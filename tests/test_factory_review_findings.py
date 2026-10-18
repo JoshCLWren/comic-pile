@@ -190,7 +190,8 @@ def test_greptile_findings_are_listed_first_and_high_priority(tmp_path: Path) ->
     assert "Human nit" not in out[greptile:other]
     assert "R2. app/x.py:2" in out
     assert "FIXED IN CODE" in out and "EVIDENCE-BACKED REBUTTAL" in out
-    assert "never resolve a thread silently" in out
+    assert "Never resolve a Greptile thread" in out
+    assert "[OPEN: outcome entry required]" in out
 
 
 def test_resolved_threads_are_excluded_and_outdated_are_flagged(tmp_path: Path) -> None:
@@ -333,6 +334,7 @@ esac
     return {
         "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
         "GITHUB_REPOSITORY": "JoshCLWren/comic-pile",
+        "FACTORY_GREPTILE_OUTCOMES_FILE": str(tmp_path / "outcomes.json"),
     }
 
 

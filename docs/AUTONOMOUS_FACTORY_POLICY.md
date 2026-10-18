@@ -162,11 +162,15 @@ A worker's own review conclusion does not silently override existing human or bo
 Josh directed on 2026-10-18 that Greptile (`greptile-apps[bot]`) findings be held in high regard. They are must-address review feedback, not advisory noise:
 
 - the worker wrapper fetches unresolved review threads, the Greptile review body and PR-body summary, and current-head PR-Agent check output before every PR-mode run, and injects them into the mission with Greptile items first and labeled HIGH PRIORITY;
-- every Greptile finding must be fixed in code on the PR branch, or answered with a concrete, evidence-backed rebuttal reply on that exact thread (cite file and line, test output, or spec);
-- a thread may be resolved only after it is fixed or rebutted; never resolve a Greptile thread silently;
-- a worker or semantic reviewer must not emit `FACTORY_GATE_READY` or a pass verdict while any Greptile finding is neither fixed nor rebutted;
-- a Greptile review with unresolved, non-outdated findings on the exact current head routes the PR to `factory:changes-requested` (see `docs/FACTORY_GITHUB_VISIBILITY.md`). Greptile remains untrusted for factory markers, ownership, and readiness;
+- every open Greptile finding must be fixed in code on the PR branch, or answered with a concrete, evidence-backed rebuttal (cite file and line, test output, or spec). The agent records each outcome (`fixed` with an explanation, or `rebutted` with evidence) in the git-excluded `.factory-greptile-outcomes.json`, and the trusted wrapper posts those outcomes as the replies on each thread;
+- workers never resolve Greptile threads; Greptile resolves its own. A thread is open until Greptile acknowledges the answer or a trusted responder has replied after Greptile's latest comment;
+- the wrapper refuses `FACTORY_GATE_READY` while any open current-head Greptile finding lacks a valid outcome, and re-dispatches the PR when new Greptile findings arrive during the run. A worker or semantic reviewer must not emit a pass verdict while any Greptile finding is neither fixed nor rebutted;
+- open Greptile findings, including findings listed only in a Greptile PR-body summary for the current head, route the PR to `factory:changes-requested` (see `docs/FACTORY_GITHUB_VISIBILITY.md`). Greptile remains untrusted for factory markers, ownership, and readiness;
 - PR-Agent check output is lower-priority advisory input: fix the real defects it finds, but it does not block on its own.
+
+### Pre-push fast checks
+
+A worker diff is pushed only after the trusted pre-push fast checks pass for the files it touches: `node --check` for `.mjs`/`.cjs`, CI-parity ruff and ty plus targeted pytest for `.py`, and the frontend typecheck plus eslint for `frontend/**/*.ts|tsx|mjs`. On failure the wrapper does not push. It resets the tree and leaves a `comic-pile-factory-fast-checks-failed-v1` comment for the next worker (see `docs/FACTORY_GITHUB_VISIBILITY.md`). Agents should run the same checks themselves before ending a run.
 
 Every push invalidates prior review, readiness, and merge eligibility. Re-fetch the exact SHA, current review threads, mergeability, and CI after every push.
 

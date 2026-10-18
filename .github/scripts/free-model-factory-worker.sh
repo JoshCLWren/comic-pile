@@ -192,7 +192,7 @@ run_agent() {
 
   if [[ "$mode" == 'pr' ]]; then
     target="pull request #${number}"
-    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Greptile (greptile-apps[bot]) review findings are HIGH PRIORITY, must-address feedback: fix each one in code or post a concrete evidence-backed rebuttal reply on its thread, and never resolve a thread silently. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
+    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Greptile (greptile-apps[bot]) review findings are HIGH PRIORITY, must-address feedback: fix each open one in code or rebut it with concrete evidence, and record every outcome in the outcome file described below; the wrapper posts those outcomes as the thread replies and blocks FACTORY_GATE_READY while any open Greptile finding lacks one. Never resolve a Greptile thread yourself. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
     findings="$(factory_review_findings_mission "$number" "${EXPECTED_HEAD:-$(git rev-parse HEAD)}")"
     mission+=" ${findings}"
   else
@@ -208,6 +208,65 @@ run_agent() {
     "$prompt" \
     "/tmp/opencode-factory-${WORKER}.log" || status=$?
   return "$status"
+}
+
+# Trusted Greptile outcome gate (docs/FACTORY_GITHUB_VISIBILITY.md,
+# "Greptile outcome gate"). Runs after the agent, right before any ready or
+# review handoff:
+#   1. rebuilds the findings file and the open Greptile findings from a fresh,
+#      complete fetch (fail closed when the fetch is incomplete);
+#   2. validates the agent's per-finding outcome file against them and posts
+#      each valid outcome as a reply on its thread (idempotent; never resolves);
+#   3. compares against the snapshot taken when the mission was built, so
+#      findings that arrived during the run are never declared ready.
+# $1 is the SHA this run pushed ("" when nothing was pushed). Sets
+# GREPTILE_GATE_STATUS (clear|blocked|unknown|new-findings) and
+# GREPTILE_GATE_DETAIL. Returns 0 only for clear.
+greptile_outcome_gate() {
+  local pushed="${1:-}" head findings validation valid new_ids reply_status=0
+  findings="/tmp/factory-review-findings-${WORKER}-pr${NUMBER}.md"
+  head="$(git rev-parse HEAD)"
+  GREPTILE_GATE_STATUS='unknown'
+  GREPTILE_GATE_DETAIL='open Greptile findings could not be fetched completely (fail closed)'
+  factory_collect_review_findings "$NUMBER" "$head" "$findings" || true
+  jq -e 'type == "array"' "${findings}.open.json" >/dev/null 2>&1 || return 1
+  validation="$(factory_validate_greptile_outcomes "${findings}.open.json" "$(factory_greptile_outcomes_path)" "$pushed")" || true
+  if [[ -z "$validation" ]]; then
+    GREPTILE_GATE_DETAIL='Greptile outcome file could not be validated'
+    return 1
+  fi
+  valid="$(jq -c '.valid' <<< "$validation")"
+  if [[ "$valid" != '[]' ]] && ! factory_post_greptile_outcome_replies "$valid" "$head" "${findings}.threads.json"; then
+    reply_status=1
+  fi
+  new_ids=''
+  if [[ -f "${findings}.open-before.json" ]]; then
+    new_ids="$(jq -rn --slurpfile now "${findings}.open.json" --slurpfile before "${findings}.open-before.json" \
+      '([$now[0][].id] - [$before[0][].id]) | join(", ")' 2>/dev/null || true)"
+  fi
+  if [[ -n "$new_ids" ]]; then
+    GREPTILE_GATE_STATUS='new-findings'
+    GREPTILE_GATE_DETAIL="new Greptile findings arrived during this run: ${new_ids}"
+    return 1
+  fi
+  GREPTILE_GATE_STATUS='blocked'
+  if ! jq -e '(.missing | length) == 0 and (.invalid | length) == 0' <<< "$validation" >/dev/null; then
+    GREPTILE_GATE_DETAIL="open Greptile findings without a valid outcome: $(jq -r '
+      ([.missing[] | "\(.) (missing)"] + [.invalid[] | "\(.thread_id) (\(.reason))"]) | join("; ")' <<< "$validation")"
+    return 1
+  fi
+  if (( reply_status != 0 )); then
+    GREPTILE_GATE_DETAIL='posting a Greptile outcome reply failed'
+    return 1
+  fi
+  GREPTILE_GATE_STATUS='clear'
+  GREPTILE_GATE_DETAIL="$(jq -r '"\(.valid | length) Greptile outcome(s) recorded"' <<< "$validation")"
+  return 0
+}
+
+# Record a wrapper-gate downgrade in the review log the controller excerpts.
+append_wrapper_gate_reason() {
+  printf '\n# comic-pile-factory-wrapper-gate\nThe trusted wrapper downgraded this approval to repair: %s\n' "$1" >> "$sanitized_review_log"
 }
 
 select_controller_assignment() {
@@ -338,7 +397,10 @@ log "executing control-plane assignment: ${MODE} #${NUMBER}; runtime ${RUNTIME_M
 checkout_target "$MODE" "$NUMBER" "$BRANCH"
 
 available="$(remaining)"
-agent_timeout=$((available - 240))
+# Reserve post-agent time for the pre-push fast checks (toolchain install,
+# lint/type, targeted tests) on top of the existing handoff reserve.
+FAST_CHECK_RESERVE_SECONDS="${FACTORY_FAST_CHECK_RESERVE_SECONDS:-240}"
+agent_timeout=$((available - 240 - FAST_CHECK_RESERVE_SECONDS))
 (( agent_timeout > 3000 )) && agent_timeout=3000
 if (( agent_timeout < 300 )); then
   log 'insufficient remaining budget for assigned work'
@@ -377,7 +439,7 @@ while :; do
   (( sleep_for > 0 )) && sleep "$sleep_for"
   agent_attempt=$((agent_attempt + 1))
   available="$(remaining)"
-  agent_timeout=$((available - 240))
+  agent_timeout=$((available - 240 - FAST_CHECK_RESERVE_SECONDS))
   (( agent_timeout > 3000 )) && agent_timeout=3000
   (( agent_timeout >= 300 )) || break
 done
@@ -448,8 +510,19 @@ fi
 if persist_pr_changes "$NUMBER" "$BRANCH"; then
   log "pushed repairs to PR #${NUMBER}; recording contributor provenance"
   record_head_contribution "$NUMBER" 'repairs-pushed-handoff' || true
-  log "pushed repairs to PR #${NUMBER}; handing it to the merge controller for exact-head review"
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
+  pushed_stage='factory:review'
+  pushed_reason='repairs-pushed-handoff'
+  if greptile_outcome_gate "$(git rev-parse HEAD)"; then
+    log "greptile outcome gate clear for PR #${NUMBER}: ${GREPTILE_GATE_DETAIL}"
+  else
+    # Pushed, but an open Greptile finding has no recorded outcome (or new
+    # findings arrived): re-dispatch for repair instead of review.
+    log "greptile outcome gate ${GREPTILE_GATE_STATUS} for PR #${NUMBER}: ${GREPTILE_GATE_DETAIL}; releasing as factory:changes-requested"
+    pushed_stage='factory:changes-requested'
+    pushed_reason='repairs-pushed-greptile-findings-open'
+  fi
+  log "pushed repairs to PR #${NUMBER}; handing it to the merge controller as ${pushed_stage}"
+  release_pr_and_issue "$NUMBER" "$BRANCH" "$pushed_stage" "$pushed_reason"
   post_readable_handoff repair "$NUMBER" "$(git rev-parse HEAD)" "Repairs were pushed and the lease was released for independent review."
   record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"
   log "assignment complete; remaining budget $(remaining)s"
@@ -473,11 +546,21 @@ fi
 if [[ "$ASSIGNED_PR_STAGE" != 'factory:review' ]]; then
   repair_log="/tmp/opencode-factory-${WORKER}.log"
   repair_verdict="$(factory_extract_semantic_verdict "$repair_log" || true)"
-  if [[ "$repair_verdict" == 'approve' ]]; then
+  if [[ "$repair_verdict" == 'approve' && -n "$FACTORY_PUSH_BLOCKED_REASON" ]]; then
+    log "repair attempt for PR #${NUMBER} reported ready but its edits were not pushed (${FACTORY_PUSH_BLOCKED_REASON}); preserving ${ASSIGNED_PR_STAGE}"
+    release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" "repair-${FACTORY_PUSH_BLOCKED_REASON}"
+    record_terminal_outcome work_failure "repair attempt for PR #${NUMBER} failed pre-push fast checks"
+  elif [[ "$repair_verdict" == 'approve' ]] && ! greptile_outcome_gate ''; then
+    log "repair attempt for PR #${NUMBER} reported ready but the greptile outcome gate is ${GREPTILE_GATE_STATUS}: ${GREPTILE_GATE_DETAIL}; preserving ${ASSIGNED_PR_STAGE}"
+    release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" "repair-greptile-gate-${GREPTILE_GATE_STATUS}"
+    record_terminal_outcome no_work "repair attempt for PR #${NUMBER} left Greptile findings without outcomes"
+  elif [[ "$repair_verdict" == 'approve' ]]; then
     log "repair attempt for PR #${NUMBER} found no persisted change and reports ready; handing off for independent review"
     release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repair-no-change-ready-handoff'
     record_terminal_outcome no_work "repair attempt for PR #${NUMBER} required no persisted change and handed off for review"
   else
+    # Still post any outcomes (e.g. rebuttals) the agent recorded.
+    greptile_outcome_gate '' || true
     log "repair attempt for PR #${NUMBER} produced no persisted change; preserving ${ASSIGNED_PR_STAGE} without invoking the review controller"
     release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'repair-no-persisted-change-handoff'
     record_terminal_outcome no_work "repair attempt for PR #${NUMBER} produced no persisted change"
@@ -592,6 +675,37 @@ if [[ -z "$verdict" ]]; then
   record_terminal_outcome work_failure "PR #${NUMBER} semantic review did not produce an authoritative terminal verdict"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
+fi
+
+# Wrapper gates on approval. A push blocked by the fast checks, or an open
+# Greptile finding without a recorded outcome, can never be declared ready.
+if [[ "$verdict" == 'approve' && -n "$FACTORY_PUSH_BLOCKED_REASON" ]]; then
+  log "downgrading approval for PR #${NUMBER}: the agent's edits were not pushed (${FACTORY_PUSH_BLOCKED_REASON})"
+  append_wrapper_gate_reason "the agent edited the branch but its diff failed the pre-push fast checks and was not pushed (see the fast-check comment)."
+  verdict='repair'
+elif [[ "$verdict" == 'approve' ]] && ! greptile_outcome_gate ''; then
+  case "$GREPTILE_GATE_STATUS" in
+    new-findings)
+      log "greptile outcome gate: ${GREPTILE_GATE_DETAIL}; releasing PR #${NUMBER} for re-dispatch instead of declaring ready"
+      release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:changes-requested' 'new-greptile-findings-during-run'
+      record_terminal_outcome no_work "PR #${NUMBER} received new Greptile findings during the review run"
+      log "assignment complete; remaining budget $(remaining)s"
+      exit 0
+      ;;
+    unknown)
+      log "greptile outcome gate: ${GREPTILE_GATE_DETAIL}; releasing PR #${NUMBER} for another review attempt"
+      release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'greptile-findings-fetch-failed'
+      record_terminal_outcome control_plane_failure "PR #${NUMBER} Greptile findings could not be fetched before the gate"
+      log "assignment complete; remaining budget $(remaining)s"
+      exit 0
+      ;;
+  esac
+  log "downgrading approval for PR #${NUMBER}: ${GREPTILE_GATE_DETAIL}"
+  append_wrapper_gate_reason "${GREPTILE_GATE_DETAIL}"
+  verdict='repair'
+elif [[ "$verdict" != 'approve' ]]; then
+  # Post any outcomes the agent recorded even when it did not approve.
+  greptile_outcome_gate '' || true
 fi
 
 case "$verdict" in

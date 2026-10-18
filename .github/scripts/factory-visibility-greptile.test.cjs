@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 
 const reconcile = require('./factory-visibility.cjs');
@@ -6,15 +8,46 @@ const {
   trusted,
   isRepairRoutingReviewer,
   unresolvedReviewerBotThreads,
+  greptileThreadState,
+  greptileSummaryFindings,
+  isGreptileAck,
   REPAIR_ROUTING_REVIEWER_BOTS,
   TRUSTED_APP_SLUGS,
 } = reconcile._test;
 
 const HEAD = 'a'.repeat(40);
 const OLD_HEAD = 'b'.repeat(40);
+let nextId = 1;
 
-function thread({ login = 'greptile-apps', isResolved = false, isOutdated = false } = {}) {
-  return { isResolved, isOutdated, comments: { nodes: [{ author: { login } }] } };
+function comment(login, body = 'finding', extra = {}) {
+  const id = nextId++;
+  return { databaseId: id, url: `https://github.com/x/pull/100#discussion_r${id}`, author: { login }, body, createdAt: '2026-10-18T15:00:00Z', ...extra };
+}
+
+// GraphQL-shaped thread: firstComment + recent window (oldest first).
+function thread({ login = 'greptile-apps', isResolved = false, isOutdated = false, replies = [], first } = {}) {
+  const head = first || comment(login, '**Bug** here');
+  return {
+    id: `PRRT_${head.databaseId}`,
+    isResolved,
+    isOutdated,
+    firstComment: { nodes: [{ databaseId: head.databaseId, url: head.url, author: head.author }] },
+    recent: { nodes: [head, ...replies] },
+  };
+}
+
+function summaryBody({ commit = HEAD, findings = [] } = {}) {
+  const items = findings.map((f, i) => `${i + 1}. <img alt="P1" src="https://x/p1.svg" align="top">&nbsp;**${f.title}** ${f.discussionId ? `<a href="https://github.com/JoshCLWren/comic-pile/pull/100#discussion_r${f.discussionId}">▶</a>` : ''}`);
+  return [
+    'Author text mentioning `<!-- greptile_comment -->` inline.',
+    '<!-- greptile_comment -->',
+    '<h2>Findings</h2>',
+    '',
+    ...items,
+    '',
+    `<sub>Reviews (3) · Last reviewed commit: ["fix"](https://github.com/joshclwren/comic-pile/commit/${commit}) · Reviewed by Greptile</sub>`,
+    '<!-- /greptile_comment -->',
+  ].join('\n');
 }
 
 function githubFor({
@@ -22,6 +55,8 @@ function githubFor({
   threads = [],
   threadPages,
   liveHead = HEAD,
+  body = '',
+  checkRuns = [],
   setLabels,
   graphqlCalls,
   pullCalls,
@@ -59,10 +94,18 @@ function githubFor({
     },
     rest: {
       issues: api,
+      checks: { listForRef: async () => ({ data: { check_runs: checkRuns } }) },
       pulls: {
         get: async (params) => {
           if (pullCalls) pullCalls.push(params);
-          return { data: { head: { sha: liveHead } } };
+          return {
+            data: {
+              number: params.pull_number,
+              state: 'open',
+              body,
+              head: { sha: liveHead, ref: 'factory/49-3154-greptile', repo: { full_name: 'JoshCLWren/comic-pile' } },
+            },
+          };
         },
       },
     },
@@ -98,14 +141,35 @@ function reviewContext(review, { headSha = HEAD } = {}) {
   };
 }
 
-async function run(review, options = {}) {
+function editedContext(body, { changes = { body: { from: 'old' } } } = {}) {
+  return {
+    eventName: 'pull_request_target',
+    repo: { owner: 'JoshCLWren', repo: 'comic-pile' },
+    payload: {
+      action: 'edited',
+      changes,
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        number: 100,
+        body,
+        head: { ref: 'factory/49-3154-greptile', sha: HEAD, repo: { full_name: 'JoshCLWren/comic-pile' } },
+        labels: [{ name: 'factory' }, { name: 'factory:review' }],
+      },
+    },
+  };
+}
+
+async function runWith(context, options = {}) {
   const calls = [];
   const graphqlCalls = [];
   const pullCalls = [];
   const github = githubFor({ ...options, setLabels: async input => calls.push(input), graphqlCalls, pullCalls });
-  await reconcile({ github, context: reviewContext(review, options) });
+  await reconcile({ github, context });
   return { calls, graphqlCalls, pullCalls };
 }
+
+const run = (review, options = {}) => runWith(reviewContext(review, options), options);
+const routed = calls => calls.length === 1 && calls[0].labels.includes('factory:changes-requested');
 
 test('reviewer-bot allowlist is separate from marker trust', () => {
   assert.deepEqual([...REPAIR_ROUTING_REVIEWER_BOTS], ['greptile-apps[bot]']);
@@ -118,21 +182,20 @@ test('reviewer-bot allowlist is separate from marker trust', () => {
   assert.equal(isRepairRoutingReviewer({ user: { login: 'coderabbitai[bot]' } }), false);
 });
 
-test('Greptile COMMENTED review with unresolved current-head findings routes to changes-requested', async () => {
-  const { calls, graphqlCalls } = await run(greptileReview(), { threads: [thread()] });
+test('Greptile COMMENTED review with an open finding routes to changes-requested', async () => {
+  const { calls, graphqlCalls, pullCalls } = await run(greptileReview(), { threads: [thread()] });
+  assert.equal(pullCalls.length, 1);
   assert.equal(graphqlCalls.length, 1);
   assert.equal(graphqlCalls[0].variables.number, 100);
-  assert.equal(calls.length, 1);
+  assert.ok(routed(calls));
   assert.equal(calls[0].issue_number, 100);
-  assert.ok(calls[0].labels.includes('factory:changes-requested'));
   assert.ok(!calls[0].labels.includes('factory:review'));
   assert.ok(calls[0].labels.includes('factory:unowned'));
 });
 
 test('Greptile REST login suffix is also matched in GraphQL thread authors', async () => {
   const { calls } = await run(greptileReview(), { threads: [thread({ login: 'greptile-apps[bot]' })] });
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:changes-requested'));
+  assert.ok(routed(calls));
 });
 
 test('Greptile findings beyond the first thread page still route', async () => {
@@ -145,8 +208,7 @@ test('Greptile findings beyond the first thread page still route', async () => {
   assert.equal(graphqlCalls.length, 2);
   assert.equal(graphqlCalls[0].variables.after, null);
   assert.equal(graphqlCalls[1].variables.after, 'cursor-1');
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:changes-requested'));
+  assert.ok(routed(calls));
 });
 
 test('truncated thread pagination with no findings seen fails closed instead of skipping', async () => {
@@ -169,8 +231,7 @@ test('truncated thread pagination still routes when an open Greptile finding was
   const { calls } = await run(greptileReview(), {
     threadPages: [{ nodes: [thread()], pageInfo: { hasNextPage: true, endCursor: null } }],
   });
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:changes-requested'));
+  assert.ok(routed(calls));
 });
 
 test('thread counting reports incomplete when the page limit is exhausted', async () => {
@@ -188,55 +249,88 @@ test('thread counting reports incomplete when the page limit is exhausted', asyn
   );
 });
 
-test('Greptile review routes only when it still targets the live PR head', async () => {
-  // The globally serialized reconciler can run after a newer push; the event
-  // payload head then still equals the review commit, but the live head moved.
-  const { calls, graphqlCalls, pullCalls } = await run(greptileReview(), {
+test('routing is state-based: a stale payload still routes from live open findings', async () => {
+  // A replaced or late run carries an old review payload; routing reads the
+  // live PR head and threads instead of trusting the payload.
+  const { calls, pullCalls } = await run(greptileReview({ commit_id: OLD_HEAD }), {
+    headSha: OLD_HEAD,
     threads: [thread()],
-    liveHead: OLD_HEAD,
   });
   assert.equal(pullCalls.length, 1);
-  assert.equal(pullCalls[0].pull_number, 100);
-  assert.equal(calls.length, 0);
-  assert.equal(graphqlCalls.length, 0);
+  assert.ok(routed(calls));
 });
 
-test('Greptile review on an older head does not route', async () => {
-  const { calls, graphqlCalls } = await run(greptileReview({ commit_id: OLD_HEAD }), { threads: [thread()] });
-  assert.equal(calls.length, 0);
-  assert.equal(graphqlCalls.length, 0);
+test('a non-Greptile review (e.g. a worker thread reply) also recomputes routing', async () => {
+  const reply = { author_association: 'NONE', user: { login: 'github-actions[bot]' }, state: 'COMMENTED', performed_via_github_app: { slug: 'github-actions' } };
+  assert.ok(routed((await run(reply, { threads: [thread()] })).calls));
+  assert.equal((await run(reply, { threads: [] })).calls.length, 0);
 });
 
-test('Greptile review with only resolved, outdated, or other-author threads does not route', async () => {
+test('resolved, outdated, or other-author threads do not route', async () => {
   const { calls } = await run(greptileReview(), {
     threads: [
       thread({ isResolved: true }),
       thread({ isOutdated: true }),
       thread({ login: 'some-human' }),
       thread({ login: 'pr-agent[bot]' }),
+      thread({ login: 'other-reviewer' }),
     ],
   });
   assert.equal(calls.length, 0);
 });
 
-test('Greptile review with no inline findings does not route', async () => {
-  const { calls } = await run(greptileReview(), { threads: [] });
+test('open-thread rule: acknowledgement and trusted answers close a finding; pushback reopens it', () => {
+  const cases = [
+    // #3890: Greptile accepted the owner rebuttal.
+    [[comment('JoshCLWren', 'Rebuttal, no code change.', { authorAssociation: 'OWNER' }), comment('greptile-apps', 'That addresses the concern. The caps are the intended guard.')], 'acknowledged'],
+    [[comment('github-actions', 'x'), comment('greptile-apps', "<p>You\u2019re right. That finding was based on reverted code.</p>")], 'acknowledged'],
+    [[comment('greptile-apps', 'Good catch, thanks')], 'acknowledged'],
+    // Worker/owner reply after Greptile's last comment: answered, awaiting Greptile.
+    [[comment('github-actions', '**Fixed** in abc')], 'answered'],
+    [[comment('opencode-free-model-factory-54', 'Rebuttal')], 'answered'],
+    [[comment('JoshCLWren', 'Rebuttal', { authorAssociation: 'OWNER' })], 'answered'],
+    // Untrusted replies never close a finding.
+    [[comment('random-user', 'not a bug', { authorAssociation: 'NONE' })], 'open'],
+    // Greptile pushed back after the answer.
+    [[comment('JoshCLWren', 'no', { authorAssociation: 'OWNER' }), comment('greptile-apps', 'I still think this is broken because...')], 'open'],
+    [[], 'open'],
+  ];
+  for (const [replies, expected] of cases) {
+    const node = thread({ replies });
+    const normalized = {
+      isResolved: node.isResolved,
+      isOutdated: node.isOutdated,
+      firstComment: node.firstComment.nodes[0],
+      comments: node.recent.nodes,
+    };
+    assert.equal(greptileThreadState(normalized), expected, JSON.stringify(replies.map(r => r.body)));
+  }
+  // The first Greptile comment is a finding, never an acknowledgement.
+  const ackLooking = thread({ first: comment('greptile-apps', 'Thanks for the PR, but this leaks') });
+  assert.equal(greptileThreadState({ firstComment: ackLooking.firstComment.nodes[0], comments: ackLooking.recent.nodes }), 'open');
+  assert.equal(isGreptileAck("I don't think that addresses it"), false);
+});
+
+test('Greptile reply accepting a rebuttal does not re-route (#3890 flapping)', async () => {
+  const accepted = thread({ replies: [
+    comment('JoshCLWren', 'Rebuttal with evidence', { authorAssociation: 'OWNER' }),
+    comment('greptile-apps', 'That addresses the concern.'),
+  ] });
+  const { calls } = await run(greptileReview(), { threads: [accepted] });
   assert.equal(calls.length, 0);
 });
 
-test('Greptile APPROVED never mutates labels', async () => {
-  const { calls, graphqlCalls } = await run(greptileReview({ state: 'APPROVED' }), { threads: [thread()] });
+test('Greptile APPROVED with no open findings never mutates labels', async () => {
+  const { calls } = await run(greptileReview({ state: 'APPROVED' }), { threads: [] });
   assert.equal(calls.length, 0);
-  assert.equal(graphqlCalls.length, 0);
 });
 
-test('a non-allowlisted bot COMMENTED review with open threads still does not route', async () => {
-  const { calls, graphqlCalls } = await run(
-    greptileReview({ user: { login: 'other-reviewer[bot]' } }),
-    { threads: [thread({ login: 'other-reviewer' })] },
-  );
+test('an already-routed PR is not rewritten', async () => {
+  const { calls } = await run(greptileReview(), {
+    labels: ['factory', 'factory:changes-requested', 'factory:unowned'],
+    threads: [thread()],
+  });
   assert.equal(calls.length, 0);
-  assert.equal(graphqlCalls.length, 0);
 });
 
 test('trusted CHANGES_REQUESTED routing is unchanged and does not query threads', async () => {
@@ -246,17 +340,78 @@ test('trusted CHANGES_REQUESTED routing is unchanged and does not query threads'
     state: 'CHANGES_REQUESTED',
     performed_via_github_app: { slug: 'github-actions' },
   });
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:changes-requested'));
+  assert.ok(routed(calls));
   assert.equal(graphqlCalls.length, 0);
 });
 
-test('reconciler workflow fires on submitted pull_request_review events', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
+test('summary parser reads the reviewed commit and finding links, not inline mentions', () => {
+  const parsed = greptileSummaryFindings(summaryBody({ findings: [{ title: 'Caps unbounded', discussionId: '42' }, { title: 'No thread' }] }));
+  assert.equal(parsed.commit, HEAD);
+  assert.deepEqual(parsed.findings, [
+    { title: 'Caps unbounded', discussionId: '42' },
+    { title: 'No thread', discussionId: null },
+  ]);
+  assert.equal(greptileSummaryFindings('no summary `<!-- greptile_comment -->`'), null);
+});
+
+test('summary-only Greptile re-review routes on a PR-body edit for the live head', async () => {
+  const body = summaryBody({ findings: [{ title: 'Summary-only finding' }] });
+  const { calls } = await runWith(editedContext(body), { body, threads: [] });
+  assert.ok(routed(calls));
+});
+
+test('summary for an older commit, or with no findings, does not route', async () => {
+  for (const body of [summaryBody({ commit: OLD_HEAD, findings: [{ title: 'Old' }] }), summaryBody({ findings: [] })]) {
+    const { calls } = await runWith(editedContext(body), { body, threads: [] });
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('summary findings linked to acknowledged or freshly answered threads do not route', async () => {
+  const acked = thread({ replies: [comment('JoshCLWren', 'rebut', { authorAssociation: 'OWNER' }), comment('greptile-apps', "You're right.")] });
+  const answered = thread({ replies: [comment('github-actions', '**Rebuttal**', { createdAt: '2026-10-18T16:10:00Z' })] });
+  const body = summaryBody({ findings: [
+    { title: 'Acked', discussionId: String(acked.firstComment.nodes[0].databaseId) },
+    { title: 'Answered after review', discussionId: String(answered.firstComment.nodes[0].databaseId) },
+  ] });
+  const { calls } = await runWith(editedContext(body), {
+    body,
+    threads: [acked, answered],
+    checkRuns: [{ name: 'Greptile Review', completed_at: '2026-10-18T16:05:00Z' }],
+  });
+  assert.equal(calls.length, 0);
+});
+
+test('summary finding re-listed after the answer (Greptile re-reviewed later) routes', async () => {
+  const answered = thread({ isResolved: true, replies: [comment('github-actions', '**Fixed** in abc', { createdAt: '2026-10-18T16:00:00Z' })] });
+  const body = summaryBody({ findings: [{ title: 'Still broken', discussionId: String(answered.firstComment.nodes[0].databaseId) }] });
+  const { calls } = await runWith(editedContext(body), {
+    body,
+    threads: [answered],
+    checkRuns: [{ name: 'Greptile Review', completed_at: '2026-10-18T16:05:00Z' }],
+  });
+  assert.ok(routed(calls));
+});
+
+test('PR-body edits without a body change or Greptile summary make no API calls', async () => {
+  for (const context of [
+    editedContext(summaryBody({ findings: [{ title: 'x' }] }), { changes: { title: { from: 'old' } } }),
+    editedContext('plain body mentioning `<!-- greptile_comment -->` inline'),
+  ]) {
+    const { calls, graphqlCalls, pullCalls } = await runWith(context, { threads: [thread()] });
+    assert.equal(calls.length + graphqlCalls.length + pullCalls.length, 0);
+  }
+});
+
+test('reconciler workflow routes review and PR-body edit events in a per-PR group', () => {
   const workflow = fs.readFileSync(
     path.join(__dirname, '..', 'workflows', 'factory-issue-pr-state-reconciler.yml'),
     'utf8',
   );
   assert.match(workflow, /pull_request_review:\s*\n\s*types:\s*\[submitted, dismissed\]/);
+  assert.match(workflow, /types:\s*\[opened, reopened, ready_for_review, closed, unlabeled, edited\]/);
+  assert.match(workflow, /format\('factory-greptile-routing-pr-\{0\}', github\.event\.pull_request\.number\)/);
+  assert.match(workflow, /github\.event_name == 'pull_request_review' \|\| \(github\.event_name == 'pull_request_target' && github\.event\.action == 'edited'\)/);
+  assert.match(workflow, /\|\| 'factory-issue-pr-state-reconciler' \}\}\n\s*cancel-in-progress: false/);
+  assert.match(workflow, /"\$EVENT_ACTION" == 'edited' \]\] && exit 0/);
 });
