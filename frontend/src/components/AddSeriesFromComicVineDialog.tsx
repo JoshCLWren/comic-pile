@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import Modal from './Modal'
 import { comicVineApi } from '../services/api-comicvine'
+import { useQueueThreads } from '../hooks/useQueue' // Import hook
 import type {
   ComicVineSeriesImportStatus,
   ComicVineSeriesResult,
@@ -101,6 +102,9 @@ function importSuccessMessage({ seriesName, issuesAdopted, threadCreated }: Impo
   if (issuesAdopted === null) {
     return `Added "${seriesName}" to ComicPile`
   }
+  if (!threadCreated && issuesAdopted === 0) {
+    return `"${seriesName}" is already up to date`
+  }
   return threadCreated
     ? `Added "${seriesName}" to ComicPile (${issuesAdopted} issues)`
     : `Added ${issuesAdopted} more issues to "${seriesName}"`
@@ -126,14 +130,17 @@ function hasUnknownOutcome(error: unknown): boolean {
   return error instanceof Error && getApiErrorStatus(error) === null
 }
 
+// ... (around line 130)
 export default function AddSeriesFromComicVineDialog({
   isOpen,
   onClose,
   onAdded,
 }: AddSeriesFromComicVineDialogProps) {
   const { showToast } = useToast()
+  const { data: threads } = useQueueThreads() // Add this to check if series is already linked
 
   const [step, setStep] = useState<DialogStep>('search')
+// ...
   const [query, setQuery] = useState('')
   const [seriesResults, setSeriesResults] = useState<ComicVineSeriesResult[]>([])
   const [selectedSeries, setSelectedSeries] = useState<ComicVineSeriesResult | null>(null)
@@ -314,6 +321,16 @@ export default function AddSeriesFromComicVineDialog({
   )
 
   const maxAlreadyRead = selectedSeries?.issue_count ?? 0
+
+  const isAlreadyLinked = useMemo(
+    () => {
+      if (!selectedSeries || !threads) return false
+      return threads.some(
+        (t) => t.comicvine_volume_id === selectedSeries.comicvine_volume_id,
+      )
+    },
+    [selectedSeries, threads],
+  )
 
   return (
     <Modal
