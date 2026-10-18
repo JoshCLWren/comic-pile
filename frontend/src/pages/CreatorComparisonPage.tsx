@@ -188,6 +188,26 @@ function IssueDrilldown({
   )
 }
 
+/**
+ * Column template for the comparison-card grid.
+ *
+ * Four creators must never leave a single orphaned card on its own row
+ * (issue #3459), so four uses an explicit two-column layout. The previous
+ * `repeat(auto-fit, minmax(280px, 1fr))` packing resolved to 3 + 1 at desktop
+ * widths because the capped 1024px container only fits three 280px tracks.
+ * Two creators sit side by side; three keep the wider packing so the row still
+ * fills on desktop.
+ */
+function comparisonGridClasses(count: number): string {
+  if (count <= 1) {
+    return 'grid-cols-1'
+  }
+  if (count === 3) {
+    return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+  }
+  return 'grid-cols-1 md:grid-cols-2'
+}
+
 function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
   const totalRatings = item.ratings_count
   const hasRatings = totalRatings > 0
@@ -195,7 +215,11 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
   const detailPath = isValidKey ? creatorRoutePath(item.canonical_creator_key) : null
 
   return (
-    <section className="min-w-0 flex-1 max-w-full rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+    <section
+      data-testid="creator-comparison-card"
+      className="min-w-0 rounded-2xl border p-4 md:p-6"
+      style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}
+    >
       <header className="mb-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
@@ -269,14 +293,14 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
           )}
         </div>
 
-        <div className="sm:col-span-2">
+        <div className="col-span-full">
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Rating distribution
           </p>
           <RatingDistributionBar distribution={item.rating_distribution} totalCount={totalRatings} />
         </div>
 
-        <div className="sm:col-span-2">
+        <div className="col-span-full">
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Unread in your library
           </p>
@@ -294,7 +318,7 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
         </div>
 
         {item.read_unrated_count > 0 && (
-          <div className="sm:col-span-2">
+          <div className="col-span-full">
             <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
               Read with no stored rating
             </p>
@@ -380,7 +404,7 @@ export default function CreatorComparisonPage() {
         <h1 className="mt-1 text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
-<div className="mt-6 grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+<div className={`mt-6 grid gap-6 ${comparisonGridClasses(keys.length)}`}>
           {[0, 1, 2, 3].slice(0, keys.length).map((i) => (
             <div key={i} className="h-72 animate-pulse rounded-2xl" style={{ backgroundColor: 'var(--theme-bg-panel)' }} />
           ))}
@@ -473,7 +497,7 @@ export default function CreatorComparisonPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+      <div className={`mt-6 grid gap-6 ${comparisonGridClasses(comparisonItems.length)}`}>
         {comparisonItems.map((item) => (
           <ComparisonCard key={item.canonical_creator_key} item={item} />
         ))}
