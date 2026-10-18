@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import Modal from './Modal'
 import { comicVineApi } from '../services/api-comicvine'
-import { useQueueThreads } from '../hooks/useQueue' // Import hook
 import type {
   ComicVineSeriesImportStatus,
   ComicVineSeriesResult,
@@ -104,7 +103,7 @@ function importSuccessMessage({ seriesName, issuesAdopted, threadCreated }: Impo
   }
   if (!threadCreated && issuesAdopted === 0) {
     // Check for conflicts or errors that occurred during import
-    if (result?.issues_conflict > 0) {
+    if (result && result.issues_conflict > 0) {
       return `"${seriesName}" imported with ${result.issues_conflict} conflicts - check your queue for details`
     }
     const hasErrors = result?.issue_results?.some((issue) => issue.outcome === 'error') ?? false
