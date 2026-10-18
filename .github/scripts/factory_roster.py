@@ -198,21 +198,15 @@ def mistral_model_is_pinned(model: str) -> bool:
     return _bare_source_model(model, "mistral") in MISTRAL_PINNED_MODELS
 
 
+# Multi-vendor routers pin upstream ids (``nvidia/...``) that may collide with
+# ids retired from *other* sources in the shared retirement lock. Their lock
+# entries are therefore source-qualified (``requesty/nvidia/...``).
+SOURCE_SCOPED_RETIREMENT_SOURCES = frozenset({"orcarouter", "requesty"})
+
+
 def retirement_key(source: str, model: str) -> str:
     """Return the retirement-lock key for one roster pin."""
-    # Import here to avoid circular imports and handle relative import issues
-    try:
-        from factory_source_budget import load_source_scoped_retirement_sources
-        source_scoped_sources = load_source_scoped_retirement_sources()
-    except ImportError:
-        # Fallback to hardcoded sources if import fails (for testing/compatibility)
-        source_scoped_sources = {"orcarouter", "requesty"}
-    
-    # Multi-vendor routers pin upstream ids (``nvidia/...``) that may collide with
-    # ids retired from *other* sources in the shared retirement lock. Their lock
-    # entries are therefore source-qualified (``requesty/nvidia/...``).
-    
-    if source in source_scoped_sources:
+    if source in SOURCE_SCOPED_RETIREMENT_SOURCES:
         return f"{source}/{_bare_source_model(model, source)}"
     return model
 

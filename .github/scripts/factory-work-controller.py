@@ -872,11 +872,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
     if worker_has_active_lease(worker):
         print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
         return None
-    # Check budget with conservative approach to handle race conditions
-    budget_reason = budget_block_reason(
-        worker,
-        request_budgets=load_request_budgets() if os.environ.get("FACTORY_CONSERVATIVE_BUDGET_CHECK") == "1" else None
-    )
+    budget_reason = budget_block_reason(worker)
     if budget_reason is not None:
         print(f'[factory-controller] {budget_reason}; skipping dispatch', file=sys.stderr)
         return None
