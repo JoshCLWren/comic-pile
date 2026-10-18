@@ -1454,14 +1454,12 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
         "scheduler": "dispatcher",
         "display_name": "NVIDIA GLM 5.3 Flash",
     }
-    assert by_worker["81"] == {
-        "worker": "81",
-        "source": "nvidia",
-        "model": "deepseek-ai/deepseek-v4.1-flash",
-        "minute": "50",
-        "scheduler": "dispatcher",
-        "display_name": "NVIDIA DeepSeek V4.1 Flash",
-    }
+    # Worker 81 retired: 15/15 then 23/24 "socket closed" failures and it
+    # duplicated the OpenCode Zen DeepSeek V4.1 Flash lanes.
+    assert "81" not in by_worker
+    assert 81 not in lock["expected_workers"]
+    assert 81 in lock["retired_workers"]
+    assert "deepseek-ai/deepseek-v4.1-flash" in lock["retired_models"]
     assert by_worker["82"] == {
         "worker": "82",
         "source": "z-ai",

@@ -30,7 +30,6 @@
     75,
     78,
     80,
-    81,
     82,
     83,
     86,
@@ -65,11 +64,13 @@
     76,
     77,
     79,
+    81,
     84,
     85
   ],
   "retired_models": [
     "apodex/apodex-1.1-mini:free",
+    "deepseek-ai/deepseek-v4.1-flash",
     "deepseek-v4-flash-free",
     "exo-free",
     "fledge-alpha-free",
