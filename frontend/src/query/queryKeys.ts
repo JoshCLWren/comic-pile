@@ -66,7 +66,7 @@ export const queryKeys = {
     /**
      * Canonical key for the authoritative active-series total (`active_count`)
      * on its own. Surfaces that need the whole-queue size without loading any
-     * page - the Roll shuffle confirmation (#3261) - read this instead of
+     * page — the Roll shuffle confirmation (#3261) — read this instead of
      * hydrating the paginated list. It sits beside `pages`, not under it, so a
      * bounded count never participates in the queue loader's page reset.
      */

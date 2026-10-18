@@ -182,7 +182,6 @@ export default function AddSeriesFromComicVineDialog({
       setUnknownOutcome(null)
       setHasSearched(false)
       setAlreadyReadCount(0)
-      setExistingSeries(null)
     }
   }, [isOpen])
 
@@ -195,11 +194,15 @@ export default function AddSeriesFromComicVineDialog({
    * keeps the fresh-add copy; the import itself stays idempotent server-side,
    * so a stale "new series" fallback never creates a duplicate row.
    */
+  const selectedVolumeId = selectedSeries?.comicvine_volume_id
   const { data: existingSeries } = useQuery({
-    queryKey: queryKeys.comicVine.importStatus(selectedSeries?.comicvine_volume_id),
-    queryFn: () => comicVineApi.getSeriesImportStatus(selectedSeries!.comicvine_volume_id),
-    enabled: isOpen && step === 'confirm' && !!selectedSeries,
+    queryKey: selectedVolumeId != null ? queryKeys.comicVine.importStatus(selectedVolumeId) : [],
+    queryFn: () => comicVineApi.getSeriesImportStatus(selectedVolumeId!),
+    enabled: isOpen && step === 'confirm' && selectedVolumeId != null,
     retry: false,
+    // The status endpoint answers for every volume; only an `imported` volume
+    // means the confirm copy should say "already in your queue".
+    select: (status) => (status?.imported ? status : null),
   })
 
   const handleSearch = useCallback(
