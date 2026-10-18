@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as testModule from './test.module';
 
-const mockFn = vi['mock'];
-mockFn('./test.module', () => ({
+vi.mock('./test.module', () => ({
   myFunction: () => 'mocked implementation'
 }));
 

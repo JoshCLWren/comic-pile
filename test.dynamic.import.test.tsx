@@ -4,12 +4,10 @@ describe('dynamic import mock test', () => {
   let testModule: any;
 
   beforeEach(async () => {
-    const mockFn = vi['mock'];
-    mockFn('./test.module', () => ({
+    vi.mock('./test.module', () => ({
       myFunction: () => 'mocked implementation'
     }));
     
-    // Import after mocking using Vitest-aware dynamic import
     testModule = await import('./test.module');
   });
 

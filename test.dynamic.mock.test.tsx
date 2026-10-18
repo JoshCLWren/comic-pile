@@ -4,12 +4,9 @@ describe('dynamic mock test', () => {
   let testModule: any;
 
   beforeEach(() => {
-    const mockFn = vi['mock'];
-    mockFn('./test.module', () => ({
+    vi.mock('./test.module', () => ({
       myFunction: () => 'mocked implementation'
     }));
-    
-    // Import after mocking
     testModule = require('./test.module');
   });
 
