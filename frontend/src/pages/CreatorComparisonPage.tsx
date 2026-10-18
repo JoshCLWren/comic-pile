@@ -5,9 +5,9 @@ import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
 import type { CreatorComparisonIssueRef, CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
 import Breadcrumbs from '../components/Breadcrumbs'
-import CreatorMetricDrilldownModal from '../components/CreatorMetricDrilldownModal'
+import { CreatorMetricDrilldownModal } from '../components/CreatorMetricDrilldownModal'
 
-function RatingValue({ value, label, creatorKey, onMetricClick }: { 
+function RatingValue({ value, label, creatorKey: _creatorKey, onMetricClick }: { 
   value: number; 
   label: string;
   creatorKey: string;
@@ -37,7 +37,7 @@ function InsufficientDataBadge() {
   )
 }
 
-function SeriesLink({ aggregate, creatorKey, onMetricClick }: { 
+function SeriesLink({ aggregate, creatorKey: _creatorKey, onMetricClick }: { 
   aggregate: CreatorComparisonSeriesAggregate; 
   creatorKey: string;
   onMetricClick: (metricType: string, metricLabel: string, params?: { seriesKey: string }) => void;
@@ -55,14 +55,14 @@ function SeriesLink({ aggregate, creatorKey, onMetricClick }: {
         <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
           <span>{aggregate.issue_count} {aggregate.issue_count === 1 ? 'issue' : 'issues'}</span>
           <span>{aggregate.rated_issue_count} rated</span>
-          <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} creatorKey={creatorKey} onMetricClick={onMetricClick} />
+          <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} creatorKey={_creatorKey} onMetricClick={onMetricClick} />
         </span>
       </button>
     </>
   )
 }
 
-function RoleStatRow({ stat, creatorKey, onMetricClick }: { 
+function RoleStatRow({ stat, creatorKey: _creatorKey, onMetricClick }: { 
   stat: CreatorComparisonRoleStat; 
   creatorKey: string;
   onMetricClick: (metricType: string, metricLabel: string, params?: { role: string }) => void;
@@ -79,7 +79,7 @@ function RoleStatRow({ stat, creatorKey, onMetricClick }: {
           {stat.issue_count} {stat.issue_count === 1 ? 'issue' : 'issues'}
           <> · {stat.rated_issue_count} rated</>
           {stat.average_rating != null ? (
-            <> · <RatingValue value={stat.average_rating} label={`Average ${stat.average_rating} out of 5 as ${stat.role}`} creatorKey={creatorKey} onMetricClick={onMetricClick} /></>
+            <> · <RatingValue value={stat.average_rating} label={`Average ${stat.average_rating} out of 5 as ${stat.role}`} creatorKey={_creatorKey} onMetricClick={onMetricClick} /></>
           ) : (
             ' · unrated'
           )}
@@ -89,7 +89,7 @@ function RoleStatRow({ stat, creatorKey, onMetricClick }: {
   )
 }
 
-function RatingDistributionBar({ distribution, totalCount, creatorKey, onMetricClick }: { 
+function RatingDistributionBar({ distribution, totalCount, creatorKey: _creatorKey, onMetricClick }: { 
   distribution: Record<string, number>; 
   totalCount: number;
   creatorKey: string;
@@ -622,24 +622,6 @@ export default function CreatorComparisonPage() {
         initialParams={activeModal.initialParams}
       />
 
-      {/* Metric click handler */}
-      {comparisonItems.map((item) => (
-        <div key={item.canonical_creator_key} style={{ display: 'none' }}>
-          {/* This hidden div captures metric click events for each creator */}
-          {(() => {
-            const handleMetricClick = (metricType: string, metricLabel: string, params?: { role?: string; ratingValue?: string; seriesKey?: string }) => {
-              setActiveModal({
-                isOpen: true,
-                creatorKey: item.canonical_creator_key,
-                metricType,
-                metricLabel,
-                initialParams: params,
-              })
-            }
-            return null
-          })()}
-        </div>
-      ))}
     </div>
   )
 }
