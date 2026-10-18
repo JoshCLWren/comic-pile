@@ -12,7 +12,7 @@ WORKFLOW = (
 
 # Keep dispatcher assertions tied to the checked-in workflow contract.
 # These assertions protect the control-plane race handling, not provider policy.
-def test_push_smoke_workers_are_derived_from_current_provider_rows():
+def test_push_smoke_workers_are_derived_from_current_provider_rows() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "workers='[\"6\",\"39\",\"46\"]'" not in workflow
@@ -22,7 +22,7 @@ def test_push_smoke_workers_are_derived_from_current_provider_rows():
     assert ".github/scripts/factory_candidate_health.py" in workflow
 
 
-def test_stale_run_cancellation_retries_transient_status_race():
+def test_stale_run_cancellation_retries_transient_status_race() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "cancel_succeeded=false" in workflow
@@ -35,7 +35,7 @@ def test_stale_run_cancellation_retries_transient_status_race():
     assert 'if [[ "$status_from_cancel" != true ]]; then' in workflow
 
 
-def test_roster_dispatch_mode_cannot_fall_through_to_smoke_selection():
+def test_roster_dispatch_mode_cannot_fall_through_to_smoke_selection() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "mode:" in workflow
@@ -44,7 +44,7 @@ def test_roster_dispatch_mode_cannot_fall_through_to_smoke_selection():
     assert "-f mode=roster" in workflow
 
 
-def test_recovery_watchdog_dispatches_explicit_roster_mode():
+def test_recovery_watchdog_dispatches_explicit_roster_mode() -> None:
     recovery = (
         Path(__file__).resolve().parents[1]
         / ".github"
@@ -55,7 +55,7 @@ def test_recovery_watchdog_dispatches_explicit_roster_mode():
     assert "-f mode=roster" in recovery
 
 
-def test_dispatcher_installs_exact_rotisserie_revision_before_assignment():
+def test_dispatcher_installs_exact_rotisserie_revision_before_assignment() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     pin = "0067e8c49cb3a3142a04f6c56f19795a1e81ad3c"
@@ -68,7 +68,7 @@ def test_dispatcher_installs_exact_rotisserie_revision_before_assignment():
     )
 
 
-def test_roster_chain_is_serialized_and_keeps_hourly_watchdog():
+def test_roster_chain_is_serialized_and_keeps_hourly_watchdog() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "queue: single" in workflow
@@ -80,7 +80,7 @@ def test_roster_chain_is_serialized_and_keeps_hourly_watchdog():
     assert "sleep 240" in workflow
 
 
-def test_roster_tick_defaults_to_twelve_workers_with_source_diverse_seed():
+def test_roster_tick_defaults_to_twelve_workers_with_source_diverse_seed() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert 'max_per_tick="${MAX_WORKERS_PER_TICK:-12}"' in workflow
@@ -103,7 +103,7 @@ def test_roster_tick_defaults_to_twelve_workers_with_source_diverse_seed():
     )
 
 
-def test_dispatch_assigned_worker_counts_successful_entry_dispatches_not_kind_none():
+def test_dispatch_assigned_worker_counts_successful_entry_dispatches_not_kind_none() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "dispatched_count=0" in workflow
@@ -117,7 +117,7 @@ def test_dispatch_assigned_worker_counts_successful_entry_dispatches_not_kind_no
     )
 
 
-def test_dispatch_step_emits_dispatched_count_and_dispatch_failed_outputs():
+def test_dispatch_step_emits_dispatched_count_and_dispatch_failed_outputs() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     dispatch_step = workflow.split("Resolve and dispatch fixed workers", 1)[1].split(
@@ -130,7 +130,7 @@ def test_dispatch_step_emits_dispatched_count_and_dispatch_failed_outputs():
     assert 'echo "${dispatch_failures} worker dispatch(es) failed after retries' in dispatch_step
 
 
-def test_capacity_exhausted_early_exit_is_trustworthy_zero():
+def test_capacity_exhausted_early_exit_is_trustworthy_zero() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "OmniRoute free-entry cap is exhausted" in workflow
@@ -139,7 +139,7 @@ def test_capacity_exhausted_early_exit_is_trustworthy_zero():
     assert 'echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"' in cap_branch
 
 
-def test_roster_chain_gates_on_dispatched_count_and_dispatch_failed():
+def test_roster_chain_gates_on_dispatched_count_and_dispatch_failed() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     chain_step = workflow.split("Self-perpetuate roster cadence", 1)[1]
@@ -153,7 +153,7 @@ def test_roster_chain_gates_on_dispatched_count_and_dispatch_failed():
     assert "-f mode=roster" in chain_step
 
 
-def test_roster_chain_step_still_fires_on_always_for_schedule_or_roster():
+def test_roster_chain_step_still_fires_on_always_for_schedule_or_roster() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert (
@@ -164,7 +164,7 @@ def test_roster_chain_step_still_fires_on_always_for_schedule_or_roster():
     assert "queue: single" in workflow
 
 
-def test_private_rotisserie_secret_has_safe_ssh_preflight():
+def test_private_rotisserie_secret_has_safe_ssh_preflight() -> None:
     """Secret parsing and actual repo authorization must precede the pipx install."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     install = workflow.split("Install pinned Rotisserie decision CLI", 1)[1].split(
@@ -184,7 +184,7 @@ def test_private_rotisserie_secret_has_safe_ssh_preflight():
     assert 'trap \'rm -rf "$ssh_dir"\' EXIT' in install
 
 
-def test_dispatch_fails_closed_when_actions_installation_budget_is_low_or_unreadable():
+def test_dispatch_fails_closed_when_actions_installation_budget_is_low_or_unreadable() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     gate = workflow.split("Gate factory dispatch on Actions REST quota", 1)[1].split(
         "Reconcile serialized migration finalization lane", 1
@@ -207,7 +207,7 @@ def test_dispatch_fails_closed_when_actions_installation_budget_is_low_or_unread
         assert "if: steps.api_budget.outputs.allow == 'true'" in section
 
 
-def test_dispatch_batch_checks_live_quota_and_stops_roster_chain_at_reserve():
+def test_dispatch_batch_checks_live_quota_and_stops_roster_chain_at_reserve() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     batch = workflow.split("Dispatching workers through centralized assignment:", 1)[1].split(
         "Self-perpetuate roster cadence", 1
@@ -220,7 +220,7 @@ def test_dispatch_batch_checks_live_quota_and_stops_roster_chain_at_reserve():
     assert "steps.api_budget.outputs.allow == 'true'" in chain
     assert "steps.dispatch_workers.outputs.budget_deferred != 'true'" in chain
 
-def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick():
+def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick() -> None:
     """New manually authored PRs must not wait for hourly dispatcher recovery."""
     wake = (
         Path(__file__).resolve().parents[1]
@@ -243,7 +243,7 @@ def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick():
     assert "--ref main -f mode=roster" in wake
 
 
-def test_event_wakeup_never_checks_out_untrusted_pr_code_or_assigns_workers():
+def test_event_wakeup_never_checks_out_untrusted_pr_code_or_assigns_workers() -> None:
     """Privileged pull_request_target may only wake the trusted dispatcher."""
     wake = (
         Path(__file__).resolve().parents[1]
