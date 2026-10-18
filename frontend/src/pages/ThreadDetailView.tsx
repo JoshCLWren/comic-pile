@@ -545,9 +545,9 @@ export default function ThreadDetailView() {
                               <span className="text-sm font-medium text-stone-300">
                                 #{issue.issue_number}
                               </span>
-                              {thread && getCreatorDisplayText(thread.manual_creator_credits).length > 0 && (
+                              {thread && getCreatorDisplayText(thread.manual_creator_credits ?? []).length > 0 && (
                                 <span className="text-xs text-stone-400">
-                                  by {getCreatorDisplayText(thread.manual_creator_credits)}
+                                  by {getCreatorDisplayText(thread.manual_creator_credits ?? [])}
                                 </span>
                               )}
                             </span>
