@@ -27,7 +27,8 @@ def _load_roster_lock_module() -> ModuleType:
     return module
 
 
-_ROSTER_LOCK = _load_roster_lock_module().load_roster_lock()
+_ROSTER_MODULE = _load_roster_lock_module()
+_ROSTER_LOCK = _ROSTER_MODULE.load_roster_lock()
 RETIRED_FIXED_MODELS = set(_ROSTER_LOCK["retired_models"])
 REMOVED_WORKERS = {str(worker) for worker in _ROSTER_LOCK["retired_workers"]}
 CATALOG_SOURCES = {"opencode-free", "openrouter-free"}
@@ -79,7 +80,9 @@ def _throttle_evidence(provider: str, model: str) -> dict[str, str]:
 def test_retired_fixed_models_are_replaced_by_catalog_free_slots() -> None:
     """Permanently retired models cannot keep consuming fixed factory lanes."""
     rows = _rows()
-    configured_models = {row[2] for row in rows}
+    # Router lanes (orcarouter, requesty) use source-scoped retirement keys so
+    # a retired upstream id elsewhere does not retire the router lane.
+    configured_models = {_ROSTER_MODULE.retirement_key(row[1], row[2]) for row in rows}
     assert RETIRED_FIXED_MODELS.isdisjoint(configured_models)
     assert REMOVED_WORKERS.isdisjoint({row[0] for row in rows})
 
