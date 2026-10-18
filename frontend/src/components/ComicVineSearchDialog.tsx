@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Modal from './Modal'
 import { comicVineApi } from '../services/api-comicvine'
 import type {
@@ -24,6 +24,16 @@ interface ComicVineSearchDialogProps {
 
 type DialogStep = 'search' | 'select-issue' | 'confirm' | 'siblings'
 
+/**
+ * Lifecycle of one async surface inside the dialog (#3448).
+ *
+ * The search step and the issue step each own exactly one of these phases at a time, so the
+ * screen can be in exactly one of loading / results / empty / error. A phase is resolved only
+ * by the request that is still current, which keeps out-of-order responses from flipping the
+ * screen back to a state the reader already left.
+ */
+type LoadPhase = 'idle' | 'loading' | 'ready' | 'error'
+
 /** The provider volume a confirmed correction can license sibling scope for (#3159). */
 interface SiblingScope {
   provider: string
@@ -46,6 +56,9 @@ const EMPTY_PAGINATION: SeriesPagination = {
   hasMore: false,
   nextOffset: null,
 }
+
+const SEARCH_ERROR_MESSAGE = 'Failed to search ComicVine. Please try again.'
+const ISSUES_ERROR_MESSAGE = 'Failed to load issues. Please try again.'
 
 function seriesMetaParts(series: ComicVineSeriesResult): string[] {
   return [
@@ -120,15 +133,18 @@ export default function ComicVineSearchDialog({
   const [selectedIssue, setSelectedIssue] = useState<ComicVineIssueCandidate | null>(null)
   const [directIssue, setDirectIssue] = useState<ComicVineResolvedIssue | null>(null)
   const [pagination, setPagination] = useState<SeriesPagination>(EMPTY_PAGINATION)
-  const [isSearching, setIsSearching] = useState(false)
+  const [searchPhase, setSearchPhase] = useState<LoadPhase>('idle')
+  const [issuesPhase, setIssuesPhase] = useState<LoadPhase>('idle')
   const [isConfirming, setIsConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [hasSearched, setHasSearched] = useState(false)
   const [siblingScope, setSiblingScope] = useState<SiblingScope | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const asyncRef = useRef(0)
   const searchingRef = useRef(false)
+
+  const searchLoading = searchPhase === 'loading'
+  const issuesLoading = issuesPhase === 'loading'
 
   useEffect(() => {
     return () => {
@@ -151,8 +167,9 @@ export default function ComicVineSearchDialog({
       setSelectedIssue(null)
       setDirectIssue(null)
       setPagination(EMPTY_PAGINATION)
+      setSearchPhase('idle')
+      setIssuesPhase('idle')
       setError(null)
-      setHasSearched(false)
       setSiblingScope(null)
     }
   }, [isOpen, threadTitle])
@@ -163,7 +180,12 @@ export default function ComicVineSearchDialog({
     async (searchQuery: string, offset = 0, append = false) => {
       const requestId = ++asyncRef.current
       searchingRef.current = true
-      setIsSearching(true)
+      setSearchPhase('loading')
+      setError(null)
+      if (!append) {
+        setSeriesResults([])
+        setPagination(EMPTY_PAGINATION)
+      }
       try {
         const response = await comicVineApi.searchSeries(searchQuery, SEARCH_PAGE_SIZE, offset)
         if (requestId !== asyncRef.current) return
@@ -171,13 +193,15 @@ export default function ComicVineSearchDialog({
           append ? mergeSeriesResults(previous, response.results) : response.results,
         )
         setPagination(paginationFromResponse(response))
+        setSearchPhase('ready')
       } catch {
         if (requestId !== asyncRef.current) return
-        setError('Failed to search ComicVine. Please try again.')
-        setSeriesResults((previous) => (append ? previous : []))
+        setError(SEARCH_ERROR_MESSAGE)
+        setSeriesResults([])
+        setPagination(EMPTY_PAGINATION)
+        setSearchPhase('error')
       } finally {
         if (requestId === asyncRef.current) {
-          setIsSearching(false)
           searchingRef.current = false
         }
       }
@@ -191,6 +215,7 @@ export default function ComicVineSearchDialog({
         setSeriesResults([])
         setPagination(EMPTY_PAGINATION)
         setError(resolved.validation_error)
+        setSearchPhase('error')
         return
       }
       if (resolved.kind === 'issue') {
@@ -199,10 +224,13 @@ export default function ComicVineSearchDialog({
           setSelectedIssue(null)
           setSelectedSeries(null)
           setIssueCandidates([])
+          setIssuesPhase('idle')
+          setSearchPhase('ready')
           setStep('confirm')
           return
         } else {
           setError('Failed to resolve ComicVine issue. Please try again.')
+          setSearchPhase('error')
           return
         }
       }
@@ -212,6 +240,10 @@ export default function ComicVineSearchDialog({
           setSelectedIssue(null)
           setSelectedSeries(resolved.volume)
           setIssueCandidates(resolved.issues)
+          setIssuesPhase('ready')
+          // A pasted volume URL is not a text search, so the search step has no
+          // results to show when the reader navigates back to it.
+          setSearchPhase('idle')
           setStep('select-issue')
           if (issueNumber) {
             const normalizedIssueNumber = issueNumber.trim()
@@ -226,13 +258,14 @@ export default function ComicVineSearchDialog({
           return
         } else {
           setError('Failed to resolve ComicVine volume. Please try again.')
+          setSearchPhase('error')
           return
         }
       }
       if (resolved.kind === 'search') {
         const remainingQuery = resolved.input.trim()
         if (remainingQuery) {
-          handlePlainSearch(remainingQuery)
+          void handlePlainSearch(remainingQuery)
         }
       }
     },
@@ -243,15 +276,21 @@ export default function ComicVineSearchDialog({
     async (searchQuery: string, offset = 0, append = false) => {
       if (!searchQuery.trim()) {
         setSeriesResults([])
-        setHasSearched(false)
         setPagination(EMPTY_PAGINATION)
+        setSearchPhase('idle')
+        setError(null)
         return
       }
       const requestId = ++asyncRef.current
       searchingRef.current = true
-      setIsSearching(true)
+      setSearchPhase('loading')
       setError(null)
-      setHasSearched(true)
+      if (!append) {
+        // A new query replaces the previous result set, so the reader never sees one
+        // query's results sitting under another query's spinner or error (#3448).
+        setSeriesResults([])
+        setPagination(EMPTY_PAGINATION)
+      }
       try {
         const trimmed = searchQuery.trim()
         if (isComicVineUrlLike(trimmed)) {
@@ -263,16 +302,18 @@ export default function ComicVineSearchDialog({
         const response = await comicVineApi.searchSeries(trimmed, SEARCH_PAGE_SIZE, offset)
         if (requestId !== asyncRef.current) return
         setSeriesResults((previous) =>
-          append ? mergeSeriesResults(previous, response.results) : response.results
+          append ? mergeSeriesResults(previous, response.results) : response.results,
         )
         setPagination(paginationFromResponse(response))
+        setSearchPhase('ready')
       } catch {
         if (requestId !== asyncRef.current) return
-        setError('Failed to search ComicVine. Please try again.')
-        setSeriesResults((previous) => (append ? previous : []))
+        setError(SEARCH_ERROR_MESSAGE)
+        setSeriesResults([])
+        setPagination(EMPTY_PAGINATION)
+        setSearchPhase('error')
       } finally {
         if (requestId === asyncRef.current) {
-          setIsSearching(false)
           searchingRef.current = false
         }
       }
@@ -283,7 +324,7 @@ export default function ComicVineSearchDialog({
   useEffect(() => {
     if (isOpen && threadTitle.trim() && !hasAutoSearchedRef.current) {
       hasAutoSearchedRef.current = true
-      handleSearch(stripParenthesizedYears(threadTitle))
+      void handleSearch(stripParenthesizedYears(threadTitle))
     }
     if (!isOpen) {
       hasAutoSearchedRef.current = false
@@ -295,14 +336,23 @@ export default function ComicVineSearchDialog({
       setQuery(value)
       if (debounceRef.current) clearTimeout(debounceRef.current)
       if (!value.trim()) {
-        setHasSearched(false)
+        searchingRef.current = false
         setSeriesResults([])
         setPagination(EMPTY_PAGINATION)
+        setSearchPhase('idle')
+        setError(null)
         return
       }
+      setSeriesResults([])
+      setPagination(EMPTY_PAGINATION)
+      setError(null)
+      setSearchPhase('loading')
+      // Invalidate any in-flight request the moment the query changes, before the debounce
+      // fires, so a late response for the old query cannot repaint the screen under the new
+      // one (#3448).
+      asyncRef.current += 1
       debounceRef.current = setTimeout(() => {
-        asyncRef.current += 1
-        handleSearch(value)
+        void handleSearch(value)
       }, 350)
     },
     [handleSearch],
@@ -310,20 +360,26 @@ export default function ComicVineSearchDialog({
 
   const handleLoadMore = useCallback(() => {
     if (!pagination.hasMore || pagination.nextOffset == null || searchingRef.current) return
-    handleSearch(query, pagination.nextOffset, true)
+    void handleSearch(query, pagination.nextOffset, true)
   }, [pagination, query, handleSearch])
 
   const handleSelectSeries = useCallback(
     async (series: ComicVineSeriesResult) => {
       setSelectedSeries(series)
       setStep('select-issue')
-      setIsSearching(true)
+      setIssuesPhase('loading')
+      setIssueCandidates([])
       setError(null)
+      // Selecting a series supersedes any in-flight search, so keep the search step
+      // from being stuck on its loading phase when the reader navigates back.
+      searchingRef.current = false
+      setSearchPhase((phase) => (phase === 'loading' ? 'idle' : phase))
       const requestId = ++asyncRef.current
       try {
         const response = await comicVineApi.getSeriesIssues(series.comicvine_volume_id, series.name)
         if (requestId !== asyncRef.current) return
         setIssueCandidates(response.issues)
+        setIssuesPhase('ready')
         if (issueNumber) {
           const normalizedIssueNumber = issueNumber.trim()
           const match = response.issues.find(
@@ -336,12 +392,9 @@ export default function ComicVineSearchDialog({
         }
       } catch {
         if (requestId !== asyncRef.current) return
-        setError('Failed to load issues. Please try again.')
+        setError(ISSUES_ERROR_MESSAGE)
         setIssueCandidates([])
-      } finally {
-        if (requestId === asyncRef.current) {
-          setIsSearching(false)
-        }
+        setIssuesPhase('error')
       }
     },
     [issueNumber],
@@ -386,6 +439,16 @@ export default function ComicVineSearchDialog({
     }
   }, [issueId, directIssue, selectedIssue, mode, onConfirmed, onClose, selectedSeries, threadTitle])
 
+  const handleRetry = useCallback(() => {
+    if (step === 'select-issue' && selectedSeries) {
+      void handleSelectSeries(selectedSeries)
+      return
+    }
+    if (query.trim()) {
+      void handleSearch(query)
+    }
+  }, [step, selectedSeries, query, handleSelectSeries, handleSearch])
+
   const handleDismissSiblings = useCallback(() => {
     setSiblingScope(null)
     onClose()
@@ -395,7 +458,7 @@ export default function ComicVineSearchDialog({
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && step === 'search' && query.trim()) {
         if (debounceRef.current) clearTimeout(debounceRef.current)
-        handleSearch(query)
+        void handleSearch(query)
       }
     },
     [step, query, handleSearch],
@@ -403,6 +466,11 @@ export default function ComicVineSearchDialog({
 
   const confirmSeriesName = directIssue?.series_name ?? selectedSeries?.name ?? threadTitle
   const confirmIssue = directIssue ?? selectedIssue
+
+  const showRetry =
+    error !== null
+    && ((step === 'search' && searchPhase === 'error')
+      || (step === 'select-issue' && issuesPhase === 'error'))
 
   const dialogTitle =
     step === 'search'
@@ -422,8 +490,18 @@ export default function ComicVineSearchDialog({
     >
       <div className="space-y-4">
         {error && (
-          <div className="p-3 rounded-lg bg-rose-900/30 border border-rose-700/40 text-sm text-rose-300" role="alert">
-            {error}
+          <div className="p-3 rounded-lg bg-rose-900/30 border border-rose-700/40 text-sm text-rose-300 space-y-2" role="alert">
+            <p>{error}</p>
+            {showRetry && (
+              <button
+                type="button"
+                onClick={handleRetry}
+                data-testid="comicvine-retry"
+                className="min-h-11 px-4 rounded-lg text-sm font-bold text-rose-100 bg-rose-800/60 border border-rose-600/50 hover:bg-rose-800 transition"
+              >
+                Retry
+              </button>
+            )}
           </div>
         )}
 
@@ -446,7 +524,7 @@ export default function ComicVineSearchDialog({
                 placeholder="Search series title or paste a ComicVine URL"
                 className="w-full min-h-11 rounded-xl px-4 pr-10 text-sm text-stone-100 bg-stone-800 border border-stone-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
               />
-              {isSearching && (
+              {searchLoading && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                   <div className="w-4 h-4 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
                 </div>
@@ -486,30 +564,30 @@ export default function ComicVineSearchDialog({
                     </div>
                   </button>
                 ))}
-{pagination.hasMore && pagination.nextOffset !== null && (
-                   <button
-                     type="button"
-                     onClick={handleLoadMore}
-                     disabled={isSearching}
-                     data-testid="comicvine-load-more"
-                     className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
-                   >
-                     {isSearching ? 'Loading...' : 'Load more'}
-                   </button>
-                 )}
+                {pagination.hasMore && pagination.nextOffset !== null && (
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={searchLoading}
+                    data-testid="comicvine-load-more"
+                    className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
+                  >
+                    {searchLoading ? 'Loading...' : 'Load more'}
+                  </button>
+                )}
               </div>
             )}
-            {!isSearching && !query.trim() && (
+            {!query.trim() && (
               <p className="text-sm text-stone-400 text-center py-4">
                 Type a series name to search ComicVine
               </p>
             )}
-            {!isSearching && query.trim() && seriesResults.length === 0 && !hasSearched && (
+            {query.trim() && seriesResults.length === 0 && searchPhase === 'idle' && (
               <p className="text-sm text-stone-400 text-center py-4">
                 Search ComicVine for the correct series
               </p>
             )}
-            {!isSearching && query.trim() && seriesResults.length === 0 && hasSearched && !error && (
+            {query.trim() && seriesResults.length === 0 && searchPhase === 'ready' && (
               <p className="text-sm text-stone-300 text-center py-4">
                 No series found. Try a different search term.
               </p>
@@ -526,6 +604,8 @@ export default function ComicVineSearchDialog({
                   setStep('search')
                   setSelectedSeries(null)
                   setIssueCandidates([])
+                  setIssuesPhase('idle')
+                  setSearchPhase(seriesResults.length > 0 ? 'ready' : 'idle')
                 }}
                 className="text-sm text-amber-500 hover:text-amber-400 font-bold"
               >
@@ -546,7 +626,7 @@ export default function ComicVineSearchDialog({
                 matching issue below to confirm.
               </p>
             )}
-            {isSearching ? (
+            {issuesLoading ? (
               <div className="flex justify-center py-8">
                 <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
               </div>
@@ -582,13 +662,13 @@ export default function ComicVineSearchDialog({
                   </button>
                 ))}
               </div>
-            ) : (
+            ) : issuesPhase === 'ready' ? (
               <p className="text-sm text-stone-400 text-center py-4">
                 {issueNumber
                   ? `No match for #${issueNumber} in this series.`
                   : 'No issues found in this series.'}
               </p>
-            )}
+            ) : null}
           </>
         )}
 
