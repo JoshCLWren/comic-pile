@@ -6,6 +6,7 @@ import LandingPage from '../pages/LandingPage'
 import {
   buildLandingStructuredData,
   LANDING_FEATURES,
+  resolveProductionOrigin,
   SITE_DESCRIPTION,
   SITE_NAME,
   STRUCTURED_DATA_SCRIPT_ID,
@@ -111,6 +112,9 @@ test('runtime structured data matches the static prerendered graph', () => {
   renderSeoAt('/')
   // SAFETY: script.textContent is valid JSON from the scaffolded landing structured-data graph
   const runtime = JSON.parse(structuredDataScript()?.textContent ?? '') as JsonLdGraph
-  const expected = buildLandingStructuredData(window.location.origin)
+  // Both the runtime <Seo/> head and the build-time prerendered graph resolve the
+  // configured production origin, so schema URLs stay absolute and identical.
+  const expected = buildLandingStructuredData(resolveProductionOrigin())
   expect(runtime).toEqual(expected)
+  expect(runtime['@graph'].every(node => node.url?.startsWith('https://'))).toBe(true)
 })

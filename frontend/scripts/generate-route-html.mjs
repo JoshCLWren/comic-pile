@@ -1,11 +1,17 @@
 /**
  * Generate route-specific HTML files with proper SEO metadata.
- * This addresses issue #3485 where raw HTML has the same title/description/canonical on every route.
+ *
+ * This addresses issue #3485 where raw HTML served the same title, description,
+ * and canonical URL on every route. Instead of maintaining a second full copy
+ * of the bootstrap page, the script rewrites only the SEO metadata block inside
+ * Vite's own build output. Every generated route file is therefore byte-identical
+ * to `frontend/index.html` everywhere except the head metadata, so future fixes
+ * to the bootstrap page automatically flow into every route file.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { ROUTE_SEO_TABLE } from '../src/seo/routeSeo.ts'
 import { resolveProductionOrigin } from './generate-sitemap.mjs'
@@ -16,7 +22,23 @@ const buildDir = resolve(frontendDir, '..', 'static', 'react')
 const productionOrigin = resolveProductionOrigin(process.env)
 
 /**
- * Generate structured data JSON-LD for indexable routes
+ * Escape a value for use in HTML text content or a double-quoted attribute.
+ *
+ * @param {string} value - Raw title or description text.
+ * @returns {string} HTML-safe text.
+ */
+function escapeHtml(value) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}
+
+/**
+ * Generate structured data JSON-LD for indexable routes.
+ *
+ * @returns {string} Compact JSON-LD document.
  */
 function generateStructuredData() {
   return JSON.stringify({
@@ -41,260 +63,113 @@ function generateStructuredData() {
 }
 
 /**
- * Simple template engine for replacing placeholders
+ * Build the route-specific head metadata tags.
+ *
+ * @param {{pattern: string, title: string, description: string, canonicalPath: string | null, visibility: string}} route - Route SEO entry.
+ * @returns {string[]} Metadata tags ready to inject after `<meta charset>`.
  */
-function renderTemplate(template, data) {
-  return template
-    .replace(/<%= title %>/g, data.title || '')
-    .replace(/<%= description %>/g, data.description || '')
-    .replace(/<%= canonicalUrl %>/g, data.canonicalUrl || '')
-    .replace(/<%= robots %>/g, data.robots || '')
-    .replace(/<%= ogTitle %>/g, data.ogTitle || '')
-    .replace(/<%= ogDescription %>/g, data.ogDescription || '')
-    .replace(/<%= ogUrl %>/g, data.ogUrl || '')
-    .replace(/<%= structuredData %>/g, data.structuredData || '')
-}
-
-/**
- * Generate HTML for a specific route
- */
-function extractAssetTags(builtIndexHtml) {
-  if (!builtIndexHtml) {
-    return ''
-  }
-  const tags = []
-  const stylesheetRegex = /<link[^>]*rel=["']stylesheet["'][^>]*>/gi
-  const moduleScriptRegex = /<script[^>]*type=["']module["'][^>]*><\/script>/gi
-  for (const match of builtIndexHtml.match(stylesheetRegex) || []) {
-    tags.push(match.trim())
-  }
-  for (const match of builtIndexHtml.match(moduleScriptRegex) || []) {
-    tags.push(match.trim())
-  }
-  return tags.join('\n    ')
-}
-
-function generateRouteHtml(route, assetTags = '') {
+function buildRouteHeadTags(route) {
   const canonicalUrl = route.canonicalPath ? `${productionOrigin}${route.canonicalPath}` : null
   const robots = route.visibility === 'public-indexable' ? 'index, follow' : 'noindex, nofollow'
   const ogUrl = canonicalUrl || `${productionOrigin}${route.pattern}`
-  const structuredData = route.visibility === 'public-indexable' ? generateStructuredData() : null
-  const assetMarkup = assetTags || '    <script type="module" src="/src/main.tsx"></script>'
+  const title = escapeHtml(route.title)
+  const description = escapeHtml(route.description)
 
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>${route.title}</title>
-    <meta name="description" content="${route.description}" />
-    ${canonicalUrl ? `<link rel="canonical" href="${canonicalUrl}" />` : ''}
-    <meta name="robots" content="${robots}" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="${route.title}" />
-    <meta property="og:description" content="${route.description}" />
-    <meta property="og:url" content="${ogUrl}" />
-    ${structuredData ? `
-    <script id="comic-pile-structured-data" type="application/ld+json">
-      ${structuredData}
-    </script>` : ''}
-    <style>
-      #bootstrap-shell {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        display: flex;
-        min-height: 100vh;
-        flex-direction: column;
-        justify-content: space-between;
-        background: radial-gradient(circle at top, #2b2118 0%, #110e0a 48%, #090806 100%);
-        color: #f5f0e8;
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-
-      .bootstrap-shell__main {
-        width: min(100% - 2rem, 38rem);
-        margin: auto;
-        padding: 2rem 0 7rem;
-        text-align: center;
-      }
-
-      .bootstrap-shell__mark {
-        display: inline-grid;
-        width: 4rem;
-        height: 4rem;
-        place-items: center;
-        border: 1px solid rgba(245, 240, 232, 0.18);
-        border-radius: 1rem;
-        background: rgba(17, 14, 10, 0.72);
-        box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.35);
-        font-size: 2rem;
-      }
-
-      .bootstrap-shell__title {
-        margin: 1rem 0 0.35rem;
-        font-size: clamp(1.75rem, 7vw, 2.75rem);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .bootstrap-shell__status {
-        min-height: 3rem;
-        margin: 0 auto;
-        color: #b8aea1;
-        line-height: 1.5;
-      }
-
-      .bootstrap-shell__maintainer {
-        margin: 1rem auto 0;
-        max-width: 30rem;
-        color: #b8aea1;
-        font-size: 0.8125rem;
-        line-height: 1.5;
-      }
-
-      .bootstrap-shell__maintainer a {
-        color: #d4a35f;
-        font-weight: 600;
-        text-decoration: none;
-      }
-
-      .bootstrap-shell__lede {
-        margin: 0.5rem auto 0;
-        max-width: 30rem;
-        color: #f5f0e8;
-        font-size: 1rem;
-        font-weight: 600;
-        line-height: 1.5;
-      }
-
-      .bootstrap-shell__points {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.5rem 1.25rem;
-        margin: 1rem auto 0;
-        padding: 0;
-        max-width: 32rem;
-        list-style: none;
-        color: #b8aea1;
-        font-size: 0.8125rem;
-        line-height: 1.5;
-      }
-
-      .bootstrap-shell__pulse {
-        width: 2.5rem;
-        height: 0.25rem;
-        margin: 1.5rem auto 0;
-        overflow: hidden;
-        border-radius: 999px;
-        background: rgba(245, 240, 232, 0.12);
-      }
-
-      .bootstrap-shell__pulse::after {
-        display: block;
-        width: 50%;
-        height: 100%;
-        border-radius: inherit;
-        background: #d4a35f;
-        content: "";
-        animation: bootstrap-pulse 1.15s ease-in-out infinite alternate;
-      }
-
-      .bootstrap-shell__nav {
-        position: fixed;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        min-height: 4rem;
-        border-top: 1px solid rgba(245, 240, 232, 0.1);
-        background: rgba(17, 14, 10, 0.94);
-        backdrop-filter: blur(12px);
-      }
-
-      .bootstrap-shell__nav span {
-        display: grid;
-        place-items: center;
-        color: #8f8579;
-        font-size: 1.35rem;
-      }
-
-      @keyframes bootstrap-pulse {
-        from { transform: translateX(-75%); }
-        to { transform: translateX(175%); }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .bootstrap-shell__pulse::after { animation: none; }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="bootstrap-shell" role="status" aria-live="polite" aria-label="ComicPile is starting">
-      <main class="bootstrap-shell__main">
-        <div class="bootstrap-shell__mark" aria-hidden="true">📚</div>
-        <h1 class="bootstrap-shell__title">ComicPile</h1>
-        <div data-prerendered-landing>
-          <p class="bootstrap-shell__lede">
-            A dice-driven reading queue for your comic collection.
-          </p>
-          <ul class="bootstrap-shell__points">
-            <li>Build your queue of series and issues remaining</li>
-            <li>Roll the die to pick your next read</li>
-            <li>Read, rate, and keep your place</li>
-          </ul>
-          <p class="bootstrap-shell__maintainer">
-            A personal open-source project maintained by
-            <a href="https://github.com/JoshCLWren" target="_blank" rel="noreferrer">Josh</a>
-            (JoshCLWren on GitHub).
-          </p>
-        </div>
-        <p class="bootstrap-shell__status" data-bootstrap-status data-state="loading">
-          Opening your reading desk and checking your session…
-        </p>
-        <div class="bootstrap-shell__pulse" aria-hidden="true"></div>
-      </main>
-      <nav class="bootstrap-shell__nav" aria-label="ComicPile navigation loading">
-        <span aria-hidden="true">🎲</span>
-        <span aria-hidden="true">📚</span>
-        <span aria-hidden="true">📜</span>
-        <span aria-hidden="true">🔀</span>
-      </nav>
-    </div>
-    <div id="root"></div>
-    <noscript>
-      <p style="max-width: 32rem; margin: 2rem auto; text-align: center; line-height: 1.5;">
-        ComicPile is a dice-driven reading queue for your comic collection: build your
-        stack, roll the die, and read what comes up. It is a personal open-source
-        project maintained by
-        <a href="https://github.com/JoshCLWren" target="_blank" rel="noreferrer">Josh</a>
-        (JoshCLWren on GitHub). The interactive queue needs JavaScript; please enable
-        it to sign in and roll.
-      </p>
-    </noscript>
-    ${assetMarkup}
-  </body>
-</html>`
+  const tags = [
+    `<title>${title}</title>`,
+    `<meta name="description" content="${description}" />`,
+  ]
+  if (canonicalUrl) {
+    tags.push(`<link rel="canonical" href="${canonicalUrl}" />`)
+  }
+  tags.push(`<meta name="robots" content="${robots}" />`)
+  tags.push('<meta property="og:type" content="website" />')
+  tags.push(`<meta property="og:title" content="${title}" />`)
+  tags.push(`<meta property="og:description" content="${description}" />`)
+  tags.push(`<meta property="og:url" content="${ogUrl}" />`)
+  if (route.visibility === 'public-indexable') {
+    tags.push(
+      `<script id="comic-pile-structured-data" type="application/ld+json">\n` +
+        `      ${generateStructuredData()}\n` +
+        `    </script>`,
+    )
+  }
+  return tags
 }
 
 /**
- * Main function to generate all route HTML files
+ * Remove every SEO metadata tag from the built page so exactly one route-specific
+ * set remains after injection.
+ *
+ * @param {string} builtIndexHtml - Vite's built `index.html` content.
+ * @returns {string} HTML without title, description, canonical, robots, Open Graph,
+ *   or landing JSON-LD metadata.
+ */
+function stripRouteSeoMetadata(builtIndexHtml) {
+  return builtIndexHtml
+    .replace(/<title[^>]*>[\s\S]*?<\/title>/i, '')
+    .replace(/<meta\s+name="description"[^>]*>/gi, '')
+    .replace(/<link\s+rel="canonical"[^>]*>/gi, '')
+    .replace(/<meta\s+name="robots"[^>]*>/gi, '')
+    .replace(/<meta\s+property="og:[a-z]+"[^>]*>/gi, '')
+    .replace(
+      /<script[^>]*id="comic-pile-structured-data"[^>]*>[\s\S]*?<\/script>/gi,
+      '',
+    )
+}
+
+/**
+ * Insert route metadata right after the charset declaration in `<head>`.
+ *
+ * @param {string} strippedHtml - Built HTML with prior metadata removed.
+ * @param {string[]} headTags - Route metadata tags.
+ * @returns {string} HTML with the route metadata in place.
+ */
+function insertHeadTags(strippedHtml, headTags) {
+  const tags = headTags.join('\n    ')
+  const charsetPattern = /<meta\s+charset="[^"]*"\s*\/?>/i
+  if (charsetPattern.test(strippedHtml)) {
+    return strippedHtml.replace(
+      charsetPattern,
+      (match) => `${match}\n    ${tags}`,
+    )
+  }
+  return strippedHtml.replace(/<head[^>]*>/i, (match) => `${match}\n    ${tags}`)
+}
+
+/**
+ * Generate HTML for a specific route by rewriting the built page's metadata.
+ *
+ * @param {{pattern: string, title: string, description: string, canonicalPath: string | null, visibility: string}} route - Route SEO entry.
+ * @param {string} builtIndexHtml - Vite's built `index.html` content to derive the page from.
+ * @returns {string} Full HTML document for the route.
+ * @throws If no built HTML is supplied; the script only runs after `vite build`.
+ */
+function generateRouteHtml(route, builtIndexHtml) {
+  if (!builtIndexHtml) {
+    throw new Error(
+      'generateRouteHtml requires the built index.html content; run after `vite build`.',
+    )
+  }
+  return insertHeadTags(stripRouteSeoMetadata(builtIndexHtml), buildRouteHeadTags(route))
+}
+
+/**
+ * Generate one route HTML file per non-parameterized route from the single
+ * built `index.html`.
  */
 function main() {
   if (!existsSync(buildDir)) {
     mkdirSync(buildDir, { recursive: true })
   }
 
-  // Capture the asset references emitted by Vite's build before we overwrite
-  // the generated index.html, so route HTML files bootstrap the real app.
   const builtIndexHtmlPath = resolve(buildDir, 'index.html')
-  const builtIndexHtml = existsSync(builtIndexHtmlPath)
-    ? readFileSync(builtIndexHtmlPath, 'utf-8')
-    : ''
-  const assetTags = extractAssetTags(builtIndexHtml)
+  if (!existsSync(builtIndexHtmlPath)) {
+    throw new Error(
+      `Missing Vite build output at ${builtIndexHtmlPath}; run \`vite build\` before generating route HTML.`,
+    )
+  }
+  const builtIndexHtml = readFileSync(builtIndexHtmlPath, 'utf-8')
 
   // Generate HTML for each route
   for (const route of ROUTE_SEO_TABLE) {
@@ -312,7 +187,7 @@ function main() {
       mkdirSync(htmlDir, { recursive: true })
     }
 
-    const html = generateRouteHtml(route, assetTags)
+    const html = generateRouteHtml(route, builtIndexHtml)
     writeFileSync(htmlPath, html)
 
     console.log(`✓ Generated ${routePath}`)
@@ -325,6 +200,6 @@ function main() {
 export { generateRouteHtml, generateStructuredData }
 
 // Execute if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main()
 }

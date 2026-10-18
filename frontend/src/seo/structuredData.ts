@@ -21,8 +21,10 @@ const DEFAULT_PRODUCTION_ORIGIN = 'https://comic-pile.vercel.app'
  * @returns The origin with no trailing slash and no path.
  */
 export function resolveProductionOrigin(): string {
-  const raw = import.meta.env.VITE_PRODUCTION_ORIGIN
-  return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : DEFAULT_PRODUCTION_ORIGIN
+  // Import-meta env values are strings or absent, so parse at this I/O
+  // boundary and branch on the trimmed domain value rather than its runtime type.
+  const raw = import.meta.env.VITE_PRODUCTION_ORIGIN?.trim()
+  return raw ? raw : DEFAULT_PRODUCTION_ORIGIN
 }
 
 export const SITE_NAME = 'ComicPile'
