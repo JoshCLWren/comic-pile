@@ -80,11 +80,12 @@ def active_pauses(
 
 def is_paused(worker: int | str, now: datetime | None = None) -> QuotaPause | None:
     """Return the active pause for a worker, or None."""
-    try:
-        worker_id = int(worker)
-    except TypeError, ValueError:
+    # Avoid tuple-except syntax that differs across Python versions; the
+    # dispatcher runs this with the runner's system python3.
+    text = str(worker).strip()
+    if not text.isdigit():
         return None
-    return active_pauses(now).get(worker_id)
+    return active_pauses(now).get(int(text))
 
 
 def describe(pause: QuotaPause) -> str:

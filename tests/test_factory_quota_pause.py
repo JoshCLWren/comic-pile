@@ -12,7 +12,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / ".github" / "scripts"
-_SPEC = importlib.util.spec_from_file_location("factory_quota_pause", SCRIPTS / "factory_quota_pause.py")
+_SPEC = importlib.util.spec_from_file_location(
+    "factory_quota_pause", SCRIPTS / "factory_quota_pause.py"
+)
 assert _SPEC and _SPEC.loader
 qp = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = qp
@@ -85,6 +87,21 @@ def test_rejects_non_utc_and_duplicates(tmp_path: Path) -> None:
     dup = {"worker": 48, "paused_until": "2026-11-01T00:00:00Z"}
     with pytest.raises(ValueError, match="duplicate"):
         qp.load_pauses(_write(tmp_path, [dup, dup]))
+
+
+def test_is_paused_handles_non_numeric_ids() -> None:
+    """Non-numeric worker ids are never paused."""
+    assert qp.is_paused("local") is None
+    assert qp.is_paused(None) is None  # type: ignore[arg-type]
+    assert qp.is_paused("48", now=BEFORE_RESET) is not None
+
+
+def test_pause_module_parses_on_older_python() -> None:
+    """The dispatcher's system python3 may predate 3.14 syntax relaxations."""
+    import ast
+
+    source = (SCRIPTS / "factory_quota_pause.py").read_text(encoding="utf-8")
+    ast.parse(source, feature_version=(3, 10))
 
 
 def test_missing_file_means_no_pauses(tmp_path: Path) -> None:
