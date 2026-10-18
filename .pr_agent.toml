@@ -8,12 +8,14 @@
 # call per PR event, published as a GitHub check run.
 #
 # Free models only, through OpenAI-compatible gateways, tried in this order:
-#   1. Routeway   https://api.routeway.ai/v1    deepseek-v4-flash:free            ROUTEWAY_API_KEY
+#   1. Routeway   https://api.routeway.ai/v1    minimax-m2.7:free                 ROUTEWAY_API_KEY
 #   2. Requesty   https://router.requesty.ai/v1 nvidia/nemotron-3-ultra-550b-a55b  REQUESTY_API_KEY
 #   3. OrcaRouter https://api.orcarouter.ai/v1  z-ai/glm-5.3-flash-free            ORCAROUTER_API_KEY
 # Routeway goes first because the Requesty and OrcaRouter keys are shared with the
 # factory workers' daily quota. ROUTEWAY_API_KEY may be unset; the workflow then
 # falls through to Requesty, then OrcaRouter. No paid OpenRouter.
+# Routeway deepseek-v4-flash:free was evaluated first and rejected: on a real review
+# it returned empty content (finish_reason=length).
 #
 # Endpoints, keys and model names live in the workflow, not here: since PR-Agent
 # v0.48.0, api_base and key/token/url settings are host-only and ignored in this
@@ -34,9 +36,14 @@ push_commands = ["/review"]
 [github]
 publish_as_check_run = true
 
+[config]
+max_output_tokens = 8192
+
 [pr_reviewer]
 require_tests_review = true
 require_security_review = true
 num_max_findings = 5
 persistent_comment = true
+enable_review_labels_effort = false
+enable_review_labels_security = false
 extra_instructions = "Advisory review for comic-pile (FastAPI + React). Focus on correctness, security, migrations and test gaps; skip style nits."
