@@ -39,12 +39,36 @@ OPENCODE_DISPLAY_TOKEN_OVERRIDES = {"mimo": "MiMo"}
 OPENCODE_MUSE_SPARK_RE = re.compile(r"muse-spark", re.IGNORECASE)
 _VERSIONISH_TOKEN_RE = re.compile(r"^v?\d+(?:\.\d+)*$", re.IGNORECASE)
 CATALOG_SOURCES = frozenset({"opencode-free", "nvidia", "openrouter-free"})
-PROTECTED_SOURCES = frozenset({"kilo-auto", "z-ai", "ollama-cloud", "vercel-ai-gateway", "mistral"})
+PROTECTED_SOURCES = frozenset(
+    {"kilo-auto", "z-ai", "ollama-cloud", "vercel-ai-gateway", "mistral", "orcarouter", "requesty"}
+)
 Z_AI_FREE_MODELS = frozenset({"glm-4.5-flash", "glm-4.7-flash"})
 OLLAMA_CLOUD_FREE_MODELS = frozenset({"nemotron-3-nano:30b", "gpt-oss:20b"})
 # Approved native Mistral lane pin. Not a catalog :free id; mistral-small
 # and every other Mistral id stay rejected.
 MISTRAL_PINNED_MODELS = frozenset({"codestral-latest"})
+# OrcaRouter (https://api.orcarouter.ai/v1) free ids smoked or approved for
+# factory lanes. ``orcarouter/free`` (auto-router) and
+# ``orca/orcaverify-text1.0-free`` are deliberately excluded.
+ORCAROUTER_FREE_MODELS = frozenset(
+    {
+        "z-ai/glm-5.3-flash-free",
+        "tencent/hy4-preview-free",
+        "tencent/hy3-free",
+        "deepseek/deepseek-v4.1-flash-free",
+        "deepseek/deepseek-v4-flash-free",
+    }
+)
+# Requesty (https://router.requesty.ai/v1) ids approved for factory lanes.
+REQUESTY_APPROVED_MODELS = frozenset(
+    {
+        "nvidia/nemotron-3-ultra-550b-a55b",
+        "nvidia/nemotron-3-super-120b-a12b",
+        "poolside/laguna-m.1",
+        "poolside/laguna-xs.2",
+        "google/gemma-4-31b-it",
+    }
+)
 # Time-boxed $0 OpenRouter promo catalog ids that omit the ``:free`` suffix.
 OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha"})
 LOCK_SCHEMA_VERSION = 1
@@ -172,6 +196,44 @@ def mistral_model_is_pinned(model: str) -> bool:
         other Mistral id are rejected.
     """
     return _bare_source_model(model, "mistral") in MISTRAL_PINNED_MODELS
+
+
+# Multi-vendor routers pin upstream ids (``nvidia/...``) that may collide with
+# ids retired from *other* sources in the shared retirement lock. Their lock
+# entries are therefore source-qualified (``requesty/nvidia/...``).
+SOURCE_SCOPED_RETIREMENT_SOURCES = frozenset({"orcarouter", "requesty"})
+
+
+def retirement_key(source: str, model: str) -> str:
+    """Return the retirement-lock key for one roster pin."""
+    if source in SOURCE_SCOPED_RETIREMENT_SOURCES:
+        return f"{source}/{_bare_source_model(model, source)}"
+    return model
+
+
+def orcarouter_model_is_free(model: str) -> bool:
+    """Return whether an OrcaRouter lane pin is an approved free id.
+
+    Args:
+        model: Bare or ``orcarouter/``-prefixed OrcaRouter model id.
+
+    Returns:
+        True only for approved ``*-free`` ids; ``orcarouter/free`` and
+        ``orca/orcaverify-text1.0-free`` are rejected.
+    """
+    return _bare_source_model(model, "orcarouter") in ORCAROUTER_FREE_MODELS
+
+
+def requesty_model_is_approved(model: str) -> bool:
+    """Return whether a Requesty lane pin is an approved id.
+
+    Args:
+        model: Bare or ``requesty/``-prefixed Requesty model id.
+
+    Returns:
+        True only for ids in :data:`REQUESTY_APPROVED_MODELS`.
+    """
+    return _bare_source_model(model, "requesty") in REQUESTY_APPROVED_MODELS
 
 
 def is_big_pickle(model: str) -> bool:

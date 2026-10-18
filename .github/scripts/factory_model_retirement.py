@@ -38,6 +38,7 @@ from factory_roster import (
     default_lock_path,
     default_roster_path,
     is_big_pickle,
+    retirement_key,
     load_roster_comments,
     load_roster_lock,
     load_roster_rows,
@@ -253,7 +254,7 @@ def decide_pin(
     source = row["source"]
     model = row["model"]
     retired_410 = retired_410_models or set()
-    if model in retired_models:
+    if retirement_key(source, model) in retired_models:
         return PinDecision(
             worker=worker,
             source=source,

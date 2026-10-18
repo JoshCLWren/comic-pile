@@ -25,6 +25,7 @@ from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FA
 from stale_pr_decay import StalePRGuard
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
 from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for
+from factory_source_budget import budget_block_reason
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
@@ -870,6 +871,10 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
         return None
     if worker_has_active_lease(worker):
         print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
+        return None
+    budget_reason = budget_block_reason(worker)
+    if budget_reason is not None:
+        print(f'[factory-controller] {budget_reason}; skipping dispatch', file=sys.stderr)
         return None
     snapshot = omniroute_free_entry_capacity()
     if snapshot['remaining'] <= 0:

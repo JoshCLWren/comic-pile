@@ -24,9 +24,9 @@ def test_multi_provider_entry_is_restored_while_omniroute_stays_dark() -> None:
     assert "openrouter-free)" in workflow
     assert "factory_live_opencode.py" in selector
     assert "kilo-auto)" in workflow
-    assert "z-ai|ollama-cloud|mistral)" in workflow
+    assert "z-ai|ollama-cloud|mistral|orcarouter|requesty)" in workflow
     assert "vercel-ai-gateway)" in workflow
-    assert "nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral)" in workflow
+    assert "nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)" in workflow
     assert "omniroute-disabled-incident" in workflow
     assert "FACTORY_OMNIROUTE_ENABLED" in workflow
     assert "factory_provider_candidates.py" in selector
@@ -63,6 +63,8 @@ def test_openai_compatible_factory_providers_inject_opencode_config() -> None:
     assert "https://api.z.ai/api/paas/v4" in workflow
     assert "https://ollama.com/v1" in workflow
     assert "https://api.mistral.ai/v1" in workflow
+    assert "https://api.orcarouter.ai/v1" in workflow
+    assert "https://router.requesty.ai/v1" in workflow
     assert "https://ai-gateway.vercel.sh/v1" in workflow
     assert "Require Pixel Canary to remain zero-price" in workflow
     assert "Prove Pixel Canary can use OpenCode tools" in workflow

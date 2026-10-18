@@ -36,3 +36,6 @@
 88	opencode-free	deepseek-v4.1-flash-free	35	dispatcher	OpenCode DeepSeek V4.1 Free Authenticated A
 89	opencode-free	deepseek-v4.1-flash-free	45	dispatcher	DeepSeek V4.1 Free Anonymous B
 90	opencode-free	deepseek-v4.1-flash-free	50	dispatcher	OpenCode DeepSeek V4.1 Free Authenticated B
+91	orcarouter	z-ai/glm-5.3-flash-free	5	dispatcher	OrcaRouter GLM 5.3 Flash Free
+92	requesty	nvidia/nemotron-3-ultra-550b-a55b	10	dispatcher	Requesty Nemotron 3 Ultra
+93	requesty	nvidia/nemotron-3-super-120b-a12b	15	dispatcher	Requesty Nemotron 3 Super

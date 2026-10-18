@@ -22,6 +22,10 @@ on:
         required: false
       MISTRAL_API_KEY:
         required: false
+      ORCAROUTER_API_KEY:
+        required: false
+      REQUESTY_API_KEY:
+        required: false
       AI_GATEWAY_API_KEY:
         required: false
       OMNIROUTE_API_KEY:
@@ -74,6 +78,8 @@ jobs:
       Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
       OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
       MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+      ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY }}
+      REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
       OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
       OMNIROUTE_MANAGEMENT_API_KEY: ${{ secrets.OMNIROUTE_MANAGEMENT_API_KEY }}
@@ -156,7 +162,7 @@ jobs:
               configured=true
               reason='configured-anonymous-free'
               ;;
-            z-ai|ollama-cloud|mistral)
+            z-ai|ollama-cloud|mistral|orcarouter|requesty)
               if [[ "$model" == "${source}/"* ]]; then
                 runtime_model="$model"
               else
@@ -167,6 +173,10 @@ jobs:
                 if [[ -n "${Z_AI_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-Z_AI_API_KEY'; fi
               elif [[ "$source" == "ollama-cloud" ]]; then
                 if [[ -n "${OLLAMA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-OLLAMA_API_KEY'; fi
+              elif [[ "$source" == "orcarouter" ]]; then
+                if [[ -n "${ORCAROUTER_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-ORCAROUTER_API_KEY'; fi
+              elif [[ "$source" == "requesty" ]]; then
+                if [[ -n "${REQUESTY_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-REQUESTY_API_KEY'; fi
               else
                 if [[ -n "${MISTRAL_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-MISTRAL_API_KEY'; fi
               fi
@@ -305,7 +315,7 @@ jobs:
           discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
 
           case "$SOURCE" in
-            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral)
+            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)
               # These adapters cannot enumerate reliably. Preserve the lane
               # request and let the existing real invocation/probe prove it.
               {
@@ -598,7 +608,9 @@ jobs:
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'z-ai' ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'ollama-cloud' ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'mistral'
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'mistral' ||
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'orcarouter' ||
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'requesty'
           )
         shell: bash
         env:
@@ -634,6 +646,20 @@ jobs:
               provider_id='mistral'
               env_name='MISTRAL_API_KEY'
               provider_name='Mistral Codestral'
+              ;;
+            orcarouter)
+              key="${ORCAROUTER_API_KEY:-}"
+              base_url='https://api.orcarouter.ai/v1'
+              provider_id='orcarouter'
+              env_name='ORCAROUTER_API_KEY'
+              provider_name='OrcaRouter free capacity'
+              ;;
+            requesty)
+              key="${REQUESTY_API_KEY:-}"
+              base_url='https://router.requesty.ai/v1'
+              provider_id='requesty'
+              env_name='REQUESTY_API_KEY'
+              provider_name='Requesty router'
               ;;
             *)
               echo "Unsupported OpenAI-compatible factory source: ${SOURCE}" >&2
