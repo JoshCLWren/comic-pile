@@ -40,7 +40,10 @@ export function applyCblAdoptionChoices(
         excluded.push(entry.cbl_position)
       }
     } else if (!selectable) {
-      if (entryKey in entryDecisions && entryDecisions[entryKey] === false) {
+      const explicitEntryExclude = entryKey in entryDecisions && entryDecisions[entryKey] === false
+      const explicitSeriesExclude =
+        entry.series_group_id in seriesDecisions && seriesDecisions[entry.series_group_id] === false
+      if (explicitEntryExclude || explicitSeriesExclude) {
         decision = 'excluded'
         excluded.push(entry.cbl_position)
       } else {
