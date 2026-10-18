@@ -16,6 +16,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException, status
 from httpx import AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -216,7 +217,6 @@ async def test_cron_fails_closed_when_secret_is_not_configured(
         {"Authorization": "Basic test-cron-secret-value-0123456789"},
         {"Authorization": "Bearer"},
         {"Authorization": "test-cron-secret-value-0123456789"},
-        {"Authorization": "Bearer sécret-é"},
     ],
 )
 async def test_cron_rejects_missing_or_incorrect_bearer(
@@ -231,6 +231,25 @@ async def test_cron_rejects_missing_or_incorrect_bearer(
 
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"
+
+
+@pytest.mark.asyncio
+async def test_cron_rejects_non_ascii_authorization_without_crashing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-ASCII bearer value is rejected by the gate, never a 500.
+
+    httpx cannot transmit non-ASCII header bytes, so this exercises the
+    dependency directly to prove ``compare_digest`` is byte-safe.
+    """
+    from app.access_control import require_cron_secret
+
+    _configure_cron_secret(monkeypatch)
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_cron_secret(authorization="Bearer sécret-é")
+
+    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.asyncio

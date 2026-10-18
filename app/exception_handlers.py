@@ -202,10 +202,16 @@ def register_exception_handlers(app: FastAPI, app_settings: AppSettings) -> None
                 extra=error_data,
             )
 
-        return JSONResponse(
+        response = JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
         )
+        # Preserve caller-supplied response headers (e.g. ``WWW-Authenticate``
+        # on a 401) instead of silently dropping them with the JSON body.
+        if exc.headers:
+            for key, value in exc.headers.items():
+                response.headers[key] = value
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
