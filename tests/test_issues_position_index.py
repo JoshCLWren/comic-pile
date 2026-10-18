@@ -194,6 +194,7 @@ async def test_issues_position_index_improves_pagination(
 
 @pytest.mark.asyncio
 async def test_issue_model_indexes_survive_committed_fixture(async_db_committed: AsyncSession):
+    """Verify the committed fixture leaves the model-declared issue indexes intact."""
     result = await async_db_committed.execute(
         text(
             "SELECT indexname FROM pg_indexes WHERE tablename = 'issues' "
