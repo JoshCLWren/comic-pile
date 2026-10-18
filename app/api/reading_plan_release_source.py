@@ -13,6 +13,7 @@ from app.schemas.reading_plan_release_source import (
     ReleaseSourceResponse,
     ReleaseSourceUpdate,
 )
+from app.schemas.reading_plan_reader import ReadingPlanReleaseSourceStatus
 from app.services import reading_plan_release_source_service as service
 
 router = APIRouter(tags=["reading-plan-release-sources"])
@@ -47,13 +48,13 @@ async def list_release_sources(
 
 @router.get(
     "/continuity-plans/{plan_id}/release-sources/reader",
-    response_model=list[ReleaseSourceResponse],
+    response_model=list[ReadingPlanReleaseSourceStatus],
 )
 async def list_release_sources_for_reader(
     plan_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[ReleaseSourceResponse]:
+) -> list[ReadingPlanReleaseSourceStatus]:
     """List reader-facing release source status for one plan.
 
     Returns enabled and disabled sources so the reader can re-enable a

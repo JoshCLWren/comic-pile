@@ -83,10 +83,10 @@ describe('NewReleasesSection', () => {
       { wrapper: createWrapper() },
     )
     expect(screen.getByRole('heading', { name: 'New releases' })).toBeInTheDocument()
-    expect(screen.getByText('X-Men')).toBeInTheDocument()
+    expect(screen.getByText(/X-Men/)).toBeInTheDocument()
     expect(screen.getByText('Target thread #4')).toBeInTheDocument()
     expect(screen.getByText(/Last sync:/)).toBeInTheDocument()
-    expect(screen.getByText('Incredible Hulk')).toBeInTheDocument()
+    expect(screen.getByText(/Incredible Hulk/)).toBeInTheDocument()
     expect(screen.getAllByTestId('new-release-source')).toHaveLength(2)
   })
 

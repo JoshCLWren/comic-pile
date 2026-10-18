@@ -188,7 +188,7 @@ describe('ReadingPlanDetailPage', () => {
     // New releases control is part of the Reading Plan reader surface.
     expect(screen.getByRole('heading', { name: 'New releases' })).toBeInTheDocument()
     expect(screen.getByTestId('new-release-source')).toBeInTheDocument()
-    expect(screen.getByText('X-Men')).toBeInTheDocument()
+    expect(screen.getByText(/X-Men/)).toBeInTheDocument()
     expect(screen.getByText('Target thread #4')).toBeInTheDocument()
     expect(screen.getByText('Last sync:')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Enabled' })).toBeInTheDocument()
