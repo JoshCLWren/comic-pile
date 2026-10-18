@@ -1,68 +1,48 @@
 import { render, screen } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import QueueControls from '../pages/QueuePage/QueueControls'
+import { describe, expect, it, vi } from 'vitest'
+import { QueueControls } from '../pages/QueuePage/QueueControls'
+import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 
 describe('QueueControls', () => {
-  const defaultProps = {
+  const baseProps = {
     activeCount: 5,
     shuffleDisabled: false,
     shufflePending: false,
-    onShuffle: jest.fn(),
-    onCreateThread: jest.fn(),
-    onAddFromComicVine: jest.fn(),
-    onBulkMapSeries: jest.fn(),
-    sortBy: 'position' as const,
-    onSortChange: jest.fn(),
+    onShuffle: vi.fn(),
+    onCreateThread: vi.fn(),
+    onAddFromComicVine: vi.fn(),
+    onBulkMapSeries: vi.fn(),
+    sortBy: 'position' as QueueSortBy,
+    onSortChange: vi.fn(),
     searchQuery: '',
-    onSearchChange: jest.fn(),
+    onSearchChange: vi.fn(),
   }
 
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  })
-
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
-
   it('renders bulk map series button', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueControls {...defaultProps} />
-      </QueryClientProvider>
-    )
+    render(<QueueControls {...baseProps} />)
 
     expect(screen.getByText('Map Series')).toBeInTheDocument()
     expect(screen.getByTestId('queue-bulk-map-desktop')).toBeInTheDocument()
   })
 
-  it('calls onBulkMapSeries when button is clicked', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueControls {...defaultProps} />
-      </QueryClientProvider>
-    )
+  it('calls onBulkMapSeries when button is clicked', async () => {
+    const { user } = await import('@testing-library/user-event')
+    const USER = await user.setup()
+    render(<QueueControls {...baseProps} />)
 
     const bulkMapButton = screen.getByText('Map Series')
-    bulkMapButton.click()
+    await USER.click(bulkMapButton)
 
-    expect(defaultProps.onBulkMapSeries).toHaveBeenCalled()
+    expect(baseProps.onBulkMapSeries).toHaveBeenCalled()
   })
 
   it('shows disabled state when no threads need mapping', () => {
     const propsWithNoThreads = {
-      ...defaultProps,
+      ...baseProps,
       activeCount: 0,
     }
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueControls {...propsWithNoThreads} />
-      </QueryClientProvider>
-    )
+    render(<QueueControls {...propsWithNoThreads} />)
 
     const bulkMapButton = screen.getByText('Map Series')
     expect(bulkMapButton).toBeDisabled()

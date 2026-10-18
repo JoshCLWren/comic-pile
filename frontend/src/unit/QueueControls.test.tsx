@@ -11,6 +11,7 @@ const baseProps = {
   onShuffle: vi.fn(),
   onCreateThread: vi.fn(),
   onAddFromComicVine: vi.fn(),
+  onBulkMapSeries: vi.fn(),
   // SAFETY: test fixture uses the valid default sort option
   sortBy: 'position' as QueueSortBy,
   onSortChange: vi.fn(),
@@ -31,6 +32,8 @@ describe('QueueControls', () => {
   beforeEach(() => {
     baseProps.onShuffle.mockClear()
     baseProps.onCreateThread.mockClear()
+    baseProps.onAddFromComicVine.mockClear()
+    baseProps.onBulkMapSeries.mockClear()
     baseProps.onSortChange.mockClear()
     baseProps.onSearchChange.mockClear()
   })
