@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
+import { getApiErrorDetail } from '../utils/apiError'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 
 export type ReportType = 'bug' | 'feature'
@@ -47,7 +48,7 @@ export default function BugReportModal({
       await onSubmit(reportType, title.trim(), description.trim())
     } catch (err) {
       console.error('Failed to submit report:', err)
-      setError(err instanceof Error ? err.message : 'Failed to submit report')
+      setError(getApiErrorDetail(err))
     } finally {
       setIsSubmitting(false)
     }
@@ -156,6 +157,10 @@ export default function BugReportModal({
             <span>Browser info and console errors will be included</span>
           </div>
         )}
+
+        <p className="text-[10px] text-stone-500" data-testid="bug-report-hourly-limit-notice">
+          Non-admin accounts can submit one report per hour.
+        </p>
 
         <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 pt-2">
           <button type="button" onClick={onClose} disabled={isSubmitting} className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] min-[360px]:tracking-[0.2em] transition-all disabled:opacity-50">
