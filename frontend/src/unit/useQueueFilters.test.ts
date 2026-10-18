@@ -178,4 +178,88 @@ describe('useQueueFilters', () => {
       'Oldest',
     ])
   })
+
+  describe('search filtering', () => {
+    it('filters threads case-insensitively', () => {
+      const threads = [
+        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
+        makeThread({ id: 2, title: 'DESCENDER', queue_position: 2 }),
+        makeThread({ id: 3, title: 'batman', queue_position: 3 }),
+      ]
+      const { result } = renderHook(() => useQueueFilters(threads, 'position', 'saga'))
+      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1])
+    })
+
+    it('filters threads with trimmed whitespace', () => {
+      const threads = [
+        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
+        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
+      ]
+      const { result } = renderHook(() => useQueueFilters(threads, 'position', '  saga  '))
+      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1])
+    })
+
+    it('returns empty array when no matches found', () => {
+      const threads = [
+        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
+        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
+      ]
+      const { result } = renderHook(() => useQueueFilters(threads, 'position', 'nonexistent'))
+      expect(result.current.filteredThreads).toEqual([])
+    })
+
+    it('returns all threads when search is empty', () => {
+      const threads = [
+        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
+        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
+      ]
+      const { result } = renderHook(() => useQueueFilters(threads, 'position', ''))
+      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
+    })
+
+    it('returns all threads when search is whitespace only', () => {
+      const threads = [
+        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
+        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
+      ]
+      const { result } = renderHook(() => useQueueFilters(threads, 'position', '   '))
+      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
+    })
+
+    it('filters partial matches in thread titles', () => {
+      const threads = [
+        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
+        makeThread({ id: 2, title: 'Saga Vol 2', queue_position: 2 }),
+        makeThread({ id: 3, title: 'Saga Annual', queue_position: 3 }),
+        makeThread({ id: 4, title: 'Descender', queue_position: 4 }),
+      ]
+      const { result } = renderHook(() => useQueueFilters(threads, 'position', 'Saga'))
+      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2, 3])
+    })
+  })
+
+  describe('zero-added scenario', () => {
+    it('handles zero-added scenario with empty threads array', () => {
+      const { result } = renderHook(() => useQueueFilters([], 'position', 'search'))
+      expect(result.current.filteredThreads).toEqual([])
+    })
+
+    it('handles zero-added scenario with no search matches', () => {
+      const threads = [
+        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
+        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
+      ]
+      const { result } = renderHook(() => useQueueFilters(threads, 'position', 'nonexistent'))
+      expect(result.current.filteredThreads).toEqual([])
+    })
+
+    it('handles zero-added scenario with empty search', () => {
+      const threads = [
+        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
+        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
+      ]
+      const { result } = renderHook(() => useQueueFilters(threads, 'position', ''))
+      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
+    })
+  })
 })

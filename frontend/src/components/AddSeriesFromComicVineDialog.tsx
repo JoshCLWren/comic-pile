@@ -98,11 +98,19 @@ interface ImportOutcome {
  * request adopted, so a null count drops the parenthetical instead of
  * inventing "0 issues".
  */
-function importSuccessMessage({ seriesName, issuesAdopted, threadCreated }: ImportOutcome): string {
+function importSuccessMessage({ seriesName, issuesAdopted, threadCreated }: ImportOutcome, result?: ComicVineImportSeriesResult): string {
   if (issuesAdopted === null) {
     return `Added "${seriesName}" to ComicPile`
   }
   if (!threadCreated && issuesAdopted === 0) {
+    // Check for conflicts or errors that occurred during import
+    if (result?.issues_conflict > 0) {
+      return `"${seriesName}" imported with ${result.issues_conflict} conflicts - check your queue for details`
+    }
+    const hasErrors = result?.issue_results?.some((issue) => issue.outcome === 'error') ?? false
+    if (hasErrors) {
+      return `"${seriesName}" imported but some issues couldn't be added - check your queue for details`
+    }
     return `"${seriesName}" is already up to date`
   }
   return threadCreated
@@ -251,8 +259,8 @@ export default function AddSeriesFromComicVineDialog({
   }, [])
 
   const finishAdd = useCallback(
-    async (outcome: ImportOutcome) => {
-      showToast(importSuccessMessage(outcome), 'success')
+    async (outcome: ImportOutcome, result?: ComicVineImportSeriesResult) => {
+      showToast(importSuccessMessage(outcome, result), 'success')
       await invalidateAfterQueueMutation(queryClient)
       onAdded(outcome.threadId)
       onClose()
@@ -278,7 +286,7 @@ export default function AddSeriesFromComicVineDialog({
         seriesName: result.series_name,
         issuesAdopted: result.issues_adopted,
         threadCreated: result.thread_created,
-      })
+      }, result)
     } catch (err: unknown) {
       // An import that outlives the client budget keeps running server-side and
       // commits after the client gives up, so a request the server never
@@ -292,7 +300,7 @@ export default function AddSeriesFromComicVineDialog({
             seriesName: committed.series_name ?? seriesName,
             issuesAdopted: committed.issue_count,
             threadCreated: true,
-          })
+          }, undefined)
           return
         }
         // Nothing is committed yet, but the import may still be in flight, so
@@ -322,15 +330,8 @@ export default function AddSeriesFromComicVineDialog({
 
   const maxAlreadyRead = selectedSeries?.issue_count ?? 0
 
-  const isAlreadyLinked = useMemo(
-    () => {
-      if (!selectedSeries || !threads) return false
-      return threads.some(
-        (t) => t.comicvine_volume_id === selectedSeries.comicvine_volume_id,
-      )
-    },
-    [selectedSeries, threads],
-  )
+  // Note: ThreadListItem doesn't have comicvine_volume_id, so we can't check for duplicates
+  // This functionality is incomplete and should be removed or implemented with a different approach
 
   return (
     <Modal
