@@ -4096,116 +4096,6 @@
         "title": "CreatorDetailResponse",
         "type": "object"
       },
-      "CreatorInsightIssue": {
-        "description": "One individual rated issue surfaced by creator insights (issue #3092).\n\nIndividual issue extremes are deliberately not aggregate series\nconclusions: a single 5-star issue may be shown, but it is always carried\nwith its stable thread context so the UI can label it as an individual\nissue and drill into the supporting thread instead of implying the\ncreator's \"best work\".",
-        "properties": {
-          "issue_id": {
-            "description": "Local ComicPile issue id.",
-            "title": "Issue Id",
-            "type": "integer"
-          },
-          "rating": {
-            "description": "Latest effective personal rating for this individual issue.",
-            "title": "Rating",
-            "type": "number"
-          },
-          "thread_id": {
-            "description": "Local ComicPile thread (series/run) id containing the issue.",
-            "title": "Thread Id",
-            "type": "integer"
-          },
-          "thread_title": {
-            "description": "Current local thread title. Display only; never a grouping identity.",
-            "title": "Thread Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "rating"
-        ],
-        "title": "CreatorInsightIssue",
-        "type": "object"
-      },
-      "CreatorInsights": {
-        "description": "Strongest and weakest work analysis for one creator detail page (#3092).\n\nSeries strongest/weakest/most-rated labels require a minimum rated-issue\nsample (``min_sample_threshold``) so a single high-rated issue cannot\nautomatically outweigh a consistently loved longer run. Every selection is\ndeterministic: series averages tie-break by the stable thread id and\nindividual issue extremes tie-break by the stable issue id, so a tie never\nresolves by input order.\n\nIndividual issue extremes live in ``highest_rated_issue`` and\n``lowest_rated_issue`` and are never presented as aggregate series\nconclusions. When no series meets the minimum sample,\n``has_sufficient_data`` is false, the series fields stay null, and the\nordinary creator data is still returned.",
-        "properties": {
-          "has_sufficient_data": {
-            "description": "True when at least one series meets the minimum rated-issue sample threshold, so strongest/weakest series conclusions are meaningful. False means the series comparison is intentionally withheld, not that the creator has no data.",
-            "title": "Has Sufficient Data",
-            "type": "boolean"
-          },
-          "highest_rated_issue": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CreatorInsightIssue"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Single highest-rated individual issue, shown separately from aggregate series conclusions. Null when the creator has no attributable rated issues."
-          },
-          "highest_rated_series": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CreatorSeriesGroup"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Qualified series with the highest personal average, or null when no series meets the minimum sample."
-          },
-          "lowest_rated_issue": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CreatorInsightIssue"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Single lowest-rated individual issue, shown separately from aggregate series conclusions. Null when the creator has no attributable rated issues."
-          },
-          "lowest_rated_series": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CreatorSeriesGroup"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Qualified series with the lowest personal average, or null when no series meets the minimum sample."
-          },
-          "min_sample_threshold": {
-            "description": "Minimum rated issues a series needs before it can be named the strongest, weakest, or most-rated series.",
-            "minimum": 1.0,
-            "title": "Min Sample Threshold",
-            "type": "integer"
-          },
-          "most_rated_series": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CreatorSeriesGroup"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Qualified series with the largest rated sample, or null when no series meets the minimum sample."
-          }
-        },
-        "required": [
-          "has_sufficient_data",
-          "min_sample_threshold"
-        ],
-        "title": "CreatorInsights",
-        "type": "object"
-      },
       "CreatorDiscoveryCoverage": {
         "description": "Explicit metadata-coverage state for the discovery aggregation.",
         "properties": {
@@ -4586,6 +4476,116 @@
           "max_entries"
         ],
         "title": "CreatorDiscoveryView",
+        "type": "object"
+      },
+      "CreatorInsightIssue": {
+        "description": "One individual rated issue surfaced by creator insights (issue #3092).\n\nIndividual issue extremes are deliberately not aggregate series\nconclusions: a single 5-star issue may be shown, but it is always carried\nwith its stable thread context so the UI can label it as an individual\nissue and drill into the supporting thread instead of implying the\ncreator's \"best work\".",
+        "properties": {
+          "issue_id": {
+            "description": "Local ComicPile issue id.",
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "rating": {
+            "description": "Latest effective personal rating for this individual issue.",
+            "title": "Rating",
+            "type": "number"
+          },
+          "thread_id": {
+            "description": "Local ComicPile thread (series/run) id containing the issue.",
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "description": "Current local thread title. Display only; never a grouping identity.",
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "rating"
+        ],
+        "title": "CreatorInsightIssue",
+        "type": "object"
+      },
+      "CreatorInsights": {
+        "description": "Strongest and weakest work analysis for one creator detail page (#3092).\n\nSeries strongest/weakest/most-rated labels require a minimum rated-issue\nsample (``min_sample_threshold``) so a single high-rated issue cannot\nautomatically outweigh a consistently loved longer run. Every selection is\ndeterministic: series averages tie-break by the stable thread id and\nindividual issue extremes tie-break by the stable issue id, so a tie never\nresolves by input order.\n\nIndividual issue extremes live in ``highest_rated_issue`` and\n``lowest_rated_issue`` and are never presented as aggregate series\nconclusions. When no series meets the minimum sample,\n``has_sufficient_data`` is false, the series fields stay null, and the\nordinary creator data is still returned.",
+        "properties": {
+          "has_sufficient_data": {
+            "description": "True when at least one series meets the minimum rated-issue sample threshold, so strongest/weakest series conclusions are meaningful. False means the series comparison is intentionally withheld, not that the creator has no data.",
+            "title": "Has Sufficient Data",
+            "type": "boolean"
+          },
+          "highest_rated_issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorInsightIssue"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Single highest-rated individual issue, shown separately from aggregate series conclusions. Null when the creator has no attributable rated issues."
+          },
+          "highest_rated_series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorSeriesGroup"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Qualified series with the highest personal average, or null when no series meets the minimum sample."
+          },
+          "lowest_rated_issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorInsightIssue"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Single lowest-rated individual issue, shown separately from aggregate series conclusions. Null when the creator has no attributable rated issues."
+          },
+          "lowest_rated_series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorSeriesGroup"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Qualified series with the lowest personal average, or null when no series meets the minimum sample."
+          },
+          "min_sample_threshold": {
+            "description": "Minimum rated issues a series needs before it can be named the strongest, weakest, or most-rated series.",
+            "minimum": 1.0,
+            "title": "Min Sample Threshold",
+            "type": "integer"
+          },
+          "most_rated_series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorSeriesGroup"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Qualified series with the largest rated sample, or null when no series meets the minimum sample."
+          }
+        },
+        "required": [
+          "has_sufficient_data",
+          "min_sample_threshold"
+        ],
+        "title": "CreatorInsights",
         "type": "object"
       },
       "CreatorIssueRow": {
