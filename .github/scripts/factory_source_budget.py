@@ -321,7 +321,6 @@ def filter_workers(
     
     # Check dispatch budgets
     dispatch_counts = count_dispatches(titles or [], sources, caps)
-    request_counts: dict[str, int] = estimate_requests_from_dispatches(titles or [], sources, request_budgets, request_budgets)
     kept: list[str] = []
     messages: list[str] = []
     
@@ -352,7 +351,7 @@ def filter_workers(
             
         # Check request budget and whether this dispatch would exceed it
         if has_request_budget:
-            would_exceed = would_exceed_request_budget(worker, sources, request_budgets, None, request_counts)
+            would_exceed = would_exceed_request_budget(worker, sources, request_budgets, titles)
             if would_exceed:
                 messages.append(f"Factory {worker} skipped: {would_exceed}")
                 continue
@@ -360,8 +359,6 @@ def filter_workers(
         # Worker passes all checks
         if has_dispatch_budget:
             dispatch_counts[source] += 1
-        if has_request_budget:
-            request_counts[source] = request_counts.get(source, 0) + request_budgets[source]["max_requests_per_dispatch"]
         kept.append(worker)
         
     return kept, messages

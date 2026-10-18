@@ -875,7 +875,8 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
     # Check budget with conservative approach to handle race conditions
     budget_reason = budget_block_reason(
         worker,
-        request_budgets=None    )
+        request_budgets=load_request_budgets() if os.environ.get("FACTORY_CONSERVATIVE_BUDGET_CHECK") == "1" else None
+    )
     if budget_reason is not None:
         print(f'[factory-controller] {budget_reason}; skipping dispatch', file=sys.stderr)
         return None
