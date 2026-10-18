@@ -30,6 +30,10 @@ it('states the non-admin hourly limit and shows when the user can submit again',
   await user.click(screen.getByRole('button', { name: /submit report/i }))
 
   await waitFor(() => {
-    expect(screen.getByText(detail)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Non-admin accounts can submit one GitHub issue per hour\. Try again in \d+ minute\(s\), after \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC/,
+      ),
+    ).toBeInTheDocument()
   })
 })
