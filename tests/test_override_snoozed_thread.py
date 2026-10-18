@@ -1,4 +1,4 @@
-"""Test that overriding to a snoozed thread removes it from snoozed list."""
+"""Test that overriding to a snoozed thread succeeds and preserves the snooze."""
 
 import pytest
 from httpx import AsyncClient
@@ -10,12 +10,17 @@ from app.models import Thread
 
 
 @pytest.mark.asyncio
-async def test_override_snoozed_thread_removes_from_snoozed_list(
+async def test_override_snoozed_thread_keeps_it_snoozed(
     auth_client: AsyncClient,
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Overriding to a snoozed thread should be rejected to prevent data loss."""
+    """An explicit override of a snoozed thread succeeds without losing its snooze.
+
+    The Roll "Pick manually" picker surfaces a "Snoozed series" group on purpose, so an
+    override of a snoozed thread must succeed (issue #3446). The durable session snooze is
+    read state and is deliberately preserved, so the thread stays snoozed afterwards (#293).
+    """
     from tests.conftest import get_or_create_user_async
 
     monkeypatch.setattr("random.randint", lambda _a, _b: 0)
@@ -53,20 +58,18 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
     snooze_data = snooze_response.json()
     assert rolled_thread_id in snooze_data["snoozed_thread_ids"]
 
-    # Now override to snoozed thread1
-    # This should fail because we should not be able to override to a snoozed thread
-    override_response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread1.id})
+    # Overriding a snoozed thread is allowed and returns it as the current thread.
+    override_response = await auth_client.post(
+        "/api/v1/roll/override", json={"thread_id": thread1.id}
+    )
+    assert override_response.status_code == 200, override_response.text
+    assert override_response.json()["thread_id"] == thread1.id
 
-    # The override should be rejected with an error
-    assert override_response.status_code == 400
-    assert "snoozed" in override_response.json()["detail"].lower()
-
-    # Get current session from API to verify thread remains in snoozed list
+    # The snooze is preserved: the explicit override must not clear durable read state.
     session_response = await auth_client.get("/api/v1/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
 
-    # Verify thread1 is still in snoozed list (data was NOT lost)
     assert thread1.id in session_data["snoozed_thread_ids"], (
         f"Thread {thread1.id} should remain in snoozed list, got {session_data['snoozed_thread_ids']}"
     )

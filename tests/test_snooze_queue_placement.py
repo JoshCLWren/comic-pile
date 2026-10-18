@@ -180,13 +180,19 @@ async def test_high_affinity_thread_returns_with_position_after_session_expiry(
     assert snooze_response.status_code == 200
     assert target.id in snooze_response.json()["snoozed_thread_ids"]
 
-    # The snoozed thread is excluded for the rest of the active session:
-    # overriding it explicitly is rejected while the snooze state lives.
+    # An explicit override of the snoozed thread now succeeds (issue #3446), but the
+    # session snooze is durable read state and is preserved, so the override does not
+    # move the thread's durable queue position.
     override_while_snoozed = await auth_client.post(
         "/api/v1/roll/override", json={"thread_id": target.id}
     )
-    assert override_while_snoozed.status_code == 400
-    assert "is snoozed" in override_while_snoozed.json()["detail"]
+    assert override_while_snoozed.status_code == 200, override_while_snoozed.text
+    assert override_while_snoozed.json()["thread_id"] == target.id
+    assert override_while_snoozed.json()["queue_position"] == 1
+
+    still_snoozed = await auth_client.get("/api/v1/sessions/current/")
+    assert still_snoozed.status_code == 200
+    assert target.id in still_snoozed.json()["snoozed_thread_ids"]
 
     # Session snooze state expires with the session itself.
     session_result = await async_db.execute(
