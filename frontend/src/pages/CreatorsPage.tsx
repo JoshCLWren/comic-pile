@@ -312,6 +312,9 @@ export default function CreatorsPage() {
 
   const handleSearchChange = (value: string) => {
     setSearch(value)
+    if (value && discoveryMode) {
+      setDiscoveryMode(null)
+    }
   }
 
   const handleDiscoveryModeChange = (mode: DiscoveryMode | null) => {

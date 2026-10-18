@@ -1,7 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   creatorsApi,
+  type DiscoveryMode,
   type DiscoveryParams,
+  type DiscoveryResponse,
+  type DiscoveryModesResponse,
 } from '../services/api-creators'
 import { queryKeys } from '../query/queryKeys'
 
@@ -16,6 +19,7 @@ export function useDiscoveryModes() {
   return useQuery({
     queryKey: queryKeys.creators.discovery.modes(),
     queryFn: () => creatorsApi.getDiscoveryModes(),
+    initialData: { modes: [] },
   })
 }
 
@@ -33,5 +37,15 @@ export function useDiscovery(
     queryKey: queryKeys.creators.discovery.detail(params.mode, params.limit, params.offset),
     queryFn: () => creatorsApi.getDiscovery(params),
     enabled: enabled && !!params.mode,
+    // SAFETY: this literal placeholder satisfies the DiscoveryResponse contract and is replaced as soon as the bounded discovery query resolves.
+    initialData: {
+      mode: params.mode,
+      title: '',
+      description: '',
+      items: [],
+      total: 0,
+      limit: params.limit || 20,
+      offset: params.offset || 0,
+    } as DiscoveryResponse,
   })
 }
