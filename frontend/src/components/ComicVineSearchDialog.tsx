@@ -295,6 +295,7 @@ export default function ComicVineSearchDialog({
         }
         requestId = ++asyncRef.current
         searchingRef.current = true
+        setError(null)
         const trimmed = searchQuery.trim()
         if (isComicVineUrlLike(trimmed)) {
           const resolved = await comicVineApi.resolveIdentity(trimmed)
@@ -337,6 +338,12 @@ export default function ComicVineSearchDialog({
     },
     [handleDirectResolution],
   )
+
+  useEffect(() => {
+    if (isOpen && threadTitle.trim() && !hasAutoSearchedRef.current) {
+      hasAutoSearchedRef.current = true
+      void handleSearch(stripParenthesizedYears(threadTitle))
+    }
     if (!isOpen) {
       hasAutoSearchedRef.current = false
     }
