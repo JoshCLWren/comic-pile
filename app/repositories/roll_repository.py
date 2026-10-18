@@ -196,6 +196,51 @@ async def update_session_pending_thread(
     )
 
 
+async def fetch_latest_session_event(db: AsyncSession, session_id: int) -> Event | None:
+    """Return the session's most recent event, or None.
+
+    Backs the #3467 duplicate-override guard: the latest event identifies
+    whether the immediately preceding action was already an override of the
+    same series, which is what a double-clicked "Pick this series" produces.
+
+    Args:
+        db: Database session.
+        session_id: Session whose newest event should be read.
+
+    Returns:
+        The newest Event in the session, ordered by timestamp then id, or None
+        when the session has no events.
+    """
+    result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
+async def fetch_pending_thread_id(db: AsyncSession, session_id: int) -> int | None:
+    """Return the session's committed pending thread id, or None.
+
+    Companion signal to ``fetch_latest_session_event`` for the #3467 guard. A
+    pending pointer is required alongside the trailing override so a repeat pick
+    is only suppressed while the first one is still the live, unconsumed
+    selection.
+
+    Args:
+        db: Database session.
+        session_id: Session whose pending pointer should be read.
+
+    Returns:
+        The pending thread id when a roll is awaiting consumption, else None.
+    """
+    result = await db.execute(
+        select(ReadingSession.pending_thread_id).where(ReadingSession.id == session_id)
+    )
+    return result.scalar_one_or_none()
+
+
 async def clear_session_pending(db: AsyncSession, session_id: int, now: datetime) -> None:
     """Clear the pending thread on a session.
 
