@@ -25,6 +25,7 @@ import importlib.util
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
+from typing import cast
 
 import pytest
 from alembic.migration import MigrationContext
@@ -64,6 +65,14 @@ PRESERVED_INDEXES: frozenset[str] = frozenset(
 # Deterministic fixture for the index-byte accounting: 4 threads, 50 issues each.
 FIXTURE_THREADS = 4
 FIXTURE_ISSUES_PER_THREAD = 50
+
+# Tables whose write-maintenance cost the migration changes.
+TRACKED_TABLES: tuple[str, ...] = ("issues", "user_preferences", "recommendation_contexts")
+
+
+def _model_table(model_table: object) -> Table:
+    """Narrow SQLAlchemy's declarative table attribute for static analysis."""
+    return cast(Table, model_table)
 
 
 def _load_migration() -> ModuleType:
@@ -289,8 +298,12 @@ async def test_upgrade_removes_only_the_redundant_indexes(async_db: AsyncSession
         before = _index_names(conn)
         assert set(DROPPED_INDEXES) <= before
         bytes_before = {
-            table_name: _table_index_bytes(conn, table_name)
-            for table_name in ("issues", "user_preferences", "recommendation_contexts")
+            table_name: _table_index_bytes(conn, table_name) for table_name in TRACKED_TABLES
+        }
+        # One entry per index a row write must maintain: the write-maintenance
+        # count the issue's acceptance criteria ask to record on this fixture.
+        writes_before = {
+            table_name: len(_index_names(conn, table_name)) for table_name in TRACKED_TABLES
         }
 
         with Operations.context(MigrationContext.configure(conn)):
@@ -305,6 +318,14 @@ async def test_upgrade_removes_only_the_redundant_indexes(async_db: AsyncSession
         for table_name, previous_bytes in bytes_before.items():
             assert previous_bytes > 0, f"{table_name} had no index bytes before upgrade"
             assert _table_index_bytes(conn, table_name) < previous_bytes
+
+        # Each tracked table lost exactly one write-maintained index, so every
+        # row write to issues, user_preferences and recommendation_contexts now
+        # maintains one fewer B-tree while all surviving coverage stays put.
+        for table_name, previous_writes in writes_before.items():
+            assert len(_index_names(conn, table_name)) == previous_writes - 1, (
+                f"{table_name} did not shed exactly one write-maintained index"
+            )
 
         # Uniqueness is untouched, including the deferred Issue.position check.
         assert frozenset({"thread_id", "position"}) in _db_unique_column_sets(conn, "issues")
@@ -373,15 +394,19 @@ def test_orm_metadata_matches_the_post_migration_schema() -> None:
     declared_indexes = {
         index.name
         for model in (Issue, UserPreferences, RecommendationContext)
-        for index in model.__table__.indexes
+        for index in _model_table(model.__table__).indexes
         if index.name is not None
     }
 
     assert not declared_indexes & set(DROPPED_INDEXES)
-    assert _orm_unique_column_sets(Issue.__table__) >= {
+    assert _orm_unique_column_sets(_model_table(Issue.__table__)) >= {
         frozenset({"thread_id", "position"}),
         frozenset({"thread_id", "issue_number"}),
         frozenset({"thread_id", "id"}),
     }
-    assert _orm_unique_column_sets(UserPreferences.__table__) >= {frozenset({"user_id"})}
-    assert _orm_unique_column_sets(RecommendationContext.__table__) >= {frozenset({"event_id"})}
+    assert _orm_unique_column_sets(_model_table(UserPreferences.__table__)) >= {
+        frozenset({"user_id"})
+    }
+    assert _orm_unique_column_sets(_model_table(RecommendationContext.__table__)) >= {
+        frozenset({"event_id"})
+    }
