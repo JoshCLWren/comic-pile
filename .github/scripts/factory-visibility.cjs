@@ -91,6 +91,33 @@ function trusted(comment) {
   return comment?.user?.login === 'github-actions[bot]';
 }
 
+// Reviewer bots whose inline findings route a PR to repair. This allowlist is
+// deliberately separate from trusted(): a reviewer bot can never author
+// factory markers, ownership, or readiness. It only proves that the bot left
+// unresolved findings on the exact current head.
+const REPAIR_ROUTING_REVIEWER_BOTS = new Set(['greptile-apps[bot]']);
+
+function isRepairRoutingReviewer(review) {
+  return REPAIR_ROUTING_REVIEWER_BOTS.has(review?.user?.login);
+}
+
+function reviewerGraphqlLogins() {
+  // GraphQL reports App actors without the REST "[bot]" suffix.
+  return new Set([...REPAIR_ROUTING_REVIEWER_BOTS].flatMap(login => [login, login.replace(/\[bot\]$/, '')]));
+}
+
+async function unresolvedReviewerBotThreads(github, context, number) {
+  const response = await withRetry(() => github.graphql(
+    `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved isOutdated comments(first:1){nodes{author{login}}}}}}}}`,
+    { owner: context.repo.owner, name: context.repo.repo, number },
+  ));
+  const logins = reviewerGraphqlLogins();
+  const nodes = response?.repository?.pullRequest?.reviewThreads?.nodes || [];
+  return nodes.filter(thread => !thread.isResolved
+    && !thread.isOutdated
+    && logins.has(thread.comments?.nodes?.[0]?.author?.login)).length;
+}
+
 function workerFrom(body) {
   for (const pattern of [
     /comic-pile-factory-implement-(?:claim|progress)-v\d+:issue-\d+:([^:\s>]+):/,
@@ -415,6 +442,21 @@ async function reconcile({ github, context }) {
     }
 
     const review = context.payload.review;
+    if (isRepairRoutingReviewer(review)) {
+      // Greptile submits COMMENTED reviews with inline findings. Unresolved
+      // findings on the exact current head are must-address feedback, so route
+      // the PR to repair. Stale-head reviews and fully resolved/outdated
+      // findings never mutate labels, and APPROVED never does.
+      const state = (review.state || '').toUpperCase();
+      if (state === 'APPROVED') return;
+      if (!review.commit_id || review.commit_id !== pullRequest.head?.sha) return;
+      if (await unresolvedReviewerBotThreads(github, context, pullRequest.number) === 0) return;
+      await reconcileLabels(github, context, pullRequest.number, {
+        owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),
+        stage: 'factory:changes-requested',
+      });
+      return;
+    }
     if (!trusted(review)) return;
     const state = (review.state || '').toUpperCase();
     // Native APPROVED must never rewrite labels. A wired pull_request_review
@@ -440,6 +482,9 @@ module.exports._test = {
   rateLimitDelay,
   workerFrom,
   trusted,
+  isRepairRoutingReviewer,
+  unresolvedReviewerBotThreads,
+  REPAIR_ROUTING_REVIEWER_BOTS,
   performedViaUntrustedApp,
   TRUSTED_APP_SLUGS,
   TRUSTED_ASSOCIATIONS,

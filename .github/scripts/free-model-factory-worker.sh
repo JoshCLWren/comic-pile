@@ -182,7 +182,7 @@ stage_trusted_review_controller() {
 eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
 run_agent() {
   local mode="$1" number="$2" timeout_seconds="$3"
-  local target mission prompt status=0
+  local target mission prompt findings status=0
   if [[ "$SOURCE" != 'kilo-auto' ]]; then
     legacy_run_agent "$@"
     return $?
@@ -190,7 +190,9 @@ run_agent() {
 
   if [[ "$mode" == 'pr' ]]; then
     target="pull request #${number}"
-    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
+    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Greptile (greptile-apps[bot]) review findings are HIGH PRIORITY, must-address feedback: fix each one in code or post a concrete evidence-backed rebuttal reply on its thread, and never resolve a thread silently. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
+    findings="$(factory_review_findings_mission "$number" "${EXPECTED_HEAD:-$(git rev-parse HEAD)}")"
+    mission+=" ${findings}"
   else
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
