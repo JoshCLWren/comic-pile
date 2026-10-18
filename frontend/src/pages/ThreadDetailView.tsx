@@ -36,19 +36,22 @@ import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
 function IssueCreator({ issueId, thread }: { issueId: number; thread: Thread | undefined }) {
-  const { metadata } = useComicVineIssueIntelligence(issueId)
+  const fallbackCreators = getManualCreatorCreditList(thread ?? {})
+  // Skip per-issue ComicVine intelligence when the series already has manual
+  // creator credits, avoiding N+1 requests for creator display. Intelligence is
+  // still fetched when manual credits are absent to preserve per-issue provider metadata.
+  const { metadata } = useComicVineIssueIntelligence(issueId, { enabled: fallbackCreators.length === 0 })
   // Prefer the issue's own provider (ComicVine) creators so two issues in one
   // series can show different credits. Fall back to the series' manual creator
   // credits when the issue has no provider metadata (#3461).
   const creatorsFromIntelligence =
     metadata?.creators?.map((c) => ({ name: c.name, roles: c.roles })) ?? []
-  const fallbackCreators = getManualCreatorCreditList(thread ?? {})
   const creatorsToShow =
     creatorsFromIntelligence.length > 0 ? creatorsFromIntelligence : fallbackCreators
   const displayText = getCreatorDisplayText(creatorsToShow)
   if (!displayText) return null
   return (
-    <span className="text-xs text-stone-400">
+    <span className="text-xs text-[var(--theme-text-muted)]">
       by {displayText}
     </span>
   )
