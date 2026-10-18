@@ -846,7 +846,7 @@
     "tests/test_vercel_production_only.py",
     "tests/test_verify_clone_export.py"
   ],
-  "error_count": 2205,
+  "error_count": 2200,
   "triage_note": "Conservative code-based triage, not proof of a runtime defect; inspect evidence before changing interfaces.",
   "modules": [
     {
@@ -4908,27 +4908,8 @@
       "module": "comic_pile.comicvine_provider",
       "package": "comic_pile",
       "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "arg-type",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "call-overload",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
+      "error_count": 0,
+      "groups": []
     },
     {
       "path": "comic_pile/comicvine_repair_pipeline.py",
@@ -14631,41 +14612,6 @@
       "code": "assignment",
       "severity": "error",
       "message": "Incompatible types in assignment (expression has type \"VolumeSegment | None\", variable has type \"VolumeSegment\")"
-    },
-    {
-      "file": "comic_pile/comicvine_provider.py",
-      "line": 157,
-      "code": "call-overload",
-      "severity": "error",
-      "message": "No overload variant of \"int\" matches argument type \"object\""
-    },
-    {
-      "file": "comic_pile/comicvine_provider.py",
-      "line": 179,
-      "code": "call-overload",
-      "severity": "error",
-      "message": "No overload variant of \"int\" matches argument type \"object\""
-    },
-    {
-      "file": "comic_pile/comicvine_provider.py",
-      "line": 196,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"float\""
-    },
-    {
-      "file": "comic_pile/comicvine_provider.py",
-      "line": 222,
-      "code": "arg-type",
-      "severity": "error",
-      "message": "Argument 1 to \"float\" has incompatible type \"object\"; expected \"str | Buffer | SupportsFloat | SupportsIndex\""
-    },
-    {
-      "file": "comic_pile/comicvine_provider.py",
-      "line": 528,
-      "code": "arg-type",
-      "severity": "error",
-      "message": "Argument \"params\" to \"get\" of \"AsyncClient\" has incompatible type \"dict[str, object]\"; expected \"QueryParams | Mapping[str, str | int | float | bool | None | Sequence[str | int | float | bool | None]] | list[tuple[str, str | int | float | bool | None]] | tuple[tuple[str, str | int | float | bool | None], ...] | str | bytes | None\""
     },
     {
       "file": "comic_pile/explore_scoring.py",

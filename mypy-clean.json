@@ -2,6 +2,7 @@
   "comic_pile/__init__.py",
   "comic_pile/comicvine_identity_repair.py",
   "comic_pile/comicvine_live_refresh.py",
+  "comic_pile/comicvine_provider.py",
   "comic_pile/comicvine_repair_pipeline.py",
   "comic_pile/comicvine_report_classification.py",
   "comic_pile/dependencies.py",

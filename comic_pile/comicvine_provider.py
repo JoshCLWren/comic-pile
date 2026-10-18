@@ -43,6 +43,9 @@ DEEP_ISSUE_FIELDS = (
     "date_last_updated",
 )
 
+ComicVineQueryValue = str | int | float | bool | None
+"""Scalar value accepted at the ComicVine query-string boundary (matches httpx/urlencode)."""
+
 
 class ComicVineError(RuntimeError):
     """Base error raised for provider failures."""
@@ -153,11 +156,11 @@ class PersistentResourceThrottleTracker:
         with self._lock:
             state = self._read()
             previous = state.get(resource, {})
-            attempts = (
-                int(previous.get("headerless_attempts", 0))
-                if headerless_attempts is None
-                else max(0, headerless_attempts)
-            )
+            if headerless_attempts is None:
+                raw_attempts = previous.get("headerless_attempts", 0)
+                attempts = int(raw_attempts) if isinstance(raw_attempts, int | float) else 0
+            else:
+                attempts = max(0, headerless_attempts)
             state[resource] = {
                 "cooldown_until": cooldown_until,
                 "retry_after": retry_after,
@@ -176,12 +179,13 @@ class PersistentResourceThrottleTracker:
         with self._lock:
             state = self._read()
             previous = state.get(resource, {})
-            attempts = int(previous.get("headerless_attempts", 0))
+            raw_attempts = previous.get("headerless_attempts", 0)
+            attempts = int(raw_attempts) if isinstance(raw_attempts, int | float) else 0
             if retry_after is None:
                 attempts += 1
                 exponent = min(max(attempts - 1, 0), 20)
                 delay = min(
-                    DEFAULT_NO_HEADER_COOLDOWN * (2**exponent),
+                    DEFAULT_NO_HEADER_COOLDOWN * (2.0**exponent),
                     DEFAULT_MAX_NO_HEADER_COOLDOWN,
                 )
             else:
@@ -219,7 +223,12 @@ class PersistentResourceThrottleTracker:
         entry = state.get(resource)
         if entry is None:
             return None
-        cooldown_until = float(entry.get("cooldown_until", 0))
+        raw_cooldown_until = entry.get("cooldown_until", 0)
+        cooldown_until = (
+            float(raw_cooldown_until)
+            if isinstance(raw_cooldown_until, int | float)
+            else 0.0
+        )
         retry_after = entry.get("retry_after")
         if isinstance(retry_after, (int, float)):
             retry_after = float(retry_after)
@@ -493,7 +502,7 @@ class ComicVineClient:
         return httpx.Timeout(self.timeout_seconds, connect=self.timeout_seconds * 0.3)
 
     async def _request_async(
-        self, endpoint: str, params: Mapping[str, object]
+        self, endpoint: str, params: Mapping[str, ComicVineQueryValue]
     ) -> dict[str, object]:
         """Fetch one raw provider payload over the configured HTTP transport.
 
@@ -555,7 +564,9 @@ class ComicVineClient:
 
         return decoded
 
-    def _request_sync(self, endpoint: str, params: Mapping[str, object]) -> dict[str, object]:
+    def _request_sync(
+        self, endpoint: str, params: Mapping[str, ComicVineQueryValue]
+    ) -> dict[str, object]:
         query = {
             **params,
             "api_key": self.api_key,
@@ -593,7 +604,7 @@ class ComicVineClient:
         self,
         endpoint_bucket: str,
         endpoint: str,
-        params: Mapping[str, object],
+        params: Mapping[str, ComicVineQueryValue],
         *,
         refresh: bool = False,
     ) -> ComicVineResponse:
