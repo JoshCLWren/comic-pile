@@ -484,6 +484,55 @@ async def get_issues_by_ids(db: AsyncSession, issue_ids: list[int]) -> list[Issu
     return list(result.scalars())
 
 
+async def confirmed_comicvine_credits_for_thread(
+    db: AsyncSession,
+    thread_id: int,
+) -> list[tuple[int, object, object]]:
+    """Read stored ComicVine credit arrays for every confirmed issue mapping.
+
+    One query covers the whole thread so caller surfaces (for example the
+    thread issue list) never fan out into one provider-intelligence request
+    per issue. Only the ``person_credits`` / ``creator_credits`` arrays are
+    extracted from the stored provider metadata, so the payload stays small
+    regardless of how large each issue's full metadata document is. When an
+    issue has several confirmed ComicVine mappings, the highest-confidence
+    mapping wins (ties broken by identity id), matching the single-issue
+    intelligence read.
+
+    Args:
+        db: Database session.
+        thread_id: Thread whose confirmed-mapping credit arrays are read.
+
+    Returns:
+        One ``(issue_id, person_credits, creator_credits)`` tuple per issue
+        with a confirmed ComicVine mapping; either credits value may be None
+        when the stored metadata lacks that key.
+    """
+    result = await db.execute(
+        text(
+            """
+            SELECT DISTINCT ON (i.id)
+                   i.id AS issue_id,
+                   ei.metadata_json -> 'person_credits' AS person_credits,
+                   ei.metadata_json -> 'creator_credits' AS creator_credits
+            FROM issues i
+            JOIN issue_external_identity_mappings iem ON iem.issue_id = i.id
+            JOIN external_identities ei ON ei.id = iem.external_identity_id
+            WHERE i.thread_id = :thread_id
+              AND iem.status = 'confirmed'
+              AND ei.provider = 'comicvine'
+              AND ei.entity_type = 'issue'
+            ORDER BY i.id, iem.confidence DESC NULLS LAST, ei.id
+            """
+        ),
+        {"thread_id": thread_id},
+    )
+    return [
+        (int(row["issue_id"]), row["person_credits"], row["creator_credits"])
+        for row in result.mappings().all()
+    ]
+
+
 def is_thread_number_conflict(exc: IntegrityError) -> bool:
     """Report whether an integrity error came from issue thread/number uniqueness.
 

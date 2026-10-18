@@ -11,8 +11,8 @@ import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
 import { useThread, useUpdateThread } from '../hooks/useThread'
 import { useConnectedThreads } from '../hooks/useReaderContext'
 import { useThreadIssuePages } from '../hooks/useThreadIssues'
+import { useThreadIssueCreators } from '../hooks/useThreadIssueCreators'
 import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
-import { useComicVineIssueIntelligence } from '../hooks/useComicVineIssueIntelligence'
 import {
   applyEditedThreadToQueuePages,
   applyIssueReadSnapshotToCache,
@@ -21,7 +21,7 @@ import {
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getManualCreatorCreditList } from '../types'
-import type { Thread } from '../types'
+import type { ManualCreatorCredit, Thread } from '../types'
 import { getCreatorDisplayText } from '../utils/creatorUtils'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
@@ -35,19 +35,20 @@ import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
 import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
-function IssueCreator({ issueId, thread }: { issueId: number; thread: Thread | undefined }) {
-  const fallbackCreators = getManualCreatorCreditList(thread ?? {})
-  // Skip per-issue ComicVine intelligence when the series already has manual
-  // creator credits, avoiding N+1 requests for creator display. Intelligence is
-  // still fetched when manual credits are absent to preserve per-issue provider metadata.
-  const { metadata } = useComicVineIssueIntelligence(issueId, { enabled: fallbackCreators.length === 0 })
+function IssueCreator({
+  creators,
+  fallbackCreators,
+}: {
+  creators: ManualCreatorCredit[]
+  fallbackCreators: ManualCreatorCredit[]
+}) {
   // Prefer the issue's own provider (ComicVine) creators so two issues in one
-  // series can show different credits. Fall back to the series' manual creator
-  // credits when the issue has no provider metadata (#3461).
-  const creatorsFromIntelligence =
-    metadata?.creators?.map((c) => ({ name: c.name, roles: c.roles })) ?? []
-  const creatorsToShow =
-    creatorsFromIntelligence.length > 0 ? creatorsFromIntelligence : fallbackCreators
+  // series can show different credits, even when the series carries manual
+  // creator credits. The credits come from one bulk thread read
+  // (`useThreadIssueCreators`), so expanding the issue list never fans out
+  // into one provider-intelligence request per row; the series' manual
+  // credits only fill issues without stored provider credits (#3461).
+  const creatorsToShow = creators.length > 0 ? creators : fallbackCreators
   const displayText = getCreatorDisplayText(creatorsToShow)
   if (!displayText) return null
   return (
@@ -112,6 +113,10 @@ export default function ThreadDetailView() {
     const entries = rowTagsQuery.data?.issues ?? []
     return new Map(entries.map((entry) => [entry.target_id, entry]))
   }, [rowTagsQuery.data])
+  // Row-level creator credits (#3461): one bulk read covers every visible
+  // issue so each row shows its own ComicVine creators (falling back to the
+  // series' manual credits) without one provider request per issue.
+  const issueCreatorsQuery = useThreadIssueCreators(threadId, issuesExpanded)
   const issuesTotal = issuesQuery.totalCount
   const issuesLoading = issuesQuery.isPending
   const issuesError = issuesQuery.isError
@@ -291,6 +296,8 @@ export default function ThreadDetailView() {
   const progressPercentage = getProgressPercentage()
   const issuesReadCount = getIssuesReadCount()
   const crossoverGroups = crossoverGroupsByThreadId[thread.id] ?? []
+  const seriesCreatorCredits = getManualCreatorCreditList(thread)
+  const issueCreatorsByIssueId = issueCreatorsQuery.creatorsByIssueId
 
   return (
     <div className="space-y-6 md:space-y-8 pb-20">
@@ -569,7 +576,10 @@ export default function ThreadDetailView() {
                               <span className="text-sm font-medium text-stone-300">
                                 #{issue.issue_number}
                               </span>
-                              {thread && <IssueCreator issueId={issue.id} thread={thread} />}
+                              <IssueCreator
+                                creators={issueCreatorsByIssueId.get(issue.id) ?? []}
+                                fallbackCreators={seriesCreatorCredits}
+                              />
                             </span>
                             <div className="flex items-center gap-3">
                               <button

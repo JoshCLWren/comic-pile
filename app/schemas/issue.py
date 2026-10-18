@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.comicvine import ComicVineCreator
+
 
 class IssueResponse(BaseModel):
     """Schema for issue response."""
@@ -41,6 +43,25 @@ class IssueListResponse(BaseModel):
     total_count: int
     page_size: int
     next_page_token: str | None = None
+
+
+class IssueCreatorsEntry(BaseModel):
+    """Stored ComicVine creator credits for one thread issue."""
+
+    issue_id: int
+    creators: list[ComicVineCreator] = Field(default_factory=list)
+
+
+class ThreadIssueCreatorsResponse(BaseModel):
+    """Bulk per-issue ComicVine creator credits for one thread.
+
+    Issues without a confirmed ComicVine mapping (or without stored credit
+    arrays) are omitted; callers fall back to the series' manual creator
+    credits for those rows.
+    """
+
+    thread_id: int
+    issues: list[IssueCreatorsEntry] = Field(default_factory=list)
 
 
 class IssueCreateRange(BaseModel):

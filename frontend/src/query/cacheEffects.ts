@@ -105,6 +105,11 @@ export async function invalidateAfterIssueEdit(
     client.invalidateQueries({
       queryKey: queryKeys.thread.issuePages(threadId),
     }),
+    // Issue mutations can change which issues carry confirmed provider
+    // credits; refresh the bulk creator-credits map alongside the pages.
+    client.invalidateQueries({
+      queryKey: queryKeys.thread.issueCreators(threadId),
+    }),
     client.invalidateQueries({
       queryKey: queryKeys.thread.detail(threadId),
       exact: true,

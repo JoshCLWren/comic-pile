@@ -189,6 +189,13 @@ export const queryKeys = {
     /** Canonical key for the all-pages-drained issue array (IssueToggleList). */
     issuePagesAll: (threadId: number) =>
       ['thread', threadId, 'issues', 'all'] as const,
+    /**
+     * Canonical key for the bulk per-issue ComicVine creator-credits read
+     * that serves the thread issue list's creator column (#3461). Kept out
+     * of the `issuePages` prefix so page-shape cache updates never touch it.
+     */
+    issueCreators: (threadId: number) =>
+      ['thread', threadId, 'issue-creators'] as const,
     issuePage: (
       threadId: number,
       { pageToken, pageSize, status }: ThreadIssuePageKeyOptions,
