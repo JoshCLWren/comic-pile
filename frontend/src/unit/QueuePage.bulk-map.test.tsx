@@ -1,267 +1,203 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import QueuePage from '../pages/QueuePage/QueuePage'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { BrowserRouter } from 'react-router-dom'
+import QueuePage from '../pages/QueuePage'
+import { ToastProvider } from '../contexts/ToastProvider'
+import QueueBulkMapSeriesDialog from '../components/QueueBulkMapSeriesDialog'
+import { useCreateThread, useUpdateThread, useReactivateThread } from '../hooks/useThread'
+import { useQueueThreads } from '../hooks/useQueue'
+import { useSession } from '../hooks/useSession'
 
-// Mock the hooks and components
-jest.mock('../pages/QueuePage/QueueControls')
-jest.mock('../components/QueueBulkMapSeriesDialog')
+vi.mock('../components/QueueBulkMapSeriesDialog', () => ({
+  default: vi.fn(() => null),
+}))
 
-const mockQueueControls = require('../pages/QueuePage/QueueControls')
-const mockQueueBulkMapSeriesDialog = require('../components/QueueBulkMapSeriesDialog')
+vi.mock('../hooks/useThread', () => ({
+  useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
+  useCreateThread: vi.fn(),
+  useUpdateThread: vi.fn(),
+  useDeleteThread: vi.fn(),
+  useReactivateThread: vi.fn(),
+}))
 
-jest.mock('../../hooks/useQueue')
-jest.mock('../../hooks/useSession')
-jest.mock('../../hooks/useThread')
-jest.mock('../../hooks/useQueueThreadActions')
-jest.mock('../../hooks/useQueueThreadCards')
-jest.mock('../../hooks/useQueueFilters')
-jest.mock('../../hooks/useQueueModals')
+vi.mock('../hooks/useQueue', () => ({
+  useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
+  useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
+  useMoveToFront: vi.fn(),
+  useMoveToBack: vi.fn(),
+  useMoveToPosition: vi.fn(),
+  useQueueThreads: vi.fn(),
+  useShuffleQueue: vi.fn(),
+}))
 
-describe('QueuePage', () => {
-  const defaultProps = {
-    activeCount: 5,
-    shuffleDisabled: false,
-    shufflePending: false,
-    onShuffle: jest.fn(),
-    onCreateThread: jest.fn(),
-    onAddFromComicVine: jest.fn(),
-    onBulkMapSeries: jest.fn(),
-    sortBy: 'position' as const,
-    onSortChange: jest.fn(),
-    searchQuery: '',
-    onSearchChange: jest.fn(),
-  }
+vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
+vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
+vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  })
+vi.mock('../services/api-threads', () => ({
+  threadsApi: { setPending: vi.fn().mockResolvedValue({}) },
+}))
 
+vi.mock('../services/api-dependencies', () => ({
+  dependenciesApi: {
+    listBlockedThreadIds: vi.fn().mockResolvedValue([]),
+    getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+  },
+}))
+
+vi.mock('../services/api-issues', () => ({
+  issuesApi: {
+    create: vi.fn().mockResolvedValue({ issues: [] }),
+    markRead: vi.fn().mockResolvedValue(undefined),
+    bulkMarkRead: vi.fn().mockResolvedValue(undefined),
+    bulkMarkUnread: vi.fn().mockResolvedValue(undefined),
+    migrateThread: vi.fn().mockResolvedValue({}),
+  },
+}))
+
+vi.mock('../contexts/useBugReportRestore', () => ({
+  useBugReportRestore: vi.fn(() => ({
+    setRestoreAction: vi.fn(),
+    clearRestoreAction: vi.fn(),
+    restoreLastView: vi.fn(),
+  })),
+}))
+
+vi.mock('../contexts/useToast', () => ({
+  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
+}))
+
+vi.mock('../pages/QueuePage/QueueModals', () => ({ QueueModals: () => null }))
+
+vi.mock('../pages/QueuePage/useQueueFilters', () => ({
+  useQueueFilters: vi.fn(() => ({
+    activeThreads: [],
+    completedThreads: [],
+    filteredThreads: [],
+  })),
+}))
+
+vi.mock('../pages/QueuePage/useQueueThreadCards', () => ({
+  useQueueThreadCards: vi.fn(() => () => null),
+}))
+
+vi.mock('../pages/QueuePage/useQueueThreadActions', () => ({
+  useQueueThreadActions: vi.fn(() => ({
+    requestShuffle: vi.fn(),
+    reorderError: null,
+    pendingDeleteThread: null,
+    isDeletePending: false,
+    deleteError: null,
+    confirmDelete: vi.fn(),
+    cancelDelete: vi.fn(),
+    pendingRemoveThread: null,
+    isRemovePending: false,
+    removeError: null,
+    confirmRemove: vi.fn(),
+    cancelRemove: vi.fn(),
+    isShuffleConfirmOpen: false,
+    confirmShuffle: vi.fn(),
+    cancelShuffle: vi.fn(),
+  })),
+}))
+
+const mockedUseQueueThreads = vi.mocked(useQueueThreads)
+const mockedUseCreateThread = vi.mocked(useCreateThread)
+const mockedUseUpdateThread = vi.mocked(useUpdateThread)
+const mockedUseReactivateThread = vi.mocked(useReactivateThread)
+const mockedUseSession = vi.mocked(useSession)
+const mockedBulkDialog = vi.mocked(QueueBulkMapSeriesDialog)
+
+interface CapturedBulkProps {
+  isOpen?: boolean
+  threadIds?: number[]
+  threadTitles?: string[]
+}
+
+function lastBulkDialogProps(): CapturedBulkProps | undefined {
+  const call = mockedBulkDialog.mock.calls.at(-1)
+  return call?.[0] as unknown as CapturedBulkProps | undefined
+}
+
+describe('QueuePage bulk mapping wiring', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
 
-    // Mock useQueue to return threads needing mapping
-    const mockUseQueue = require('../../hooks/useQueue')
-    mockUseQueue.useQueueThreads.mockReturnValue({
+    mockedUseQueueThreads.mockReturnValue({
       data: [
-        {
-          id: 1,
-          title: 'Batman',
-          format: 'Ongoing',
-          comicvine_mapping: { status: 'unresolved' },
-          issues_remaining: 10,
-          queue_position: 1,
-        },
-        {
-          id: 2,
-          title: 'Superman',
-          format: 'Ongoing',
-          comicvine_mapping: { status: 'partial' },
-          issues_remaining: 8,
-          queue_position: 2,
-        },
-        {
-          id: 3,
-          title: 'Wonder Woman',
-          format: 'Ongoing',
-          comicvine_mapping: { status: 'fully_mapped' },
-          issues_remaining: 12,
-          queue_position: 3,
-        },
+        { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'unresolved' } },
+        { id: 2, title: 'Superman', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 8, comicvine_mapping: { status: 'partial' } },
+        { id: 3, title: 'Wonder Woman', format: 'Comic', status: 'active', queue_position: 3, issues_remaining: 12, comicvine_mapping: { status: 'fully_mapped' } },
       ],
       isPending: false,
       isError: false,
       nextPageToken: null,
-      loadMore: jest.fn(),
+      loadMore: vi.fn(),
       activeCount: 3,
-    })
+    } as never)
 
-    // Mock other hooks
-    const mockUseSession = require('../../hooks/useSession')
-    mockUseSession.useSession.mockReturnValue({
-      data: { id: 1, name: 'Test User' },
-      refetch: jest.fn(),
-    })
+    mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    mockedUseSession.mockReturnValue({
+      data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
+      refetch: vi.fn(),
+    } as never)
+  })
 
-    const mockUseCreateThread = require('../../hooks/useThread').useCreateThread
-    mockUseCreateThread.mockReturnValue({ mutate: jest.fn() })
+  it('offers only series that still need mapping to the bulk dialog', () => {
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>,
+    )
 
-    const mockUseUpdateThread = require('../../hooks/useThread').useUpdateThread
-    mockUseUpdateThread.mockReturnValue({ mutate: jest.fn() })
-
-    const mockUseReactivateThread = require('../../hooks/useThread').useReactivateThread
-    mockUseReactivateThread.mockReturnValue({ mutate: jest.fn() })
-
-    const mockUseMoveToPosition = require('../../hooks/useQueue').useMoveToPosition
-    mockUseMoveToPosition.mockReturnValue({ mutate: jest.fn() })
-
-    const mockUseShuffleQueue = require('../../hooks/useQueue').useShuffleQueue
-    mockUseShuffleQueue.mockReturnValue({ mutate: jest.fn() })
-
-    const mockUseExcludedThreads = require('../../hooks/useQueue').useExcludedThreads
-    mockUseExcludedThreads.mockReturnValue({ threads: [] })
-
-    const mockUseRestoreThread = require('../../hooks/useQueue').useRestoreThread
-    mockUseRestoreThread.mockReturnValue({ mutate: jest.fn() })
-
-    const mockUseQueueThreadActions = require('../../hooks/useQueueThreadActions').useQueueThreadActions
-    mockUseQueueThreadActions.mockReturnValue({
-      requestShuffle: jest.fn(),
-      reorderError: null,
-      pendingDeleteThread: null,
-      isDeletePending: false,
-      deleteError: null,
-      confirmDelete: jest.fn(),
-      cancelDelete: jest.fn(),
-      pendingRemoveThread: null,
-      isRemovePending: false,
-      removeError: null,
-      confirmRemove: jest.fn(),
-      cancelRemove: jest.fn(),
-      isShuffleConfirmOpen: false,
-      confirmShuffle: jest.fn(),
-      cancelShuffle: jest.fn(),
-    })
-
-    const mockUseQueueThreadCards = require('../../hooks/useQueueThreadCards').useQueueThreadCards
-    mockUseQueueThreadCards.mockReturnValue(jest.fn())
-
-    const mockUseQueueFilters = require('../../hooks/useQueueFilters').useQueueFilters
-    mockUseQueueFilters.mockReturnValue({
-      activeThreads: [],
-      completedThreads: [],
-      filteredThreads: [],
-    })
-
-    const mockUseQueueModalsHook = require('../../hooks/useQueueModals').useQueueModals
-    mockUseQueueModalsHook.mockReturnValue({
-      showCreateModal: jest.fn(),
-      showAddSeriesComicVineModal: jest.fn(),
-      createForm: {},
-      editForm: {},
-      setCreateForm: jest.fn(),
-      setEditForm: jest.fn(),
-      issuePreview: null,
-      issueParseError: null,
-      issueParseWarnings: [],
-      issueParseBreakdown: null,
-      editingThread: null,
-      repositioningThread: null,
-      dependencyThread: null,
-      threadToMigrate: null,
-      showMigrationDialog: false,
-      reactivateThreadId: null,
-      setReactivateThreadId: jest.fn(),
-      issuesToAdd: 1,
-      setIssuesToAdd: jest.fn(),
-      handleCreateSubmit: jest.fn(),
-      handleEditSubmit: jest.fn(),
-      handleReactivateSubmit: jest.fn(),
-      closeCreateModal: jest.fn(),
-      closeEditModal: jest.fn(),
-      closeReactivateModal: jest.fn(),
-      closeRepositionModal: jest.fn(),
-      closeDependenciesModal: jest.fn(),
-      handleMigrationComplete: jest.fn(),
-      handleMigrationSkip: jest.fn(),
-      closeMigrationDialog: jest.fn(),
-      openMigrationDialog: jest.fn(),
-      openDependenciesModal: jest.fn(),
-      markIssuesLoaded: jest.fn(),
-      isPendingCreate: false,
-      isPendingEdit: false,
-      isIssuesLoading: false,
-      showRollNudge: false,
-      dismissRollNudge: jest.fn(),
-      rollNudgeNavigate: jest.fn(),
-      closeAddSeriesComicVineModal: jest.fn(),
+    expect(lastBulkDialogProps()).toMatchObject({
+      isOpen: false,
+      threadIds: [1, 2],
+      threadTitles: ['Batman', 'Superman'],
     })
   })
 
-  it('renders QueueControls with bulk map series button', () => {
+  it('opens the bulk dialog from the queue controls', async () => {
+    const user = userEvent.setup()
     render(
-      <QueryClientProvider client={queryClient}>
-        <QueuePage />
-      </QueryClientProvider>
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>,
     )
 
-    expect(mockQueueControls.default).toHaveBeenCalledWith(
-      expect.objectContaining({
-        onBulkMapSeries: expect.any(Function),
-      }),
-      {}
-    )
+    await user.click(screen.getByTestId('queue-bulk-map-desktop'))
+
+    expect(lastBulkDialogProps()).toMatchObject({ isOpen: true })
   })
 
-  it('opens bulk map dialog when bulk map button is clicked', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueuePage />
-      </QueryClientProvider>
-    )
-
-    // Find the bulk map button in the rendered QueueControls
-    const bulkMapButton = screen.getByText('Map Series')
-    bulkMapButton.click()
-
-    // Verify the bulk map dialog is opened
-    expect(mockQueueBulkMapSeriesDialog.default).toHaveBeenCalledWith(
-      expect.objectContaining({
-        isOpen: true,
-        threadIds: [1, 2], // Only threads needing mapping
-        threadTitles: ['Batman', 'Superman'], // Only threads needing mapping
-      }),
-      {}
-    )
-  })
-
-  it('filters threads that need mapping', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueuePage />
-      </QueryClientProvider>
-    )
-
-    // Verify that only threads needing mapping are passed to the bulk map dialog
-    expect(mockQueueBulkMapSeriesDialog.default).toHaveBeenCalledWith(
-      expect.objectContaining({
-        threadIds: [1, 2], // Batman and Superman need mapping, Wonder Woman doesn't
-        threadTitles: ['Batman', 'Superman'], // Batman and Superman need mapping, Wonder Woman doesn't
-      }),
-      {}
-    )
-  })
-
-  it('calls onMapped when bulk mapping is completed', () => {
-    const mockOnMapped = jest.fn()
-    
-    mockQueueBulkMapSeriesDialog.default.mockImplementation((props) => {
-      // Simulate the dialog calling onMapped
-      if (props.onMapped) {
-        props.onMapped([1, 2, 3])
-      }
-      return null
-    })
+  it('disables the bulk action when every series is mapped', () => {
+    mockedUseQueueThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'fully_mapped' } },
+      ],
+      isPending: false,
+      isError: false,
+      nextPageToken: null,
+      loadMore: vi.fn(),
+      activeCount: 1,
+    } as never)
 
     render(
-      <QueryClientProvider client={queryClient}>
-        <QueuePage />
-      </QueryClientProvider>
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>,
     )
 
-    // Open the dialog
-    const bulkMapButton = screen.getByText('Map Series')
-    bulkMapButton.click()
-
-    // Simulate completion
-    const dialogProps = mockQueueBulkMapSeriesDialog.default.mock.calls[0][0]
-    if (dialogProps.onMapped) {
-      dialogProps.onMapped([1, 2, 3])
-    }
-
-    // Verify the callback is called
-    expect(mockOnMapped).not.toHaveBeenCalled() // This would be called in the actual implementation
+    expect(screen.getByTestId('queue-bulk-map-desktop')).toBeDisabled()
+    expect(lastBulkDialogProps()).toMatchObject({ threadIds: [] })
   })
 })

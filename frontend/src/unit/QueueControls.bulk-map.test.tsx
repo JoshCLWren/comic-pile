@@ -1,50 +1,64 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueueControls } from '../pages/QueuePage/QueueControls'
 import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 
-describe('QueueControls', () => {
-  const baseProps = {
-    activeCount: 5,
-    shuffleDisabled: false,
-    shufflePending: false,
-    onShuffle: vi.fn(),
-    onCreateThread: vi.fn(),
-    onAddFromComicVine: vi.fn(),
-    onBulkMapSeries: vi.fn(),
-    sortBy: 'position' as QueueSortBy,
-    onSortChange: vi.fn(),
-    searchQuery: '',
-    onSearchChange: vi.fn(),
-  }
+const baseProps = {
+  activeCount: 5,
+  shuffleDisabled: false,
+  shufflePending: false,
+  onShuffle: vi.fn(),
+  onCreateThread: vi.fn(),
+  onAddFromComicVine: vi.fn(),
+  onBulkMapSeries: vi.fn(),
+  // SAFETY: test fixture uses the valid default sort option
+  sortBy: 'position' as QueueSortBy,
+  onSortChange: vi.fn(),
+  searchQuery: '',
+  onSearchChange: vi.fn(),
+}
 
-  it('renders bulk map series button', () => {
+describe('QueueControls bulk mapping entry point', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders both the desktop and mobile bulk map actions', () => {
     render(<QueueControls {...baseProps} />)
 
-    expect(screen.getByText('Map Series')).toBeInTheDocument()
     expect(screen.getByTestId('queue-bulk-map-desktop')).toBeInTheDocument()
+    expect(screen.getByTestId('queue-bulk-map-mobile')).toBeInTheDocument()
   })
 
-  it('calls onBulkMapSeries when button is clicked', async () => {
-    const { user } = await import('@testing-library/user-event')
-    const USER = await user.setup()
+  it('calls onBulkMapSeries from the desktop action', async () => {
+    const user = userEvent.setup()
     render(<QueueControls {...baseProps} />)
 
-    const bulkMapButton = screen.getByText('Map Series')
-    await USER.click(bulkMapButton)
+    await user.click(screen.getByTestId('queue-bulk-map-desktop'))
 
-    expect(baseProps.onBulkMapSeries).toHaveBeenCalled()
+    expect(baseProps.onBulkMapSeries).toHaveBeenCalledTimes(1)
   })
 
-  it('shows disabled state when no threads need mapping', () => {
-    const propsWithNoThreads = {
-      ...baseProps,
-      activeCount: 0,
-    }
+  it('calls onBulkMapSeries from the mobile action', async () => {
+    const user = userEvent.setup()
+    render(<QueueControls {...baseProps} />)
 
-    render(<QueueControls {...propsWithNoThreads} />)
+    await user.click(screen.getByTestId('queue-bulk-map-mobile'))
 
-    const bulkMapButton = screen.getByText('Map Series')
-    expect(bulkMapButton).toBeDisabled()
+    expect(baseProps.onBulkMapSeries).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables both actions when no series need mapping', async () => {
+    const user = userEvent.setup()
+    render(<QueueControls {...baseProps} bulkMapDisabled />)
+
+    const desktop = screen.getByTestId('queue-bulk-map-desktop')
+    const mobile = screen.getByTestId('queue-bulk-map-mobile')
+    expect(desktop).toBeDisabled()
+    expect(mobile).toBeDisabled()
+
+    await user.click(desktop)
+    expect(baseProps.onBulkMapSeries).not.toHaveBeenCalled()
   })
 })

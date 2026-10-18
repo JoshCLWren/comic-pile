@@ -1,369 +1,144 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueBulkMapSeriesDialog from '../../components/QueueBulkMapSeriesDialog'
+import QueueMapSeriesDialog from '../../components/QueueMapSeriesDialog'
 
-// Mock the hooks and API
-jest.mock('../../hooks/useQueueSeriesMapping')
-jest.mock('../../services/api-comicvine')
-jest.mock('../../services/api-series-mapping')
+vi.mock('../../components/QueueMapSeriesDialog')
 
-const mockUseQueueSeriesMapping = require('../../hooks/useQueueSeriesMapping')
-const mockComicVineApi = require('../../services/api-comicvine')
-const mockApiSeriesMapping = require('../../services/api-series-mapping')
+const mockedSeriesDialog = vi.mocked(QueueMapSeriesDialog)
+
+interface DialogOverrides {
+  isOpen?: boolean
+  threadIds?: number[]
+  threadTitles?: string[]
+  onClose?: () => void
+}
+
+function renderBulkDialog(overrides: DialogOverrides = {}) {
+  const props = {
+    isOpen: overrides.isOpen ?? true,
+    threadIds: overrides.threadIds ?? [1, 2],
+    threadTitles: overrides.threadTitles ?? ['Batman', 'Superman'],
+    onClose: overrides.onClose ?? vi.fn(),
+  }
+  const view = render(<QueueBulkMapSeriesDialog {...props} />)
+  return { props, view }
+}
 
 describe('QueueBulkMapSeriesDialog', () => {
-  const defaultProps = {
-    isOpen: true,
-    threadIds: [1, 2, 3],
-    threadTitles: ['Batman', 'Superman', 'Wonder Woman'],
-    onClose: jest.fn(),
-    onMapped: jest.fn(),
-  }
-
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  })
-
   beforeEach(() => {
-    jest.clearAllMocks()
-    
-    // Mock the API responses
-    mockComicVineApi.default.searchSeries.mockResolvedValue({
-      results: [
-        {
-          comicvine_volume_id: '123',
-          name: 'Batman (2016)',
-          publisher: 'DC Comics',
-          start_year: 2016,
-          issue_count: 100,
-          site_detail_url: 'https://comicvine.gamespot.com/batman-2016/4050-58512/',
-          image: { super_url: 'https://example.com/image.jpg' },
-        },
-      ],
-      has_more: false,
-      next_offset: null,
-    })
-
-    mockUseQueueSeriesMapping.useQueueMappingOriginIssue.mockReturnValue({
-      data: { id: 1 },
-      isSuccess: true,
-      isError: false,
-    })
-
-    mockUseQueueSeriesMapping.useQueueSeriesMappingPreview.mockReturnValue({
-      data: {
-        preview_token: 'token123',
-        scope: {
-          status: 'available',
-          scope_key: 'key123',
-          origin_issue_id: 1,
-          series_label: 'Batman',
-          basis: 'exact_match',
-        },
-        provider_series: {
-          id: '123',
-          name: 'Batman (2016)',
-          publisher: 'DC Comics',
-          start_year: 2016,
-          count_of_issues: 100,
-          site_detail_url: 'https://comicvine.gamespot.com/batman-2016/4050-58512/',
-          image: { super_url: 'https://example.com/image.jpg' },
-        },
-        counts: {
-          already_confirmed: 0,
-          safe_exact_match: 2,
-          needs_review_ambiguous: 0,
-          needs_review_conflict: 0,
-          unresolved: 0,
-          excluded_special: 0,
-        },
-        rows: [
-          {
-            row_id: 'row1',
-            issue_id: 1,
-            issue_number: '#1',
-            title: 'Batman: The First Night',
-            classification: 'safe_exact_match',
-            thread_id: 1,
-            thread_title: 'Batman',
-            current_mapping_status: null,
-            proposed_mapping: true,
-            default_selected: true,
-            reason: null,
-          },
-          {
-            row_id: 'row2',
-            issue_id: 2,
-            issue_number: '#2',
-            title: 'Batman: The Second Night',
-            classification: 'safe_exact_match',
-            thread_id: 1,
-            thread_title: 'Batman',
-            current_mapping_status: null,
-            proposed_mapping: true,
-            default_selected: true,
-            reason: null,
-          },
-        ],
-        issued_at: Date.now(),
-        expires_at: Date.now() + 3600000,
-      },
-      isSuccess: true,
-      isError: false,
-      isPending: false,
-      isFetching: false,
-    })
-
-    mockUseQueueSeriesMapping.useQueueSeriesMappingCommit.mockReturnValue({
-      mutate: jest.fn().mockResolvedValue({
-        idempotency_key: 'key123',
-        confirmed_issue_ids: [1, 2],
-        already_confirmed_issue_ids: [],
-        needs_review_issue_ids: [],
-        hydration_queued_issue_ids: [],
-        series_mapping: {
-          provider: 'comicvine',
-          external_id: '123',
-          status: 'confirmed',
-          evidence_source: 'user_confirmation',
-        },
-      }),
-      isError: false,
-      isPending: false,
-    })
-
-    mockApiSeriesMapping.bulkApprovableSeriesMappingRows.mockReturnValue([
-      {
-        row_id: 'row1',
-        issue_id: 1,
-        issue_number: '#1',
-        title: 'Batman: The First Night',
-        classification: 'safe_exact_match',
-        thread_id: 1,
-        thread_title: 'Batman',
-        current_mapping_status: null,
-        proposed_mapping: true,
-        default_selected: true,
-        reason: null,
-      },
-      {
-        row_id: 'row2',
-        issue_id: 2,
-        issue_number: '#2',
-        title: 'Batman: The Second Night',
-        classification: 'safe_exact_match',
-        thread_id: 1,
-        thread_title: 'Batman',
-        current_mapping_status: null,
-        proposed_mapping: true,
-        default_selected: true,
-        reason: null,
-      },
-    ])
-
-    mockApiSeriesMapping.isOwnedSeriesMappingRow.mockReturnValue(true)
+    mockedSeriesDialog.mockReset()
+    mockedSeriesDialog.mockImplementation((props) => (
+      <>
+        {props.isOpen && (
+          <div
+            data-testid="mock-series-dialog"
+            data-thread-id={props.threadId}
+            data-thread-title={props.threadTitle}
+          >
+            <button type="button" onClick={() => props.onMapped([props.threadId * 10])}>
+              complete-current
+            </button>
+            <button type="button" onClick={() => props.onSkip?.()}>
+              skip-current
+            </button>
+            <button type="button" onClick={props.onClose}>
+              cancel-current
+            </button>
+          </div>
+        )}
+      </>
+    ))
   })
 
-  it('renders when open', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueBulkMapSeriesDialog {...defaultProps} />
-      </QueryClientProvider>
-    )
+  it('opens the shared mapping dialog for the first series', () => {
+    renderBulkDialog()
 
-    expect(screen.getByText('Map Series')).toBeInTheDocument()
-    expect(screen.getByText('Batman')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Search ComicVine volumes')).toBeInTheDocument()
+    const child = screen.getByTestId('mock-series-dialog')
+    expect(child).toHaveAttribute('data-thread-id', '1')
+    expect(child).toHaveAttribute('data-thread-title', 'Batman')
   })
 
-  it('shows progress indicator', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueBulkMapSeriesDialog {...defaultProps} />
-      </QueryClientProvider>
-    )
+  it('steps through the remaining series after each commit', () => {
+    renderBulkDialog()
 
-    expect(screen.getByText('1 of 3')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('complete-current'))
+
+    const child = screen.getByTestId('mock-series-dialog')
+    expect(child).toHaveAttribute('data-thread-id', '2')
+    expect(child).toHaveAttribute('data-thread-title', 'Superman')
   })
 
-  it('allows searching for series', async () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueBulkMapSeriesDialog {...defaultProps} />
-      </QueryClientProvider>
-    )
+  it('reports per-series results once every series is processed', async () => {
+    renderBulkDialog()
 
-    const searchInput = screen.getByPlaceholderText('Search ComicVine volumes')
-    fireEvent.change(searchInput, { target: { value: 'Batman' } })
+    fireEvent.click(screen.getByText('complete-current'))
+    fireEvent.click(screen.getByText('complete-current'))
 
-    await waitFor(() => {
-      expect(screen.getByText('Batman (2016)')).toBeInTheDocument()
-    })
+    const results = await screen.findByTestId('queue-bulk-map-series-results')
+    expect(results).toHaveTextContent('2 series mapped with 2 issues confirmed.')
+    expect(screen.queryByTestId('mock-series-dialog')).not.toBeInTheDocument()
   })
 
-  it('allows selecting a series and previewing mapping', async () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueBulkMapSeriesDialog {...defaultProps} />
-      </QueryClientProvider>
-    )
+  it('records a skipped series and still advances', async () => {
+    renderBulkDialog()
 
-    // Search for series
-    const searchInput = screen.getByPlaceholderText('Search ComicVine volumes')
-    fireEvent.change(searchInput, { target: { value: 'Batman' } })
+    fireEvent.click(screen.getByText('skip-current'))
+    expect(screen.getByTestId('mock-series-dialog')).toHaveAttribute('data-thread-id', '2')
 
-    await waitFor(() => {
-      expect(screen.getByText('Batman (2016)')).toBeInTheDocument()
-    })
+    fireEvent.click(screen.getByText('complete-current'))
 
-    // Select the series
-    fireEvent.click(screen.getByText('Batman (2016)'))
-
-    // Should show preview
-    await waitFor(() => {
-      expect(screen.getByText('Review Series Mapping')).toBeInTheDocument()
-      expect(screen.getByText('2 issues mapped to Batman (2016)')).toBeInTheDocument()
-    })
+    const results = await screen.findByTestId('queue-bulk-map-series-results')
+    expect(results).toHaveTextContent('1 series mapped with 1 issue confirmed.')
+    expect(results).toHaveTextContent('1 series left for manual review.')
   })
 
-  it('allows committing the mapping', async () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueBulkMapSeriesDialog {...defaultProps} />
-      </QueryClientProvider>
+  it('keeps batch progress when the queue props change identity', () => {
+    const { props, view } = renderBulkDialog()
+
+    fireEvent.click(screen.getByText('complete-current'))
+    expect(screen.getByTestId('mock-series-dialog')).toHaveAttribute('data-thread-id', '2')
+
+    // A successful commit refreshes the Queue, which hands back new array
+    // instances. Progress must survive that without restarting the batch.
+    view.rerender(
+      <QueueBulkMapSeriesDialog
+        isOpen
+        threadIds={[2]}
+        threadTitles={['Superman']}
+        onClose={props.onClose}
+      />,
     )
 
-    // Search for series
-    const searchInput = screen.getByPlaceholderText('Search ComicVine volumes')
-    fireEvent.change(searchInput, { target: { value: 'Batman' } })
-
-    await waitFor(() => {
-      expect(screen.getByText('Batman (2016)')).toBeInTheDocument()
-    })
-
-    // Select the series
-    fireEvent.click(screen.getByText('Batman (2016)'))
-
-    // Wait for preview to load
-    await waitFor(() => {
-      expect(screen.getByText('Review Series Mapping')).toBeInTheDocument()
-    })
-
-    // Commit the mapping
-    fireEvent.click(screen.getByText('Map 2 issues'))
-
-    // Should move to next thread
-    await waitFor(() => {
-      expect(screen.getByText('Map Series')).toBeInTheDocument()
-      expect(screen.getByText('Superman')).toBeInTheDocument()
-    })
+    expect(screen.getByTestId('mock-series-dialog')).toHaveAttribute('data-thread-id', '2')
   })
 
-  it('shows results when all threads are processed', async () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueBulkMapSeriesDialog {...defaultProps} />
-      </QueryClientProvider>
+  it('preserves progress when cancelled and resumes on reopen', () => {
+    const onClose = vi.fn()
+    const { view } = renderBulkDialog({ onClose })
+
+    fireEvent.click(screen.getByText('complete-current'))
+    fireEvent.click(screen.getByText('cancel-current'))
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    view.rerender(
+      <QueueBulkMapSeriesDialog
+        isOpen={false}
+        threadIds={[1, 2]}
+        threadTitles={['Batman', 'Superman']}
+        onClose={onClose}
+      />,
+    )
+    view.rerender(
+      <QueueBulkMapSeriesDialog
+        isOpen
+        threadIds={[1, 2]}
+        threadTitles={['Batman', 'Superman']}
+        onClose={onClose}
+      />,
     )
 
-    // Process all threads (mock the completion)
-    for (let i = 0; i < 3; i++) {
-      // Search for series
-      const searchInput = screen.getByPlaceholderText('Search ComicVine volumes')
-      fireEvent.change(searchInput, { target: { value: defaultProps.threadTitles[i] } })
-
-      await waitFor(() => {
-        expect(screen.getByText(defaultProps.threadTitles[i])).toBeInTheDocument()
-      })
-
-      // Select the series
-      fireEvent.click(screen.getByText(defaultProps.threadTitles[i]))
-
-      // Wait for preview to load
-      await waitFor(() => {
-        expect(screen.getByText('Review Series Mapping')).toBeInTheDocument()
-      })
-
-      // Commit the mapping
-      fireEvent.click(screen.getByText('Map 2 issues'))
-
-      // Wait for next thread or results
-      await waitFor(() => {
-        if (i < 2) {
-          expect(screen.getByText('Map Series')).toBeInTheDocument()
-          expect(screen.getByText(defaultProps.threadTitles[i + 1])).toBeInTheDocument()
-        }
-      })
-    }
-
-    // Should show results
-    await waitFor(() => {
-      expect(screen.getByText('Mapping complete for 3 series')).toBeInTheDocument()
-      expect(screen.getByText('3 series successfully mapped with 6 issues')).toBeInTheDocument()
-    })
-  })
-
-  it('can be cancelled', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueBulkMapSeriesDialog {...defaultProps} />
-      </QueryClientProvider>
-    )
-
-    fireEvent.click(screen.getByText('Done'))
-
-    expect(defaultProps.onClose).toHaveBeenCalled()
-  })
-
-  it('handles search errors', async () => {
-    mockComicVineApi.default.searchSeries.mockRejectedValue(new Error('Search failed'))
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueBulkMapSeriesDialog {...defaultProps} />
-      </QueryClientProvider>
-    )
-
-    const searchInput = screen.getByPlaceholderText('Search ComicVine volumes')
-    fireEvent.change(searchInput, { target: { value: 'Invalid Search' } })
-
-    await waitFor(() => {
-      expect(screen.getByText('Failed to search ComicVine. Please try again.')).toBeInTheDocument()
-    })
-  })
-
-  it('handles preview errors', async () => {
-    mockUseQueueSeriesMapping.useQueueSeriesMappingPreview.mockReturnValue({
-      data: null,
-      isSuccess: false,
-      isError: true,
-      isPending: false,
-      isFetching: false,
-    })
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <QueueBulkMapSeriesDialog {...defaultProps} />
-      </QueryClientProvider>
-    )
-
-    // Search for series
-    const searchInput = screen.getByPlaceholderText('Search ComicVine volumes')
-    fireEvent.change(searchInput, { target: { value: 'Batman' } })
-
-    await waitFor(() => {
-      expect(screen.getByText('Batman (2016)')).toBeInTheDocument()
-    })
-
-    // Select the series
-    fireEvent.click(screen.getByText('Batman (2016)'))
-
-    // Should show error
-    await waitFor(() => {
-      expect(screen.getByText('The mapping plan could not be loaded. Nothing was changed.')).toBeInTheDocument()
-    })
+    // Resumes at the first unprocessed series instead of restarting at Batman.
+    expect(screen.getByTestId('mock-series-dialog')).toHaveAttribute('data-thread-id', '2')
   })
 })

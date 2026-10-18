@@ -47,11 +47,13 @@ export default function QueuePage() {
     activeCount,
   } = useQueueThreads(searchQuery, sortBy)
 
-  // Filter threads that need mapping for bulk mapping
-  const threadsNeedingMapping = threads?.filter(
-    thread => thread.comicvine_mapping?.status === 'unresolved' || 
-              thread.comicvine_mapping?.status === 'partial'
-  ) || []
+  // Series that show the per-row `Map series` repair action (everything except
+  // fully mapped or non-issue-tracked rows) are the bulk action's scope.
+  const threadsNeedingMapping =
+    threads?.filter((thread) => {
+      const status = thread.comicvine_mapping?.status
+      return status === 'unresolved' || status === 'partial' || status === 'needs_review'
+    }) ?? []
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -176,9 +178,7 @@ export default function QueuePage() {
     setBulkMapDialogOpen(true)
   }, [])
 
-  const handleBulkMapMapped = useCallback((confirmedIssueIds: number[]) => {
-    // Queue pages refresh through the shared series-mapping commit hook, so the
-    // mapping indicators update without a hard reload or a manual refetch here.
+  const handleBulkMapClose = useCallback(() => {
     setBulkMapDialogOpen(false)
   }, [])
 
@@ -210,6 +210,7 @@ export default function QueuePage() {
           onCreateThread={modals.showCreateModal}
           onAddFromComicVine={modals.showAddSeriesComicVineModal}
           onBulkMapSeries={handleBulkMapSeries}
+          bulkMapDisabled={threadsNeedingMapping.length === 0}
           sortBy={sortBy}
           onSortChange={setSortBy}
           searchQuery={searchQuery}
@@ -349,8 +350,7 @@ export default function QueuePage() {
           isOpen={bulkMapDialogOpen}
           threadIds={threadsNeedingMapping.map(thread => thread.id)}
           threadTitles={threadsNeedingMapping.map(thread => thread.title)}
-          onClose={() => setBulkMapDialogOpen(false)}
-          onMapped={handleBulkMapMapped}
+          onClose={handleBulkMapClose}
         />
       </div>
     </PositionMenuProvider>

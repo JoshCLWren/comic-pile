@@ -23,6 +23,13 @@ interface QueueMapSeriesDialogProps {
   threadTitle: string
   onClose: () => void
   onMapped: (confirmedIssueIds: number[]) => void
+  /**
+   * Optional batch affordance. When the host runs several series in one pass, a
+   * series with no safe matches (or that cannot be loaded) must not trap the
+   * reader on the current step. The host supplies this to record the series as
+   * needing review and advance. Standalone single-series callers omit it.
+   */
+  onSkip?: () => void
 }
 
 type DialogStep = 'search' | 'preview'
@@ -93,6 +100,7 @@ export default function QueueMapSeriesDialog({
   threadTitle,
   onClose,
   onMapped,
+  onSkip,
 }: QueueMapSeriesDialogProps) {
   const [step, setStep] = useState<DialogStep>('search')
   const [query, setQuery] = useState(threadTitle)
@@ -385,6 +393,16 @@ export default function QueueMapSeriesDialog({
                 {isSearching ? 'Loading...' : 'Show more volumes'}
               </button>
             )}
+            {onSkip && (
+              <button
+                type="button"
+                onClick={onSkip}
+                data-testid="queue-map-series-skip"
+                className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
+              >
+                Skip / needs review
+              </button>
+            )}
           </div>
         )}
 
@@ -439,6 +457,16 @@ export default function QueueMapSeriesDialog({
                   >
                     {preview.isFetching ? 'Retrying...' : 'Try again'}
                   </button>
+                  {onSkip && (
+                    <button
+                      type="button"
+                      onClick={onSkip}
+                      data-testid="queue-map-series-skip"
+                      className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
+                    >
+                      Skip / needs review
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -449,14 +477,26 @@ export default function QueueMapSeriesDialog({
                   ComicPile could not establish a safe mapping scope for this series, so there is
                   no plan to approve. Nothing was changed.
                 </p>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  data-testid="queue-map-series-dismiss"
-                  className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
-                >
-                  Done
-                </button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    data-testid="queue-map-series-dismiss"
+                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
+                  >
+                    Done
+                  </button>
+                  {onSkip && (
+                    <button
+                      type="button"
+                      onClick={onSkip}
+                      data-testid="queue-map-series-skip"
+                      className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
+                    >
+                      Skip / needs review
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -555,6 +595,17 @@ export default function QueueMapSeriesDialog({
                   >
                     {commit.isSuccess ? 'Done' : 'Cancel'}
                   </button>
+                  {onSkip && !commit.isSuccess && (
+                    <button
+                      type="button"
+                      onClick={onSkip}
+                      disabled={commit.isPending}
+                      data-testid="queue-map-series-skip"
+                      className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition disabled:opacity-50"
+                    >
+                      Skip / needs review
+                    </button>
+                  )}
                   {!commit.isSuccess && (
                     <button
                       type="button"
