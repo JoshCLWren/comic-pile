@@ -249,3 +249,43 @@ def test_fast_checks_are_staged_from_trusted_main_before_checkout() -> None:
     assert source.index("factory-fast-checks.sh") < source.index("checkout_target() {")
     # The live worker imports primitives only above the legacy-loop sentinel.
     assert source.index("factory-fast-checks.sh") < source.index("\nensure_owner_label\n")
+
+
+def test_deletions_still_select_whole_project_checks(tmp_path: Path) -> None:
+    # Deleting a still-imported module must not produce an empty plan
+    # (Greptile finding on #3899): whole-project checks still run, while
+    # file-level commands only receive files that exist.
+    repo = repo_with(
+        tmp_path,
+        {"frontend/src/hooks/useQueueThreads.ts": "export {};\n", "app/helpers.py": "x = 1\n"},
+    )
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "files")
+    (repo / "frontend/src/hooks/useQueueThreads.ts").unlink()
+    (repo / "app/helpers.py").unlink()
+    bin_dir = tmp_path / "bin"
+    stub(bin_dir, "pnpm", 'echo "pnpm $*" >> ../pnpm.log\nexit 0')
+    python_stub(bin_dir, "", 0)
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 0, result.stdout
+    pnpm = (tmp_path / "pnpm.log").read_text()
+    assert "--filter frontend run typecheck" in pnpm
+    assert "eslint" not in pnpm
+    uv = (tmp_path / "uv.log").read_text()
+    assert "run --frozen ruff check ." in uv and "ty check --error-on-warning" in uv
+    assert "pytest" not in uv
+
+
+def test_renames_check_both_the_removed_and_the_added_path(tmp_path: Path) -> None:
+    repo = repo_with(tmp_path, {"scripts/a.mjs": "export {};\n"})
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "files")
+    git(repo, "mv", "scripts/a.mjs", "scripts/b.mjs")
+    result = subprocess.run(
+        ["bash", "-c", f"source {HELPER!s}; factory_fast_check_paths HEAD"],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert set(result.stdout.split()) == {"scripts/a.mjs", "scripts/b.mjs"}

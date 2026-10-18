@@ -79,6 +79,7 @@ case "$*" in
   *pulls/*/reviews*) kind=reviews ;;
   "pr view"*) printf '' ; exit 0 ;;
   *check-runs*) echo '{{"check_runs":[]}}' ; exit 0 ;;
+  *issues/*/comments*) echo '[]' ; exit 0 ;;
   *) exit 1 ;;
 esac
 [[ -f {data}/$kind ]] || {{ echo "fake gh: $kind failed" >&2; exit 1; }}

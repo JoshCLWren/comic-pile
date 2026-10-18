@@ -8,6 +8,7 @@ arrived during the run. See docs/FACTORY_GITHUB_VISIBILITY.md.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -25,11 +26,13 @@ HEAD_PLACEHOLDER = "HEAD"
 
 class Author(TypedDict):
     login: str
+    __typename: NotRequired[str]
 
 
 class Comment(TypedDict):
     author: Author
     body: str
+    databaseId: NotRequired[int]
     url: NotRequired[str]
     authorAssociation: NotRequired[str]
     createdAt: NotRequired[str]
@@ -50,8 +53,19 @@ class Thread(TypedDict):
     commentsIncomplete: NotRequired[bool]
 
 
-def c(login: str, body: str, association: str = "NONE") -> Comment:
-    return {"author": {"login": login}, "body": body, "authorAssociation": association}
+def c(
+    login: str, body: str, association: str = "NONE", *, bot: bool = False, at: str = ""
+) -> Comment:
+    author: Author = {"login": login, "__typename": "Bot" if bot else "User"}
+    comment: Comment = {"author": author, "body": body, "authorAssociation": association}
+    if at:
+        comment["createdAt"] = at
+    return comment
+
+
+def actions(body: str, at: str = "") -> Comment:
+    """A reply posted by the wrapper as github-actions[bot] (GraphQL: Bot)."""
+    return c("github-actions", body, bot=True, at=at)
 
 
 def thread(
@@ -123,11 +137,11 @@ GREPTILE_FINDING = c("greptile-apps", "<b>**Unbounded retry**</b> in the loop")
 def test_open_thread_rule_matches_the_documented_cases(tmp_path: Path) -> None:
     threads = [
         thread("OPEN_PLAIN", [GREPTILE_FINDING]),
-        thread("ANSWERED_BY_WRAPPER", [GREPTILE_FINDING, c("github-actions", "**Fixed** in abc")]),
-        thread(
-            "ANSWERED_BY_WORKER_APP",
-            [GREPTILE_FINDING, c("opencode-free-model-factory-54", "Rebuttal")],
-        ),
+        thread("ANSWERED_BY_WRAPPER", [GREPTILE_FINDING, actions("**Fixed** in abc")]),
+        # A look-alike login is not trusted without a repository role or the
+        # github-actions Bot actor (Greptile finding on #3899).
+        thread("LOOKALIKE_LOGIN", [GREPTILE_FINDING, c("opencode-testfactory", "Rebuttal")]),
+        thread("ACTIONS_LOOKALIKE_USER", [GREPTILE_FINDING, c("github-actions", "Rebuttal")]),
         thread("ANSWERED_BY_OWNER", [GREPTILE_FINDING, c("JoshCLWren", "Rebuttal", "OWNER")]),
         thread("UNTRUSTED_REPLY", [GREPTILE_FINDING, c("drive-by", "not a bug")]),
         thread(
@@ -151,6 +165,31 @@ def test_open_thread_rule_matches_the_documented_cases(tmp_path: Path) -> None:
             ],
         ),
         thread("ACK_LOOKING_FIRST", [c("greptile-apps", "Thanks for the PR, but this leaks")]),
+        # Polite pushback is not acceptance (Greptile finding on #3899).
+        thread(
+            "POLITE_PUSHBACK",
+            [
+                GREPTILE_FINDING,
+                c("JoshCLWren", "Rebuttal", "OWNER"),
+                c("greptile-apps", "Thanks for the rebuttal, but the bug remains."),
+            ],
+        ),
+        thread(
+            "GOOD_POINT_BUT",
+            [
+                GREPTILE_FINDING,
+                c("JoshCLWren", "Rebuttal", "OWNER"),
+                c("greptile-apps", "Good point, however the retry is still unbounded."),
+            ],
+        ),
+        thread(
+            "RIGHT_BUT_NOT",
+            [
+                GREPTILE_FINDING,
+                c("JoshCLWren", "Rebuttal", "OWNER"),
+                c("greptile-apps", "You're right that it is capped, but it isn't bounded."),
+            ],
+        ),
         thread("RESOLVED", [GREPTILE_FINDING], resolved=True),
         thread("OUTDATED", [GREPTILE_FINDING], outdated=True),
         thread("HUMAN", [c("JoshCLWren", "nit", "OWNER")]),
@@ -158,7 +197,17 @@ def test_open_thread_rule_matches_the_documented_cases(tmp_path: Path) -> None:
     result = open_ids(tmp_path, threads)
     assert result.returncode == 0, result.stderr
     found = {item["id"]: item for item in json.loads(result.stdout)}
-    assert set(found) == {"OPEN_PLAIN", "UNTRUSTED_REPLY", "PUSHBACK", "ACK_LOOKING_FIRST"}
+    assert set(found) == {
+        "OPEN_PLAIN",
+        "UNTRUSTED_REPLY",
+        "LOOKALIKE_LOGIN",
+        "ACTIONS_LOOKALIKE_USER",
+        "PUSHBACK",
+        "ACK_LOOKING_FIRST",
+        "POLITE_PUSHBACK",
+        "GOOD_POINT_BUT",
+        "RIGHT_BUT_NOT",
+    }
     assert found["OPEN_PLAIN"]["title"] == "Unbounded retry"
     assert found["ACK_LOOKING_FIRST"]["title"] == ""
 
@@ -215,13 +264,22 @@ def test_outcome_validation(tmp_path: Path) -> None:
 
 
 def fake_gh(
-    tmp_path: Path, threads: list[Thread] | None, *, mutation_status: int = 0
+    tmp_path: Path,
+    threads: list[Thread] | None,
+    *,
+    mutation_status: int = 0,
+    body: str = "",
+    checks: str = '{"check_runs":[]}',
+    comments: str = "[]",
 ) -> dict[str, str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     threads_file = tmp_path / "gh-threads.json"
     if threads is not None:
         threads_file.write_text(doc(threads))
+    (tmp_path / "gh-body.txt").write_text(body)
+    (tmp_path / "gh-checks.json").write_text(checks)
+    (tmp_path / "gh-comments.json").write_text(comments)
     script = bin_dir / "gh"
     script.write_text(f"""#!/usr/bin/env bash
 case "$*" in
@@ -230,8 +288,12 @@ case "$*" in
     exit {mutation_status} ;;
   *graphql*) [[ -f {threads_file} ]] || exit 1; cat {threads_file} ;;
   *pulls/42/reviews*) echo '[]' ;;
-  "pr view 42"*) printf '' ;;
-  *check-runs*) echo '{{"check_runs":[]}}' ;;
+  "pr view 42"*) cat {tmp_path}/gh-body.txt ;;
+  *check-runs*) cat {tmp_path}/gh-checks.json ;;
+  *"issues/42/comments -f body="*)
+    printf '%s\\n' "$*" >> {tmp_path}/pr-comments.log
+    exit {mutation_status} ;;
+  *issues/42/comments*) cat {tmp_path}/gh-comments.json ;;
   *) exit 1 ;;
 esac
 """)
@@ -318,7 +380,8 @@ def test_gate_reply_is_idempotent_per_thread_outcome_and_head(tmp_path: Path) ->
     ).stdout.strip()
     # The untrusted drive-by reply leaves the thread open; it carries the marker
     # only to prove the duplicate check reads the fetched thread comments.
-    marker = f"<!-- comic-pile-factory-greptile-outcome-v1:PRRT_A:rebutted:{head} -->"
+    digest = hashlib.sha256(("e" * 50).encode()).hexdigest()[:12]
+    marker = f"<!-- comic-pile-factory-greptile-outcome-v1:PRRT_A:rebutted:{head}:{digest} -->"
     env = fake_gh(tmp_path, [thread("PRRT_A", [GREPTILE_FINDING, c("drive-by", marker)])])
     (tmp_path / "outcomes.json").write_text(
         json.dumps(
@@ -435,3 +498,140 @@ def test_worker_wires_the_gate_into_every_ready_or_review_handoff() -> None:
     assert "'factory:changes-requested' 'new-greptile-findings-during-run'" in review
     assert "verdict='repair'" in review
     assert "FAST_CHECK_RESERVE_SECONDS" in source
+
+
+def test_revised_answer_after_greptile_pushback_is_posted(tmp_path: Path) -> None:
+    repo = git_repo(tmp_path)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, text=True, capture_output=True, check=True
+    ).stdout.strip()
+    digest = hashlib.sha256(("e" * 50).encode()).hexdigest()[:12]
+    old_reply = actions(
+        f"<!-- comic-pile-factory-greptile-outcome-v1:PRRT_A:rebutted:{head}:{digest} -->"
+    )
+    pushback = c("greptile-apps", "I still think the loop is unbounded.")
+    env = fake_gh(tmp_path, [thread("PRRT_A", [GREPTILE_FINDING, old_reply, pushback])])
+    (tmp_path / "outcomes.json").write_text(
+        json.dumps(
+            {"outcomes": [{"thread_id": "PRRT_A", "outcome": "rebutted", "evidence": "e" * 50}]}
+        )
+    )
+    out = run_gate(tmp_path, env, snapshot=["PRRT_A"])
+    assert out["status"] == "clear", out
+    # Same text and head, but the old reply predates Greptile's pushback.
+    assert "threadId=PRRT_A" in (tmp_path / "mutations.log").read_text()
+
+
+def summary_body(head: str, items: list[str]) -> str:
+    lines = [
+        f'{i + 1}. <img alt="P1" src="https://x/p1.svg" align="top">&nbsp;{item}'
+        for i, item in enumerate(items)
+    ]
+    return "\n".join(
+        [
+            "<!-- greptile_comment -->",
+            "<h2>Findings</h2>",
+            *lines,
+            "<sub>Last reviewed commit: "
+            f'["x"](https://github.com/joshclwren/comic-pile/commit/{head}) · Reviewed</sub>',
+            "<!-- /greptile_comment -->",
+        ]
+    )
+
+
+def repo_head(tmp_path: Path) -> str:
+    repo = git_repo(tmp_path)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, text=True, capture_output=True, check=True
+    ).stdout.strip()
+
+
+def checks_at(completed_at: str) -> str:
+    return json.dumps({"check_runs": [{"name": "Greptile Review", "completed_at": completed_at}]})
+
+
+SUMMARY_ID = "GREPTILE_SUMMARY_cache-key-ignores-user"
+
+
+def test_summary_only_findings_are_required_and_answered_by_pr_comment(tmp_path: Path) -> None:
+    head = repo_head(tmp_path)
+    env = fake_gh(tmp_path, [], body=summary_body(head, ["**Cache key ignores user** no thread"]))
+    out = run_gate(tmp_path, env, snapshot=[SUMMARY_ID])
+    assert out["status"] == "blocked", out
+    assert f"{SUMMARY_ID} (missing)" in out["detail"]
+
+    evidence = "app/cache.py:12 already includes user_id in the key; see test_cache_key."
+    (tmp_path / "outcomes.json").write_text(
+        json.dumps(
+            {"outcomes": [{"thread_id": SUMMARY_ID, "outcome": "rebutted", "evidence": evidence}]}
+        )
+    )
+    out = run_gate(tmp_path, env, snapshot=[SUMMARY_ID])
+    assert out["status"] == "clear", out
+    posted = (tmp_path / "pr-comments.log").read_text()
+    assert "repos/JoshCLWren/comic-pile/issues/42/comments" in posted
+    assert f"comic-pile-factory-greptile-outcome-v1:{SUMMARY_ID}:rebutted:{head}:" in posted
+    assert "Cache key ignores user" in posted
+    assert not (tmp_path / "mutations.log").exists()
+
+
+def test_summary_only_finding_answered_after_review_is_not_required(tmp_path: Path) -> None:
+    head = repo_head(tmp_path)
+    comment = {
+        "user": {"login": "github-actions[bot]", "type": "Bot"},
+        "author_association": "NONE",
+        "created_at": "2026-10-18T17:10:00Z",
+        "body": f"<!-- comic-pile-factory-greptile-outcome-v1:{SUMMARY_ID}:rebutted:{head}:abc -->",
+    }
+    env = fake_gh(
+        tmp_path,
+        [],
+        body=summary_body(head, ["**Cache key ignores user**"]),
+        checks=checks_at("2026-10-18T17:00:00Z"),
+        comments=json.dumps([comment]),
+    )
+    assert run_gate(tmp_path, env, snapshot=[])["status"] == "clear"
+    # Greptile re-reviewed after the answer and still lists it: required again.
+    (tmp_path / "gh-checks.json").write_text(checks_at("2026-10-18T17:20:00Z"))
+    out = run_gate(tmp_path, env, snapshot=[SUMMARY_ID])
+    assert out["status"] == "blocked" and SUMMARY_ID in out["detail"], out
+    # An untrusted commenter cannot answer a summary finding.
+    (tmp_path / "gh-checks.json").write_text(checks_at("2026-10-18T17:00:00Z"))
+    (tmp_path / "gh-comments.json").write_text(
+        json.dumps(
+            [
+                {
+                    **comment,
+                    "user": {"login": "drive-by", "type": "User"},
+                    "author_association": "NONE",
+                }
+            ]
+        )
+    )
+    assert run_gate(tmp_path, env, snapshot=[SUMMARY_ID])["status"] == "blocked"
+
+
+def test_summary_relisting_an_answered_thread_after_review_requires_a_new_outcome(
+    tmp_path: Path,
+) -> None:
+    head = repo_head(tmp_path)
+    first: Comment = {**GREPTILE_FINDING, "databaseId": 777}
+    answered = thread("PRRT_A", [first, actions("**Rebuttal**", at="2026-10-18T17:00:00Z")])
+    link = '<a href="https://github.com/x/pull/42#discussion_r777">▶</a>'
+    env = fake_gh(
+        tmp_path,
+        [answered],
+        body=summary_body(head, [f"**Unbounded retry** {link}"]),
+        checks=checks_at("2026-10-18T17:30:00Z"),
+    )
+    out = run_gate(tmp_path, env, snapshot=["PRRT_A"])
+    assert out["status"] == "blocked" and "PRRT_A (missing)" in out["detail"], out
+    # Answered after Greptile's review completed: awaiting Greptile, not required.
+    (tmp_path / "gh-checks.json").write_text(checks_at("2026-10-18T16:30:00Z"))
+    assert run_gate(tmp_path, env, snapshot=["PRRT_A"])["status"] == "clear"
+
+
+def test_summary_for_an_older_commit_is_ignored(tmp_path: Path) -> None:
+    repo_head(tmp_path)
+    env = fake_gh(tmp_path, [], body=summary_body("b" * 40, ["**Old finding**"]))
+    assert run_gate(tmp_path, env, snapshot=[])["status"] == "clear"

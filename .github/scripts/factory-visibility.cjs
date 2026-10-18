@@ -113,11 +113,16 @@ const REVIEW_THREAD_PAGE_LIMIT = 50;
 // docs/FACTORY_GITHUB_VISIBILITY.md "Open Greptile findings"). A review thread
 // is an OPEN Greptile finding when it is unresolved, not outdated, its first
 // comment is by Greptile, and neither of these holds:
-//   1. Greptile's latest comment is a reply acknowledging/accepting the answer;
-//   2. a trusted responder (OWNER/MEMBER/COLLABORATOR, github-actions, or an
-//      opencode-*factory* worker app) replied after Greptile's latest comment.
-const GREPTILE_ACK_RE = /^(you['\u2019]?re (absolutely |totally )?right|you are (absolutely |totally )?right|(that|this) (addresses|resolves|answers|fixes|clears up|handles)|good (catch|point|call)|makes sense|fair (point|enough)|agreed|acknowledged|understood|confirmed|thanks|thank you)/i;
-const TRUSTED_RESPONDER_LOGIN_RE = /^(github-actions(\[bot\])?|opencode-[a-z0-9-]*factory[a-z0-9-]*(\[bot\])?)$/;
+//   1. Greptile's latest comment is a reply that clearly accepts the answer
+//      (an acceptance prefix and no contrast word in its first sentence);
+//   2. a trusted responder (OWNER/MEMBER/COLLABORATOR, or the github-actions
+//      Bot actor) replied after Greptile's latest comment. A login pattern
+//      alone is never trusted: anyone can register a look-alike user name.
+const GREPTILE_ACK_RE = /^(you['\u2019]?re (absolutely |totally )?right|you are (absolutely |totally )?right|(that|this) (addresses|resolves|answers|fixes|clears up|handles)|good (catch|point|call)|makes sense|fair (point|enough)|agreed|confirmed)/i;
+const GREPTILE_ACK_CONTRAST_RE = /\b(but|however|although|though|still|remains?|not)\b|n['\u2019]t\b/i;
+const GITHUB_ACTIONS_LOGIN_RE = /^github-actions(\[bot\])?$/;
+const GREPTILE_OUTCOME_MARKER = 'comic-pile-factory-greptile-outcome-v1';
+const RECENT_COMMENT_WINDOW = 20;
 
 function isGreptileLogin(login) {
   return reviewerGraphqlLogins().has(login || '');
@@ -125,12 +130,49 @@ function isGreptileLogin(login) {
 
 function isGreptileAck(body) {
   const text = String(body || '').replace(/<[^>]*>/g, '').replace(/^[\s*_>`"-]+/, '');
-  return GREPTILE_ACK_RE.test(text);
+  const firstSentence = (text.match(/^[^.!?\n]*/) || [''])[0];
+  return GREPTILE_ACK_RE.test(text) && !GREPTILE_ACK_CONTRAST_RE.test(firstSentence);
 }
 
 function isTrustedResponder(comment) {
-  return TRUSTED_RESPONDER_LOGIN_RE.test(comment?.author?.login || '')
-    || TRUSTED_ASSOCIATIONS.has(comment?.authorAssociation || '');
+  return TRUSTED_ASSOCIATIONS.has(comment?.authorAssociation || '')
+    || (comment?.author?.__typename === 'Bot' && GITHUB_ACTIONS_LOGIN_RE.test(comment?.author?.login || ''));
+}
+
+// REST issue comment variant (summary-only outcome comments).
+function isTrustedIssueCommenter(comment) {
+  return TRUSTED_ASSOCIATIONS.has(comment?.author_association || '')
+    || (comment?.user?.type === 'Bot' && comment?.user?.login === 'github-actions[bot]');
+}
+
+// Must equal summary_finding_id in factory-review-findings.sh.
+function summaryFindingId(title) {
+  const slug = String(title || '')
+    .replace(/[A-Z]/g, ch => ch.toLowerCase())
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  return `GREPTILE_SUMMARY_${slug}`;
+}
+
+// Fetch every comment of one thread. Used only when the recent window cannot
+// establish Greptile's latest comment. Returns null when incomplete.
+async function fullThreadComments(github, threadId, { pageLimit = 20 } = {}) {
+  const comments = [];
+  let after = null;
+  for (let page = 0; page < pageLimit; page += 1) {
+    const response = await withRetry(() => github.graphql(
+      `query($id:ID!,$after:String){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{url author{__typename login} authorAssociation body createdAt}}}}}`,
+      { id: threadId, after },
+    ));
+    const connection = response?.node?.comments;
+    if (!Array.isArray(connection?.nodes)) return null;
+    comments.push(...connection.nodes);
+    if (connection.pageInfo?.hasNextPage === false) return comments;
+    if (connection.pageInfo?.hasNextPage !== true || !connection.pageInfo.endCursor) return null;
+    after = connection.pageInfo.endCursor;
+  }
+  return null;
 }
 
 // thread: { isResolved, isOutdated, firstComment: {author,url}, comments: [...] }
@@ -167,19 +209,31 @@ async function greptileReviewThreads(github, context, number, { pageLimit = REVI
   let after = null;
   for (let page = 0; page < pageLimit; page += 1) {
     const response = await withRetry(() => github.graphql(
-      `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated firstComment:comments(first:1){nodes{databaseId url author{login}}} recent:comments(last:20){nodes{url author{login} authorAssociation body createdAt}}}}}}}`,
+      `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated firstComment:comments(first:1){nodes{databaseId url author{__typename login}}} recent:comments(last:${RECENT_COMMENT_WINDOW}){totalCount nodes{url author{__typename login} authorAssociation body createdAt}}}}}}}`,
       { owner: context.repo.owner, name: context.repo.repo, number, after },
     ));
     const connection = response?.repository?.pullRequest?.reviewThreads;
     if (!Array.isArray(connection?.nodes)) return { threads, complete: false };
     for (const node of connection.nodes) {
-      threads.push({
+      const thread = {
         id: node.id,
         isResolved: Boolean(node.isResolved),
         isOutdated: Boolean(node.isOutdated),
         firstComment: node.firstComment?.nodes?.[0] || null,
         comments: node.recent?.nodes || [],
-      });
+      };
+      // A long discussion can push Greptile's latest comment out of the recent
+      // window; then the window cannot decide the rule, so read every comment.
+      // An incomplete read keeps the window, which leaves the finding open.
+      const total = node.recent?.totalCount ?? thread.comments.length;
+      if (!thread.isResolved && !thread.isOutdated
+          && isGreptileLogin(thread.firstComment?.author?.login)
+          && total > thread.comments.length
+          && !thread.comments.some(comment => isGreptileLogin(comment?.author?.login))) {
+        const all = await fullThreadComments(github, node.id);
+        if (all) thread.comments = all;
+      }
+      threads.push(thread);
     }
     if (connection.pageInfo?.hasNextPage === false) return { threads, complete: true };
     if (connection.pageInfo?.hasNextPage !== true || !connection.pageInfo.endCursor) {
@@ -229,17 +283,28 @@ async function greptileReviewCompletedAt(github, context, sha) {
   return times.length ? times.sort().at(-1) : null;
 }
 
-// A summary finding counts when Greptile lists it for the live head and its
-// linked thread (if any) is not acknowledged/outdated and either still open
-// or answered only before Greptile's latest review of this head completed.
-function openSummaryFindings(summary, threads, head, reviewedAt) {
+// A summary finding counts when Greptile lists it for the live head and:
+//   - it has no thread: unless a trusted outcome comment for it and this head
+//     was posted after Greptile's latest review of the head completed;
+//   - its thread is open; or
+//   - its thread is answered/resolved, but the latest trusted answer predates
+//     Greptile's latest review of this head (Greptile re-reviewed and still
+//     lists it). Acknowledged and outdated threads never count.
+// Same rule as factory_greptile_required_findings in factory-review-findings.sh.
+function openSummaryFindings(summary, threads, head, reviewedAt, issueComments = []) {
   if (!summary || !summary.commit || summary.commit !== head) return [];
   const byComment = new Map(threads
     .filter(thread => thread.firstComment?.databaseId)
     .map(thread => [String(thread.firstComment.databaseId), thread]));
   return summary.findings.filter(finding => {
     const thread = finding.discussionId ? byComment.get(finding.discussionId) : null;
-    if (!thread) return true;
+    if (!thread) {
+      const id = summaryFindingId(finding.title);
+      return !issueComments.some(comment => isTrustedIssueCommenter(comment)
+        && String(comment.body || '').includes(`${GREPTILE_OUTCOME_MARKER}:${id}:`)
+        && String(comment.body || '').includes(`:${head}`)
+        && (!reviewedAt || String(comment.created_at || '') > reviewedAt));
+    }
     const state = greptileThreadState(thread);
     if (state === 'open') return true;
     if (state !== 'answered' && state !== 'resolved') return false;
@@ -271,7 +336,18 @@ async function routeGreptileFindings(github, context, number) {
   const summary = greptileSummaryFindings(live.body);
   let openSummary = [];
   if (summary && summary.commit === head && summary.findings.length) {
-    openSummary = openSummaryFindings(summary, threads, head, await greptileReviewCompletedAt(github, context, head));
+    const reviewedAt = await greptileReviewCompletedAt(github, context, head);
+    const byComment = new Set(threads.map(thread => String(thread.firstComment?.databaseId || '')));
+    const needsComments = summary.findings.some(finding => !finding.discussionId || !byComment.has(finding.discussionId));
+    const issueComments = needsComments
+      ? await withRetry(() => github.paginate(github.rest.issues.listComments, {
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        issue_number: number,
+        per_page: 100,
+      }))
+      : [];
+    openSummary = openSummaryFindings(summary, threads, head, reviewedAt, issueComments);
   }
   if (openThreads.length === 0 && openSummary.length === 0) {
     // Fail closed: never treat a truncated thread listing as "no findings".
@@ -578,6 +654,13 @@ async function reconcile({ github, context }) {
     return;
   }
 
+  if (context.eventName === 'pull_request_review_comment') {
+    // A thread reply (including Greptile pushback on an answered finding) can
+    // reopen a finding; recompute routing from live state.
+    await routeGreptileFindings(github, context, context.payload.pull_request.number);
+    return;
+  }
+
   if (context.eventName === 'pull_request_target' && context.payload.action === 'edited') {
     // Greptile re-reviews that only rewrite the PR-body summary still route.
     if (!context.payload.changes?.body) return;
@@ -665,6 +748,8 @@ module.exports._test = {
   openSummaryFindings,
   routeGreptileFindings,
   isGreptileAck,
+  isTrustedResponder,
+  summaryFindingId,
   livePullRequestHead,
   REVIEW_THREAD_PAGE_LIMIT,
   REPAIR_ROUTING_REVIEWER_BOTS,

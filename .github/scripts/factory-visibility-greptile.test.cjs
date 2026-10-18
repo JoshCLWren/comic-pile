@@ -11,6 +11,8 @@ const {
   greptileThreadState,
   greptileSummaryFindings,
   isGreptileAck,
+  isTrustedResponder,
+  summaryFindingId,
   REPAIR_ROUTING_REVIEWER_BOTS,
   TRUSTED_APP_SLUGS,
 } = reconcile._test;
@@ -24,15 +26,21 @@ function comment(login, body = 'finding', extra = {}) {
   return { databaseId: id, url: `https://github.com/x/pull/100#discussion_r${id}`, author: { login }, body, createdAt: '2026-10-18T15:00:00Z', ...extra };
 }
 
+// The wrapper posts outcomes as github-actions[bot]: GraphQL actor type Bot.
+function actions(body, extra = {}) {
+  return comment('github-actions', body, { ...extra, author: { login: 'github-actions', __typename: 'Bot' } });
+}
+
 // GraphQL-shaped thread: firstComment + recent window (oldest first).
-function thread({ login = 'greptile-apps', isResolved = false, isOutdated = false, replies = [], first } = {}) {
+function thread({ login = 'greptile-apps', isResolved = false, isOutdated = false, replies = [], first, totalCount } = {}) {
   const head = first || comment(login, '**Bug** here');
+  const nodes = [head, ...replies];
   return {
     id: `PRRT_${head.databaseId}`,
     isResolved,
     isOutdated,
     firstComment: { nodes: [{ databaseId: head.databaseId, url: head.url, author: head.author }] },
-    recent: { nodes: [head, ...replies] },
+    recent: { totalCount: totalCount ?? nodes.length, nodes },
   };
 }
 
@@ -57,6 +65,8 @@ function githubFor({
   liveHead = HEAD,
   body = '',
   checkRuns = [],
+  issueComments = [],
+  fullComments = {},
   setLabels,
   graphqlCalls,
   pullCalls,
@@ -73,11 +83,15 @@ function githubFor({
   return {
     paginate: async (operation) => {
       if (operation === api.listLabelsForRepo) return [];
-      if (operation === api.listComments) return [];
+      if (operation === api.listComments) return issueComments;
       return labels.map(name => ({ name }));
     },
     graphql: async (query, variables) => {
       if (graphqlCalls) graphqlCalls.push({ query, variables });
+      if (variables.id) {
+        const nodes = fullComments[variables.id];
+        return { node: { comments: { nodes: nodes || null, pageInfo: { hasNextPage: false, endCursor: null } } } };
+      }
       const index = variables.after ? Number(variables.after.slice('cursor-'.length)) : 0;
       const page = pages[index];
       const hasNextPage = index + 1 < pages.length || page.hasNextPage === true;
@@ -283,12 +297,19 @@ test('open-thread rule: acknowledgement and trusted answers close a finding; pus
   const cases = [
     // #3890: Greptile accepted the owner rebuttal.
     [[comment('JoshCLWren', 'Rebuttal, no code change.', { authorAssociation: 'OWNER' }), comment('greptile-apps', 'That addresses the concern. The caps are the intended guard.')], 'acknowledged'],
-    [[comment('github-actions', 'x'), comment('greptile-apps', "<p>You\u2019re right. That finding was based on reverted code.</p>")], 'acknowledged'],
-    [[comment('greptile-apps', 'Good catch, thanks')], 'acknowledged'],
-    // Worker/owner reply after Greptile's last comment: answered, awaiting Greptile.
-    [[comment('github-actions', '**Fixed** in abc')], 'answered'],
-    [[comment('opencode-free-model-factory-54', 'Rebuttal')], 'answered'],
+    [[actions('x'), comment('greptile-apps', "<p>You\u2019re right. That finding was based on reverted code.</p>")], 'acknowledged'],
+    [[actions('x'), comment('greptile-apps', 'Good catch.')], 'acknowledged'],
+    // Polite pushback is not acceptance (Greptile finding on #3899).
+    [[actions('x'), comment('greptile-apps', 'Thanks for the rebuttal, but the bug remains.')], 'open'],
+    [[actions('x'), comment('greptile-apps', 'Good point, however the retry is still unbounded.')], 'open'],
+    [[actions('x'), comment('greptile-apps', "You're right that it is capped, but it isn't bounded.")], 'open'],
+    // Wrapper/owner reply after Greptile's last comment: answered, awaiting Greptile.
+    [[actions('**Fixed** in abc')], 'answered'],
     [[comment('JoshCLWren', 'Rebuttal', { authorAssociation: 'OWNER' })], 'answered'],
+    // Look-alike logins are never trusted without a role or the Bot actor.
+    [[comment('opencode-free-model-factory-54', 'Rebuttal')], 'open'],
+    [[comment('opencode-testfactory', 'Rebuttal')], 'open'],
+    [[comment('github-actions', 'Rebuttal')], 'open'],
     // Untrusted replies never close a finding.
     [[comment('random-user', 'not a bug', { authorAssociation: 'NONE' })], 'open'],
     // Greptile pushed back after the answer.
@@ -369,7 +390,7 @@ test('summary for an older commit, or with no findings, does not route', async (
 
 test('summary findings linked to acknowledged or freshly answered threads do not route', async () => {
   const acked = thread({ replies: [comment('JoshCLWren', 'rebut', { authorAssociation: 'OWNER' }), comment('greptile-apps', "You're right.")] });
-  const answered = thread({ replies: [comment('github-actions', '**Rebuttal**', { createdAt: '2026-10-18T16:10:00Z' })] });
+  const answered = thread({ replies: [actions('**Rebuttal**', { createdAt: '2026-10-18T16:10:00Z' })] });
   const body = summaryBody({ findings: [
     { title: 'Acked', discussionId: String(acked.firstComment.nodes[0].databaseId) },
     { title: 'Answered after review', discussionId: String(answered.firstComment.nodes[0].databaseId) },
@@ -383,7 +404,7 @@ test('summary findings linked to acknowledged or freshly answered threads do not
 });
 
 test('summary finding re-listed after the answer (Greptile re-reviewed later) routes', async () => {
-  const answered = thread({ isResolved: true, replies: [comment('github-actions', '**Fixed** in abc', { createdAt: '2026-10-18T16:00:00Z' })] });
+  const answered = thread({ isResolved: true, replies: [actions('**Fixed** in abc', { createdAt: '2026-10-18T16:00:00Z' })] });
   const body = summaryBody({ findings: [{ title: 'Still broken', discussionId: String(answered.firstComment.nodes[0].databaseId) }] });
   const { calls } = await runWith(editedContext(body), {
     body,
@@ -403,6 +424,72 @@ test('PR-body edits without a body change or Greptile summary make no API calls'
   }
 });
 
+test('responder trust needs a repository role or the github-actions Bot actor', () => {
+  assert.equal(isTrustedResponder({ author: { login: 'github-actions', __typename: 'Bot' } }), true);
+  assert.equal(isTrustedResponder({ author: { login: 'x' }, authorAssociation: 'MEMBER' }), true);
+  assert.equal(isTrustedResponder({ author: { login: 'github-actions', __typename: 'User' } }), false);
+  assert.equal(isTrustedResponder({ author: { login: 'opencode-free-model-factory-54', __typename: 'Bot' } }), false);
+});
+
+test('a long discussion that pushes Greptile out of the recent window reads every comment', async () => {
+  const accepted = thread({
+    replies: Array.from({ length: 20 }, (_, i) => comment(`drive-by-${i}`, 'noise')),
+    totalCount: 23,
+  });
+  const full = [
+    accepted.recent.nodes[0],
+    comment('JoshCLWren', 'Rebuttal', { authorAssociation: 'OWNER' }),
+    comment('greptile-apps', 'That addresses the concern.'),
+    ...accepted.recent.nodes.slice(1),
+  ];
+  // The last-20 window holds only the trailing noise.
+  accepted.recent.nodes = accepted.recent.nodes.slice(1);
+  // Window shows only untrusted noise; the full thread shows an accepted answer.
+  const { calls, graphqlCalls } = await run(greptileReview(), {
+    threads: [accepted],
+    fullComments: { [accepted.id]: full },
+  });
+  assert.equal(calls.length, 0);
+  assert.ok(graphqlCalls.some(call => call.variables.id === accepted.id));
+  // If the full read fails, the finding stays open (fail closed).
+  const failed = await run(greptileReview(), { threads: [accepted] });
+  assert.ok(routed(failed.calls));
+});
+
+test('summary-only finding answered by a trusted outcome comment after the review does not route', async () => {
+  const id = summaryFindingId('Summary-only finding');
+  assert.equal(id, 'GREPTILE_SUMMARY_summary-only-finding');
+  const body = summaryBody({ findings: [{ title: 'Summary-only finding' }] });
+  const answer = {
+    user: { login: 'github-actions[bot]', type: 'Bot' },
+    author_association: 'NONE',
+    created_at: '2026-10-18T16:10:00Z',
+    body: `<!-- comic-pile-factory-greptile-outcome-v1:${id}:rebutted:${HEAD}:abc -->`,
+  };
+  const checkRuns = [{ name: 'Greptile Review', completed_at: '2026-10-18T16:05:00Z' }];
+  assert.equal((await runWith(editedContext(body), { body, threads: [], checkRuns, issueComments: [answer] })).calls.length, 0);
+  // Greptile re-reviewed after the answer and still lists it.
+  const late = [{ name: 'Greptile Review', completed_at: '2026-10-18T16:20:00Z' }];
+  assert.ok(routed((await runWith(editedContext(body), { body, threads: [], checkRuns: late, issueComments: [answer] })).calls));
+  // Untrusted look-alike comments never answer it.
+  const forged = { ...answer, user: { login: 'drive-by', type: 'User' } };
+  assert.ok(routed((await runWith(editedContext(body), { body, threads: [], checkRuns, issueComments: [forged] })).calls));
+});
+
+test('a thread reply (pull_request_review_comment) recomputes routing', async () => {
+  const context = {
+    eventName: 'pull_request_review_comment',
+    repo: { owner: 'JoshCLWren', repo: 'comic-pile' },
+    payload: {
+      action: 'created',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: { number: 100, head: { ref: 'factory/49-3154-greptile', sha: HEAD, repo: { full_name: 'JoshCLWren/comic-pile' } } },
+    },
+  };
+  const pushback = thread({ replies: [actions('Rebuttal'), comment('greptile-apps', 'I still think this leaks.')] });
+  assert.ok(routed((await runWith(context, { threads: [pushback] })).calls));
+});
+
 test('reconciler workflow routes review and PR-body edit events in a per-PR group', () => {
   const workflow = fs.readFileSync(
     path.join(__dirname, '..', 'workflows', 'factory-issue-pr-state-reconciler.yml'),
@@ -411,7 +498,8 @@ test('reconciler workflow routes review and PR-body edit events in a per-PR grou
   assert.match(workflow, /pull_request_review:\s*\n\s*types:\s*\[submitted, dismissed\]/);
   assert.match(workflow, /types:\s*\[opened, reopened, ready_for_review, closed, unlabeled, edited\]/);
   assert.match(workflow, /format\('factory-greptile-routing-pr-\{0\}', github\.event\.pull_request\.number\)/);
-  assert.match(workflow, /github\.event_name == 'pull_request_review' \|\| \(github\.event_name == 'pull_request_target' && github\.event\.action == 'edited'\)/);
+  assert.match(workflow, /pull_request_review_comment:\s*\n\s*types:\s*\[created\]/);
+  assert.match(workflow, /github\.event_name == 'pull_request_review' \|\| github\.event_name == 'pull_request_review_comment' \|\| \(github\.event_name == 'pull_request_target' && github\.event\.action == 'edited'\)/);
   assert.match(workflow, /\|\| 'factory-issue-pr-state-reconciler' \}\}\n\s*cancel-in-progress: false/);
   assert.match(workflow, /"\$EVENT_ACTION" == 'edited' \]\] && exit 0/);
 });

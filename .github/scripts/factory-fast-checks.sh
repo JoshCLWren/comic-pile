@@ -9,7 +9,11 @@
 # duplicate `const` in generate-route-html.mjs on #3879 and a removed import
 # that was still called on #3895).
 #
-# Checks, chosen by touched path (added/copied/modified/renamed + untracked):
+# Checks, chosen by touched path (added/copied/modified/deleted, renames as
+# delete + add, and untracked). A deleted .py or frontend file still selects
+# the whole-project checks (ruff/ty, frontend typecheck) because deleting a
+# still-imported module breaks its importers; file-level commands (node
+# --check, eslint, targeted pytest) only receive files that exist.
 #   *.mjs / *.cjs                 node --check <file>
 #   *.py                          scripts/check-python-ci-lint.sh (exact CI
 #                                 parity: ruff check . and ty check
@@ -32,7 +36,7 @@ FACTORY_FAST_CHECK_DB_ERROR_RE='(ConnectionRefusedError|could not connect to ser
 factory_fast_check_paths() {
   local base_ref="$1"
   {
-    git diff --name-only --diff-filter=ACMR "$base_ref" 2>/dev/null
+    git diff --name-only --no-renames --diff-filter=ACMD "$base_ref" 2>/dev/null
     git ls-files --others --exclude-standard 2>/dev/null
   } | awk 'NF' | sort -u
 }
@@ -115,13 +119,17 @@ factory_run_fast_checks() {
     0|off|false|no) printf 'fast checks disabled by FACTORY_FAST_CHECKS\n' >> "$log"; return 0 ;;
   esac
   plan="$(factory_fast_check_paths "$base_ref" | factory_fast_check_plan)"
+  local fe_project=0
   while IFS=$'\t' read -r kind file; do
-    [[ -n "$file" && -f "$file" ]] || continue
+    [[ -n "$file" ]] || continue
     case "$kind" in
-      node) node_files+=("$file") ;;
+      node) [[ -f "$file" ]] && node_files+=("$file") ;;
       python) py_files+=("$file") ;;
-      pytest) pytest_files+=("$file") ;;
-      frontend) fe_files+=("${file#frontend/}") ;;
+      pytest) [[ -f "$file" ]] && pytest_files+=("$file") ;;
+      frontend)
+        fe_project=1
+        [[ -f "$file" ]] && fe_files+=("${file#frontend/}")
+        ;;
     esac
   done <<< "$plan"
   printf 'fast-check plan:\n%s\n' "${plan:-(no checked file types touched)}" >> "$log"
@@ -160,7 +168,7 @@ factory_run_fast_checks() {
     fi
   fi
 
-  if (( ${#fe_files[@]} )); then
+  if (( fe_project )); then
     if ! _factory_fast_check_ensure_pnpm; then
       failures+=('frontend toolchain setup (pnpm)')
     elif ! _factory_fast_check_run "$log" 'pnpm install' pnpm install --frozen-lockfile --silent; then
@@ -168,8 +176,10 @@ factory_run_fast_checks() {
     else
       _factory_fast_check_run "$log" 'frontend typecheck' pnpm --filter frontend run typecheck \
         || failures+=('frontend typecheck')
-      _factory_fast_check_run "$log" 'frontend eslint (touched files)' pnpm --dir frontend exec eslint -- "${fe_files[@]}" \
-        || failures+=("frontend eslint (${fe_files[*]})")
+      if (( ${#fe_files[@]} )); then
+        _factory_fast_check_run "$log" 'frontend eslint (touched files)' pnpm --dir frontend exec eslint -- "${fe_files[@]}" \
+          || failures+=("frontend eslint (${fe_files[*]})")
+      fi
     fi
   fi
 

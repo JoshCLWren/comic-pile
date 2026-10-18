@@ -22,30 +22,41 @@ FACTORY_GREPTILE_OUTCOMES_BASENAME='.factory-greptile-outcomes.json'
 FACTORY_GREPTILE_OUTCOME_MARKER='comic-pile-factory-greptile-outcome-v1'
 
 # Open-thread rule, shared with factory-visibility.cjs (keep them identical;
-# see docs/FACTORY_GITHUB_VISIBILITY.md). A review thread is an OPEN Greptile
-# finding when it is unresolved, not outdated, its first comment is by
-# Greptile, and neither of these holds:
-#   1. Greptile's latest comment is a reply that acknowledges/accepts the
-#      answer (starts with "you're right", "that addresses", "good catch",
-#      "makes sense", "agreed", "acknowledged", "thanks", ...);
-#   2. a trusted responder (repo OWNER/MEMBER/COLLABORATOR, github-actions,
-#      or an opencode-*factory* worker app) replied after Greptile's latest
-#      comment, i.e. the finding is answered and awaits Greptile.
+# see docs/FACTORY_GITHUB_VISIBILITY.md "Open Greptile findings"). A review
+# thread is an OPEN Greptile finding when it is unresolved, not outdated, its
+# first comment is by Greptile, and neither of these holds:
+#   1. Greptile's latest comment is a reply that clearly accepts the answer:
+#      it starts with "you're right", "that addresses", "good catch", "makes
+#      sense", "agreed", ... and its first sentence has no contrast word
+#      ("but", "however", "still", "not", "n't", ...);
+#   2. a trusted responder replied after Greptile's latest comment, i.e. the
+#      finding is answered and awaits Greptile. Trusted means a repository
+#      OWNER/MEMBER/COLLABORATOR, or the github-actions Bot actor (the wrapper
+#      posts outcomes as github-actions[bot]). A login pattern alone is never
+#      trusted: anyone can register a look-alike user name.
 FACTORY_GREPTILE_JQ_DEFS='
   def is_greptile_login: (. // "") | test("^greptile-apps(\\[bot\\])?$");
   def is_trusted_responder:
-    ((.author.login // "") | test("^(github-actions(\\[bot\\])?|opencode-[a-z0-9-]*factory[a-z0-9-]*(\\[bot\\])?)$"))
-    or ((.authorAssociation // "") | IN("OWNER", "MEMBER", "COLLABORATOR"));
+    ((.authorAssociation // "") | IN("OWNER", "MEMBER", "COLLABORATOR"))
+    or ((.author.__typename // "") == "Bot" and ((.author.login // "") | test("^github-actions(\\[bot\\])?$")));
   def is_greptile_ack:
-    (. // "") | gsub("<[^>]*>"; "") | gsub("^[\\s*_>`\"-]+"; "")
-    | test("^(you[\u0027\u2019]?re (absolutely |totally )?right|you are (absolutely |totally )?right|(that|this) (addresses|resolves|answers|fixes|clears up|handles)|good (catch|point|call)|makes sense|fair (point|enough)|agreed|acknowledged|understood|confirmed|thanks|thank you)"; "i");
-  def greptile_thread_open:
+    ((. // "") | gsub("<[^>]*>"; "") | gsub("^[\\s*_>`\"-]+"; "")) as $t
+    | ($t | test("^(you[\u0027\u2019]?re (absolutely |totally )?right|you are (absolutely |totally )?right|(that|this) (addresses|resolves|answers|fixes|clears up|handles)|good (catch|point|call)|makes sense|fair (point|enough)|agreed|confirmed)"; "i"))
+      and ((first($t | match("^[^.!?\n]*") | .string) // "")
+           | test("\\b(but|however|although|though|still|remains?|not)\\b|n[\u0027\u2019]t\\b"; "i") | not);
+  def greptile_thread_state:
     (.comments.nodes // []) as $c
-    | (.isResolved != true) and (.isOutdated != true) and ($c | length) > 0
-      and ($c[0].author.login | is_greptile_login)
-      and (([range(0; $c | length) | select($c[.].author.login | is_greptile_login)] | last) as $g
-           | ($g == 0 or ($c[$g].body | is_greptile_ack | not))
-             and ([$c[($g + 1):][] | select(is_trusted_responder)] | length) == 0);
+    | if ($c | length) == 0 or (($c[0].author.login | is_greptile_login) | not) then "other"
+      elif .isResolved == true then "resolved"
+      elif .isOutdated == true then "outdated"
+      else ([range(0; $c | length) | select($c[.].author.login | is_greptile_login)] | last) as $g
+        | if $g > 0 and ($c[$g].body | is_greptile_ack) then "acknowledged"
+          elif ([$c[($g + 1):][] | select(is_trusted_responder)] | length) > 0 then "answered"
+          else "open" end
+      end;
+  def greptile_thread_open: greptile_thread_state == "open";
+  def last_trusted_answer_at: [(.comments.nodes // [])[] | select(is_trusted_responder) | .createdAt // empty] | max;
+  def summary_finding_id: "GREPTILE_SUMMARY_" + ((. // "") | ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("^-+|-+$"; "") | .[0:60]);
 '
 
 # Print only the Greptile summary block of a PR body (stdin), without markers.
@@ -159,8 +170,8 @@ factory_format_review_findings() {
 # The reviewThreads pageInfo is requested before nodes on purpose: gh's
 # --paginate follows the first pageInfo object in each response, so it must
 # be the thread connection's pageInfo, not a nested comments pageInfo.
-FACTORY_REVIEW_THREADS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated path line originalLine comments(first:100){totalCount pageInfo{hasNextPage endCursor} nodes{author{login} authorAssociation body url createdAt}}}}}}}'
-FACTORY_THREAD_COMMENTS_QUERY='query($id:ID!,$endCursor:String){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{author{login} authorAssociation body url createdAt}}}}}'
+FACTORY_REVIEW_THREADS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated path line originalLine comments(first:100){totalCount pageInfo{hasNextPage endCursor} nodes{databaseId author{__typename login} authorAssociation body url createdAt}}}}}}}'
+FACTORY_THREAD_COMMENTS_QUERY='query($id:ID!,$endCursor:String){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{databaseId author{__typename login} authorAssociation body url createdAt}}}}}'
 FACTORY_UNRESOLVED_THREADS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{isResolved}}}}}'
 
 # Print the number of unresolved review threads across every page. Fails
@@ -253,10 +264,6 @@ factory_collect_review_findings() {
   elif jq -e '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.commentsIncomplete == true)] | length > 0' \
       "$dir/threads.json" >/dev/null 2>&1; then
     warnings+=('thread comments')
-  else
-    cp "$dir/threads.json" "${out}.threads.json"
-    factory_greptile_open_threads "$dir/threads.json" > "${out}.open.json" 2>/dev/null \
-      || rm -f "${out}.open.json" "${out}.threads.json"
   fi
   if ! gh api --paginate "repos/${repo}/pulls/${pr}/reviews?per_page=100" 2>"$dir/err" \
       | jq -s 'add // []' > "$dir/reviews.json" 2>/dev/null; then
@@ -271,6 +278,19 @@ factory_collect_review_findings() {
       || ! jq -e . "$dir/checks.json" >/dev/null 2>&1; then
     warnings+=('check runs')
     printf '{"check_runs":[]}\n' > "$dir/checks.json"
+  fi
+  if ! gh api --paginate "repos/${repo}/issues/${pr}/comments?per_page=100" 2>"$dir/err" \
+      | jq -s 'add // []' > "$dir/comments.json" 2>/dev/null; then
+    warnings+=('PR comments')
+    printf '[]\n' > "$dir/comments.json"
+  fi
+  # The required-findings sidecar needs every input complete; otherwise it is
+  # absent and the gate fails closed.
+  if (( ${#warnings[@]} == 0 )) \
+    && factory_greptile_required_findings "$dir/threads.json" "$dir/body.txt" "$dir/checks.json" \
+         "$dir/comments.json" "$head" > "$dir/open.json" 2>/dev/null; then
+    cp "$dir/threads.json" "${out}.threads.json"
+    mv "$dir/open.json" "${out}.open.json"
   fi
   if ! factory_format_review_findings "$dir/threads.json" "$dir/reviews.json" "$dir/body.txt" \
       "$dir/checks.json" "$pr" "$head" > "$out" 2>/dev/null; then
@@ -301,6 +321,61 @@ factory_greptile_open_threads() {
                    | (if test("\\*\\*[^*\n]+\\*\\*") then capture("\\*\\*(?<t>[^*\n]+)\\*\\*").t else "" end) | .[0:160])}]
       end
   ' "$1"
+}
+
+# Print every Greptile finding the gate requires an outcome for, as a JSON
+# array of {id, kind, path, line, url, title}:
+#   - every open Greptile thread (kind "thread");
+#   - when the PR-body summary's "Last reviewed commit" is the current head,
+#     each listed finding (alt="P<n>") that is either unlinked to a thread
+#     (kind "summary", id GREPTILE_SUMMARY_<slug>; its outcome is posted as a
+#     PR comment) unless a trusted outcome comment for it and this head was
+#     posted after Greptile's latest review of the head completed, or linked to
+#     an answered/resolved thread whose latest trusted answer predates that
+#     review (Greptile re-reviewed and still lists it; kind "thread").
+# Same rule as openSummaryFindings in factory-visibility.cjs.
+#   $1 normalized thread doc  $2 PR body file  $3 check-runs JSON
+#   $4 issue comments JSON array  $5 head SHA
+factory_greptile_required_findings() {
+  local threads="$1" body_file="$2" checks="$3" comments="$4" head="$5" open summary_file status=0
+  open="$(factory_greptile_open_threads "$threads")" || return 1
+  summary_file="$(mktemp)"
+  factory_greptile_pr_summary < "$body_file" > "$summary_file" || true
+  jq -ce --argjson open "$open" --rawfile summary "$summary_file" --slurpfile checks "$checks" \
+    --slurpfile comments "$comments" --arg head "$head" --arg marker "$FACTORY_GREPTILE_OUTCOME_MARKER" \
+    "$FACTORY_GREPTILE_JQ_DEFS"'
+    .data.repository.pullRequest.reviewThreads.nodes as $threads
+    | ([$checks[0].check_runs[]? | select((.name // "") | test("greptile"; "i")) | .completed_at // empty] | max) as $reviewed
+    | (first($summary | match("Last reviewed commit:[^\n]*?/commit/([0-9a-f]{40})"; "i") | .captures[0].string) // null) as $commit
+    | [if $commit == $head then
+        ($summary | split("\n")[] | select(test("^\\s*\\d+\\.\\s.*<img[^>]*\\balt=\"P\\d\"")))
+        | {title: ((first(match("\\*\\*([^*]+)\\*\\*") | .captures[0].string) // "") | gsub("^\\s+|\\s+$"; "")),
+           discussion: (first(match("#discussion_r(\\d+)") | .captures[0].string) // null)}
+      else empty end] as $items
+    | [$items[] | . as $item
+        | ([$threads[] | select(((.comments.nodes[0].databaseId // "") | tostring) == ($item.discussion // "-"))] | first) as $t
+        | if $t == null then
+            ($item.title | summary_finding_id) as $id
+            | if any($comments[0][]?;
+                  (((.author_association // "") | IN("OWNER", "MEMBER", "COLLABORATOR"))
+                    or (.user.type == "Bot" and .user.login == "github-actions[bot]"))
+                  and ((.body // "") | contains("\($marker):\($id):") and contains(":\($head)"))
+                  and ($reviewed == null or (.created_at // "") > $reviewed))
+              then empty
+              else {id: $id, kind: "summary", path: null, line: null, url: null, title: $item.title} end
+          else ($t | greptile_thread_state) as $state
+            | if ($state == "answered" or $state == "resolved")
+                 and $reviewed != null and (($t | last_trusted_answer_at) // "") < $reviewed
+                 and (($t | last_trusted_answer_at) // null) != null
+              then {id: $t.id, kind: "thread", path: $t.path, line: ($t.line // $t.originalLine),
+                    url: $t.comments.nodes[0].url, title: $item.title}
+              else empty end
+          end] as $extra
+    | ($open | map(. + {kind: "thread"})) + $extra
+    | reduce .[] as $f ([]; if any(.[]; .id == $f.id) then . else . + [$f] end)
+  ' "$threads" || status=$?
+  rm -f "$summary_file"
+  return "$status"
 }
 
 # Absolute path of the agent-written outcome file in the current checkout.
@@ -343,7 +418,8 @@ factory_validate_greptile_outcomes() {
   fi
   result="$(jq -cn --slurpfile open "$open_file" --argjson outcomes "$doc" --arg pushed "$pushed" '
     def text: (. // "") | tostring | gsub("^\\s+|\\s+$"; "");
-    ($open[0] // [] | map(.id)) as $ids
+    ($open[0] // [] | map({key: .id, value: (.title // "")}) | from_entries) as $titles
+    | ($open[0] // [] | map(.id)) as $ids
     | [$outcomes[] | select(type == "object") | . + {thread_id: (.thread_id // "" | tostring)}] as $all
     | [$ids[] as $id | [$all[] | select(.thread_id == $id)] as $mine
         | if ($mine | length) == 0 then {missing: $id}
@@ -353,11 +429,11 @@ factory_validate_greptile_outcomes() {
                 if ($o.explanation | text | length) < 20 then {invalid: {thread_id: $id, reason: "fixed outcome needs an explanation of at least 20 characters"}}
                 elif $pushed == "" and (($o.commit // "") | tostring | test("^[0-9a-f]{7,40}$") | not)
                 then {invalid: {thread_id: $id, reason: "fixed outcome needs a pushed fix in this run or a commit SHA on this branch"}}
-                else {valid: {thread_id: $id, outcome: "fixed", text: ($o.explanation | text | .[0:3000]),
+                else {valid: {thread_id: $id, title: $titles[$id], outcome: "fixed", text: ($o.explanation | text | .[0:3000]),
                               commit: (if $pushed != "" then $pushed else ($o.commit | tostring) end), check_commit: ($pushed == "")}} end
               elif $o.outcome == "rebutted" then
                 if ($o.evidence | text | length) < 40 then {invalid: {thread_id: $id, reason: "rebutted outcome needs evidence of at least 40 characters"}}
-                else {valid: {thread_id: $id, outcome: "rebutted", text: ($o.evidence | text | .[0:3000]), commit: "", check_commit: false}} end
+                else {valid: {thread_id: $id, title: $titles[$id], outcome: "rebutted", text: ($o.evidence | text | .[0:3000]), commit: "", check_commit: false}} end
               else {invalid: {thread_id: $id, reason: "outcome must be \"fixed\" or \"rebutted\""}} end
           end]
     | {valid: [.[].valid | select(. != null)], missing: [.[].missing | select(. != null)], invalid: [.[].invalid | select(. != null)]}
@@ -375,41 +451,65 @@ factory_validate_greptile_outcomes() {
   jq -e '(.missing | length) == 0 and (.invalid | length) == 0' <<< "$result" >/dev/null
 }
 
+# Short content digest so a revised outcome never matches an older reply.
+factory_greptile_outcome_digest() {
+  printf '%s' "$1" | sha256sum | cut -c1-12
+}
+
 # Reply body for one validated outcome. Agent text is neutralized so it can
 # never carry a factory marker or an HTML comment into a trusted reply.
 factory_greptile_reply_body() {
-  local outcome="$1" text="$2" commit="$3" head="$4" thread="$5" safe
+  local outcome="$1" text="$2" commit="$3" head="$4" thread="$5" title="${6:-}" safe digest subject=''
   # sed, not ${var//}: bash 5.2 patsub_replacement treats & specially.
   safe="$(printf '%s' "$text" | sed -e 's/<!--/\&lt;!--/g' -e 's/-->/--\&gt;/g' \
     -e 's/comic-pile-factory-/comic-pile-factory‑/g')"
+  digest="$(factory_greptile_outcome_digest "$text")"
+  if [[ "$thread" == GREPTILE_SUMMARY_* ]]; then
+    title="$(printf '%s' "$title" | sed -e 's/<!--/\&lt;!--/g' -e 's/-->/--\&gt;/g' -e 's/comic-pile-factory-/comic-pile-factory‑/g')"
+    subject=" for the Greptile summary finding \"${title}\""
+  fi
   if [[ "$outcome" == fixed ]]; then
-    printf '**Fixed** in `%s` by ComicPile Factory %s.\n\n%s\n\n<!-- %s:%s:%s:%s -->\n' \
-      "$commit" "${WORKER:-agent}" "$safe" "$FACTORY_GREPTILE_OUTCOME_MARKER" "$thread" "$outcome" "$head"
+    printf '**Fixed**%s in `%s` by ComicPile Factory %s.\n\n%s\n\n<!-- %s:%s:%s:%s:%s -->\n' \
+      "$subject" "$commit" "${WORKER:-agent}" "$safe" "$FACTORY_GREPTILE_OUTCOME_MARKER" "$thread" "$outcome" "$head" "$digest"
   else
-    printf '**Rebuttal** (no code change) by ComicPile Factory %s at head `%s`.\n\n%s\n\n<!-- %s:%s:%s:%s -->\n' \
-      "${WORKER:-agent}" "$head" "$safe" "$FACTORY_GREPTILE_OUTCOME_MARKER" "$thread" "$outcome" "$head"
+    printf '**Rebuttal**%s (no code change) by ComicPile Factory %s at head `%s`.\n\n%s\n\n<!-- %s:%s:%s:%s:%s -->\n' \
+      "$subject" "${WORKER:-agent}" "$head" "$safe" "$FACTORY_GREPTILE_OUTCOME_MARKER" "$thread" "$outcome" "$head" "$digest"
   fi
 }
 
-# Post each validated outcome ($1, JSON array from the validator's .valid) as
-# a reply on its thread, idempotently: a reply already carrying the marker for
-# that thread/outcome/head in the thread document ($3) is not posted again.
-# Never resolves threads. Returns non-zero when any post fails.
+# Post each validated outcome ($1, JSON array from the validator's .valid):
+# a thread finding gets a reply on its thread; a summary-only finding
+# (GREPTILE_SUMMARY_*) gets a PR comment. A thread reply is skipped only when
+# a reply with the identical marker (thread, outcome, head, content digest)
+# already sits after Greptile's latest comment on that thread ($3), so a
+# revised answer after Greptile pushback is always posted. Never resolves
+# threads. Returns non-zero when any post fails.
 factory_post_greptile_outcome_replies() {
-  local valid="$1" head="$2" threads_doc="${3:-}" status=0 thread outcome text commit marker body
+  local valid="$1" head="$2" threads_doc="${3:-}" status=0 thread outcome text commit title marker body
+  local repo="${GITHUB_REPOSITORY:-JoshCLWren/comic-pile}"
   while IFS= read -r entry; do
     [[ -n "$entry" ]] || continue
     thread="$(jq -r '.thread_id' <<< "$entry")"
     outcome="$(jq -r '.outcome' <<< "$entry")"
     text="$(jq -r '.text' <<< "$entry")"
     commit="$(jq -r '.commit' <<< "$entry")"
-    marker="${FACTORY_GREPTILE_OUTCOME_MARKER}:${thread}:${outcome}:${head}"
-    if [[ -s "$threads_doc" ]] && jq -e --arg id "$thread" --arg m "$marker" '
-        any(.data.repository.pullRequest.reviewThreads.nodes[]?; .id == $id
-            and any(.comments.nodes[]?; (.body // "") | contains($m)))' "$threads_doc" >/dev/null 2>&1; then
+    title="$(jq -r '.title // ""' <<< "$entry")"
+    marker="${FACTORY_GREPTILE_OUTCOME_MARKER}:${thread}:${outcome}:${head}:$(factory_greptile_outcome_digest "$text")"
+    body="$(factory_greptile_reply_body "$outcome" "$text" "$commit" "$head" "$thread" "$title")"
+    if [[ "$thread" == GREPTILE_SUMMARY_* ]]; then
+      if ! gh api "repos/${repo}/issues/${NUMBER:-${FACTORY_PR_NUMBER:-0}}/comments" -f body="$body" >/dev/null 2>&1; then
+        printf 'Greptile summary outcome comment failed for %s\n' "$thread" >&2
+        status=1
+      fi
       continue
     fi
-    body="$(factory_greptile_reply_body "$outcome" "$text" "$commit" "$head" "$thread")"
+    if [[ -s "$threads_doc" ]] && jq -e --arg id "$thread" --arg m "$marker" "$FACTORY_GREPTILE_JQ_DEFS"'
+        any(.data.repository.pullRequest.reviewThreads.nodes[]?; .id == $id
+            and ((.comments.nodes // []) as $c
+                 | ([range(0; $c | length) | select($c[.].author.login | is_greptile_login)] | last // -1) as $g
+                 | any($c[($g + 1):][]; (.body // "") | contains($m))))' "$threads_doc" >/dev/null 2>&1; then
+      continue
+    fi
     if ! gh api graphql -F threadId="$thread" -f body="$body" \
         -f query='mutation($threadId:ID!,$body:String!){addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$threadId,body:$body}){comment{id}}}' \
         >/dev/null 2>&1; then
@@ -439,7 +539,7 @@ factory_review_findings_mission() {
   open_ids="$(jq -r '[.[].id] | join(", ")' "${out}.open.json" 2>/dev/null || true)"
   [[ -f "${out}.open.json" ]] || open_ids='UNKNOWN (fetch incomplete; inspect threads with gh and cover every unresolved Greptile thread)'
   [[ -n "$open_ids" ]] || open_ids='none'
-  printf '%s\n' "REVIEW FINDINGS (fetched by the trusted wrapper and written to ${out}). Greptile (greptile-apps[bot]) findings are HIGH PRIORITY, must-address review feedback: fix each OPEN one in code, or rebut it with concrete evidence. Record every outcome in ${FACTORY_GREPTILE_OUTCOMES_BASENAME} at the repository root (git-excluded; never commit it) as JSON: {\"outcomes\":[{\"thread_id\":\"PRRT_...\",\"outcome\":\"fixed\",\"explanation\":\"what changed and where\"},{\"thread_id\":\"PRRT_...\",\"outcome\":\"rebutted\",\"evidence\":\"file:line, test output, or spec showing the finding does not apply\"}]}. A fixed entry needs your fix in this run's diff (or a \"commit\" SHA already on this branch); a rebutted entry needs at least 40 characters of evidence. Required thread ids (OPEN Greptile findings): ${open_ids}. Before FACTORY_GATE_READY the wrapper posts these outcomes as replies on each thread and refuses gate-ready if any open Greptile finding (including one that arrives during your run) has no valid entry. Do not post or resolve Greptile thread replies yourself; Greptile resolves its own threads. Other unresolved threads follow the normal fix-or-rebut rule. PR-Agent check output is lower-priority advisory input. Findings file contents follow.
+  printf '%s\n' "REVIEW FINDINGS (fetched by the trusted wrapper and written to ${out}). Greptile (greptile-apps[bot]) findings are HIGH PRIORITY, must-address review feedback: fix each OPEN one in code, or rebut it with concrete evidence. Record every outcome in ${FACTORY_GREPTILE_OUTCOMES_BASENAME} at the repository root (git-excluded; never commit it) as JSON: {\"outcomes\":[{\"thread_id\":\"PRRT_...\",\"outcome\":\"fixed\",\"explanation\":\"what changed and where\"},{\"thread_id\":\"PRRT_...\",\"outcome\":\"rebutted\",\"evidence\":\"file:line, test output, or spec showing the finding does not apply\"}]}. A fixed entry needs your fix in this run's diff (or a \"commit\" SHA already on this branch); a rebutted entry needs at least 40 characters of evidence. Required thread ids (OPEN Greptile findings): ${open_ids}. A GREPTILE_SUMMARY_* id is a finding listed only in the Greptile PR-body summary for this head; use that id as thread_id and the wrapper posts its outcome as a PR comment. Before FACTORY_GATE_READY the wrapper posts these outcomes as replies on each thread and refuses gate-ready if any open Greptile finding (including one that arrives during your run) has no valid entry. Do not post or resolve Greptile thread replies yourself; Greptile resolves its own threads. Other unresolved threads follow the normal fix-or-rebut rule. PR-Agent check output is lower-priority advisory input. Findings file contents follow.
 ----- BEGIN REVIEW FINDINGS -----
 ${content}
 ----- END REVIEW FINDINGS -----"
