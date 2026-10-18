@@ -24,7 +24,18 @@ on:
         description: Required when override_freeze is true. Logged in the run summary.
         type: string
         required: false
+      source:
+        description: >
+          Who dispatched the run. "manual" (default) forces a redeploy of
+          main. "factory-merge" is used by factory bot-merge paths (GITHUB_TOKEN
+          merges fire no push event) and skips a SHA that is already READY.
+        type: string
+        default: manual
 
+# One deploy at a time; the newest pending run replaces any older pending
+# run, and every run checks out current main, so overlapping triggers (push,
+# workflow_run, cron, factory-merge dispatches) never deploy an older SHA
+# after a newer one and never cancel an in-flight deploy.
 concurrency:
   group: vercel-production
   cancel-in-progress: false
@@ -156,14 +167,16 @@ jobs:
         id: deployment
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DISPATCH_SOURCE: ${{ github.event.inputs.source || 'manual' }}
         run: |
           set -euo pipefail
           deploy_sha="$(git rev-parse HEAD)"
           echo "deploy_sha=$deploy_sha" >> "$GITHUB_OUTPUT"
 
           # A manual run is an explicit recovery request and may intentionally
-          # redeploy a SHA that Vercel already considers READY.
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+          # redeploy a SHA that Vercel already considers READY. A factory-merge
+          # dispatch (after a GITHUB_TOKEN merge) deduplicates like push does.
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$DISPATCH_SOURCE" != "factory-merge" ]]; then
             echo "deployment_required=true" >> "$GITHUB_OUTPUT"
             echo "Manual recovery requested for $deploy_sha"
             exit 0

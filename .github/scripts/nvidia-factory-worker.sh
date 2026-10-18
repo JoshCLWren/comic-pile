@@ -22,6 +22,13 @@ if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-review-findings.sh" ]]; then
 else
   source .github/scripts/factory-review-findings.sh
 fi
+# Deploy dispatch after a GITHUB_TOKEN merge (see factory-dispatch-production-deploy.sh).
+# shellcheck source=factory-dispatch-production-deploy.sh
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-dispatch-production-deploy.sh" ]]; then
+  source "$(dirname "${BASH_SOURCE[0]}")/factory-dispatch-production-deploy.sh"
+else
+  source .github/scripts/factory-dispatch-production-deploy.sh
+fi
 
 log() { printf '[factory:%s] %s\n' "$WORKER" "$*"; }
 remaining() { echo $((DEADLINE - $(date +%s))); }
@@ -493,6 +500,7 @@ while (( $(remaining) > 480 )); do
   if grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && machine_merge_gates_pass "$NUMBER" "$current"; then
     log "all exact-head gates passed for PR #${NUMBER}; merging ${current}"
     gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
+    factory_dispatch_production_deploy "Factory ${WORKER} merged PR #${NUMBER}"
     issue_number="$(sed -nE "s#^factory/${WORKER}-([0-9]+)-nvidia$#\\1#p" <<< "$BRANCH")"
     if [[ -n "$issue_number" ]]; then
       state="$(gh issue view "$issue_number" --json state --jq .state 2>/dev/null || true)"

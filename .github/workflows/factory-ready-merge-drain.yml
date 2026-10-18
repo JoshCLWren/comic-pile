@@ -259,6 +259,18 @@ jobs:
           set -Eeuo pipefail
           review_controller='.github/scripts/factory-review-controller.py'
           closure_script='.github/scripts/factory_post_merge_closure.py'
+          # shellcheck source=/dev/null
+          source .github/scripts/factory-dispatch-production-deploy.sh
+          # GITHUB_TOKEN merges fire no push event, so dispatch Deploy
+          # Production once, after the last merge of this run (EXIT trap so a
+          # later failure in the loop cannot skip it).
+          merged_count=0
+          dispatch_deploy_after_merges() {
+            if (( merged_count > 0 )); then
+              factory_dispatch_production_deploy "Factory Ready Merge Drain merged ${merged_count} PR(s)"
+            fi
+          }
+          trap dispatch_deploy_after_merges EXIT
 
           complete_post_merge_closure() {
             local pr="$1"
@@ -342,6 +354,7 @@ jobs:
             if gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" \
               --merge --match-head-commit "$expected_head"; then
               echo "Merged ready PR #${pr}"
+              merged_count=$((merged_count + 1))
               complete_post_merge_closure "$pr" || true
               continue
             fi
