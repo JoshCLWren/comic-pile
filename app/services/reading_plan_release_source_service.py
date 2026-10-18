@@ -16,11 +16,106 @@ from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesM
 from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.models.thread import Thread
 from app.repositories import reading_plan_release_source_repository as repo
+from app.schemas.reading_plan_reader import ReadingPlanReleaseSourceStatus
 from app.schemas.reading_plan_release_source import (
     ReleaseSourceCreate,
     ReleaseSourceResponse,
     ReleaseSourceUpdate,
 )
+
+
+def _provider_display_metadata(identity: ExternalIdentity) -> dict[str, object]:
+    """Extract reader-safe display metadata from a provider identity.
+
+    Args:
+        identity: Confirmed ComicVine series identity.
+
+    Returns:
+        A mapping with title, publisher, start_year, and issue_count when the
+        provider metadata carries them. Internal confidence and identity
+        evidence fields are never surfaced.
+    """
+    metadata = identity.metadata_json or {}
+    display: dict[str, object] = {}
+    title = metadata.get("name") or metadata.get("title")
+    if isinstance(title, str) and title.strip():
+        display["title"] = title.strip()
+    publisher = metadata.get("publisher")
+    if isinstance(publisher, str) and publisher.strip():
+        display["publisher"] = publisher.strip()
+    elif isinstance(publisher, dict):
+        publisher_name = publisher.get("name")
+        if isinstance(publisher_name, str) and publisher_name.strip():
+            display["publisher"] = publisher_name.strip()
+    start_year = metadata.get("start_year")
+    if isinstance(start_year, int) and not isinstance(start_year, bool):
+        display["start_year"] = start_year
+    elif isinstance(start_year, str) and start_year.strip().isdigit():
+        display["start_year"] = int(start_year.strip())
+    issue_count = metadata.get("count_of_issues") or metadata.get("issue_count")
+    if isinstance(issue_count, int) and not isinstance(issue_count, bool):
+        display["issue_count"] = issue_count
+    elif isinstance(issue_count, str) and issue_count.strip().isdigit():
+        display["issue_count"] = int(issue_count.strip())
+    return display
+
+
+def _to_release_source_status(
+    source: ReadingPlanReleaseSource, identity: ExternalIdentity
+) -> ReadingPlanReleaseSourceStatus:
+    """Project a release source onto its reader-facing status schema.
+
+    Args:
+        source: Persisted release source with an eagerly loaded identity.
+        identity: Provider identity for the source.
+
+    Returns:
+        Reader-safe release source status with display metadata.
+    """
+    display = _provider_display_metadata(identity)
+    return ReadingPlanReleaseSourceStatus(
+        source_id=source.id,
+        thread_id=source.thread_id,
+        external_identity_id=source.external_identity_id,
+        provider_volume_id=identity.external_id,
+        provider_title=display.get("title") if isinstance(display.get("title"), str) else None,
+        provider_publisher=display.get("publisher") if isinstance(display.get("publisher"), str) else None,
+        provider_start_year=display.get("start_year") if isinstance(display.get("start_year"), int) else None,
+        provider_issue_count=display.get("issue_count") if isinstance(display.get("issue_count"), int) else None,
+        enabled=source.enabled,
+        last_synced_at=source.last_synced_at,
+    )
+
+
+async def list_release_sources_for_reader(
+    db: AsyncSession, *, plan_id: int, user_id: int
+) -> list[ReadingPlanReleaseSourceStatus]:
+    """List reader-facing release source status for one plan.
+
+    Args:
+        db: Database session.
+        plan_id: Plan to inspect.
+        user_id: Authenticated plan owner.
+
+    Returns:
+        Release source status rows ordered by creation, including disabled
+        sources so the reader can re-enable them.
+    """
+    await _get_plan(db, plan_id=plan_id, user_id=user_id)
+    sources = await repo.list_for_plan(db, plan_id=plan_id, user_id=user_id)
+    if not sources:
+        return []
+    identity_ids = {s.external_identity_id for s in sources}
+    stmt = select(ExternalIdentity).where(ExternalIdentity.id.in_(identity_ids))
+    identities = list((await db.execute(stmt)).scalars().all())
+    by_id = {i.id: i for i in identities}
+    responses: list[ReadingPlanReleaseSourceStatus] = []
+    for source in sources:
+        identity = by_id.get(source.external_identity_id)
+        if identity is None:  # pragma: no cover - FK guarantees existence
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Provider identity not found")
+        responses.append(_to_release_source_status(source, identity))
+    return responses
 
 
 async def _get_plan(db: AsyncSession, *, plan_id: int, user_id: int) -> ContinuityPlan:

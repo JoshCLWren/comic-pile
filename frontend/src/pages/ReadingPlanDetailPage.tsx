@@ -3,6 +3,7 @@ import { EligibilityExplanation } from '../components/EligibilityExplanation'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Breadcrumbs from '../components/Breadcrumbs'
 import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
+import { NewReleasesSection } from '../components/NewReleasesSection'
 import { TagSection } from '../components/Tags/TagSection'
 import { useReadingPlanReader } from '../hooks/useReadingPlans'
 import {
@@ -211,6 +212,11 @@ export default function ReadingPlanDetailPage() {
           </div>
         </dl>
       </div>
+
+      <NewReleasesSection
+        sources={view.release_sources ?? []}
+        emptyLabel="No followed ComicVine volumes are subscribed to new releases for this plan yet. Add a confirmed mapping from the plan editor or Queue mapping repair to start tracking new releases."
+      />
 
       <section aria-labelledby="available-now-heading" data-testid="available-now">
         <h2 id="available-now-heading" className="text-lg font-bold text-[var(--theme-text-primary)]">

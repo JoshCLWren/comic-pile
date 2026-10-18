@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from comic_pile.dependencies import build_blocking_explanation
 from app.repositories import continuity_repository, reading_plan_repository
+from app.services import reading_plan_release_source_service as release_source_service
 from app.services.reading_eligibility_service import (
     get_execution_eligibility, project_blocking_explanation,
 )
@@ -259,6 +260,9 @@ async def get_reading_plan_reader(
             lane_catalog.append((lane_id, lane_id, len(lane_catalog)))
             seen_lane_ids.add(lane_id)
     total_issues, read_issues = await get_plan_progress(db, plan_id=plan_id_value)
+    release_sources = await release_source_service.list_release_sources_for_reader(
+        db, plan_id=plan_id_value, user_id=user_id
+    )
     return ReadingPlanReaderResponse(
         execution_mode="option_e" if eligibility is not None else "legacy",
         plan_id=plan_id_value,
@@ -292,4 +296,5 @@ async def get_reading_plan_reader(
             )
             for source in sources
         ],
+        release_sources=release_sources,
     )
