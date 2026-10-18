@@ -280,60 +280,63 @@ export default function ComicVineSearchDialog({
     [handlePlainSearch, issueNumber],
   )
 
+
   const handleSearch = useCallback(
     async (searchQuery: string, offset = 0, append = false) => {
-      if (!searchQuery.trim()) {
-        setSeriesResults([])
-        setPagination(EMPTY_PAGINATION)
-        setSearchPhase('idle')
-        setError(null)
-        return
-      }
-      const requestId = ++asyncRef.current
-      searchingRef.current = true
-      setSearchPhase('loading')
-      setError(null)
-      if (!append) {
-        // A new query replaces the previous result set, so the reader never sees one
-        // query's results sitting under another query's spinner or error (#3448).
-        setSeriesResults([])
-        setPagination(EMPTY_PAGINATION)
-      }
+      let requestId = 0
       try {
+        if (!searchQuery.trim()) {
+          setSeriesResults([])
+          setPagination(EMPTY_PAGINATION)
+          setSearchPhase('idle')
+          setError(null)
+          searchingRef.current = false
+          return
+        }
+        requestId = ++asyncRef.current
+        searchingRef.current = true
         const trimmed = searchQuery.trim()
         if (isComicVineUrlLike(trimmed)) {
           const resolved = await comicVineApi.resolveIdentity(trimmed)
-          if (requestId !== asyncRef.current) return
+          if (requestId !== asyncRef.current) {
+            searchingRef.current = false
+            return
+          }
           handleDirectResolution(resolved)
+          searchingRef.current = false
           return
         }
         const response = await comicVineApi.searchSeries(trimmed, SEARCH_PAGE_SIZE, offset)
-        if (requestId !== asyncRef.current) return
+        if (requestId !== asyncRef.current) {
+          searchingRef.current = false
+          return
+        }
+        if (!append) {
+          setSeriesResults([])
+          setPagination(EMPTY_PAGINATION)
+        }
         setSeriesResults((previous) =>
           append ? mergeSeriesResults(previous, response.results) : response.results,
         )
         setPagination(paginationFromResponse(response))
         setSearchPhase('ready')
       } catch {
-        if (requestId !== asyncRef.current) return
+        if (requestId !== asyncRef.current) {
+          searchingRef.current = false
+          return
+        }
         setError(SEARCH_ERROR_MESSAGE)
         setSeriesResults([])
         setPagination(EMPTY_PAGINATION)
         setSearchPhase('error')
       } finally {
-        if (requestId === asyncRef.current) {
+        if (requestId !== 0 && requestId === asyncRef.current) {
           searchingRef.current = false
         }
       }
     },
     [handleDirectResolution],
   )
-
-  useEffect(() => {
-    if (isOpen && threadTitle.trim() && !hasAutoSearchedRef.current) {
-      hasAutoSearchedRef.current = true
-      void handleSearch(stripParenthesizedYears(threadTitle))
-    }
     if (!isOpen) {
       hasAutoSearchedRef.current = false
     }
