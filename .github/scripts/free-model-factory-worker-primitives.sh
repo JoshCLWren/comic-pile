@@ -90,9 +90,11 @@ current_owner_is_self() {
 }
 
 pr_no_diff_generation_fields() {
-  local number="$1" stage="$2"
+  local number="$1" stage="$2" prefer_live="${3:-0}"
   local sha="" conflicted=0 meta='{}' mergeable='' merge_state=''
-  sha="$(git rev-parse HEAD 2>/dev/null || true)"
+  if [[ "$prefer_live" != 1 ]]; then
+    sha="$(git rev-parse HEAD 2>/dev/null || true)"
+  fi
   meta="$(gh pr view "$number" --json headRefOid,mergeable,mergeStateStatus 2>/dev/null || true)"
   [[ -n "$meta" ]] || meta='{}'
   if [[ ! "$sha" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
@@ -131,12 +133,9 @@ release_target() {
   epoch="$(date +%s)"
   if (( bounded )); then
     if [[ "$target_kind" == 'pr' ]]; then
-      if [[ "$reason" == controller-assignment-read-failed ]]; then
-        local live_head
-        live_head="$(gh pr view "$number" --json headRefOid --jq .headRefOid)" || return 1
-        [[ "$live_head" =~ ^[a-f0-9]{40}$ ]] || return 1
-        generation=":sha=${live_head}:stage=${stage}:conflicted=0"
-      elif ! generation="$(pr_no_diff_generation_fields "$number" "$stage")"; then
+      local prefer_live=0
+      [[ "$reason" != controller-assignment-read-failed ]] || prefer_live=1
+      if ! generation="$(pr_no_diff_generation_fields "$number" "$stage" "$prefer_live")"; then
         FACTORY_RETAIN_LEASE_ON_EXIT=1
         log "unable to pin no-diff generation to head SHA for pr #${number}; retaining the lease"
         return 1

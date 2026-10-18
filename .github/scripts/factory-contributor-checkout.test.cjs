@@ -97,3 +97,18 @@ for (const [observed, expected, owner, reason] of [
     assert.equal(result.stdout, reason);
   });
 }
+
+const generation = source.match(/^pr_no_diff_generation_fields\(\) \{\n.*?^\}/ms)[0];
+for (const conflicted of [false, true]) {
+  test(`pre-session failure pins the live head and conflict=${conflicted}`, () => {
+    const result = spawnSync('bash', ['-c', `${generation}
+      git() { printf '%s' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; }
+      gh() { printf '%s' "$TEST_META"; }
+      pr_no_diff_generation_fields 3897 factory:review 1
+    `], { encoding: 'utf8', env: { ...process.env, TEST_META: JSON.stringify({
+      headRefOid: 'b'.repeat(40), mergeable: conflicted ? 'CONFLICTING' : 'MERGEABLE',
+    }) } });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `:sha=${'b'.repeat(40)}:stage=factory:review:conflicted=${Number(conflicted)}`);
+  });
+}
