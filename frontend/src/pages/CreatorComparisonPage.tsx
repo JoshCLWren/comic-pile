@@ -1,5 +1,5 @@
+import { createContext, useContext, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useState } from 'react'
 import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
@@ -7,21 +7,84 @@ import type { CreatorComparisonIssueRef, CreatorComparisonItem, CreatorCompariso
 import Breadcrumbs from '../components/Breadcrumbs'
 import { CreatorMetricDrilldownModal } from '../components/CreatorMetricDrilldownModal'
 
-function RatingValue({ value, label, creatorKey: _creatorKey, onMetricClick }: { 
-  value: number; 
-  label: string;
-  creatorKey: string;
-  onMetricClick: (metricType: string, metricLabel: string) => void;
+interface MetricClickParams {
+  role?: string
+  ratingValue?: string
+  seriesKey?: string
+}
+
+type MetricClickHandler = (metricType: string, metricLabel: string, params?: MetricClickParams) => void
+
+// Evidence-view wiring (issue #3460). Every headline metric, distribution
+// bucket, role and series rating opens the metric drilldown. The handler is
+// supplied by a per-card provider so a metric control is automatically scoped
+// to the creator it belongs to without threading callbacks through every leaf.
+const MetricClickContext = createContext<MetricClickHandler | null>(null)
+
+function useMetricClick(): MetricClickHandler {
+  return useContext(MetricClickContext) ?? (() => {})
+}
+
+function RatingValue({
+  value,
+  label,
+  metricType,
+  metricLabel,
+  params,
+  className = 'font-bold',
+}: {
+  value: number
+  label: string
+  metricType: string
+  metricLabel: string
+  params?: MetricClickParams
+  className?: string
 }) {
+  const onMetricClick = useMetricClick()
   return (
     <button
-      onClick={() => onMetricClick('average-rating', `Average rating for ${label}`)}
-      className="font-bold hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
+      type="button"
+      onClick={() => onMetricClick(metricType, metricLabel, params)}
+      className={`${className} rounded hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]`}
       style={{ color: 'var(--theme-personal-accent)' }}
       aria-label={label}
       title={`View details for ${label}`}
     >
       {value.toFixed(1)}★
+    </button>
+  )
+}
+
+function MetricValueButton({
+  metricType,
+  metricLabel,
+  params,
+  className,
+  style,
+  ariaLabel,
+  title,
+  children,
+}: {
+  metricType: string
+  metricLabel: string
+  params?: MetricClickParams
+  className: string
+  style: React.CSSProperties
+  ariaLabel: string
+  title: string
+  children: React.ReactNode
+}) {
+  const onMetricClick = useMetricClick()
+  return (
+    <button
+      type="button"
+      onClick={() => onMetricClick(metricType, metricLabel, params)}
+      className={`${className} rounded hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]`}
+      style={style}
+      aria-label={ariaLabel}
+      title={title}
+    >
+      {children}
     </button>
   )
 }
@@ -37,63 +100,60 @@ function InsufficientDataBadge() {
   )
 }
 
-function SeriesLink({ aggregate, creatorKey: _creatorKey, onMetricClick }: { 
-  aggregate: CreatorComparisonSeriesAggregate; 
-  creatorKey: string;
-  onMetricClick: (metricType: string, metricLabel: string, params?: { seriesKey: string }) => void;
-}) {
+function SeriesLink({ aggregate }: { aggregate: CreatorComparisonSeriesAggregate }) {
   return (
-    <>
+    <div className="min-w-0">
       <Link
         to={`/thread/${aggregate.thread_id}`}
-        className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] hover:underline"
+        className="block min-w-0 truncate rounded-lg text-sm font-semibold hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+        style={{ color: 'var(--theme-text-primary)' }}
       >
-        <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
-          {aggregate.thread_title}
-        </span>
-        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-          <span>{aggregate.issue_count} {aggregate.issue_count === 1 ? 'issue' : 'issues'}</span>
-          <span>{aggregate.rated_issue_count} rated</span>
-          <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} creatorKey={_creatorKey} onMetricClick={onMetricClick} />
-        </span>
+        {aggregate.thread_title}
       </Link>
-    </>
+      <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+        <span>{aggregate.issue_count} {aggregate.issue_count === 1 ? 'issue' : 'issues'}</span>
+        <span>{aggregate.rated_issue_count} rated</span>
+        <RatingValue
+          value={aggregate.average_rating}
+          label={`Average ${aggregate.average_rating} out of 5`}
+          metricType="series-stats"
+          metricLabel={`Series: ${aggregate.thread_title}`}
+          params={{ seriesKey: `thread:${aggregate.thread_id}` }}
+        />
+      </span>
+    </div>
   )
 }
 
-function RoleStatRow({ stat, creatorKey: _creatorKey, onMetricClick }: { 
-  stat: CreatorComparisonRoleStat; 
-  creatorKey: string;
-  onMetricClick: (metricType: string, metricLabel: string, params?: { role: string }) => void;
-}) {
+function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
+  const onMetricClick = useMetricClick()
+  const openRoleDrilldown = () => onMetricClick('role-stats', `Role: ${stat.role}`, { role: stat.role })
+
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
       <button
-        onClick={() => onMetricClick('role-stats', `Role: ${stat.role}`, { role: stat.role })}
-        className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
-        title={`View details for ${stat.role} role`}
+        type="button"
+        onClick={openRoleDrilldown}
+        className="block w-full truncate rounded text-left text-sm font-bold hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+        style={{ color: 'var(--theme-text-primary)' }}
+        title={stat.role}
       >
-        <p className="truncate text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>{stat.role}</p>
-        <p className="mt-0.5 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-          {stat.issue_count} {stat.issue_count === 1 ? 'issue' : 'issues'}
-          <> · {stat.rated_issue_count} rated</>
-          {stat.average_rating != null ? (
-            <> · <RatingValue value={stat.average_rating} label={`Average ${stat.average_rating} out of 5 as ${stat.role}`} creatorKey={_creatorKey} onMetricClick={onMetricClick} /></>
-          ) : (
-            ' · unrated'
-          )}
-        </p>
+        {stat.role}
       </button>
+      <p className="mt-0.5 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+        {stat.issue_count} {stat.issue_count === 1 ? 'issue' : 'issues'}
+        <> · {stat.rated_issue_count} rated</>
+        {stat.average_rating != null ? (
+          <> · <RatingValue value={stat.average_rating} label={`Average ${stat.average_rating} out of 5 as ${stat.role}`} metricType="role-stats" metricLabel={`Role: ${stat.role}`} params={{ role: stat.role }} /></>
+        ) : (
+          ' · unrated'
+        )}
+      </p>
     </li>
   )
 }
 
-function RatingDistributionBar({ distribution, totalCount, creatorKey: _creatorKey, onMetricClick }: { 
-  distribution: Record<string, number>; 
-  totalCount: number;
-  creatorKey: string;
-  onMetricClick: (metricType: string, metricLabel: string, params?: { ratingValue: string }) => void;
-}) {
+function RatingDistributionBar({ distribution, totalCount }: { distribution: Record<string, number>; totalCount: number }) {
   // ComicPile rates on a 1-5 scale with 0.5 increments. Only buckets with at
   // least one rating render (issue #3329): zero-count steps are noise that
   // buries the actual distribution on low-data cards. Buckets sort
@@ -101,9 +161,10 @@ function RatingDistributionBar({ distribution, totalCount, creatorKey: _creatorK
   //
   // Bar length uses a shared 0-100% scale: bucket_count / total_ratings.
   // This makes bars directly comparable across creators with very different
-  // sample sizes. Each rendered bucket exposes both raw count and
-  // percentage, while screen readers receive bucket, count, percentage and
-  // the region communicates the creator's sample size.
+  // sample sizes. Each rendered bucket keeps count and percentage in the row
+  // label, while the bucket marker is a keyboard-accessible control that opens
+  // the evidence behind it (issue #3460).
+  const onMetricClick = useMetricClick()
   const total = totalCount > 0 ? totalCount : 0
   const buckets = Object.entries(distribution)
     .map(([rating, count]) => ({ rating, count }))
@@ -138,12 +199,14 @@ function RatingDistributionBar({ distribution, totalCount, creatorKey: _creatorK
             role="listitem"
             className="flex items-center gap-2 text-xs"
             style={{ color: 'var(--theme-text-muted)' }}
+            aria-label={`${rating}★: ${count} rating${count === 1 ? '' : 's'}, ${percentage.toFixed(1)}%`}
           >
             <button
+              type="button"
               onClick={() => onMetricClick('rating-distribution', `Rating distribution for ${rating}★`, { ratingValue: rating })}
-              className="w-6 text-right font-medium hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
-              title={`View ${rating}★ ratings (${count} issues, ${percentage.toFixed(1)}%)`}
-              aria-label={`${rating}★: ${count} rating${count === 1 ? '' : 's'}, ${percentage.toFixed(1)}% - click to view details`}
+              className="w-6 rounded text-right font-medium hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              aria-label={`View the ${count} issue${count === 1 ? '' : 's'} rated ${rating}★`}
+              title={`View the ${count} issue${count === 1 ? '' : 's'} rated ${rating}★ (${percentage.toFixed(1)}%)`}
             >
               {rating}★
             </button>
@@ -224,19 +287,38 @@ function IssueDrilldown({
   )
 }
 
-interface ComparisonCardProps {
-  item: CreatorComparisonItem;
-  onMetricClick: (metricType: string, metricLabel: string, params?: { role?: string; ratingValue?: string; seriesKey?: string }) => void;
+/**
+ * Column template for the comparison-card grid.
+ *
+ * Four creators must never leave a single orphaned card on its own row
+ * (issue #3459), so four uses an explicit two-column layout. The previous
+ * `repeat(auto-fit, minmax(280px, 1fr))` packing resolved to 3 + 1 at desktop
+ * widths because the capped 1024px container only fits three 280px tracks.
+ * Two creators sit side by side; three keep the wider packing so the row still
+ * fills on desktop.
+ */
+function comparisonGridClasses(count: number): string {
+  if (count <= 1) {
+    return 'grid-cols-1'
+  }
+  if (count === 3) {
+    return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+  }
+  return 'grid-cols-1 md:grid-cols-2'
 }
 
-function ComparisonCard({ item, onMetricClick }: ComparisonCardProps) {
+function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
   const totalRatings = item.ratings_count
   const hasRatings = totalRatings > 0
   const isValidKey = parseCreatorKey(item.canonical_creator_key) != null
   const detailPath = isValidKey ? creatorRoutePath(item.canonical_creator_key) : null
 
   return (
-    <section className="min-w-0 flex-1 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+    <section
+      data-testid="creator-comparison-card"
+      className="min-w-0 rounded-2xl border p-4 md:p-6"
+      style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}
+    >
       <header className="mb-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
@@ -270,7 +352,7 @@ function ComparisonCard({ item, onMetricClick }: ComparisonCardProps) {
           </p>
           {hasRatings ? (
 <p className="text-3xl font-black leading-tight" style={{ color: 'var(--theme-personal-accent)' }} aria-label={`Average rating ${item.average_rating} out of 5 from ${item.ratings_count} ${item.ratings_count === 1 ? 'rating' : 'ratings'}`}>
-<RatingValue value={item.average_rating!} label={`Average ${item.average_rating} out of 5 from ${item.ratings_count} ${item.ratings_count === 1 ? 'rating' : 'ratings'}`} creatorKey={item.canonical_creator_key} onMetricClick={onMetricClick} />
+<RatingValue value={item.average_rating!} label={`Average ${item.average_rating} out of 5 from ${item.ratings_count} ${item.ratings_count === 1 ? 'rating' : 'ratings'}`} metricType="average-rating" metricLabel={`Average rating for ${item.display_name}`} />
             </p>
           ) : (
             <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>No ratings yet</p>
@@ -282,15 +364,13 @@ function ComparisonCard({ item, onMetricClick }: ComparisonCardProps) {
             Median rating
           </p>
           {item.median_rating != null ? (
-            <button
-              onClick={() => onMetricClick('median-rating', `Median rating for ${item.display_name}`)}
-              className="text-3xl font-black leading-tight hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
-              style={{ color: 'var(--theme-personal-accent)' }}
-              aria-label={`View details for median rating ${item.median_rating} out of 5`}
-              title={`View details for median rating ${item.median_rating} out of 5`}
-            >
-              <RatingValue value={item.median_rating} label={`Median ${item.median_rating} out of 5`} creatorKey={item.canonical_creator_key} onMetricClick={onMetricClick} />
-            </button>
+            <RatingValue
+              value={item.median_rating}
+              label={`Median ${item.median_rating} out of 5`}
+              className="text-3xl font-black leading-tight"
+              metricType="median-rating"
+              metricLabel={`Median rating for ${item.display_name}`}
+            />
           ) : (
             <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>{hasRatings ? 'N/A' : 'No ratings yet'}</p>
           )}
@@ -300,15 +380,16 @@ function ComparisonCard({ item, onMetricClick }: ComparisonCardProps) {
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Rated issues
           </p>
-          <button
-              onClick={() => onMetricClick('rated-issue-count', `Rated issues for ${item.display_name}`)}
-              className="text-lg font-bold hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
-              style={{ color: 'var(--theme-text-primary)' }}
-              aria-label={`View details for ${item.ratings_count} rated issues`}
-              title={`View details for ${item.ratings_count} rated issues`}
-            >
-              {item.ratings_count}
-            </button>
+          <MetricValueButton
+            metricType="rated-issue-count"
+            metricLabel={`Rated issues for ${item.display_name}`}
+            className="text-lg font-bold"
+            style={{ color: 'var(--theme-text-primary)' }}
+            ariaLabel={`View details for ${item.ratings_count} rated issues`}
+            title={`View details for ${item.ratings_count} rated issues`}
+          >
+            {item.ratings_count}
+          </MetricValueButton>
         </div>
 
         <div>
@@ -316,45 +397,42 @@ function ComparisonCard({ item, onMetricClick }: ComparisonCardProps) {
             5★ rate
           </p>
           {item.top_rating_rate != null ? (
-            <button
-              onClick={() => onMetricClick('five-star-rate', `5★ rating rate for ${item.display_name}`)}
-              className="text-lg font-bold hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
+            <MetricValueButton
+              metricType="five-star-rate"
+              metricLabel={`5★ rating rate for ${item.display_name}`}
+              className="text-lg font-bold"
               style={{ color: 'var(--theme-personal-accent)' }}
-              aria-label={`View details for ${(item.top_rating_rate * 100).toFixed(1)}% 5-star rate`}
+              ariaLabel={`View details for ${(item.top_rating_rate * 100).toFixed(1)}% 5-star rate`}
               title={`View details for ${(item.top_rating_rate * 100).toFixed(1)}% 5-star rate`}
             >
               {(item.top_rating_rate * 100).toFixed(1)}%
-            </button>
+            </MetricValueButton>
           ) : (
             <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>{hasRatings ? '0%' : 'N/A'}</p>
           )}
         </div>
 
-        <div className="sm:col-span-2">
+        <div className="col-span-full">
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Rating distribution
           </p>
-          <RatingDistributionBar 
-            distribution={item.rating_distribution} 
-            totalCount={totalRatings} 
-            creatorKey={item.canonical_creator_key}
-            onMetricClick={onMetricClick} 
-          />
+          <RatingDistributionBar distribution={item.rating_distribution} totalCount={totalRatings} />
         </div>
 
-        <div className="sm:col-span-2">
+        <div className="col-span-full">
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Unread in your library
           </p>
-          <button
-              onClick={() => onMetricClick('unread-count', `Unread issues for ${item.display_name}`)}
-              className="text-lg font-bold hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
-              style={{ color: 'var(--theme-text-primary)' }}
-              aria-label={`View details for ${item.unread_upcoming_count} unread issues`}
-              title={`View details for ${item.unread_upcoming_count} unread issues`}
-            >
-              {item.unread_upcoming_count}
-            </button>
+          <MetricValueButton
+            metricType="unread-count"
+            metricLabel={`Unread issues for ${item.display_name}`}
+            className="text-lg font-bold"
+            style={{ color: 'var(--theme-text-primary)' }}
+            ariaLabel={`View details for ${item.unread_upcoming_count} unread issues`}
+            title={`View details for ${item.unread_upcoming_count} unread issues`}
+          >
+            {item.unread_upcoming_count}
+          </MetricValueButton>
           <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
             Unread issues by this creator already in your library — not queue order or roll eligibility.
           </p>
@@ -368,19 +446,20 @@ function ComparisonCard({ item, onMetricClick }: ComparisonCardProps) {
         </div>
 
         {item.read_unrated_count > 0 && (
-          <div className="sm:col-span-2">
+          <div className="col-span-full">
             <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
               Read with no stored rating
             </p>
-            <button
-              onClick={() => onMetricClick('read-unrated-count', `Read unrated issues for ${item.display_name}`)}
-              className="text-lg font-bold hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
+            <MetricValueButton
+              metricType="read-unrated-count"
+              metricLabel={`Read unrated issues for ${item.display_name}`}
+              className="text-lg font-bold"
               style={{ color: 'var(--theme-text-primary)' }}
-              aria-label={`View details for ${item.read_unrated_count} read issues with no stored rating`}
+              ariaLabel={`View details for ${item.read_unrated_count} read issues with no stored rating`}
               title={`View details for ${item.read_unrated_count} read issues with no stored rating`}
             >
               {item.read_unrated_count}
-            </button>
+            </MetricValueButton>
             <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
               Read issues by this creator with no stored rating.
             </p>
@@ -405,12 +484,7 @@ function ComparisonCard({ item, onMetricClick }: ComparisonCardProps) {
           </p>
           <ul className="mt-2 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
             {item.role_stats.map((stat) => (
-              <RoleStatRow 
-                key={stat.role} 
-                stat={stat} 
-                creatorKey={item.canonical_creator_key}
-                onMetricClick={onMetricClick}
-              />
+              <RoleStatRow key={stat.role} stat={stat} />
             ))}
           </ul>
         </div>
@@ -424,11 +498,7 @@ function ComparisonCard({ item, onMetricClick }: ComparisonCardProps) {
           <ul className="mt-2 space-y-2">
             {item.strongest_series.map((aggregate) => (
               <li key={aggregate.thread_id}>
-                <SeriesLink 
-                  aggregate={aggregate} 
-                  creatorKey={item.canonical_creator_key}
-                  onMetricClick={onMetricClick}
-                />
+                <SeriesLink aggregate={aggregate} />
               </li>
             ))}
           </ul>
@@ -449,20 +519,16 @@ export default function CreatorComparisonPage() {
   const keys = keysParam ? keysParam.split(',').filter(Boolean) : []
 
   const { data, isPending, isError, error } = useCreatorComparison(keys.length > 0 ? keys : null)
-  
-  // State for metric drilldown modal
+
+  // Metric evidence view state (issue #3460). Clicking any headline metric,
+  // distribution bucket, role or series rating opens this drilldown so the
+  // displayed value can be traced back to the issues that produced it.
   const [activeModal, setActiveModal] = useState<{
     isOpen: boolean
     creatorKey: string
     metricType: string
     metricLabel: string
-    initialParams?: {
-      role?: string
-      ratingValue?: string
-      seriesKey?: string
-      page?: number
-      pageSize?: number
-    }
+    initialParams?: MetricClickParams
   }>({
     isOpen: false,
     creatorKey: '',
@@ -470,15 +536,15 @@ export default function CreatorComparisonPage() {
     metricLabel: '',
   })
 
-  // Handle metric clicks to open the drilldown modal
-  const handleMetricClick = (creatorKey: string, metricType: string, metricLabel: string, params?: { role?: string; ratingValue?: string; seriesKey?: string }) => {
-    setActiveModal({
-      isOpen: true,
-      creatorKey,
-      metricType,
-      metricLabel,
-      initialParams: params,
-    })
+  // The per-card provider binds the creator key, so a click from any metric
+  // control resolves to the creator whose card actually rendered it.
+  const handleMetricClick = (
+    creatorKey: string,
+    metricType: string,
+    metricLabel: string,
+    params?: MetricClickParams,
+  ) => {
+    setActiveModal({ isOpen: true, creatorKey, metricType, metricLabel, initialParams: params })
   }
 
   if (keys.length < 2 || keys.length > 4) {
@@ -502,7 +568,7 @@ export default function CreatorComparisonPage() {
         <h1 className="mt-1 text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
-<div className="mt-6 grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+<div className={`mt-6 grid gap-6 ${comparisonGridClasses(keys.length)}`}>
           {[0, 1, 2, 3].slice(0, keys.length).map((i) => (
             <div key={i} className="h-72 animate-pulse rounded-2xl" style={{ backgroundColor: 'var(--theme-bg-panel)' }} />
           ))}
@@ -595,13 +661,16 @@ export default function CreatorComparisonPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+      <div className={`mt-6 grid gap-6 ${comparisonGridClasses(comparisonItems.length)}`}>
         {comparisonItems.map((item) => (
-          <ComparisonCard 
-            key={item.canonical_creator_key} 
-            item={item} 
-            onMetricClick={(metricType, metricLabel, params) => handleMetricClick(item.canonical_creator_key, metricType, metricLabel, params)}
-          />
+          <MetricClickContext.Provider
+            key={item.canonical_creator_key}
+            value={(metricType, metricLabel, params) =>
+              handleMetricClick(item.canonical_creator_key, metricType, metricLabel, params)
+            }
+          >
+            <ComparisonCard item={item} />
+          </MetricClickContext.Provider>
         ))}
       </div>
 
@@ -611,16 +680,14 @@ export default function CreatorComparisonPage() {
         </p>
       )}
 
-      {/* Metric Drilldown Modal */}
       <CreatorMetricDrilldownModal
         isOpen={activeModal.isOpen}
-        onClose={() => setActiveModal(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => setActiveModal((prev) => ({ ...prev, isOpen: false }))}
         creatorKey={activeModal.creatorKey}
         metricType={activeModal.metricType}
         metricLabel={activeModal.metricLabel}
         initialParams={activeModal.initialParams}
       />
-
     </div>
   )
 }
