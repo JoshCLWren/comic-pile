@@ -22,7 +22,9 @@ accident. New routes must be classified in the canonical table before they are a
 
 ## Sources of truth
 
-The policy is expressed in one place per surface. None of them duplicates another.
+The policy is expressed in one place per surface. The production routing layer has to name
+routes to serve their generated files, so it is guarded against drifting from the canonical
+table by the cross-artifact tests in "Automated regression coverage" below.
 
 - `frontend/src/seo/routeSeo.ts` — the canonical route indexability table and the
   `matchRouteSeo` lookup used by the client `Seo` head manager.
@@ -35,9 +37,17 @@ The policy is expressed in one place per surface. None of them duplicates anothe
   `robots.txt` from the canonical table and policy at build time.
 - `frontend/scripts/generate-route-html.mjs` — prerenders per-route HTML metadata from the
   same table so crawlers see route-specific title, description, canonical, and robots tags
-  without executing JavaScript.
-- `app/main.py` — serves the built artifacts and emits `X-Robots-Tag: noindex, nofollow`
-  for every SPA path except `/`.
+  without executing JavaScript. It also emits one shared noindex `spa.html` fallback shell
+  that parameterized and unknown routes are served instead of the indexable landing page.
+- `vercel.json` — the **production** routing contract. It rewrites every non-parameterized
+  route to its generated `<route>.html` (with `X-Robots-Tag: noindex, nofollow`) before the
+  filesystem boundary, and sends every other non-file path to the noindex `spa.html`
+  fallback shell instead of `index.html`. On Vercel the SPA routes never reach FastAPI, so
+  this file—not `app/main.py`—is what determines the production head and robots headers.
+- `app/main.py` — serves the same built artifacts for non-Vercel runtimes (local `make dev`,
+  container builds): the route-specific `<route>.html`, the shared `spa.html` fallback shell
+  for parameterized and unknown paths, and `X-Robots-Tag: noindex, nofollow` for every SPA
+  path except `/`.
 
 ## Automated regression coverage
 
@@ -49,7 +59,16 @@ The policy is enforced across artifacts, so drift fails CI rather than shipping:
   non-indexable route is disallowed by `robots.txt` prefix rules.
 - `frontend/src/unit/sitemap.test.ts` and `frontend/scripts/generate-sitemap.test.mjs` — the
   sitemap lists exactly the indexable routes and nothing else.
-- `frontend/src/unit/seoHtmlGeneration.test.ts` — the prerendered metadata generator.
+- `frontend/src/unit/seoHtmlGeneration.test.ts` — the prerendered metadata generator,
+  including the noindex `spa.html` fallback shell.
+- `frontend/src/unit/seoVercelRouting.test.ts` — cross-artifact guard over the real
+  `vercel.json`: every non-parameterized route is rewritten to its generated `.html` file,
+  parameterized and unknown paths fall through to the noindex fallback shell, and the
+  catch-all never serves the indexable landing page.
+- `tests/test_vercel_seo_routing.py` — the same production routing contract, plus the
+  `noindex, nofollow` header policy, without requiring a JavaScript runtime.
+- `tests/test_spa_route_file_serving.py` — the non-Vercel FastAPI path-to-file selection,
+  including the fallback shell for parameterized and unknown routes.
 - `tests/test_seo_crawlability.py` — the served HTTP surface: `X-Robots-Tag` policy,
   `robots.txt` content and cache headers, the sitemap, and the no-JavaScript landing HTML.
 - `frontend/src/test/issue-3068-seo-route-cleanup.spec.ts` — browser-level crawlability and

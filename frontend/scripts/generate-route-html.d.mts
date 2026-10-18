@@ -28,6 +28,22 @@ export interface RouteSeoEntryInput {
 export function generateRouteHtml(route: RouteSeoEntryInput, builtIndexHtml: string): string
 
 /**
+ * Built file name of the shared noindex SPA fallback shell.
+ */
+export const SPA_FALLBACK_FILENAME: string
+
+/**
+ * Generate the shared noindex SPA fallback shell by rewriting the SEO metadata
+ * of the built `index.html` content. Served for parameterized and unknown routes
+ * instead of `index.html` so they never inherit the landing page's indexable
+ * metadata.
+ *
+ * @param builtIndexHtml - Vite's built `index.html` content.
+ * @returns Full HTML document for the fallback shell.
+ */
+export function generateSpaFallbackHtml(builtIndexHtml: string): string
+
+/**
  * Generate the JSON-LD graph for indexable routes.
  *
  * @returns Compact JSON-LD document.

@@ -82,7 +82,13 @@ export const ROUTE_SEO_TABLE: readonly RouteSeoEntry[] = [
   { pattern: '/cbl-sources', visibility: 'private', canonicalPath: null, title: `CBL Sources — ${APP_TITLE}`, description: 'Browse trusted reading-order sources and add them as Reading Plans in ComicPile.' },
 ]
 
-const FALLBACK_ENTRY: RouteSeoEntry = {
+/**
+ * Safe default for any path not in {@link ROUTE_SEO_TABLE}: private and
+ * non-indexable. Exported so the build's SPA fallback shell (served for
+ * parameterized and unknown routes) emits exactly the metadata the client
+ * `Seo` head manager would apply.
+ */
+export const FALLBACK_ROUTE_SEO: RouteSeoEntry = {
   pattern: '*',
   visibility: 'private',
   canonicalPath: null,
@@ -119,14 +125,14 @@ export function matchRouteSeo(pathname: string): RouteSeoEntry {
   const normalized = normalizeSeoPathname(pathname)
   if (normalized === '/') {
     const root = ROUTE_SEO_TABLE.find(entry => entry.pattern === '/')
-    return root ?? FALLBACK_ENTRY
+    return root ?? FALLBACK_ROUTE_SEO
   }
   for (const entry of ROUTE_SEO_TABLE) {
     if (entry.pattern !== '/' && patternMatches(entry.pattern, normalized)) {
       return entry
     }
   }
-  return FALLBACK_ENTRY
+  return FALLBACK_ROUTE_SEO
 }
 
 /** True only for the crawlable public surface (currently just `/`). */

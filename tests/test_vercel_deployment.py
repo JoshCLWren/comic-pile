@@ -69,19 +69,37 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         "continue": True,
         "headers": {"Cache-Control": "public, max-age=31536000, immutable"},
     }
-    assert routes[4] == {"handle": "filesystem"}
+    # Route 4 serves the build-generated `<route>.html` metadata files (issue
+    # #3905) before the filesystem boundary so crawlers see route-specific heads.
+    assert routes[4]["dest"] == "/$1.html"
+    assert routes[5] == {"handle": "filesystem"}
+    # The catch-all serves the noindex fallback shell, never the indexable
+    # landing `index.html`, for parameterized and unknown paths.
     assert routes[-1]["src"] == "/(.*)"
-    assert routes[-1]["dest"] == "/index.html"
+    assert routes[-1]["dest"] == "/spa.html"
 
 
 def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
     """Ensure static HTML remains identifiable and receives browser protections."""
     routes = _routes(_load_vercel_config())
+    route_file_route = routes[4]
+    fallback_route = routes[-1]
 
-    for route in (routes[2], routes[-1]):
+    # The indexable landing page is the only HTML route without a noindex header.
+    for route in (routes[2], route_file_route, fallback_route):
         headers = cast("dict[str, str]", route["headers"])
         assert headers["X-ComicPile-Frontend"] == "vercel-static"
         assert headers["Cache-Control"] == "public, max-age=0, must-revalidate"
         assert headers["X-Content-Type-Options"] == "nosniff"
         assert headers["X-Frame-Options"] == "DENY"
         assert "frame-ancestors 'none'" in headers["Content-Security-Policy"]
+
+    assert "X-Robots-Tag" not in cast("dict[str, str]", routes[2]["headers"])
+    assert (
+        cast("dict[str, str]", route_file_route["headers"])["X-Robots-Tag"]
+        == "noindex, nofollow"
+    )
+    assert (
+        cast("dict[str, str]", fallback_route["headers"])["X-Robots-Tag"]
+        == "noindex, nofollow"
+    )

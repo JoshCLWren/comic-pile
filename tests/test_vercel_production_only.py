@@ -101,6 +101,6 @@ def test_vercel_keeps_production_static_and_api_routes_intact() -> None:
         for route in routes
     )
     assert any(
-        route.get("src") == "/(.*)" and route.get("dest") == "/index.html"
+        route.get("src") == "/(.*)" and route.get("dest") == "/spa.html"
         for route in routes
     )

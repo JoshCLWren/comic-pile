@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   generateRouteHtml,
+  generateSpaFallbackHtml,
   generateStructuredData,
   type RouteSeoEntryInput,
 } from '../../scripts/generate-route-html.mjs'
@@ -158,6 +159,26 @@ describe('SEO HTML generation', () => {
     }
 
     expect(() => generateRouteHtml(route, '')).toThrow(/built index\.html/)
+  })
+
+  test('SPA fallback shell is non-indexable and drops landing-only metadata', () => {
+    const html = generateSpaFallbackHtml(BUILT_INDEX_HTML)
+
+    expect(html).toContain('<title>Comic Pile</title>')
+    expect(html).toContain('<meta name="robots" content="noindex, nofollow" />')
+    // The fallback must never present itself as the crawlable landing page.
+    expect(html).not.toContain('<link rel="canonical"')
+    expect(html).not.toContain('comic-pile-structured-data')
+    expect(html).not.toContain('Built default title')
+    expect(html).not.toContain('Built default description that must be replaced per route.')
+    // Exactly one metadata set, and the bootstrap shell plus hashed assets survive.
+    expect(countOccurrences(html, '<title>')).toBe(1)
+    expect(html).toContain('id="bootstrap-shell"')
+    expect(html).toContain('src="/assets/index-abc123.js"')
+  })
+
+  test('fallback shell generator refuses to run without built HTML', () => {
+    expect(() => generateSpaFallbackHtml('')).toThrow(/built index\.html/)
   })
 
   test('Structured data is generated correctly for public-indexable routes', () => {

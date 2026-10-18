@@ -13,8 +13,20 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { ROUTE_SEO_TABLE } from '../src/seo/routeSeo.ts'
+import { FALLBACK_ROUTE_SEO, ROUTE_SEO_TABLE } from '../src/seo/routeSeo.ts'
 import { resolveProductionOrigin } from './generate-sitemap.mjs'
+
+/**
+ * Built name of the shared noindex SPA fallback shell.
+ *
+ * Parameterized routes (`/thread/:id`, `/sessions/:id`, …) and unknown paths
+ * cannot have a route-specific static file. They are served this shell instead
+ * of `index.html` so they never inherit the landing page's indexable metadata
+ * (canonical, `index, follow`, and landing JSON-LD). Kept in sync with
+ * `_SPA_FALLBACK_SHELL_FILENAME` in `app/main.py` and the catch-all `dest` in
+ * `vercel.json`.
+ */
+export const SPA_FALLBACK_FILENAME = 'spa.html'
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const frontendDir = resolve(scriptDirectory, '..')
@@ -98,6 +110,28 @@ function buildRouteHeadTags(route) {
 }
 
 /**
+ * Build the metadata tags for the noindex SPA fallback shell.
+ *
+ * Mirrors {@link FALLBACK_ROUTE_SEO}: no canonical, no Open Graph URL (the
+ * request path is unknown at build time), and no JSON-LD, because the fallback
+ * is never a crawl target.
+ *
+ * @returns {string[]} Metadata tags ready to inject after `<meta charset>`.
+ */
+function buildFallbackHeadTags() {
+  const title = escapeHtml(FALLBACK_ROUTE_SEO.title)
+  const description = escapeHtml(FALLBACK_ROUTE_SEO.description)
+  return [
+    `<title>${title}</title>`,
+    `<meta name="description" content="${description}" />`,
+    `<meta name="robots" content="noindex, nofollow" />`,
+    '<meta property="og:type" content="website" />',
+    `<meta property="og:title" content="${title}" />`,
+    `<meta property="og:description" content="${description}" />`,
+  ]
+}
+
+/**
  * Remove every SEO metadata tag from the built page so exactly one route-specific
  * set remains after injection.
  *
@@ -155,6 +189,28 @@ function generateRouteHtml(route, builtIndexHtml) {
 }
 
 /**
+ * Generate the shared noindex SPA fallback shell from the built page.
+ *
+ * The fallback is byte-identical to the built `index.html` except for the head
+ * metadata, so it boots the exact same React application. Only its head differs:
+ * generic app title/description, `noindex, nofollow`, and no canonical or
+ * JSON-LD. It is what parameterized and unknown routes are served so they are
+ * never presented to crawlers as the indexable landing page.
+ *
+ * @param {string} builtIndexHtml - Vite's built `index.html` content.
+ * @returns {string} Full HTML document for the fallback shell.
+ * @throws If no built HTML is supplied; the script only runs after `vite build`.
+ */
+function generateSpaFallbackHtml(builtIndexHtml) {
+  if (!builtIndexHtml) {
+    throw new Error(
+      'generateSpaFallbackHtml requires the built index.html content; run after `vite build`.',
+    )
+  }
+  return insertHeadTags(stripRouteSeoMetadata(builtIndexHtml), buildFallbackHeadTags())
+}
+
+/**
  * Generate one route HTML file per non-parameterized route from the single
  * built `index.html`.
  */
@@ -193,11 +249,16 @@ function main() {
     console.log(`✓ Generated ${routePath}`)
   }
 
+  // Shared noindex shell for parameterized and unknown routes.
+  const fallbackPath = resolve(buildDir, SPA_FALLBACK_FILENAME)
+  writeFileSync(fallbackPath, generateSpaFallbackHtml(builtIndexHtml))
+  console.log(`✓ Generated ${SPA_FALLBACK_FILENAME}`)
+
   console.log(`✓ Generated route HTML files`)
 }
 
 // Export functions for testing
-export { generateRouteHtml, generateStructuredData }
+export { generateRouteHtml, generateSpaFallbackHtml, generateStructuredData }
 
 // Execute if run directly
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
