@@ -326,6 +326,11 @@ ADAPTERS: dict[str, ProviderAdapter] = {
     "z-ai": RuntimeOnlyAdapter("z-ai"),
     "ollama-cloud": RuntimeOnlyAdapter("ollama-cloud"),
     "mistral": RuntimeOnlyAdapter("mistral"),
+    # OrcaRouter and Requesty are metered free OpenAI-compatible routers with
+    # small per-account daily request limits; runtime smoke is the evidence and
+    # factory-source-budgets.json caps daily dispatches.
+    "orcarouter": RuntimeOnlyAdapter("orcarouter"),
+    "requesty": RuntimeOnlyAdapter("requesty"),
 }
 
 

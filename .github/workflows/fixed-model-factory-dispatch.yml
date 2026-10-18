@@ -40,6 +40,8 @@ on:
       - '.github/scripts/factory_candidate_health.py'
       - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
+      - '.github/factory-source-budgets.json'
+      - '.github/scripts/factory_source_budget.py'
 
 permissions:
   contents: read
@@ -654,6 +656,16 @@ jobs:
 
           echo 'Reconciling abandoned factory leases before assignment'
           python3 "$controller" reconcile
+
+          # Metered free sources (OrcaRouter, Requesty) have small per-account
+          # daily request limits; drop their workers once today's cap is used.
+          workers="$(python3 .github/scripts/factory_source_budget.py filter <<< "$workers")"
+          if [[ "$workers" == '[]' ]]; then
+            echo 'Every resolved worker is over its source daily dispatch budget; nothing to dispatch'
+            echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
+            echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           capacity="$(python3 "$controller" capacity)"
           echo "OmniRoute free-entry capacity: ${capacity}"

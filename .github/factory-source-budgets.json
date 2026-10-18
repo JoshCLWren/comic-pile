@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "notes": "Per-source daily dispatch caps (UTC day) for metered free OpenAI-compatible providers. One factory session is typically 10-45 model requests, so caps are set well under each account's published daily request limit.",
+  "sources": {
+    "orcarouter": {
+      "max_dispatches_per_utc_day": 1,
+      "account_limits": "50 requests/day, 10 requests/minute per account; unpublished per-request prompt-size cap on free tier"
+    },
+    "requesty": {
+      "max_dispatches_per_utc_day": 4,
+      "account_limits": "200 requests/day, 20 requests/minute per account"
+    }
+  }
+}
