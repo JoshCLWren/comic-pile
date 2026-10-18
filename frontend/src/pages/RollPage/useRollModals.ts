@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { threadsApi } from '../../services/api-threads'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -53,6 +53,9 @@ export function useRollModals({
   } = state
 
   const [overrideThreads, setOverrideThreads] = useState<ThreadListItem[] | null>(null)
+  // Issue #3467: a fast double-click dispatches two submits before React
+  // re-renders the disabled state, so drop the second request synchronously.
+  const overrideSubmitInFlight = useRef(false)
 
   useEffect(() => {
     if (!isOverrideOpen || overrideThreads) return
@@ -138,6 +141,8 @@ export function useRollModals({
   function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!overrideThreadId) return
+    if (overrideSubmitInFlight.current) return
+    overrideSubmitInFlight.current = true
     overrideMutation
       .mutate({ thread_id: Number(overrideThreadId) })
       .then((response) => {
@@ -148,6 +153,9 @@ export function useRollModals({
       })
       .catch((error: unknown) => {
         setOverrideErrorMessage(getApiErrorDetail(error))
+      })
+      .finally(() => {
+        overrideSubmitInFlight.current = false
       })
   }
 

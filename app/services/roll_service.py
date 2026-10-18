@@ -28,6 +28,8 @@ from app.repositories.roll_repository import (
     fetch_bootstrap_pool_rows,
     fetch_bootstrap_stale_rows,
     fetch_issue_by_id,
+    fetch_latest_session_event,
+    fetch_pending_thread_id,
     fetch_thread_by_id,
     insert_event,
     fetch_session_events,
@@ -992,46 +994,6 @@ class RollService:
         current_session_id = current_session.id
         current_die = await get_current_die_for_session(current_session, db)
 
-        # Issue #3467: Prevent duplicate roll events for the same thread in the same session
-        # Check if there's already a pending roll for this thread in the current session
-        existing_pending_result = await db.execute(
-            select(Event)
-            .where(Event.session_id == current_session_id)
-            .where(Event.selected_thread_id == override_thread_id)
-            .where(Event.type == "roll")
-            .where(Event.selection_method == "override")
-            .where(Event.ended_at.is_(None))
-            .order_by(Event.created_at.desc())
-        )
-        existing_pending = existing_pending_result.scalar_one_or_none()
-        
-        if existing_pending:
-            # If there's already a pending override for this thread, return the same response
-            # without creating a duplicate event
-            snoozed_ids = (
-                list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
-            )
-            snoozed_count = len(snoozed_ids)
-            
-            return RollResponse(
-                thread_id=override_thread_id,
-                title=override_thread_title,
-                format=override_thread_format,
-                issues_remaining=override_thread_issues_remaining,
-                queue_position=override_thread_queue_position,
-                die_size=current_die,
-                result=0,
-                offset=snoozed_count,
-                snoozed_count=snoozed_count,
-                issue_id=override_thread_issue_id,
-                issue_number=override_thread_issue_number,
-                next_issue_id=override_thread_issue_id,
-                next_issue_number=override_thread_issue_number,
-                total_issues=override_thread_total_issues,
-                reading_progress=override_thread_reading_progress,
-                explanation=get_primary_explanation([]),
-            )
-
         override_thread_id = override_thread.id
         override_thread_title = override_thread.title
         override_thread_format = normalize_format_value(override_thread.format)
@@ -1077,6 +1039,42 @@ class RollService:
                     f'"{override_thread_title}" is on session-based snooze backoff and '
                     "cannot be overridden yet."
                 ),
+            )
+
+        # Issue #3467: a double-clicked "Pick this series" must log a single ROLLED
+        # event. Both signals must agree: the session still points at this thread
+        # (so the pick is live and unconsumed) and the newest event is already the
+        # override for it. A random roll, a rate, a snooze, a dismiss, or a
+        # different pick breaks one of those signals, so a later pick of the same
+        # series is treated as genuinely new and still records its own event.
+        latest_event = await fetch_latest_session_event(db, current_session_id)
+        pending_thread_id = await fetch_pending_thread_id(db, current_session_id)
+        is_duplicate_override = (
+            pending_thread_id == override_thread_id
+            and latest_event is not None
+            and latest_event.type == "roll"
+            and latest_event.selection_method == "override"
+            and latest_event.selected_thread_id == override_thread_id
+        )
+        if is_duplicate_override:
+            snoozed_count = len(snoozed_ids)
+            return RollResponse(
+                thread_id=override_thread_id,
+                title=override_thread_title,
+                format=override_thread_format,
+                issues_remaining=override_thread_issues_remaining,
+                queue_position=override_thread_queue_position,
+                die_size=current_die,
+                result=0,
+                offset=snoozed_count,
+                snoozed_count=snoozed_count,
+                issue_id=override_thread_issue_id,
+                issue_number=override_thread_issue_number,
+                next_issue_id=override_thread_issue_id,
+                next_issue_number=override_thread_issue_number,
+                total_issues=override_thread_total_issues,
+                reading_progress=override_thread_reading_progress,
+                explanation=get_primary_explanation([]),
             )
 
         # Decision-time context is purely observational: it records the estimate
