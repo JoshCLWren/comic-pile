@@ -48,7 +48,7 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
     },
   }
 })
-vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn() } }))
+vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn(), listCreators: vi.fn() } }))
 vi.mock('../services/api-tags', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
@@ -77,10 +77,10 @@ vi.mock('../services/api-tags', async (importOriginal) => {
     },
   }
 })
-
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedThreadsApiGet = vi.mocked(threadsApi.get)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
+const mockedIssuesApiListCreators = vi.mocked(issuesApi.listCreators)
 const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
 
@@ -99,6 +99,9 @@ beforeEach(() => {
   } as never)
   mockedIssuesApiList.mockReset()
   mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
+  mockedIssuesApiListCreators.mockReset()
+  // SAFETY: the bulk response matches the endpoint contract; issues without stored credits are omitted
+  mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
   vi.mocked(dependenciesApi.getBatchBlockingInfo).mockReset()
   vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } })
   mockedConnectedThreads.mockReset()
@@ -618,4 +621,93 @@ it('opens the exact required issue after loading its later page', async () => {
   await waitFor(() => expect(document.getElementById('issue-101')).toHaveFocus())
   expect(mockedIssuesApiList).toHaveBeenCalledWith(1, { page_size: 100, page_token: 'next' })
   expect(screen.getByText('#101')).toBeVisible()
+})
+
+function creatorsResponseFor(
+  entries: { issueId: number; creators: { name: string; roles: string[] }[] }[],
+) {
+  // SAFETY: the payload matches the bulk creators endpoint contract; the page
+  // reads only `issues[].issue_id` and `issues[].creators`.
+  return {
+    thread_id: 1,
+    issues: entries.map((entry) => ({ issue_id: entry.issueId, creators: entry.creators })),
+  } as never
+}
+
+it("renders each issue's own provider creators instead of shared series credits (#3461)", async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 0, queue_position: 1,
+    status: 'active', total_issues: 2, next_unread_issue_number: '1', notes: null,
+    manual_creator_credits: [{ name: 'Series Fallback', roles: ['Writer'] }],
+  } as never)
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 11, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' },
+      { id: 22, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 2, page_size: 100,
+  })
+  mockedIssuesApiListCreators.mockResolvedValue(
+    creatorsResponseFor([
+      { issueId: 11, creators: [{ name: 'Alan Moore', roles: ['Writer'] }] },
+      { issueId: 22, creators: [{ name: 'Dave Gibbons', roles: ['Artist'] }] },
+    ]),
+  )
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+  expect(await screen.findByText('by Alan Moore (Writer)')).toBeInTheDocument()
+  expect(screen.getByText('by Dave Gibbons (Artist)')).toBeInTheDocument()
+  expect(screen.queryByText(/Series Fallback/)).not.toBeInTheDocument()
+})
+
+it('falls back to the series manual creator credits when an issue has no provider metadata (#3461)', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 0, queue_position: 1,
+    status: 'active', total_issues: 1, next_unread_issue_number: '1', notes: null,
+    manual_creator_credits: [{ name: 'Series Writer', roles: ['Writer'] }],
+  } as never)
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 11, thread_id: 1, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 1, page_size: 100,
+  })
+  // The bulk read omits issues without stored credits, so the row falls back
+  // to the series' manual creator credits.
+  mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  expect(await screen.findByText('by Series Writer (Writer)')).toBeInTheDocument()
+})
+
+it('loads and saves the series manual creator credits from the thread edit form (#3461)', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 0, queue_position: 1,
+    status: 'active', total_issues: 1, next_unread_issue_number: '1', notes: null,
+    manual_creator_credits: [{ name: 'Alan Moore', roles: ['Writer'] }],
+  } as never)
+  const mutate = vi.fn().mockResolvedValue({})
+  // SAFETY: the hook mock returns only the fields the component under test reads
+  mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Edit' }))
+  expect(await screen.findByText('Alan Moore')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Remove' }))
+  await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+  await waitFor(() =>
+    expect(mutate).toHaveBeenCalledWith({
+      id: 1,
+      data: expect.objectContaining({ manual_creator_credits: [] }),
+    }),
+  )
 })

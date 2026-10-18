@@ -11,6 +11,7 @@ import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
 import { useThread, useUpdateThread } from '../hooks/useThread'
 import { useConnectedThreads } from '../hooks/useReaderContext'
 import { useThreadIssuePages } from '../hooks/useThreadIssues'
+import { useThreadIssueCreators } from '../hooks/useThreadIssueCreators'
 import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
 import {
   applyEditedThreadToQueuePages,
@@ -20,6 +21,8 @@ import {
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getManualCreatorCreditList } from '../types'
+import type { ManualCreatorCredit, Thread } from '../types'
+import { getCreatorDisplayText } from '../utils/creatorUtils'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
 import Breadcrumbs from '../components/Breadcrumbs'
@@ -29,7 +32,31 @@ import { IssueTagRowChips } from '../components/Tags/IssueTagRowChips'
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
 import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
+import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
+
+function IssueCreator({
+  creators,
+  fallbackCreators,
+}: {
+  creators: ManualCreatorCredit[]
+  fallbackCreators: ManualCreatorCredit[]
+}) {
+  // Prefer the issue's own provider (ComicVine) creators so two issues in one
+  // series can show different credits, even when the series carries manual
+  // creator credits. The credits come from one bulk thread read
+  // (`useThreadIssueCreators`), so expanding the issue list never fans out
+  // into one provider-intelligence request per row; the series' manual
+  // credits only fill issues without stored provider credits (#3461).
+  const creatorsToShow = creators.length > 0 ? creators : fallbackCreators
+  const displayText = getCreatorDisplayText(creatorsToShow)
+  if (!displayText) return null
+  return (
+    <span className="text-xs text-[var(--theme-text-muted)]">
+      by {displayText}
+    </span>
+  )
+}
 
 export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
@@ -86,6 +113,10 @@ export default function ThreadDetailView() {
     const entries = rowTagsQuery.data?.issues ?? []
     return new Map(entries.map((entry) => [entry.target_id, entry]))
   }, [rowTagsQuery.data])
+  // Row-level creator credits (#3461): one bulk read covers every visible
+  // issue so each row shows its own ComicVine creators (falling back to the
+  // series' manual credits) without one provider request per issue.
+  const issueCreatorsQuery = useThreadIssueCreators(threadId, issuesExpanded)
   const issuesTotal = issuesQuery.totalCount
   const issuesLoading = issuesQuery.isPending
   const issuesError = issuesQuery.isError
@@ -178,6 +209,7 @@ export default function ThreadDetailView() {
         title: editForm.title,
         format: editForm.format,
         notes: editForm.notes || null,
+        manual_creator_credits: editForm.manualCreatorCredits,
       }
 
       if (currentThread.total_issues === null) {
@@ -264,6 +296,8 @@ export default function ThreadDetailView() {
   const progressPercentage = getProgressPercentage()
   const issuesReadCount = getIssuesReadCount()
   const crossoverGroups = crossoverGroupsByThreadId[thread.id] ?? []
+  const seriesCreatorCredits = getManualCreatorCreditList(thread)
+  const issueCreatorsByIssueId = issueCreatorsQuery.creatorsByIssueId
 
   return (
     <div className="space-y-6 md:space-y-8 pb-20">
@@ -542,6 +576,10 @@ export default function ThreadDetailView() {
                               <span className="text-sm font-medium text-stone-300">
                                 #{issue.issue_number}
                               </span>
+                              <IssueCreator
+                                creators={issueCreatorsByIssueId.get(issue.id) ?? []}
+                                fallbackCreators={seriesCreatorCredits}
+                              />
                             </span>
                             <div className="flex items-center gap-3">
                               <button
@@ -691,6 +729,10 @@ export default function ThreadDetailView() {
                 className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"
               />
             </div>
+            <CreatorInput
+              creators={editForm.manualCreatorCredits}
+              onChange={(next) => setEditForm({ ...editForm, manualCreatorCredits: next })}
+            />
           </form>
 
           {thread.total_issues !== null && (

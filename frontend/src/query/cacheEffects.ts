@@ -105,6 +105,11 @@ export async function invalidateAfterIssueEdit(
     client.invalidateQueries({
       queryKey: queryKeys.thread.issuePages(threadId),
     }),
+    // Issue mutations can change which issues carry confirmed provider
+    // credits; refresh the bulk creator-credits map alongside the pages.
+    client.invalidateQueries({
+      queryKey: queryKeys.thread.issueCreators(threadId),
+    }),
     client.invalidateQueries({
       queryKey: queryKeys.thread.detail(threadId),
       exact: true,
@@ -363,6 +368,20 @@ export function applyEditedThreadToQueuePages(
 
   client.setQueryData(queryKeys.thread.detail(updatedThread.id), updatedThread)
   client.setQueryData(queryKeys.thread.summary(updatedThread.id), updatedThread)
+}
+
+/**
+ * Refresh creator analytics after a series' manual creator credits change so
+ * add/edit/remove shows up on the Creators pages without a full page reload
+ * (#3461). The creator browse list, detail, summaries, comparison, team
+ * chemistry, and metric drilldowns are all server-derived from those credits,
+ * so every `creators`/`creator` query prefix is invalidated.
+ */
+export async function invalidateAfterCreatorCreditChange(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.creators.all }),
+    client.invalidateQueries({ queryKey: queryKeys.creator.all }),
+  ])
 }
 
 /**

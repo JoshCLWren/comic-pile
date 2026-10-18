@@ -22,7 +22,7 @@ const CREATOR_ROLE_OPTIONS = [
   'Penciller',
 ] as const
 
-function CreatorInput({
+export function CreatorInput({
   creators,
   onChange,
   label = 'Creators (optional)',

@@ -23,12 +23,14 @@ from app.schemas.issue import (
     IssueBulkMarkUnreadRequest,
     IssueCreate,
     IssueCreateRange,
+    IssueCreatorsEntry,
     IssueListResponse,
     IssueMoveRequest,
     IssueOrderValidationResponse,
     IssueReorderRequest,
     IssueResponse,
     IssueUpdate,
+    ThreadIssueCreatorsResponse,
 )
 from app.schemas.migration import MigrateToIssuesRequest
 from app.schemas.performance_metric import (
@@ -131,6 +133,8 @@ __all__ = [
     "IssueUpdate",
     "IssueResponse",
     "IssueListResponse",
+    "IssueCreatorsEntry",
+    "ThreadIssueCreatorsResponse",
     "IssueOrderValidationResponse",
     # Migration
     "MigrateToIssuesRequest",

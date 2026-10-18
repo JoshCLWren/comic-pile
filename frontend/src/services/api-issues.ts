@@ -2,11 +2,23 @@ import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
   Issue,
   IssueListResponse,
+  ManualCreatorCredit,
   ReaderContextResponse,
   Thread,
 } from '../types'
 
 export type { IssueListResponse }
+
+/** One creator credit returned by the bulk thread-creators read. */
+export type ThreadIssueCreatorCredit = ManualCreatorCredit & {
+  creator_id?: number | null
+}
+
+/** Response of GET /v1/threads/{threadId}/issues/creators. */
+export interface ThreadIssueCreatorsResponse {
+  thread_id: number
+  issues: { issue_id: number; creators: ThreadIssueCreatorCredit[] }[]
+}
 
 export interface SetCurrentIssueResponse {
   thread_id: number
@@ -54,6 +66,16 @@ export function createIssuesApi(client: HttpClient) {
       params?: IssueListParams
     ): Promise<IssueListResponse> => {
       return client.get(`/v1/threads/${threadId}/issues`, { params })
+    },
+
+    /**
+     * List stored ComicVine creator credits for every mapped issue in a thread
+     * in one request (issue #3461).
+     * @param threadId - The thread ID whose issue credits are listed
+     * @returns Per-issue creator credits; unmapped issues are omitted
+     */
+    listCreators: async (threadId: number): Promise<ThreadIssueCreatorsResponse> => {
+      return client.get(`/v1/threads/${threadId}/issues/creators`)
     },
 
     /**

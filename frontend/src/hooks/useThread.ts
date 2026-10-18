@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { threadsApi } from '../services/api-threads';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadUpdatePayload } from '../types';
-import { applyEditedThreadToQueuePages, invalidateAfterQueueMutation } from '../query/cacheEffects';
+import { applyEditedThreadToQueuePages, invalidateAfterCreatorCreditChange, invalidateAfterQueueMutation } from '../query/cacheEffects';
 import { queryClient } from '../query/queryClient';
 import { queryKeys } from '../query/queryKeys';
 
@@ -57,8 +57,14 @@ export function useUpdateThread() {
   const mutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: ThreadUpdatePayload }) =>
       threadsApi.update(id, data),
-    onSuccess: (result) => {
+    onSuccess: async (result, variables) => {
       applyEditedThreadToQueuePages(queryClient, result);
+      // Creator analytics are derived server-side from the series' manual
+      // creator credits, so only a credits edit needs those refreshed. Leave
+      // other thread edits out of the creator cache (#3461).
+      if (variables.data.manual_creator_credits !== undefined) {
+        await invalidateAfterCreatorCreditChange(queryClient);
+      }
     },
   });
 

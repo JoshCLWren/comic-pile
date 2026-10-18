@@ -11,11 +11,13 @@ interface ComicVineIssueIntelligenceState {
 
 export function useComicVineIssueIntelligence(
   issueId: number | null | undefined,
+  options?: { enabled?: boolean },
 ): ComicVineIssueIntelligenceState {
+  const enabled = !!issueId && (options?.enabled ?? true)
   const { data, isPending, refetch } = useQuery({
     queryKey: issueId ? queryKeys.comicVine.issueIntelligence(issueId) : [],
     queryFn: () => comicVineApi.getIssueIntelligence(issueId!),
-    enabled: !!issueId,
+    enabled,
   })
 
   return {
