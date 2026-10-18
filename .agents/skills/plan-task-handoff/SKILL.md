@@ -183,7 +183,7 @@ the worker must run Playwright per `AGENTS.md` (backend on port 9000).
 ## Step 8 — Launch the worker
 
 ```bash
-opencode run -m "<resolved-model-id>" --dir "<repo-root>" "<worker-prompt>"
+(cd "<repo-root>" && opencode run -m "<resolved-model-id>" "<worker-prompt>")
 ```
 
 Stream the output. When it finishes:

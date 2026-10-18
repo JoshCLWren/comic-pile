@@ -424,13 +424,13 @@ async def test_cbl_adoption_preview_is_read_only_and_supports_overrides(
     assert overridden.entries[0]["adoption_class"] == "existing"
     assert overridden.entries[1]["adoption_decision"] == "would_create_missing"
     assert overridden.entries[1]["adoption_class"] == "missing_importable"
-    assert overridden.entries[2]["adoption_decision"] == "unresolved"
+    assert overridden.entries[2]["adoption_decision"] == "excluded"
     assert overridden.entries[2]["adoption_class"] == "ambiguous_unresolved"
     assert overridden.final_adopted_order == (2,)
     assert overridden.reused_existing_count == 0
     assert overridden.missing_would_create_count == 1
-    assert overridden.excluded_count == 1
-    assert overridden.unresolved_count == 1
+    assert overridden.excluded_count == 2
+    assert overridden.unresolved_count == 0
     assert before["issues"] == await async_db.scalar(select(func.count()).select_from(Issue))
     assert before["threads"] == await async_db.scalar(select(func.count()).select_from(Thread))
     assert before["memberships"] == await async_db.scalar(

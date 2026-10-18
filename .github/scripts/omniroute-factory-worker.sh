@@ -187,10 +187,11 @@ run_agent() {
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
   prompt="You are OpenCode OmniRoute Factory ${WORKER} · ${CALL_SIGN} for JoshCLWren/comic-pile. Requested capability route: ${MODEL}. OmniRoute gateway: ${PROVIDER}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow normal ComicPile product-first factory policy and ownership rules. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. OmniRoute may switch upstream models, providers, or routes within the configured policy; do not bypass the gateway or request unconfigured capacity. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
-  timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" \
-    opencode run -m "omniroute/${MODEL}" --agent build --auto --dir "$GITHUB_WORKSPACE" \
+  # OpenCode 2 rejects `opencode run --dir`; run from the workspace instead.
+  ( cd "$GITHUB_WORKSPACE" && exec timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" \
+    opencode run -m "omniroute/${MODEL}" --agent build --auto \
     --title "ComicPile OmniRoute Factory ${WORKER} · ${CALL_SIGN}" "$prompt" \
-    2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
+  ) 2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
   status=${PIPESTATUS[0]}
   return "$status"
 }
@@ -200,11 +201,11 @@ smoke_agent() {
   before="$(git status --porcelain)"
   [[ -z "$before" ]] || { log 'smoke requires a clean worktree'; return 1; }
   set +e
-  timeout --signal=TERM --kill-after=10s 180s \
-    opencode run -m "omniroute/${MODEL}" --agent build --dir "$GITHUB_WORKSPACE" \
+  ( cd "$GITHUB_WORKSPACE" && exec timeout --signal=TERM --kill-after=10s 180s \
+    opencode run -m "omniroute/${MODEL}" --agent build \
     --title "ComicPile OmniRoute Factory ${WORKER} smoke" \
     'Reply with exactly OMNIROUTE_OPENCODE_OK. Do not edit files, run commands, or use tools.' \
-    2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
+  ) 2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
   status=${PIPESTATUS[0]}
   set -e
   (( status == 0 )) || return "$status"
