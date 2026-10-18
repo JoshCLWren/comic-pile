@@ -21,7 +21,7 @@ import {
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getManualCreatorCreditList } from '../types'
-import type { Issue, ManualCreatorCredit, Thread } from '../types'
+import type { Thread } from '../types'
 import { getCreatorDisplayText } from '../utils/creatorUtils'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
@@ -37,11 +37,14 @@ import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
 function IssueCreator({ issueId, thread }: { issueId: number; thread: Thread | undefined }) {
   const { metadata } = useComicVineIssueIntelligence(issueId)
-  // Prefer issue-level ComicVine creators; fall back to thread manual credits per spec
+  // Prefer the issue's own provider (ComicVine) creators so two issues in one
+  // series can show different credits. Fall back to the series' manual creator
+  // credits when the issue has no provider metadata (#3461).
   const creatorsFromIntelligence =
     metadata?.creators?.map((c) => ({ name: c.name, roles: c.roles })) ?? []
-  const fallbackCreators = (thread?.manual_creator_credits ?? []) as ManualCreatorCredit[]
-  const creatorsToShow = creatorsFromIntelligence.length > 0 ? creatorsFromIntelligence : fallbackCreators
+  const fallbackCreators = getManualCreatorCreditList(thread ?? {})
+  const creatorsToShow =
+    creatorsFromIntelligence.length > 0 ? creatorsFromIntelligence : fallbackCreators
   const displayText = getCreatorDisplayText(creatorsToShow)
   if (!displayText) return null
   return (

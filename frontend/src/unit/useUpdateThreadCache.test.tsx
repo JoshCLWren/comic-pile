@@ -17,10 +17,15 @@ function createTestWrapper() {
 
 const spyThreadsApiUpdate = vi.spyOn(threadsApi, 'update')
 const spyApplyEditedThreadToQueuePages = vi.spyOn(cacheEffects, 'applyEditedThreadToQueuePages')
+const spyInvalidateAfterCreatorCreditChange = vi.spyOn(
+  cacheEffects,
+  'invalidateAfterCreatorCreditChange',
+)
 
 beforeEach(() => {
   spyThreadsApiUpdate.mockReset()
   spyApplyEditedThreadToQueuePages.mockReset()
+  spyInvalidateAfterCreatorCreditChange.mockReset()
 })
 
 it('publishes the authoritative update through the targeted thread-cache contract', async () => {
@@ -73,4 +78,37 @@ it('does not touch targeted cache state when the update request fails', async ()
   expect(spyApplyEditedThreadToQueuePages).not.toHaveBeenCalled()
   await waitFor(() => expect(result.current.isError).toBe(true))
   expect(result.current.isPending).toBe(false)
+})
+
+it('refreshes creator analytics when an update edits manual creator credits (#3461)', async () => {
+  // SAFETY: the updated thread supplies only the fields the cache write asserts
+  const updatedThread = { id: 7, title: 'Updated title' } as Thread
+  spyThreadsApiUpdate.mockResolvedValue(updatedThread)
+
+  const { wrapper } = createTestWrapper()
+  const { result } = renderHook(() => useUpdateThread(), { wrapper })
+
+  await act(async () => {
+    await result.current.mutate({
+      id: 7,
+      data: { manual_creator_credits: [{ name: 'Alan Moore', roles: ['Writer'] }] },
+    })
+  })
+
+  expect(spyInvalidateAfterCreatorCreditChange).toHaveBeenCalledOnce()
+})
+
+it('leaves creator analytics untouched when an update does not change creator credits', async () => {
+  // SAFETY: the updated thread supplies only the fields the cache write asserts
+  const updatedThread = { id: 7, title: 'Updated title' } as Thread
+  spyThreadsApiUpdate.mockResolvedValue(updatedThread)
+
+  const { wrapper } = createTestWrapper()
+  const { result } = renderHook(() => useUpdateThread(), { wrapper })
+
+  await act(async () => {
+    await result.current.mutate({ id: 7, data: { title: 'Updated title' } })
+  })
+
+  expect(spyInvalidateAfterCreatorCreditChange).not.toHaveBeenCalled()
 })

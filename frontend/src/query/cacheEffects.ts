@@ -366,6 +366,20 @@ export function applyEditedThreadToQueuePages(
 }
 
 /**
+ * Refresh creator analytics after a series' manual creator credits change so
+ * add/edit/remove shows up on the Creators pages without a full page reload
+ * (#3461). The creator browse list, detail, summaries, comparison, team
+ * chemistry, and metric drilldowns are all server-derived from those credits,
+ * so every `creators`/`creator` query prefix is invalidated.
+ */
+export async function invalidateAfterCreatorCreditChange(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.creators.all }),
+    client.invalidateQueries({ queryKey: queryKeys.creator.all }),
+  ])
+}
+
+/**
  * Boolean guard for the paged (infinite) issue cache shape. The
  * `queryKeys.thread.issuePages` prefix also hosts the flattened all-issues
  * array (`queryKeys.thread.issuePagesAll`), so shape-matching updaters must
