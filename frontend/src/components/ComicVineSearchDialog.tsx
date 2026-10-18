@@ -610,12 +610,15 @@ export default function ComicVineSearchDialog({
               <button
                 type="button"
                 onClick={() => {
+                  // Leaving the issue step abandons its outstanding request, so a late success
+                  // cannot pull the reader onto the confirm step and a late failure cannot
+                  // follow them back onto the search screen (#3448).
+                  asyncRef.current += 1
+                  searchingRef.current = false
                   setStep('search')
                   setSelectedSeries(null)
                   setIssueCandidates([])
                   setIssuesPhase('idle')
-                  // The issue step is being left, so its failure must not follow the reader
-                  // back onto the search screen as an error with no retry (#3448).
                   setError(null)
                   setSearchPhase(seriesResults.length > 0 ? 'ready' : 'idle')
                 }}

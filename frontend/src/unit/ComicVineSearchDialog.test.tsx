@@ -1459,5 +1459,67 @@ describe('ComicVineSearchDialog single-state loading (#3448)', () => {
     expect(screen.queryByTestId('comicvine-retry')).not.toBeInTheDocument()
     expect(screen.getByText('Stormwatch')).toBeInTheDocument()
   })
+
+  it('ignores a late issue success after the reader returns to search', async () => {
+    const issues = deferred<{
+      comicvine_volume_id: number
+      series_name: string
+      issues: (typeof mockIssue)[]
+    }>()
+    getSeriesIssuesSpy.mockImplementationOnce(() => issues.promise)
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '40' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+
+    // The reader leaves the issue step while its request is still outstanding.
+    fireEvent.click(await screen.findByRole('button', { name: '← Back to search' }))
+
+    await act(async () => {
+      issues.resolve({
+        comicvine_volume_id: 42,
+        series_name: 'Stormwatch',
+        issues: [{ ...mockIssue, issue_number: '40', name: 'Forty' }],
+      })
+    })
+
+    // The abandoned request must not pull the reader onto the confirm step.
+    expect(
+      screen.getByPlaceholderText('Search series title or paste a ComicVine URL'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirm Identity' })).not.toBeInTheDocument()
+  })
+
+  it('ignores a late issue failure after the reader returns to search', async () => {
+    const issues = deferred<{
+      comicvine_volume_id: number
+      series_name: string
+      issues: (typeof mockIssue)[]
+    }>()
+    getSeriesIssuesSpy.mockImplementationOnce(() => issues.promise)
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '40' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+
+    fireEvent.click(await screen.findByRole('button', { name: '← Back to search' }))
+
+    await act(async () => {
+      issues.reject(new Error('provider down'))
+    })
+
+    expect(
+      screen.queryByText('Failed to load issues. Please try again.'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText('Search series title or paste a ComicVine URL'),
+    ).toBeInTheDocument()
+  })
 })
 
