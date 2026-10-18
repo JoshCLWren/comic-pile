@@ -516,7 +516,11 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
 export default function CreatorComparisonPage() {
   const [searchParams] = useSearchParams()
   const keysParam = searchParams.get('keys')
-  const keys = keysParam ? keysParam.split(',').filter(Boolean) : []
+  // Trim each key before any validation so the page's checks accept exactly
+  // what useCreatorComparison's normalizeKeys accepts (#3462): a deep link
+  // like ?keys=creator:7,%20creator:12 loads successfully instead of being
+  // rejected as malformed while the hook would have trimmed it.
+  const keys = keysParam ? keysParam.split(',').map((k: string) => k.trim()).filter(Boolean) : []
 
   const { data, isPending, isError, error } = useCreatorComparison(keys.length > 0 ? keys : null)
 
@@ -547,16 +551,52 @@ export default function CreatorComparisonPage() {
     setActiveModal({ isOpen: true, creatorKey, metricType, metricLabel, initialParams: params })
   }
 
-  if (keys.length < 2 || keys.length > 4) {
+  const invalidSyntax = keys.some((k: string) => parseCreatorKey(k.trim()) === null)
+  const duplicateKeys = keys.length !== new Set(keys).size
+  const inputInvalid = keys.length < 2 || keys.length > 4 || invalidSyntax || duplicateKeys
+
+  if (inputInvalid) {
+    // A count problem (fewer than 2 or more than 4 keys) states the accepted
+    // input explicitly and still names the Creators page, so the generic
+    // prompt and the accepted-input explanation both stay discoverable (#3462).
+    // Malformed syntax keeps its own readable explanation; duplicate keys fall
+    // back to the pre-existing generic prompt.
+    const countExplanation = keys.length > 4
+      ? 'Comparison accepts 2 to 4 creator keys (format creator:<id>, separated by commas). Select 2 to 4 creators from the Creators page to compare them.'
+      : keys.length < 2
+        ? 'Comparison requires 2 to 4 creator keys (format creator:<id>, separated by commas). Select 2 to 4 creators from the Creators page to compare them.'
+        : null
+    const syntaxExplanation = invalidSyntax
+      ? 'Invalid creator key format: expected creator:<external-person-id> (stable ComicVine person id, no display names).'
+      : null
     return (
       <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
         <Breadcrumbs items={[{ label: 'Creators', to: '/creators' }, { label: 'Compare' }]} />
         <h1 className="mt-1 text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
-        <p className="mt-4 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          Select 2 to 4 creators from the <Link to="/creators" className="underline">Creators page</Link> to compare them.
-        </p>
+        <div className="mt-4">
+          <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+            {countExplanation ?? syntaxExplanation ?? (
+              <>
+                Select 2 to 4 creators from the{' '}
+                <Link to="/creators" className="underline">
+                  Creators page
+                </Link>{' '}
+                to compare them.
+              </>
+            )}
+          </p>
+          <div className="mt-2">
+            <Link
+              to="/creators"
+              className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ color: 'var(--theme-text-muted)' }}
+            >
+              Back to Creators
+            </Link>
+          </div>
+        </div>
       </div>
     )
   }
@@ -622,6 +662,10 @@ export default function CreatorComparisonPage() {
     (key) => data.comparisons[key]?.display_name ?? key
   )
 
+  const resolvedKeys = new Set(Object.keys(data.comparisons))
+  const missingRequestedCount = keys.filter((k: string) => !resolvedKeys.has(k)).length
+  const hasMixedResult = missingRequestedCount > 0 && comparisonItems.length > 0
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
       <Breadcrumbs items={[{ label: 'Creators', to: '/creators' }, { label: 'Compare' }]} />
@@ -634,8 +678,30 @@ export default function CreatorComparisonPage() {
         </p>
       </header>
 
+      {hasMixedResult && (
+        <div
+          className="mt-4 rounded-xl border px-4 py-3"
+          style={{
+            borderColor: 'var(--theme-warning)',
+            backgroundColor: 'color-mix(in srgb, var(--theme-warning) 10%, transparent)',
+          }}
+          role="alert"
+        >
+          <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
+            <strong>Note:</strong> One or more requested creators could not be included in this comparison.
+            The comparison reflects only the creators available in your library.
+          </p>
+        </div>
+      )}
+
       {affectedNames.length > 0 && (
-        <div className="mt-4 rounded-xl border px-4 py-3" style={{ borderColor: 'var(--theme-warning)', backgroundColor: 'var(--theme-warning)/10' }}>
+        <div
+          className="mt-4 rounded-xl border px-4 py-3"
+          style={{
+            borderColor: 'var(--theme-warning)',
+            backgroundColor: 'color-mix(in srgb, var(--theme-warning) 10%, transparent)',
+          }}
+        >
           <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
             <strong>Note:</strong> Some creators have fewer than 3 rated issues, making their statistics less reliable.
             <span className="break-words ml-2">Affected: {affectedNames.join(', ')}</span>
@@ -675,9 +741,21 @@ export default function CreatorComparisonPage() {
       </div>
 
       {comparisonItems.length === 0 && (
-        <p className="mt-6 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          None of the selected creators were found in your library.
-        </p>
+        <div className="mt-6">
+          <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+            None of the selected creators are available in your library — the comparison can
+            only include creators with issues credited to them in your library.
+          </p>
+          <div className="mt-2">
+            <Link
+              to="/creators"
+              className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ color: 'var(--theme-text-muted)' }}
+            >
+              Back to Creators
+            </Link>
+          </div>
+        </div>
       )}
 
       <CreatorMetricDrilldownModal
