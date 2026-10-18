@@ -152,3 +152,50 @@ def test_scheduled_batch_applies_source_budget_before_offer_cap() -> None:
     text = (ROOT / ".github/workflows/fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
     scheduled = text[text.index("source_seed=") : text.index("Scheduled batch:")]
     assert scheduled.index("factory_source_budget.py filter") < scheduled.index(".[:$cap]")
+
+
+class _ReachedCapacityError(Exception):
+    """Sentinel: assign() got past the budget gate."""
+
+
+def _load_controller():
+    if str(SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS))
+    return _load("factory_work_controller_budget_gate", "factory-work-controller.py")
+
+
+def _arm_assign(monkeypatch: pytest.MonkeyPatch, controller, reason: str | None) -> list[str]:
+    seen: list[str] = []
+
+    def fake_budget(worker: str) -> str | None:
+        seen.append(worker)
+        return reason
+
+    def capacity():
+        raise _ReachedCapacityError
+
+    monkeypatch.setattr(controller, "quota_pause_for", lambda worker: None)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda worker: False)
+    monkeypatch.setattr(controller, "budget_block_reason", fake_budget)
+    monkeypatch.setattr(controller, "omniroute_free_entry_capacity", capacity)
+    return seen
+
+
+def test_controller_assign_refuses_over_budget_worker(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """assign() must stop at the budget gate before any capacity or intake work."""
+    controller = _load_controller()
+    seen = _arm_assign(monkeypatch, controller, "Factory 91 source orcarouter used 1/1")
+    assert controller.assign("91") is None
+    assert seen == ["91"]
+    assert "used 1/1; skipping dispatch" in capsys.readouterr().err
+
+
+def test_controller_assign_continues_when_budget_allows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A worker within budget proceeds past the gate to the capacity check."""
+    controller = _load_controller()
+    seen = _arm_assign(monkeypatch, controller, None)
+    with pytest.raises(_ReachedCapacityError):
+        controller.assign("92")
+    assert seen == ["92"]
