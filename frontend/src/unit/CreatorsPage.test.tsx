@@ -5,9 +5,7 @@ import CreatorsPage from '../pages/CreatorsPage'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSelection, CreatorsListState } from '../hooks/useCreatorsList'
 import { useDiscovery, useDiscoveryModes } from '../hooks/useCreatorDiscovery'
-import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import type { CreatorListItem, DiscoveryResultItem, DiscoveryResponse } from '../services/api-creators'
-import type { CreatorTeamChemistryResponse } from '../types'
 
 vi.mock('../hooks/useCreatorsList', () => ({
   useCreatorsList: vi.fn(),
@@ -22,22 +20,25 @@ vi.mock('../hooks/useCreatorDiscovery', () => ({
   useDiscovery: vi.fn(),
 }))
 
-vi.mock('../hooks/useCreatorTeamChemistry', () => ({
-  useCreatorTeamChemistry: vi.fn(),
-}))
-
 const mockedHook = vi.mocked(useCreatorsList)
 const mockedModes = vi.mocked(useDiscoveryModes)
 const mockedDiscovery = vi.mocked(useDiscovery)
-const mockedChemistry = vi.mocked(useCreatorTeamChemistry)
 
 /** Build a controlled `useDiscoveryModes` result; only `isLoading` drives the page. */
-function modesState(overrides: Partial<ReturnType<typeof useDiscoveryModes>> = {}) {
+function modesState(
+  overrides: Omit<Partial<ReturnType<typeof useDiscoveryModes>>, 'isLoading'> & {
+    isLoading?: boolean
+  } = {},
+) {
   return { isLoading: false, ...overrides } as unknown as ReturnType<typeof useDiscoveryModes>
 }
 
 /** Build a controlled `useDiscovery` result for the discovery-mode render paths. */
-function discoveryState(overrides: Partial<ReturnType<typeof useDiscovery>> = {}) {
+function discoveryState(
+  overrides: Omit<Partial<ReturnType<typeof useDiscovery>>, 'isPending'> & {
+    isPending?: boolean
+  } = {},
+) {
   return {
     data: undefined,
     isPending: false,
@@ -45,26 +46,6 @@ function discoveryState(overrides: Partial<ReturnType<typeof useDiscovery>> = {}
     refetch: vi.fn(),
     ...overrides,
   } as unknown as ReturnType<typeof useDiscovery>
-}
-
-/** Build a controlled `useCreatorTeamChemistry` result. */
-function chemistryState(overrides: Partial<ReturnType<typeof useCreatorTeamChemistry>> = {}) {
-  return {
-    data: undefined,
-    isPending: false,
-    isError: false,
-    error: null,
-    refetch: vi.fn(),
-    ...overrides,
-  } as unknown as ReturnType<typeof useCreatorTeamChemistry>
-}
-
-const EMPTY_CHEMISTRY: CreatorTeamChemistryResponse = {
-  pairs: [],
-  pairs_total: 0,
-  min_shared_team_sample: 2,
-  max_ranked_pairs: 10,
-  coverage: null,
 }
 
 function makeDiscovery(overrides: Partial<DiscoveryResponse> = {}): DiscoveryResponse {
@@ -156,7 +137,6 @@ beforeEach(() => {
   mockedHook.mockReturnValue(baseState())
   mockedModes.mockReturnValue(modesState())
   mockedDiscovery.mockReturnValue(discoveryState())
-  mockedChemistry.mockReturnValue(chemistryState())
 })
 
 describe('CreatorsPage', () => {
@@ -745,28 +725,5 @@ describe('CreatorsPage discovery insights (issue #3093)', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
     expect(screen.getByText('1 rated issue')).toBeInTheDocument()
     expect(screen.getByText('unrated')).toBeInTheDocument()
-  })
-})
-
-describe('CreatorsPage team chemistry (issue #3094)', () => {
-  it('renders the team chemistry section when data is available', () => {
-    mockedChemistry.mockReturnValue(chemistryState({ data: EMPTY_CHEMISTRY }))
-
-    renderPage()
-
-    expect(screen.getByText(/No recurring creator teams yet/)).toBeInTheDocument()
-  })
-
-  it('offers a retry when team chemistry fails to load', () => {
-    const refetch = vi.fn()
-    mockedChemistry.mockReturnValue(
-      chemistryState({ isError: true, error: new Error('boom'), refetch }),
-    )
-
-    renderPage()
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load team chemistry')
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(refetch).toHaveBeenCalled()
   })
 })
