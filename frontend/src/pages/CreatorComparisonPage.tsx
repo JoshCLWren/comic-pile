@@ -18,7 +18,7 @@ function RatingValue({ value, label, creatorKey: _creatorKey, onMetricClick }: {
       onClick={() => onMetricClick('average-rating', `Average rating for ${label}`)}
       className="font-bold hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
       style={{ color: 'var(--theme-personal-accent)' }}
-      aria-label={`View details for ${label}`}
+      aria-label={label}
       title={`View details for ${label}`}
     >
       {value.toFixed(1)}★
@@ -44,10 +44,9 @@ function SeriesLink({ aggregate, creatorKey: _creatorKey, onMetricClick }: {
 }) {
   return (
     <>
-      <button
-        onClick={() => onMetricClick('series-stats', `Series: ${aggregate.thread_title}`, { seriesKey: `thread:${aggregate.thread_id}` })}
+      <Link
+        to={`/thread/${aggregate.thread_id}`}
         className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] hover:underline"
-        title={`View details for series: ${aggregate.thread_title}`}
       >
         <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
           {aggregate.thread_title}
@@ -57,7 +56,7 @@ function SeriesLink({ aggregate, creatorKey: _creatorKey, onMetricClick }: {
           <span>{aggregate.rated_issue_count} rated</span>
           <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} creatorKey={_creatorKey} onMetricClick={onMetricClick} />
         </span>
-      </button>
+      </Link>
     </>
   )
 }
