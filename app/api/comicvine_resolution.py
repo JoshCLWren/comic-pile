@@ -30,7 +30,6 @@ from app.schemas.comicvine_resolution import (
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
     ReplaceIdentityRequest,
-    SeriesImportStatusResponse,
 )
 from app.services.comicvine_resolution import (
     ImportTargetNotFoundError,
@@ -38,7 +37,6 @@ from app.services.comicvine_resolution import (
     apply_metadata_correction,
     get_comicvine_series_issues,
     get_issue_identity_state,
-    get_series_import_status,
     import_comicvine_issue,
     import_comicvine_series,
     list_metadata_corrections,
@@ -333,39 +331,6 @@ async def api_import_series(
         raise
     await db.commit()
     return result
-
-
-@router.get(
-    "/series/{comicvine_volume_id}/import-status",
-    response_model=SeriesImportStatusResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def api_series_import_status(
-    comicvine_volume_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> SeriesImportStatusResponse:
-    """Report whether this user already imported one ComicVine volume.
-
-    A client whose ``series:import`` response was lost asks this endpoint
-    before reporting failure, so a slow import that actually committed is
-    recovered instead of being reported as an error or retried into a
-    duplicate series. The answer is scoped to the calling user's threads.
-
-    Args:
-        comicvine_volume_id: ComicVine volume ID the client submitted.
-        current_user: Authenticated caller.
-        db: Async database session.
-
-    Returns:
-        SeriesImportStatusResponse with the owned thread when the volume is
-        already imported for this user.
-    """
-    return await get_series_import_status(
-        db,
-        user_id=current_user.id,
-        comicvine_volume_id=comicvine_volume_id,
-    )
 
 
 @router.post(
