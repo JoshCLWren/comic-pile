@@ -52,7 +52,7 @@ REQUIRED_CHECK_FAILURE_STATES = frozenset({'CANCELLED', 'ERROR', 'FAILURE', 'STA
 NO_DIFF_ATTEMPT_RE = re.compile(
     r'<!--\s*comic-pile-factory-claim-released-v3:'
     r'(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):'
-    r'(?:repair-)?no-persisted-change-handoff'
+    r'(?P<reason>(?:repair-)?no-persisted-change-handoff|transient-model-interruption|review-agent-failed|controller-assignment-read-failed|semantic-review-head-read-failed)'
     r'(?::sha=(?P<sha>[0-9a-fA-F]{7,40}))?'
     r'(?::stage=(?P<stage>factory:[a-z-]+))?'
     r'(?::conflicted=(?P<conflicted>[01]))?'
@@ -102,6 +102,7 @@ FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
 FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 8)
 FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 3)
 FACTORY_NO_DIFF_RETRY_RESET_SECONDS = env_positive_int('FACTORY_NO_DIFF_RETRY_RESET_SECONDS', 86400)
+FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS = env_positive_int('FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS', 1800)
 
 
 @dataclass(frozen=True)
@@ -688,6 +689,13 @@ def build_candidates(
             issue_map,
             no_diff_attempts=pr_attempts,
         ):
+            if pr_attempts >= FACTORY_NO_DIFF_RETRY_LIMIT:
+                print(
+                    f'[factory-controller] retry cooldown: PR #{pr_number} '
+                    f'head={pr_head_sha(pr)} stage={stage_of(pr_labels)} '
+                    f'recent_failures={pr_attempts}; new head/stage or expiry restores eligibility',
+                    file=sys.stderr,
+                )
             continue
         # Recent no-diff retries suppress only the unchanged execution
         # generation. A new head, newly actionable review stage, or newly
@@ -819,7 +827,12 @@ def parse_no_diff_attempts_from_comments(
         body = str(comment.get('body') or '')
         for match in NO_DIFF_ATTEMPT_RE.finditer(body):
             epoch = int(match.group('epoch'))
-            if epoch <= cutoff or epoch > now_epoch:
+            transient = match.group('reason') in {
+                'transient-model-interruption', 'review-agent-failed',
+                'controller-assignment-read-failed', 'semantic-review-head-read-failed',
+            }
+            attempt_cutoff = max(cutoff, now_epoch - FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS) if transient else cutoff
+            if epoch <= attempt_cutoff or epoch > now_epoch:
                 continue
             sha = match.group('sha')
             conflicted_raw = match.group('conflicted')

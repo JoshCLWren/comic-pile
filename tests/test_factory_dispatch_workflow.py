@@ -235,8 +235,9 @@ def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick() -> Non
     assert "github.event.action == 'opened'" in wake
     assert "github.event.label.name == 'factory:review'" in wake
     assert "github.event.pull_request.labels.*.name" in wake
-    assert "github.event.pull_request.head.repo.full_name == github.repository" in wake
-    assert "github.event.pull_request.user.login == github.repository_owner" in wake
+    assert "github.event.pull_request.head.repo.full_name != ''" in wake
+    assert "github.event.pull_request.user.login == github.repository_owner" not in wake
+    assert "github.event.pull_request.user.login != 'dependabot[bot]'" in wake
     assert ".base.ref == 'main'" in wake
     assert "!github.event.pull_request.draft" in wake
     assert "gh workflow run fixed-model-factory-dispatch.yml" in wake
@@ -259,4 +260,5 @@ def test_event_wakeup_never_checks_out_untrusted_pr_code_or_assigns_workers() ->
     assert "factory-work-controller.py" not in wake
     assert 'gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"' in wake
     assert '.state == "open"' in wake
-    assert '.head.repo.full_name == $repo' in wake
+    assert '.base.repo.full_name == $repo' in wake
+    assert '.head.repo.full_name != null' in wake

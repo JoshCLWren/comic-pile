@@ -264,6 +264,17 @@ greptile_outcome_gate() {
   return 0
 }
 
+review_snapshot_failure_reason() {
+  local observed="$1" expected="$2" pr="$3"
+  if [[ -z "$observed" ]]; then
+    printf '%s' 'semantic-review-head-read-failed'
+  elif [[ "$observed" != "$expected" ]]; then
+    printf '%s' 'semantic-review-head-changed'
+  elif ! current_owner_is_self "$pr"; then
+    printf '%s' 'semantic-review-lease-lost'
+  fi
+}
+
 # Record a wrapper-gate downgrade in the review log the controller excerpts.
 append_wrapper_gate_reason() {
   printf '\n# comic-pile-factory-wrapper-gate\nThe trusted wrapper downgraded this approval to repair: %s\n' "$1" >> "$sanitized_review_log"
@@ -591,9 +602,13 @@ fi
 last_token="$(factory_terminal_marker "$review_log" || true)"
 
 current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
-if [[ "$current_head" != "$EXPECTED_HEAD" ]] || ! current_owner_is_self "$NUMBER"; then
-  log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} changed or lease was revoked during review"
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'semantic-review-head-changed'
+snapshot_failure="$(review_snapshot_failure_reason "$current_head" "$EXPECTED_HEAD" "$NUMBER")"
+if [[ -n "$snapshot_failure" ]]; then
+  log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} review invalidated (expected ${EXPECTED_HEAD}, observed ${current_head:-unavailable}, or lease revoked)"
+  # A revoked lease belongs to its new owner; never release that worker.
+  if [[ "$snapshot_failure" != semantic-review-lease-lost ]]; then
+    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' "$snapshot_failure"
+  fi
   record_terminal_outcome control_plane_failure "PR #${NUMBER} head or lease changed during semantic review"
   exit 0
 fi
@@ -624,9 +639,13 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] && factory_review_is_su
     set -e
 
     current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
-    if [[ "$current_head" != "$EXPECTED_HEAD" ]] || ! current_owner_is_self "$NUMBER"; then
-      log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} changed or lease was revoked during recovery"
-      release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'semantic-review-head-changed'
+    snapshot_failure="$(review_snapshot_failure_reason "$current_head" "$EXPECTED_HEAD" "$NUMBER")"
+    if [[ -n "$snapshot_failure" ]]; then
+      log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} recovery invalidated (expected ${EXPECTED_HEAD}, observed ${current_head:-unavailable}, or lease revoked)"
+      # A revoked lease belongs to its new owner; never release that worker.
+      if [[ "$snapshot_failure" != semantic-review-lease-lost ]]; then
+        release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' "$snapshot_failure"
+      fi
       record_terminal_outcome control_plane_failure "PR #${NUMBER} head or lease changed during semantic verdict recovery"
       exit 0
     fi

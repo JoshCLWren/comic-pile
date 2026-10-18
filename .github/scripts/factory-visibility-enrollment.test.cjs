@@ -8,7 +8,7 @@ const pr = (number = 1) => ({
   head: { sha, repo: { full_name: 'JoshCLWren/comic-pile' } },
 });
 
-async function run({ prs = [pr()], labels = [], comments = [], event = 'schedule' } = {}) {
+async function run({ prs = [pr()], labels = [], comments = [], event = 'schedule', action = 'opened' } = {}) {
   const writes = [];
   const reads = [];
   const issues = {
@@ -27,7 +27,7 @@ async function run({ prs = [pr()], labels = [], comments = [], event = 'schedule
   };
   await reconcileMissingPrLabels({ github, context: {
     eventName: event, repo: { owner: 'JoshCLWren', repo: 'comic-pile' },
-    payload: { pull_request: prs[0] },
+    payload: { pull_request: prs[0], action },
   } });
   return { writes, reads };
 }
@@ -84,10 +84,8 @@ test('complete metadata is left untouched', async () => {
   assert.deepEqual(writes, []);
 });
 
-test('forks, dependency bots, drafts, and closed PRs are excluded', async () => {
-  const fork = pr();
-  fork.head.repo.full_name = 'someone/comic-pile';
-  const { writes } = await run({ prs: [fork, { ...pr(), draft: true },
+test('dependency bots, deleted heads, drafts, and closed PRs are excluded', async () => {
+  const { writes } = await run({ prs: [{ ...pr(), head: { sha, repo: null } }, { ...pr(), draft: true },
     { ...pr(), state: 'closed' }, { ...pr(), user: { login: 'dependabot[bot]' } },
     { ...pr(), user: { login: 'renovate[bot]' } }] });
   assert.deepEqual(writes, []);
@@ -113,3 +111,23 @@ test('current-head changes-required verdict requests repair', async () => {
   }] });
   assert.ok(writes[0].labels.includes('factory:changes-requested'));
 });
+
+for (const event of ['schedule', 'pull_request_target']) {
+  test(`${event} enrolls a first-time fork with the normal review gates`, async () => {
+    const fork = { ...pr(), body: 'Closes #3893', user: { login: 'first-timer' },
+      head: { sha, ref: 'fix/issue-3893', repo: { full_name: 'first-timer/comic-pile' } } };
+    const { writes } = await run({ prs: [fork], event, labels: ['bug'] });
+    assert.deepEqual(new Set(writes[0].labels),
+      new Set(['bug', 'factory', 'factory:review', 'factory:unowned']));
+  });
+}
+
+for (const previous of ['factory:ci', 'factory:ready']) {
+  test(`a contributor push invalidates ${previous} while preserving ownership`, async () => {
+    const fork = { ...pr(), head: { sha, repo: { full_name: 'contributor/comic-pile' } } };
+    const { writes } = await run({ prs: [fork], event: 'pull_request_target', action: 'synchronize',
+      labels: ['factory', previous, 'factory:local', 'bug'] });
+    assert.deepEqual(new Set(writes[0].labels),
+      new Set(['bug', 'factory', 'factory:review', 'factory:local']));
+  });
+}

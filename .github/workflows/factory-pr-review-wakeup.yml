@@ -20,8 +20,9 @@ jobs:
   wake:
     if: >-
       github.event.pull_request.base.ref == 'main' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.head.repo.full_name != '' &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.user.login != 'renovate[bot]' &&
       !github.event.pull_request.draft &&
       (
         github.event.action == 'opened' ||
@@ -44,7 +45,10 @@ jobs:
             .state == "open"
             and (.draft | not)
             and .base.ref == "main"
-            and .head.repo.full_name == $repo
+            and .base.repo.full_name == $repo
+            and .head.repo.full_name != null
+            and .user.login != "dependabot[bot]"
+            and .user.login != "renovate[bot]"
           ' <<<"$pr" >/dev/null; then
             echo "PR #${PR_NUMBER} is no longer eligible; no dispatch"
             exit 0

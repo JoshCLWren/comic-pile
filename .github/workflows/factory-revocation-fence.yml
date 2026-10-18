@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   verify-factory-provenance:
-    if: startsWith(github.event.pull_request.head.ref, 'factory/')
+    if: github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'factory/')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout trusted fence implementation

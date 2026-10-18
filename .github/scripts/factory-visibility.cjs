@@ -584,7 +584,7 @@ async function reconcileMissingPrLabels({ github, context }) {
     }));
   for (const pr of candidates) {
     if (pr.state !== 'open' || pr.draft
-      || pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`
+      || !pr.head.repo?.full_name
       || /^(dependabot|renovate)(\[bot\])?$/.test(pr.user?.login || '')) continue;
     // Manual-only PRs are operator-managed and must never be enrolled into the
     // factory queue (enroll would otherwise default them to factory:review).
@@ -595,12 +595,13 @@ async function reconcileMissingPrLabels({ github, context }) {
     // ownership; never take it over during an enrollment sweep.
     const owners = [...current].filter(isOwnerLabel);
     const stages = STAGE_LABELS.filter(label => current.has(label));
-    if (current.has('factory') && owners.length === 1 && stages.length === 1) continue;
+    const pushed = context.eventName === 'pull_request_target' && context.payload.action === 'synchronize';
+    if (!pushed && current.has('factory') && owners.length === 1 && stages.length === 1) continue;
 
     // Repair missing metadata without taking an existing lease or downgrading
     // review/CI state. Never manufacture readiness from green checks alone.
-    let stage = stages.length === 1 ? stages[0] : 'factory:review';
-    if (stages.length === 0) {
+    let stage = !pushed && stages.length === 1 ? stages[0] : 'factory:review';
+    if (!pushed && stages.length === 0) {
       const comments = await withRetry(() => github.paginate(github.rest.issues.listComments, {
         ...context.repo, issue_number: pr.number, per_page: 100,
       }));

@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 25
+Version: 26
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, fixed-model external factories, and interactive factory repair sessions.
 
@@ -248,12 +248,13 @@ Apply these states exactly. Reconcile each target with one full label-set replac
 Rules:
 
 - The issue/PR state reconciler enrolls open, non-draft repository PRs missing
-  factory metadata on open/reopen/unlabel events and every 15 minutes. Forks,
-  Dependabot, and Renovate are excluded. It preserves unrelated labels and an
+  factory metadata on open/reopen/unlabel events and every 15 minutes. Contributor
+  fork PRs participate in the same review, repair, CI, and merge lifecycle as
+  factory and local PRs. Dependabot and Renovate are excluded. It preserves unrelated labels and an
   existing owner/stage, defaults missing ownership to `factory:unowned`, and uses
   exact-head trusted review markers when recovering a missing stage; otherwise
   it requests `factory:review`. Green CI alone never establishes readiness.
-- A Josh-authored manual PR or local factory PR follows the same review,
+- A contributor PR, Josh-authored manual PR, or local factory PR follows the same review,
   repair handoff, exact-head CI, and merge-drain stages. Branches named
   `local/*`, `agent/*`, and `chatgpt/*` are eligible when enrolled with
   `factory`. The controller checks the PR's verified GitHub author and exact
@@ -297,6 +298,16 @@ Rules:
 - Before ending any turn, compare the issue, PR, review, CI, lease, and merge state and repair any metadata contradiction discovered.
 
 ## Repository safety
+
+- Contributor fork PRs enter the normal factory lifecycle automatically. Fetch
+  their exact head through the base repository's `refs/pull/<n>/head`, never by
+  assuming their branch exists on the base repository. Preserve their commits
+  and authorship when repairing. Push repairs to the actual fork head using
+  maintainer edit access; never create a same-named base branch as a substitute.
+- Fork CI runs on `pull_request` with read-only credentials and no registry
+  publishing. Metadata-only `pull_request_target` workflows use trusted default
+  branch code and never execute the fork checkout with their write token.
+  Enrollment does not attest provenance, approve code, or bypass exact-head gates.
 
 - Fixed-model PR creation must use `PR_REBASE_TOKEN`, like git pushes. Keep the
   workflow token for controller comments and labels; creating the PR with that
@@ -405,6 +416,18 @@ A factory implementation attempt gets three substantive semantic repair cycles. 
 On a fourth distinct semantic repair verdict, cancel that implementation attempt instead of repairing it again: persist the fourth review findings, close the PR, return the linked issue to unowned executable implementation, and record a `comic-pile-factory-strike-reset-v1` marker on the issue. When producer provenance is known, that producer is ineligible to receive the first clean implementation retry. The exclusion is one-shot and is spent only after a different factory posts a real implementation claim for the retried issue.
 
 This is an attempt-level circuit breaker, not an issue-level failure. The issue remains valid work unless a separate terminal blocker applies.
+
+## Review infrastructure retry cooldown
+
+For an unchanged PR head and stage, three trusted release records for transient
+model interruption, review-agent failure, head-read failure, or pre-session assignment-read failure
+suppress further assignments for a rolling 30 minutes. The existing generation
+retry gate enforces the cap without labeling infrastructure failures as human
+blockers or semantic strikes. A real new head, changed stage, or newly developed
+merge conflict gets a fresh budget. Expired failures drop out automatically.
+Release markers retain the reason, worker, timestamp, exact SHA, stage, and
+conflict state; dispatcher logs show suppressed generations and failure counts. Untrusted comments do not
+count, and one PR's failures do not suppress other work.
 
 ## Markers and leases
 

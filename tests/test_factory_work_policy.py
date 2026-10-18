@@ -1295,3 +1295,57 @@ def test_parent_language_without_child_graph_stays_an_intake_candidate():
     )
 
     assert [c.number for c in candidates if c.kind == "issue"] == [905]
+
+
+def test_transient_review_failures_cool_down_only_the_current_generation() -> None:
+    """Three trusted failures pause one head and recover after cooldown or a push."""
+    now = 2_000_000_000
+    head = "a" * 40
+    for reason in (
+        "transient-model-interruption",
+        "review-agent-failed",
+        "controller-assignment-read-failed",
+        "semantic-review-head-read-failed",
+    ):
+        comments = [
+            {
+                "author_association": "OWNER",
+                "body": (
+                    "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+                    f"{now - offset}:{reason}:sha={head}:stage=factory:review:conflicted=0 -->"
+                ),
+            }
+            for offset in range(policy.FACTORY_NO_DIFF_RETRY_LIMIT)
+        ]
+        target = pr_fixture(
+            number=2264, issue=2200,
+            labels=["factory", "factory:unowned", "factory:review"], head=head,
+        )
+        other = pr_fixture(
+            number=2265, issue=2201,
+            labels=["factory", "factory:unowned", "factory:review"], head=head,
+        )
+        attempts = policy.parse_no_diff_attempts_from_comments(comments, now_epoch=now)
+        assert len(attempts) == policy.FACTORY_NO_DIFF_RETRY_LIMIT
+        selected = policy.build_candidates([], [target, other], no_diff_attempt_records=attempts)
+        assert [item.number for item in selected] == [2265]
+        pushed = {**target, "headRefOid": "b" * 40}
+        assert policy.build_candidates([], [pushed], no_diff_attempt_records=attempts)
+        expired = policy.parse_no_diff_attempts_from_comments(
+            comments, now_epoch=now + policy.FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS,
+        )
+        assert policy.build_candidates([], [target], no_diff_attempt_records=expired)
+        untrusted = [{**comment, "author_association": "NONE"} for comment in comments]
+        assert not policy.parse_no_diff_attempts_from_comments(untrusted, now_epoch=now)
+
+
+def test_genuine_head_changes_do_not_consume_review_failure_budget() -> None:
+    """A moved head is invalidated review evidence, not an infrastructure failure."""
+    comments = [{
+        "author_association": "OWNER",
+        "body": (
+            "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+            "2000000000:semantic-review-head-changed -->"
+        ),
+    }]
+    assert not policy.parse_no_diff_attempts_from_comments(comments, now_epoch=2_000_000_000)
