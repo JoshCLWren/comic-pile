@@ -187,11 +187,11 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.queryByText(/ContinuityRule/i)).not.toBeInTheDocument()
     // New releases control is part of the Reading Plan reader surface.
     expect(screen.getByRole('heading', { name: 'New releases' })).toBeInTheDocument()
-    expect(screen.getByTestId('new-release-source')).toBeInTheDocument()
-    expect(screen.getByText(/X-Men/)).toBeInTheDocument()
-    expect(screen.getByText('Target thread #4')).toBeInTheDocument()
-    expect(screen.getByText('Last sync:')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Enabled' })).toBeInTheDocument()
+    const newRelease = within(screen.getByTestId('new-release-source'))
+    expect(newRelease.getByText(/X-Men/)).toBeInTheDocument()
+    expect(newRelease.getByText('Target thread #4')).toBeInTheDocument()
+    expect(newRelease.getByText(/Last sync:/)).toBeInTheDocument()
+    expect(newRelease.getByRole('button', { name: 'Enabled' })).toBeInTheDocument()
   })
 
   it('rejects an invalid plan id before fetching', () => {

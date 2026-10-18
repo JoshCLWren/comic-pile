@@ -2,8 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../query/queryKeys'
 import {
   continuityPlansApi,
-  type ReadingPlanReleaseSourceStatus,
+  type ReadingPlanReaderView,
 } from '../services/api-continuity-plans'
+import { cast } from '../utils/cast'
 
 /**
  * List the reader's release sources for one plan.
@@ -18,6 +19,14 @@ export function useReleaseSources(planId: number | null) {
     queryFn: () => continuityPlansApi.listReleaseSources(planId!),
     enabled: planId != null,
   })
+}
+
+/**
+ * Dependencies for the enable/release-source mutation, injectable for tests.
+ */
+export interface EnableReleaseSourceDeps {
+  /** Service used for the enable request; defaults to the shared API. */
+  api?: Pick<typeof continuityPlansApi, 'updateReleaseSourceEnabled'>
 }
 
 /**
@@ -48,10 +57,10 @@ export function useEnableReleaseSource(deps: EnableReleaseSourceDeps = {}) {
       for (const [key, data] of client.getQueriesData({
         queryKey: readerPrefix,
       })) {
-        if (!data || typeof data !== 'object' || Array.isArray(data)) continue
-        // SAFETY: getQueriesData returns the cached query payload; validated as
-        // non-array object before reading domain keys.
-        const record: { release_sources?: ReadingPlanReleaseSourceStatus[] } = data
+        // SAFETY: getQueriesData returns the cached query payload of unknown
+        // shape; cast() is the dedicated boundary helper that establishes the
+        // reader-view contract before reading domain keys.
+        const record = cast<ReadingPlanReaderView>(data)
         if (!Array.isArray(record.release_sources)) continue
         const previous = record.release_sources
         if (!previous.some((source) => source.source_id === sourceId)) continue

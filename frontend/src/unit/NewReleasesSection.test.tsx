@@ -3,7 +3,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NewReleasesSection } from '../components/NewReleasesSection'
-import { continuityPlansApi } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
 
 const mocks = vi.hoisted(() => ({
@@ -63,6 +62,7 @@ const enabledSource = {
 const disabledSource = {
   ...enabledSource,
   source_id: 902,
+  thread_id: 5,
   provider_title: 'Incredible Hulk',
   enabled: false,
   last_synced_at: null,
@@ -85,7 +85,8 @@ describe('NewReleasesSection', () => {
     expect(screen.getByRole('heading', { name: 'New releases' })).toBeInTheDocument()
     expect(screen.getByText(/X-Men/)).toBeInTheDocument()
     expect(screen.getByText('Target thread #4')).toBeInTheDocument()
-    expect(screen.getByText(/Last sync:/)).toBeInTheDocument()
+    expect(screen.getByText('Target thread #5')).toBeInTheDocument()
+    expect(screen.getAllByText(/Last sync:/)).toHaveLength(2)
     expect(screen.getByText(/Incredible Hulk/)).toBeInTheDocument()
     expect(screen.getAllByTestId('new-release-source')).toHaveLength(2)
   })
@@ -105,7 +106,9 @@ describe('NewReleasesSection', () => {
     })
     const toggle = screen.getByRole('button', { name: 'Enabled' })
     toggle.click()
-    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(901, false))
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith({ sourceId: 901, enabled: false }),
+    )
     expect(mockUpdate).toHaveBeenCalledTimes(1)
   })
 
@@ -115,6 +118,8 @@ describe('NewReleasesSection', () => {
     })
     const toggle = screen.getByRole('button', { name: 'Enable' })
     toggle.click()
-    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(902, true))
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith({ sourceId: 902, enabled: true }),
+    )
   })
 })
