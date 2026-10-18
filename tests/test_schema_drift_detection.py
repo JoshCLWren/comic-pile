@@ -74,12 +74,16 @@ def test_has_schema_drift_returns_false_for_matching_schema(
     assert test_conftest._has_schema_drift(object()) is False
 
 
-def test_has_schema_drift_does_not_detect_removed_redundant_index(
+def test_has_schema_drift_ignores_previously_removed_redundant_index(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Removed redundant indexes should not trigger schema drift."""
     fake_inspector = build_fake_inspector()
-    fake_inspector.indexes["issues"].remove("ix_issue_thread_position")
+    # Issue #3219 dropped the redundant ix_issue_thread_position index from the
+    # schema (and the ORM metadata no longer declares it). A database created
+    # before that migration can still carry the index; extra database indexes
+    # are not drift and must not trigger schema recreation.
+    fake_inspector.indexes["issues"].append("ix_issue_thread_position")
 
     def fake_inspect(_conn: object) -> FakeInspector:
         return fake_inspector
@@ -87,6 +91,21 @@ def test_has_schema_drift_does_not_detect_removed_redundant_index(
     monkeypatch.setattr(test_conftest, "inspect", fake_inspect)
 
     assert test_conftest._has_schema_drift(object()) is False
+
+
+def test_has_schema_drift_detects_missing_issue_thread_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing indexes that the ORM still expects should trigger schema recreation."""
+    fake_inspector = build_fake_inspector()
+    fake_inspector.indexes["issues"].remove("ix_issue_thread_id")
+
+    def fake_inspect(_conn: object) -> FakeInspector:
+        return fake_inspector
+
+    monkeypatch.setattr(test_conftest, "inspect", fake_inspect)
+
+    assert test_conftest._has_schema_drift(object()) is True
 
 
 def test_has_schema_drift_detects_missing_issue_unique_constraint(

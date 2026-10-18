@@ -8,6 +8,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Issue, Thread, User
 
 
+def collect_thread_lookup_indexes(node: dict[str, object]) -> set[str]:
+    """Find indexed lookups bounded by the requested Thread."""
+    names: set[str] = set()
+    name = node.get("Index Name")
+    condition = node.get("Index Cond")
+    if isinstance(name, str) and isinstance(condition, str) and "thread_id" in condition:
+        names.add(name)
+    children = node.get("Plans")
+    if isinstance(children, list):
+        for child in children:
+            if isinstance(child, dict):
+                names.update(collect_thread_lookup_indexes(child))
+    return names
+
+
 @pytest.mark.asyncio
 async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
     """Verify the (thread_id, position) index exists and is usable for ordered lookups."""
@@ -73,24 +88,31 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
             index_names.update(collect_index_names(child))
         return index_names
 
-    # After #3219, only the unique constraint's backing index should exist and be used
-    index_names = collect_index_names(plan_nodes)
-    assert "uq_issue_thread_position" in index_names, (
-        f"Plan did not reference uq_issue_thread_position after sequential scans were disabled. Found indexes: {index_names}"
+    # PostgreSQL may prefer the ownership FK's (thread_id, id) unique index and
+    # sort this small page, rather than use uq_issue_thread_position, so require
+    # the intended bounded index lookup instead of one optimizer-dependent index
+    # name — the same contract as test_issues_position_index_improves_pagination.
+    index_names = collect_thread_lookup_indexes(plan_nodes)
+    assert index_names, (
+        f"Plan did not use an index bound by thread_id after sequential scans were disabled. Found indexes: {collect_index_names(plan_nodes)}"
     )
 
-    # After #3219, only the unique constraint's backing index should exist
+    # After #3219, uq_issue_thread_position provides the (thread_id, position)
+    # coverage and the redundant ordinary ix_issue_thread_position is gone.
     index_check = text("""
-        SELECT 1 FROM pg_indexes
+        SELECT indexname FROM pg_indexes
         WHERE tablename = 'issues'
-        AND indexname = 'uq_issue_thread_position'
+        AND indexname IN ('ix_issue_thread_position', 'uq_issue_thread_position')
     """)
 
     index_result = await async_db_committed.execute(index_check)
-    index_exists = index_result.scalar()
+    index_names_present = {row[0] for row in index_result.all()}
 
-    assert index_exists is not None, (
+    assert "uq_issue_thread_position" in index_names_present, (
         "uq_issue_thread_position index does not exist in database"
+    )
+    assert "ix_issue_thread_position" not in index_names_present, (
+        "Redundant ix_issue_thread_position index from issue #3219 still exists"
     )
 
 
@@ -158,20 +180,6 @@ async def test_issues_position_index_improves_pagination(
 
     # SQLAlchemy with asyncpg already deserializes JSON
     plan_data = plan if isinstance(plan, list) else [plan]
-
-    def collect_thread_lookup_indexes(node: dict[str, object]) -> set[str]:
-        """Find indexed lookups bounded by the requested Thread."""
-        names: set[str] = set()
-        name = node.get("Index Name")
-        condition = node.get("Index Cond")
-        if isinstance(name, str) and isinstance(condition, str) and "thread_id" in condition:
-            names.add(name)
-        children = node.get("Plans")
-        if isinstance(children, list):
-            for child in children:
-                if isinstance(child, dict):
-                    names.update(collect_thread_lookup_indexes(child))
-        return names
 
     # PostgreSQL may prefer the ownership FK's (thread_id, id) index and sort
     # this small page, rather than use (thread_id, position). Require the
