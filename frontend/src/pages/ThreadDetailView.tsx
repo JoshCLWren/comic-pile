@@ -20,6 +20,7 @@ import {
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getManualCreatorCreditList } from '../types'
+import { getCreatorDisplayText } from '../utils/creatorUtils'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
 import Breadcrumbs from '../components/Breadcrumbs'
@@ -31,19 +32,6 @@ import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
 import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
-
-function getCreatorDisplayText(creators: { name: string; roles: string[] }[]): string {
-  if (creators.length === 0) {
-    return ''
-  }
-
-  return creators.map(creator => {
-    if (creator.roles.length === 0) {
-      return creator.name
-    }
-    return `${creator.name} (${creator.roles.join(', ')})`
-  }).join(' • ')
-}
 
 export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
@@ -192,6 +180,7 @@ export default function ThreadDetailView() {
         title: editForm.title,
         format: editForm.format,
         notes: editForm.notes || null,
+        manual_creator_credits: editForm.manualCreatorCredits,
       }
 
       if (currentThread.total_issues === null) {
