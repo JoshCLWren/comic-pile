@@ -84,6 +84,7 @@ class Thread(Base):
     )
     reading_progress: Mapped[str | None] = mapped_column(String(20), nullable=True)
     queue_position: Mapped[int] = mapped_column(Integer, nullable=False)
+    queue_order_key: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active")
     last_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_activity_at: Mapped[datetime | None] = mapped_column(
