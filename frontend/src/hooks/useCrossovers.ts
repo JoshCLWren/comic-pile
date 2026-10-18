@@ -8,6 +8,7 @@ import { issuesApi, type IssueListParams } from '../services/api-issues'
 import type { Issue, ThreadListItem, ThreadListResponse } from '../types'
 import { queryKeys } from '../query/queryKeys'
 import { invalidateAfterCrossoverMutation } from '../query/cacheEffects'
+import type { DependencyGroupResponseWithProgress } from '../types'
 
 type PositionedIssue = Issue & { position: number }
 
@@ -75,7 +76,7 @@ async function fetchAllThreads(threadApi: CrossoverThreadsApi = threadsApi): Pro
 
 export function useCrossoverGroupsList(deps: CrossoverApiDeps = {}) {
   const groups = deps.groups ?? dependencyGroupsApi
-  return useQuery({
+  return useQuery<DependencyGroupResponseWithProgress[]>({
     queryKey: queryKeys.crossover.list(),
     queryFn: async () => {
       try {

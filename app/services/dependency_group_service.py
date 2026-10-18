@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import DependencyGroup, DependencyGroupMembership
 from app.repositories import dependency_group_repository as groups_repo
+from app.repositories.dependency_group_repository import issues_by_id
 from app.schemas.dependency_group import (
     DependencyGroupCreate,
     DependencyGroupDetailMemberResponse,
@@ -29,6 +30,7 @@ from app.schemas.dependency_group import (
 from app.schemas.issue import IssueResponse
 from app.schemas.thread import ThreadResponse
 from app.services.errors import ConflictError, InvalidRequestError, NotFoundError
+from app.services.thread_issue_stats import load_unread_counts
 from comic_pile.dependencies import refresh_user_blocked_status
 
 MAX_RANGE_SIZE = 250
@@ -167,6 +169,75 @@ class DependencyGroupService:
 
         return _build_member_responses(memberships, thread_titles, issue_metadata)
 
+    async def _calculate_crossover_progress(
+        self,
+        memberships: Sequence[DependencyGroupMembership],
+    ) -> dict[str, int | str]:
+        """Calculate reading progress for a crossover group.
+
+        Args:
+            memberships: The memberships in the crossover group.
+
+        Returns:
+            Dictionary containing read_issues, total_issues, and reading_progress.
+        """
+        # Collect all thread IDs from memberships
+        thread_ids = {
+            member.thread_id 
+            for member in memberships 
+            if member.thread_id is not None
+        }
+        
+        # Collect all issue IDs from memberships
+        issue_ids = {
+            member.issue_id 
+            for member in memberships 
+            if member.issue_id is not None
+        }
+        
+        # If there are no thread or issue memberships, return no progress
+        if not thread_ids and not issue_ids:
+            return {
+                'read_issues': 0,
+                'total_issues': 0,
+                'reading_progress': '0%'
+            }
+        
+        # Calculate progress from issues
+        total_issues = 0
+        read_issues = 0
+        
+        # For thread-level memberships, get issue counts
+        if thread_ids:
+            threads = await groups_repo.threads_by_id(self._db, thread_ids)
+            for thread_id in thread_ids:
+                thread = threads.get(thread_id)
+                if thread and thread.total_issues:
+                    total_issues += thread.total_issues
+                    # Use issues_remaining to calculate read issues
+                    read_issues += (thread.total_issues - thread.issues_remaining) if thread.issues_remaining is not None else 0
+        
+        # For issue-level memberships, count each issue
+        if issue_ids:
+            issues = await issues_by_id(self._db, issue_ids)
+            for issue in issues.values():
+                total_issues += 1
+                if issue.status == 'read':
+                    read_issues += 1
+        
+        # Calculate progress percentage
+        if total_issues == 0:
+            reading_progress = '0%'
+        else:
+            progress_percentage = int((read_issues / total_issues) * 100)
+            reading_progress = f'{progress_percentage}%'
+        
+        return {
+            'read_issues': read_issues,
+            'total_issues': total_issues,
+            'reading_progress': reading_progress,
+        }
+
     async def _group_response(
         self,
         group: DependencyGroup,
@@ -180,11 +251,19 @@ class DependencyGroupService:
             The group payload whose members carry resolved comic metadata.
         """
         memberships = await groups_repo.list_memberships(self._db, group.id)
+        member_responses = await self._member_responses(memberships)
+        
+        # Calculate progress information for the crossover
+        progress_info = await self._calculate_crossover_progress(memberships)
+        
         return DependencyGroupResponse(
             id=group.id,
             name=group.name,
             created_at=group.created_at,
-            memberships=await self._member_responses(memberships),
+            memberships=member_responses,
+            read_issues=progress_info['read_issues'],
+            total_issues=progress_info['total_issues'],
+            reading_progress=progress_info['reading_progress'],
         )
 
     async def _group_detail_response(
