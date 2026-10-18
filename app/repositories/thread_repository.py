@@ -118,6 +118,29 @@ async def max_queue_position(db: AsyncSession, user_id: int) -> int:
     return result.scalar() or 0
 
 
+async def renormalize_queue_positions(db: AsyncSession, user_id: int) -> None:
+    """Rewrite active queue positions as a dense 1..N sequence.
+
+    Sorts active threads by their current queue position (then id) and
+    reassigns contiguous positions starting at 1, eliminating gaps left by
+    completed/deleted/excluded threads.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+    """
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .order_by(Thread.queue_position, Thread.id)
+    )
+    threads = result.scalars().all()
+    for index, thread in enumerate(threads, start=1):
+        thread.queue_position = index
+
+
 async def find_recent_duplicate(
     db: AsyncSession,
     *,

@@ -749,6 +749,7 @@ async def update_thread(
             if thread.issues_remaining == 0:
                 if thread.apply_derived_status("completed"):
                     thread.queue_position = 0
+                    await thread_repository.renormalize_queue_positions(db, user_id)
             else:
                 thread.apply_derived_status("active")
     if thread_data.notes is not None:
@@ -882,6 +883,7 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
         await refresh_user_blocked_status(user_id, db)
 
         await thread_repository.delete_thread(db, thread)
+        await thread_repository.renormalize_queue_positions(db, user_id)
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
@@ -922,6 +924,7 @@ async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
 
     thread.status = EXCLUDED_STATUS
     thread.queue_position = 0
+    await thread_repository.renormalize_queue_positions(db, user_id)
     await db.commit()
     await db.refresh(thread)
     return await thread_to_response(thread, db)
