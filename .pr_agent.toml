@@ -1,0 +1,42 @@
+# PR-Agent (The-PR-Agent/pr-agent v0.48.0, MIT) repository settings for comic-pile.
+#
+# Advisory AI review only. The "PR-Agent advisory review" job in
+# .github/workflows/pr-agent-review.yml is continue-on-error, is never a required
+# check, and is not part of the CI Summary needs in ci.yml.
+#
+# Review only (auto_review on, auto_describe and auto_improve off): about one model
+# call per PR event, published as a GitHub check run.
+#
+# Free models only, through OpenAI-compatible gateways, tried in this order:
+#   1. Routeway   https://api.routeway.ai/v1    deepseek-v4-flash:free            ROUTEWAY_API_KEY
+#   2. Requesty   https://router.requesty.ai/v1 nvidia/nemotron-3-ultra-550b-a55b  REQUESTY_API_KEY
+#   3. OrcaRouter https://api.orcarouter.ai/v1  z-ai/glm-5.3-flash-free            ORCAROUTER_API_KEY
+# Routeway goes first because the Requesty and OrcaRouter keys are shared with the
+# factory workers' daily quota. ROUTEWAY_API_KEY may be unset; the workflow then
+# falls through to Requesty, then OrcaRouter. No paid OpenRouter.
+#
+# Endpoints, keys and model names live in the workflow, not here: since PR-Agent
+# v0.48.0, api_base and key/token/url settings are host-only and ignored in this
+# file, and one run supports a single OpenAI-compatible endpoint, so the workflow
+# chains one step per provider. This file is read from the default branch, so the
+# workflow env also repeats the review-only and check-run settings below.
+#
+# PR-Agent cannot choose a reviewer model that differs from the model that authored
+# the PR, so no such logic exists here.
+
+[github_action_config]
+auto_review = true
+auto_describe = false
+auto_improve = false
+handle_push_trigger = true
+push_commands = ["/review"]
+
+[github]
+publish_as_check_run = true
+
+[pr_reviewer]
+require_tests_review = true
+require_security_review = true
+num_max_findings = 5
+persistent_comment = true
+extra_instructions = "Advisory review for comic-pile (FastAPI + React). Focus on correctness, security, migrations and test gaps; skip style nits."
