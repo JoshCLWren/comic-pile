@@ -277,9 +277,20 @@ async def test_session_filters_leave_no_roll_offer(
     assert stale.status_code == 200 and stale.json() == []
     response = await auth_client.post("/api/v1/roll/")
     assert response.status_code == 400
-    for thread_id in [one_id, two_id]:
-        response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
-        assert response.status_code == 400
+    # A session-skipped thread still refuses an explicit override ...
+    skipped_override = await auth_client.post(
+        "/api/v1/roll/override", json={"thread_id": two_id}
+    )
+    assert skipped_override.status_code == 400
+    # ... but the snoozed thread is overridable now that the picker offers it (issue
+    # #3446), and the override leaves the durable session snooze in place.
+    snoozed_override = await auth_client.post(
+        "/api/v1/roll/override", json={"thread_id": one_id}
+    )
+    assert snoozed_override.status_code == 200, snoozed_override.text
+    session_after_override = await auth_client.get("/api/v1/sessions/current/")
+    assert session_after_override.status_code == 200
+    assert one_id in session_after_override.json()["snoozed_thread_ids"]
 
 
 def test_activation_requires_a_separate_approval_reference(monkeypatch: pytest.MonkeyPatch) -> None:

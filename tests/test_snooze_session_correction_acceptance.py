@@ -195,10 +195,10 @@ class TestAC2SessionExclusion:
         assert resp.json()["snoozed_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_snoozed_thread_cannot_be_overridden_during_session(
+    async def test_snoozed_thread_can_be_overridden_and_stays_snoozed(
         self, auth_client: AsyncClient, async_db: AsyncSession
     ) -> None:
-        """Overriding a snoozed thread is rejected while session lives."""
+        """An explicit override of a snoozed thread succeeds and preserves the snooze (#3446)."""
         _, session, threads = await _create_session_with_pending(async_db)
 
         await auth_client.post("/api/v1/snooze/")
@@ -206,8 +206,12 @@ class TestAC2SessionExclusion:
         resp = await auth_client.post(
             "/api/v1/roll/override", json={"thread_id": threads[0].id}
         )
-        assert resp.status_code == 400
-        assert "snoozed" in resp.json()["detail"].lower()
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["thread_id"] == threads[0].id
+
+        # The explicit override must not clear the durable session snooze.
+        await async_db.refresh(session)
+        assert threads[0].id in (session.snoozed_thread_ids or [])
 
 
 # ---------------------------------------------------------------------------

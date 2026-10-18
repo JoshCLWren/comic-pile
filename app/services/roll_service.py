@@ -963,7 +963,7 @@ class RollService:
         if not override_thread:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Thread {thread_id} not found",
+                detail="That series was not found",
             )
 
         eligibility = await get_execution_eligibility(db, current_user.id)
@@ -974,13 +974,16 @@ class RollService:
         ):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"Thread {thread_id} is blocked and cannot be selected",
+                detail=f'"{override_thread.title}" is blocked and cannot be selected',
             )
 
         if override_thread.status != "active":
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"Thread {thread_id} is {override_thread.status} and cannot be selected",
+                detail=(
+                    f'"{override_thread.title}" is {override_thread.status} '
+                    "and cannot be selected"
+                ),
             )
 
         current_session = await get_or_create(
@@ -1021,18 +1024,17 @@ class RollService:
         ):
             raise HTTPException(status_code=400, detail="Unskip this Thread before selecting it")
 
-        if override_thread_id in snoozed_ids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Thread {override_thread_id} is snoozed. Please unsnooze it first before overriding.",
-            )
-
+        # Issue #3446: the "Pick manually" picker lists the current session's snoozed
+        # series on purpose, so an explicit override must succeed and leave the durable
+        # session snooze untouched (#293) — the series stays snoozed after the manual
+        # read. A thread that is only on durable cross-session snooze backoff, never
+        # surfaced in that picker, stays excluded.
         derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, current_user.id)
-        if override_thread_id in derived_snoozed_ids:
+        if override_thread_id in derived_snoozed_ids and override_thread_id not in snoozed_ids:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    f"Thread {override_thread_id} is on session-based snooze backoff and "
+                    f'"{override_thread_title}" is on session-based snooze backoff and '
                     "cannot be overridden yet."
                 ),
             )
