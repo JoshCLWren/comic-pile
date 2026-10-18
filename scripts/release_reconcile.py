@@ -257,8 +257,6 @@ def _run_model(
         "--agent",
         "release-writer",
         "--auto",
-        "--dir",
-        workspace,
         "--title",
         f"ComicPile release writer PR #{source.number}",
         _prompt(repository, source),
@@ -268,6 +266,7 @@ def _run_model(
         check=False,
         capture_output=True,
         text=True,
+        cwd=workspace,  # OpenCode 2 rejects `opencode run --dir`.
     )
     output = "\n".join(part for part in (result.stdout, result.stderr) if part)
     if output:

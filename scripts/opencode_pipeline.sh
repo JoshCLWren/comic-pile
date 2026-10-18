@@ -537,7 +537,7 @@ for model in "${models[@]}"; do
         start=$(date +%s)
 
         local run_output
-        run_output=$(timeout 45m opencode run -m "$model" --dir "$wt" "$prompt" 2>&1) || exit_code=$?
+        run_output=$(cd "$wt" && timeout 45m opencode run -m "$model" "$prompt" 2>&1) || exit_code=$?
         echo "$run_output" >> "$log"
 
         local end duration outcome
@@ -1553,10 +1553,9 @@ Write a summary to ${LOG_DIR}/qa_${run_id}_summary.txt:
 PROMPT
 )"
 
-        if opencode run \
+        if (cd "$REPO_ROOT" && opencode run \
             -m "$MODEL" \
-            --dir "$REPO_ROOT" \
-            "$prompt" \
+            "$prompt") \
             >> "$run_log" 2>&1; then
             log_ok "qa — run $run_id complete (see $run_log)"
         else
@@ -1935,7 +1934,7 @@ PROMPT
             {
                 echo ""
                 echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) job=${job_name} prs=${count} ==="
-                timeout 30m opencode run -m "$FIXER_MODEL" --dir "$REPO_ROOT" "$fixer_prompt" 2>&1
+                (cd "$REPO_ROOT" && timeout 30m opencode run -m "$FIXER_MODEL" "$fixer_prompt") 2>&1
                 echo "=== END ==="
             } | tee -a "$FIXER_LOG"
 

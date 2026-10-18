@@ -66,7 +66,7 @@ The prompt must be self-contained. Include:
 ## Step 4 — Launch
 
 ```bash
-opencode run -m "<model-id>" --dir "<cwd>" "<prompt>"
+(cd "<cwd>" && opencode run -m "<model-id>" "<prompt>")
 ```
 
 Show output as it streams. When done:
