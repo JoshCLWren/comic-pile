@@ -11,7 +11,7 @@ import os
 import stat
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import NotRequired, TypedDict
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / ".github/scripts/factory-review-findings.sh"
@@ -31,6 +31,59 @@ def run_bash(script: str, env: dict[str, str] | None = None) -> subprocess.Compl
     )
 
 
+class Author(TypedDict):
+    login: str
+
+
+class ThreadComment(TypedDict):
+    author: Author
+    body: str
+    url: str | None
+
+
+class ThreadComments(TypedDict):
+    nodes: list[ThreadComment]
+    totalCount: NotRequired[int]
+
+
+class ReviewThread(TypedDict):
+    id: str
+    isResolved: bool
+    isOutdated: bool
+    path: str
+    line: int | None
+    originalLine: int
+    comments: ThreadComments
+
+
+class ReviewUser(TypedDict):
+    login: str
+
+
+class Review(TypedDict):
+    user: ReviewUser
+    body: str
+    commit_id: str
+    submitted_at: str
+
+
+class CheckOutput(TypedDict):
+    title: str | None
+    summary: str | None
+    text: str | None
+
+
+class CheckRun(TypedDict):
+    name: str
+    conclusion: str
+    output: CheckOutput
+
+
+class PageInfo(TypedDict):
+    hasNextPage: bool
+    endCursor: str | None
+
+
 def thread(
     login: str,
     body: str,
@@ -40,13 +93,17 @@ def thread(
     path: str = "app/x.py",
     line: int | None = 7,
     replies: list[tuple[str, str]] | None = None,
-) -> dict:
-    comments: list[dict[str, Any]] = [
+    total_count: int | None = None,
+) -> ReviewThread:
+    comments: list[ThreadComment] = [
         {"author": {"login": login}, "body": body, "url": f"https://example.test/{login}"}
     ]
     comments += [
         {"author": {"login": who}, "body": text, "url": None} for who, text in replies or []
     ]
+    thread_comments: ThreadComments = {"nodes": comments}
+    if total_count is not None:
+        thread_comments["totalCount"] = total_count
     return {
         "id": f"PRRT_{login}_{line}",
         "isResolved": resolved,
@@ -54,8 +111,15 @@ def thread(
         "path": path,
         "line": line,
         "originalLine": 3,
-        "comments": {"nodes": comments},
+        "comments": thread_comments,
     }
+
+
+def threads_page(threads: list[ReviewThread], page_info: PageInfo | None = None) -> str:
+    connection: dict[str, object] = {"nodes": threads}
+    if page_info is not None:
+        connection["pageInfo"] = page_info
+    return json.dumps({"data": {"repository": {"pullRequest": {"reviewThreads": connection}}}})
 
 
 GREPTILE_BODY = """Intro text
@@ -70,27 +134,38 @@ Trailing author text
 
 def write_inputs(
     tmp_path: Path,
-    threads: list[dict],
+    threads_json: str,
     *,
-    reviews: list[dict] | None = None,
+    reviews: list[Review] | None = None,
     body: str = GREPTILE_BODY,
-    checks: list[dict] | None = None,
+    checks: list[CheckRun] | None = None,
 ) -> list[Path]:
     paths = [
         tmp_path / name for name in ("threads.json", "reviews.json", "body.txt", "checks.json")
     ]
-    paths[0].write_text(
-        json.dumps({"data": {"repository": {"pullRequest": {"reviewThreads": {"nodes": threads}}}}})
-    )
+    paths[0].write_text(threads_json)
     paths[1].write_text(json.dumps(reviews or []))
     paths[2].write_text(body)
     paths[3].write_text(json.dumps({"check_runs": checks or []}))
     return paths
 
 
-def format_findings(tmp_path: Path, **kwargs) -> str:
-    threads = kwargs.pop("threads", [])
-    files = write_inputs(tmp_path, threads, **kwargs)
+def format_findings(
+    tmp_path: Path,
+    *,
+    threads: list[ReviewThread] | None = None,
+    threads_json: str | None = None,
+    reviews: list[Review] | None = None,
+    body: str = GREPTILE_BODY,
+    checks: list[CheckRun] | None = None,
+) -> str:
+    files = write_inputs(
+        tmp_path,
+        threads_json if threads_json is not None else threads_page(threads or []),
+        reviews=reviews,
+        body=body,
+        checks=checks,
+    )
     result = run_bash(f"factory_format_review_findings {' '.join(map(str, files))} 42 {HEAD}")
     assert result.returncode == 0, result.stderr
     return result.stdout
@@ -216,7 +291,7 @@ def test_empty_inputs_say_none(tmp_path: Path) -> None:
 
 
 def test_long_bodies_are_clipped(tmp_path: Path) -> None:
-    files = write_inputs(tmp_path, [thread("greptile-apps", "x" * 500)])
+    files = write_inputs(tmp_path, threads_page([thread("greptile-apps", "x" * 500)]))
     result = run_bash(
         f"factory_format_review_findings {' '.join(map(str, files))} 42 {HEAD}",
         env={"FACTORY_REVIEW_FINDINGS_BODY_LIMIT": "50"},
@@ -229,21 +304,11 @@ def test_long_bodies_are_clipped(tmp_path: Path) -> None:
 def fake_gh(tmp_path: Path, *, fail: bool = False) -> dict[str, str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    graphql = json.dumps(
-        {
-            "data": {
-                "repository": {
-                    "pullRequest": {
-                        "reviewThreads": {
-                            "nodes": [
-                                thread("some-human", "human comment", line=1),
-                                thread("greptile-apps", "greptile finding", line=5),
-                            ]
-                        }
-                    }
-                }
-            }
-        }
+    graphql = threads_page(
+        [
+            thread("some-human", "human comment", line=1),
+            thread("greptile-apps", "greptile finding", line=5),
+        ]
     )
     script = bin_dir / "gh"
     if fail:
@@ -284,6 +349,7 @@ def test_mission_fetches_writes_file_and_injects_greptile_first(tmp_path: Path) 
     calls = (tmp_path / "gh-calls.log").read_text()
     assert f"commits/{HEAD}/check-runs" in calls
     assert "isOutdated" in calls and "author{login}" in calls
+    assert "api graphql --paginate" in calls and "$endCursor" in calls
 
 
 def test_fetch_failure_never_fails_the_wrapper(tmp_path: Path) -> None:
@@ -330,3 +396,53 @@ def test_semantic_recovery_prompt_requires_greptile_findings_addressed() -> None
     source = (SCRIPTS / "factory-semantic-verdict.sh").read_text()
     assert "EVERY Greptile finding was either fixed in code" in source
     assert "must be FACTORY_GATE_BLOCKED and never FACTORY_GATE_READY" in source
+
+
+def test_every_thread_page_is_read_and_greptile_still_comes_first(tmp_path: Path) -> None:
+    first = threads_page(
+        [
+            thread("some-human", "page one human", line=1),
+            thread("greptile-apps", "done", resolved=True),
+        ],
+        {"hasNextPage": True, "endCursor": "c1"},
+    )
+    second = threads_page(
+        [thread("greptile-apps", "page two greptile finding", line=200)],
+        {"hasNextPage": False, "endCursor": None},
+    )
+    out = format_findings(tmp_path, threads_json=first + "\n" + second)
+    assert "HIGH PRIORITY G1. app/x.py:200" in out
+    assert out.index("page two greptile finding") < out.index("page one human")
+    assert "pagination was incomplete" not in out
+
+
+def test_incomplete_thread_pagination_is_flagged(tmp_path: Path) -> None:
+    out = format_findings(
+        tmp_path,
+        threads_json=threads_page(
+            [thread("greptile-apps", "finding")], {"hasNextPage": True, "endCursor": "c1"}
+        ),
+    )
+    assert "WARNING: review-thread pagination was incomplete" in out
+
+
+def test_hidden_thread_comments_are_flagged(tmp_path: Path) -> None:
+    out = format_findings(
+        tmp_path,
+        threads=[thread("greptile-apps", "finding", replies=[("JoshCLWren", "r")], total_count=60)],
+    )
+    assert "58 more comment(s) on this thread not shown" in out
+
+
+def test_marker_mentioned_in_prose_is_not_a_summary_boundary(tmp_path: Path) -> None:
+    body = (
+        "Docs mention `<!-- greptile_comment -->` markers inline.\n"
+        "## Author section\n"
+        "<!-- greptile_comment -->\n"
+        "Real Greptile summary\n"
+        "<!-- /greptile_comment -->\n"
+    )
+    out = format_findings(tmp_path, body=body)
+    summary = out[out.index("### Greptile PR-body summary") : out.index("## Other unresolved")]
+    assert "Real Greptile summary" in summary
+    assert "Author section" not in summary

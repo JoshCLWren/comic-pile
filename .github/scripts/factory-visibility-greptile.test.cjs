@@ -16,7 +16,16 @@ function thread({ login = 'greptile-apps', isResolved = false, isOutdated = fals
   return { isResolved, isOutdated, comments: { nodes: [{ author: { login } }] } };
 }
 
-function githubFor({ labels = ['factory', 'factory:review', 'factory:unowned'], threads = [], setLabels, graphqlCalls } = {}) {
+function githubFor({
+  labels = ['factory', 'factory:review', 'factory:unowned'],
+  threads = [],
+  threadPages,
+  liveHead = HEAD,
+  setLabels,
+  graphqlCalls,
+  pullCalls,
+} = {}) {
+  const pages = threadPages || [{ nodes: threads }];
   const api = {
     listLabelsForRepo() {},
     listLabelsOnIssue() {},
@@ -33,9 +42,29 @@ function githubFor({ labels = ['factory', 'factory:review', 'factory:unowned'], 
     },
     graphql: async (query, variables) => {
       if (graphqlCalls) graphqlCalls.push({ query, variables });
-      return { repository: { pullRequest: { reviewThreads: { nodes: threads } } } };
+      const index = variables.after ? Number(variables.after.slice('cursor-'.length)) : 0;
+      const page = pages[index];
+      const hasNextPage = index + 1 < pages.length;
+      return {
+        repository: {
+          pullRequest: {
+            reviewThreads: {
+              nodes: page.nodes,
+              pageInfo: { hasNextPage, endCursor: hasNextPage ? `cursor-${index + 1}` : null },
+            },
+          },
+        },
+      };
     },
-    rest: { issues: api },
+    rest: {
+      issues: api,
+      pulls: {
+        get: async (params) => {
+          if (pullCalls) pullCalls.push(params);
+          return { data: { head: { sha: liveHead } } };
+        },
+      },
+    },
   };
 }
 
@@ -71,9 +100,10 @@ function reviewContext(review, { headSha = HEAD } = {}) {
 async function run(review, options = {}) {
   const calls = [];
   const graphqlCalls = [];
-  const github = githubFor({ ...options, setLabels: async input => calls.push(input), graphqlCalls });
+  const pullCalls = [];
+  const github = githubFor({ ...options, setLabels: async input => calls.push(input), graphqlCalls, pullCalls });
   await reconcile({ github, context: reviewContext(review, options) });
-  return { calls, graphqlCalls };
+  return { calls, graphqlCalls, pullCalls };
 }
 
 test('reviewer-bot allowlist is separate from marker trust', () => {
@@ -102,6 +132,33 @@ test('Greptile REST login suffix is also matched in GraphQL thread authors', asy
   const { calls } = await run(greptileReview(), { threads: [thread({ login: 'greptile-apps[bot]' })] });
   assert.equal(calls.length, 1);
   assert.ok(calls[0].labels.includes('factory:changes-requested'));
+});
+
+test('Greptile findings beyond the first thread page still route', async () => {
+  const { calls, graphqlCalls } = await run(greptileReview(), {
+    threadPages: [
+      { nodes: Array.from({ length: 100 }, () => thread({ isResolved: true })) },
+      { nodes: [thread()] },
+    ],
+  });
+  assert.equal(graphqlCalls.length, 2);
+  assert.equal(graphqlCalls[0].variables.after, null);
+  assert.equal(graphqlCalls[1].variables.after, 'cursor-1');
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:changes-requested'));
+});
+
+test('Greptile review routes only when it still targets the live PR head', async () => {
+  // The globally serialized reconciler can run after a newer push; the event
+  // payload head then still equals the review commit, but the live head moved.
+  const { calls, graphqlCalls, pullCalls } = await run(greptileReview(), {
+    threads: [thread()],
+    liveHead: OLD_HEAD,
+  });
+  assert.equal(pullCalls.length, 1);
+  assert.equal(pullCalls[0].pull_number, 100);
+  assert.equal(calls.length, 0);
+  assert.equal(graphqlCalls.length, 0);
 });
 
 test('Greptile review on an older head does not route', async () => {

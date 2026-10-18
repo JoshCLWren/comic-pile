@@ -107,15 +107,33 @@ function reviewerGraphqlLogins() {
 }
 
 async function unresolvedReviewerBotThreads(github, context, number) {
-  const response = await withRetry(() => github.graphql(
-    `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved isOutdated comments(first:1){nodes{author{login}}}}}}}}`,
-    { owner: context.repo.owner, name: context.repo.repo, number },
-  ));
+  // Follow every reviewThreads page: an open finding beyond the first 100
+  // threads must still route the PR to repair.
   const logins = reviewerGraphqlLogins();
-  const nodes = response?.repository?.pullRequest?.reviewThreads?.nodes || [];
-  return nodes.filter(thread => !thread.isResolved
-    && !thread.isOutdated
-    && logins.has(thread.comments?.nodes?.[0]?.author?.login)).length;
+  let count = 0;
+  let after = null;
+  for (let page = 0; page < 50; page += 1) {
+    const response = await withRetry(() => github.graphql(
+      `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{isResolved isOutdated comments(first:1){nodes{author{login}}}}}}}}`,
+      { owner: context.repo.owner, name: context.repo.repo, number, after },
+    ));
+    const threads = response?.repository?.pullRequest?.reviewThreads;
+    count += (threads?.nodes || []).filter(thread => !thread.isResolved
+      && !thread.isOutdated
+      && logins.has(thread.comments?.nodes?.[0]?.author?.login)).length;
+    if (!threads?.pageInfo?.hasNextPage || !threads.pageInfo.endCursor) break;
+    after = threads.pageInfo.endCursor;
+  }
+  return count;
+}
+
+async function livePullRequestHead(github, context, number) {
+  const response = await withRetry(() => github.rest.pulls.get({
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    pull_number: number,
+  }));
+  return response?.data?.head?.sha || null;
 }
 
 function workerFrom(body) {
@@ -450,6 +468,10 @@ async function reconcile({ github, context }) {
       const state = (review.state || '').toUpperCase();
       if (state === 'APPROVED') return;
       if (!review.commit_id || review.commit_id !== pullRequest.head?.sha) return;
+      // The reconciler is globally serialized, so the event payload can be
+      // stale by the time this runs. Route only if the review still targets
+      // the live PR head.
+      if (review.commit_id !== await livePullRequestHead(github, context, pullRequest.number)) return;
       if (await unresolvedReviewerBotThreads(github, context, pullRequest.number) === 0) return;
       await reconcileLabels(github, context, pullRequest.number, {
         owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),
@@ -484,6 +506,7 @@ module.exports._test = {
   trusted,
   isRepairRoutingReviewer,
   unresolvedReviewerBotThreads,
+  livePullRequestHead,
   REPAIR_ROUTING_REVIEWER_BOTS,
   performedViaUntrustedApp,
   TRUSTED_APP_SLUGS,
