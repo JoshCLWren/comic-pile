@@ -485,8 +485,6 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await session.execute(text("DELETE FROM issue_external_identity_mappings"))
         await session.execute(text("DELETE FROM thread_external_series_mappings"))
         await session.execute(text("DELETE FROM external_identities"))
-        await session.execute(text("DROP INDEX IF EXISTS ix_issue_thread_id"))
-        await session.execute(text("DROP INDEX IF EXISTS ix_issue_thread_is_read"))
         await session.commit()
 
         yield session
