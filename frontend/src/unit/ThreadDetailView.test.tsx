@@ -7,7 +7,6 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import { queryKeys } from '../query/queryKeys'
 import { queryClient } from '../query/queryClient'
 import { useUpdateThread } from '../hooks/useThread'
-import { useComicVineIssueIntelligence } from '../hooks/useComicVineIssueIntelligence'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
@@ -49,7 +48,7 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
     },
   }
 })
-vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn() } }))
+vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn(), listCreators: vi.fn() } }))
 vi.mock('../services/api-tags', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
@@ -78,16 +77,12 @@ vi.mock('../services/api-tags', async (importOriginal) => {
     },
   }
 })
-vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
-  useComicVineIssueIntelligence: vi.fn(),
-}))
-
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedThreadsApiGet = vi.mocked(threadsApi.get)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
+const mockedIssuesApiListCreators = vi.mocked(issuesApi.listCreators)
 const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
-const mockedIssueIntelligence = vi.mocked(useComicVineIssueIntelligence)
 
 beforeEach(() => {
   routeParams.id = '1'
@@ -104,14 +99,15 @@ beforeEach(() => {
   } as never)
   mockedIssuesApiList.mockReset()
   mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
+  mockedIssuesApiListCreators.mockReset()
+  // SAFETY: the bulk response matches the endpoint contract; issues without stored credits are omitted
+  mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
   vi.mocked(dependenciesApi.getBatchBlockingInfo).mockReset()
   vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } })
   mockedConnectedThreads.mockReset()
   mockedConnectedThreads.mockResolvedValue({ thread_id: 1, connected_threads: [] })
   mockedThreadIssuesTags.mockReset()
   mockedThreadIssuesTags.mockResolvedValue({ thread_id: 1, issues: [] })
-  mockedIssueIntelligence.mockReset()
-  mockedIssueIntelligence.mockReturnValue({ metadata: null, isLoading: false, refetch: vi.fn() })
 })
 
 function renderPage() {
@@ -627,14 +623,15 @@ it('opens the exact required issue after loading its later page', async () => {
   expect(screen.getByText('#101')).toBeVisible()
 })
 
-function intelligenceWithCreators(creators: { name: string; roles: string[] }[]) {
+function creatorsResponseFor(
+  entries: { issueId: number; creators: { name: string; roles: string[] }[] }[],
+) {
+  // SAFETY: the payload matches the bulk creators endpoint contract; the page
+  // reads only `issues[].issue_id` and `issues[].creators`.
   return {
-    // SAFETY: the view under test reads only `metadata.creators`; the remaining
-    // provider fields never reach the rendered issue row.
-    metadata: { creators } as never,
-    isLoading: false,
-    refetch: vi.fn(),
-  }
+    thread_id: 1,
+    issues: entries.map((entry) => ({ issue_id: entry.issueId, creators: entry.creators })),
+  } as never
 }
 
 it("renders each issue's own provider creators instead of shared series credits (#3461)", async () => {
@@ -651,10 +648,11 @@ it("renders each issue's own provider creators instead of shared series credits 
     ],
     next_page_token: null, total_count: 2, page_size: 100,
   })
-  mockedIssueIntelligence.mockImplementation((issueId) =>
-    issueId === 11
-      ? intelligenceWithCreators([{ name: 'Alan Moore', roles: ['Writer'] }])
-      : intelligenceWithCreators([{ name: 'Dave Gibbons', roles: ['Artist'] }]),
+  mockedIssuesApiListCreators.mockResolvedValue(
+    creatorsResponseFor([
+      { issueId: 11, creators: [{ name: 'Alan Moore', roles: ['Writer'] }] },
+      { issueId: 22, creators: [{ name: 'Dave Gibbons', roles: ['Artist'] }] },
+    ]),
   )
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
@@ -679,7 +677,9 @@ it('falls back to the series manual creator credits when an issue has no provide
     ],
     next_page_token: null, total_count: 1, page_size: 100,
   })
-  mockedIssueIntelligence.mockReturnValue({ metadata: null, isLoading: false, refetch: vi.fn() })
+  // The bulk read omits issues without stored credits, so the row falls back
+  // to the series' manual creator credits.
+  mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()

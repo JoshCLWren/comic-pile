@@ -9632,6 +9632,27 @@
         "title": "IssueCreateRange",
         "type": "object"
       },
+      "IssueCreatorsEntry": {
+        "description": "Stored ComicVine creator credits for one thread issue.",
+        "properties": {
+          "creators": {
+            "items": {
+              "$ref": "#/components/schemas/ComicVineCreator"
+            },
+            "title": "Creators",
+            "type": "array"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue_id"
+        ],
+        "title": "IssueCreatorsEntry",
+        "type": "object"
+      },
       "IssueDependenciesResponse": {
         "description": "Schema for issue-level dependency listing.",
         "properties": {
@@ -18061,6 +18082,27 @@
           "updated_at"
         ],
         "title": "ThreadExternalSeriesMappingResponse",
+        "type": "object"
+      },
+      "ThreadIssueCreatorsResponse": {
+        "description": "Bulk per-issue ComicVine creator credits for one thread.\n\nIssues without a confirmed ComicVine mapping (or without stored credit\narrays) are omitted; callers fall back to the series' manual creator\ncredits for those rows.",
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/IssueCreatorsEntry"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id"
+        ],
+        "title": "ThreadIssueCreatorsResponse",
         "type": "object"
       },
       "ThreadIssueDependenciesResponse": {
@@ -30373,6 +30415,55 @@
           }
         ],
         "summary": "Create Issues",
+        "tags": [
+          "issues",
+          "issues"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/issues/creators": {
+      "get": {
+        "description": "Return stored ComicVine creator credits for every mapped issue in a thread.\n\nOne bulk read serves the whole issue list's creator column, so expanding\na full page never fans out into one provider-intelligence request per\nrow. Issues without a confirmed ComicVine mapping (or without stored\ncredits) are omitted; clients fall back to the series' manual creator\ncredits for those rows.\n\nArgs:\n    thread_id: ComicPile thread whose issue credits are returned.\n    current_user: Authenticated owner of the requested thread.\n    db: Async database session.\n\nReturns:\n    Per-issue stored ComicVine creator credits for the owned thread.",
+        "operationId": "list_thread_issue_creators_api_v1_threads__thread_id__issues_creators_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssueCreatorsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Thread Issue Creators",
         "tags": [
           "issues",
           "issues"

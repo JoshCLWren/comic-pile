@@ -5431,6 +5431,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{thread_id}/issues/creators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Thread Issue Creators
+         * @description Return stored ComicVine creator credits for every mapped issue in a thread.
+         *
+         *     One bulk read serves the whole issue list's creator column, so expanding
+         *     a full page never fans out into one provider-intelligence request per
+         *     row. Issues without a confirmed ComicVine mapping (or without stored
+         *     credits) are omitted; clients fall back to the series' manual creator
+         *     credits for those rows.
+         *
+         *     Args:
+         *         thread_id: ComicPile thread whose issue credits are returned.
+         *         current_user: Authenticated owner of the requested thread.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Per-issue stored ComicVine creator credits for the owned thread.
+         */
+        get: operations["list_thread_issue_creators_api_v1_threads__thread_id__issues_creators_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{thread_id}/issues/{issue_id}/attach-external": {
         parameters: {
             query?: never;
@@ -10585,6 +10619,16 @@ export interface components {
             issue_range: string;
         };
         /**
+         * IssueCreatorsEntry
+         * @description Stored ComicVine creator credits for one thread issue.
+         */
+        IssueCreatorsEntry: {
+            /** Creators */
+            creators?: components["schemas"]["ComicVineCreator"][];
+            /** Issue Id */
+            issue_id: number;
+        };
+        /**
          * IssueDependenciesResponse
          * @description Schema for issue-level dependency listing.
          */
@@ -14212,6 +14256,20 @@ export interface components {
             thread_id: number;
             /** Updated At */
             updated_at: number;
+        };
+        /**
+         * ThreadIssueCreatorsResponse
+         * @description Bulk per-issue ComicVine creator credits for one thread.
+         *
+         *     Issues without a confirmed ComicVine mapping (or without stored credit
+         *     arrays) are omitted; callers fall back to the series' manual creator
+         *     credits for those rows.
+         */
+        ThreadIssueCreatorsResponse: {
+            /** Issues */
+            issues?: components["schemas"]["IssueCreatorsEntry"][];
+            /** Thread Id */
+            thread_id: number;
         };
         /**
          * ThreadIssueDependenciesResponse
@@ -21371,6 +21429,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssueListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_thread_issue_creators_api_v1_threads__thread_id__issues_creators_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssueCreatorsResponse"];
                 };
             };
             /** @description Validation Error */

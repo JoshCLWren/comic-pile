@@ -240,14 +240,19 @@ describe('targeted cache effects', () => {
     expect(resetQueries).not.toHaveBeenCalled()
   })
 
-  it('invalidates the edited thread issue, detail, summary, session, and queue keys', async () => {
+  it('invalidates the edited thread issue, creator credits, detail, summary, session, and queue keys', async () => {
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
     await invalidateAfterIssueEdit(client, thread.id)
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.thread.issuePages(thread.id),
+    })
+    // Issue mutations can change which issues carry confirmed provider
+    // credits, so the bulk creator-credits map refreshes with the pages (#3461).
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.thread.issueCreators(thread.id),
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.thread.detail(thread.id),
