@@ -24,6 +24,14 @@ elif (($#)); then
   exit 2
 fi
 
+# Stage the trusted review-findings helper from main before any PR checkout.
+# shellcheck source=factory-review-findings.sh
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-review-findings.sh" ]]; then
+  source "$(dirname "${BASH_SOURCE[0]}")/factory-review-findings.sh"
+else
+  source .github/scripts/factory-review-findings.sh
+fi
+
 log() { printf '[factory:%s][omniroute:%s][model:%s] %s\n' "$WORKER" "$PROVIDER" "$MODEL" "$*"; }
 remaining() { echo $((DEADLINE - $(date +%s))); }
 contains_skip_pr() {
@@ -178,10 +186,12 @@ is_transient_agent_failure() {
 
 run_agent() {
   local mode="$1" number="$2" timeout_seconds="$3"
-  local target mission prompt status=0
+  local target mission prompt findings status=0
   if [[ "$mode" == "pr" ]]; then
     target="pull request #${number}"
-    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Use 'gh pr view ${number} --json ...' and 'gh pr checks ${number} --required' for GitHub evidence; do not use 'gh pr status ${number}'. Fix closure-critical defects and resolve or concretely rebut actionable threads. Treat a missing local .venv, pnpm, ruff, or other optional runner tool as an environment limitation, not a code blocker; rely on the repository's required CI results unless CI itself reports a failure. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only when no semantic blocker remains; otherwise end with FACTORY_GATE_NOT_READY."
+    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Use 'gh pr view ${number} --json ...' and 'gh pr checks ${number} --required' for GitHub evidence; do not use 'gh pr status ${number}'. Greptile (greptile-apps[bot]) review findings are HIGH PRIORITY, must-address feedback: fix each one in code or post a concrete evidence-backed rebuttal reply on its thread, and never resolve a thread silently. Fix closure-critical defects and resolve or concretely rebut actionable threads. Treat a missing local .venv, pnpm, ruff, or other optional runner tool as an environment limitation, not a code blocker; rely on the repository's required CI results unless CI itself reports a failure. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only when no semantic blocker remains; otherwise end with FACTORY_GATE_NOT_READY."
+    findings="$(factory_review_findings_mission "$number" "${EXPECTED_HEAD:-$(git rev-parse HEAD)}")"
+    mission+=" ${findings}"
   else
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."

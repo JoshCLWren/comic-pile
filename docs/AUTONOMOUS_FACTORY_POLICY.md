@@ -150,12 +150,23 @@ Implementation workers must not create, repair, or require `docs/changelog.d` fr
 Before posting a pass verdict, ready marker, merge-gated marker, or statement that no blocking correctness issue remains, the worker must inspect the exact current head SHA and:
 
 1. fetch review submissions and all current inline review threads;
-2. ignore only clearly non-actionable status noise such as review-rate-limit notices, summaries, release notes, or optional finishing-touch advertisements;
+2. ignore only clearly non-actionable status noise such as review-rate-limit notices, generic summaries, release notes, or optional finishing-touch advertisements (Greptile's PR-body summary and findings are never noise; see below);
 3. classify every actionable finding as fixed, demonstrably outdated because of a specific later code change, or rebutted with concrete technical evidence;
 4. respond to or resolve every actionable current thread;
 5. refuse pass, readiness, or merge while an unresolved actionable correctness, security, ownership, data-integrity, concurrency, recovery, migration, or test-validity finding remains.
 
 A worker's own review conclusion does not silently override existing human or bot feedback.
+
+### Greptile findings are high priority
+
+Josh directed on 2026-10-18 that Greptile (`greptile-apps[bot]`) findings be held in high regard. They are must-address review feedback, not advisory noise:
+
+- the worker wrapper fetches unresolved review threads, the Greptile review body and PR-body summary, and current-head PR-Agent check output before every PR-mode run, and injects them into the mission with Greptile items first and labeled HIGH PRIORITY;
+- every Greptile finding must be fixed in code on the PR branch, or answered with a concrete, evidence-backed rebuttal reply on that exact thread (cite file and line, test output, or spec);
+- a thread may be resolved only after it is fixed or rebutted; never resolve a Greptile thread silently;
+- a worker or semantic reviewer must not emit `FACTORY_GATE_READY` or a pass verdict while any Greptile finding is neither fixed nor rebutted;
+- a Greptile review with unresolved, non-outdated findings on the exact current head routes the PR to `factory:changes-requested` (see `docs/FACTORY_GITHUB_VISIBILITY.md`). Greptile remains untrusted for factory markers, ownership, and readiness;
+- PR-Agent check output is lower-priority advisory input: fix the real defects it finds, but it does not block on its own.
 
 Every push invalidates prior review, readiness, and merge eligibility. Re-fetch the exact SHA, current review threads, mergeability, and CI after every push.
 

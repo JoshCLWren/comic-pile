@@ -5,6 +5,8 @@ on:
     types: [opened, reopened, ready_for_review, closed, unlabeled]
   # Trusted review feedback may route a PR to repair. Native APPROVED is
   # deliberately not a merge authorization; controller attestations still rule.
+  # `submitted` also covers Greptile's COMMENTED reviews: unresolved Greptile
+  # findings on the exact current head route the PR to factory:changes-requested.
   pull_request_review:
     types: [submitted, dismissed]
   workflow_dispatch:
