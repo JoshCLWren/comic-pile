@@ -2,11 +2,19 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
-const { importSeriesSpy, searchSeriesSpy, importStatusSpy, invalidateSpy, toastSpy } = vi.hoisted(() => ({
+const {
+  importSeriesSpy,
+  searchSeriesSpy,
+  importStatusSpy,
+  invalidateSpy,
+  invalidateImportStatusSpy,
+  toastSpy,
+} = vi.hoisted(() => ({
   importSeriesSpy: vi.fn(),
   searchSeriesSpy: vi.fn(),
   importStatusSpy: vi.fn(),
   invalidateSpy: vi.fn().mockResolvedValue(undefined),
+  invalidateImportStatusSpy: vi.fn().mockResolvedValue(undefined),
   toastSpy: {
     toasts: [],
     showToast: vi.fn(() => 'toast-id'),
@@ -24,6 +32,7 @@ vi.mock('../services/api-comicvine', () => ({
 
 vi.mock('../query/cacheEffects', () => ({
   invalidateAfterQueueMutation: invalidateSpy,
+  invalidateComicVineImportStatus: invalidateImportStatusSpy,
 }))
 
 vi.mock('../contexts/useToast', () => ({
