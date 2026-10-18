@@ -149,7 +149,7 @@ export default function QueueThreadCard({
             </button>
           </Tooltip>
           <span className="w-6 text-right text-xs font-bold tabular-nums text-[var(--theme-text-dim)]">
-            #{index + 1}
+            #{thread.queue_position ?? index + 1}
           </span>
         </div>
         <div className="min-w-0 flex-1">
