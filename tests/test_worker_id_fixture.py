@@ -34,9 +34,5 @@ def test_worker_id_returns_xdist_value_when_set(monkeypatch: pytest.MonkeyPatch)
     """Explicitly verify the fixture honors a non-master worker id."""
     monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw1")
     # The fixture should honor the env var when called in the test context
-    # We can verify by checking the env var directly affects the fixture logic
-    import os
-
-    # Simulate what the fixture does
-    result = os.environ.get("PYTEST_XDIST_WORKER", "master")
+    result = worker_id
     assert result == "gw1"
