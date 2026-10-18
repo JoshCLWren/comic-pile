@@ -8,11 +8,13 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { ROUTE_SEO_TABLE } from '../src/seo/routeSeo.ts'
-import { DEFAULT_PRODUCTION_ORIGIN } from './generate-sitemap.mjs'
+import { resolveProductionOrigin, productionOrigin } from './generate-sitemap.mjs'
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const frontendDir = resolve(scriptDirectory, '..')
 const buildDir = resolve(frontendDir, '..', 'static', 'react')
+const productionOrigin = resolveProductionOrigin(process.env)
+const productionOrigin = resolveProductionOrigin(process.env)
 
 /**
  * Base HTML template with placeholders for SEO metadata
@@ -230,13 +232,13 @@ function generateStructuredData() {
       {
         "@type": "WebSite",
         name: "ComicPile",
-        url: DEFAULT_PRODUCTION_ORIGIN,
+        url: productionOrigin,
         description: "ComicPile is a dice-driven reading queue for your comic collection. Build your stack, roll the die, and read what comes up — continuity-aware and self-hosted.",
       },
       {
         "@type": "SoftwareApplication",
         name: "ComicPile",
-        url: DEFAULT_PRODUCTION_ORIGIN,
+        url: productionOrigin,
         description: "ComicPile is a dice-driven reading queue for your comic collection. Build your stack, roll the die, and read what comes up — continuity-aware and self-hosted.",
         applicationCategory: "WebApplication",
         featureList: ["Weighted by your history", "Continuity-aware", "No external dependencies", "Built for the long stack"],
@@ -280,9 +282,9 @@ function extractAssetTags(builtIndexHtml) {
 }
 
 function generateRouteHtml(route, assetTags = '') {
-  const canonicalUrl = route.canonicalPath ? `${DEFAULT_PRODUCTION_ORIGIN}${route.canonicalPath}` : null
+  const canonicalUrl = route.canonicalPath ? `${productionOrigin}${route.canonicalPath}` : null
   const robots = route.visibility === 'public-indexable' ? 'index, follow' : 'noindex, nofollow'
-  const ogUrl = canonicalUrl || `${DEFAULT_PRODUCTION_ORIGIN}${route.pattern}`
+  const ogUrl = canonicalUrl || `${productionOrigin}${route.pattern}`
   const structuredData = route.visibility === 'public-indexable' ? generateStructuredData() : null
   const assetMarkup = assetTags || '    <script type="module" src="/src/main.tsx"></script>'
 
