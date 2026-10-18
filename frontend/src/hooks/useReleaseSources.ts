@@ -48,10 +48,10 @@ export function useEnableReleaseSource(deps: EnableReleaseSourceDeps = {}) {
       for (const [key, data] of client.getQueriesData({
         queryKey: readerPrefix,
       })) {
-        if (!data || typeof data !== 'object') continue
-        const record = data as {
-          release_sources?: ReadingPlanReleaseSourceStatus[]
-        }
+        if (!data || typeof data !== 'object' || Array.isArray(data)) continue
+        // SAFETY: getQueriesData returns the cached query payload; validated as
+        // non-array object before reading domain keys.
+        const record: { release_sources?: ReadingPlanReleaseSourceStatus[] } = data
         if (!Array.isArray(record.release_sources)) continue
         const previous = record.release_sources
         if (!previous.some((source) => source.source_id === sourceId)) continue
