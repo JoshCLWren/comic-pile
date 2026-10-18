@@ -190,3 +190,16 @@ async def test_issues_position_index_improves_pagination(
     rows = page.all()
     assert [row.position for row in rows] == list(range(51, 101))
     assert all(row.thread_id == thread.id for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_issue_model_indexes_survive_committed_fixture(async_db_committed: AsyncSession):
+    """Verify the committed fixture leaves the model-declared issue indexes intact."""
+    result = await async_db_committed.execute(
+        text(
+            "SELECT indexname FROM pg_indexes WHERE tablename = 'issues' "
+            "AND indexname IN ('ix_issue_thread_id', 'ix_issue_thread_is_read')"
+        )
+    )
+    names = {row[0] for row in result.all()}
+    assert names == {"ix_issue_thread_id", "ix_issue_thread_is_read"}
