@@ -7,7 +7,7 @@
     "orcarouter": {
       "max_dispatches_per_utc_day": 1,
       "max_requests_per_utc_day": 40,
-      "max_requests_per_dispatch": 45,
+      "max_requests_per_dispatch": 40,
       "max_requests_per_minute": 8,
       "account_limits": "50 requests/day, 10 requests/minute per account; unpublished per-request prompt-size cap on free tier"
     },

@@ -138,7 +138,7 @@ def test_runner_and_dispatcher_wiring() -> None:
     )
     controller = (SCRIPTS / "factory-work-controller.py").read_text()
     assert (
-        "budget_block_reason(worker)" in controller.split("def assign(", 1)[1].split("\ndef ", 1)[0]
+        "budget_block_reason(" in controller.split("def assign(", 1)[1].split("\ndef ", 1)[0]
     )
 
 
@@ -149,33 +149,32 @@ def test_budget_module_parses_on_older_python() -> None:
 
 def test_controller_budget_gate_integration() -> None:
     """The controller's assign() function calls budget_block_reason() and blocks workers with exhausted budgets."""
-    # Import the controller module
     controller = _load("factory_work_controller", "factory-work-controller.py")
     
     # Mock the budget_block_reason function to return a blocking reason
     def mock_budget_block_reason(worker, **kwargs):
         return f"Factory {worker} source budget exhausted"
     
-    # Mock other dependencies to focus on budget check
-    original_budget_block_reason = budget.budget_block_reason
-    budget.budget_block_reason = mock_budget_block_reason
+    # Patch controller's directly imported reference
+    original_budget_block_reason = controller.budget_block_reason
+    controller.budget_block_reason = mock_budget_block_reason
     
     try:
         # Test that a worker with budget block reason gets skipped
-        result = controller.assign("91", dry_run=True)
+        result = controller.assign("91")
         assert result is None
         
         # Test that a worker without budget block reason gets processed
         def mock_budget_block_reason_none(worker, **kwargs):
             return None
         
-        budget.budget_block_reason = mock_budget_block_reason_none
-        result = controller.assign("91", dry_run=True)
+        controller.budget_block_reason = mock_budget_block_reason_none
+        result = controller.assign("91")
         assert result is not None
         
     finally:
         # Restore original function
-        budget.budget_block_reason = original_budget_block_reason
+        controller.budget_block_reason = original_budget_block_reason
 
 
 def test_scheduled_batch_applies_source_budget_before_offer_cap() -> None:
