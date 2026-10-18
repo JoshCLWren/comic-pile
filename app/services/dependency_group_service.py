@@ -109,6 +109,27 @@ def _build_member_responses(
     return responses
 
 
+def _issue_metadata_by_id(
+    issues: Mapping[int, Issue],
+) -> dict[int, tuple[str | None, str | None]]:
+    """Map resolved issue models to ``(issue number, series title)`` metadata.
+
+    Used by the batched crossover list and single-group serializers: the same
+    ``issues_by_id`` query already eager-loads each parent thread, so member
+    display reuses those rows instead of issuing a second metadata SELECT.
+
+    Args:
+        issues: Issue models resolved for the requested memberships.
+
+    Returns:
+        Mapping of issue ID to its number and owning thread title.
+    """
+    return {
+        issue_id: (issue.issue_number, issue.thread.title if issue.thread else None)
+        for issue_id, issue in issues.items()
+    }
+
+
 def _crossover_progress(
     memberships: Sequence[DependencyGroupMembership],
     threads: Mapping[int, Thread],
@@ -222,9 +243,11 @@ class DependencyGroupService:
         """Resolve member threads, issues, and bulk unread counts.
 
         Thread totals and unread counts require full thread rows, so one
-        threads query plus one grouped unread-count query covers every group;
-        issue status needs one issues query. Each is a flat SELECT regardless
-        of how many groups share the resolved targets.
+        threads query plus one grouped unread-count query covers every group.
+        Issue rows carry both the read status used for progress and the
+        eager-loaded parent thread used for series titles, so member display
+        and progress accounting share one issues query. Each is a flat SELECT
+        regardless of how many groups share the resolved targets.
 
         Args:
             thread_ids: Thread targets referenced by the memberships.
@@ -232,7 +255,7 @@ class DependencyGroupService:
 
         Returns:
             Tuple of ``(threads, issues, unread_counts)`` where unread counts
-            cover migrated threads only.
+            cover migrated threads only and each issue has ``thread`` loaded.
         """
         threads: dict[int, Thread] = {}
         issues: dict[int, Issue] = {}
@@ -262,10 +285,7 @@ class DependencyGroupService:
         thread_ids, issue_ids = _member_target_ids(memberships)
         threads, issues, unread_counts = await self._resolve_progress_models(thread_ids, issue_ids)
         thread_titles = {thread_id: thread.title for thread_id, thread in threads.items()}
-        if issue_ids:
-            issue_metadata = await groups_repo.issue_series_metadata_by_id(self._db, issue_ids)
-        else:
-            issue_metadata = {}
+        issue_metadata = _issue_metadata_by_id(issues)
         read_issues, total_issues, progress = _crossover_progress(
             memberships, threads, issues, unread_counts
         )
@@ -384,9 +404,9 @@ class DependencyGroupService:
         """
         groups = await groups_repo.list_groups_for_user(self._db, user_id)
         # Resolve metadata for every group in one pass. Reusing the eagerly
-        # loaded memberships avoids the per-group membership requery, and one
-        # thread-rows query plus one issue-metadata query keeps the route's
-        # query count flat instead of growing with the number of groups.
+        # loaded memberships avoids the per-group membership requery, and the
+        # flat thread-rows, unread-count, and issue-rows queries keep the
+        # route's query count constant instead of growing with group count.
         # ``selectinload`` does not guarantee membership order, so sort by id to
         # preserve the order ``list_memberships`` established per group.
         ordered_memberships: list[list[DependencyGroupMembership]] = [
@@ -397,13 +417,7 @@ class DependencyGroupService:
 
         threads, issues, unread_counts = await self._resolve_progress_models(thread_ids, issue_ids)
         thread_titles = {thread_id: thread.title for thread_id, thread in threads.items()}
-
-        if issue_ids:
-            issue_metadata: dict[int, tuple[str | None, str | None]] = (
-                await groups_repo.issue_series_metadata_by_id(self._db, issue_ids)
-            )
-        else:
-            issue_metadata = {}
+        issue_metadata = _issue_metadata_by_id(issues)
 
         responses: list[DependencyGroupResponse] = []
         for group, memberships in zip(groups, ordered_memberships, strict=True):

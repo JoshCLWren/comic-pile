@@ -9608,6 +9608,21 @@ export interface components {
             memberships: components["schemas"]["DependencyGroupMemberResponse"][];
             /** Name */
             name: string;
+            /**
+             * Read Issues
+             * @default 0
+             */
+            read_issues: number;
+            /**
+             * Reading Progress
+             * @default 0%
+             */
+            reading_progress: string;
+            /**
+             * Total Issues
+             * @default 0
+             */
+            total_issues: number;
         };
         /**
          * DependencyGroupSummary
