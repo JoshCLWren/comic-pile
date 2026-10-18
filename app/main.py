@@ -98,17 +98,32 @@ def _spa_route_file_path(request_path: str) -> Path:
     description, canonical, and robots metadata instead of the landing page
     shell.
 
+    The request path is never trusted for filesystem layout: empty, ``.`` and
+    ``..`` segments, and backslashes are rejected so a crafted request such as
+    ``/../../frontend/dice-playground`` cannot escape ``static/react`` and serve
+    an unrelated ``.html`` file. An unsafe path falls back to the SPA index,
+    exactly like any other route without a generated file, and the resolved
+    candidate must stay inside the build directory even if it contains a
+    symlinked segment.
+
     Args:
         request_path: Request path with or without a leading slash.
 
     Returns:
-        Path to the generated route HTML file, falling back to the SPA index
-        when no route-specific file exists.
+        Path to the generated route HTML file, or the SPA index when the path
+        is unsafe or no route-specific file was generated.
     """
+    build_dir = Path("static/react")
     stripped = request_path.strip().strip("/")
     if not stripped:
-        return Path("static/react/index.html")
-    return Path(f"static/react/{stripped}.html")
+        return build_dir / "index.html"
+    segments = stripped.replace("\\", "/").split("/")
+    if any(segment in ("", ".", "..") for segment in segments):
+        return build_dir / "index.html"
+    candidate = build_dir / f"{stripped}.html"
+    if not candidate.resolve().is_relative_to(build_dir.resolve()):
+        return build_dir / "index.html"
+    return candidate
 
 
 def _render_sitemap_xml() -> str:
