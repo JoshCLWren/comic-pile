@@ -9,6 +9,7 @@
 
 export const STRUCTURED_DATA_SCRIPT_ID = 'comic-pile-structured-data'
 export const BREADCRUMB_STRUCTURED_DATA_SCRIPT_ID = 'comic-pile-breadcrumb-structured-data'
+const DEFAULT_PRODUCTION_ORIGIN = 'https://comic-pile.vercel.app'
 
 export const SITE_NAME = 'ComicPile'
 export const SITE_DESCRIPTION =
@@ -56,19 +57,20 @@ export interface StructuredDataGraph {
  * @returns The WebSite + SoftwareApplication JSON-LD graph.
  */
 export function buildLandingStructuredData(siteUrl: string): StructuredDataGraph {
+  const absoluteUrl = siteUrl === '/' ? DEFAULT_PRODUCTION_ORIGIN : siteUrl
   return {
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': 'WebSite',
         name: SITE_NAME,
-        url: siteUrl,
+        url: absoluteUrl,
         description: SITE_DESCRIPTION,
       },
       {
         '@type': 'SoftwareApplication',
         name: SITE_NAME,
-        url: siteUrl,
+        url: absoluteUrl,
         description: SITE_DESCRIPTION,
         applicationCategory: 'WebApplication',
         featureList: [...LANDING_FEATURES],

@@ -11,13 +11,24 @@ function sitemapPlugin() {
   return {
     name: 'sitemap-generator',
     async closeBundle() {
-      const scriptPath = path.resolve(__dirname, 'scripts', 'generate-sitemap.mjs')
-      const result = spawnSync('node', [scriptPath], {
+      // Generate sitemap
+      const sitemapScriptPath = path.resolve(__dirname, 'scripts', 'generate-sitemap.mjs')
+      const sitemapResult = spawnSync('node', [sitemapScriptPath], {
         stdio: 'inherit',
         env: { ...process.env, NODE_ENV: 'production' },
       })
-      if (result.status !== 0) {
+      if (sitemapResult.status !== 0) {
         throw new Error('Sitemap generation failed')
+      }
+
+      // Generate route-specific HTML files
+      const htmlScriptPath = path.resolve(__dirname, 'scripts', 'generate-route-html.mjs')
+      const htmlResult = spawnSync('node', [htmlScriptPath], {
+        stdio: 'inherit',
+        env: { ...process.env, NODE_ENV: 'production' },
+      })
+      if (htmlResult.status !== 0) {
+        throw new Error('Route HTML generation failed')
       }
     },
   }

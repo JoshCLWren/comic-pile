@@ -7,6 +7,7 @@ import {
   STRUCTURED_DATA_SCRIPT_ID,
   upsertStructuredDataScript,
 } from './structuredData'
+const DEFAULT_PRODUCTION_ORIGIN = 'https://comic-pile.vercel.app'
 
 function upsertMetaTag(name: string, content: string): void {
   const selector = `meta[name="${name}"]`
@@ -25,12 +26,17 @@ function upsertMetaTag(name: string, content: string): void {
  * "one stable canonical URL" acceptance criterion holds across navigation.
  */
 function syncCanonicalLink(canonicalPath: string | null): void {
+  if (typeof window === 'undefined') {
+    // Server-side rendering: don't manipulate document
+    return
+  }
+  
   const existing = Array.from(document.head.querySelectorAll('link[rel="canonical"]'))
   if (canonicalPath === null) {
     existing.forEach(tag => tag.remove())
     return
   }
-  const href = `${window.location.origin}${canonicalPath}`
+  const href = `${DEFAULT_PRODUCTION_ORIGIN}${canonicalPath}`
   const [first, ...rest] = existing
   rest.forEach(tag => tag.remove())
   if (first instanceof HTMLLinkElement) {
