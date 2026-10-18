@@ -159,6 +159,14 @@ class AppSettings(BaseSettings):
         description="Enable internal operations routes",
         json_schema_extra={"env": "ENABLE_INTERNAL_OPS_ROUTES"},
     )
+    cron_secret: str = Field(
+        default="",
+        description=(
+            "Bearer secret Vercel Cron sends as Authorization when it invokes "
+            "the scheduled release-sync endpoint (CRON_SECRET)"
+        ),
+        json_schema_extra={"env": "CRON_SECRET"},
+    )
     perf_alarm_github_issues_enabled: bool = Field(
         default=False,
         description="Opt in to automatic GitHub issue filing from performance telemetry",
@@ -205,6 +213,16 @@ class AppSettings(BaseSettings):
         if self.environment == "production" and "*" in origins:
             raise RuntimeError("Wildcard CORS not allowed in production")
         return origins
+
+    @property
+    def usable_cron_secret(self) -> str | None:
+        """Return the configured cron secret, or None when missing/placeholder.
+
+        Returns:
+            The stripped bearer secret, or ``None`` when the deployment has not
+            configured a usable ``CRON_SECRET``.
+        """
+        return _usable_secret(self.cron_secret or None)
 
     def validate_production_cors(self) -> None:
         """Validate that CORS is properly configured in production."""

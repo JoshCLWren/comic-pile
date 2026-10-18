@@ -1,6 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["cle1"],
+  "crons": [
+    {
+      "path": "/api/v1/cron/release-sync",
+      "schedule": "0 9 * * *"
+    }
+  ],
   "git": {
     "deploymentEnabled": false
   },

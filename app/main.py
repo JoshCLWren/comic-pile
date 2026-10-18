@@ -242,6 +242,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import cbl_plan_adoption
     from app.api import comicvine_resolution
     from app.api import creators
+    from app.api import cron
     from app.api import demo
     from app.api import dependency
     from app.api import delivery
@@ -304,6 +305,9 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(
         reading_plan_sync.router, prefix="/api/v1", tags=["reading-plan-sync"]
     )
+    # Machine-triggered Vercel Cron endpoint. It is secret-gated, omitted from
+    # the generated client schema, and delegates all work to the sync service.
+    app.include_router(cron.router, prefix="/api/v1", tags=["cron"])
     app.include_router(
         recommendation_diagnostics.router, prefix="/api", tags=["recommendations"]
     )
