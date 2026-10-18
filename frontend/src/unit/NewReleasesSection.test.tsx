@@ -107,6 +107,7 @@ describe('NewReleasesSection', () => {
     expect(screen.getByText('Target thread #4')).toBeInTheDocument()
     expect(screen.getByText('Target thread #5')).toBeInTheDocument()
     expect(screen.getAllByText(/Last sync:/)).toHaveLength(2)
+    expect(screen.getByText('Last sync: Never synced')).toBeInTheDocument()
     expect(screen.getByText(/Incredible Hulk/)).toBeInTheDocument()
     expect(screen.getAllByTestId('new-release-source')).toHaveLength(2)
   })
