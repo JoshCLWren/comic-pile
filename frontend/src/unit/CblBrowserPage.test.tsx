@@ -653,4 +653,66 @@ describe('CblBrowserPage', () => {
       ).not.toBeDisabled()
     })
   })
+
+  it('excluding the series of an unresolved entry unblocks the add (#3542)', async () => {
+    const user = userEvent.setup()
+    const unresolvedEntry = entry({
+      cbl_position: 2,
+      cbl_entry_id: 102,
+      issue_number: '1',
+      series_name: 'Ultimate Hawkeye',
+      series_group_id: 'group-2',
+      adoption_class: 'ambiguous_unresolved',
+      adoption_decision: 'unresolved',
+      adopted: false,
+      resolved_issue_id: null,
+      canonical_issue_id: null,
+      resolution_status: 'ambiguous_no_comicvine_id',
+    })
+    const initialPreview = preview({
+      entries: [entry({}), unresolvedEntry],
+      summary: {
+        reused_existing_count: 1,
+        missing_would_create_count: 0,
+        excluded_count: 0,
+        unresolved_count: 1,
+        awaiting_opt_in_count: 0,
+        final_adopted_count: 1,
+        final_adopted_order: [1],
+        reused_existing_positions: [1],
+        missing_would_create_positions: [],
+        excluded_positions: [],
+        unresolved_positions: [2],
+        awaiting_opt_in_positions: [],
+      },
+    })
+    renderPage()
+    await searchFor(user)
+    await selectSource(user, initialPreview)
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+    expect(
+      screen.getByText('1 entry still needs attention before this source can be added.'),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Customize' }))
+    const group = screen.getByRole('group', { name: 'Ultimate Hawkeye series choice' })
+    await user.click(within(group).getByRole('button', { name: 'Exclude' }))
+    expect(mockPlan).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(screen.getByText('Skipped')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Add this reading order' }),
+      ).not.toBeDisabled()
+    })
+    expect(screen.queryByText(/still needs attention/)).not.toBeInTheDocument()
+
+    // Skip stays available: the reader can put the entry back to unresolved.
+    await user.click(screen.getByRole('button', { name: 'Unskip' }))
+    await waitFor(() => {
+      expect(
+        screen.getByText('Needs identity resolution'),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+    })
+  })
 })

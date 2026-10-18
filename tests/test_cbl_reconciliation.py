@@ -670,6 +670,51 @@ def test_cbl_adoption_unresolved_entry_can_be_skipped() -> None:
     assert unskipped.entries[1]["adoption_decision"] == "unresolved"
 
 
+def test_cbl_adoption_series_exclusion_defers_unresolved_entries() -> None:
+    """Excluding a series clears its unresolved entries from the attention gate.
+
+    The reader must not need a separate per-entry Skip before adoption can
+    proceed, and an explicit entry choice still beats the series choice (#3542).
+    """
+    entries = [
+        {
+            "cbl_position": 1,
+            "cbl_entry_id": 10,
+            "series_name": "Known",
+            "issue_number": "1",
+            "series_group_id": "known-key",
+            "resolution_status": "resolved_via_comicvine_canonical",
+            "resolved_issue_id": 8,
+        },
+        {
+            "cbl_position": 2,
+            "cbl_entry_id": 20,
+            "series_name": "Mystery",
+            "issue_number": "?",
+            "series_group_id": "mystery-key",
+            "resolution_status": "ambiguous_no_comicvine_id",
+            "resolved_issue_id": None,
+        },
+    ]
+    excluded = calculate_cbl_adoption_plan(entries, series_decisions={"mystery-key": False})
+    assert excluded.unresolved_count == 0
+    assert excluded.excluded_count == 1
+    assert excluded.entries[1]["adoption_decision"] == "excluded"
+    assert excluded.final_adopted_order == (1,)
+
+    # The series exclusion leaves unrelated series untouched.
+    assert excluded.entries[0]["adoption_decision"] == "included_existing"
+
+    # An explicit per-entry include overrides the series exclusion.
+    reconsidered = calculate_cbl_adoption_plan(
+        entries,
+        series_decisions={"mystery-key": False},
+        entry_decisions={"20": True},
+    )
+    assert reconsidered.unresolved_count == 1
+    assert reconsidered.entries[1]["adoption_decision"] == "unresolved"
+
+
 @pytest.mark.asyncio
 async def test_cbl_adoption_endpoint_returns_typed_fingerprinted_contract(
     auth_client: AsyncClient,

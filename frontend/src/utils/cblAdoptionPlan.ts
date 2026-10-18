@@ -40,10 +40,13 @@ export function applyCblAdoptionChoices(
         excluded.push(entry.cbl_position)
       }
     } else if (!selectable) {
-      const explicitEntryExclude = entryKey in entryDecisions && entryDecisions[entryKey] === false
-      const explicitSeriesExclude =
-        entry.series_group_id in seriesDecisions && seriesDecisions[entry.series_group_id] === false
-      if (explicitEntryExclude || explicitSeriesExclude) {
+      // #3542: excluding the whole series defers its unresolved entries the
+      // same way an explicit per-entry Skip does, so the reader never needs a
+      // separate Skip before Add can proceed. An explicit entry choice still
+      // wins over the series choice, mirroring the collection-exclusion branch.
+      const skipRequested =
+        (entryDecisions[entryKey] ?? seriesDecisions[entry.series_group_id] ?? true) === false
+      if (skipRequested) {
         decision = 'excluded'
         excluded.push(entry.cbl_position)
       } else {
