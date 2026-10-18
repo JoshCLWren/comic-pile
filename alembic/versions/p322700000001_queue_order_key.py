@@ -1,7 +1,7 @@
 """Add nullable internal queue_order_key to threads (#3227).
 
 Revision ID: p322700000001
-Revises: p322500000001
+Revises: c36690000001
 Create Date: 2026-10-18 00:00:00.000000
 """
 
