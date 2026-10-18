@@ -45,6 +45,25 @@ async def list_release_sources(
     return await service.list_sources(db, plan_id=plan_id, user_id=current_user.id)
 
 
+@router.get(
+    "/continuity-plans/{plan_id}/release-sources/reader",
+    response_model=list[ReleaseSourceResponse],
+)
+async def list_release_sources_for_reader(
+    plan_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[ReleaseSourceResponse]:
+    """List reader-facing release source status for one plan.
+
+    Returns enabled and disabled sources so the reader can re-enable a
+    previously disabled volume without leaving the plan reader view.
+    """
+    return await service.list_release_sources_for_reader(
+        db, plan_id=plan_id, user_id=current_user.id
+    )
+
+
 @router.patch(
     "/continuity-plans/release-sources/{source_id}",
     response_model=ReleaseSourceResponse,

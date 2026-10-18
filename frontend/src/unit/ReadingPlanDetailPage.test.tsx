@@ -113,33 +113,47 @@ const laterIssue = {
 }
 
 const readerView: ReadingPlanReaderView = {
-  plan_id: 12,
-  name: 'Age of Apocalypse',
-  ordering_mode: 'informational',
-  progress: { total_issues: 3, read_issues: 0 },
-  available_now: [availableIssue],
-  blocked_next: [blockedIssue],
-  lanes: [
-    {
-      id: 'main',
-      name: 'Main',
-      order: 0,
-      issues: [availableIssue, blockedIssue, laterIssue],
-    },
-  ],
-  sources: [
-    {
-      id: 1,
-      raw_source_path: 'Marvel/Age of Apocalypse.cbl',
-      repository: null,
-      source_path: null,
-      revision_sha: null,
-      content_hash: null,
-      adopted_at: null,
-      recorded_at: '2026-10-12T00:00:00Z',
-    },
-  ],
-}
+    plan_id: 12,
+    name: 'Age of Apocalypse',
+    ordering_mode: 'informational',
+    progress: { total_issues: 3, read_issues: 0 },
+    available_now: [availableIssue],
+    blocked_next: [blockedIssue],
+    lanes: [
+      {
+        id: 'main',
+        name: 'Main',
+        order: 0,
+        issues: [availableIssue, blockedIssue, laterIssue],
+      },
+    ],
+    sources: [
+      {
+        id: 1,
+        raw_source_path: 'Marvel/Age of Apocalypse.cbl',
+        repository: null,
+        source_path: null,
+        revision_sha: null,
+        content_hash: null,
+        adopted_at: null,
+        recorded_at: '2026-10-12T00:00:00Z',
+      },
+    ],
+    release_sources: [
+      {
+        source_id: 901,
+        thread_id: 4,
+        external_identity_id: 77,
+        provider_volume_id: '4000-77',
+        provider_title: 'X-Men',
+        provider_publisher: 'Marvel',
+        provider_start_year: 1963,
+        provider_issue_count: 12,
+        enabled: true,
+        last_synced_at: '2026-10-17T05:00:00Z',
+      },
+    ],
+  }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -171,6 +185,13 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getByRole('link', { name: 'Continue reading' })).toHaveAttribute('href', '/thread/4')
     expect(screen.getByRole('button', { name: 'Edit plan' })).toBeInTheDocument()
     expect(screen.queryByText(/ContinuityRule/i)).not.toBeInTheDocument()
+    // New releases control is part of the Reading Plan reader surface.
+    expect(screen.getByRole('heading', { name: 'New releases' })).toBeInTheDocument()
+    expect(screen.getByTestId('new-release-source')).toBeInTheDocument()
+    expect(screen.getByText('X-Men')).toBeInTheDocument()
+    expect(screen.getByText('Target thread #4')).toBeInTheDocument()
+    expect(screen.getByText('Last sync:')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enabled' })).toBeInTheDocument()
   })
 
   it('rejects an invalid plan id before fetching', () => {

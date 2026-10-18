@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -12,6 +13,21 @@ from app.schemas.reading_plan_membership import (
 )
 
 ReadingPlanIssueAvailability = Literal["read", "available", "blocked", "later", "excluded", "inactive"]
+
+
+class ReadingPlanReleaseSourceStatus(BaseModel):
+    """One followed ComicVine volume and its sync state on a Reading Plan."""
+
+    source_id: int
+    thread_id: int
+    external_identity_id: int
+    provider_volume_id: str
+    provider_title: str | None = None
+    provider_publisher: str | None = None
+    provider_start_year: int | None = None
+    provider_issue_count: int | None = None
+    enabled: bool
+    last_synced_at: datetime | None = None
 
 
 class ReadingPlanBlocker(BaseModel):
@@ -65,3 +81,4 @@ class ReadingPlanReaderResponse(BaseModel):
     blocked_next: list[ReadingPlanReaderIssue]
     lanes: list[ReadingPlanReaderLane]
     sources: list[ReadingPlanSourceSnapshot]
+    release_sources: list[ReadingPlanReleaseSourceStatus] = Field(default_factory=list)

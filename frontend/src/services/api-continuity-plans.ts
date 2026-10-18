@@ -131,6 +131,19 @@ export interface ReadingPlanSourceSnapshot {
   recorded_at: string
 }
 
+export interface ReadingPlanReleaseSourceStatus {
+  source_id: number
+  thread_id: number
+  external_identity_id: number
+  provider_volume_id: string
+  provider_title: string | null
+  provider_publisher: string | null
+  provider_start_year: number | null
+  provider_issue_count: number | null
+  enabled: boolean
+  last_synced_at: string | null
+}
+
 export interface ReadingPlanReaderView {
   execution_mode?: 'legacy' | 'option_e'
   plan_id: number
@@ -141,8 +154,67 @@ export interface ReadingPlanReaderView {
   blocked_next: ReadingPlanReaderIssue[]
   lanes: ReadingPlanReaderLane[]
   sources: ReadingPlanSourceSnapshot[]
+  release_sources: ReadingPlanReleaseSourceStatus[]
 }
 
+
+export interface SyncRequest {
+  as_of: string
+  refresh?: boolean
+}
+
+export interface SourceSyncFailure {
+  source_id: number
+  plan_id: number
+  thread_id: number
+  volume_id: number
+  error: string
+}
+
+export interface SyncReport {
+  total_sources: number
+  enabled_sources: number
+  checked_sources: number
+  successful_sources: number
+  failed_sources: number
+  issues_checked: number
+  created_issues: number
+  reused_issues: number
+  future_skips: number
+  unknown_date_skips: number
+  conflicts: number
+  issue_failures: number
+  excluded_sources: number
+  excluded_issues: number
+  skipped_sources: number
+  failures: SourceSyncFailure[]
+}
+
+export interface SyncResponse {
+  success: boolean
+  message: string
+  result: SyncReport
+}
+
+export interface SyncStatusSource {
+  id: number
+  reading_plan_id: number
+  thread_id: number
+  external_identity_id: number
+  provider_volume_id: string
+  enabled: boolean
+  last_synced_at: string | null
+}
+
+export interface SyncStatusResponse {
+  total_sources: number
+  enabled_sources: number
+  sources: SyncStatusSource[]
+}
+
+export interface ReleaseSourceUpdateRequest {
+  enabled: boolean
+}
 
 /**
  * Build the continuity-plan service bound to an HTTP client.
@@ -160,6 +232,24 @@ export function createContinuityPlansApi(client: HttpClient) {
       client.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
     getReader: (planId: number) =>
       client.get<ReadingPlanReaderView>(`/v1/continuity-plans/${planId}/reader`),
+    listReleaseSources: (planId: number) =>
+      client.get<ReadingPlanReleaseSourceStatus[]>(
+        `/v1/continuity-plans/${planId}/release-sources/reader`,
+      ),
+    updateReleaseSource: (sourceId: number, payload: ReleaseSourceUpdateRequest) =>
+      client.patch<ReadingPlanReleaseSourceStatus>(
+        `/v1/continuity-plans/release-sources/${sourceId}`,
+        payload,
+      ),
+    updateReleaseSourceEnabled: (sourceId: number, enabled: boolean) =>
+      client.patch<ReadingPlanReleaseSourceStatus>(
+        `/v1/continuity-plans/release-sources/${sourceId}`,
+        { enabled },
+      ),
+    getSyncStatus: () =>
+      client.get<SyncStatusResponse>('/v1/reading-plan-sync/status'),
+    syncReleaseSources: (payload: SyncRequest) =>
+      client.post<SyncResponse>('/v1/reading-plan-sync/sync', payload),
     update: (planId: number, payload: ContinuityPlanWrite) =>
       client.put<ContinuityPlan, ContinuityPlanWrite>(`/v1/continuity-plans/${planId}`, payload),
     delete: (planId: number) =>
