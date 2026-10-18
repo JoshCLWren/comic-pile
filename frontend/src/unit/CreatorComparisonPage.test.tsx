@@ -527,14 +527,14 @@ describe('CreatorComparisonPage', () => {
       baseHook({
         data: makeResponse({
           comparisons: {
-            'creator:small': makeItem({
-              canonical_creator_key: 'creator:small',
+            'creator:100': makeItem({
+              canonical_creator_key: 'creator:100',
               display_name: 'Few Ratings Creator',
               ratings_count: 4,
               rating_distribution: { '5': 4 },
             }),
-            'creator:large': makeItem({
-              canonical_creator_key: 'creator:large',
+            'creator:101': makeItem({
+              canonical_creator_key: 'creator:101',
               display_name: 'Many Ratings Creator',
               average_rating: 4.2,
               median_rating: 4.5,
@@ -546,7 +546,7 @@ describe('CreatorComparisonPage', () => {
       }),
     )
 
-    renderAt('creator:small,creator:large')
+renderAt('creator:100,creator:101')
 
     // Each bar is bucket_count / creator_ratings_count, so bars are directly
     // comparable regardless of sample size.
@@ -565,14 +565,14 @@ describe('CreatorComparisonPage', () => {
       baseHook({
         data: makeResponse({
           comparisons: {
-            'creator:small': makeItem({
-              canonical_creator_key: 'creator:small',
+            'creator:100': makeItem({
+              canonical_creator_key: 'creator:100',
               display_name: 'Few Ratings Creator',
               ratings_count: 4,
               rating_distribution: { '5': 4 },
             }),
-            'creator:large': makeItem({
-              canonical_creator_key: 'creator:large',
+            'creator:101': makeItem({
+              canonical_creator_key: 'creator:101',
               display_name: 'Many Ratings Creator',
               average_rating: 4.2,
               median_rating: 4.5,
@@ -584,7 +584,7 @@ describe('CreatorComparisonPage', () => {
       }),
     )
 
-    renderAt('creator:small,creator:large')
+    renderAt('creator:100,creator:101')
 
     const distributions = screen.getAllByTestId('rating-distribution')
     const largeDistribution = distributions[1]
@@ -597,14 +597,14 @@ describe('CreatorComparisonPage', () => {
       baseHook({
         data: makeResponse({
           comparisons: {
-            'creator:a': makeItem({
-              canonical_creator_key: 'creator:a',
+            'creator:200': makeItem({
+              canonical_creator_key: 'creator:200',
               display_name: 'Creator A',
               ratings_count: 4,
               rating_distribution: { '4': 2, '5': 2 },
             }),
-            'creator:b': makeItem({
-              canonical_creator_key: 'creator:b',
+            'creator:201': makeItem({
+              canonical_creator_key: 'creator:201',
               display_name: 'Creator B',
               average_rating: 4.5,
               median_rating: 4.5,
@@ -616,7 +616,7 @@ describe('CreatorComparisonPage', () => {
       }),
     )
 
-    renderAt('creator:a,creator:b')
+    renderAt('creator:200,creator:201')
 
     const distributions = screen.getAllByTestId('rating-distribution')
     const aDistribution = distributions[0]
@@ -631,8 +631,8 @@ describe('CreatorComparisonPage', () => {
       baseHook({
         data: makeResponse({
           comparisons: {
-            'creator:none': makeItem({
-              canonical_creator_key: 'creator:none',
+            'creator:202': makeItem({
+              canonical_creator_key: 'creator:202',
               display_name: 'Unrated Creator',
               average_rating: null,
               median_rating: null,
@@ -645,8 +645,8 @@ describe('CreatorComparisonPage', () => {
               read_unrated_count: 0,
               insufficient_data: false,
             }),
-            'creator:other': makeItem({
-              canonical_creator_key: 'creator:other',
+            'creator:203': makeItem({
+              canonical_creator_key: 'creator:203',
               display_name: 'Other Creator',
               average_rating: 4,
               median_rating: 4,
@@ -658,7 +658,7 @@ describe('CreatorComparisonPage', () => {
       }),
     )
 
-    renderAt('creator:none,creator:other')
+    renderAt('creator:202,creator:203')
 
     const distributions = screen.getAllByTestId('rating-distribution')
     const noneDistribution = distributions[0]
@@ -673,8 +673,8 @@ describe('CreatorComparisonPage', () => {
       baseHook({
         data: makeResponse({
           comparisons: {
-            'creator:half': makeItem({
-              canonical_creator_key: 'creator:half',
+            'creator:204': makeItem({
+              canonical_creator_key: 'creator:204',
               display_name: 'Half-Star Creator',
               ratings_count: 4,
               rating_distribution: { '5': 1, '4.5': 1, '3.5': 1, '3': 1 },
@@ -684,7 +684,7 @@ describe('CreatorComparisonPage', () => {
       }),
     )
 
-    renderAt('creator:half,creator:other')
+    renderAt('creator:204,creator:203')
 
     const distributions = screen.getAllByTestId('rating-distribution')
     const distribution = distributions[0]

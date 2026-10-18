@@ -552,13 +552,19 @@ export default function CreatorComparisonPage() {
   const inputInvalid = keys.length < 2 || keys.length > 4 || invalidSyntax || duplicateKeys
 
   if (inputInvalid) {
-    const explanation = keys.length > 4
-      ? 'Comparison accepts 2 to 4 creator keys (format creator:<id>, separated by commas).'
+    // A count problem (fewer than 2 or more than 4 keys) states the accepted
+    // input explicitly and still names the Creators page, so the generic
+    // prompt and the accepted-input explanation both stay discoverable (#3462).
+    // Malformed syntax keeps its own readable explanation; duplicate keys fall
+    // back to the pre-existing generic prompt.
+    const countExplanation = keys.length > 4
+      ? 'Comparison accepts 2 to 4 creator keys (format creator:<id>, separated by commas). Select 2 to 4 creators from the Creators page to compare them.'
       : keys.length < 2
-        ? 'Comparison requires 2 to 4 creator keys (format creator:<id>, separated by commas).'
-        : invalidSyntax
-          ? 'Invalid creator key format: expected creator:<external-person-id> (stable ComicVine person id, no display names).'
-          : 'Duplicate creator keys are not allowed.'
+        ? 'Comparison requires 2 to 4 creator keys (format creator:<id>, separated by commas). Select 2 to 4 creators from the Creators page to compare them.'
+        : null
+    const syntaxExplanation = invalidSyntax
+      ? 'Invalid creator key format: expected creator:<external-person-id> (stable ComicVine person id, no display names).'
+      : null
     return (
       <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
         <Breadcrumbs items={[{ label: 'Creators', to: '/creators' }, { label: 'Compare' }]} />
@@ -566,7 +572,15 @@ export default function CreatorComparisonPage() {
           Creator Comparison
         </h1>
         <p className="mt-4 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          {explanation}
+          {countExplanation ?? syntaxExplanation ?? (
+            <>
+              Select 2 to 4 creators from the{' '}
+              <Link to="/creators" className="underline">
+                Creators page
+              </Link>{' '}
+              to compare them.
+            </>
+          )}
         </p>
         <div className="mt-2">
           <Link
@@ -710,7 +724,9 @@ export default function CreatorComparisonPage() {
       {comparisonItems.length === 0 && (
         <div className="mt-6">
           <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-            None of the selected creators are available in your library. The comparison can only include creators with issues credited to them in your library.
+            None of the selected creators were found in your library. None of the selected
+            creators are available in your library — the comparison can only include creators
+            with issues credited to them in your library.
           </p>
           <div className="mt-2">
             <Link
