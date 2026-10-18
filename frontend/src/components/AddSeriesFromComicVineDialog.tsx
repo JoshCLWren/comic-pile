@@ -14,6 +14,7 @@ import { useToast } from '../contexts/useToast'
 import { queryClient } from '../query/queryClient'
 import { invalidateAfterQueueMutation } from '../query/cacheEffects'
 import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
+import { LatestRequestGuard, type LoadPhase, type RequestTicket } from '../utils/latestRequest'
 
 interface AddSeriesFromComicVineDialogProps {
   isOpen: boolean
@@ -23,15 +24,33 @@ interface AddSeriesFromComicVineDialogProps {
 
 type DialogStep = 'search' | 'select-series' | 'confirm'
 
-const SEARCH_PAGE_SIZE = 10
+/** The provider page currently listed under the search box. */
+interface SeriesPagination {
+  offset: number
+  limit: number
+  hasMore: boolean
+  nextOffset: number | null
+}
 
-const EMPTY_PAGINATION = {
+/** One provider search, identified well enough to repeat it exactly after a failure. */
+interface SeriesSearch {
+  query: string
+  offset: number
+  append: boolean
+}
+
+const SEARCH_PAGE_SIZE = 10
+const SEARCH_DEBOUNCE_MS = 350
+
+const EMPTY_PAGINATION: SeriesPagination = {
   offset: 0,
   limit: SEARCH_PAGE_SIZE,
   hasMore: false,
-  // SAFETY: null is the correct initial value for an optional number field
-  nextOffset: null as number | null,
+  nextOffset: null,
 }
+
+const SEARCH_ERROR_MESSAGE = 'Failed to search ComicVine. Please try again.'
+const INVALID_RESPONSE_MESSAGE = 'Invalid response from ComicVine. Please try again.'
 
 function seriesMetaParts(series: ComicVineSeriesResult): string[] {
   return [
@@ -70,10 +89,10 @@ function paginationFromResponse(response: {
   limit: number
   has_more: boolean
   next_offset: number | null
-}) {
+}): SeriesPagination {
   return {
     offset: response.offset || 0,
-    limit: response.limit || 10,
+    limit: response.limit || SEARCH_PAGE_SIZE,
     hasMore: response.has_more || false,
     nextOffset: response.next_offset || null,
   }
@@ -137,73 +156,104 @@ export default function AddSeriesFromComicVineDialog({
   const [query, setQuery] = useState('')
   const [seriesResults, setSeriesResults] = useState<ComicVineSeriesResult[]>([])
   const [selectedSeries, setSelectedSeries] = useState<ComicVineSeriesResult | null>(null)
-  const [pagination, setPagination] = useState(EMPTY_PAGINATION)
-  const [isSearching, setIsSearching] = useState(false)
+  const [pagination, setPagination] = useState<SeriesPagination>(EMPTY_PAGINATION)
+  const [searchPhase, setSearchPhase] = useState<LoadPhase>('idle')
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [unknownOutcome, setUnknownOutcome] = useState<string | null>(null)
-  const [hasSearched, setHasSearched] = useState(false)
   const [alreadyReadCount, setAlreadyReadCount] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const asyncRef = useRef(0)
+  // Only the newest provider search may repaint the result list, so every keystroke,
+  // every step change, and every dialog reset abandons the outstanding request first
+  // instead of waiting for a network round trip to notice the reader moved on (#3448).
+  const requestsRef = useRef(new LatestRequestGuard())
   const searchingRef = useRef(false)
+  const lastSearchRef = useRef<SeriesSearch | null>(null)
+
+  const searchLoading = searchPhase === 'loading'
 
   useEffect(() => {
+    const requests = requestsRef.current
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current)
         debounceRef.current = null
       }
+      // Unmounting abandons every outstanding request, so a late response cannot repaint a
+      // component the reader has already dismissed (#3448).
+      requests.abandon()
     }
   }, [])
 
   useEffect(() => {
     if (isOpen) {
+      // Reopening abandons whatever the previous session asked for, so its late response
+      // cannot repopulate a dialog the reader has already reset.
+      requestsRef.current.abandon()
+      searchingRef.current = false
+      lastSearchRef.current = null
       setStep('search')
       setQuery('')
       setSeriesResults([])
       setSelectedSeries(null)
       setPagination(EMPTY_PAGINATION)
+      setSearchPhase('idle')
       setError(null)
       setUnknownOutcome(null)
-      setHasSearched(false)
       setAlreadyReadCount(0)
     }
   }, [isOpen])
 
   const handleSearch = useCallback(
     async (searchQuery: string, offset = 0, append = false) => {
-      if (!searchQuery.trim()) {
+      const trimmed = searchQuery.trim()
+      if (!trimmed) {
+        // An empty field is the idle state, not a failed search.
+        requestsRef.current.abandon()
+        searchingRef.current = false
+        lastSearchRef.current = null
         setSeriesResults([])
-        setHasSearched(false)
         setPagination(EMPTY_PAGINATION)
+        setSearchPhase('idle')
+        setError(null)
         return
       }
-      const requestId = ++asyncRef.current
+      const requestId = requestsRef.current.begin()
       searchingRef.current = true
-      setIsSearching(true)
+      lastSearchRef.current = { query: trimmed, offset, append }
+      if (!append) {
+        // A first page owns the whole list, so it replaces it outright. Enter and Retry both
+        // reach this handler directly, and neither may leave the previous query's rows under
+        // the new one's spinner (#3448).
+        setSeriesResults([])
+        setPagination(EMPTY_PAGINATION)
+      }
+      setSearchPhase('loading')
       setError(null)
-      setHasSearched(true)
       try {
-        const response = await comicVineApi.searchSeries(searchQuery.trim(), SEARCH_PAGE_SIZE, offset)
-        if (requestId !== asyncRef.current) return
+        const response = await comicVineApi.searchSeries(trimmed, SEARCH_PAGE_SIZE, offset)
+        if (!requestsRef.current.isCurrent(requestId)) return
         if (!response?.results) {
-          setError('Invalid response from ComicVine. Please try again.')
+          setError(INVALID_RESPONSE_MESSAGE)
+          // A first page that never arrived leaves nothing trustworthy to show; a failed
+          // next page keeps the series the reader already has.
           setSeriesResults((previous) => (append ? previous : []))
+          setSearchPhase('error')
           return
         }
         setSeriesResults((previous) =>
           append ? mergeSeriesResults(previous, response.results) : response.results,
         )
         setPagination(paginationFromResponse(response))
+        setSearchPhase('ready')
       } catch {
-        if (requestId !== asyncRef.current) return
-        setError('Failed to search ComicVine. Please try again.')
+        if (!requestsRef.current.isCurrent(requestId)) return
+        setError(SEARCH_ERROR_MESSAGE)
         setSeriesResults((previous) => (append ? previous : []))
+        setSearchPhase('error')
       } finally {
-        if (requestId === asyncRef.current) {
-          setIsSearching(false)
+        if (requestsRef.current.isCurrent(requestId)) {
           searchingRef.current = false
         }
       }
@@ -214,24 +264,45 @@ export default function AddSeriesFromComicVineDialog({
   const handleQueryChange = useCallback(
     (value: string) => {
       setQuery(value)
-      if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+      }
+      // Abandon the previous query the moment the box changes, before the debounce fires,
+      // so a late response can never repaint results for a term the reader replaced or
+      // deleted. Clearing the field counts as a change (#3448).
+      requestsRef.current.abandon()
+      searchingRef.current = false
+      lastSearchRef.current = null
+      setError(null)
       if (!value.trim()) {
-        setHasSearched(false)
         setSeriesResults([])
         setPagination(EMPTY_PAGINATION)
+        setSearchPhase('idle')
         return
       }
+      // The previous query's rows belong to the previous query: they must not sit under the
+      // new one's spinner, so the list clears as soon as the new query starts.
+      setSeriesResults([])
+      setPagination(EMPTY_PAGINATION)
+      setSearchPhase('loading')
       debounceRef.current = setTimeout(() => {
-        asyncRef.current += 1
-        handleSearch(value)
-      }, 350)
+        debounceRef.current = null
+        void handleSearch(value)
+      }, SEARCH_DEBOUNCE_MS)
     },
     [handleSearch],
   )
 
+  const handleRetrySearch = useCallback(() => {
+    const failed = lastSearchRef.current
+    if (!failed) return
+    void handleSearch(failed.query, failed.offset, failed.append)
+  }, [handleSearch])
+
   const handleLoadMore = useCallback(() => {
     if (!pagination.hasMore || pagination.nextOffset == null || searchingRef.current) return
-    handleSearch(query, pagination.nextOffset, true)
+    void handleSearch(query, pagination.nextOffset, true)
   }, [pagination, query, handleSearch])
 
   const handleSelectSeries = useCallback((series: ComicVineSeriesResult) => {
@@ -240,7 +311,26 @@ export default function AddSeriesFromComicVineDialog({
     // different run must not carry the previous volume's already-read count
     // into the new confirmation, where it would exceed the new issue count.
     setAlreadyReadCount(0)
+    // The list the reader picked from is settled, so a paging failure stops here instead of
+    // following them onto the confirmation, where no retry could act on it (#3448).
+    requestsRef.current.abandon()
+    searchingRef.current = false
+    setError(null)
+    setSearchPhase(seriesResults.length > 0 ? 'ready' : 'idle')
     setStep('confirm')
+  }, [seriesResults.length])
+
+  const handleBackToSearch = useCallback(() => {
+    // Leaving the list abandons its outstanding request, so a late page cannot repaint
+    // results the reader already walked away from (#3448).
+    requestsRef.current.abandon()
+    searchingRef.current = false
+    // A failed import belongs to the step it happened on: the search screen has no action
+    // that could retry it, so it must not follow the reader back (#3448).
+    setError(null)
+    setUnknownOutcome(null)
+    setStep('search')
+    setSelectedSeries(null)
   }, [])
 
   const finishAdd = useCallback(
@@ -306,14 +396,20 @@ export default function AddSeriesFromComicVineDialog({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && step === 'search' && query.trim()) {
-        if (debounceRef.current) clearTimeout(debounceRef.current)
-        handleSearch(query)
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current)
+          debounceRef.current = null
+        }
+        void handleSearch(query)
       }
     },
     [step, query, handleSearch],
   )
 
   const maxAlreadyRead = selectedSeries?.issue_count ?? 0
+  const showSearchRetry = error !== null && step === 'search' && searchPhase === 'error'
+  const showResults = seriesResults.length > 0
+  const showIdleHint = searchPhase === 'idle' && !query.trim() && !showResults
 
   return (
     <Modal
@@ -333,6 +429,16 @@ export default function AddSeriesFromComicVineDialog({
             }
           >
             {unknownOutcome ?? error}
+            {showSearchRetry && (
+              <button
+                type="button"
+                onClick={handleRetrySearch}
+                data-testid="add-series-comicvine-retry"
+                className="mt-2 min-h-11 px-4 rounded-lg text-sm font-bold text-rose-100 bg-rose-800/60 border border-rose-600/50 hover:bg-rose-800 transition"
+              >
+                Retry
+              </button>
+            )}
           </div>
         )}
 
@@ -351,13 +457,13 @@ export default function AddSeriesFromComicVineDialog({
                 placeholder="Search series title (e.g., Batman, Saga, One Piece)"
                 className="w-full min-h-11 rounded-xl px-4 pr-10 text-sm text-stone-100 bg-stone-800 border border-stone-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
               />
-              {isSearching && (
+              {searchLoading && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                   <div className="w-4 h-4 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
                 </div>
               )}
             </div>
-            {seriesResults.length > 0 && (
+            {showResults && (
               <div className="space-y-2 max-h-96 overflow-y-auto overscroll-contain">
                 {seriesResults.map((series) => (
                   <button
@@ -392,25 +498,20 @@ export default function AddSeriesFromComicVineDialog({
                   <button
                     type="button"
                     onClick={handleLoadMore}
-                    disabled={isSearching}
+                    disabled={searchLoading}
                     className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
                   >
-                    {isSearching ? 'Loading...' : 'Load more'}
+                    {searchLoading ? 'Loading...' : 'Load more'}
                   </button>
                 )}
               </div>
             )}
-            {!isSearching && !query.trim() && (
+            {showIdleHint && (
               <p className="text-sm text-stone-400 text-center py-4">
                 Type a series name to search ComicVine
               </p>
             )}
-            {!isSearching && query.trim() && seriesResults.length === 0 && !hasSearched && (
-              <p className="text-sm text-stone-400 text-center py-4">
-                Search ComicVine for the series you want to add
-              </p>
-            )}
-            {!isSearching && query.trim() && seriesResults.length === 0 && hasSearched && !error && (
+            {searchPhase === 'ready' && !showResults && query.trim() && (
               <p className="text-sm text-stone-300 text-center py-4">
                 No series found. Try a different search term.
               </p>
@@ -422,10 +523,7 @@ export default function AddSeriesFromComicVineDialog({
           <>
             <button
               type="button"
-              onClick={() => {
-                setStep('search')
-                setSelectedSeries(null)
-              }}
+              onClick={handleBackToSearch}
               className="text-sm text-amber-500 hover:text-amber-400 font-bold"
             >
               ← Back to search
