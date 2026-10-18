@@ -575,25 +575,27 @@ export default function CreatorComparisonPage() {
         <h1 className="mt-1 text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
-        <p className="mt-4 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          {countExplanation ?? syntaxExplanation ?? (
-            <>
-              Select 2 to 4 creators from the{' '}
-              <Link to="/creators" className="underline">
-                Creators page
-              </Link>{' '}
-              to compare them.
-            </>
-          )}
-        </p>
-        <div className="mt-2">
-          <Link
-            to="/creators"
-            className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-            style={{ color: 'var(--theme-text-muted)' }}
-          >
-            Back to Creators
-          </Link>
+        <div className="mt-4">
+          <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+            {countExplanation ?? syntaxExplanation ?? (
+              <>
+                Select 2 to 4 creators from the{' '}
+                <Link to="/creators" className="underline">
+                  Creators page
+                </Link>{' '}
+                to compare them.
+              </>
+            )}
+          </p>
+          <div className="mt-2">
+            <Link
+              to="/creators"
+              className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ color: 'var(--theme-text-muted)' }}
+            >
+              Back to Creators
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -693,13 +695,7 @@ export default function CreatorComparisonPage() {
       )}
 
       {affectedNames.length > 0 && (
-        <div
-          className="mt-4 rounded-xl border px-4 py-3"
-          style={{
-            borderColor: 'var(--theme-warning)',
-            backgroundColor: 'color-mix(in srgb, var(--theme-warning) 10%, transparent)',
-          }}
-        >
+        <div className="mt-4 rounded-xl border px-4 py-3">
           <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
             <strong>Note:</strong> Some creators have fewer than 3 rated issues, making their statistics less reliable.
             <span className="break-words ml-2">Affected: {affectedNames.join(', ')}</span>
