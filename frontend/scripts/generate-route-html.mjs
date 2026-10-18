@@ -263,11 +263,28 @@ function renderTemplate(template, data) {
 /**
  * Generate HTML for a specific route
  */
-function generateRouteHtml(route) {
+function extractAssetTags(builtIndexHtml) {
+  if (!builtIndexHtml) {
+    return ''
+  }
+  const tags = []
+  const stylesheetRegex = /<link[^>]*rel=["']stylesheet["'][^>]*>/gi
+  const moduleScriptRegex = /<script[^>]*type=["']module["'][^>]*><\/script>/gi
+  for (const match of builtIndexHtml.match(stylesheetRegex) || []) {
+    tags.push(match.trim())
+  }
+  for (const match of builtIndexHtml.match(moduleScriptRegex) || []) {
+    tags.push(match.trim())
+  }
+  return tags.join('\n    ')
+}
+
+function generateRouteHtml(route, assetTags = '') {
   const canonicalUrl = route.canonicalPath ? `${DEFAULT_PRODUCTION_ORIGIN}${route.canonicalPath}` : null
   const robots = route.visibility === 'public-indexable' ? 'index, follow' : 'noindex, nofollow'
   const ogUrl = canonicalUrl || `${DEFAULT_PRODUCTION_ORIGIN}${route.pattern}`
   const structuredData = route.visibility === 'public-indexable' ? generateStructuredData() : null
+  const assetMarkup = assetTags || '    <script type="module" src="/src/main.tsx"></script>'
 
   return `<!doctype html>
 <html lang="en">
@@ -463,7 +480,7 @@ function generateRouteHtml(route) {
         it to sign in and roll.
       </p>
     </noscript>
-    <script type="module" src="/src/main.tsx"></script>
+    ${assetMarkup}
   </body>
 </html>`
 }
@@ -476,34 +493,37 @@ function main() {
     mkdirSync(buildDir, { recursive: true })
   }
 
+  // Capture the asset references emitted by Vite's build before we overwrite
+  // the generated index.html, so route HTML files bootstrap the real app.
+  const builtIndexHtmlPath = resolve(buildDir, 'index.html')
+  const builtIndexHtml = existsSync(builtIndexHtmlPath)
+    ? readFileSync(builtIndexHtmlPath, 'utf-8')
+    : ''
+  const assetTags = extractAssetTags(builtIndexHtml)
+
   // Generate HTML for each route
   for (const route of ROUTE_SEO_TABLE) {
     // Skip parameterized routes as they can't have static HTML files
     if (route.pattern.includes(':')) {
       continue
     }
-    
+
     const routePath = route.pattern === '/' ? 'index.html' : `${route.pattern.slice(1)}.html`
     const htmlPath = resolve(buildDir, routePath)
-    
+
     // Create directory if it doesn't exist
     const htmlDir = dirname(htmlPath)
     if (!existsSync(htmlDir)) {
       mkdirSync(htmlDir, { recursive: true })
     }
-    
-    const html = generateRouteHtml(route)
+
+    const html = generateRouteHtml(route, assetTags)
     writeFileSync(htmlPath, html)
-    
+
     console.log(`✓ Generated ${routePath}`)
   }
 
-  // Copy the original index.html as a fallback
-  const originalIndexHtml = resolve(frontendDir, 'index.html')
-  const fallbackIndexHtml = resolve(buildDir, 'index.html')
-  writeFileSync(fallbackIndexHtml, readFileSync(originalIndexHtml, 'utf-8'))
-  
-  console.log(`✓ Generated fallback index.html`)
+  console.log(`✓ Generated route HTML files`)
 }
 
 // Export functions for testing
