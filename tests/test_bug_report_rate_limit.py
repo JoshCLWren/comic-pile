@@ -67,14 +67,15 @@ def _configured_github() -> Iterator[AsyncMock]:
         yield mock_create
 
 
-async def _client_for_user(async_db: AsyncSession, username: str, *, is_admin: bool) -> AsyncClient:
+async def _client_for_user(async_db: AsyncSession, username: str, *, is_admin: bool, override_get_db: bool = True) -> AsyncClient:
     """Create an authenticated client for a freshly created user."""
     user = User(username=username, is_admin=is_admin, created_at=datetime.now(UTC))
     async_db.add(user)
     await async_db.commit()
     await async_db.refresh(user)
 
-    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
+    if override_get_db:
+        app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     ac = AsyncClient(transport=transport, base_url="http://test")
     csrf_token = generate_csrf_token()
@@ -99,7 +100,7 @@ async def admin_client(async_db: AsyncSession) -> AsyncIterator[AsyncClient]:
 async def second_user_client(async_db: AsyncSession) -> AsyncIterator[AsyncClient]:
     """Authenticated second non-admin client for per-user key verification."""
     async with await _client_for_user(
-        async_db, "rate_limit_second_user", is_admin=False
+        async_db, "rate_limit_second_user", is_admin=False, override_get_db=False
     ) as ac:
         yield ac
     app.dependency_overrides.clear()
