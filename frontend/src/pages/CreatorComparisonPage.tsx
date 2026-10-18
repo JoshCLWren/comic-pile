@@ -195,7 +195,7 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
   const detailPath = isValidKey ? creatorRoutePath(item.canonical_creator_key) : null
 
   return (
-    <section className="min-w-0 flex-1 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+    <section className="min-w-0 flex-1 max-w-full rounded-2xl border p-4 md:p-6" style="{ borderColor: "var(--theme-border)", backgroundColor: "var(--theme-bg-panel)" }">
       <header className="mb-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
