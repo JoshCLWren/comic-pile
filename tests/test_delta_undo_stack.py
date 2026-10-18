@@ -147,6 +147,8 @@ async def test_delta_undo_is_lifo_and_consumes_snapshots(
     assert second_undo.status_code == 200
     assert second_undo.json()["current_die"] == 8
     assert second_undo.json()["ladder_path"] == "6 → 8 → 10 → 8"
+    assert second_undo.json()["snapshot_count"] == 1
+    assert second_undo.json()["has_restore_point"] is True
 
     await async_db.refresh(second_thread)
     assert second_thread.issues_remaining == 5
@@ -167,6 +169,8 @@ async def test_delta_undo_is_lifo_and_consumes_snapshots(
     assert first_undo.status_code == 200
     assert first_undo.json()["current_die"] == 6
     assert first_undo.json()["ladder_path"] == "6 → 8 → 10 → 8 → 6"
+    assert first_undo.json()["snapshot_count"] == 0
+    assert first_undo.json()["has_restore_point"] is False
 
     await async_db.refresh(first_thread)
     assert first_thread.issues_remaining == 5

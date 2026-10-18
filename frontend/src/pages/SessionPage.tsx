@@ -184,7 +184,6 @@ export default function SessionPage() {
     try {
       await undoMutation.mutate({ sessionId: details.session_id, snapshotId })
       await refetchDetails()
-      await refetchSnapshots()
       await invalidateAfterUndo(queryClient)
       showToast('Last change undone.', 'success')
     } catch (error) {
@@ -198,7 +197,6 @@ export default function SessionPage() {
       await restoreMutation.mutate(details.session_id)
       setIsRestoreConfirmationOpen(false)
       await refetchDetails()
-      await refetchSnapshots()
       await invalidateAfterUndo(queryClient)
       showToast('Session restored to its starting state.', 'success')
     } catch (error) {
