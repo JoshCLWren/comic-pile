@@ -32,6 +32,7 @@ interface VercelConfig {
   routes: VercelRoute[]
 }
 
+// SAFETY: vercel.json is a build-controlled config file whose routes array is validated by the test suite below.
 const config = JSON.parse(readFileSync(VERCEL_CONFIG_PATH, 'utf-8')) as VercelConfig
 const routes = config.routes
 
