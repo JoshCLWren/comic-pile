@@ -286,8 +286,10 @@ async def test_concurrent_submissions_cannot_bypass_limit(db_engine: AsyncEngine
         assert stored.last_submitted_at is not None
 
     async with session_maker() as cleanup:
-        await cleanup.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
-        await cleanup.commit()
+        user = await cleanup.get(User, user_id)
+        if user is not None:
+            await cleanup.delete(user)
+            await cleanup.commit()
 
 
 def _migration_path() -> Path:

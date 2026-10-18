@@ -145,7 +145,7 @@ async def submit_github_issue(
             username=username,
             diagnostics_data=diagnostics,
         )
-    except BaseException:
+    except Exception:
         # The claim is uncommitted; rolling back releases the row lock without
         # consuming the user's allowance.
         await db.rollback()
