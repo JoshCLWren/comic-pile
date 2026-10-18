@@ -139,6 +139,7 @@ async def renormalize_queue_positions(db: AsyncSession, user_id: int) -> None:
     threads = result.scalars().all()
     for index, thread in enumerate(threads, start=1):
         thread.queue_position = index
+    await db.flush()
 
 
 async def find_recent_duplicate(
@@ -473,6 +474,7 @@ async def delete_thread(db: AsyncSession, thread: Thread) -> None:
         thread: Thread instance to delete.
     """
     await db.delete(thread)
+    await db.flush()
 
 
 async def delete_threads_by_ids(db: AsyncSession, thread_ids: set[int], user_id: int) -> None:

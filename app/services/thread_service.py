@@ -972,6 +972,9 @@ async def restore_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
         thread.status = "completed"
         thread.queue_position = 0
 
+    if thread.status == "active":
+        await thread_repository.renormalize_queue_positions(db, user_id)
+
     await db.commit()
     await db.refresh(thread)
     return await thread_to_response(thread, db)
@@ -1044,6 +1047,7 @@ async def reactivate_completed_thread(
 
     thread.status = "active"
     thread.queue_position = 1
+    await thread_repository.renormalize_queue_positions(db, user_id)
     await db.commit()
     await db.refresh(thread)
 
