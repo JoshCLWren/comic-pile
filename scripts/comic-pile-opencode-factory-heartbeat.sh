@@ -888,7 +888,7 @@ while true; do
   log_file="$WORKTREE/.opencode_logs/factory_${timestamp}_heartbeat_${heartbeat}.log"
   printf '\n[%s] Starting heartbeat %d (model %s)\n' "$(date --iso-8601=seconds)" "$heartbeat" "$MODEL"
 
-  opencode_args=(run -m "$MODEL" --dir "$WORKTREE" --title "ComicPile factory heartbeat ${timestamp}")
+  opencode_args=(run -m "$MODEL" --title "ComicPile factory heartbeat ${timestamp}")
   [[ -n "$AGENT" ]] && opencode_args+=(--agent "$AGENT")
   [[ "$USE_AUTO" == "1" ]] && opencode_args+=(--auto)
 
@@ -900,13 +900,14 @@ while true; do
 
   set +e
   setsid bash -c '
-    LOG="$1"; HB="$2"; shift 2
-    opencode "$@" 2>&1 | while IFS= read -r line; do
+    LOG="$1"; HB="$2"; WT="$3"; shift 3
+    # OpenCode 2 rejects `opencode run --dir`; run from the worktree instead.
+    (cd "$WT" && exec opencode "$@") 2>&1 | while IFS= read -r line; do
       touch "$HB"
       printf "%s\n" "$line"
     done | tee "$LOG"
     exit "${PIPESTATUS[0]}"
-  ' _ "$log_file" "$hb_file" "${opencode_args[@]}" "$FACTORY_PROMPT" &
+  ' _ "$log_file" "$hb_file" "$WORKTREE" "${opencode_args[@]}" "$FACTORY_PROMPT" &
   run_pid=$!
   (
     while kill -0 "$run_pid" 2>/dev/null; do

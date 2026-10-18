@@ -57,7 +57,7 @@ Construct a self-contained prompt string. It should:
 
 Run:
 ```bash
-opencode run -m "<resolved-model-id>" --dir "<current working directory>" "<prompt>"
+(cd "<current working directory>" && opencode run -m "<resolved-model-id>" "<prompt>")
 ```
 
 Stream the output. When it finishes, check if a `_done.md` file was written and show the user a summary of what the agent did.
