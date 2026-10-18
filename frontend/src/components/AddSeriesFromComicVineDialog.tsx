@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import Modal from './Modal'
 import { comicVineApi } from '../services/api-comicvine'
 import type {
@@ -14,6 +15,7 @@ import { useToast } from '../contexts/useToast'
 import { queryClient } from '../query/queryClient'
 import { invalidateAfterQueueMutation } from '../query/cacheEffects'
 import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
+import { queryKeys } from '../query/queryKeys'
 
 interface AddSeriesFromComicVineDialogProps {
   isOpen: boolean
@@ -155,7 +157,6 @@ export default function AddSeriesFromComicVineDialog({
   const [unknownOutcome, setUnknownOutcome] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
   const [alreadyReadCount, setAlreadyReadCount] = useState(0)
-  const [existingSeries, setExistingSeries] = useState<ComicVineSeriesImportStatus | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const asyncRef = useRef(0)
@@ -194,25 +195,12 @@ export default function AddSeriesFromComicVineDialog({
    * keeps the fresh-add copy; the import itself stays idempotent server-side,
    * so a stale "new series" fallback never creates a duplicate row.
    */
-  useEffect(() => {
-    if (!isOpen || step !== 'confirm' || !selectedSeries) {
-      return
-    }
-    let cancelled = false
-    comicVineApi.getSeriesImportStatus(selectedSeries.comicvine_volume_id)
-      .then((status) => {
-        if (!cancelled && status?.imported) {
-          setExistingSeries(status)
-        }
-      })
-      .catch(() => {
-        // An unreachable status check keeps the fresh-add copy in place; the
-        // import itself stays idempotent server-side either way.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [isOpen, step, selectedSeries])
+  const { data: existingSeries } = useQuery({
+    queryKey: queryKeys.comicVine.importStatus(selectedSeries?.comicvine_volume_id),
+    queryFn: () => comicVineApi.getSeriesImportStatus(selectedSeries!.comicvine_volume_id),
+    enabled: isOpen && step === 'confirm' && !!selectedSeries,
+    retry: false,
+  })
 
   const handleSearch = useCallback(
     async (searchQuery: string, offset = 0, append = false) => {
@@ -282,9 +270,6 @@ export default function AddSeriesFromComicVineDialog({
     // different run must not carry the previous volume's already-read count
     // into the new confirmation, where it would exceed the new issue count.
     setAlreadyReadCount(0)
-    // Drop the previous volume's linked status so the confirm copy starts
-    // fresh; the status effect refills it from the server for this volume.
-    setExistingSeries(null)
     setStep('confirm')
   }, [])
 

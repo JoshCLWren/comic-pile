@@ -66,7 +66,7 @@ export const queryKeys = {
     /**
      * Canonical key for the authoritative active-series total (`active_count`)
      * on its own. Surfaces that need the whole-queue size without loading any
-     * page — the Roll shuffle confirmation (#3261) — read this instead of
+     * page - the Roll shuffle confirmation (#3261) - read this instead of
      * hydrating the paginated list. It sits beside `pages`, not under it, so a
      * bounded count never participates in the queue loader's page reset.
      */
@@ -243,6 +243,11 @@ export const queryKeys = {
      * repair dialog is open, so Queue rendering never pays per-card issue fetches.
      */
     queueSeriesOrigin: (threadId: number) => ['comicVine', 'queueSeriesOrigin', threadId] as const,
+    /**
+     * Canonical key for checking whether a ComicVine series is already imported.
+     * Used in the add series dialog to determine whether to show "already in queue" copy.
+     */
+    importStatus: (volumeId: number) => ['comicVine', 'importStatus', volumeId] as const,
   },
   readerContext: {
     all: ['readerContext'] as const,
