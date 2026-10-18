@@ -15,7 +15,7 @@ import type {
   SeriesMappingClassification,
   SeriesMappingPreviewRow,
 } from '../services/api-series-mapping'
-import { getApiErrorDetail } from '../utils/apiError'
+import { getApiErrorDetail, isIndeterminateApiOutcome } from '../utils/apiError'
 
 interface QueueMapSeriesDialogProps {
   isOpen: boolean
@@ -248,10 +248,16 @@ export default function QueueMapSeriesDialog({
 
   const commitErrorDetail = commit.isError ? getApiErrorDetail(commit.error) : null
   const previewIsStale = commitErrorDetail !== null && STALE_PREVIEW_DETAILS.has(commitErrorDetail)
+  const commitOutcomeUnknown = commit.isError && isIndeterminateApiOutcome(commit.error)
 
   const commitMessage = (() => {
     if (!commit.isError) return null
     if (previewIsStale) return 'That preview is out of date. Reviewing the series again.'
+    if (commitOutcomeUnknown) {
+      // A lost response does not prove nothing changed: the mappings may have committed.
+      // Approving again replays the same idempotency key, so retrying is safe.
+      return 'Could not confirm the mapping result. Any saved mappings are safe; map again to replay the request.'
+    }
     return 'Could not map the series. Nothing was changed.'
   })()
 
