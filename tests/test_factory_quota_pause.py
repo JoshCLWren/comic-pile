@@ -12,10 +12,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / ".github" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
-
-import factory_quota_pause as qp  # noqa: E402
+_SPEC = importlib.util.spec_from_file_location("factory_quota_pause", SCRIPTS / "factory_quota_pause.py")
+assert _SPEC and _SPEC.loader
+qp = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = qp
+_SPEC.loader.exec_module(qp)
 
 BEFORE_RESET = datetime(2026, 10, 18, 13, 0, tzinfo=UTC)
 AFTER_RESET = datetime(2026, 11, 1, 0, 0, 1, tzinfo=UTC)
