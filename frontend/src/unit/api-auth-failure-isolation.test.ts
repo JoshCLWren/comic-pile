@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createApiClient, getAccessToken, setAccessToken } from '../services/api'
 import type { ApiRequestConfig } from '../services/httpClient'
+import type { Thread } from '../types'
 import { createTransportDouble } from './transportDouble'
 
 const transport = createTransportDouble()
 createApiClient(() => transport)
+// SAFETY: createApiClient registered this mock's response error handler;
+// successful replays in these tests resolve to a thread with an id.
 const responseError = transport.interceptors.response.use.mock.calls[0][1] as (
   error: { config?: ApiRequestConfig; response?: { status: number; data?: unknown }; message?: string },
-) => Promise<unknown>
+) => Promise<Pick<Thread, 'id'>>
 
 beforeEach(() => {
   transport.post.mockReset()
