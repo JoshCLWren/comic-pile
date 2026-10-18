@@ -3,11 +3,7 @@ import type { ReactNode } from 'react'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
-import type {
-  CreatorInsightIssue,
-  CreatorIssueRow,
-  CreatorSeriesGroup,
-} from '../services/api-creators'
+import type { CreatorIssueRow, CreatorSeriesGroup } from '../services/api-creators'
 import Breadcrumbs from '../components/Breadcrumbs'
 
 function formatRatingDate(value: string | null): string | null {
@@ -106,7 +102,11 @@ function InsightSeriesCard({ label, group }: { label: string; group: CreatorSeri
   )
 }
 
-function InsightIssueCard({ label, issue }: { label: string; issue: CreatorInsightIssue }) {
+// Type-only inline import keeps the creator insights contract sourced from the
+// API module without adding another entry to this module's shared import block.
+type InsightIssueSummary = import('../services/api-creators').CreatorInsightIssue
+
+function InsightIssueCard({ label, issue }: { label: string; issue: InsightIssueSummary }) {
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
       <Link
