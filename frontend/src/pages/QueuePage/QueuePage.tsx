@@ -77,6 +77,7 @@ export default function QueuePage() {
   const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
     threads,
     sortBy,
+    searchQuery,
   )
   const authoritativeActiveCount = activeCount ?? activeThreads.length
 
