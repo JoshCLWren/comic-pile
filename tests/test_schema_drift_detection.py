@@ -74,10 +74,10 @@ def test_has_schema_drift_returns_false_for_matching_schema(
     assert test_conftest._has_schema_drift(object()) is False
 
 
-def test_has_schema_drift_detects_missing_issue_position_index(
+def test_has_schema_drift_does_not_detect_removed_redundant_index(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Missing indexes should trigger schema recreation."""
+    """Removed redundant indexes should not trigger schema drift."""
     fake_inspector = build_fake_inspector()
     fake_inspector.indexes["issues"].remove("ix_issue_thread_position")
 
@@ -86,7 +86,7 @@ def test_has_schema_drift_detects_missing_issue_position_index(
 
     monkeypatch.setattr(test_conftest, "inspect", fake_inspect)
 
-    assert test_conftest._has_schema_drift(object()) is True
+    assert test_conftest._has_schema_drift(object()) is False
 
 
 def test_has_schema_drift_detects_missing_issue_unique_constraint(

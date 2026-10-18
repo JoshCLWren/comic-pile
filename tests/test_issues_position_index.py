@@ -73,27 +73,24 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
             index_names.update(collect_index_names(child))
         return index_names
 
-    # Either the explicit index or the unique constraint's index can be used
+    # After #3219, only the unique constraint's backing index should exist and be used
     index_names = collect_index_names(plan_nodes)
-    assert any(name in index_names for name in ["ix_issue_thread_position", "uq_issue_thread_position"]), (
-        f"Plan did not reference either ix_issue_thread_position or uq_issue_thread_position after sequential scans were disabled. Found indexes: {index_names}"
+    assert "uq_issue_thread_position" in index_names, (
+        f"Plan did not reference uq_issue_thread_position after sequential scans were disabled. Found indexes: {index_names}"
     )
 
-    # Also verify the backing index for (thread_id, position) actually exists.
-    # After #3219, the ordinary ix_issue_thread_position index is dropped and the
-    # unique constraint uq_issue_thread_position provides the same B-tree index,
-    # so both names satisfy the lookup/order coverage requirement.
+    # After #3219, only the unique constraint's backing index should exist
     index_check = text("""
         SELECT 1 FROM pg_indexes
         WHERE tablename = 'issues'
-        AND indexname IN ('ix_issue_thread_position', 'uq_issue_thread_position')
+        AND indexname = 'uq_issue_thread_position'
     """)
 
     index_result = await async_db_committed.execute(index_check)
     index_exists = index_result.scalar()
 
     assert index_exists is not None, (
-        "Neither ix_issue_thread_position nor uq_issue_thread_position exists in database"
+        "uq_issue_thread_position index does not exist in database"
     )
 
 
