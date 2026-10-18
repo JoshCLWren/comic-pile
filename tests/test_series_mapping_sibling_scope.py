@@ -29,6 +29,9 @@ from app.services import catalog_series_commit
 PREVIEW_URL = "/api/v1/catalog/series-mappings/preview"
 COMMIT_URL = "/api/v1/catalog/series-mappings/commit"
 
+HYDRATION_TEST_USER_ID = 1
+"""Logging-only user id for direct hydration unit tests (no database row is involved)."""
+
 VOLUME_ID = 20764
 ORIGIN_COMICVINE_ISSUE_ID = 400012345
 SIBLING_COMICVINE_ISSUE_IDS = {2: 400012346, 3: 400012347}
@@ -721,7 +724,7 @@ class TestHydrationBudget:
         monkeypatch.setattr(catalog_series_commit, "HYDRATION_BUDGET_SECONDS", 0.05)
 
         await catalog_series_commit._hydrate_after_commit(
-            user_id=1, identity_ids=list(range(1, 17))
+            user_id=HYDRATION_TEST_USER_ID, identity_ids=list(range(1, 17))
         )
 
         assert 0 < len(attempted) < 16
@@ -740,7 +743,9 @@ class TestHydrationBudget:
 
         monkeypatch.setattr("app.services.comicvine_fallback.refresh_issue_metadata", flaky)
 
-        await catalog_series_commit._hydrate_after_commit(user_id=1, identity_ids=[1, 2, 3])
+        await catalog_series_commit._hydrate_after_commit(
+            user_id=HYDRATION_TEST_USER_ID, identity_ids=[1, 2, 3]
+        )
 
         assert attempted == [1, 2, 3]
 
@@ -754,6 +759,8 @@ class TestHydrationBudget:
 
         monkeypatch.setattr("app.services.comicvine_fallback.refresh_issue_metadata", record)
 
-        await catalog_series_commit._hydrate_after_commit(user_id=1, identity_ids=[])
+        await catalog_series_commit._hydrate_after_commit(
+            user_id=HYDRATION_TEST_USER_ID, identity_ids=[]
+        )
 
         assert attempted == []
