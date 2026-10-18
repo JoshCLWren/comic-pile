@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
-from app.repositories import issue_repository
+from app.repositories import issue_repository, thread_repository
 from app.schemas.tags import TagTargetType
 from app.services.issue_insertion import create_issues_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
@@ -446,10 +446,19 @@ async def delete_issue(
             i.position -= 1
 
     state = apply_thread_issue_tracking_state(thread, remaining_issues)
+    queue_changed = False
     if state.issues_remaining == 0:
-        thread.apply_derived_status("completed")
+        if thread.apply_derived_status("completed"):
+            queue_changed = True
     elif thread.status == "completed":
-        thread.apply_derived_status("active")
+        if thread.apply_derived_status("active"):
+            if thread.queue_position < 1:
+                thread.queue_position = (
+                    await thread_repository.max_queue_position(db, current_user_id) + 1
+                )
+            queue_changed = True
+    if queue_changed:
+        await thread_repository.renormalize_queue_positions(db, current_user_id)
 
     event = Event(
         type="issue_deleted",
@@ -562,7 +571,11 @@ async def mark_issue_read(
         thread.next_unread_issue_id = None
         thread.reading_progress = "completed"
         thread.issues_remaining = 0
-        thread.apply_derived_status("completed")
+        if thread.apply_derived_status("completed"):
+            # Completing the series removes it from the active queue; close the
+            # gap it leaves so Queue, roll card, and thread page keep a dense
+            # 1..N position (#3449).
+            await thread_repository.renormalize_queue_positions(db, current_user_id)
 
     event = Event(
         type="issue_read",
@@ -611,7 +624,12 @@ async def mark_issue_unread(
     thread.issues_remaining = await thread.get_issues_remaining(db)
 
     if thread_was_completed:
-        thread.apply_derived_status("active")
+        if thread.apply_derived_status("active"):
+            if thread.queue_position < 1:
+                thread.queue_position = (
+                    await thread_repository.max_queue_position(db, current_user_id) + 1
+                )
+            await thread_repository.renormalize_queue_positions(db, current_user_id)
 
     event = Event(
         type="issue_unread",
@@ -661,15 +679,23 @@ async def bulk_mark_issue_read(
 
     # Gather unique threads to recalculate tracking once per thread
     thread_ids = {issue.thread_id for issue in issues}
+    queue_changed = False
     for thread_id in thread_ids:
         thread = await get_owned_thread_or_404(db, current_user_id, thread_id)
         adopted_issues = await issue_repository.issues_ordered(db, thread_id)
         tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
         if tracking_state.next_unread_issue_id is None:
-            thread.apply_derived_status("completed")
-        else:
-            if thread.status == "completed":
-                thread.apply_derived_status("active")
+            if thread.apply_derived_status("completed"):
+                queue_changed = True
+        elif thread.status == "completed":
+            if thread.apply_derived_status("active"):
+                if thread.queue_position < 1:
+                    thread.queue_position = (
+                        await thread_repository.max_queue_position(db, current_user_id) + 1
+                    )
+                queue_changed = True
+    if queue_changed:
+        await thread_repository.renormalize_queue_positions(db, current_user_id)
 
     # Create events for each issue
     for issue in issues:
@@ -718,15 +744,23 @@ async def bulk_mark_issue_unread(
         issue.read_at = None
 
     thread_ids = {issue.thread_id for issue in issues}
+    queue_changed = False
     for thread_id in thread_ids:
         thread = await get_owned_thread_or_404(db, current_user_id, thread_id)
         adopted_issues = await issue_repository.issues_ordered(db, thread_id)
         tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
         if tracking_state.next_unread_issue_id is None:
-            thread.apply_derived_status("completed")
-        else:
-            if thread.status == "completed":
-                thread.apply_derived_status("active")
+            if thread.apply_derived_status("completed"):
+                queue_changed = True
+        elif thread.status == "completed":
+            if thread.apply_derived_status("active"):
+                if thread.queue_position < 1:
+                    thread.queue_position = (
+                        await thread_repository.max_queue_position(db, current_user_id) + 1
+                    )
+                queue_changed = True
+    if queue_changed:
+        await thread_repository.renormalize_queue_positions(db, current_user_id)
 
     for issue in issues:
         event = Event(
