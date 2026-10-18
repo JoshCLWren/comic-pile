@@ -92,7 +92,7 @@ def test_rejects_non_utc_and_duplicates(tmp_path: Path) -> None:
 def test_is_paused_handles_non_numeric_ids() -> None:
     """Non-numeric worker ids are never paused."""
     assert qp.is_paused("local") is None
-    assert qp.is_paused(None) is None  # type: ignore[arg-type]
+    assert qp.is_paused(None) is None
     assert qp.is_paused("48", now=BEFORE_RESET) is not None
 
 
@@ -161,3 +161,11 @@ def test_dispatch_workflows_filter_paused_workers() -> None:
     for name in ("fixed-model-factory-dispatch.yml", "fixed-model-factory-capacity-refill.yml"):
         text = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
         assert text.index("factory_quota_pause.py filter") < text.index('controller" capacity')
+
+
+def test_scheduled_batch_filters_pauses_before_offer_cap() -> None:
+    """Paused lanes must not displace eligible workers inside the offer cap."""
+    text = (ROOT / ".github/workflows/fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
+    scheduled = text[text.index("source_seed=") : text.index("Scheduled batch:")]
+    assert 'head -n "$offer_count"' not in scheduled
+    assert scheduled.index("factory_quota_pause.py filter") < scheduled.index(".[:$cap]")

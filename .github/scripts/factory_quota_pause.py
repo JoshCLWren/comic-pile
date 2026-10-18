@@ -78,7 +78,7 @@ def active_pauses(
     return {pause.worker: pause for pause in items if pause.paused_until > now}
 
 
-def is_paused(worker: int | str, now: datetime | None = None) -> QuotaPause | None:
+def is_paused(worker: int | str | None, now: datetime | None = None) -> QuotaPause | None:
     """Return the active pause for a worker, or None."""
     # Avoid tuple-except syntax that differs across Python versions; the
     # dispatcher runs this with the runner's system python3.
