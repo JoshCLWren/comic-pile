@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
@@ -1198,6 +1198,328 @@ describe('ComicVineSearchDialog sibling mapping offer (#3159)', () => {
     fireEvent.click(screen.getByTestId('sibling-mapping-dismiss'))
 
     expect(onClose).toHaveBeenCalled()
+  })
+})
+
+describe('ComicVineSearchDialog single-state loading (#3448)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    searchSeriesSpy.mockResolvedValue({ query: '', results: [mockSeries], total_available: 1, offset: 0, limit: 10, has_more: false, next_offset: null })
+    getSeriesIssuesSpy.mockResolvedValue({ comicvine_volume_id: 42, series_name: 'Stormwatch', issues: [mockIssue] })
+  })
+
+  function deferred<T>() {
+    let resolve: (value: T) => void = () => {}
+    let reject: (reason?: unknown) => void = () => {}
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  type SeriesResponse = {
+    query: string
+    results: (typeof mockSeries)[]
+    total_available: number
+    offset: number
+    limit: number
+    has_more: boolean
+    next_offset: number | null
+  }
+
+  it('clears stale series results and the spinner when a search fails', async () => {
+    const { container } = render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+
+    searchSeriesSpy.mockRejectedValueOnce(new Error('provider down'))
+    fireEvent.change(input, { target: { value: 'Stormwatch Fails' } })
+
+    await waitFor(() =>
+      expect(screen.getByText('Failed to search ComicVine. Please try again.')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('Stormwatch')).not.toBeInTheDocument()
+    expect(container.querySelector('.animate-spin')).toBeNull()
+    expect(screen.getByTestId('comicvine-retry')).toBeInTheDocument()
+  })
+
+  it('retries a failed search and recovers without a stale error', async () => {
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    searchSeriesSpy.mockRejectedValueOnce(new Error('provider down'))
+    fireEvent.change(input, { target: { value: 'Recover Query' } })
+    await waitFor(() => expect(screen.getByTestId('comicvine-retry')).toBeInTheDocument())
+
+    searchSeriesSpy.mockResolvedValueOnce({
+      query: 'Recover Query',
+      results: [{ ...mockSeries, name: 'Recovered Series' }],
+      total_available: 1,
+      offset: 0,
+      limit: 10,
+      has_more: false,
+      next_offset: null,
+    })
+    fireEvent.click(screen.getByTestId('comicvine-retry'))
+
+    await waitFor(() => expect(screen.getByText('Recovered Series')).toBeInTheDocument())
+    expect(searchSeriesSpy).toHaveBeenLastCalledWith('Recover Query', 10, 0)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('never shows "No match" while the issue list failed to load, and retry refetches', async () => {
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '40' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+
+    getSeriesIssuesSpy.mockRejectedValueOnce(new Error('provider down'))
+    fireEvent.click(screen.getByText('Stormwatch'))
+
+    await waitFor(() =>
+      expect(screen.getByText('Failed to load issues. Please try again.')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText(/No match for #40/)).not.toBeInTheDocument()
+
+    getSeriesIssuesSpy.mockResolvedValueOnce({
+      comicvine_volume_id: 42,
+      series_name: 'Stormwatch',
+      issues: [{ ...mockIssue, issue_number: '40', name: 'Forty' }],
+    })
+    fireEvent.click(screen.getByTestId('comicvine-retry'))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument(),
+    )
+    expect(getSeriesIssuesSpy).toHaveBeenLastCalledWith(42, 'Stormwatch')
+  })
+
+  it('ignores an out-of-order series response so the latest query wins', async () => {
+    const first = deferred<SeriesResponse>()
+    const second = deferred<SeriesResponse>()
+    searchSeriesSpy.mockImplementation((searchQuery: string) =>
+      searchQuery === 'First Query' ? first.promise : second.promise,
+    )
+
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    fireEvent.change(input, { target: { value: 'First Query' } })
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('First Query', 10, 0))
+
+    fireEvent.change(input, { target: { value: 'Second Query' } })
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Second Query', 10, 0))
+
+    await act(async () => {
+      second.resolve({
+        query: 'Second Query',
+        results: [{ ...mockSeries, comicvine_volume_id: 22, name: 'Second Series' }],
+        total_available: 1,
+        offset: 0,
+        limit: 10,
+        has_more: false,
+        next_offset: null,
+      })
+    })
+    expect(screen.getByText('Second Series')).toBeInTheDocument()
+
+    await act(async () => {
+      first.resolve({
+        query: 'First Query',
+        results: [{ ...mockSeries, comicvine_volume_id: 11, name: 'First Series' }],
+        total_available: 1,
+        offset: 0,
+        limit: 10,
+        has_more: false,
+        next_offset: null,
+      })
+    })
+    expect(screen.getByText('Second Series')).toBeInTheDocument()
+    expect(screen.queryByText('First Series')).not.toBeInTheDocument()
+  })
+
+  it('ignores a stale response that lands while a newer query is still debouncing', async () => {
+    const first = deferred<SeriesResponse>()
+    const second = deferred<SeriesResponse>()
+    searchSeriesSpy.mockImplementation((searchQuery: string) =>
+      searchQuery === 'First Query' ? first.promise : second.promise,
+    )
+
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    fireEvent.change(input, { target: { value: 'First Query' } })
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('First Query', 10, 0))
+
+    fireEvent.change(input, { target: { value: 'Second Query' } })
+    await act(async () => {
+      first.resolve({
+        query: 'First Query',
+        results: [{ ...mockSeries, comicvine_volume_id: 11, name: 'First Series' }],
+        total_available: 1,
+        offset: 0,
+        limit: 10,
+        has_more: false,
+        next_offset: null,
+      })
+    })
+
+    expect(screen.queryByText('First Series')).not.toBeInTheDocument()
+  })
+
+  it('ignores a stale response that lands after the reader clears the query', async () => {
+    const first = deferred<SeriesResponse>()
+    searchSeriesSpy.mockImplementationOnce(() => first.promise)
+
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    fireEvent.change(input, { target: { value: 'Abandoned Query' } })
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Abandoned Query', 10, 0))
+
+    fireEvent.change(input, { target: { value: '' } })
+    await waitFor(() =>
+      expect(screen.getByText('Type a series name to search ComicVine')).toBeInTheDocument(),
+    )
+
+    await act(async () => {
+      first.resolve({
+        query: 'Abandoned Query',
+        results: [{ ...mockSeries, comicvine_volume_id: 21, name: 'Abandoned Series' }],
+        total_available: 1,
+        offset: 0,
+        limit: 10,
+        has_more: false,
+        next_offset: null,
+      })
+    })
+
+    // Clearing the field abandons the query, so its late response must not repopulate the
+    // result list next to the "type a series name" hint.
+    expect(screen.queryByText('Abandoned Series')).not.toBeInTheDocument()
+    expect(screen.getByText('Type a series name to search ComicVine')).toBeInTheDocument()
+  })
+
+  it('ignores a stale response that lands after the dialog context resets', async () => {
+    const first = deferred<SeriesResponse>()
+    searchSeriesSpy.mockImplementationOnce(() => first.promise)
+
+    const { rerender } = render(
+      <ComicVineSearchDialog {...defaultProps({ threadTitle: 'Stormwatch Vol. 1' })} />,
+    )
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch Vol. 1', 10, 0))
+
+    rerender(<ComicVineSearchDialog {...defaultProps({ threadTitle: 'The Authority' })} />)
+    expect(
+      screen.getByPlaceholderText('Search series title or paste a ComicVine URL'),
+    ).toHaveValue('The Authority')
+
+    await act(async () => {
+      first.resolve({
+        query: 'Stormwatch Vol. 1',
+        results: [{ ...mockSeries, comicvine_volume_id: 31, name: 'Stale Series' }],
+        total_available: 1,
+        offset: 0,
+        limit: 10,
+        has_more: false,
+        next_offset: null,
+      })
+    })
+
+    expect(screen.queryByText('Stale Series')).not.toBeInTheDocument()
+  })
+
+  it('does not carry a failed issue load back onto the search screen', async () => {
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '40' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+
+    getSeriesIssuesSpy.mockRejectedValueOnce(new Error('provider down'))
+    fireEvent.click(screen.getByText('Stormwatch'))
+
+    await waitFor(() =>
+      expect(screen.getByText('Failed to load issues. Please try again.')).toBeInTheDocument(),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '← Back to search' }))
+
+    // The issue step's failure belongs to the issue step: the search screen must not inherit
+    // an error (or a retry that would re-run the wrong request) it cannot act on.
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Failed to load issues. Please try again.'),
+      ).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByTestId('comicvine-retry')).not.toBeInTheDocument()
+    expect(screen.getByText('Stormwatch')).toBeInTheDocument()
+  })
+
+  it('ignores a late issue success after the reader returns to search', async () => {
+    const issues = deferred<{
+      comicvine_volume_id: number
+      series_name: string
+      issues: (typeof mockIssue)[]
+    }>()
+    getSeriesIssuesSpy.mockImplementationOnce(() => issues.promise)
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '40' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+
+    // The reader leaves the issue step while its request is still outstanding.
+    fireEvent.click(await screen.findByRole('button', { name: '← Back to search' }))
+
+    await act(async () => {
+      issues.resolve({
+        comicvine_volume_id: 42,
+        series_name: 'Stormwatch',
+        issues: [{ ...mockIssue, issue_number: '40', name: 'Forty' }],
+      })
+    })
+
+    // The abandoned request must not pull the reader onto the confirm step.
+    expect(
+      screen.getByPlaceholderText('Search series title or paste a ComicVine URL'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirm Identity' })).not.toBeInTheDocument()
+  })
+
+  it('ignores a late issue failure after the reader returns to search', async () => {
+    const issues = deferred<{
+      comicvine_volume_id: number
+      series_name: string
+      issues: (typeof mockIssue)[]
+    }>()
+    getSeriesIssuesSpy.mockImplementationOnce(() => issues.promise)
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '40' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+
+    fireEvent.click(await screen.findByRole('button', { name: '← Back to search' }))
+
+    await act(async () => {
+      issues.reject(new Error('provider down'))
+    })
+
+    expect(
+      screen.queryByText('Failed to load issues. Please try again.'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText('Search series title or paste a ComicVine URL'),
+    ).toBeInTheDocument()
   })
 })
 

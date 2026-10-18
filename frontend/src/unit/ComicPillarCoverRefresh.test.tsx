@@ -297,8 +297,10 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
     })
-    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalled())
-    fireEvent.click(screen.getByText('Stormwatch'))
+    // #3448: changing the query clears the previous results, so wait for the debounced
+    // search for the new term to land instead of matching the auto-search call.
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10, 0))
+    fireEvent.click(await screen.findByText('Stormwatch'))
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
     fireEvent.click(screen.getByText('#1'))
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
