@@ -29,7 +29,21 @@ import { IssueTagRowChips } from '../components/Tags/IssueTagRowChips'
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
 import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
+import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
+
+function getCreatorDisplayText(creators: { name: string; roles: string[] }[]): string {
+  if (creators.length === 0) {
+    return ''
+  }
+
+  return creators.map(creator => {
+    if (creator.roles.length === 0) {
+      return creator.name
+    }
+    return `${creator.name} (${creator.roles.join(', ')})`
+  }).join(' • ')
+}
 
 export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
@@ -542,6 +556,11 @@ export default function ThreadDetailView() {
                               <span className="text-sm font-medium text-stone-300">
                                 #{issue.issue_number}
                               </span>
+                              {thread && getCreatorDisplayText(thread.manual_creator_credits).length > 0 && (
+                                <span className="text-xs text-stone-400">
+                                  by {getCreatorDisplayText(thread.manual_creator_credits)}
+                                </span>
+                              )}
                             </span>
                             <div className="flex items-center gap-3">
                               <button
@@ -691,6 +710,10 @@ export default function ThreadDetailView() {
                 className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"
               />
             </div>
+            <CreatorInput
+              creators={editForm.manualCreatorCredits}
+              onChange={(next) => setEditForm({ ...editForm, manualCreatorCredits: next })}
+            />
           </form>
 
           {thread.total_issues !== null && (
