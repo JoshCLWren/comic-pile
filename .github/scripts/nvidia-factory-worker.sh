@@ -158,7 +158,9 @@ current_head_review_blockers() {
   local changes unresolved
   changes="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${pr}/reviews?per_page=100" | jq -s --arg head "$head" '[.[][] | select(.state == "CHANGES_REQUESTED" and .commit_id == $head)] | length')"
   [[ "$changes" == "0" ]] || return 1
-  unresolved="$(gh api graphql -F owner='JoshCLWren' -F name='comic-pile' -F number="$pr" -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')"
+  # Pages through every review thread; fails closed when a page is missing
+  # or pagination is incomplete.
+  unresolved="$(factory_count_unresolved_review_threads "$pr")" || return 1
   [[ "$unresolved" == "0" ]]
 }
 
