@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from sqlalchemy import func, or_, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.models.continuity_plan import ContinuityPlan
@@ -279,18 +279,26 @@ async def threads_by_id(db: AsyncSession, thread_ids: set[int]) -> dict[int, Thr
 
 
 async def issues_by_id(db: AsyncSession, issue_ids: set[int]) -> dict[int, Issue]:
-    """Resolve issue models by identifier.
+    """Resolve issue models by identifier with their parent thread eager-loaded.
+
+    Crossover member display needs each issue's series title (its parent thread
+    title) while progress accounting needs the parent thread identifier and the
+    read status. Eager-loading the many-to-one parent in the same statement
+    keeps both consumers on one flat SELECT and avoids an async lazy load.
 
     Args:
         db: The asynchronous database session.
         issue_ids: Issue identifiers to load.
 
     Returns:
-        Mapping of issue ID to its model for every resolvable issue.
+        Mapping of issue ID to its model for every resolvable issue, each with
+        ``thread`` populated.
     """
     if not issue_ids:
         return {}
-    result = await db.execute(select(Issue).where(Issue.id.in_(issue_ids)))
+    result = await db.execute(
+        select(Issue).options(joinedload(Issue.thread)).where(Issue.id.in_(issue_ids))
+    )
     return {issue.id: issue for issue in result.scalars()}
 
 

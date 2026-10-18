@@ -114,6 +114,26 @@ describe('CrossoversPage', () => {
     expect(screen.getByText('2 members')).toBeInTheDocument()
   })
 
+  it('shows row reading progress and reveals rename or delete only when expanded', async () => {
+    groupsApi.list.mockResolvedValue([
+      { ...annihilation, read_issues: 1, total_issues: 4, reading_progress: '25%' },
+      { ...annihilation, id: 8, name: 'Secret Wars' },
+    ])
+    renderPage()
+
+    await screen.findByText(/Annihilation/)
+    expect(screen.getAllByRole('link', { name: 'View' })).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Rename' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    expect(screen.getByText('Progress: 1/4 (25%)')).toBeInTheDocument()
+    // A group with nothing countable keeps the bare member-count treatment.
+    expect(screen.getByRole('button', { name: 'Secret Wars 2 members' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Annihilation 2 members/ }))
+    expect(await screen.findByRole('button', { name: 'Rename' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+  })
+
   it('renames and deletes an existing crossover', async () => {
     groupsApi.list.mockResolvedValue([annihilation])
     groupsApi.rename.mockResolvedValue({ ...annihilation, name: 'Annihilation Conquest' })
@@ -122,6 +142,7 @@ describe('CrossoversPage', () => {
     renderPage()
 
     await screen.findByText('Annihilation')
+    fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Conquest' } })
     groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }])
@@ -147,18 +168,21 @@ describe('CrossoversPage', () => {
     await screen.findByText('Annihilation')
     await screen.findByText('Secret Wars')
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Rename' })[0])
+    fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Conquest' } })
     groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }, secretWars])
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
-    expect(screen.getAllByRole('button', { name: 'Rename' })[0]).toBeDisabled()
+    // The mutation guard keeps other crossovers unexpanded while the rename is in flight.
+    fireEvent.click(screen.getByRole('button', { name: /Secret Wars/ }))
+    expect(screen.queryByText('Nova #4')).not.toBeInTheDocument()
 
     await waitFor(() => expect(groupsApi.rename).toHaveBeenCalledTimes(1))
     resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
     expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled())
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeEnabled()
   })
 
   it('opens crossover detail with member count', async () => {
@@ -196,6 +220,7 @@ describe('CrossoversPage', () => {
     renderPage()
 
     await screen.findByText('Annihilation')
+    fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: '   ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -217,6 +242,7 @@ describe('CrossoversPage', () => {
     renderPage()
 
     await screen.findByText('Annihilation')
+    fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(groupsApi.delete).not.toHaveBeenCalled()
     expect(screen.getByText('Annihilation')).toBeInTheDocument()

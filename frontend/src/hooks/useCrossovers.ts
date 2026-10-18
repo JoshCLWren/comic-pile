@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   dependencyGroupsApi,
+  type DependencyGroup,
   type DependencyGroupMemberTarget,
 } from '../services/api-dependency-groups'
 import { threadsApi } from '../services/api-threads'
@@ -75,7 +76,7 @@ async function fetchAllThreads(threadApi: CrossoverThreadsApi = threadsApi): Pro
 
 export function useCrossoverGroupsList(deps: CrossoverApiDeps = {}) {
   const groups = deps.groups ?? dependencyGroupsApi
-  return useQuery({
+  return useQuery<DependencyGroup[]>({
     queryKey: queryKeys.crossover.list(),
     queryFn: async () => {
       try {

@@ -329,13 +329,24 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
                 ) : (
                   <div className="flex items-center justify-between gap-3">
                     <button type="button" onClick={() => toggleExpanded(group.id)} disabled={isAnyMutationPending} aria-expanded={isExpanded} className="min-w-0 text-left">
-                      <span className="block text-lg font-black text-[var(--theme-text-primary)]">{group.name}</span>
-                      <span className="text-sm text-[var(--theme-text-dim)]">{group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}</span>
+                      <span className="block text-lg font-black text-[var(--theme-text-primary)]">{group.name}</span>{" "}
+                      <span className="text-sm text-[var(--theme-text-dim)]">
+                        {group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}
+                        {(group.total_issues ?? 0) > 0 && (
+                          <span className="ml-2">
+                            Progress: {group.read_issues}/{group.total_issues} ({group.reading_progress})
+                          </span>
+                        )}
+                      </span>
                     </button>
                     <div className="flex gap-2">
                       <Link to={`/crossovers/${group.id}`} className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1 text-sm font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)]">View</Link>
-                      <button type="button" onClick={() => { setEditingId(group.id); setEditingName(group.name) }} disabled={isAnyMutationPending}>Rename</button>
-                      <button type="button" onClick={() => void deleteGroup(group)} disabled={isAnyMutationPending}>Delete</button>
+                      {isExpanded && (
+                        <>
+                          <button type="button" onClick={() => { setEditingId(group.id); setEditingName(group.name) }} disabled={isAnyMutationPending}>Rename</button>
+                          <button type="button" onClick={() => void deleteGroup(group)} disabled={isAnyMutationPending}>Delete</button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

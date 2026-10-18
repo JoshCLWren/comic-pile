@@ -122,6 +122,9 @@ class DependencyGroupResponse(BaseModel):
     name: str
     created_at: datetime
     memberships: list[DependencyGroupMemberResponse]
+    read_issues: int = 0
+    total_issues: int = 0
+    reading_progress: str = "0%"
 
 
 class DependencyGroupSummary(BaseModel):

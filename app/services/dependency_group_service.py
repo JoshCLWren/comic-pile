@@ -11,7 +11,7 @@ from collections.abc import Mapping, Sequence
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import DependencyGroup, DependencyGroupMembership
+from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.repositories import dependency_group_repository as groups_repo
 from app.schemas.dependency_group import (
     DependencyGroupCreate,
@@ -29,6 +29,7 @@ from app.schemas.dependency_group import (
 from app.schemas.issue import IssueResponse
 from app.schemas.thread import ThreadResponse
 from app.services.errors import ConflictError, InvalidRequestError, NotFoundError
+from app.services.thread_issue_stats import load_unread_counts
 from comic_pile.dependencies import refresh_user_blocked_status
 
 MAX_RANGE_SIZE = 250
@@ -108,6 +109,73 @@ def _build_member_responses(
     return responses
 
 
+def _issue_metadata_by_id(
+    issues: Mapping[int, Issue],
+) -> dict[int, tuple[str | None, str | None]]:
+    """Map resolved issue models to ``(issue number, series title)`` metadata.
+
+    Used by the batched crossover list and single-group serializers: the same
+    ``issues_by_id`` query already eager-loads each parent thread, so member
+    display reuses those rows instead of issuing a second metadata SELECT.
+
+    Args:
+        issues: Issue models resolved for the requested memberships.
+
+    Returns:
+        Mapping of issue ID to its number and owning thread title.
+    """
+    return {
+        issue_id: (issue.issue_number, issue.thread.title if issue.thread else None)
+        for issue_id, issue in issues.items()
+    }
+
+
+def _crossover_progress(
+    memberships: Sequence[DependencyGroupMembership],
+    threads: Mapping[int, Thread],
+    issues: Mapping[int, Issue],
+    unread_counts: Mapping[int, int],
+) -> tuple[int, int, str]:
+    """Compute ``(read_issues, total_issues, progress)`` for one group.
+
+    Thread memberships count the whole referenced series when that thread was
+    migrated to issue tracking; the bulk-loaded ``unread_counts`` decide how
+    many of those issues remain. Issue memberships count their referenced
+    issue, except when its series is also a thread target in the same group,
+    so a range inside an already-membered series is never counted twice.
+    Legacy threads without a migrated ``total_issues`` contribute nothing
+    because they carry no issue-derived total.
+
+    Args:
+        memberships: The persisted memberships of one dependency group.
+        threads: Member thread models resolved for these memberships.
+        issues: Member issue models resolved for these memberships.
+        unread_counts: Mapping of migrated thread ID to unread issue count.
+
+    Returns:
+        Tuple of ``(read_issues, total_issues, progress string)``.
+    """
+    thread_ids = _member_target_ids(memberships)[0]
+    read_issues = 0
+    total_issues = 0
+    for thread_id in thread_ids:
+        thread = threads.get(thread_id)
+        if thread is None or thread.total_issues is None or thread.total_issues <= 0:
+            continue
+        remaining = unread_counts.get(thread_id, 0)
+        total_issues += thread.total_issues
+        read_issues += max(thread.total_issues - remaining, 0)
+    for member in memberships:
+        issue = issues.get(member.issue_id) if member.issue_id is not None else None
+        if issue is None or issue.thread_id in thread_ids:
+            continue
+        total_issues += 1
+        if issue.status != "unread":
+            read_issues += 1
+    progress = "0%" if total_issues == 0 else f"{read_issues * 100 // total_issues}%"
+    return read_issues, total_issues, progress
+
+
 class DependencyGroupService:
     """Reading-order group orchestration for the dependency-group API."""
 
@@ -167,24 +235,68 @@ class DependencyGroupService:
 
         return _build_member_responses(memberships, thread_titles, issue_metadata)
 
+    async def _resolve_progress_models(
+        self,
+        thread_ids: set[int],
+        issue_ids: set[int],
+    ) -> tuple[dict[int, Thread], dict[int, Issue], dict[int, int]]:
+        """Resolve member threads, issues, and bulk unread counts.
+
+        Thread totals and unread counts require full thread rows, so one
+        threads query plus one grouped unread-count query covers every group.
+        Issue rows carry both the read status used for progress and the
+        eager-loaded parent thread used for series titles, so member display
+        and progress accounting share one issues query. Each is a flat SELECT
+        regardless of how many groups share the resolved targets.
+
+        Args:
+            thread_ids: Thread targets referenced by the memberships.
+            issue_ids: Issue targets referenced by the memberships.
+
+        Returns:
+            Tuple of ``(threads, issues, unread_counts)`` where unread counts
+            cover migrated threads only and each issue has ``thread`` loaded.
+        """
+        threads: dict[int, Thread] = {}
+        issues: dict[int, Issue] = {}
+        unread_counts: dict[int, int] = {}
+        if thread_ids:
+            threads = await groups_repo.threads_by_id(self._db, thread_ids)
+            member_threads = list(threads.values())
+            unread_counts = await load_unread_counts(member_threads, self._db)
+        if issue_ids:
+            issues = await groups_repo.issues_by_id(self._db, issue_ids)
+        return threads, issues, unread_counts
+
     async def _group_response(
         self,
         group: DependencyGroup,
     ) -> DependencyGroupResponse:
-        """Serialize one group with enriched member display metadata.
+        """Serialize one group with enriched member and progress metadata.
 
         Args:
             group: The owned group whose memberships should be described.
 
         Returns:
-            The group payload whose members carry resolved comic metadata.
+            The group payload whose members carry resolved comic metadata and
+            whose reading progress covers countable member issues.
         """
         memberships = await groups_repo.list_memberships(self._db, group.id)
+        thread_ids, issue_ids = _member_target_ids(memberships)
+        threads, issues, unread_counts = await self._resolve_progress_models(thread_ids, issue_ids)
+        thread_titles = {thread_id: thread.title for thread_id, thread in threads.items()}
+        issue_metadata = _issue_metadata_by_id(issues)
+        read_issues, total_issues, progress = _crossover_progress(
+            memberships, threads, issues, unread_counts
+        )
         return DependencyGroupResponse(
             id=group.id,
             name=group.name,
             created_at=group.created_at,
-            memberships=await self._member_responses(memberships),
+            memberships=_build_member_responses(memberships, thread_titles, issue_metadata),
+            read_issues=read_issues,
+            total_issues=total_issues,
+            reading_progress=progress,
         )
 
     async def _group_detail_response(
@@ -292,9 +404,9 @@ class DependencyGroupService:
         """
         groups = await groups_repo.list_groups_for_user(self._db, user_id)
         # Resolve metadata for every group in one pass. Reusing the eagerly
-        # loaded memberships avoids the per-group membership requery, and one
-        # thread-titles query plus one issue-metadata query keeps the route's
-        # query count flat instead of growing with the number of groups.
+        # loaded memberships avoids the per-group membership requery, and the
+        # flat thread-rows, unread-count, and issue-rows queries keep the
+        # route's query count constant instead of growing with group count.
         # ``selectinload`` does not guarantee membership order, so sort by id to
         # preserve the order ``list_memberships`` established per group.
         ordered_memberships: list[list[DependencyGroupMembership]] = [
@@ -303,25 +415,27 @@ class DependencyGroupService:
         all_memberships = [member for memberships in ordered_memberships for member in memberships]
         thread_ids, issue_ids = _member_target_ids(all_memberships)
 
-        thread_titles: dict[int, str] = {}
-        if thread_ids:
-            thread_titles = await groups_repo.thread_titles_by_id(self._db, thread_ids)
+        threads, issues, unread_counts = await self._resolve_progress_models(thread_ids, issue_ids)
+        thread_titles = {thread_id: thread.title for thread_id, thread in threads.items()}
+        issue_metadata = _issue_metadata_by_id(issues)
 
-        issue_metadata: dict[int, tuple[str | None, str | None]] = {}
-        if issue_ids:
-            issue_metadata = await groups_repo.issue_series_metadata_by_id(self._db, issue_ids)
-
-        return [
-            DependencyGroupResponse(
-                id=group.id,
-                name=group.name,
-                created_at=group.created_at,
-                memberships=_build_member_responses(
-                    memberships, thread_titles, issue_metadata
-                ),
+        responses: list[DependencyGroupResponse] = []
+        for group, memberships in zip(groups, ordered_memberships, strict=True):
+            read_issues, total_issues, progress = _crossover_progress(
+                memberships, threads, issues, unread_counts
             )
-            for group, memberships in zip(groups, ordered_memberships, strict=True)
-        ]
+            responses.append(
+                DependencyGroupResponse(
+                    id=group.id,
+                    name=group.name,
+                    created_at=group.created_at,
+                    memberships=_build_member_responses(memberships, thread_titles, issue_metadata),
+                    read_issues=read_issues,
+                    total_issues=total_issues,
+                    reading_progress=progress,
+                )
+            )
+        return responses
 
     async def create_group(
         self,
