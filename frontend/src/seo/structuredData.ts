@@ -11,6 +11,20 @@ export const STRUCTURED_DATA_SCRIPT_ID = 'comic-pile-structured-data'
 export const BREADCRUMB_STRUCTURED_DATA_SCRIPT_ID = 'comic-pile-breadcrumb-structured-data'
 const DEFAULT_PRODUCTION_ORIGIN = 'https://comic-pile.vercel.app'
 
+/**
+ * Resolve the absolute origin used for absolute SEO URLs.
+ *
+ * `VITE_PRODUCTION_ORIGIN` overrides the canonical production origin so a
+ * deployment on another host can emit its own absolute URLs. Falls back to the
+ * canonical origin when unset, matching `frontend/scripts/generate-sitemap.mjs`.
+ *
+ * @returns The origin with no trailing slash and no path.
+ */
+export function resolveProductionOrigin(): string {
+  const raw = import.meta.env.VITE_PRODUCTION_ORIGIN
+  return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : DEFAULT_PRODUCTION_ORIGIN
+}
+
 export const SITE_NAME = 'ComicPile'
 export const SITE_DESCRIPTION =
   'ComicPile is a dice-driven reading queue for your comic collection. ' +
@@ -57,7 +71,7 @@ export interface StructuredDataGraph {
  * @returns The WebSite + SoftwareApplication JSON-LD graph.
  */
 export function buildLandingStructuredData(siteUrl: string): StructuredDataGraph {
-  const absoluteUrl = siteUrl === '/' ? DEFAULT_PRODUCTION_ORIGIN : siteUrl
+  const absoluteUrl = siteUrl === '/' ? resolveProductionOrigin() : siteUrl
   return {
     '@context': 'https://schema.org',
     '@graph': [

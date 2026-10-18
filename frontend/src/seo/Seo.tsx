@@ -3,11 +3,12 @@ import { useLocation } from 'react-router-dom'
 import { matchRouteSeo } from './routeSeo'
 import {
   buildLandingStructuredData,
+  resolveProductionOrigin,
   removeStructuredDataScript,
   STRUCTURED_DATA_SCRIPT_ID,
   upsertStructuredDataScript,
 } from './structuredData'
-const DEFAULT_PRODUCTION_ORIGIN = 'https://comic-pile.vercel.app'
+const PRODUCTION_ORIGIN = resolveProductionOrigin()
 
 function upsertMetaTag(name: string, content: string): void {
   const selector = `meta[name="${name}"]`
@@ -36,7 +37,7 @@ function syncCanonicalLink(canonicalPath: string | null): void {
     existing.forEach(tag => tag.remove())
     return
   }
-  const href = `${DEFAULT_PRODUCTION_ORIGIN}${canonicalPath}`
+  const href = `${PRODUCTION_ORIGIN}${canonicalPath}`
   const [first, ...rest] = existing
   rest.forEach(tag => tag.remove())
   if (first instanceof HTMLLinkElement) {
@@ -73,7 +74,7 @@ export default function Seo() {
     if (entry.visibility === 'public-indexable') {
       upsertStructuredDataScript(
         STRUCTURED_DATA_SCRIPT_ID,
-        buildLandingStructuredData(window.location.origin),
+        buildLandingStructuredData(PRODUCTION_ORIGIN),
       )
     } else {
       removeStructuredDataScript(STRUCTURED_DATA_SCRIPT_ID)

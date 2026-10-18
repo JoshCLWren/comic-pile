@@ -89,6 +89,28 @@ def _robots_tag_for_spa_path(request_path: str) -> str | None:
     return "noindex, nofollow"
 
 
+def _spa_route_file_path(request_path: str) -> Path:
+    """Return the route-specific HTML file for a request path, if one exists.
+
+    The Vite build's ``closeBundle`` hook generates a static ``<route>.html`` for
+    every non-parameterized route (see ``frontend/scripts/generate-route-html.mjs``).
+    Serving that file lets crawlers and clients see route-specific title,
+    description, canonical, and robots metadata instead of the landing page
+    shell.
+
+    Args:
+        request_path: Request path with or without a leading slash.
+
+    Returns:
+        Path to the generated route HTML file, falling back to the SPA index
+        when no route-specific file exists.
+    """
+    stripped = request_path.strip().strip("/")
+    if not stripped:
+        return Path("static/react/index.html")
+    return Path(f"static/react/{stripped}.html")
+
+
 def _render_sitemap_xml() -> str:
     """Render the sitemap for the canonical indexable path set.
 
@@ -623,12 +645,14 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             from fastapi.responses import FileResponse, HTMLResponse
 
             spa_index = Path("static/react/index.html")
+            route_file = _spa_route_file_path(request_path)
+            serve_path = route_file if route_file.exists() else spa_index
             cache_headers = {"Cache-Control": "no-store, no-cache, must-revalidate"}
             robots_tag = _robots_tag_for_spa_path(request_path)
             if robots_tag is not None:
                 cache_headers["X-Robots-Tag"] = robots_tag
-            if spa_index.exists():
-                return FileResponse(str(spa_index), headers=cache_headers)
+            if serve_path.exists():
+                return FileResponse(str(serve_path), headers=cache_headers)
             if app_settings.environment == "production":
                 raise StarletteHTTPException(status_code=503, detail="Frontend assets unavailable")
             fallback_html = "<!doctype html><html><body><div id='root'></div></body></html>"
