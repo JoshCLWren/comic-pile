@@ -16,10 +16,88 @@
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
 
+interface SeriesGroup {
+  series_key: string
+  thread_id: number
+  thread_title: string
+  rated_issue_count: number
+  average_rating: number
+  lowest_rating: number
+  highest_rating: number
+  roles: string[]
+  unread_issue_count: number
+  read_unrated_issue_count: number
+  metadata_complete: boolean
+  sort_key: string
+}
+
+interface CreatorInsightsPayload {
+  summary: {
+    canonical_creator_key: string
+    display_name: string
+    normalized_roles: string[]
+    average_rating: number
+    ratings_count: number
+    read_unrated_count: number
+    upcoming_count: number
+  }
+  coverage: {
+    rated_issues_total: number
+    rated_issues_with_creator_metadata: number
+    ratings_complete: boolean
+    read_unrated_issues_total: number
+    read_unrated_issues_with_creator_metadata: number
+    read_unrated_complete: boolean
+    unread_issues_total: number
+    unread_issues_with_creator_metadata: number
+    upcoming_complete: boolean
+  }
+  role_stats: Array<{
+    role: string
+    issue_count: number
+    rated_issue_count: number
+    average_rating: number
+  }>
+  series_groups: SeriesGroup[]
+  series_groups_total: number
+  series_groups_complete: boolean
+  rated_issues: Array<{
+    issue_id: number
+    thread_id: number
+    thread_title: string
+    rating: number
+  }>
+  read_unrated_issues: any[] // Keeping as any since we don't use specifics
+  upcoming_issues: any[] // Keeping as any since we don't use specifics
+  next_cursor: string | null
+  rating_distribution: any // Keeping as any since we don't use specifics
+  insights: Insights
+}
+
+interface Insights {
+  has_sufficient_data: boolean
+  min_sample_threshold: number
+  highest_rated_series: SeriesGroup | null
+  lowest_rated_series: SeriesGroup | null
+  most_rated_series: SeriesGroup | null
+  highest_rated_issue: {
+    issue_id: number
+    thread_id: number
+    thread_title: string
+    rating: number
+  } | null
+  lowest_rated_issue: {
+    issue_id: number
+    thread_id: number
+    thread_title: string
+    rating: number
+  } | null
+}
+
 const DESKTOP_VIEWPORT = { width: 1280, height: 900 }
 const MOBILE_VIEWPORT = { width: 390, height: 844 }
 
-function seriesGroup(overrides: Record<string, unknown> = {}) {
+function seriesGroup(overrides: Partial<SeriesGroup> = {}) {
   return {
     series_key: 'thread:1',
     thread_id: 1,
@@ -37,7 +115,7 @@ function seriesGroup(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function creatorInsightsPayload(insights: Record<string, unknown>) {
+function creatorInsightsPayload(insights: Insights) {
   return {
     summary: {
       canonical_creator_key: 'creator:7',
@@ -90,7 +168,7 @@ function qualifiedInsights() {
   }
 }
 
-async function installCreatorRoutes(page: Page, insights: Record<string, unknown>) {
+async function installCreatorRoutes(page: Page, insights: Insights) {
   await page.route('**/v1/creators/*', (route) =>
     route.fulfill({ json: creatorInsightsPayload(insights) }),
   )
