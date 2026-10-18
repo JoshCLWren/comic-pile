@@ -19,11 +19,11 @@ export interface DependencyGroup {
   created_at: string
   memberships: DependencyGroupMember[]
   /** Countable member issues the reader has completed; 0 when nothing is countable. */
-  read_issues: number
+  read_issues?: number
   /** Total countable member issues across migrated series and direct issues; 0 if none. */
-  total_issues: number
+  total_issues?: number
   /** Computed reading progress as a percentage string, e.g. "40%". */
-  reading_progress: string
+  reading_progress?: string
 }
 
 export interface DependencyGroupSummary {

@@ -329,10 +329,10 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
                 ) : (
                   <div className="flex items-center justify-between gap-3">
                     <button type="button" onClick={() => toggleExpanded(group.id)} disabled={isAnyMutationPending} aria-expanded={isExpanded} className="min-w-0 text-left">
-                      <span className="block text-lg font-black text-[var(--theme-text-primary)]">{group.name}</span>
+                      <span className="block text-lg font-black text-[var(--theme-text-primary)]">{group.name}</span>{" "}
                       <span className="text-sm text-[var(--theme-text-dim)]">
                         {group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}
-                        {group.total_issues > 0 && (
+                        {(group.total_issues ?? 0) > 0 && (
                           <span className="ml-2">
                             Progress: {group.read_issues}/{group.total_issues} ({group.reading_progress})
                           </span>
