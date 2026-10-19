@@ -53,8 +53,9 @@ function errorMessage(error: Error, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
-function countPhrase(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`
+function countPhraseWithArticle(count: number, singular: string, plural: string): string {
+  const word = count === 1 ? singular : plural
+  return count === 1 ? `1 ${word}` : `${count} ${word}`
 }
 
 function choiceButtonClass(selected: boolean, muted = false): string {
@@ -263,7 +264,7 @@ export default function CblBrowserPage() {
       : staleReview
         ? 'Refresh the preview before adding it.'
         : needsAttentionCount > 0
-          ? `${countPhrase(needsAttentionCount, 'entry still needs', 'entries still need')} attention before this source can be added.`
+          ? `${countPhraseWithArticle(needsAttentionCount, 'entry still needs', 'entries still need')} attention before this source can be added.`
           : (summary?.final_adopted_count ?? 0) === 0
             ? 'Nothing is selected to add.'
             : isCommitting
@@ -272,7 +273,7 @@ export default function CblBrowserPage() {
   const commitBlocked = commitBlockedReason !== null || isCommitting || !preview
   const consequenceLine =
     preview && summary
-      ? `${countPhrase(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhrase(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
+      ? `${countPhraseWithArticle(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhraseWithArticle(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
 
   const openConfirm = () => {
@@ -483,17 +484,22 @@ export default function CblBrowserPage() {
                 disabled={commitBlocked}
                 aria-disabled={commitBlocked}
                 title={commitBlockedReason ?? undefined}
-                className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
+                className={`min-h-11 rounded-xl px-4 text-sm font-black text-black transition-all duration-200 ${
+                  commitBlocked
+                    ? 'bg-[var(--theme-border)] border border-[var(--theme-border)] text-[var(--theme-text-muted)] cursor-not-allowed'
+                    : 'bg-[var(--theme-continuity-accent)] hover:bg-[var(--theme-continuity-accent)]/80'
+                }`}
               >
                 {isCommitting ? 'Adding reading order…' : 'Add this reading order'}
               </button>
               {commitBlockedReason && (
-                <p className="max-w-xs text-xs text-[var(--theme-text-muted)]">
+                <p className="max-w-xs text-xs text-[var(--theme-text-muted)] flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-[var(--theme-warning)]"></span>
                   {commitBlockedReason}
                 </p>
               )}
               {commitError && (
-                <p role="alert" className="max-w-md text-sm text-[var(--theme-danger)]">
+                <p role="alert" className="max-w-md text-sm text-[var(--theme-danger)] font-medium">
                   {commitError}
                 </p>
               )}
