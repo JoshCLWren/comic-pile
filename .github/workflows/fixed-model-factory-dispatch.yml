@@ -376,6 +376,10 @@ jobs:
             state="$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)"
             if [[ "$state" == "MERGED" ]]; then
               echo "PR #${pr} was merged concurrently"
+              # The merge may have landed even though gh errored (or another
+              # GITHUB_TOKEN actor merged it); count it so the deploy is still
+              # dispatched. Deploy Production dedupes an already-READY SHA.
+              merged_count=$((merged_count + 1))
             else
               echo "Unable to merge ready PR #${pr}; it will be retried on the next dispatcher tick" >&2
             fi

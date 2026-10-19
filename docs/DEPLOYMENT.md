@@ -126,7 +126,7 @@ The core application remains portable PostgreSQL software. Neon is the maintaine
 
 Merges to `main` are the production source. The production workflow runs the required database migration against Neon before deploying the application to Vercel.
 
-Factory merges made with the built-in `GITHUB_TOKEN` fire no push event, so the factory drains and workers dispatch Deploy Production themselves after merging (once per drain run). See [Bot merges dispatch the deploy](VERCEL_DEPLOYMENT.md#bot-merges-dispatch-the-deploy).
+Factory merges made with the built-in `GITHUB_TOKEN` fire no push event, so the two factory merge drains (Factory Ready Merge Drain and the Fixed Model Factory Dispatcher's ready drain) dispatch Deploy Production themselves, once per drain run after the last merge. Factory workers do not merge. A queued manual redeploy can be superseded by a later pending run (GitHub keeps only the newest pending run), so see the note in [Overlapping runs](VERCEL_DEPLOYMENT.md#overlapping-runs). See [Bot merges dispatch the deploy](VERCEL_DEPLOYMENT.md#bot-merges-dispatch-the-deploy).
 
 ### Red-deploy freeze
 
