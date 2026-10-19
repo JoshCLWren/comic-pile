@@ -14,9 +14,12 @@ import {
 } from '../services/api-cbl-sources'
 import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
-import { displayCblRepository, displayCblSourceName, displayCblSourcePath } from '../utils/cblSourceDisplay'
+import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
 import { isObject, isString } from '../utils/runtimeChecks'
 import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
+
+/** Shown when a source list declares neither a readable title nor a usable path. */
+const FALLBACK_SOURCE_TITLE = 'CBL source'
 
 function statusLabel(entry: CBLAdoptionPreviewEntry): string {
   switch (entry.adoption_decision) {
@@ -253,10 +256,10 @@ export default function CblBrowserPage() {
   const summary = preview?.summary
   const needsAttentionCount =
     (summary?.unresolved_count ?? 0) + (summary?.awaiting_opt_in_count ?? 0)
-  const commitBlockedReason = !preview
-    ? 'Preview this source before adding it.'
-    : isPreviewing
-      ? 'Wait for the preview to finish.'
+  const commitBlockedReason = isPreviewing
+    ? 'Wait for the preview to finish.'
+    : !preview
+      ? 'Preview this source before adding it.'
       : staleReview
         ? 'Refresh the preview before adding it.'
         : needsAttentionCount > 0
@@ -271,6 +274,10 @@ export default function CblBrowserPage() {
     preview && summary
       ? `${countPhraseWithArticle(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhraseWithArticle(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
+  const selectedSourceTitle = selectedSource
+    ? (displayCblSourceTitle(selectedSource.name, selectedSource.source_path) ??
+      FALLBACK_SOURCE_TITLE)
+    : null
 
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
@@ -331,6 +338,8 @@ export default function CblBrowserPage() {
         <div className="grid gap-2" aria-label="Source candidates">
           {sources.map((source) => {
             const publicRepo = displayCblRepository(source.source_repository)
+            const title =
+              displayCblSourceTitle(source.name, source.source_path) ?? FALLBACK_SOURCE_TITLE
             const meta = [
               publicRepo,
               source.declared_issue_count !== null ? `${source.declared_issue_count} issues` : null,
@@ -348,7 +357,7 @@ export default function CblBrowserPage() {
                 } hover:bg-white/5`}
               >
                 <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
-                  {source.name || displayCblSourceName(source.source_path)}
+                  {title}
                 </span>
                 {meta.length > 0 && (
                   <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">
@@ -375,13 +384,7 @@ export default function CblBrowserPage() {
         </button>
       )}
 
-      {isPreviewing && !preview && (
-        <p role="status" className="text-sm text-[var(--theme-text-muted)]">
-          Reconciling source…
-        </p>
-      )}
-
-      {preview && selectedSource && (
+      {selectedSource && selectedSourceTitle && (
         <section
           className="space-y-4 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4"
           aria-labelledby="cbl-preview-heading"
@@ -391,23 +394,31 @@ export default function CblBrowserPage() {
               id="cbl-preview-heading"
               className="text-base font-black text-[var(--theme-text-primary)]"
             >
-              {selectedSource.name}
+              {selectedSourceTitle}
             </h2>
-            <details className="mt-2">
-              <summary className="cursor-pointer text-xs font-bold text-[var(--theme-text-muted)]">
-                Source details
-              </summary>
-              <div className="mt-2 space-y-1 text-xs text-[var(--theme-text-dim)]">
-                {displayCblSourcePath(preview.source.source_path) && (
-                  <p>{displayCblSourcePath(preview.source.source_path)}</p>
-                )}
-                {displayCblRepository(preview.source.source_repository) && (
-                  <p>{displayCblRepository(preview.source.source_repository)}</p>
-                )}
-                <p>Revision {preview.source.revision_sha.slice(0, 8)}</p>
-              </div>
-            </details>
+            {preview && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs font-bold text-[var(--theme-text-muted)]">
+                  Source details
+                </summary>
+                <div className="mt-2 space-y-1 text-xs text-[var(--theme-text-dim)]">
+                  {displayCblSourcePath(preview.source.source_path) && (
+                    <p>{displayCblSourcePath(preview.source.source_path)}</p>
+                  )}
+                  {displayCblRepository(preview.source.source_repository) && (
+                    <p>{displayCblRepository(preview.source.source_repository)}</p>
+                  )}
+                  <p>Revision {preview.source.revision_sha.slice(0, 8)}</p>
+                </div>
+              </details>
+            )}
           </div>
+
+          {isPreviewing && !preview && (
+            <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+              Reconciling source…
+            </p>
+          )}
 
           {consequenceLine && (
             <p className="text-sm font-bold text-[var(--theme-text-primary)]" role="status">
@@ -497,7 +508,7 @@ export default function CblBrowserPage() {
             <button
               type="button"
               onClick={() => setCustomizing((current) => !current)}
-              disabled={isCommitting}
+              disabled={isCommitting || !preview}
               aria-expanded={customizing}
               className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
             >
@@ -505,7 +516,7 @@ export default function CblBrowserPage() {
             </button>
           </div>
 
-          {customizing && (
+          {customizing && preview && (
             <div className="space-y-3 border-t border-[var(--theme-border)] pt-4">
               <section className="space-y-2" aria-labelledby="cbl-series-decisions-heading">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -641,8 +652,8 @@ export default function CblBrowserPage() {
         onClose={() => setConfirmOpen(false)}
       >
         <p className="text-sm text-[var(--theme-text-muted)]">
-          {selectedSource
-            ? `Add ${selectedSource.name} as a Reading Plan? Cancel creates nothing.`
+          {selectedSourceTitle
+            ? `Add ${selectedSourceTitle} as a Reading Plan? Cancel creates nothing.`
             : 'Add this source as a Reading Plan? Cancel creates nothing.'}
         </p>
         {consequenceLine && (

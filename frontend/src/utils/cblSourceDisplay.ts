@@ -13,6 +13,19 @@ function normalizedPath(value: string): string {
 }
 
 /**
+ * Remove leading metadata tags such as `[Marvel] [2024-2026]` from a title.
+ *
+ * CBL list names often carry publisher and coverage tags before the
+ * reading-order title. The default view shows the title, not the tags.
+ *
+ * @param value - A list title or filename.
+ * @returns The title without its leading bracketed metadata tags.
+ */
+function stripMetadataTags(value: string): string {
+  return value.replace(/^(\[[^\]]+\]\s*)+/, '').trim()
+}
+
+/**
  * Extract a reader-friendly source name from the full source path.
  *
  * The source path may include directories and the .cbl extension.
@@ -41,11 +54,43 @@ export function displayCblSourceName(sourcePath: string): string | null {
 
   if (!name || name === MIRROR_NAME) return null
 
-  name = name.replace(/^(\[[^\]]+\]\s*)+/, '')
+  name = stripMetadataTags(name)
 
   if (!name) return null
 
   return name
+}
+
+/**
+ * Return the reader-friendly title for a CBL source list.
+ *
+ * The supplied list title wins whenever it is readable, because it carries the
+ * reading-order name the CBL file declares rather than a filename. Leading
+ * metadata tags (`[Marvel] [2024-2026]`) and a trailing `.cbl` extension are
+ * removed so the default view never shows file-path noise. The stored source
+ * path is only a fallback for sources that declare no readable title.
+ *
+ * @param name - The supplied list title, when the source declares one.
+ * @param sourcePath - The stored CBL source path.
+ * @returns A reader-friendly title, or null when nothing readable remains.
+ *
+ * @example
+ * displayCblSourceTitle(
+ *   '[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH)',
+ *   'Marvel/Events/CBH/[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH).cbl',
+ * )
+ * // returns 'The New Marvel Ultimate Universe 2.0 (CBH)'
+ */
+export function displayCblSourceTitle(
+  name: string | null | undefined,
+  sourcePath: string,
+): string | null {
+  const supplied = name?.trim()
+  if (supplied) {
+    const title = stripMetadataTags(supplied.replace(/\.cbl$/i, '').trim())
+    if (title) return title
+  }
+  return displayCblSourceName(sourcePath)
 }
 
 /**

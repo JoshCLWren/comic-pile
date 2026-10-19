@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
@@ -105,6 +105,7 @@ function entry(overrides: Partial<CBLAdoptionPreviewEntry>): CBLAdoptionPreviewE
 function preview(overrides?: {
   entries?: CBLAdoptionPreviewEntry[]
   summary?: Partial<CBLAdoptionPreview['summary']>
+  source?: Partial<CBLAdoptionPreview['source']>
 }): CBLAdoptionPreview {
   const entries = overrides?.entries ?? [
     entry({}),
@@ -127,6 +128,7 @@ function preview(overrides?: {
       source_path: 'Ultimate.cbl',
       content_hash: 'hash-1',
       revision_sha: 'abcdef1234567890',
+      ...overrides?.source,
     },
     total_positions: entries.length,
     entries,
@@ -189,8 +191,10 @@ describe('CblBrowserPage', () => {
     renderPage()
     await searchFor(user)
     expect(mockDiscover).toHaveBeenCalledWith('ultimate')
-    expect(screen.getByText('Ultimate.cbl')).toBeInTheDocument()
+    expect(screen.getByText('Ultimate Universe')).toBeInTheDocument()
     expect(screen.getByText(/JoshCLWren\/CBL-ReadingLists/)).toBeInTheDocument()
+    // #3939: the raw .cbl path stays out of the default search row.
+    expect(screen.queryByText('Ultimate.cbl')).not.toBeInTheDocument()
   })
 
   it('hides filesystem mirror paths from source cards (#3365)', async () => {
@@ -207,9 +211,108 @@ describe('CblBrowserPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Ultimate Universe/ })).toBeInTheDocument()
     })
-    expect(screen.getByText('Marvel/Ultimate.cbl')).toBeInTheDocument()
+    // #3939: the whole path is provenance now, shown only under "Source details".
+    expect(screen.queryByText('Marvel/Ultimate.cbl')).not.toBeInTheDocument()
     expect(screen.getByText('JoshCLWren/CBL-ReadingLists · 4 issues')).toBeInTheDocument()
     expect(document.body.textContent).not.toContain('/mnt/bigdata')
+  })
+
+  it('shows a reader-friendly title and hides the raw .cbl path (#3939)', async () => {
+    const user = userEvent.setup()
+    const rawPath =
+      'Marvel/Events/CBH/[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH).cbl'
+    mockDiscover.mockResolvedValue([
+      {
+        ...source,
+        name: '[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH)',
+        source_path: rawPath,
+      },
+    ])
+    renderPage()
+    await user.type(screen.getByLabelText('Search source lists'), 'ultimate')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    const row = await screen.findByRole('button', {
+      name: /The New Marvel Ultimate Universe 2\.0 \(CBH\)/,
+    })
+    expect(row).toHaveTextContent('The New Marvel Ultimate Universe 2.0 (CBH)')
+    expect(row).not.toHaveTextContent(rawPath)
+    expect(row).not.toHaveTextContent('.cbl')
+    expect(screen.queryByText(rawPath)).not.toBeInTheDocument()
+  })
+
+  it('previews under the reader-friendly title and keeps the path in Source details (#3939)', async () => {
+    const user = userEvent.setup()
+    const rawPath =
+      'Marvel/Events/CBH/[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH).cbl'
+    const listed: CBLSourceListDiscoveryItem = {
+      ...source,
+      name: '[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH)',
+      source_path: rawPath,
+    }
+    mockDiscover.mockResolvedValue([listed])
+    mockPreview.mockResolvedValue(preview({ source: { source_path: rawPath } }))
+    renderPage()
+    await user.type(screen.getByLabelText('Search source lists'), 'ultimate')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await user.click(
+      await screen.findByRole('button', { name: /The New Marvel Ultimate Universe 2\.0 \(CBH\)/ }),
+    )
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'The New Marvel Ultimate Universe 2.0 (CBH)' }),
+      ).toBeInTheDocument()
+    })
+    // The path is provenance: it survives only inside the collapsed disclosure.
+    const details = screen.getByText('Source details').closest('details')
+    expect(details).not.toBeNull()
+    expect(details).toContainElement(screen.getByText(rawPath))
+  })
+
+  it('shows the add button disabled with a reason while the preview loads (#3939)', async () => {
+    const user = userEvent.setup()
+    let resolvePreview: (value: CBLAdoptionPreview) => void = () => undefined
+    mockPreview.mockImplementation(
+      () =>
+        new Promise<CBLAdoptionPreview>((resolve) => {
+          resolvePreview = resolve
+        }),
+    )
+    renderPage()
+    await searchFor(user)
+    await user.click(screen.getByRole('button', { name: /Ultimate Universe/ }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Wait for the preview to finish.')).toBeInTheDocument()
+    })
+    const addButton = screen.getByRole('button', { name: 'Add this reading order' })
+    expect(addButton).toBeDisabled()
+    expect(addButton).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('status')).toHaveTextContent('Reconciling source…')
+    expect(screen.getByRole('button', { name: 'Customize' })).toBeDisabled()
+
+    await act(async () => {
+      resolvePreview(preview())
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add this reading order' })).not.toBeDisabled()
+    })
+  })
+
+  it('falls back to a generic title when a source declares no readable title or path', async () => {
+    const user = userEvent.setup()
+    mockDiscover.mockResolvedValue([
+      { ...source, name: '', source_path: '/mnt/bigdata/CBL-ReadingLists' },
+    ])
+    mockPreview.mockResolvedValue(preview())
+    renderPage()
+    await user.type(screen.getByLabelText('Search source lists'), 'ultimate')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    const row = await screen.findByRole('button', { name: /CBL source/ })
+    expect(row).toHaveTextContent('CBL source')
+    await user.click(row)
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'CBL source' })).toBeInTheDocument()
+    })
   })
 
   it('shows an empty state when no sources match', async () => {

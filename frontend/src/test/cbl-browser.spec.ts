@@ -102,6 +102,13 @@ test.describe('CBL browser one-decision adoption', () => {
     ).toBeVisible()
     await expect(page.getByText('/mnt/')).toHaveCount(0)
 
+    // #3939: the default view shows the reader-friendly title, never the raw .cbl path.
+    const sourceRow = page.getByRole('button', {
+      name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    })
+    await expect(sourceRow).not.toContainText(sourcePath)
+    await expect(page.getByRole('heading', { name: sourceName })).toBeVisible()
+
     // Preview caused no mutation: no Reading Plan exists for this source yet.
     const plansBefore = await page.request.get('/api/v1/continuity-plans/', { headers })
     expect(plansBefore.ok(), await plansBefore.text()).toBeTruthy()

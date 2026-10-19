@@ -3,6 +3,7 @@ import {
   displayCblRepository,
   displayCblSourceName,
   displayCblSourcePath,
+  displayCblSourceTitle,
   isFilesystemSourceLocation,
 } from '../utils/cblSourceDisplay'
 
@@ -25,6 +26,7 @@ describe('cblSourceDisplay', () => {
     expect(displayCblSourceName('/')).toBeNull()
     expect(displayCblSourceName('dir/')).toBeNull()
     expect(displayCblSourceName('/mnt/bigdata/CBL-ReadingLists')).toBeNull()
+    expect(displayCblSourceName('[Marvel].cbl')).toBeNull()
   })
 
   it('does not strip .cbl when not at the end', () => {
@@ -34,6 +36,32 @@ describe('cblSourceDisplay', () => {
   it('works with Windows-style paths', () => {
     expect(displayCblSourceName('C:\\path\\to\\file.cbl')).toBe('file')
     expect(displayCblSourceName('C:\\path\\to\\Marvel\\Ultimate.cbl')).toBe('Ultimate')
+  })
+
+  it('keeps the supplied title and drops metadata tags and the .cbl extension', () => {
+    expect(
+      displayCblSourceTitle(
+        '[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH)',
+        'Marvel/Events/CBH/[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH).cbl',
+      ),
+    ).toBe('The New Marvel Ultimate Universe 2.0 (CBH)')
+    expect(displayCblSourceTitle('Ultimate Universe', 'Ultimate.cbl')).toBe('Ultimate Universe')
+    expect(displayCblSourceTitle('Ultimate Universe.cbl', 'Ultimate.cbl')).toBe('Ultimate Universe')
+    expect(displayCblSourceTitle('  Ultimate Universe  ', 'Ultimate.cbl')).toBe('Ultimate Universe')
+  })
+
+  it('falls back to the source path when the supplied title is unusable', () => {
+    expect(displayCblSourceTitle('', 'Marvel/Events/CBH/Ultimate.cbl')).toBe('Ultimate')
+    expect(displayCblSourceTitle('   ', 'Marvel/Events/CBH/Ultimate.cbl')).toBe('Ultimate')
+    expect(displayCblSourceTitle(null, 'Marvel/Events/CBH/Ultimate.cbl')).toBe('Ultimate')
+    expect(displayCblSourceTitle(undefined, 'Marvel/Events/CBH/Ultimate.cbl')).toBe('Ultimate')
+    // A title that is only metadata tags leaves nothing readable behind.
+    expect(displayCblSourceTitle('[Marvel]', 'Marvel/Events/CBH/Ultimate.cbl')).toBe('Ultimate')
+  })
+
+  it('returns null when neither the title nor the path is readable', () => {
+    expect(displayCblSourceTitle('', '')).toBeNull()
+    expect(displayCblSourceTitle('[Marvel]', '/mnt/bigdata/CBL-ReadingLists')).toBeNull()
   })
 
   it('maps the production mirror path to the public repository', () => {
@@ -72,6 +100,7 @@ describe('cblSourceDisplay', () => {
     expect(displayCblSourcePath('/tmp/lists/Ultimate.cbl')).toBe('Ultimate')
     expect(displayCblSourcePath('/tmp/lists')).toBeNull()
     expect(displayCblSourcePath('/mnt/bigdata/CBL-ReadingLists/')).toBeNull()
+    expect(displayCblSourcePath('/tmp/lists/.cbl')).toBeNull()
   })
 })
 
