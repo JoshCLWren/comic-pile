@@ -11,20 +11,24 @@ const pr = (number = 1) => ({
 async function run({ prs = [pr()], labels = [], comments = [], event = 'schedule', action = 'opened' } = {}) {
   const writes = [];
   const reads = [];
+  // REST response doubles: every read now consumes `result.data`, and label
+  // reads are paginated issue REST endpoints rather than github.paginate.
   const issues = {
-    listLabelsOnIssue() {}, listComments() {},
-    async setLabels(input) { writes.push(input); },
+    listLabelsOnIssue: async () => ({
+      data: labels.map(name => ({ name })),
+      headers: {},
+      status: 200,
+    }),
+    listComments: async () => ({ data: comments, headers: {}, status: 200 }),
+    async setLabels(input) { writes.push(input); return { data: {}, headers: {}, status: 200 }; },
   };
-  const pulls = { list() {} };
-  const github = {
-    rest: { issues, pulls },
-    async paginate(operation, params) {
+  const pulls = {
+    async list(params) {
       reads.push(params);
-      if (operation === pulls.list) return prs;
-      if (operation === issues.listComments) return comments;
-      return labels.map(name => ({ name }));
+      return { data: prs, headers: {}, status: 200 };
     },
   };
+  const github = { rest: { issues, pulls } };
   await reconcileMissingPrLabels({ github, context: {
     eventName: event, repo: { owner: 'JoshCLWren', repo: 'comic-pile' },
     payload: { pull_request: prs[0], action },
@@ -33,10 +37,20 @@ async function run({ prs = [pr()], labels = [], comments = [], event = 'schedule
 }
 
 test('open event enrolls a manual PR and preserves unrelated labels atomically', async () => {
-  const { writes } = await run({ labels: ['bug'], event: 'pull_request_target' });
+  const { writes } = await run({ labels: ['bug'], event: 'pull_request_target', action: 'opened' });
   assert.equal(writes.length, 1);
   assert.deepEqual(new Set(writes[0].labels),
     new Set(['bug', 'factory', 'factory:review', 'factory:unowned']));
+});
+
+test('pull_request_target enrolls the payload PR without listing pulls', async () => {
+  // Regression: PR events supplied the payload as a bare array while the loop
+  // expected `{ data }`, so every non-edited PR event crashed before labels ran.
+  const { writes, reads } = await run({ labels: ['bug'], event: 'pull_request_target', action: 'synchronize' });
+  assert.equal(writes.length, 1);
+  assert.deepEqual(reads, []);
+  assert.equal(writes[0].issue_number, 1);
+  assert.ok(writes[0].labels.includes('factory:review'));
 });
 
 test('local factory lease is preserved while its missing review stage is enrolled', async () => {

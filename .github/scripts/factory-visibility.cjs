@@ -108,6 +108,142 @@ function reviewerGraphqlLogins() {
 
 const REVIEW_THREAD_PAGE_LIMIT = 50;
 
+// REST/GraphQL instrumentation: record every outbound request by installation,
+// workflow, endpoint, event, response status, and rate-limit headers so the
+// top API consumers can be identified without guessing (issue #3340). The log
+// is bounded in memory and exposed only through _test.
+const REST_REQUEST_LOG_LIMIT = 1000;
+let restRequestLogEntries = [];
+
+function rateLimited(error) {
+  return error?.status === 403 || error?.status === 429;
+}
+
+function restRateLimitHeaders(headers) {
+  const remaining = Number(headers?.['x-ratelimit-remaining']);
+  const reset = Number(headers?.['x-ratelimit-reset']);
+  const retryAfter = Number(headers?.['retry-after']);
+  return {
+    remaining: Number.isFinite(remaining) ? remaining : null,
+    reset: Number.isFinite(reset) && reset > 0 ? reset : null,
+    retryAfter: Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter : null,
+  };
+}
+
+function recordRestRequest(spec) {
+  const record = {
+    observedAt: spec.observedAt || new Date().toISOString(),
+    installation: spec.installation || 'local',
+    workflow: spec.workflow || 'unknown',
+    endpoint: spec.endpoint || 'unknown',
+    event: spec.event || 'unknown',
+    kind: spec.kind || 'rest',
+    method: spec.method || null,
+    status: spec.status ?? null,
+    limited: Boolean(spec.limited),
+    ...restRateLimitHeaders(spec.headers),
+  };
+  restRequestLogEntries.push(record);
+  if (restRequestLogEntries.length > REST_REQUEST_LOG_LIMIT) restRequestLogEntries.shift();
+  return record;
+}
+
+// Record a single outbound HTTP request. This is the shared request layer that
+// pagination, retries, and individual calls all use so every request is counted.
+async function recordRequest(github, context, spec, requestFn) {
+  const installation = process.env.GITHUB_ACTIONS === 'true'
+    ? 'github-actions-installation'
+    : 'local';
+  const workflow = process.env.GITHUB_WORKFLOW
+    || (context && context.workflow)
+    || 'unknown';
+  const event = spec.event || (context && context.eventName) || 'unknown';
+  const observedAt = new Date().toISOString();
+  const record = recordRestRequest({
+    installation, workflow, endpoint: spec.endpoint, event,
+    kind: spec.kind || 'rest', method: spec.method || null,
+    status: null, headers: {}, observedAt,
+  });
+  try {
+    const response = await requestFn();
+    const headers = response?.headers || {};
+    Object.assign(record, { status: response?.status ?? null, ...restRateLimitHeaders(headers) });
+    return response;
+  } catch (error) {
+    const headers = error?.response?.headers || error?.headers || {};
+    Object.assign(record, {
+      status: error?.status ?? null,
+      ...restRateLimitHeaders(headers),
+      limited: rateLimited(error),
+    });
+    throw error;
+  }
+}
+
+// Wrap one outbound REST/GraphQL call so its installation, workflow, endpoint,
+// event, response status, and rate-limit headers are recorded. The wrapped
+// operation owns its own retry/backpressure (withRetry); instrumentation
+// observes the final outcome of the call.
+// Kept for backward compatibility with call sites that pass a compound operation.
+async function restCall(github, context, spec, operation) {
+  return recordRequest(github, context, spec, operation);
+}
+
+// Manually paginate a REST endpoint and aggregate every page's data. The page
+// fetcher owns all recording: call sites pass a withRetryLogged-wrapped
+// fetcher, so each page request and each retry attempt is recorded exactly
+// once at the shared request layer. This wrapper never records on its own.
+async function manualPaginationWithLogging(github, context, baseSpec, fetchPageFn, { perPage = 100 } = {}) {
+  const allResults = [];
+  let page = 1;
+  while (true) {
+    const response = await fetchPageFn(page, perPage, {
+      ...baseSpec,
+      endpoint: `${baseSpec.endpoint}?per_page=${perPage}&page=${page}`,
+    });
+    const pageData = response.data || [];
+    allResults.push(...pageData);
+    if (pageData.length < perPage) break;
+    page += 1;
+  }
+  return { data: allResults, headers: {}, status: 200 };
+}
+
+// Retry wrapper that records each attempt as a separate request.
+async function withRetryLogged(github, context, spec, operation, { attempts = 3, delay = 250, maxRateLimitWait = 30000, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await recordRequest(github, context, spec, operation);
+    } catch (error) {
+      lastError = error;
+      if (!isTransient(error) || attempt === attempts) throw error;
+      const rateDelay = rateLimitDelay(error);
+      if ((error.status === 403 || error.status === 429)
+          && (rateDelay === null || rateDelay > maxRateLimitWait)) throw error;
+      await sleep(rateDelay === null ? delay * attempt : rateDelay);
+    }
+  }
+  throw lastError;
+}
+
+function restRequestLog() {
+  return restRequestLogEntries.slice();
+}
+
+function restRequestCounts() {
+  const counts = {};
+  for (const record of restRequestLogEntries) {
+    const key = `${record.installation}|${record.workflow}|${record.event}|${record.kind}|${record.endpoint}|${record.status}`;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return counts;
+}
+
+function clearRestRequestLog() {
+  restRequestLogEntries = [];
+}
+
 // Open-thread rule, shared with .github/scripts/factory-review-findings.sh
 // (FACTORY_GREPTILE_JQ_DEFS; keep them identical, see
 // docs/FACTORY_GITHUB_VISIBILITY.md "Open Greptile findings"). A review thread
@@ -157,15 +293,24 @@ function summaryFindingId(title) {
 
 // Fetch every comment of one thread. Used only when the recent window cannot
 // establish Greptile's latest comment. Returns null when incomplete.
-async function fullThreadComments(github, threadId, { pageLimit = 20 } = {}) {
+async function fullThreadComments(github, context, threadId, { pageLimit = 20 } = {}) {
   const comments = [];
   let after = null;
   for (let page = 0; page < pageLimit; page += 1) {
-    const response = await withRetry(() => github.graphql(
-      `query($id:ID!,$after:String){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{url author{__typename login} authorAssociation body createdAt}}}}}`,
-      { id: threadId, after },
-    ));
-    const connection = response?.node?.comments;
+    // Retry records every attempt at the shared request layer; a second wrapper
+    // here would double-count the same outbound GraphQL request.
+    const response = await withRetryLogged(github, context, {
+      endpoint: 'graphql',
+      kind: 'graphql',
+      event: context.eventName,
+    }, async () => {
+      const result = await github.graphql(
+        `query($id:ID!,$after:String){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{url author{__typename login} authorAssociation body createdAt}}}}}`,
+        { id: threadId, after },
+      );
+      return { data: result, headers: {}, status: 200 };
+    });
+    const connection = response?.data?.node?.comments;
     if (!Array.isArray(connection?.nodes)) return null;
     comments.push(...connection.nodes);
     if (connection.pageInfo?.hasNextPage === false) return comments;
@@ -208,11 +353,20 @@ async function greptileReviewThreads(github, context, number, { pageLimit = REVI
   const threads = [];
   let after = null;
   for (let page = 0; page < pageLimit; page += 1) {
-    const response = await withRetry(() => github.graphql(
-      `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated firstComment:comments(first:1){nodes{databaseId url author{__typename login}}} recent:comments(last:${RECENT_COMMENT_WINDOW}){totalCount nodes{url author{__typename login} authorAssociation body createdAt}}}}}}}`,
-      { owner: context.repo.owner, name: context.repo.repo, number, after },
-    ));
-    const connection = response?.repository?.pullRequest?.reviewThreads;
+    // Retry records every attempt at the shared request layer; a second wrapper
+    // here would double-count the same outbound GraphQL request.
+    const response = await withRetryLogged(github, context, {
+      endpoint: 'graphql',
+      kind: 'graphql',
+      event: context.eventName,
+    }, async () => {
+      const result = await github.graphql(
+        `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated firstComment:comments(first:1){nodes{databaseId url author{__typename login}}} recent:comments(last:${RECENT_COMMENT_WINDOW}){totalCount nodes{url author{__typename login} authorAssociation body createdAt}}}}}}}`,
+        { owner: context.repo.owner, name: context.repo.repo, number, after },
+      );
+      return { data: result, headers: {}, status: 200 };
+    });
+    const connection = response?.data?.repository?.pullRequest?.reviewThreads;
     if (!Array.isArray(connection?.nodes)) return { threads, complete: false };
     for (const node of connection.nodes) {
       const thread = {
@@ -230,7 +384,7 @@ async function greptileReviewThreads(github, context, number, { pageLimit = REVI
           && isGreptileLogin(thread.firstComment?.author?.login)
           && total > thread.comments.length
           && !thread.comments.some(comment => isGreptileLogin(comment?.author?.login))) {
-        const all = await fullThreadComments(github, node.id);
+        const all = await fullThreadComments(github, context, node.id);
         if (all) thread.comments = all;
       }
       threads.push(thread);
@@ -271,12 +425,18 @@ function greptileSummaryFindings(body) {
 }
 
 async function greptileReviewCompletedAt(github, context, sha) {
-  const response = await withRetry(() => github.rest.checks.listForRef({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    ref: sha,
-    per_page: 100,
-  }));
+  const response = await withRetryLogged(github, context, {
+    endpoint: `repos/${context.repo.owner}/${context.repo.repo}/commits/${sha}/check-runs`,
+    method: 'GET',
+    event: context.eventName,
+  }, async () => {
+    return github.rest.checks.listForRef({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      ref: sha,
+      per_page: 100,
+    });
+  });
   const times = (response?.data?.check_runs || [])
     .filter(run => /greptile/i.test(run.name || '') && run.completed_at)
     .map(run => run.completed_at);
@@ -319,11 +479,17 @@ function openSummaryFindings(summary, threads, head, reviewedAt, issueComments =
 // therefore harmless, because the next run sees the same live state. Routing
 // only ever moves a PR to factory:changes-requested; it never un-routes.
 async function routeGreptileFindings(github, context, number) {
-  const live = (await withRetry(() => github.rest.pulls.get({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    pull_number: number,
-  })))?.data;
+  const live = (await withRetryLogged(github, context, {
+    endpoint: `repos/${context.repo.owner}/${context.repo.repo}/pulls/${number}`,
+    method: 'GET',
+    event: context.eventName,
+  }, async () => {
+    return github.rest.pulls.get({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      pull_number: number,
+    });
+  }))?.data;
   if (!live || (live.state && live.state !== 'open')) return { routed: false, reason: 'not-open' };
   const head = live.head?.sha;
   const current = await currentLabels(github, context, number);
@@ -340,12 +506,22 @@ async function routeGreptileFindings(github, context, number) {
     const byComment = new Set(threads.map(thread => String(thread.firstComment?.databaseId || '')));
     const needsComments = summary.findings.some(finding => !finding.discussionId || !byComment.has(finding.discussionId));
     const issueComments = needsComments
-      ? await withRetry(() => github.paginate(github.rest.issues.listComments, {
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        issue_number: number,
-        per_page: 100,
-      }))
+      ? (await manualPaginationWithLogging(github, context, {
+          endpoint: `repos/${context.repo.owner}/${context.repo.repo}/issues/${number}/comments`,
+          method: 'GET',
+          event: context.eventName,
+        }, async (page, perPage, pageSpec) => {
+          return withRetryLogged(github, context, pageSpec, async () => {
+            const result = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: number,
+              per_page: perPage,
+              page,
+            });
+            return { data: result.data, headers: result.headers, status: result.status };
+          });
+        })).data
       : [];
     openSummary = openSummaryFindings(summary, threads, head, reviewedAt, issueComments);
   }
@@ -485,13 +661,24 @@ async function withRetry(operation, { attempts = 3, delay = 250, maxRateLimitWai
 }
 
 async function currentLabels(github, context, number) {
-  const labels = await withRetry(() => github.paginate(github.rest.issues.listLabelsOnIssue, {
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: number,
-    per_page: 100,
-  }));
-  return new Set(labels.map(label => label.name));
+  const endpoint = `repos/${context.repo.owner}/${context.repo.repo}/issues/${number}/labels`;
+  const response = await manualPaginationWithLogging(github, context, {
+    endpoint,
+    method: 'GET',
+    event: context.eventName,
+  }, async (page, perPage, pageSpec) => {
+    return withRetryLogged(github, context, pageSpec, async () => {
+      const result = await github.rest.issues.listLabelsOnIssue({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        issue_number: number,
+        per_page: perPage,
+        page,
+      });
+      return { data: result.data, headers: result.headers, status: result.status };
+    });
+  });
+  return new Set(response.data.map(label => label.name));
 }
 
 async function reconcileLabels(github, context, number, { owner, stage }) {
@@ -507,43 +694,80 @@ async function reconcileLabels(github, context, number, { owner, stage }) {
   // Compare sets, since GitHub does not promise stable label ordering.
   if (current.size === next.length && next.every(label => current.has(label))) return;
 
-  await withRetry(() => github.rest.issues.setLabels({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: number,
-    labels: next,
-  }));
+  // Retry records every attempt at the shared request layer; a second wrapper
+  // here would double-count the same outbound PUT request.
+  await withRetryLogged(github, context, {
+    endpoint: `repos/${context.repo.owner}/${context.repo.repo}/issues/${number}/labels`,
+    method: 'PUT',
+    event: context.eventName,
+  }, async () => {
+    const result = await github.rest.issues.setLabels({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      issue_number: number,
+      labels: next,
+    });
+    return { data: result.data, headers: result.headers, status: result.status };
+  });
 }
 
 async function ensureLabels(github, context) {
-  const existing = await withRetry(() => github.paginate(github.rest.issues.listLabelsForRepo, {
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    per_page: 100,
-  }));
-  const byName = new Map(existing.map(label => [label.name, label]));
+  const existing = await manualPaginationWithLogging(github, context, {
+    endpoint: `repos/${context.repo.owner}/${context.repo.repo}/labels`,
+    method: 'GET',
+    event: context.eventName,
+  }, async (page, perPage, pageSpec) => {
+    return withRetryLogged(github, context, pageSpec, async () => {
+      const result = await github.rest.issues.listLabelsForRepo({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        per_page: perPage,
+        page,
+      });
+      return { data: result.data, headers: result.headers, status: result.status };
+    });
+  });
+  const byName = new Map(existing.data.map(label => [label.name, label]));
   for (const [name, [color, description]] of Object.entries(DEFINITIONS)) {
     const current = byName.get(name);
     if (!current) {
-      await withRetry(() => github.rest.issues.createLabel({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        name,
-        color,
-        description,
-      }));
+      // Retry records every attempt at the shared request layer; a second
+      // wrapper here would double-count the same outbound POST request.
+      await withRetryLogged(github, context, {
+        endpoint: `repos/${context.repo.owner}/${context.repo.repo}/labels`,
+        method: 'POST',
+        event: context.eventName,
+      }, async () => {
+        const result = await github.rest.issues.createLabel({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          name,
+          color,
+          description,
+        });
+        return { data: result.data, headers: result.headers, status: result.status };
+      });
     } else if (
       current.color.toUpperCase() !== color
       || (current.description || '') !== description
     ) {
-      await withRetry(() => github.rest.issues.updateLabel({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        name,
-        new_name: name,
-        color,
-        description,
-      }));
+      // Retry records every attempt at the shared request layer; a second
+      // wrapper here would double-count the same outbound PATCH request.
+      await withRetryLogged(github, context, {
+        endpoint: `repos/${context.repo.owner}/${context.repo.repo}/labels/${name}`,
+        method: 'PATCH',
+        event: context.eventName,
+      }, async () => {
+        const result = await github.rest.issues.updateLabel({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          name,
+          new_name: name,
+          color,
+          description,
+        });
+        return { data: result.data, headers: result.headers, status: result.status };
+      });
     }
   }
 }
@@ -559,12 +783,24 @@ async function ownerFromLinkedIssue(github, context, pullRequest) {
   const issueNumber = Number(closing?.[1] || fixedModelBranch?.[1] || legacyBranch?.[1] || 0);
   if (!issueNumber) return 'factory:unowned';
 
-  const comments = await withRetry(() => github.paginate(github.rest.issues.listComments, {
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: issueNumber,
-    per_page: 100,
-  }));
+  const endpoint = `repos/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}/comments`;
+  const commentsResponse = await manualPaginationWithLogging(github, context, {
+    endpoint,
+    method: 'GET',
+    event: context.eventName,
+  }, async (page, perPage, pageSpec) => {
+    return withRetryLogged(github, context, pageSpec, async () => {
+      const result = await github.rest.issues.listComments({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        issue_number: issueNumber,
+        per_page: perPage,
+        page,
+      });
+      return { data: result.data, headers: result.headers, status: result.status };
+    });
+  });
+  const comments = commentsResponse.data;
   comments.sort((left, right) => new Date(right.created_at) - new Date(left.created_at));
   for (const comment of comments) {
     if (!trusted(comment)) continue;
@@ -577,12 +813,23 @@ async function ownerFromLinkedIssue(github, context, pullRequest) {
 }
 
 async function reconcileMissingPrLabels({ github, context }) {
+  // Normalize both event branches to the same `{ data }` shape: PR events carry
+  // exactly the payload's pull request, scheduled sweeps list and paginate open PRs.
   const candidates = context.eventName === 'pull_request_target'
-    ? [context.payload.pull_request]
-    : await withRetry(() => github.paginate(github.rest.pulls.list, {
-      ...context.repo, state: 'open', per_page: 100,
-    }));
-  for (const pr of candidates) {
+    ? { data: [context.payload.pull_request].filter(Boolean), headers: {}, status: 200 }
+    : await manualPaginationWithLogging(github, context, {
+        endpoint: `repos/${context.repo.owner}/${context.repo.repo}/pulls`,
+        method: 'GET',
+        event: context.eventName,
+      }, async (page, perPage, pageSpec) => {
+        return withRetryLogged(github, context, pageSpec, async () => {
+          const result = await github.rest.pulls.list({
+            ...context.repo, state: 'open', per_page: perPage, page,
+          });
+          return { data: result.data, headers: result.headers, status: result.status };
+        });
+      });
+  for (const pr of candidates.data) {
     if (pr.state !== 'open' || pr.draft
       || !pr.head.repo?.full_name
       || /^(dependabot|renovate)(\[bot\])?$/.test(pr.user?.login || '')) continue;
@@ -602,9 +849,20 @@ async function reconcileMissingPrLabels({ github, context }) {
     // review/CI state. Never manufacture readiness from green checks alone.
     let stage = !pushed && stages.length === 1 ? stages[0] : 'factory:review';
     if (!pushed && stages.length === 0) {
-      const comments = await withRetry(() => github.paginate(github.rest.issues.listComments, {
-        ...context.repo, issue_number: pr.number, per_page: 100,
-      }));
+      const commentsEndpoint = `repos/${context.repo.owner}/${context.repo.repo}/issues/${pr.number}/comments`;
+      const commentsResponse = await manualPaginationWithLogging(github, context, {
+        endpoint: commentsEndpoint,
+        method: 'GET',
+        event: context.eventName,
+      }, async (page, perPage, pageSpec) => {
+        return withRetryLogged(github, context, pageSpec, async () => {
+          const result = await github.rest.issues.listComments({
+            ...context.repo, issue_number: pr.number, per_page: perPage, page,
+          });
+          return { data: result.data, headers: result.headers, status: result.status };
+        });
+      });
+      const comments = commentsResponse.data;
       for (const comment of [...comments].sort(
         (left, right) => new Date(right.created_at) - new Date(left.created_at),
       )) {
@@ -760,4 +1018,9 @@ module.exports._test = {
   EXPECTED_WORKER_IDS,
   FIXED_MODEL_OWNER_LABELS,
   WORKER_OWNER_LABELS,
+  restCall,
+  restRequestLog,
+  restRequestCounts,
+  clearRestRequestLog,
+  currentLabels,
 };
