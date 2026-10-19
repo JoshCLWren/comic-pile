@@ -2,7 +2,9 @@
  * Unit tests for CBL browser grammar fixes
  */
 
-import { countPhraseWithArticle } from '../lib/countPhraseWithArticle'
+import { describe, expect, test } from 'vitest'
+
+import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
 
 describe('CBL browser grammar', () => {
   test('correctly handles singular counts', () => {

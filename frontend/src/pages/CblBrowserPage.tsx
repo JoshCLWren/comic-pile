@@ -16,7 +16,7 @@ import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
 import { displayCblRepository, displayCblSourcePath } from '../utils/cblSourceDisplay'
 import { isObject, isString } from '../utils/runtimeChecks'
-import { countPhraseWithArticle } from '../lib/countPhraseWithArticle'
+import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
 
 function statusLabel(entry: CBLAdoptionPreviewEntry): string {
   switch (entry.adoption_decision) {
