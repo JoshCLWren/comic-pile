@@ -304,11 +304,11 @@ export default function AddSeriesFromComicVineDialog({
     [handleSearch],
   )
 
-  const handleRetrySearch = useCallback(() => {
+  const handleRetrySearch = () => {
     const failed = lastSearchRef.current
     if (!failed) return
     void handleSearch(failed.query, failed.offset, failed.append)
-  }, [handleSearch])
+  }
 
   const handleLoadMore = useCallback(() => {
     if (!pagination.hasMore || pagination.nextOffset == null || searchingRef.current) return
@@ -341,6 +341,7 @@ export default function AddSeriesFromComicVineDialog({
     setUnknownOutcome(null)
     setStep('search')
     setSelectedSeries(null)
+    // stable dependencies: requestsRef (ref), setError/setUnknownOutcome/setStep/setSelectedSeries (useState)
   }, [])
 
   const finishAdd = useCallback(
