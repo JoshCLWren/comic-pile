@@ -161,16 +161,19 @@ export default function ComicVineSearchDialog({
   }, [])
 
   useEffect(() => {
+    // Dismissing the dialog cancels the debounce too, so a dismissed surface stops asking
+    // the provider for a term the reader already walked away from. The Queue "Add from
+    // ComicVine" dialog cancels on the same transition, so the two cannot drift (#3872).
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
     if (isOpen && threadTitle) {
       setQuery(stripParenthesizedYears(threadTitle))
     }
     if (isOpen) {
       // Resetting the dialog context abandons whatever request is in flight, so its late
       // response cannot repaint a dialog that has already moved on to different state (#3448).
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-        debounceRef.current = null
-      }
       requestsRef.current.abandon()
       searchingRef.current = false
       setStep('search')

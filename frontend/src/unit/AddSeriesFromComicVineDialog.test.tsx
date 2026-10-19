@@ -121,6 +121,9 @@ function deferred<T>() {
 
 type SeriesResponse = ReturnType<typeof page>
 
+/** The dialog debounces keystrokes before it asks the provider; tests must outlast it. */
+const SEARCH_DEBOUNCE_MS = 350
+
 /** An axios-shaped rejection that carries a real server response. */
 function serverError(status: number, detail: string) {
   return Object.assign(new Error(`Request failed with status code ${status}`), {
@@ -1136,6 +1139,37 @@ describe('AddSeriesFromComicVineDialog single-state search (#3448)', () => {
     })
 
     expect(screen.queryByText('Stormwatch')).not.toBeInTheDocument()
+    expect(screen.getByText('Type a series name to search ComicVine')).toBeInTheDocument()
+  })
+
+  it('cancels a still-debouncing query when the reader closes the dialog', async () => {
+    const abandoned = deferred<SeriesResponse>()
+    searchSeriesSpy.mockImplementationOnce(() => abandoned.promise)
+
+    const { rerender } = render(<AddSeriesFromComicVineDialog {...defaultProps()} />)
+
+    // Closing inside the debounce window, then reopening before the timer fires, is the
+    // one path the reopen reset cannot catch: the pending timer still holds the term the
+    // reader abandoned, so it would search for it against the freshly reset dialog (#3872).
+    await search('Preacher')
+    rerender(<AddSeriesFromComicVineDialog {...defaultProps({ isOpen: false })} />)
+    rerender(<AddSeriesFromComicVineDialog {...defaultProps({ isOpen: true })} />)
+    await waitFor(() =>
+      expect(screen.getByText('Type a series name to search ComicVine')).toBeInTheDocument(),
+    )
+
+    // Outlast the debounce window the abandoned keystroke had already armed.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, SEARCH_DEBOUNCE_MS + 150))
+    })
+    await act(async () => {
+      abandoned.resolve(page([{ ...stormwatch, name: 'Preacher' }]))
+    })
+
+    // A dismissed dialog must not keep asking the provider, and its answer must never
+    // repopulate a reopened dialog whose search box is empty.
+    expect(searchSeriesSpy).not.toHaveBeenCalled()
+    expect(screen.queryByText('Preacher')).not.toBeInTheDocument()
     expect(screen.getByText('Type a series name to search ComicVine')).toBeInTheDocument()
   })
 })

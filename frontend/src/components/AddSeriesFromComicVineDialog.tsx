@@ -189,6 +189,14 @@ export default function AddSeriesFromComicVineDialog({
   }, [])
 
   useEffect(() => {
+    // Dismissing the dialog cancels the debounce too, so a dismissed surface stops asking
+    // the provider for a term the reader already walked away from. A timer that survived
+    // into the next session would search for that term against a reset, empty dialog, which
+    // is the same late-result defect the reopen reset below already guards (#3872).
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
     if (isOpen) {
       // Reopening abandons whatever the previous session asked for, so its late response
       // cannot repopulate a dialog the reader has already reset.
