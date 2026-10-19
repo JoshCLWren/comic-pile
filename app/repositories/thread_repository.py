@@ -5,7 +5,7 @@ return ORM models or plain values; callers (services) own transactions.
 """
 
 from datetime import datetime
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -580,6 +580,7 @@ class _MappingHealthRow(TypedDict):
     confirmed_issue_count: int
     needs_mapping_count: int
     needs_review_count: int
+    metadata_missing_count: NotRequired[int]
     has_issues: bool
 
 
@@ -631,6 +632,15 @@ async def fetch_comicvine_mapping_health(
             Issue.id.label("issue_id"),
             Issue.thread_id.label("thread_id"),
             func.count(ExternalIdentity.id).label("confirmed_count"),
+            func.count(ExternalIdentity.id).filter(
+                or_(
+                    func.coalesce(ExternalIdentity.metadata_json["issue_number"].as_string(), "") == "",
+                    func.coalesce(
+                        ExternalIdentity.metadata_json["volume"]["name"].as_string(),
+                        ExternalIdentity.metadata_json["volume_name"].as_string(), "",
+                    ) == "",
+                )
+            ).label("metadata_missing_count"),
         )
         .select_from(Issue)
         .where(Issue.thread_id.in_(select(tracked_threads.c.id)))
@@ -669,6 +679,8 @@ async def fetch_comicvine_mapping_health(
         func.count()
         .filter(issue_mapping_state.c.confirmed_count > 1)
         .label("needs_review_count"),
+        func.count().filter(issue_mapping_state.c.metadata_missing_count > 0)
+        .label("metadata_missing_count"),
         (func.count(issue_mapping_state.c.issue_id) > 0).label("has_issues"),
     ).group_by(issue_mapping_state.c.thread_id)
 
@@ -683,6 +695,7 @@ async def fetch_comicvine_mapping_health(
             confirmed_issue_count=row.confirmed_issue_count,
             needs_mapping_count=row.needs_mapping_count,
             needs_review_count=row.needs_review_count,
+            metadata_missing_count=row.metadata_missing_count,
             has_issues=row.has_issues,
         )
 
@@ -695,6 +708,7 @@ async def fetch_comicvine_mapping_health(
                 confirmed_issue_count=0,
                 needs_mapping_count=0,
                 needs_review_count=0,
+                metadata_missing_count=0,
                 has_issues=False,
             )
 

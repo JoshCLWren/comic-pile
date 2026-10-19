@@ -205,6 +205,7 @@ def to_queue_list_item(
         confirmed = mapping_health["confirmed_issue_count"]
         needs_mapping = mapping_health["needs_mapping_count"]
         needs_review = mapping_health["needs_review_count"]
+        metadata_missing = mapping_health.get("metadata_missing_count", 0)
         has_issues = mapping_health["has_issues"]
 
         if not has_issues and tr.total_issues is None:
@@ -215,7 +216,7 @@ def to_queue_list_item(
             status = ComicVineMappingStatus.not_applicable
         elif needs_review > 0:
             status = ComicVineMappingStatus.needs_review
-        elif confirmed == tracked and tracked > 0:
+        elif confirmed == tracked and tracked > 0 and metadata_missing == 0:
             status = ComicVineMappingStatus.fully_mapped
         elif confirmed > 0:
             status = ComicVineMappingStatus.partial
@@ -228,6 +229,7 @@ def to_queue_list_item(
             confirmed_issue_count=confirmed,
             needs_mapping_count=needs_mapping,
             needs_review_count=needs_review,
+            metadata_missing_count=metadata_missing,
         )
 
     return QueueThreadListItem(

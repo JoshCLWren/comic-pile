@@ -247,6 +247,59 @@ function renderDialog(onMapped = vi.fn(), onClose = vi.fn()) {
 })
 
 describe('QueueMapSeriesDialog', () => {
+  it.each([
+    ['provider_roster_unavailable', 'ComicVine did not return the issue list'],
+    ['queue_thread_bootstrap_no_exact_match', 'No issue numbers in this series match'],
+    ['thread_has_no_issues', 'This series has no tracked issues'],
+    ['origin_issue_not_found', 'The issue used to check this series is no longer available'],
+    ['origin_issue_without_thread', 'The issue used to check this series is no longer available'],
+  ])('explains the unavailable plan for %s', async (basis, message) => {
+    mockedPreview.mockResolvedValue(previewResponse([], { scope: {
+      status: 'unavailable', scope_key: null, origin_issue_id: 1, series_label: null, basis,
+    } }))
+    renderDialog()
+    const volume = await screen.findByTestId('queue-map-series-result')
+    await waitFor(() => expect(volume).toBeEnabled())
+    await userEvent.click(volume)
+    expect(await screen.findByText(new RegExp(message))).toBeInTheDocument()
+    expect(screen.queryByTestId('queue-map-series-approve')).not.toBeInTheDocument()
+    if (basis === 'provider_roster_unavailable') {
+      mockedPreview.mockResolvedValue(previewResponse([previewRow({})]))
+      await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(await screen.findByTestId('queue-map-series-approve')).toBeEnabled()
+    }
+  })
+
+  it('updates missing metadata on a verified existing identity without unlinking it', async () => {
+    mockedPreview.mockResolvedValue(previewResponse([previewRow({
+      classification: 'already_confirmed',
+      current_mapping_status: 'confirmed',
+      metadata_refresh_required: true,
+      default_selected: true,
+    })]))
+    renderDialog()
+    await userEvent.click(await screen.findByTestId('queue-map-series-result'))
+    expect(await screen.findByText('Missing details')).toBeInTheDocument()
+    expect(screen.getByText(/do not need to remove the links first/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Update 1 issue' }))
+    await waitFor(() => expect(mockedCommit).toHaveBeenCalledWith(expect.objectContaining({
+      approved_row_ids: ['issue:2'],
+    })))
+  })
+
+  it('shows existing links when no new issue needs mapping', async () => {
+    mockedPreview.mockResolvedValue(previewResponse([previewRow({
+      classification: 'already_confirmed', current_mapping_status: 'confirmed',
+      default_selected: false,
+    })], { counts: { already_confirmed: 1, safe_exact_match: 0, needs_review_ambiguous: 0,
+      needs_review_conflict: 0, unresolved: 0, excluded_special: 0 } }))
+    renderDialog()
+    await userEvent.click(await screen.findByTestId('queue-map-series-result'))
+    expect(await screen.findByText(/1 issue already links to this volume/)).toBeInTheDocument()
+    expect(screen.queryByText(/could not establish a safe mapping scope/)).not.toBeInTheDocument()
+    expect(screen.getByTestId('queue-map-series-approve')).toBeDisabled()
+  })
+
   it('searches on open and shows the mapping preview after a volume is selected', async () => {
     const user = userEvent.setup()
     renderDialog()

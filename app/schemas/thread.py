@@ -191,6 +191,7 @@ class ComicVineMappingHealth(BaseModel):
     confirmed_issue_count: int = Field(..., ge=0, description="Issues with confirmed ComicVine mappings")
     needs_mapping_count: int = Field(..., ge=0, description="Issues with no confirmed mapping (unresolved/candidate)")
     needs_review_count: int = Field(..., ge=0, description="Issues with conflicting/ambiguous mappings")
+    metadata_missing_count: int = Field(default=0, ge=0, description="Confirmed mappings without usable issue and series metadata")
 
     model_config = ConfigDict(frozen=True)
 

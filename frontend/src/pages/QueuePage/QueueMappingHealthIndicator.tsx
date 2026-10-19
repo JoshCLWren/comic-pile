@@ -21,8 +21,9 @@ export default function QueueMappingHealthIndicator({
 }: QueueMappingHealthIndicatorProps) {
   const { status, tracked_issue_count, confirmed_issue_count, needs_mapping_count, needs_review_count } =
     mapping
+  const metadataMissing = mapping.metadata_missing_count ?? 0
 
-  if (status === 'fully_mapped' || status === 'not_applicable') {
+  if ((status === 'fully_mapped' && metadataMissing === 0) || status === 'not_applicable') {
     return null
   }
 
@@ -37,6 +38,8 @@ export default function QueueMappingHealthIndicator({
           ? '1 issue needs review'
           : `${needs_review_count} issues need review`
         : 'Review needed'
+  } else if (metadataMissing > 0) {
+    label = `${metadataMissing} ${metadataMissing === 1 ? 'issue is' : 'issues are'} missing details`
   } else if (isPartial) {
     label = `${confirmed_issue_count} of ${tracked_issue_count} mapped`
   } else {

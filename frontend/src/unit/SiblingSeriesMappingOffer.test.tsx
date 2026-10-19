@@ -136,6 +136,17 @@ beforeEach(() => {
 })
 
 describe('SiblingSeriesMappingOffer loading', () => {
+  it('offers a metadata update for a verified blank sibling mapping', () => {
+    mockPreview(previewResponse([ORIGIN_ROW, previewRow({
+      classification: 'already_confirmed', current_mapping_status: 'confirmed',
+      metadata_refresh_required: true,
+    })]))
+    renderOffer()
+    expect(screen.getByText('Missing details')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Update 1 issue' })).toBeEnabled()
+    expect(screen.getByText(/without removing the links first/)).toBeInTheDocument()
+  })
+
   it('renders a loading state while the preview is pending', () => {
     mockPreview(undefined, { isPending: true })
 
@@ -148,6 +159,19 @@ describe('SiblingSeriesMappingOffer loading', () => {
 })
 
 describe('SiblingSeriesMappingOffer error', () => {
+  it('retries a failed provider lookup without losing the origin correction', () => {
+    const refetch = vi.fn()
+    mockPreview(undefined, { isError: true, refetch, isFetching: false })
+    renderOffer()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it('does not start overlapping retries while a lookup is already running', () => {
+    mockPreview(undefined, { isError: true, isFetching: true })
+    renderOffer()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeDisabled()
+  })
   it('renders an error state when the preview fails', () => {
     mockPreview(undefined, { isError: true })
 
@@ -171,6 +195,21 @@ describe('SiblingSeriesMappingOffer error', () => {
 })
 
 describe('SiblingSeriesMappingOffer empty', () => {
+  it('explains a scope failure separately from a legitimate empty sibling list', () => {
+    mockPreview(previewResponse([], { scope: { status: 'unavailable', scope_key: null,
+      origin_issue_id: 1, series_label: null, basis: 'provider_roster_unavailable' } }))
+    renderOffer()
+    expect(screen.getByText(/ComicVine did not return the issue list/)).toBeInTheDocument()
+  })
+
+  it('reports existing links when the volume has no new sibling mappings', () => {
+    mockPreview(previewResponse([ORIGIN_ROW, previewRow({ classification: 'already_confirmed',
+      default_selected: false })], { counts: { already_confirmed: 2,
+      safe_exact_match: 0, needs_review_ambiguous: 0, needs_review_conflict: 0,
+      unresolved: 0, excluded_special: 0 } }))
+    renderOffer()
+    expect(screen.getByText(/Other issues already link to this volume/)).toBeInTheDocument()
+  })
   it('renders a no-match message when no approvable rows exist', () => {
     mockPreview(previewResponse([ORIGIN_ROW]))
 

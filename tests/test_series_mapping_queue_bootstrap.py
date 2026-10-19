@@ -124,7 +124,9 @@ async def _confirm_issue(
         entity_type="issue",
         external_id=external_id,
         external_url=f"https://example.com/{provider}/4000-{external_id}",
-        metadata_json={"name": f"Issue {issue.issue_number}", "issue_number": issue.issue_number},
+        metadata_json={"name": f"Issue {issue.issue_number}", "issue_number": issue.issue_number,
+                       "volume": {"id": VOLUME_ID, "name": "B.P.R.D.: King of Fear"},
+                       "primary_image": "http://example.com/issue.jpg"},
     )
     db.add(identity)
     await db.flush()

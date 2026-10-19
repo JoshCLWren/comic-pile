@@ -802,6 +802,7 @@ describe('QueueThreadCard', () => {
         comicvine_mapping: {
           status: 'unresolved',
           tracked_issue_count: 4,
+          metadata_missing_count: 0,
           confirmed_issue_count: 0,
           needs_mapping_count: 4,
           needs_review_count: 0,
@@ -829,6 +830,7 @@ describe('QueueThreadCard', () => {
         comicvine_mapping: {
           status: 'fully_mapped',
           tracked_issue_count: 5,
+          metadata_missing_count: 0,
           confirmed_issue_count: 5,
           needs_mapping_count: 0,
           needs_review_count: 0,
@@ -876,6 +878,7 @@ describe('QueueThreadCard', () => {
         comicvine_mapping: {
           status: 'needs_review',
           tracked_issue_count: 3,
+          metadata_missing_count: 0,
           confirmed_issue_count: 1,
           needs_mapping_count: 0,
           needs_review_count: 2,

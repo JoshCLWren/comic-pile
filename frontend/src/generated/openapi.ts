@@ -6896,6 +6896,12 @@ export interface components {
              */
             confirmed_issue_count: number;
             /**
+             * Metadata Missing Count
+             * @description Confirmed mappings without usable issue and series metadata
+             * @default 0
+             */
+            metadata_missing_count: number;
+            /**
              * Needs Mapping Count
              * @description Issues with no confirmed mapping (unresolved/candidate)
              */
@@ -13071,9 +13077,9 @@ export interface components {
             } | null;
             /**
              * Name
-             * @description Series name
+             * @description Series name, when provider metadata is available
              */
-            name: string;
+            name?: string | null;
             /**
              * Publisher
              * @description Publisher name
@@ -13166,7 +13172,7 @@ export interface components {
             current_mapping_status?: string | null;
             /**
              * Default Selected
-             * @description Whether this is a default selected row (only for safe_exact_match)
+             * @description Whether this safe mapping or verified metadata refresh is selected by default
              */
             default_selected: boolean;
             /**
@@ -13184,6 +13190,12 @@ export interface components {
              * @description Issue number
              */
             issue_number: string;
+            /**
+             * Metadata Refresh Required
+             * @description Verified existing identity has no usable metadata and may be refreshed without replacing it
+             * @default false
+             */
+            metadata_refresh_required: boolean;
             /**
              * Proposed Mapping
              * @description Whether this issue would be mapped in the proposed scope

@@ -1971,6 +1971,13 @@
             "title": "Confirmed Issue Count",
             "type": "integer"
           },
+          "metadata_missing_count": {
+            "default": 0,
+            "description": "Confirmed mappings without usable issue and series metadata",
+            "minimum": 0.0,
+            "title": "Metadata Missing Count",
+            "type": "integer"
+          },
           "needs_mapping_count": {
             "description": "Issues with no confirmed mapping (unresolved/candidate)",
             "minimum": 0.0,
@@ -15294,9 +15301,16 @@
             "title": "Image"
           },
           "name": {
-            "description": "Series name",
-            "title": "Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Series name, when provider metadata is available",
+            "title": "Name"
           },
           "publisher": {
             "anyOf": [
@@ -15336,8 +15350,7 @@
           }
         },
         "required": [
-          "id",
-          "name"
+          "id"
         ],
         "title": "SeriesMappingPreviewProviderSeries",
         "type": "object"
@@ -15467,7 +15480,7 @@
             "title": "Current Mapping Status"
           },
           "default_selected": {
-            "description": "Whether this is a default selected row (only for safe_exact_match)",
+            "description": "Whether this safe mapping or verified metadata refresh is selected by default",
             "title": "Default Selected",
             "type": "boolean"
           },
@@ -15492,6 +15505,12 @@
             "description": "Issue number",
             "title": "Issue Number",
             "type": "string"
+          },
+          "metadata_refresh_required": {
+            "default": false,
+            "description": "Verified existing identity has no usable metadata and may be refreshed without replacing it",
+            "title": "Metadata Refresh Required",
+            "type": "boolean"
           },
           "proposed_mapping": {
             "description": "Whether this issue would be mapped in the proposed scope",
