@@ -146,7 +146,7 @@ describe('Queue search with incomplete data', () => {
           issues_remaining: 5,
         },
       ],
-      isPending: true,
+      isPending: false,
       isError: false,
       refetch: vi.fn(),
       nextPageToken: 'next-page-token',
@@ -158,12 +158,15 @@ describe('Queue search with incomplete data', () => {
 
     // Trigger a search to enter the searching state
     const searchInput = screen.getByPlaceholderText('Search...')
-    await user.type(searchInput, 'Saga')
+    await user.type(searchInput, 'NonExistent')
 
-    // The search should show "Loading series..." instead of "No active series match your search"
-    // because we have active threads in the queue and are likely still loading more pages
-    expect(screen.getByText('Loading series...')).toBeInTheDocument()
-    expect(screen.queryByText('No active series match your search')).not.toBeInTheDocument()
+    // Wait for the debounce delay to ensure the search state is properly entered
+    await vi.waitFor(() => {
+      // Since we're searching for something that doesn't exist and there are active threads,
+      // it should show "Loading series..." instead of "No active series match your search"
+      expect(screen.getByText('Loading series...')).toBeInTheDocument()
+      expect(screen.queryByText('No active series match your search')).not.toBeInTheDocument()
+    })
   })
 
   it('shows "No active series match your search" when searching and there are no active threads at all', async () => {
@@ -184,9 +187,11 @@ describe('Queue search with incomplete data', () => {
     const searchInput = screen.getByPlaceholderText('Search...')
     await user.type(searchInput, 'Saga')
 
-    // In this case, we genuinely have no active threads, so "No active series match your search" is correct
-    expect(screen.getByText('No active series match your search')).toBeInTheDocument()
-    expect(screen.queryByText('Loading series...')).not.toBeInTheDocument()
+    // Wait for the debounce delay to ensure the search state is properly entered
+    await vi.waitFor(() => {
+      expect(screen.getByText('No active series match your search')).toBeInTheDocument()
+      expect(screen.queryByText('Loading series...')).not.toBeInTheDocument()
+    })
   })
 
   it('shows search results when search has matches', async () => {
@@ -224,11 +229,14 @@ describe('Queue search with incomplete data', () => {
     const searchInput = screen.getByPlaceholderText('Search...')
     await user.type(searchInput, 'Saga')
 
-    // Should show the Saga result
-    expect(screen.getByText('Saga')).toBeInTheDocument()
-    expect(screen.queryByText('Loading series...')).not.toBeInTheDocument()
-    expect(screen.queryByText('No active series match your search')).not.toBeInTheDocument()
-    // Verify that Spawn is filtered out
-    expect(screen.queryByText('Spawn')).not.toBeInTheDocument()
+    // Wait for the debounce delay to ensure the search state is properly entered
+    await vi.waitFor(() => {
+      // Should show the Saga result
+      expect(screen.getByText('Saga')).toBeInTheDocument()
+      expect(screen.queryByText('Loading series...')).not.toBeInTheDocument()
+      expect(screen.queryByText('No active series match your search')).not.toBeInTheDocument()
+      // Verify that Spawn is filtered out
+      expect(screen.queryByText('Spawn')).not.toBeInTheDocument()
+    })
   })
 })
