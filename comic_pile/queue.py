@@ -34,17 +34,28 @@ class ActiveQueueThread(NamedTuple):
     is_blocked: bool
 
 
-async def _acquire_queue_lock(user_id: int, db: AsyncSession) -> None:
-    """Acquire a transaction-scoped advisory lock keyed on user ID.
+async def acquire_queue_lock(user_id: int, db: AsyncSession) -> None:
+    """Acquire the transaction-scoped advisory lock that serializes a queue.
+
+    Every writer that reads and rewrites a reader's queue positions must hold
+    this lock for the rest of its transaction, so a concurrent move or shuffle
+    can neither interleave with it nor be undone by it.
+
+    Autoflush is suppressed while acquiring the lock: a caller may already
+    have pending row changes, and flushing them first would take row locks
+    before this lock and invert the global lock order against a concurrent
+    shuffler (deadlock). The pending changes still flush at the next query,
+    which now runs after the lock is held.
 
     Args:
         user_id: Thread owner whose queue is being modified.
         db: Async database session.
     """
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(:ns, :uid)"),
-        {"ns": ADVISORY_LOCK_NAMESPACE, "uid": user_id},
-    )
+    with db.no_autoflush:
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(:ns, :uid)"),
+            {"ns": ADVISORY_LOCK_NAMESPACE, "uid": user_id},
+        )
 
 
 def _sync_cached_queue_positions(db: AsyncSession, positions: dict[int, int]) -> None:
@@ -181,7 +192,7 @@ async def move_to_back(
     Returns:
         Mapping of changed thread IDs to their previous positions.
     """
-    await _acquire_queue_lock(user_id, db)
+    await acquire_queue_lock(user_id, db)
 
     result = await db.execute(
         _MOVE_TO_BACK_SQL,
@@ -221,7 +232,7 @@ async def move_to_position(
         new_position,
     )
 
-    await _acquire_queue_lock(user_id, db)
+    await acquire_queue_lock(user_id, db)
 
     row_result = await db.execute(
         select(Thread.id, Thread.queue_position, Thread.status)
@@ -369,7 +380,7 @@ async def move_to_safe_position(
     Returns:
         Mapping of changed thread IDs to their previous positions.
     """
-    await _acquire_queue_lock(user_id, db)
+    await acquire_queue_lock(user_id, db)
 
     eligibility = await get_execution_eligibility(db, user_id)
     excluded_ids = set(excluded_thread_ids or ())
@@ -433,7 +444,7 @@ async def shuffle_queue(user_id: int, db: AsyncSession) -> int:
     Returns:
         Number of active threads that were shuffled.
     """
-    await _acquire_queue_lock(user_id, db)
+    await acquire_queue_lock(user_id, db)
 
     result = await db.execute(
         select(Thread.id)

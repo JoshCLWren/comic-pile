@@ -37,6 +37,7 @@ from app.repositories.roll_repository import (
     update_session_pending_thread,
     update_session_skipped,
 )
+from app.services.queue_display import display_position
 from app.services.reading_effort import (
     EffortEstimate,
     build_recommendation_context,
@@ -712,7 +713,7 @@ class RollService:
         except Exception:
             return None
 
-    def build_roll_response(
+    async def build_roll_response(
         self,
         *,
         selected_thread: Thread | None = None,
@@ -721,10 +722,38 @@ class RollService:
         selected_index: int,
         unread_count: int,
         snoozed_count: int,
+        issue_id: int | None = None,
+        issue_number: str | None = None,
+        next_issue_id: int | None = None,
+        next_issue_number: str | None = None,
+        recommendation_reason_codes: list[str] | None = None,
     ) -> RollResponse:
         """Convert selection artifacts into the public RollResponse.
 
-        Either ``selected_thread`` or ``thread_attrs`` must be provided.
+        Either ``selected_thread`` or ``thread_attrs`` must be provided. The
+        displayed Queue ordinal is resolved here, in the service layer, so the
+        router never performs the whole-queue lookup itself. Optional issue
+        fields and reason codes let callers surface the selected issue and its
+        reader-facing explanation while keeping response assembly in the
+        service.
+
+        Args:
+            selected_thread: ORM thread selected by the roll.
+            thread_attrs: Pre-extracted thread attributes (alternative to
+                ``selected_thread``).
+            current_die: Current die size at roll time.
+            selected_index: Zero-based index of the selected candidate.
+            unread_count: Remaining unread issue count.
+            snoozed_count: Number of snoozed series for the offset.
+            issue_id: Selected issue ID, when issue tracking applies.
+            issue_number: Selected issue number, when issue tracking applies.
+            next_issue_id: Next unread issue ID, mirrored to the client.
+            next_issue_number: Next unread issue number, mirrored to the client.
+            recommendation_reason_codes: Decision-time reason codes projected
+                into the reader-facing explanation.
+
+        Returns:
+            A fully populated ``RollResponse``.
         """
         if thread_attrs is not None:
             thread_id = thread_attrs["thread_id"]
@@ -742,7 +771,7 @@ class RollService:
             thread_id = selected_thread.id
             title = selected_thread.title
             format_ = normalize_format_value(selected_thread.format)
-            queue_position = selected_thread.queue_position
+            queue_position = await display_position(self._db, selected_thread)
             total_issues = selected_thread.total_issues
             reading_progress = selected_thread.reading_progress
         return RollResponse(
@@ -755,13 +784,13 @@ class RollService:
             result=selected_index + 1,
             offset=snoozed_count,
             snoozed_count=snoozed_count,
-            issue_id=None,
-            issue_number=None,
-            next_issue_id=None,
-            next_issue_number=None,
+            issue_id=issue_id,
+            issue_number=issue_number,
+            next_issue_id=next_issue_id,
+            next_issue_number=next_issue_number,
             total_issues=total_issues,
             reading_progress=reading_progress,
-            explanation=None,
+            explanation=get_primary_explanation(recommendation_reason_codes),
         )
 
     async def execute_dismiss_pending(self, current_user_id: int) -> None:
@@ -861,7 +890,7 @@ class RollService:
 
         selected_index: int = artifacts["selected_index"]
         unread_count: int = artifacts["unread_count"]
-        return self.build_roll_response(
+        return await self.build_roll_response(
             selected_thread=selected_thread,
             current_die=current_die,
             selected_index=selected_index,
@@ -942,7 +971,7 @@ class RollService:
 
         selected_index: int = artifacts["selected_index"]
         unread_count: int = artifacts["unread_count"]
-        return self.build_roll_response(
+        return await self.build_roll_response(
             selected_thread=selected_thread,
             current_die=current_die,
             selected_index=selected_index,
@@ -997,7 +1026,7 @@ class RollService:
         override_thread_id = override_thread.id
         override_thread_title = override_thread.title
         override_thread_format = normalize_format_value(override_thread.format)
-        override_thread_queue_position = override_thread.queue_position
+        override_thread_queue_position = await display_position(self._db, override_thread)
 
         override_thread_issues_remaining = (
             await override_thread.get_issues_remaining(db)

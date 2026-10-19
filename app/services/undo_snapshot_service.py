@@ -11,6 +11,7 @@ from app.models.reading_session import ReadingSession
 from app.models.thread import normalize_format_value
 from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
 from app.schemas import ActiveThreadInfo
+from app.services.queue_display import display_position
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     CREATED_ISSUES_KEY,
@@ -456,7 +457,7 @@ class UndoSnapshotService:
                     title=pre_thread.title,
                     format=normalize_format_value(pre_thread.format),
                     issues_remaining=pre_thread.issues_remaining,
-                    queue_position=pre_thread.queue_position,
+                    queue_position=await display_position(self.db, pre_thread),
                     last_rolled_result=pre_active_event.result,
                 )
 
