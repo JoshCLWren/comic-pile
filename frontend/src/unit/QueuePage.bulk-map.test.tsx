@@ -119,8 +119,10 @@ interface CapturedBulkProps {
 
 function lastBulkDialogProps(): CapturedBulkProps | undefined {
   const call = mockedBulkDialog.mock.calls.at(-1)
+  const props = call?.[0]
+  if (props === undefined || props === null) return undefined
   // SAFETY: the mock is called by QueuePage with a single props object; the test only reads isOpen/threadIds/threadTitles.
-  return call?.[0] as unknown as CapturedBulkProps | undefined
+  return props as CapturedBulkProps
 }
 
 describe('QueuePage bulk mapping wiring', () => {
