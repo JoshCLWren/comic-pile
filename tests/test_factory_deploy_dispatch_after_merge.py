@@ -9,6 +9,7 @@ GITHUB_TOKEN may raise, so every bot-merge path must call
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -260,7 +261,11 @@ exit {gh_exit}
         **(extra_env or {}),
     }
     result = subprocess.run(
-        ["bash", "-c", f'set -Eeuo pipefail; source {HELPER}; {DISPATCH_CALL} "test merge"; echo rc=$?'],
+        [
+            "bash",
+            "-c",
+            f'set -Eeuo pipefail; source {HELPER}; {DISPATCH_CALL} "test merge"; echo rc=$?',
+        ],
         env=env,
         text=True,
         capture_output=True,
@@ -315,6 +320,63 @@ def test_helper_does_not_supersede_a_queued_manual_redeploy(tmp_path: Path) -> N
     assert _dispatch_calls(calls) == [DISPATCH_LINE]
     _, _, calls = _run_helper(tmp_path / "lookup-failed", 0, run_list_exit=1)
     assert _dispatch_calls(calls) == [DISPATCH_LINE]
+
+
+def _pending_manual_count(tmp_path: Path, runs: list[dict[str, str]]) -> str:
+    """Run the helper's real ``gh run list --jq`` filter over fixture runs."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(parents=True)
+    fixture = tmp_path / "runs.json"
+    fixture.write_text(json.dumps(runs), encoding="utf-8")
+    # Fake gh: hand the fixture to the real jq with the helper's own --jq expression.
+    _write_exe(
+        bin_dir / "gh",
+        f"""expr=''
+while (( $# )); do
+  if [[ "$1" == "--jq" ]]; then expr="$2"; shift; fi
+  shift
+done
+[[ -n "$expr" ]] || exit 2
+jq -r "$expr" {fixture}
+""",
+    )
+    env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"set -Eeuo pipefail; source {HELPER}; factory_pending_manual_deploy_count JoshCLWren/comic-pile",
+        ],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def test_pending_manual_deploy_filter_matches_only_waiting_manual_runs(tmp_path: Path) -> None:
+    assert shutil.which("jq"), "jq is required (installed in Dockerfile.ci)"
+    manual = "Deploy Production [source=manual] force redeploy"
+    waiting_manual = [
+        {"status": status, "displayTitle": manual}
+        for status in ("queued", "pending", "waiting", "requested")
+    ]
+    not_waiting = [
+        # Manual runs that already started or finished no longer hold the slot.
+        {"status": "in_progress", "displayTitle": manual},
+        {"status": "completed", "displayTitle": manual},
+        # Queued runs that are not manual dispatches.
+        {
+            "status": "queued",
+            "displayTitle": "Deploy Production [source=factory-merge] merged 2 PR(s)",
+        },
+        {"status": "pending", "displayTitle": "Deploy Production"},
+        {"status": "queued", "displayTitle": "Deploy Production [source=manualish] x"},
+    ]
+    assert _pending_manual_count(tmp_path / "mixed", waiting_manual + not_waiting) == "4"
+    assert _pending_manual_count(tmp_path / "none", not_waiting) == "0"
+    assert _pending_manual_count(tmp_path / "empty", []) == "0"
 
 
 def test_deploy_production_dedupes_factory_dispatches_and_serializes_runs() -> None:
