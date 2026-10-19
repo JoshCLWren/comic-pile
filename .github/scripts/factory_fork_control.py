@@ -161,6 +161,22 @@ def _post(pr: int, body: str) -> None:
     _gh(["api", "--method", "POST", f"repos/{REPO}/issues/{pr}/comments"], {"body": body})
 
 
+def _latest_dispatch_nonce(comments: list[dict[str, object]], pr: int) -> str | None:
+    """Return the nonce of the newest trusted dispatch receipt for this PR.
+
+    GitHub returns issue comments oldest first, so the last matching trusted
+    receipt identifies the dispatch that currently owns the fork repair lease.
+    """
+    nonce: str | None = None
+    for comment in comments:
+        if not _trusted_receipt(comment):
+            continue
+        match = RECEIPT_RE.fullmatch(str(comment.get("body") or "").strip())
+        if match and match[1] == str(pr):
+            nonce = match[4]
+    return nonce
+
+
 def _set_state(pr: int, worker: str, stage: str) -> None:
     info = _read_pr(pr)
     if _owner(info) != f"factory:{worker}":
@@ -271,15 +287,25 @@ def _context(pr: int, head: str, output: Path) -> None:
         if row.get("status") == "removed":
             continue
         payload = _object(_gh(["api", f"repos/{repository}/contents/{quote(filename, safe='/')}?ref={head}"]))
-        if payload.get("encoding") != "base64" or int(str(payload.get("size") or "0")) > MAX_CONTEXT_BYTES:
-            raise ValueError("source is not available within the static review budget")
-        content = base64.b64decode(str(payload.get("content") or ""), validate=False).decode("utf-8")
-        sections.append(f"Source file {filename} at {head}:\n{content}")
+        sections.append(_source_section(filename, head, payload))
         if sum(len(section.encode()) for section in sections) > MAX_CONTEXT_BYTES:
             raise ValueError("static review context exceeds byte budget")
     if _fork(_read_pr(pr))[2] != head:
         raise ValueError("fork head changed during context collection")
     output.write_text("\n\n".join(sections), encoding="utf-8")
+
+
+def _source_section(filename: str, head: str, payload: dict[str, object]) -> str:
+    """Render one changed file for the review snapshot, tolerating binary assets."""
+    if payload.get("encoding") != "base64" or int(str(payload.get("size") or "0")) > MAX_CONTEXT_BYTES:
+        raise ValueError("source is not available within the static review budget")
+    raw = base64.b64decode(str(payload.get("content") or ""), validate=False)
+    try:
+        content = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        # A binary asset must never stop the whole PR from entering review.
+        return f"Binary file {filename} at {head}: {len(raw)} bytes (content omitted)"
+    return f"Source file {filename} at {head}:\n{content}"
 
 
 def _static_environment(home: Path, source: str, original: dict[str, str], runtime: str) -> dict[str, str]:
@@ -439,7 +465,7 @@ def _complete(run_id: int) -> dict[str, object]:
         # instead of dropping the provenance write or exposing an unreviewed head.
         info = _read_pr(pr)
         if _fork(info)[2] == expected:
-            _release_failure(pr, worker, expected, "fork-repair-result-invalid")
+            _release_failure(pr, worker, expected, "fork-repair-result-invalid", nonce)
         raise
 
 
@@ -460,10 +486,12 @@ def _persist(run_id: int) -> dict[str, object]:
         # A prior persistence attempt may already have pushed the verified result;
         # inspect that bundle below before accepting the changed head.
         if run.get("conclusion") != "success":
-            _release_failure(pr, worker, expected, "fork-repair-execution-failed")
+            _release_failure(pr, worker, expected, "fork-repair-execution-failed", nonce)
+            _mark_completed(pr, nonce, expected, "execution-failed")
             return {"status": "head-changed", "pr": pr}
     if run.get("conclusion") != "success":
-        _release_failure(pr, worker, expected, "fork-repair-execution-failed")
+        _release_failure(pr, worker, expected, "fork-repair-execution-failed", nonce)
+        _mark_completed(pr, nonce, expected, "execution-failed")
         return {"status": "execution-failed", "pr": pr}
     artifacts = _object(_gh(["api", f"repos/{REPO}/actions/runs/{run_id}/artifacts"]))
     raw_items = artifacts.get("artifacts")
@@ -478,7 +506,8 @@ def _persist(run_id: int) -> dict[str, object]:
     ).stdout
     result, bundle = _artifact(download)
     if result.get("head") != expected or result.get("status") != "changed" or bundle is None:
-        _release_failure(pr, worker, expected, "repair-no-persisted-change-handoff")
+        _release_failure(pr, worker, expected, "repair-no-persisted-change-handoff", nonce)
+        _mark_completed(pr, nonce, expected, "no-change")
         return {"status": "no-change", "pr": pr}
     with _verified_bundle(bundle, expected, f"https://github.com/{REPO}.git") as (bare, commit):
         fresh = _read_pr(pr)
@@ -514,9 +543,24 @@ def _persist(run_id: int) -> dict[str, object]:
         return {"status": "pushed", "pr": pr, "head": commit}
 
 
-def _release_failure(pr: int, worker: str, head: str, reason: str) -> None:
+def _mark_completed(pr: int, nonce: str, head: str, status: str) -> None:
+    """Record that this exact dispatch nonce has been reconciled.
+
+    Failed and no-change runs have no contribution to push, but they must still
+    be marked handled so ``_reconcile`` does not process them again on every
+    sweep and release a newer repair that reused the same worker and head.
+    """
+    completed = f"<!-- comic-pile-factory-fork-completed-v1:nonce-{nonce}:"
+    _post(pr, f"{completed}head-{head}:result-{status} -->")
+
+
+def _release_failure(pr: int, worker: str, head: str, reason: str, nonce: str) -> None:
     info = _read_pr(pr)
     if _owner(info) != f"factory:{worker}":
+        return
+    if _latest_dispatch_nonce(_comments(pr), pr) != nonce:
+        # Another dispatch of this PR owns the current claim; a stale run must
+        # never release a newer repair's lease.
         return
     if _fork(info)[2] != head:
         _set_state(pr, worker, "factory:review")

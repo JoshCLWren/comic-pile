@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import importlib.util
 import io
 import json
@@ -186,7 +187,47 @@ def test_failure_cannot_release_someone_elses_lease(monkeypatch: pytest.MonkeyPa
     """An old execution result cannot steal ownership from a newer worker."""
     monkeypatch.setattr(control, "_read_pr", lambda pr: {"labels": [{"name": "factory:73"}]})
     monkeypatch.setattr(control, "_post", lambda *args: pytest.fail("posted stale failure"))
-    control._release_failure(3897, "46", "a" * 40, "fork-repair-execution-failed")
+    control._release_failure(3897, "46", "a" * 40, "fork-repair-execution-failed", "b" * 32)
+
+
+def test_stale_run_cannot_release_a_newer_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A rereconciled old run must not release the lease of a newer same-worker dispatch."""
+    monkeypatch.setattr(
+        control,
+        "_read_pr",
+        lambda pr: {"labels": [{"name": "factory:46"}]},
+    )
+    monkeypatch.setattr(control, "_comments", lambda pr: [
+        {"user": {"login": "github-actions[bot]"}, "performed_via_github_app": {"slug": "github-actions"},
+         "body": f"<!-- comic-pile-factory-fork-dispatch-v1:pr-3897:head-{'a' * 40}:worker-46:nonce-{'b' * 32} -->"},
+        {"user": {"login": "github-actions[bot]"}, "performed_via_github_app": {"slug": "github-actions"},
+         "body": f"<!-- comic-pile-factory-fork-dispatch-v1:pr-3897:head-{'a' * 40}:worker-46:nonce-{'c' * 32} -->"},
+    ])
+    monkeypatch.setattr(control, "_post", lambda *args: pytest.fail("stale run released a newer claim"))
+    monkeypatch.setattr(control, "_set_state", lambda *args: pytest.fail("stale run rewrote newer state"))
+    control._release_failure(3897, "46", "a" * 40, "fork-repair-execution-failed", "b" * 32)
+
+
+def test_handled_failure_is_marked_complete(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed or no-change run posts a completion marker so it is not retried."""
+    posted: list[str] = []
+    monkeypatch.setattr(control, "_post", lambda pr, body: posted.append(body))
+    control._mark_completed(3897, "b" * 32, "a" * 40, "no-change")
+    assert posted == [f"<!-- comic-pile-factory-fork-completed-v1:nonce-{'b' * 32}:head-{'a' * 40}:result-no-change -->"]
+
+
+def test_completed_failure_run_is_skipped_on_resweep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A completion marker for the run's nonce short-circuits reprocessing."""
+    nonce = "b" * 32
+    monkeypatch.setattr(control, "_validate_run", lambda run, workflow: (3897, "46", nonce))
+    monkeypatch.setattr(control, "_read_pr", lambda pr: {"labels": [{"name": "factory:46"}]})
+    monkeypatch.setattr(control, "_receipt", lambda comments, pr, worker, nonce_arg: "a" * 40)
+    monkeypatch.setattr(control, "_comments", lambda pr: [
+        {"user": {"login": "github-actions[bot]"}, "performed_via_github_app": {"slug": "github-actions"},
+         "body": f"<!-- comic-pile-factory-fork-completed-v1:nonce-{nonce}:head-{'a' * 40}:result-no-change -->"},
+    ])
+    monkeypatch.setattr(control, "_gh", lambda args, payload=None: {"id": 1, "path": control.EXECUTION_PATH, "event": "workflow_dispatch", "head_branch": "main"})
+    assert control._persist(123) == {"status": "already-completed", "pr": 3897}
 
 
 def test_fork_review_never_runs_the_tool_enabled_recovery_pass() -> None:
@@ -194,6 +235,32 @@ def test_fork_review_never_runs_the_tool_enabled_recovery_pass() -> None:
     worker = (SCRIPTS / "free-model-factory-worker.sh").read_text(encoding="utf-8")
     recovery_condition = worker.split('if [[ -z "$verdict" ]]', 1)[1].split("; then", 1)[0]
     assert "FACTORY_FORK_STATIC_REVIEW" in recovery_condition
+
+
+def test_binary_file_does_not_block_the_review_snapshot() -> None:
+    """A PNG or other binary asset is described, not decoded as UTF-8."""
+    binary = _payload(b"\x89PNG\r\n\x1a\n\x00\xff")
+    section = control._source_section("assets/logo.png", "a" * 40, binary)
+    assert section.startswith("Binary file assets/logo.png at " + "a" * 40)
+    assert "content omitted" in section
+    text = _payload(b"print('ok')\n")
+    assert control._source_section("app.py", "a" * 40, text) == f"Source file app.py at {'a' * 40}:\nprint('ok')\n"
+
+
+def _payload(raw: bytes) -> dict[str, object]:
+    return {
+        "encoding": "base64",
+        "size": str(len(raw)),
+        "content": base64.b64encode(raw).decode(),
+    }
+
+
+def test_static_fork_review_gate_targets_the_exact_head() -> None:
+    """The Greptile gate must use the reviewed fork head, not the trusted main HEAD."""
+    worker = (SCRIPTS / "free-model-factory-worker.sh").read_text(encoding="utf-8")
+    gate = worker.split("greptile_outcome_gate() {", 1)[1].split("\n}\n", 1)[0]
+    assert "FACTORY_FORK_STATIC_REVIEW" in gate
+    assert 'head="$EXPECTED_HEAD"' in gate
 
 
 def test_credentialed_routing_never_checks_out_a_fork() -> None:

@@ -233,6 +233,12 @@ greptile_outcome_gate() {
   local pushed="${1:-}" head findings validation valid new_ids reply_status=0
   findings="/tmp/factory-review-findings-${WORKER}-pr${NUMBER}.md"
   head="$(git rev-parse HEAD)"
+  # Fork reviews run data-only from trusted main, so HEAD is main, not the
+  # reviewed contributor head. Gate findings and outcome replies against the
+  # exact reviewed head instead.
+  if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" == 1 && -n "${EXPECTED_HEAD:-}" ]]; then
+    head="$EXPECTED_HEAD"
+  fi
   GREPTILE_GATE_STATUS='unknown'
   GREPTILE_GATE_DETAIL='open Greptile findings could not be fetched completely (fail closed)'
   factory_collect_review_findings "$NUMBER" "$head" "$findings" || true
