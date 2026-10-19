@@ -10,12 +10,51 @@ import {
 import {
   bulkApprovableSeriesMappingRows,
   isOwnedSeriesMappingRow,
+  seriesMappingScopeMessage,
 } from '../services/api-series-mapping'
 import type {
   SeriesMappingClassification,
   SeriesMappingPreviewRow,
 } from '../services/api-series-mapping'
 import { getApiErrorDetail, isIndeterminateApiOutcome } from '../utils/apiError'
+
+/**
+ * Why a series could not be mapped in this pass, or why its outcome is
+ * unconfirmed (issue #3922).
+ *
+ * A bulk run reports these instead of a bare "skipped" so its results can tell
+ * the reader which series still need attention and which ones could not be
+ * attempted at all. `commit_outcome_unknown` covers a lost response or server
+ * error where the mapping may already have saved (issue #3776): claiming the
+ * save failed would be false, so the bulk run leaves the series for review
+ * with that reason instead.
+ */
+export type SeriesMappingFailure =
+  | 'origin_unavailable'
+  | 'no_tracked_issues'
+  | 'preview_unavailable'
+  | 'scope_unavailable'
+  | 'commit_failed'
+  | 'commit_outcome_unknown'
+
+/**
+ * Compact readout for the position of one series inside a bulk run (issue #3922).
+ *
+ * A forty-series pass is unusable without it: the reader cannot tell how big the
+ * batch is, how far through they are, or what the run has already settled.
+ */
+export interface SeriesBatchProgress {
+  /** 1-based position of this series in the batch. */
+  position: number
+  /** Series captured in this batch. */
+  total: number
+  /** Series already mapped in this run. */
+  mapped: number
+  /** Series the reader skipped for manual review. */
+  skipped: number
+  /** Series that could not be mapped in this pass. */
+  failed: number
+}
 
 interface QueueMapSeriesDialogProps {
   isOpen: boolean
@@ -30,6 +69,25 @@ interface QueueMapSeriesDialogProps {
    * needing review and advance. Standalone single-series callers omit it.
    */
   onSkip?: () => void
+  /**
+   * Optional batch report for a series this pass could not map at all.
+   *
+   * The host advances the run and records the reason, which is what makes the
+   * run's per-series results distinguish "left for review" from "failed".
+   * Standalone single-series callers omit it.
+   */
+  onFailed?: (reason: SeriesMappingFailure) => void
+  /**
+   * Optional bulk-run position rendered above the step content. Hosts that map
+   * one series at a time omit it.
+   */
+  batchProgress?: SeriesBatchProgress
+  /**
+   * Optional bulk-run exit. Without it the results screen is only reachable
+   * after every series is processed, which traps a reader in a long batch
+   * (#3922). Hosts that run one series at a time omit it.
+   */
+  onFinishBatch?: () => void
 }
 
 type DialogStep = 'search' | 'preview'
@@ -94,6 +152,12 @@ function issueNumberLabel(row: SeriesMappingPreviewRow): string {
  *
  * Provider and issue requests start only when the reader opens this dialog. Queue
  * rendering itself makes no per-card requests.
+ *
+ * A host that steps through several series (the Queue's bulk `Map Series` run,
+ * issue #3922) also supplies `batchProgress`, `onFinishBatch`, and `onFailed`.
+ * Those make a long batch legible (position and running counts), reachable
+ * without processing every series, and report a series that could not be mapped
+ * as a failure rather than a deliberate skip.
  */
 export default function QueueMapSeriesDialog({
   isOpen,
@@ -102,6 +166,9 @@ export default function QueueMapSeriesDialog({
   onClose,
   onMapped,
   onSkip,
+  onFailed,
+  batchProgress,
+  onFinishBatch,
 }: QueueMapSeriesDialogProps) {
   const [step, setStep] = useState<DialogStep>('search')
   const [query, setQuery] = useState(threadTitle)
@@ -230,6 +297,9 @@ export default function QueueMapSeriesDialog({
         .map((row) => row.row_id),
     [approvableRows, uncheckedRowIds],
   )
+  const includesMetadataRefresh = approvableRows.some(
+    (row) => row.metadata_refresh_required && selectedRowIds.includes(row.row_id),
+  )
 
   // The preview token is unique per preview and already embeds its issue time, so
   // deriving the key from it keeps one idempotency key across retries of the same
@@ -254,6 +324,57 @@ export default function QueueMapSeriesDialog({
     }
     return 'Could not map the series. Nothing was changed.'
   })()
+
+  // The reason this series cannot be mapped in the current step, when one
+  // applies. A bulk run records it as a failed series instead of a skipped one,
+  // so its results can separate "left for review" from "could not be attempted"
+  // (issue #3922). Every condition below is visible on screen already; this
+  // only classifies the state the reader is looking at.
+  const failureReason = ((): SeriesMappingFailure | null => {
+    if (step === 'search') {
+      if (originQuery.isError) return 'origin_unavailable'
+      if (originQuery.isSuccess && originQuery.data === null) return 'no_tracked_issues'
+      return null
+    }
+    if (preview.isError) return 'preview_unavailable'
+    if (preview.data?.scope.status === 'unavailable') return 'scope_unavailable'
+    // A refused commit left this series unmapped. A stale preview is still
+    // recoverable (the dialog re-reads it), so it stays a review case. An
+    // indeterminate outcome may have saved the mapping (issue #3776), so it is
+    // reported as unconfirmed rather than claiming the save failed.
+    if (commit.isError && !previewIsStale) {
+      return commitOutcomeUnknown ? 'commit_outcome_unknown' : 'commit_failed'
+    }
+    return null
+  })()
+
+  const canReportFailure = failureReason !== null && onFailed !== undefined
+
+  // The advance action exists whenever a bulk host can record an outcome, and
+  // it carries a failure label exactly when this series could not be mapped.
+  const canAdvance = onSkip !== undefined || canReportFailure
+
+  /**
+   * Advances past this series. In bulk mode the outcome is a failure when the
+   * series could not be mapped in this pass, and a deliberate skip otherwise.
+   */
+  const handleSkip = () => {
+    if (failureReason !== null && onFailed) {
+      onFailed(failureReason)
+      return
+    }
+    onSkip?.()
+  }
+
+  // An unconfirmed save may have applied, so advancing from here is not a
+  // "could not map" failure — the results leave the series for review with the
+  // unconfirmed reason.
+  const skipLabel =
+    failureReason === 'commit_outcome_unknown'
+      ? 'Could not confirm — leave for review'
+      : canReportFailure
+        ? 'Could not map — skip this series'
+        : 'Skip / needs review'
 
   const toggleRow = (rowId: string, checked: boolean) => {
     setUncheckedRowIds((previous) => {
@@ -297,6 +418,36 @@ export default function QueueMapSeriesDialog({
   return (
     <Modal isOpen={isOpen} title={dialogTitle} onClose={onClose} size="large">
       <div data-testid="queue-map-series-dialog">
+        {batchProgress && (
+          <div
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[var(--theme-border)] pb-3"
+            data-testid="queue-map-series-batch-progress"
+          >
+            <div className="min-w-0">
+              {/* Status readout for the bulk run, so a long batch stays navigable. */}
+              <p className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
+                Series {batchProgress.position} of {batchProgress.total}
+              </p>
+              <p
+                className="text-xs text-[var(--theme-text-muted)]"
+                data-testid="queue-map-series-batch-counts"
+              >
+                {batchProgress.mapped} mapped · {batchProgress.skipped} skipped ·{' '}
+                {batchProgress.failed} failed
+              </p>
+            </div>
+            {onFinishBatch && (
+              <button
+                type="button"
+                onClick={onFinishBatch}
+                data-testid="queue-map-series-finish-batch"
+                className="min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
+              >
+                Finish &amp; show results
+              </button>
+            )}
+          </div>
+        )}
         {step === 'search' && (
           <div className="space-y-4">
             <p className="text-sm text-stone-300">
@@ -384,14 +535,14 @@ export default function QueueMapSeriesDialog({
                 {isSearchFetching ? 'Loading...' : 'Show more volumes'}
               </button>
             )}
-            {onSkip && (
+            {canAdvance && (
               <button
                 type="button"
-                onClick={onSkip}
+                onClick={handleSkip}
                 data-testid="queue-map-series-skip"
                 className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
               >
-                Skip / needs review
+                {skipLabel}
               </button>
             )}
           </div>
@@ -404,6 +555,12 @@ export default function QueueMapSeriesDialog({
               <span className="font-bold text-stone-100">{selectedSeries.name}</span>. Only exact
               matches are selected; review-needed rows stay untouched.
             </p>
+            {approvableRows.some((row) => row.metadata_refresh_required) && (
+              <p className="text-sm text-[var(--theme-text-muted)]">
+                Some existing links have no issue details or cover. Update them together from
+                this verified ComicVine volume; you do not need to remove the links first.
+              </p>
+            )}
             <button
               type="button"
               onClick={handleBackToSearch}
@@ -448,14 +605,14 @@ export default function QueueMapSeriesDialog({
                   >
                     {preview.isFetching ? 'Retrying...' : 'Try again'}
                   </button>
-                  {onSkip && (
+                  {canAdvance && (
                     <button
                       type="button"
-                      onClick={onSkip}
+                      onClick={handleSkip}
                       data-testid="queue-map-series-skip"
                       className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
                     >
-                      Skip / needs review
+                      {skipLabel}
                     </button>
                   )}
                 </div>
@@ -465,10 +622,19 @@ export default function QueueMapSeriesDialog({
             {preview.data && preview.data.scope.status === 'unavailable' && (
               <div className="space-y-3">
                 <p className="rounded-lg bg-stone-800/40 border border-stone-700/50 p-3 text-sm text-stone-300">
-                  ComicPile could not establish a safe mapping scope for this series, so there is
-                  no plan to approve. Nothing was changed.
+                  {seriesMappingScopeMessage(preview.data.scope.basis)}
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row">
+                  {preview.data.scope.basis === 'provider_roster_unavailable' && (
+                    <button
+                      type="button"
+                      onClick={() => void preview.refetch()}
+                      disabled={preview.isFetching}
+                      className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text)] hover:bg-[var(--theme-bg-hover)]"
+                    >
+                      Try again
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={onClose}
@@ -477,14 +643,14 @@ export default function QueueMapSeriesDialog({
                   >
                     Done
                   </button>
-                  {onSkip && (
+                  {canAdvance && (
                     <button
                       type="button"
-                      onClick={onSkip}
+                      onClick={handleSkip}
                       data-testid="queue-map-series-skip"
                       className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
                     >
-                      Skip / needs review
+                      {skipLabel}
                     </button>
                   )}
                 </div>
@@ -499,7 +665,7 @@ export default function QueueMapSeriesDialog({
                     className="rounded-lg border border-[var(--theme-primary-action)]/40 bg-stone-800/40 p-3 text-sm text-stone-100"
                   >
                     {commit.data.confirmed_issue_ids.length}{' '}
-                    {commit.data.confirmed_issue_ids.length === 1 ? 'issue' : 'issues'} mapped to{' '}
+                    {commit.data.confirmed_issue_ids.length === 1 ? 'issue' : 'issues'} {includesMetadataRefresh ? 'updated from' : 'mapped to'}{' '}
                     {selectedSeries.name}.
                     {commit.data.needs_review_issue_ids.length > 0 &&
                       ` ${commit.data.needs_review_issue_ids.length} still need${
@@ -519,8 +685,9 @@ export default function QueueMapSeriesDialog({
 
                 {approvableRows.length === 0 && !commit.isSuccess && (
                   <p className="rounded-lg bg-stone-800/40 border border-stone-700/50 p-3 text-sm text-stone-300">
-                    No exact matches for your issues in this volume. Ambiguous and special rows
-                    are never mapped automatically.
+                    {preview.data.counts.already_confirmed > 0
+                      ? `${preview.data.counts.already_confirmed} ${preview.data.counts.already_confirmed === 1 ? 'issue already links' : 'issues already link'} to this volume. Remaining rows need individual review or a different volume.`
+                      : 'No exact matches for your issues in this volume. Ambiguous and special rows are never mapped automatically.'}
                   </p>
                 )}
 
@@ -558,7 +725,7 @@ export default function QueueMapSeriesDialog({
                         <span
                           className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${STATUS_ACCENT_CLASS[row.classification]}`}
                         >
-                          {STATUS_LABEL[row.classification]}
+                          {row.metadata_refresh_required ? 'Missing details' : STATUS_LABEL[row.classification]}
                         </span>
                       </li>
                     )
@@ -586,15 +753,15 @@ export default function QueueMapSeriesDialog({
                   >
                     {commit.isSuccess ? 'Done' : 'Cancel'}
                   </button>
-                  {onSkip && !commit.isSuccess && (
+                  {canAdvance && !commit.isSuccess && (
                     <button
                       type="button"
-                      onClick={onSkip}
+                      onClick={handleSkip}
                       disabled={commit.isPending}
                       data-testid="queue-map-series-skip"
                       className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition disabled:opacity-50"
                     >
-                      Skip / needs review
+                      {skipLabel}
                     </button>
                   )}
                   {!commit.isSuccess && (
@@ -607,7 +774,7 @@ export default function QueueMapSeriesDialog({
                     >
                       {commit.isPending
                         ? 'Mapping...'
-                        : `Map ${selectedRowIds.length} ${selectedRowIds.length === 1 ? 'issue' : 'issues'}`}
+                        : `${includesMetadataRefresh ? 'Update' : 'Map'} ${selectedRowIds.length} ${selectedRowIds.length === 1 ? 'issue' : 'issues'}`}
                     </button>
                   )}
                 </div>
