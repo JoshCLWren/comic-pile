@@ -939,6 +939,8 @@ async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
         NotFoundError: When the thread does not exist for this user.
         InvalidRequestError: When the thread is not active.
     """
+    # Take the queue lock first to prevent deadlocks with concurrent shuffles.
+    await thread_repository.renormalize_queue_positions(db, user_id)
     thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
     if thread.is_excluded():
         # Idempotent: removing an already-excluded series is a no-op, not an error.
@@ -948,7 +950,6 @@ async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
 
     thread.status = EXCLUDED_STATUS
     thread.queue_position = 0
-    await thread_repository.renormalize_queue_positions(db, user_id)
     await db.commit()
     await db.refresh(thread)
     return await thread_to_response(thread, db)
@@ -977,6 +978,8 @@ async def restore_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
         NotFoundError: When the thread does not exist for this user.
         InvalidRequestError: When the thread is not excluded.
     """
+    # Take the queue lock first to prevent deadlocks with concurrent shuffles.
+    await thread_repository.renormalize_queue_positions(db, user_id)
     thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
     if not thread.is_excluded():
         raise InvalidRequestError(f"Thread {thread_id} is not excluded")
@@ -996,6 +999,10 @@ async def restore_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
         thread.status = "completed"
         thread.queue_position = 0
 
+    # Renormalization was already done at the start to acquire the lock.
+    # However, if the status changed to active, we may need to ensure positions are dense.
+    # The start-of-function call acquired the lock, but we are changing the set of active threads.
+    # We call it again after the update to actually perform the renumbering.
     if thread.status == "active":
         await thread_repository.renormalize_queue_positions(db, user_id)
 
@@ -1025,6 +1032,8 @@ async def reactivate_completed_thread(
         InvalidRequestError: When the thread is not completed or the issue count
             is not positive.
     """
+    # Take the queue lock first to prevent deadlocks with concurrent shuffles.
+    await thread_repository.renormalize_queue_positions(db, user_id)
     thread = await _require_owned_thread(db, user_id, request.thread_id)
     if thread.status != "completed":
         raise InvalidRequestError(f"Thread {request.thread_id} is not completed")
@@ -1071,6 +1080,8 @@ async def reactivate_completed_thread(
 
     thread.status = "active"
     thread.queue_position = 1
+    # Renormalization was done at the start to lock, but we must re-run it now
+    # that the set of active threads has changed to actually apply the numbering.
     await thread_repository.renormalize_queue_positions(db, user_id)
     await db.commit()
     await db.refresh(thread)
