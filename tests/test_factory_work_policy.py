@@ -5,6 +5,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
@@ -28,6 +30,7 @@ def candidate(
     producer: str | None = None,
     lane: int = 3,
     head_contributors: frozenset[str] = frozenset(),
+    is_fork: bool = False,
 ) -> Candidate:
     """Build a deterministic candidate fixture."""
     return Candidate(
@@ -39,6 +42,7 @@ def candidate(
         stage=stage,
         producer_worker=producer,
         head_contributors=head_contributors,
+        is_fork=is_fork,
     )
 
 
@@ -170,6 +174,47 @@ def test_unresolved_contributor_record_does_not_block_an_independent_worker():
     unresolved = candidate(kind="pr", number=1390, stage="factory:review", producer="29")
     assert unresolved not in policy.order_candidates_for_worker([unresolved], "29")
     assert policy.order_candidates_for_worker([unresolved], "59") == [unresolved]
+
+
+def roster_with_sources(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin worker execution capabilities so fork routing is deterministic."""
+    factory_roster = importlib.import_module("factory_roster")
+    monkeypatch.setattr(
+        factory_roster,
+        "load_roster_rows",
+        lambda *args, **kwargs: [
+            {"worker": "46", "source": "kilo-auto"},
+            {"worker": "11", "source": "opencode-free"},
+        ],
+    )
+
+
+def test_fork_review_goes_to_a_tool_capable_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fork review must not land on the anonymous Kilo repair lane."""
+    roster_with_sources(monkeypatch)
+    review = candidate(kind="pr", number=1390, stage="factory:review", is_fork=True)
+    assert review not in policy.order_candidates_for_worker([review], "46")
+    assert policy.order_candidates_for_worker([review], "11") == [review]
+
+
+def test_fork_repair_goes_only_to_anonymous_kilo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fork repairs require the secretless anonymous Kilo execution capability."""
+    roster_with_sources(monkeypatch)
+    repair = candidate(kind="pr", number=1390, stage="factory:changes-requested", is_fork=True)
+    assert repair not in policy.order_candidates_for_worker([repair], "11")
+    assert policy.order_candidates_for_worker([repair], "46") == [repair]
+
+
+def test_build_candidates_marks_cross_repository_prs_as_forks():
+    """Fork identity comes from the live cross-repository flag, not the branch name."""
+    fork = pr_fixture(number=1390, issue=1391, labels=["factory", "factory:unowned", "factory:review"])
+    fork["headRefName"] = "contributor/patch"
+    fork["body"] = "Closes #1391"
+    fork["isCrossRepository"] = True
+    internal = pr_fixture(number=1392, issue=1393, labels=["factory", "factory:unowned", "factory:review"])
+    built = policy.build_candidates([], [fork, internal])
+    by_number = {item.number: item.is_fork for item in built}
+    assert by_number == {1390: True, 1392: False}
 
 
 def test_build_candidates_carries_captured_head_contributors():
@@ -1295,3 +1340,92 @@ def test_parent_language_without_child_graph_stays_an_intake_candidate():
     )
 
     assert [c.number for c in candidates if c.kind == "issue"] == [905]
+
+
+def test_transient_review_failures_cool_down_only_the_current_generation() -> None:
+    """Three trusted failures pause one head and recover after cooldown or a push."""
+    now = 2_000_000_000
+    head = "a" * 40
+    for reason in (
+        "transient-model-interruption",
+        "review-agent-failed",
+        "controller-assignment-read-failed",
+        "semantic-review-head-read-failed",
+        "missing-semantic-verdict",
+        "conflicting-semantic-verdict",
+        "authoritative-diff-read-failed",
+    ):
+        comments = [
+            {
+                "author_association": "OWNER",
+                "body": (
+                    "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+                    f"{now - offset}:{reason}:sha={head}:stage=factory:review:conflicted=0 -->"
+                ),
+            }
+            for offset in range(policy.FACTORY_NO_DIFF_RETRY_LIMIT)
+        ]
+        target = pr_fixture(
+            number=2264, issue=2200,
+            labels=["factory", "factory:unowned", "factory:review"], head=head,
+        )
+        other = pr_fixture(
+            number=2265, issue=2201,
+            labels=["factory", "factory:unowned", "factory:review"], head=head,
+        )
+        attempts = policy.parse_no_diff_attempts_from_comments(comments, now_epoch=now)
+        assert len(attempts) == policy.FACTORY_NO_DIFF_RETRY_LIMIT
+        assert {attempt.reason for attempt in attempts} == {reason}
+        selected = policy.build_candidates([], [target, other], no_diff_attempt_records=attempts)
+        assert [item.number for item in selected] == [2265]
+        pushed = {**target, "headRefOid": "b" * 40}
+        assert policy.build_candidates([], [pushed], no_diff_attempt_records=attempts)
+        expired = policy.parse_no_diff_attempts_from_comments(
+            comments, now_epoch=now + policy.FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS,
+        )
+        assert policy.build_candidates([], [target], no_diff_attempt_records=expired)
+        untrusted = [{**comment, "author_association": "NONE"} for comment in comments]
+        assert not policy.parse_no_diff_attempts_from_comments(untrusted, now_epoch=now)
+
+
+def test_genuine_head_changes_do_not_consume_review_failure_budget() -> None:
+    """A moved head is invalidated review evidence, not an infrastructure failure."""
+    comments = [{
+        "author_association": "OWNER",
+        "body": (
+            "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+            "2000000000:semantic-review-head-changed -->"
+        ),
+    }]
+    assert not policy.parse_no_diff_attempts_from_comments(comments, now_epoch=2_000_000_000)
+
+
+def test_review_cooldown_reports_counts_by_reason(capsys: pytest.CaptureFixture[str]) -> None:
+    """Mixed failures retain reason evidence while suppressing only their PR head."""
+    now = 2_000_000_000
+    reasons = ["missing-semantic-verdict", "review-agent-failed", "authoritative-diff-read-failed"]
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+                f"{now - offset}:{reason}:sha={'a' * 40}:stage=factory:review:conflicted=0 -->"
+            ),
+        }
+        for offset, reason in enumerate(reasons)
+    ]
+    attempts = policy.parse_no_diff_attempts_from_comments(comments, now_epoch=now)
+    target = pr_fixture(
+        number=2264, issue=2200,
+        labels=["factory", "factory:unowned", "factory:review"],
+    )
+    assert not policy.build_candidates([], [target], no_diff_attempt_records=attempts)
+    diagnostic = capsys.readouterr().err
+    assert "recent_failures=3" in diagnostic
+    for reason in reasons:
+        assert f"'{reason}': 1" in diagnostic
+    issue_comments = [
+        {**comment, "body": comment["body"].replace("pr-2264", "issue-2264")}
+        for comment in comments
+    ]
+    assert not policy.parse_no_diff_attempts_from_comments(issue_comments, now_epoch=now)

@@ -74,6 +74,7 @@ unclean_git_state_json() {
 # changes below it are not inherited by this worker.
 source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
 source .github/scripts/factory-semantic-verdict.sh
+source .github/scripts/factory-fork-worker.sh
 
 TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"
 
@@ -171,6 +172,8 @@ stage_trusted_review_controller() {
   cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
   cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
   cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
+  cp .github/scripts/factory_fork_control.py "$trusted_dir/factory_fork_control.py"
+  TRUSTED_FORK_CONTROL="$trusted_dir/factory_fork_control.py"
   # The staged policy imports canonical eligibility rules; pin this dependency
   # from trusted main too, never from an untrusted PR checkout or /scripts.
   cp scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py"
@@ -185,6 +188,10 @@ eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
 run_agent() {
   local mode="$1" number="$2" timeout_seconds="$3"
   local target mission prompt findings status=0
+  if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" == 1 ]]; then
+    factory_run_fork_static_review "$timeout_seconds"
+    return $?
+  fi
   if [[ "$SOURCE" != 'kilo-auto' ]]; then
     legacy_run_agent "$@"
     return $?
@@ -226,6 +233,12 @@ greptile_outcome_gate() {
   local pushed="${1:-}" head findings validation valid new_ids reply_status=0
   findings="/tmp/factory-review-findings-${WORKER}-pr${NUMBER}.md"
   head="$(git rev-parse HEAD)"
+  # Fork reviews run data-only from trusted main, so HEAD is main, not the
+  # reviewed contributor head. Gate findings and outcome replies against the
+  # exact reviewed head instead.
+  if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" == 1 && -n "${EXPECTED_HEAD:-}" ]]; then
+    head="$EXPECTED_HEAD"
+  fi
   GREPTILE_GATE_STATUS='unknown'
   GREPTILE_GATE_DETAIL='open Greptile findings could not be fetched completely (fail closed)'
   factory_collect_review_findings "$NUMBER" "$head" "$findings" || true
@@ -262,6 +275,17 @@ greptile_outcome_gate() {
   GREPTILE_GATE_STATUS='clear'
   GREPTILE_GATE_DETAIL="$(jq -r '"\(.valid | length) Greptile outcome(s) recorded"' <<< "$validation")"
   return 0
+}
+
+review_snapshot_failure_reason() {
+  local observed="$1" expected="$2" pr="$3"
+  if [[ -z "$observed" ]]; then
+    printf '%s' 'semantic-review-head-read-failed'
+  elif [[ "$observed" != "$expected" ]]; then
+    printf '%s' 'semantic-review-head-changed'
+  elif ! current_owner_is_self "$pr"; then
+    printf '%s' 'semantic-review-lease-lost'
+  fi
 }
 
 # Record a wrapper-gate downgrade in the review log the controller excerpts.
@@ -394,7 +418,17 @@ if (( assignment_status != 0 )); then
 fi
 
 log "executing control-plane assignment: ${MODE} #${NUMBER}; runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
-checkout_target "$MODE" "$NUMBER" "$BRANCH"
+fork_route=1
+if factory_route_fork_assignment; then fork_route=0; else fork_route=$?; fi
+if (( fork_route == 10 )); then
+  exit 0
+elif (( fork_route != 0 && fork_route != 1 )); then
+  record_terminal_outcome control_plane_failure 'safe fork routing failed before source execution'
+  exit 2
+fi
+if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
+  checkout_target "$MODE" "$NUMBER" "$BRANCH"
+fi
 
 available="$(remaining)"
 # Reserve post-agent time for the pre-push fast checks (toolchain install,
@@ -591,9 +625,13 @@ fi
 last_token="$(factory_terminal_marker "$review_log" || true)"
 
 current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
-if [[ "$current_head" != "$EXPECTED_HEAD" ]] || ! current_owner_is_self "$NUMBER"; then
-  log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} changed or lease was revoked during review"
-  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'semantic-review-head-changed'
+snapshot_failure="$(review_snapshot_failure_reason "$current_head" "$EXPECTED_HEAD" "$NUMBER")"
+if [[ -n "$snapshot_failure" ]]; then
+  log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} review invalidated (expected ${EXPECTED_HEAD}, observed ${current_head:-unavailable}, or lease revoked)"
+  # A revoked lease belongs to its new owner; never release that worker.
+  if [[ "$snapshot_failure" != semantic-review-lease-lost ]]; then
+    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' "$snapshot_failure"
+  fi
   record_terminal_outcome control_plane_failure "PR #${NUMBER} head or lease changed during semantic review"
   exit 0
 fi
@@ -609,7 +647,13 @@ verdict="$(factory_extract_semantic_verdict "$review_log" || true)"
 recovery_attempted=0
 recovery_status=0
 
-if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] && factory_review_is_substantive "$review_log"; then
+# Fork reviews run tool-free from a data snapshot. The recovery pass starts a
+# normal tool-enabled agent in this credentialed checkout, so it must never run
+# for a fork: a prompt-injected contributor could otherwise fetch and execute
+# its own branch here. A missing fork verdict is released for re-dispatch.
+if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
+  && [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]] \
+  && factory_review_is_substantive "$review_log"; then
   recovery_attempted=1
   recovery_log="/tmp/opencode-factory-${WORKER}-verdict-recovery.log"
   recovery_timeout=90
@@ -624,9 +668,13 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] && factory_review_is_su
     set -e
 
     current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
-    if [[ "$current_head" != "$EXPECTED_HEAD" ]] || ! current_owner_is_self "$NUMBER"; then
-      log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} changed or lease was revoked during recovery"
-      release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'semantic-review-head-changed'
+    snapshot_failure="$(review_snapshot_failure_reason "$current_head" "$EXPECTED_HEAD" "$NUMBER")"
+    if [[ -n "$snapshot_failure" ]]; then
+      log "${FACTORY_SEMANTIC_STATUS_HEAD_CHANGED}: PR #${NUMBER} recovery invalidated (expected ${EXPECTED_HEAD}, observed ${current_head:-unavailable}, or lease revoked)"
+      # A revoked lease belongs to its new owner; never release that worker.
+      if [[ "$snapshot_failure" != semantic-review-lease-lost ]]; then
+        release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' "$snapshot_failure"
+      fi
       record_terminal_outcome control_plane_failure "PR #${NUMBER} head or lease changed during semantic verdict recovery"
       exit 0
     fi

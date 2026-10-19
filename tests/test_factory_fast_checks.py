@@ -289,3 +289,59 @@ def test_renames_check_both_the_removed_and_the_added_path(tmp_path: Path) -> No
         check=True,
     )
     assert set(result.stdout.split()) == {"scripts/a.mjs", "scripts/b.mjs"}
+
+
+def run_hook_toolchain(repo: Path, bin_dir: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"set -Eeuo pipefail; source {HELPER!s}; factory_ensure_commit_hook_toolchain",
+        ],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+        env={**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"},
+    )
+
+
+def test_hook_toolchain_is_installed_for_non_python_diffs(tmp_path: Path) -> None:
+    # Greptile finding on #3914: the trusted pre-commit hook calls
+    # scripts/lint.sh, which requires .venv/ruff before it inspects staged file
+    # types, so a docs- or frontend-only repair must still install them or the
+    # commit fails with "ruff not found" and produces no repair bundle.
+    repo = repo_with(tmp_path, {"docs/readme.md": "x\n"})
+    bin_dir = tmp_path / "bin"
+    stub(
+        bin_dir,
+        "uv",
+        'echo "uv $*" >> ../uv.log\n'
+        'if [[ "$1" == sync ]]; then mkdir -p .venv/bin && : > .venv/bin/ruff; fi\n'
+        "exit 0",
+    )
+    result = run_hook_toolchain(repo, bin_dir)
+    assert result.returncode == 0, result.stderr
+    assert (repo / ".venv/bin/ruff").exists()
+    assert "sync --frozen --all-extras" in (tmp_path / "uv.log").read_text()
+
+
+def test_hook_toolchain_is_a_noop_when_the_venv_is_present(tmp_path: Path) -> None:
+    repo = repo_with(tmp_path, {"docs/readme.md": "x\n"})
+    ruff = repo / ".venv/bin/ruff"
+    ruff.parent.mkdir(parents=True)
+    ruff.write_text("#!/bin/sh\n")
+    ruff.chmod(0o755)
+    bin_dir = tmp_path / "bin"
+    stub(bin_dir, "uv", 'echo "uv $*" >> ../uv.log\nexit 0')
+    result = run_hook_toolchain(repo, bin_dir)
+    assert result.returncode == 0, result.stderr
+    assert not (tmp_path / "uv.log").exists()
+
+
+def test_fork_runner_installs_hook_toolchain_before_committing() -> None:
+    source = (SCRIPTS / "factory-fork-execute.sh").read_text()
+    assert source.index("factory_ensure_commit_hook_toolchain") < source.index(
+        "install-git-hooks.sh"
+    )
+    assert source.index("install-git-hooks.sh") < source.index("git commit")

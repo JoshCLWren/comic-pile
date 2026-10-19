@@ -4,6 +4,19 @@ Thanks for contributing to Comic Pile. This project values clear APIs, mobile-fi
 
 Participation in Comic Pile project spaces is also governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## Pull requests and the factory
+
+Open a ready-for-review PR from your fork or repository branch. Contributor,
+local, and factory PRs all enter the same automated review, repair, CI, and merge
+flow. You do not need to request factory enrollment or provide credentials.
+Your commits and contributor credit remain intact. Enable **Allow edits from
+maintainers** so the factory can push fixes to your PR branch.
+
+Factory labels show the current next action: review, changes requested, CI, or
+ready. Every new push requires review and checks for the new commit. Enrollment
+alone never approves or authorizes merging your code. Fork CI runs without
+repository secrets or permission to publish container images.
+
 ## Pre-commit hook
 
 A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically runs:

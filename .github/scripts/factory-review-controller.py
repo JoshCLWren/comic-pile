@@ -497,9 +497,9 @@ def attest_exact_head_author(
        from that worker's roster pin. Only the controller-bot stream is trusted
        here: contributor markers on the owner stream are attacker-controlled and
        must never be laundered into a bot author attestation;
-    2. otherwise an owner-authored head is attested from the pull request's
-       verified GitHub author and the head commit's ``Model:`` trailer, or
-       ``human`` when the trailer is absent;
+    2. otherwise a human head is attested from the pull request's verified
+       GitHub author and the head commit's ``Model:`` trailer, or ``human``
+       when absent; contributor commits must match the verified PR author;
     3. anything else, including conflicting records or a foreign commit
        identity, fails closed with ``None``.
 
@@ -547,12 +547,26 @@ def attest_exact_head_author(
     commit_author, commit_committer, message = evidence
     author = json_object(pr.get("author"))
     owner = REPO.split("/", 1)[0]
+    pr_author_login = str(author.get("login") or "") if author is not None else ""
+    # A contributor head has the same provenance rule as a local human head,
+    # anchored to GitHub's actual PR and commit identities. Unlinked commit
+    # emails use the verified submitter, as for owner-authored local heads;
+    # known foreign identities cannot inherit the submitter's attribution.
+    if pr_author_login != owner:
+        if (
+            not pr_author_login
+            or pr_author_login.endswith("[bot]")
+            or commit_author not in {None, pr_author_login}
+            or commit_committer not in {None, pr_author_login, "web-flow"}
+        ):
+            return None
     identity = owner_attested_head_identity(
-        pr_author_login=str(author.get("login") or "") if author is not None else None,
-        owner_login=owner,
+        pr_author_login=pr_author_login,
+        owner_login=pr_author_login,
         commit_author_login=commit_author,
         commit_committer_login=commit_committer,
         commit_message=message,
+        trusted_logins=("web-flow",) if pr_author_login != owner else _review_policy.TRUSTED_AUTOMATION_LOGINS,
     )
     if identity is None:
         return None

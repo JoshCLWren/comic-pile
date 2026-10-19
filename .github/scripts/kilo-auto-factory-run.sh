@@ -99,3 +99,16 @@ if [[ -n "$telemetry" ]]; then
 else
   echo 'Kilo telemetry: requested_route=kilo-auto/free resolved metadata unavailable'
 fi
+
+# Keep raw JSON telemetry, then expose only actual assistant text to the shared
+# terminal-verdict parser. Tool arguments/output and reasoning metadata must
+# never be promoted into a review verdict.
+assistant_text="$runtime_root/assistant.txt"
+jq -r 'select(.type == "text" and .part.type == "text"
+  and (.part.text | type) == "string") | .part.text' "$events_jsonl" > "$assistant_text"
+if [[ -s "$assistant_text" ]]; then
+  {
+    printf '\n# Kilo assistant output\n'
+    cat "$assistant_text"
+  } | tee -a "$LOG_PATH"
+fi

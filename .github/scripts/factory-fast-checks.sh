@@ -107,6 +107,16 @@ _factory_fast_check_ensure_pnpm() {
   command -v pnpm >/dev/null 2>&1
 }
 
+# Ensure the Python toolchain the trusted pre-commit hook needs is installed.
+# The hook runs scripts/lint.sh, which requires an activated .venv (or ruff in
+# PATH) before it looks at which file types were staged, so even a docs- or
+# frontend-only diff must have .venv available before it can be committed.
+factory_ensure_commit_hook_toolchain() {
+  [[ -x .venv/bin/ruff ]] && return 0
+  _factory_fast_check_ensure_uv || return 1
+  uv sync --frozen --all-extras --quiet
+}
+
 # Run the fast checks for the diff against BASE_REF. Writes a full log to
 # $2 (default /tmp/factory-fast-checks-<worker>.log) and returns non-zero when
 # any check (or the toolchain it needs) fails.

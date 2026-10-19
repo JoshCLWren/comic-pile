@@ -90,9 +90,15 @@ current_owner_is_self() {
 }
 
 pr_no_diff_generation_fields() {
-  local number="$1" stage="$2"
+  local number="$1" stage="$2" prefer_live="${3:-0}"
   local sha="" conflicted=0 meta='{}' mergeable='' merge_state=''
-  sha="$(git rev-parse HEAD 2>/dev/null || true)"
+  if [[ "$prefer_live" != 1 ]]; then
+    if [[ -n "${PR_HEAD_REPOSITORY:-}" && "$PR_HEAD_REPOSITORY" != "${GITHUB_REPOSITORY:-}" ]]; then
+      sha="${EXPECTED_HEAD:-}"
+    else
+      sha="$(git rev-parse HEAD 2>/dev/null || true)"
+    fi
+  fi
   meta="$(gh pr view "$number" --json headRefOid,mergeable,mergeStateStatus 2>/dev/null || true)"
   [[ -n "$meta" ]] || meta='{}'
   if [[ ! "$sha" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
@@ -113,7 +119,13 @@ pr_no_diff_generation_fields() {
 
 release_target() {
   local number="$1" fallback_stage="$2" reason="$3" target_kind="${4:-target}"
-  local stage epoch marker generation=""
+  local stage epoch marker generation="" bounded=0
+  case "$reason" in
+    no-persisted-change-handoff|repair-no-persisted-change-handoff) bounded=1 ;;
+    transient-model-interruption|review-agent-failed|controller-assignment-read-failed|semantic-review-head-read-failed|missing-semantic-verdict|conflicting-semantic-verdict|authoritative-diff-read-failed|fork-repair-execution-failed|fork-repair-result-invalid|fork-dispatch-failed)
+      [[ "$target_kind" != pr ]] || bounded=1
+      ;;
+  esac
   case "${target_kind}:${reason}" in
     pr:repair-no-change-ready-handoff|pr:repair-no-persisted-change-handoff)
       stage="$fallback_stage"
@@ -123,9 +135,11 @@ release_target() {
       ;;
   esac
   epoch="$(date +%s)"
-  if [[ "$reason" == 'no-persisted-change-handoff' || "$reason" == 'repair-no-persisted-change-handoff' ]]; then
+  if (( bounded )); then
     if [[ "$target_kind" == 'pr' ]]; then
-      if ! generation="$(pr_no_diff_generation_fields "$number" "$stage")"; then
+      local prefer_live=0
+      [[ "$reason" != controller-assignment-read-failed ]] || prefer_live=1
+      if ! generation="$(pr_no_diff_generation_fields "$number" "$stage" "$prefer_live")"; then
         FACTORY_RETAIN_LEASE_ON_EXIT=1
         log "unable to pin no-diff generation to head SHA for pr #${number}; retaining the lease"
         return 1
@@ -133,7 +147,7 @@ release_target() {
     fi
   fi
   marker="<!-- comic-pile-factory-claim-released-v3:${target_kind}-${number}:${WORKER_ID}:${epoch}:${reason}${generation} -->"
-  if [[ "$reason" == 'no-persisted-change-handoff' || "$reason" == 'repair-no-persisted-change-handoff' ]]; then
+  if (( bounded )); then
     if ! gh issue comment "$number" --body "$marker" >/dev/null 2>&1; then
       FACTORY_RETAIN_LEASE_ON_EXIT=1
       log "unable to persist bounded no-diff marker for ${target_kind} #${number}; retaining the lease"
@@ -143,6 +157,9 @@ release_target() {
     # workflow stage and let the controller suppress re-selection from the
     # durable marker; never rewrite no-diff failures as factory:blocked.
     replace_labels "$number" 'factory:unowned' "$stage"
+    if [[ "$reason" != *no-persisted-change-handoff ]]; then
+      log "review retry recorded for PR #${number}${generation}; after three failures this generation cools down for 30 minutes"
+    fi
   else
     replace_labels "$number" 'factory:unowned' "$stage"
     gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
@@ -347,12 +364,29 @@ record_head_contribution() {
 }
 
 checkout_target() {
-  local mode="$1" number="$2" branch="$3"
+  local mode="$1" number="$2" branch="$3" pr_json head
+  PR_HEAD_REPOSITORY=''
   git fetch --prune origin
   git switch --detach origin/main >/dev/null 2>&1 || true
   git reset --hard origin/main >/dev/null
   git clean -fd >/dev/null
-  if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+  if [[ "$mode" == pr ]]; then
+    # PR refs exist in the base repository even when the head is on a fork.
+    # Never fall back to main (or an unrelated same-named base branch).
+    pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}")" || return 1
+    PR_HEAD_REPOSITORY="$(jq -er '.head.repo.full_name' <<< "$pr_json")" || return 1
+    [[ "$PR_HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || return 1
+    [[ "$(jq -r '.base.repo.full_name' <<< "$pr_json")" == "$GITHUB_REPOSITORY" ]] || return 1
+    if [[ "$PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]]; then
+      log 'refusing fork checkout in a credentialed worker; use the secretless execution workflow' >&2
+      return 1
+    fi
+    head="$(jq -er '.head.sha' <<< "$pr_json")" || return 1
+    [[ "$head" =~ ^[a-f0-9]{40}$ ]] || return 1
+    git fetch origin "refs/pull/${number}/head" || return 1
+    [[ "$(git rev-parse FETCH_HEAD)" == "$head" ]] || return 1
+    git switch -C "$branch" "$head" || return 1
+  elif git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
     git fetch origin "$branch:$branch" --force
     git switch "$branch"
     git reset --hard "origin/$branch" >/dev/null
@@ -575,14 +609,14 @@ factory_git_push() {
   # always restores the previous URL, so the token is never left in git config.
   local source="$1" token="$2" had_xtrace=0 previous_url status=0
   shift 2
-  if [[ "$source" != installation ]]; then
+  if [[ "$source" != installation && -z "${FACTORY_PUSH_REPOSITORY:-}" ]]; then
     git push "$@"
     return $?
   fi
   [[ $- == *x* ]] && had_xtrace=1
   { set +x; } 2>/dev/null
   previous_url="$(git remote get-url origin 2>/dev/null || true)"
-  git remote set-url origin "https://x-access-token:${token}@github.com/${GITHUB_REPOSITORY}.git" || status=$?
+  git remote set-url origin "https://x-access-token:${token}@github.com/${FACTORY_PUSH_REPOSITORY:-$GITHUB_REPOSITORY}.git" || status=$?
   if (( status == 0 )); then
     git push "$@" || status=$?
   fi
@@ -730,6 +764,10 @@ persist_pr_changes() {
 
 _persist_pr_changes_untraced() {
   local pr="$1" branch="$2" base_ref
+  local FACTORY_PUSH_REPOSITORY="${PR_HEAD_REPOSITORY:-}"
+  if [[ "$FACTORY_PUSH_REPOSITORY" == "${GITHUB_REPOSITORY:-}" ]]; then
+    FACTORY_PUSH_REPOSITORY=''
+  fi
   [[ -n "$(git status --porcelain)" ]] || return 1
   base_ref="$EXPECTED_HEAD"
   if ! reject_out_of_scope_diff 'pr' "$pr" "$base_ref"; then
@@ -747,9 +785,18 @@ _persist_pr_changes_untraced() {
   git commit -m "factory: advance PR #${pr} with ${DISPLAY}"
   local pushed_head remote_head push_credential
   pushed_head="$(git rev-parse HEAD)"
-  push_credential="$(factory_push_credential)" || return 1
+  if [[ -n "$FACTORY_PUSH_REPOSITORY" ]]; then
+    [[ -n "${PR_REBASE_TOKEN:-}" ]] || return 1
+    push_credential="$(printf 'pat\t%s' "$PR_REBASE_TOKEN")"
+  else
+    push_credential="$(factory_push_credential)" || return 1
+  fi
   factory_git_push "${push_credential%%$'\t'*}" "${push_credential#*$'\t'}" origin "HEAD:$branch"
-  remote_head="$(git ls-remote origin "refs/heads/${branch}" | awk '{print $1}')"
+  if [[ -n "$FACTORY_PUSH_REPOSITORY" ]]; then
+    remote_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}" --jq '.head.sha')"
+  else
+    remote_head="$(git ls-remote origin "refs/heads/${branch}" | awk '{print $1}')"
+  fi
   if [[ "$remote_head" != "$pushed_head" ]]; then
     log "push verification failed for ${branch}: expected ${pushed_head}, found ${remote_head:-missing}" >&2
     return 1

@@ -515,51 +515,67 @@ def test_active_fixed_workers_paginates_all_active_run_states(
 ) -> None:
     """Verify active fixed workers paginates all active run states."""
     calls: list[list[str]] = []
-    responses = iter(
-        [
-            [
-                {
-                    "workflow_runs": [
-                        {"id": 1, "display_title": "Factory 13 · fixed-model entry"}
-                    ]
-                }
-            ],
-            [
-                {
-                    "workflow_runs": [
-                        {"id": 2, "display_title": "Factory 29 · fixed-model entry"}
-                    ]
-                }
-            ],
-        ]
-    )
+    workflows = ("free-model-factory-entry.yml", "factory-fork-execution.yml")
+    responses = {
+        ("free-model-factory-entry.yml", "queued"): [
+            {
+                "workflow_runs": [
+                    {"id": 1, "display_title": "Factory 13 · fixed-model entry"}
+                ]
+            }
+        ],
+        ("free-model-factory-entry.yml", "in_progress"): [{"workflow_runs": []}],
+        ("factory-fork-execution.yml", "queued"): [{"workflow_runs": []}],
+        ("factory-fork-execution.yml", "in_progress"): [
+            {
+                "workflow_runs": [
+                    {
+                        "id": 2,
+                        "display_title": f"Factory 29 · fork repair · PR 3897 · {'b' * 32}",
+                    }
+                ]
+            }
+        ],
+    }
 
     def fake_gh_json(args: list[str], **kwargs: object) -> object:
         calls.append(args)
-        return next(responses)
+        joined = " ".join(args)
+        workflow = next(name for name in workflows if name in joined)
+        status = next(state for state in ("queued", "in_progress") if f"status={state}" in joined)
+        return responses[(workflow, status)]
 
     monkeypatch.setattr(controller, "gh_json", fake_gh_json)
 
     assert controller.active_fixed_workers() == {13, 29}
     assert all("--paginate" in args and "--slurp" in args for args in calls)
+    queried = {
+        next(name for name in workflows if name in " ".join(args)) for args in calls
+    }
+    assert queried == set(workflows)
 
 
 def test_active_fixed_workers_fails_closed_when_live_run_identity_is_unknown(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Verify active fixed workers fails closed when live run identity is unknown."""
-    responses = iter(
-        [
-            [{"workflow_runs": [{"id": 99, "display_title": "Fixed Model Factory Entry"}]}],
-            [{"workflow_runs": []}],
-            [[]],
-        ]
-    )
-    monkeypatch.setattr(
-        controller,
-        "gh_json",
-        lambda args, **kwargs: next(responses),
-    )
+    def fake_gh_json(args: list[str], **kwargs: object) -> object:
+        joined = " ".join(args)
+        if "free-model-factory-entry.yml" in joined and "status=queued" in joined:
+            return [
+                {
+                    "workflow_runs": [
+                        {"id": 99, "display_title": "Fixed Model Factory Entry"}
+                    ]
+                }
+            ]
+        if "status=in_progress" in joined or "factory-fork-execution.yml" in joined:
+            return [{"workflow_runs": []}]
+        if "issues/1093/comments" in joined:
+            return [[]]
+        raise AssertionError(joined)
+
+    monkeypatch.setattr(controller, "gh_json", fake_gh_json)
 
     workers, unresolved = controller.active_fixed_workers()
     assert workers == set()

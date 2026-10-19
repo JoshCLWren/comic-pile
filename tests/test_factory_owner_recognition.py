@@ -126,8 +126,9 @@ def test_factory_persistence_pushes_and_verifies_current_head() -> None:
     # mask them on its own.
     assert "printf '::add-mask::%s\\n' \"$token\"" in primitives
     # PR_REBASE_TOKEN / non-installation path still uses plain git push inside
-    # factory_git_push (no URL swap). Fallback stays on PR_REBASE_TOKEN.
-    assert 'if [[ "$source" != installation ]]; then' in primitives
+    # factory_git_push (no URL swap) for internal heads. Fork repair swaps
+    # the URL for this push only, with the same credential masking/restoration.
+    assert 'if [[ "$source" != installation && -z "${FACTORY_PUSH_REPOSITORY:-}" ]]; then' in primitives
     assert 'git push "$@"' in primitives
     assert 'PR_REBASE_TOKEN' in primitives
     for path in (

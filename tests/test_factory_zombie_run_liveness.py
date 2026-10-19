@@ -171,7 +171,10 @@ def test_active_run_query_failure_keeps_reconciliation_conservative(
     workers, unresolved = controller.active_fixed_workers()
 
     assert workers == set()
-    assert unresolved == {"queued-run-query-unavailable"}
+    assert unresolved == {
+        "queued-run-query-unavailable",
+        "fork-queued-run-query-unavailable",
+    }
 
 
 def test_expired_zombie_allows_unrelated_stale_lease_reclamation(

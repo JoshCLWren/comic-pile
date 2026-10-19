@@ -5,7 +5,7 @@ on:
     # `edited` routes Greptile re-reviews that only rewrite the PR-body
     # summary (no new review submission) when it lists open findings for the
     # current head. Only Greptile routing runs for `edited`.
-    types: [opened, reopened, ready_for_review, closed, unlabeled, edited]
+    types: [opened, reopened, ready_for_review, synchronize, closed, unlabeled, edited]
   # Trusted review feedback may route a PR to repair. Native APPROVED is
   # deliberately not a merge authorization; controller attestations still rule.
   # `submitted` also covers Greptile's COMMENTED reviews and thread replies:

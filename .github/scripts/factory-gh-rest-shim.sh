@@ -107,6 +107,8 @@ if [[ "$command_group" == pr && "$command_name" == list ]]; then
           labels,
           headRefName: .head.ref,
           headRefOid: .head.sha,
+          author: {login: .user.login},
+          isCrossRepository: (.head.repo.full_name != .base.repo.full_name),
           createdAt: .created_at,
           updatedAt: .updated_at,
           isDraft: (.draft // false),
@@ -158,6 +160,8 @@ if [[ "$command_group" == pr && "$command_name" == view ]]; then
       isDraft: (.draft // false),
       mergeable: (if .mergeable == true then "MERGEABLE" elif .mergeable == false then "CONFLICTING" else "UNKNOWN" end),
       headRefOid: .head.sha,
+      author: {login: .user.login},
+      isCrossRepository: (.head.repo.full_name != .base.repo.full_name),
       headRefName: .head.ref
     }
   ' <<< "$raw")"
