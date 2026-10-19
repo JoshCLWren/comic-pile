@@ -21,22 +21,35 @@ so on its own a factory merge could leave production hours behind `main` (PR #38
 
 ### Bot merges dispatch the deploy
 
-`workflow_dispatch` is the one event `GITHUB_TOKEN` may raise. Every factory path that merges with
-it calls `factory_dispatch_production_deploy` from
-`.github/scripts/factory-dispatch-production-deploy.sh`, which runs
-`gh workflow run deploy-production.yml --ref main -f source=factory-merge`:
+`workflow_dispatch` is the one event `GITHUB_TOKEN` may raise. Only two paths merge factory PRs in
+production, Factory Ready Merge Drain and the Fixed Model Factory Dispatcher's ready drain. Both call
+`factory_dispatch_production_deploy` from `.github/scripts/factory-dispatch-production-deploy.sh`,
+which runs `gh workflow run deploy-production.yml --ref main -f source=factory-merge`:
 
-- Factory Ready Merge Drain and the Fixed Model Factory Dispatcher's ready drain dispatch once per
-  run, after the last merge (an `EXIT` trap, so a later loop failure cannot skip it), and only when
-  that run merged at least one PR.
-- The worker wrappers that can merge (`free-model-factory-worker-primitives.sh`'s standalone loop
-  and the dormant NVIDIA and OmniRoute wrappers) dispatch right after their merge.
-- Those jobs run with `actions: write`. A dispatch failure only warns; the merge stands and the next
-  trigger deploys the same `main`. `FACTORY_DEPLOY_DISPATCH=off` disables it for an incident.
+- Each drain dispatches once per run, after the last merge (an `EXIT` trap, so a later loop failure
+  cannot skip it), and only when that run merged at least one PR. A PR found `MERGED` after
+  `gh pr merge` errored (the merge landed anyway, or another actor merged it) also counts, because
+  a GITHUB_TOKEN merge by anyone fires no push event. Dedupe makes the extra dispatch harmless.
+- A failed `gh workflow run` is retried up to 3 times (3s, then 6s apart, the `dispatch_worker`
+  pattern). If every attempt fails, it only warns; the merge stands and the next trigger deploys the
+  same `main`. Both jobs run with `actions: write`. `FACTORY_DEPLOY_DISPATCH=off` disables the
+  dispatch for an incident.
+- The worker wrappers (`free-model-factory-worker-primitives.sh`, `nvidia-factory-worker.sh`,
+  `omniroute-factory-worker.sh`) do not merge in production. Workers hand finished PRs to the
+  merge controller. `validate-free-model-factories.py` forbids `gh pr merge "$NUMBER"` in the live
+  `free-model-factory-worker.sh`, which sources the primitives only up to `ensure_owner_label`, so
+  the primitives' standalone merge loop never runs. The NVIDIA and OmniRoute wrappers are not called
+  by any workflow. Their `gh pr merge` blocks and the dispatch call after each one are dead code. The
+  dispatch calls stay in so the guard test below keeps passing, and they would do the right thing if
+  one of those paths were revived.
 - `tests/test_factory_deploy_dispatch_after_merge.py` finds every `gh pr merge` or merge-API call
   under `.github/` and `scripts/` and fails when one does not dispatch the deploy. The only
   exemption is `scripts/opencode_pipeline.sh`, which merges locally with the operator's token, so
   its push event deploys normally.
+
+Dispatched runs are named `Deploy Production [source=<source>] <reason>` (`run-name`), so the
+Actions list shows whether a run is a manual force-redeploy or a factory-merge dispatch. `source` is
+a choice input (`manual`, the default, or `factory-merge`).
 
 ### Overlapping runs
 
@@ -47,6 +60,18 @@ exact-SHA preflight against Vercel. Once a `READY` production deployment exists 
 `main` SHA, later automatic triggers, including `source=factory-merge` dispatches, exit without
 rerunning migrations or creating another deployment. A manual `workflow_dispatch` (the default
 `source=manual`) deliberately bypasses this deduplication as the explicit force-recovery path.
+
+**A queued manual redeploy can be superseded.** `cancel-in-progress: false` does not keep every
+pending run. GitHub keeps only the newest one and cancels the older pending run. A manual or forced
+redeploy that is waiting behind an in-flight deploy is therefore cancelled when any later trigger
+queues (push, `workflow_run`, cron, or a factory-merge dispatch). If that later run is a
+deduplicating trigger and the SHA is already `READY`, it skips, and the forced redeploy never
+happens. To reduce this, `factory_dispatch_production_deploy` checks for a queued, pending, or waiting
+`workflow_dispatch` run whose name starts with `Deploy Production [source=manual]`. If it finds one,
+it does not dispatch, because the manual run checks out `main` when it starts and so deploys the merge
+anyway. If that lookup fails, it dispatches as before. Two gaps remain: the race between the check
+and the dispatch, and the other automatic triggers. If a manual run shows as cancelled with no newer
+deploy of its SHA, dispatch it again once the queue is clear.
 
 ## Red-deploy freeze
 

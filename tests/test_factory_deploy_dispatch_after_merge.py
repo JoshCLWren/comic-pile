@@ -138,7 +138,9 @@ def _write_exe(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-def _run_drain(tmp_path: Path, workflow_rel: str, *, gate: str = "pass", prs: int = 2) -> list[str]:
+def _run_drain(
+    tmp_path: Path, workflow_rel: str, *, gate: str = "pass", prs: int = 2, merge_exit: int = 0
+) -> list[str]:
     work = tmp_path / "work"
     (work / ".github/scripts").mkdir(parents=True)
     shutil.copy(HELPER, work / ".github/scripts" / HELPER.name)
@@ -151,7 +153,7 @@ def _run_drain(tmp_path: Path, workflow_rel: str, *, gate: str = "pass", prs: in
         f"""echo "gh $*" >> {log}
 case "$1 $2" in
   "api --paginate"|"pr list") printf '{rows}' ;;
-  "pr merge") exit 0 ;;
+  "pr merge") exit {merge_exit} ;;
   "pr view") echo MERGED ;;
   "workflow run") exit 0 ;;
 esac
@@ -203,6 +205,17 @@ def test_drains_dispatch_one_deploy_after_the_last_merge(tmp_path: Path) -> None
         assert "merged 2 PR(s)" in calls[dispatches[0]]
 
 
+def test_drains_count_prs_merged_while_gh_errored(tmp_path: Path) -> None:
+    # gh pr merge fails but the PR is MERGED (the merge landed, or another
+    # GITHUB_TOKEN actor merged it): no push event fires, so still dispatch.
+    for index, rel in enumerate(DRAINS):
+        calls = _run_drain(tmp_path / f"errored{index}", rel, merge_exit=1)
+        dispatches = [call for call in calls if call.startswith("gh workflow run")]
+        assert len(dispatches) == 1, (rel, calls)
+        assert "-f source=factory-merge" in dispatches[0]
+        assert "merged 2 PR(s)" in dispatches[0]
+
+
 def test_drains_without_a_merge_do_not_dispatch(tmp_path: Path) -> None:
     for index, rel in enumerate(DRAINS):
         calls = _run_drain(tmp_path / f"retry{index}", rel, gate="retry")
@@ -216,15 +229,38 @@ def test_drains_without_a_merge_do_not_dispatch(tmp_path: Path) -> None:
 
 
 def _run_helper(
-    tmp_path: Path, gh_exit: int, extra_env: dict[str, str] | None = None
+    tmp_path: Path,
+    gh_exit: int,
+    extra_env: dict[str, str] | None = None,
+    *,
+    run_list: str = "",
+    run_list_exit: int = 0,
+    succeed_on_attempt: int = 0,
 ) -> tuple[int, str, str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(parents=True)
     log = tmp_path / "gh.log"
-    _write_exe(bin_dir / "gh", f'echo "gh $*" >> {log}\nexit {gh_exit}\n')
-    env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", **(extra_env or {})}
+    count = tmp_path / "dispatches"
+    _write_exe(
+        bin_dir / "gh",
+        f"""echo "gh $*" >> {log}
+if [[ "$1 $2" == "run list" ]]; then
+  printf '%s' '{run_list}'
+  exit {run_list_exit}
+fi
+n=$(( $(cat {count} 2>/dev/null || echo 0) + 1 )); echo "$n" > {count}
+if (( {succeed_on_attempt} > 0 )); then (( n >= {succeed_on_attempt} )) && exit 0 || exit 1; fi
+exit {gh_exit}
+""",
+    )
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "FACTORY_DEPLOY_DISPATCH_RETRY_SLEEP": "0",
+        **(extra_env or {}),
+    }
     result = subprocess.run(
-        ["bash", "-c", f'source {HELPER}; {DISPATCH_CALL} "test merge"; echo rc=$?'],
+        ["bash", "-c", f'set -Eeuo pipefail; source {HELPER}; {DISPATCH_CALL} "test merge"; echo rc=$?'],
         env=env,
         text=True,
         capture_output=True,
@@ -233,24 +269,67 @@ def _run_helper(
     return result.returncode, result.stdout + result.stderr, log.read_text() if log.exists() else ""
 
 
+DISPATCH_LINE = (
+    "gh workflow run deploy-production.yml --repo JoshCLWren/comic-pile --ref main "
+    "-f source=factory-merge -f reason=test merge"
+)
+
+
+def _dispatch_calls(calls: str) -> list[str]:
+    return [line for line in calls.splitlines() if line.startswith("gh workflow run")]
+
+
 def test_helper_dispatches_deploy_on_main_and_never_fails_the_caller(tmp_path: Path) -> None:
     _, out, calls = _run_helper(tmp_path / "ok", 0)
     assert "rc=0" in out
-    assert calls.strip() == (
-        "gh workflow run deploy-production.yml --repo JoshCLWren/comic-pile --ref main "
-        "-f source=factory-merge -f reason=test merge"
-    )
-    _, out, _ = _run_helper(tmp_path / "fail", 1)
+    assert _dispatch_calls(calls) == [DISPATCH_LINE]
+    _, out, calls = _run_helper(tmp_path / "fail", 1)
     assert "rc=0" in out and "::warning::Unable to dispatch Deploy Production" in out
     _, out, calls = _run_helper(tmp_path / "off", 0, {"FACTORY_DEPLOY_DISPATCH": "off"})
     assert "rc=0" in out and calls == ""
+
+
+def test_helper_retries_failed_dispatch_three_times(tmp_path: Path) -> None:
+    _, out, calls = _run_helper(tmp_path / "fail", 1)
+    assert _dispatch_calls(calls) == [DISPATCH_LINE] * 3
+    assert "(3 attempts)" in out
+    _, out, calls = _run_helper(tmp_path / "second", 1, succeed_on_attempt=2)
+    assert _dispatch_calls(calls) == [DISPATCH_LINE] * 2
+    assert "rc=0" in out and "attempt 2/3" in out and "::warning::" not in out
+    helper = HELPER.read_text(encoding="utf-8")
+    assert "while (( attempt <= 3 )); do" in helper
+    assert "sleep $((attempt * backoff))" in helper
+
+
+def test_helper_does_not_supersede_a_queued_manual_redeploy(tmp_path: Path) -> None:
+    # GitHub keeps only the newest pending run in the concurrency group, so a
+    # factory-merge dispatch would cancel a queued manual force-redeploy.
+    _, out, calls = _run_helper(tmp_path / "queued", 0, run_list="1")
+    assert "rc=0" in out and "manual Deploy Production run is already queued" in out
+    assert _dispatch_calls(calls) == []
+    assert "gh run list --repo JoshCLWren/comic-pile --workflow deploy-production.yml" in calls
+    assert "--event workflow_dispatch" in calls
+    assert "Deploy Production [source=manual]" in calls
+    # No manual run queued, or the lookup failed: dispatch as before.
+    _, _, calls = _run_helper(tmp_path / "none", 0, run_list="0")
+    assert _dispatch_calls(calls) == [DISPATCH_LINE]
+    _, _, calls = _run_helper(tmp_path / "lookup-failed", 0, run_list_exit=1)
+    assert _dispatch_calls(calls) == [DISPATCH_LINE]
 
 
 def test_deploy_production_dedupes_factory_dispatches_and_serializes_runs() -> None:
     text = (ROOT / ".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
     workflow = yaml.safe_load(text)
     triggers = workflow[True] if True in workflow else workflow["on"]
-    assert triggers["workflow_dispatch"]["inputs"]["source"]["default"] == "manual"
+    source = triggers["workflow_dispatch"]["inputs"]["source"]
+    assert source["default"] == "manual"
+    assert source["type"] == "choice"
+    assert {"manual", "factory-merge"} <= set(source["options"])
+    # Runs are distinguishable, and the helper matches this prefix to find a
+    # queued manual run.
+    run_name = workflow["run-name"]
+    assert "inputs.source" in run_name and "inputs.reason" in run_name
+    assert "Deploy Production [source={0}]" in run_name
     assert workflow["concurrency"] == {"group": "vercel-production", "cancel-in-progress": False}
     assert "DISPATCH_SOURCE: ${{ github.event.inputs.source || 'manual' }}" in text
     assert (

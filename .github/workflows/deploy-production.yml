@@ -1,4 +1,8 @@
 name: Deploy Production
+# Dispatched runs show who asked and why ("Deploy Production [source=manual] <reason>");
+# factory-dispatch-production-deploy.sh matches this prefix to find a queued
+# manual run. Other events evaluate to '' and keep GitHub's default run name.
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('Deploy Production [source={0}] {1}', inputs.source, inputs.reason) || '' }}
 
 on:
   push:
@@ -21,7 +25,7 @@ on:
         type: boolean
         default: false
       reason:
-        description: Required when override_freeze is true. Logged in the run summary.
+        description: Required when override_freeze is true. Logged in the run summary and shown in the run name.
         type: string
         required: false
       source:
@@ -29,7 +33,10 @@ on:
           Who dispatched the run. "manual" (default) forces a redeploy of
           main. "factory-merge" is used by factory bot-merge paths (GITHUB_TOKEN
           merges fire no push event) and skips a SHA that is already READY.
-        type: string
+        type: choice
+        options:
+          - manual
+          - factory-merge
         default: manual
 
 # One deploy at a time; the newest pending run replaces any older pending
