@@ -445,7 +445,7 @@ export default function AddSeriesFromComicVineDialog({
                 type="button"
                 onClick={handleRetrySearch}
                 data-testid="add-series-comicvine-retry"
-                className="mt-2 min-h-11 px-4 rounded-lg text-sm font-bold text-rose-100 bg-rose-800/60 border border-rose-600/50 hover:bg-rose-800 transition"
+                className="mt-2 min-h-11 px-4 rounded-lg text-sm font-bold text-white bg-[var(--theme-primary-action)] border border-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] hover:border-[var(--theme-primary-action-hover)] transition"
               >
                 Retry
               </button>

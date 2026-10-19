@@ -313,6 +313,9 @@ export default function ComicVineSearchDialog({
           setSeriesResults([])
           setPagination(EMPTY_PAGINATION)
         }
+        // Enter and Retry reach here directly (bypassing handleQueryChange's debounce), so we
+        // must set the loading phase here so the spinner shows while ComicVine answers.
+        setSearchPhase('loading')
         setError(null)
         const trimmed = searchQuery.trim()
         if (isComicVineUrlLike(trimmed)) {

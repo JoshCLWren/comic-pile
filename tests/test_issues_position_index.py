@@ -75,17 +75,19 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
         return index_names
 
     # With sequential scans and bitmap scans disabled the planner must reach an
-    # index to answer a thread-scoped lookup. Which thread-scoped index it picks
-    # (the narrow FK, the is_read filter, the (thread_id, position) composite, or
-    # the unique constraint backing it) is planner-dependent and has flipped
-    # between runs, so accept any index whose condition bounds thread_id rather
-    # than pinning a single index name. The position index's existence is checked
-    # directly against pg_indexes below, and the ordering is checked by the real
-    # query, so this still guards the migration that creates the index.
+    # index to answer a thread-scoped lookup. The position index (thread_id, position)
+    # is the index that serves both the WHERE and ORDER BY for this query pattern.
+    # Verify it appears in the plan; if the planner chooses a different thread-scoped
+    # index, the test will fail and alert us to investigate rather than silently
+    # accepting a plan that cannot guarantee ordered results without a sort.
     index_names = collect_index_names(plan_nodes)
     assert index_names, (
         "Plan used no index after sequential and bitmap scans were disabled; "
         f"the thread-scoped lookup is not indexed: {plan_nodes}"
+    )
+    assert "ix_issue_thread_position" in index_names, (
+        f"Position index ix_issue_thread_position not used in plan; indexes found: {index_names}; "
+        f"plan: {plan_nodes}"
     )
 
     # Also verify the index actually exists
