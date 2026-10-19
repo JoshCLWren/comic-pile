@@ -140,6 +140,7 @@ export function useQueueThreads(
   const isPending = query.isPending || query.isNextPageLoading
   const isError = query.isError
   const nextPageToken = query.nextPageToken
+  const isLoading = query.isLoading
 
   const refetch = useCallback(async (): Promise<void> => {
     await query.refetch()
@@ -149,7 +150,7 @@ export function useQueueThreads(
     await query.fetchNextPage()
   }, [query])
 
-  return { data, isPending, isError, refetch, nextPageToken, loadMore, activeCount }
+  return { data, isPending, isError, refetch, nextPageToken, loadMore, activeCount, isLoading }
 }
 
 /**

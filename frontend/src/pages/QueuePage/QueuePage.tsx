@@ -46,6 +46,7 @@ export default function QueuePage() {
     nextPageToken,
     loadMore,
     activeCount,
+    isLoading,
   } = useQueueThreads(searchQuery, sortBy)
 
   // Series that show the per-row `Map series` repair action (everything except
@@ -224,6 +225,7 @@ export default function QueuePage() {
           isSearching={isSearching}
           sentinelRef={sentinelRef}
           hasNextPage={!!nextPageToken}
+          isLoading={isLoading}
           onAddSeries={modals.showCreateModal}
         />
 
