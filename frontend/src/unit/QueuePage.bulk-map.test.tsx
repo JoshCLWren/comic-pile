@@ -113,6 +113,9 @@ const mockedBulkDialog = vi.mocked(QueueBulkMapSeriesDialog)
 
 interface CapturedBulkProps {
   isOpen?: boolean
+  isScopeLoading?: boolean
+  isScopeIncomplete?: boolean
+  scopeSeriesCount?: number
   threadIds?: number[]
   threadTitles?: string[]
 }
@@ -214,5 +217,116 @@ describe('QueuePage bulk mapping wiring', () => {
 
     expect(screen.getByTestId('queue-bulk-map-desktop')).toBeDisabled()
     expect(lastBulkDialogProps()).toMatchObject({ threadIds: [] })
+  })
+
+  it('keeps the bulk action reachable while unread queue pages remain', () => {
+    // Issue #3922: the reader must be able to start a run even when no loaded
+    // row needs mapping, because an unread page can still hold unmapped series.
+    // SAFETY: the test provides only the fields QueuePage reads.
+    mockedUseQueueThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'fully_mapped' } },
+      ],
+      isPending: false,
+      isError: false,
+      isLoadingMore: false,
+      nextPageToken: 'page-2',
+      loadMore: vi.fn(),
+      activeCount: 164,
+    } as never)
+
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>,
+    )
+
+    expect(screen.getByTestId('queue-bulk-map-desktop')).not.toBeDisabled()
+  })
+
+  it('reads the remaining queue pages before the batch is captured', async () => {
+    const user = userEvent.setup()
+    // SAFETY: the test provides only the fields QueuePage reads; the hook's full return type is irrelevant to this wiring test.
+    const loadMore = vi.fn().mockResolvedValue(undefined)
+    mockedUseQueueThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'unresolved' } },
+      ],
+      isPending: false,
+      isError: false,
+      isLoadingMore: false,
+      nextPageToken: 'page-2',
+      loadMore,
+      activeCount: 164,
+    } as never)
+
+    const { rerender } = render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByTestId('queue-bulk-map-desktop'))
+
+    // The batch is not captured from the first page alone.
+    expect(loadMore).toHaveBeenCalled()
+    expect(lastBulkDialogProps()).toMatchObject({ isOpen: true, isScopeLoading: true })
+
+    mockedUseQueueThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'unresolved' } },
+        { id: 2, title: 'Justice League America', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 4, comicvine_mapping: { status: 'needs_review' } },
+      ],
+      isPending: false,
+      isError: false,
+      isLoadingMore: false,
+      nextPageToken: null,
+      loadMore,
+      activeCount: 164,
+    } as never)
+    rerender(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>,
+    )
+
+    expect(lastBulkDialogProps()).toMatchObject({
+      isScopeLoading: false,
+      threadIds: [1, 2],
+      threadTitles: ['Batman', 'Justice League America'],
+    })
+  })
+
+  it('reports a queue scope it could not finish loading', () => {
+    // SAFETY: the test provides only the fields QueuePage reads.
+    mockedUseQueueThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'unresolved' } },
+      ],
+      isPending: false,
+      isError: true,
+      isLoadingMore: false,
+      nextPageToken: 'page-2',
+      loadMore: vi.fn().mockResolvedValue(undefined),
+      activeCount: 164,
+    } as never)
+
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>,
+    )
+
+    // A failed page stops the drain instead of retrying forever, and the results
+    // explain that the batch may be a subset of the queue.
+    expect(lastBulkDialogProps()).toMatchObject({ isScopeIncomplete: true })
   })
 })

@@ -1,9 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Modal from './Modal'
 import QueueMapSeriesDialog from './QueueMapSeriesDialog'
+import type { SeriesBatchProgress, SeriesMappingFailure } from './QueueMapSeriesDialog'
 
 interface QueueBulkMapSeriesDialogProps {
   isOpen: boolean
+  /**
+   * True while the Queue is still loading the pages that hold series needing
+   * mapping. The batch is not captured until this clears, so a run covers every
+   * series that needs mapping rather than only the pages the reader scrolled
+   * (issue #3922).
+   */
+  isScopeLoading?: boolean
+  /**
+   * Series already discovered as needing mapping, shown while the remaining
+   * queue pages load. Optional: hosts that cannot report a running count omit
+   * it.
+   */
+  scopeSeriesCount?: number
+  /**
+   * True when the Queue still reports unmapped series it could not load. The
+   * results explain that this run may not cover every series, instead of
+   * quietly presenting a partial batch as complete.
+   */
+  isScopeIncomplete?: boolean
   threadIds: number[]
   threadTitles: string[]
   onClose: () => void
@@ -30,9 +50,36 @@ interface BulkBatchItem {
   threadTitle: string
 }
 
-type SeriesOutcome = 'pending' | 'mapped' | 'skipped'
+type SeriesOutcome = 'pending' | 'mapped' | 'skipped' | 'failed'
 
 type RunPhase = 'idle' | 'mapping' | 'results'
+
+const OUTCOME_LABEL: Record<SeriesOutcome, string> = {
+  pending: 'Not reviewed',
+  mapped: 'Mapped',
+  skipped: 'Needs review',
+  failed: 'Failed',
+}
+
+/**
+ * Status chips carry their meaning in the label as well as the accent, so the
+ * result is readable without relying on color.
+ */
+const OUTCOME_ACCENT: Record<SeriesOutcome, string> = {
+  pending: 'border-[var(--theme-border)] text-[var(--theme-text-dim)]',
+  mapped: 'border-[var(--theme-primary-action)]/40 text-[var(--theme-primary-action)]',
+  skipped: 'border-[var(--theme-warning)]/40 text-[var(--theme-warning)]',
+  failed: 'border-[var(--theme-danger)]/40 text-[var(--theme-danger)]',
+}
+
+/** Plain-language reason a series failed, so the list explains itself. */
+const FAILURE_DETAIL: Record<SeriesMappingFailure, string> = {
+  origin_unavailable: 'the series could not be loaded',
+  no_tracked_issues: 'the series has no tracked issues',
+  preview_unavailable: 'the mapping plan could not be loaded',
+  scope_unavailable: 'no safe mapping scope was available',
+  commit_failed: 'the mapping could not be saved',
+}
 
 function buildBatch(threadIds: number[], threadTitles: string[]): BulkBatchItem[] {
   return threadIds.map((threadId, index) => ({
@@ -55,18 +102,27 @@ function initialOutcomes(batch: BulkBatchItem[]) {
  * The Queue offers a `Map Series` action that steps through every unmapped
  * series in one pass. Each series reuses the shipped {@link QueueMapSeriesDialog}
  * search/preview/approve flow, so no mapping logic is duplicated. The batch is
- * captured once when the dialog opens: a Queue refresh after a successful commit
- * (which re-creates the `threadIds`/`threadTitles` arrays) must not reset
+ * captured once the whole scope has loaded: a Queue refresh after a successful
+ * commit (which re-creates the `threadIds`/`threadTitles` arrays) must not reset
  * progress or selections.
  *
- * A series with no safe matches, an unloadable origin, or an unavailable mapping
- * scope exposes a `Skip / needs review` action on the shared dialog so the reader
- * can reach later series instead of being trapped. Closing mid-run preserves the
- * batch; reopening the action resumes at the first unprocessed series. When every
- * series is terminal the dialog reports per-series results.
+ * A series with no safe matches exposes a `Skip / needs review` action on the
+ * shared dialog so the reader can reach later series instead of being trapped,
+ * and a series that could not be mapped in this pass (an unloadable origin, no
+ * tracked issues, an unavailable mapping scope, or a refused commit) reports a
+ * failure instead so the two are never conflated. Closing mid-run preserves the
+ * batch; reopening the action resumes at the first unprocessed series.
+ *
+ * Every step reports its position in the batch, and a `Finish & show results`
+ * action ends a long run early instead of forcing the reader to process every
+ * series. The results screen then reports each series by name with its own
+ * mapped / skipped / failed outcome plus separate counts (issue #3922).
  */
 export default function QueueBulkMapSeriesDialog({
   isOpen,
+  isScopeLoading = false,
+  scopeSeriesCount = 0,
+  isScopeIncomplete = false,
   threadIds,
   threadTitles,
   onClose,
@@ -77,6 +133,8 @@ export default function QueueBulkMapSeriesDialog({
   const [batch, setBatch] = useState<BulkBatchItem[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [outcomes, setOutcomes] = useState<Record<number, SeriesOutcome>>({})
+  const [failures, setFailures] = useState<Record<number, SeriesMappingFailure>>({})
+  const [confirmedByThread, setConfirmedByThread] = useState<Record<number, number>>({})
   const [confirmedIssueIds, setConfirmedIssueIds] = useState<number[]>([])
 
   // The Queue re-creates these arrays on every render, so hold only the newest
@@ -87,17 +145,41 @@ export default function QueueBulkMapSeriesDialog({
     latestPropsRef.current = { threadIds, threadTitles }
   }, [threadIds, threadTitles])
 
+  /**
+   * Returns the run to the first series that has no outcome yet. Used both when
+   * a saved batch is resumed and when the reader continues after finishing a run
+   * early, so the results screen is never a dead end.
+   */
+  const resumeAtFirstPending = useCallback(() => {
+    const pendingIndex = batch.findIndex((item) => outcomes[item.threadId] === 'pending')
+    if (pendingIndex < 0) {
+      // Every series already has an outcome, so results is the only truthful screen.
+      setPhase('results')
+      return
+    }
+    setCurrentIndex(pendingIndex)
+    setPhase('mapping')
+  }, [batch, outcomes])
+
   const wasOpenRef = useRef(false)
   useEffect(() => {
-    const justOpened = isOpen && !wasOpenRef.current
-    wasOpenRef.current = isOpen
+    if (!isOpen) {
+      // Reopening after a close is a fresh open transition, even when the run
+      // itself is still saved here.
+      wasOpenRef.current = false
+      return
+    }
+    // Capture waits for the whole scope: a batch built from the pages loaded so
+    // far silently omits every unmapped series the reader never scrolled to.
+    if (isScopeLoading) return
+
+    const justOpened = !wasOpenRef.current
+    wasOpenRef.current = true
     if (!justOpened) return
 
     if (phase === 'mapping') {
       // Resume the interrupted run at its first unprocessed series.
-      const pendingIndex = batch.findIndex((item) => outcomes[item.threadId] === 'pending')
-      if (pendingIndex >= 0) setCurrentIndex(pendingIndex)
-      else setPhase('results')
+      resumeAtFirstPending()
       return
     }
 
@@ -108,27 +190,40 @@ export default function QueueBulkMapSeriesDialog({
     )
     setBatch(nextBatch)
     setOutcomes(initialOutcomes(nextBatch))
+    setFailures({})
+    setConfirmedByThread({})
     setConfirmedIssueIds([])
     setCurrentIndex(0)
     setPhase(nextBatch.length > 0 ? 'mapping' : 'results')
-  }, [isOpen, phase, batch, outcomes])
+  }, [isOpen, isScopeLoading, phase, resumeAtFirstPending])
 
   const currentItem = batch[currentIndex]
 
   // A run that is still mid-mapping is a saved batch the reader can resume.
   // Report it so the Queue keeps the bulk action enabled even when its current
   // search would otherwise hide every unmapped series.
-  const hasPendingBatch = phase === 'mapping'
+  const hasPendingBatch = isScopeLoading || phase === 'mapping'
   useEffect(() => {
     onBatchPendingChange?.(hasPendingBatch)
   }, [hasPendingBatch, onBatchPendingChange])
 
   const finishCurrent = useCallback(
-    (outcome: SeriesOutcome, confirmed: number[] = []) => {
+    (outcome: SeriesOutcome, confirmed: number[] = [], failure?: SeriesMappingFailure) => {
       const item = batch[currentIndex]
       if (!item) return
 
       setOutcomes((previous) => ({ ...previous, [item.threadId]: outcome }))
+
+      if (outcome === 'failed' && failure) {
+        setFailures((previous) => ({ ...previous, [item.threadId]: failure }))
+      }
+
+      if (outcome === 'mapped' && confirmed.length > 0) {
+        setConfirmedByThread((previous) => ({
+          ...previous,
+          [item.threadId]: confirmed.length,
+        }))
+      }
 
       let nextConfirmed = confirmedIssueIds
       if (outcome === 'mapped' && confirmed.length > 0) {
@@ -139,10 +234,11 @@ export default function QueueBulkMapSeriesDialog({
       const nextIndex = currentIndex + 1
       if (nextIndex < batch.length) {
         setCurrentIndex(nextIndex)
-      } else {
-        setPhase('results')
-        onMapped?.(nextConfirmed)
+        return
       }
+
+      setPhase('results')
+      onMapped?.(nextConfirmed)
     },
     [batch, confirmedIssueIds, currentIndex, onMapped],
   )
@@ -154,15 +250,31 @@ export default function QueueBulkMapSeriesDialog({
 
   const handleCurrentSkipped = useCallback(() => finishCurrent('skipped'), [finishCurrent])
 
+  const handleCurrentFailed = useCallback(
+    (reason: SeriesMappingFailure) => finishCurrent('failed', [], reason),
+    [finishCurrent],
+  )
+
   const handleCancel = useCallback(() => {
     // Preserve the batch so reopening the bulk action resumes where the reader stopped.
     onClose()
   }, [onClose])
 
+  /**
+   * Ends the run early. Every series still unreviewed stays in the batch, so the
+   * results screen reports it and the reader can continue from there.
+   */
+  const handleFinish = useCallback(() => {
+    setPhase('results')
+    onMapped?.(confirmedIssueIds)
+  }, [confirmedIssueIds, onMapped])
+
   const handleDone = useCallback(() => {
     setPhase('idle')
     setBatch([])
     setOutcomes({})
+    setFailures({})
+    setConfirmedByThread({})
     setConfirmedIssueIds([])
     setCurrentIndex(0)
     onClose()
@@ -171,19 +283,70 @@ export default function QueueBulkMapSeriesDialog({
   const summary = useMemo(() => {
     let mapped = 0
     let skipped = 0
+    let failed = 0
+    let reviewed = 0
     for (const item of batch) {
       const outcome = outcomes[item.threadId]
       if (outcome === 'mapped') mapped += 1
       else if (outcome === 'skipped') skipped += 1
+      else if (outcome === 'failed') failed += 1
+      if (outcome !== undefined && outcome !== 'pending') reviewed += 1
     }
-    return { mapped, skipped, total: batch.length }
+    return {
+      mapped,
+      skipped,
+      failed,
+      reviewed,
+      total: batch.length,
+      remaining: batch.length - reviewed,
+    }
   }, [batch, outcomes])
 
+  const batchProgress = useMemo<SeriesBatchProgress | undefined>(
+    () =>
+      phase === 'mapping' && currentItem
+        ? {
+            position: currentIndex + 1,
+            total: batch.length,
+            mapped: summary.mapped,
+            skipped: summary.skipped,
+            failed: summary.failed,
+          }
+        : undefined,
+    [
+      batch.length,
+      currentIndex,
+      currentItem,
+      phase,
+      summary.failed,
+      summary.mapped,
+      summary.skipped,
+    ],
+  )
+
+  const preparingOpen = isOpen && isScopeLoading
   const mappingOpen = isOpen && phase === 'mapping' && currentItem != null
   const resultsOpen = isOpen && phase === 'results'
 
   return (
     <>
+      <Modal isOpen={preparingOpen} title="Map Series" onClose={handleCancel} size="default">
+        <div className="space-y-3" data-testid="queue-bulk-map-series-preparing">
+          <div className="flex justify-center py-4" aria-label="Loading series">
+            <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+          </div>
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Loading the whole queue so the batch covers every series that still needs a ComicVine
+            match, not only the pages already on screen.
+          </p>
+          {scopeSeriesCount > 0 && (
+            <p className="text-xs text-[var(--theme-text-dim)]">
+              {scopeSeriesCount} series found so far
+            </p>
+          )}
+        </div>
+      </Modal>
+
       {currentItem && (
         <QueueMapSeriesDialog
           isOpen={mappingOpen}
@@ -192,42 +355,128 @@ export default function QueueBulkMapSeriesDialog({
           onClose={handleCancel}
           onMapped={handleCurrentMapped}
           onSkip={handleCurrentSkipped}
+          onFailed={handleCurrentFailed}
+          batchProgress={batchProgress}
+          onFinishBatch={handleFinish}
         />
       )}
 
       <Modal isOpen={resultsOpen} title="Mapping Results" onClose={handleDone} size="large">
         <div className="space-y-4" data-testid="queue-bulk-map-series-results">
-          <p className="text-sm text-[var(--theme-text-muted)]">
-            Reviewed {summary.total} series.
+          <p
+            className="text-sm text-[var(--theme-text-muted)]"
+            data-testid="queue-bulk-map-series-summary"
+          >
+            {summary.total === 0
+              ? 'No series needed mapping.'
+              : summary.remaining === 0
+                ? `Reviewed all ${summary.total} series.`
+                : `Reviewed ${summary.reviewed} of ${summary.total} series.`}
           </p>
 
-          {summary.mapped > 0 && (
-            <div className="rounded-lg border border-[var(--theme-primary-action)]/40 bg-[var(--theme-bg-panel)] p-3">
-              <p className="text-sm text-white">
-                <span className="font-bold text-[var(--theme-primary-action)]">
-                  {summary.mapped}
-                </span>{' '}
-                series mapped with{' '}
-                <span className="font-bold">{confirmedIssueIds.length}</span>{' '}
-                {confirmedIssueIds.length === 1 ? 'issue' : 'issues'} confirmed.
-              </p>
-            </div>
+          {isScopeIncomplete && (
+            <p
+              role="alert"
+              className="rounded-lg border border-[var(--theme-warning)]/40 bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-text-primary)]"
+            >
+              Part of the queue could not be loaded, so this run may not cover every series that
+              needs a ComicVine match. Reopen Map Series once the queue finishes loading to include
+              the rest.
+            </p>
           )}
 
-          {summary.skipped > 0 && (
-            <div className="rounded-lg border border-[var(--theme-warning)]/40 bg-[var(--theme-bg-panel)] p-3">
-              <p className="text-sm text-white">
-                <span className="font-bold text-[var(--theme-warning)]">{summary.skipped}</span>{' '}
-                series left for manual review.
-              </p>
-            </div>
-          )}
+          {summary.total > 0 && (
+            <>
+              <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(
+                  [
+                    ['mapped', summary.mapped],
+                    ['skipped', summary.skipped],
+                    ['failed', summary.failed],
+                    ['pending', summary.remaining],
+                  ] as const
+                ).map(([outcome, count]) => (
+                  <div
+                    key={outcome}
+                    className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
+                    data-testid={`queue-bulk-map-series-count-${outcome}`}
+                    data-count={count}
+                  >
+                    <dt className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
+                      {OUTCOME_LABEL[outcome]}
+                    </dt>
+                    <dd className="text-xl font-black tabular-nums text-[var(--theme-text-primary)]">
+                      {count}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
 
-          {summary.mapped === 0 && summary.skipped === 0 && (
-            <p className="text-sm text-[var(--theme-text-muted)]">No series needed mapping.</p>
+              {confirmedIssueIds.length > 0 && (
+                <p
+                  className="text-sm text-[var(--theme-text-muted)]"
+                  data-testid="queue-bulk-map-series-confirmed"
+                >
+                  {confirmedIssueIds.length}{' '}
+                  {confirmedIssueIds.length === 1 ? 'issue' : 'issues'} confirmed across this run.
+                </p>
+              )}
+
+              {/* Per-series results (#3484/#3922): the aggregate counts above do not
+                  tell a reader which of 44 series actually got mapped. */}
+              <ul
+                className="max-h-72 space-y-2 overflow-y-auto overscroll-contain"
+                data-testid="queue-bulk-map-series-list"
+              >
+                {batch.map((item) => {
+                  const outcome = outcomes[item.threadId] ?? 'pending'
+                  const failure = failures[item.threadId]
+                  const confirmed = confirmedByThread[item.threadId] ?? 0
+                  return (
+                    <li
+                      key={item.threadId}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2"
+                      data-testid="queue-bulk-map-series-result-row"
+                      data-outcome={outcome}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-[var(--theme-text-primary)]">
+                          {item.threadTitle}
+                        </span>
+                        {failure && (
+                          <span className="block truncate text-xs text-[var(--theme-text-dim)]">
+                            {FAILURE_DETAIL[failure]}
+                          </span>
+                        )}
+                        {outcome === 'mapped' && confirmed > 0 && (
+                          <span className="block text-xs text-[var(--theme-text-dim)]">
+                            {confirmed} {confirmed === 1 ? 'issue' : 'issues'} confirmed
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${OUTCOME_ACCENT[outcome]}`}
+                      >
+                        {OUTCOME_LABEL[outcome]}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row">
+            {summary.remaining > 0 && (
+              <button
+                type="button"
+                onClick={resumeAtFirstPending}
+                data-testid="queue-bulk-map-series-continue"
+                className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
+              >
+                Continue mapping
+              </button>
+            )}
             <button
               type="button"
               onClick={handleDone}
