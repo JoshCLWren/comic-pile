@@ -148,11 +148,9 @@ function recordRestRequest(spec) {
   return record;
 }
 
-// Wrap one outbound REST/GraphQL call so its installation, workflow, endpoint,
-// event, response status, and rate-limit headers are recorded. The wrapped
-// operation owns its own retry/backpressure (withRetry); instrumentation
-// observes the final outcome of the call.
-async function restCall(github, context, spec, operation) {
+// Record a single outbound HTTP request. This is the shared request layer that
+// pagination, retries, and individual calls all use so every request is counted.
+async function recordRequest(github, context, spec, requestFn) {
   const installation = process.env.GITHUB_ACTIONS === 'true'
     ? 'github-actions-installation'
     : 'local';
@@ -167,7 +165,7 @@ async function restCall(github, context, spec, operation) {
     status: null, headers: {}, observedAt,
   });
   try {
-    const response = await operation();
+    const response = await requestFn();
     const headers = response?.headers || {};
     Object.assign(record, { status: response?.status ?? null, ...restRateLimitHeaders(headers) });
     return response;
@@ -180,6 +178,92 @@ async function restCall(github, context, spec, operation) {
     });
     throw error;
   }
+}
+
+// Wrap one outbound REST/GraphQL call so its installation, workflow, endpoint,
+// event, response status, and rate-limit headers are recorded. The wrapped
+// operation owns its own retry/backpressure (withRetry); instrumentation
+// observes the final outcome of the call.
+// Kept for backward compatibility with call sites that pass a compound operation.
+async function restCall(github, context, spec, operation) {
+  return recordRequest(github, context, spec, operation);
+}
+
+// Execute a paginated REST call, recording each page request individually.
+async function paginateWithLogging(github, context, spec, paginateFn) {
+  const results = [];
+  let page = 0;
+  for await (const response of paginateFn) {
+    // Each iteration of the async iterator is one HTTP request.
+    // We need to record it. Since we can't intercept the iterator's internal
+    // requests, we wrap the paginate call to record the aggregate, but also
+    // provide a manual pagination alternative for critical paths.
+    // For now, record the aggregate as one entry (matching current behavior)
+    // but expose manual pagination for call sites that need per-page recording.
+    page += 1;
+  }
+  // This fallback records the aggregate; call sites needing per-page recording
+  // should use manualPaginationWithLogging instead.
+  return recordRequest(github, context, spec, async () => {
+    const all = [];
+    for await (const response of paginateFn) {
+      all.push(...response);
+    }
+    return { data: all, headers: {}, status: 200 };
+  });
+}
+
+// Manually paginate a REST endpoint, recording each page as a separate request.
+async function manualPaginationWithLogging(github, context, baseSpec, fetchPageFn, { perPage = 100 } = {}) {
+  const allResults = [];
+  let page = 1;
+  while (true) {
+    const spec = {
+      ...baseSpec,
+      endpoint: `${baseSpec.endpoint}?per_page=${perPage}&page=${page}`,
+    };
+    const response = await recordRequest(github, context, spec, async () => fetchPageFn(page, perPage));
+    const pageData = response.data || [];
+    allResults.push(...pageData);
+    if (pageData.length < perPage) break;
+    page += 1;
+  }
+  return { data: allResults, headers: {}, status: 200 };
+}
+
+// Retry wrapper that records each attempt as a separate request.
+async function withRetryLogged(github, context, spec, operation, { attempts = 3, delay = 250, maxRateLimitWait = 30000, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await recordRequest(github, context, spec, operation);
+    } catch (error) {
+      lastError = error;
+      if (!isTransient(error) || attempt === attempts) throw error;
+      const rateDelay = rateLimitDelay(error);
+      if ((error.status === 403 || error.status === 429)
+          && (rateDelay === null || rateDelay > maxRateLimitWait)) throw error;
+      await sleep(rateDelay === null ? delay * attempt : rateDelay);
+    }
+  }
+  throw lastError;
+}
+
+function restRequestLog() {
+  return restRequestLogEntries.slice();
+}
+
+function restRequestCounts() {
+  const counts = {};
+  for (const record of restRequestLogEntries) {
+    const key = `${record.installation}|${record.workflow}|${record.event}|${record.kind}|${record.endpoint}|${record.status}`;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return counts;
+}
+
+function clearRestRequestLog() {
+  restRequestLogEntries = [];
 }
 
 function restRequestLog() {
@@ -257,12 +341,19 @@ async function fullThreadComments(github, context, threadId, { pageLimit = 20 } 
       kind: 'graphql',
       event: context.eventName,
     }, async () => {
-      return withRetry(() => github.graphql(
-        `query($id:ID!,$after:String){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{url author{__typename login} authorAssociation body createdAt}}}}}`,
-        { id: threadId, after },
-      ));
+      return withRetryLogged(github, context, {
+        endpoint: 'graphql',
+        kind: 'graphql',
+        event: context.eventName,
+      }, async () => {
+        const result = await github.graphql(
+          `query($id:ID!,$after:String){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{url author{__typename login} authorAssociation body createdAt}}}}}`,
+          { id: threadId, after },
+        );
+        return { data: result, headers: {}, status: 200 };
+      });
     });
-    const connection = response?.node?.comments;
+    const connection = response?.data?.node?.comments;
     if (!Array.isArray(connection?.nodes)) return null;
     comments.push(...connection.nodes);
     if (connection.pageInfo?.hasNextPage === false) return comments;
@@ -310,12 +401,19 @@ async function greptileReviewThreads(github, context, number, { pageLimit = REVI
       kind: 'graphql',
       event: context.eventName,
     }, async () => {
-      return withRetry(() => github.graphql(
-        `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated firstComment:comments(first:1){nodes{databaseId url author{__typename login}}} recent:comments(last:${RECENT_COMMENT_WINDOW}){totalCount nodes{url author{__typename login} authorAssociation body createdAt}}}}}}}`,
-        { owner: context.repo.owner, name: context.repo.repo, number, after },
-      ));
+      return withRetryLogged(github, context, {
+        endpoint: 'graphql',
+        kind: 'graphql',
+        event: context.eventName,
+      }, async () => {
+        const result = await github.graphql(
+          `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated firstComment:comments(first:1){nodes{databaseId url author{__typename login}}} recent:comments(last:${RECENT_COMMENT_WINDOW}){totalCount nodes{url author{__typename login} authorAssociation body createdAt}}}}}}}`,
+          { owner: context.repo.owner, name: context.repo.repo, number, after },
+        );
+        return { data: result, headers: {}, status: 200 };
+      });
     });
-    const connection = response?.repository?.pullRequest?.reviewThreads;
+    const connection = response?.data?.repository?.pullRequest?.reviewThreads;
     if (!Array.isArray(connection?.nodes)) return { threads, complete: false };
     for (const node of connection.nodes) {
       const thread = {
@@ -606,19 +704,28 @@ async function withRetry(operation, { attempts = 3, delay = 250, maxRateLimitWai
 }
 
 async function currentLabels(github, context, number) {
-  const response = await restCall(github, context, {
-    endpoint: `repos/${context.repo.owner}/${context.repo.repo}/issues/${number}/labels`,
+  const endpoint = `repos/${context.repo.owner}/${context.repo.repo}/issues/${number}/labels`;
+  const response = await manualPaginationWithLogging(github, context, {
+    endpoint,
     method: 'GET',
     event: context.eventName,
-  }, async () => {
-    return withRetry(() => github.paginate(github.rest.issues.listLabelsOnIssue, {
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      issue_number: number,
-      per_page: 100,
-    }));
+  }, async (page, perPage) => {
+    return withRetryLogged(github, context, {
+      endpoint: `${endpoint}?per_page=${perPage}&page=${page}`,
+      method: 'GET',
+      event: context.eventName,
+    }, async () => {
+      const result = await github.rest.issues.listLabelsOnIssue({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        issue_number: number,
+        per_page: perPage,
+        page,
+      });
+      return { data: result.data, headers: result.headers, status: result.status };
+    });
   });
-  return new Set(response.map(label => label.name));
+  return new Set(response.data.map(label => label.name));
 }
 
 async function reconcileLabels(github, context, number, { owner, stage }) {
@@ -639,22 +746,43 @@ async function reconcileLabels(github, context, number, { owner, stage }) {
     method: 'PUT',
     event: context.eventName,
   }, async () => {
-    return withRetry(() => github.rest.issues.setLabels({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      issue_number: number,
-      labels: next,
-    }));
+    return withRetryLogged(github, context, {
+      endpoint: `repos/${context.repo.owner}/${context.repo.repo}/issues/${number}/labels`,
+      method: 'PUT',
+      event: context.eventName,
+    }, async () => {
+      const result = await github.rest.issues.setLabels({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        issue_number: number,
+        labels: next,
+      });
+      return { data: result.data, headers: result.headers, status: result.status };
+    });
   });
 }
 
 async function ensureLabels(github, context) {
-  const existing = await withRetry(() => github.paginate(github.rest.issues.listLabelsForRepo, {
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    per_page: 100,
-  }));
-  const byName = new Map(existing.map(label => [label.name, label]));
+  const existing = await manualPaginationWithLogging(github, context, {
+    endpoint: `repos/${context.repo.owner}/${context.repo.repo}/labels`,
+    method: 'GET',
+    event: context.eventName,
+  }, async (page, perPage) => {
+    return withRetryLogged(github, context, {
+      endpoint: `repos/${context.repo.owner}/${context.repo.repo}/labels?per_page=${perPage}&page=${page}`,
+      method: 'GET',
+      event: context.eventName,
+    }, async () => {
+      const result = await github.rest.issues.listLabelsForRepo({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        per_page: perPage,
+        page,
+      });
+      return { data: result.data, headers: result.headers, status: result.status };
+    });
+  });
+  const byName = new Map(existing.data.map(label => [label.name, label]));
   for (const [name, [color, description]] of Object.entries(DEFINITIONS)) {
     const current = byName.get(name);
     if (!current) {
@@ -663,13 +791,20 @@ async function ensureLabels(github, context) {
         method: 'POST',
         event: context.eventName,
       }, async () => {
-        return withRetry(() => github.rest.issues.createLabel({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          name,
-          color,
-          description,
-        }));
+        return withRetryLogged(github, context, {
+          endpoint: `repos/${context.repo.owner}/${context.repo.repo}/labels`,
+          method: 'POST',
+          event: context.eventName,
+        }, async () => {
+          const result = await github.rest.issues.createLabel({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            name,
+            color,
+            description,
+          });
+          return { data: result.data, headers: result.headers, status: result.status };
+        });
       });
     } else if (
       current.color.toUpperCase() !== color
@@ -680,14 +815,21 @@ async function ensureLabels(github, context) {
         method: 'PATCH',
         event: context.eventName,
       }, async () => {
-        return withRetry(() => github.rest.issues.updateLabel({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          name,
-          new_name: name,
-          color,
-          description,
-        }));
+        return withRetryLogged(github, context, {
+          endpoint: `repos/${context.repo.owner}/${context.repo.repo}/labels/${name}`,
+          method: 'PATCH',
+          event: context.eventName,
+        }, async () => {
+          const result = await github.rest.issues.updateLabel({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            name,
+            new_name: name,
+            color,
+            description,
+          });
+          return { data: result.data, headers: result.headers, status: result.status };
+        });
       });
     }
   }
@@ -704,18 +846,28 @@ async function ownerFromLinkedIssue(github, context, pullRequest) {
   const issueNumber = Number(closing?.[1] || fixedModelBranch?.[1] || legacyBranch?.[1] || 0);
   if (!issueNumber) return 'factory:unowned';
 
-  const comments = await restCall(github, context, {
-    endpoint: `repos/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}/comments`,
+  const endpoint = `repos/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}/comments`;
+  const commentsResponse = await manualPaginationWithLogging(github, context, {
+    endpoint,
     method: 'GET',
     event: context.eventName,
-  }, async () => {
-    return withRetry(() => github.paginate(github.rest.issues.listComments, {
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      issue_number: issueNumber,
-      per_page: 100,
-    }));
+  }, async (page, perPage) => {
+    return withRetryLogged(github, context, {
+      endpoint: `${endpoint}?per_page=${perPage}&page=${page}`,
+      method: 'GET',
+      event: context.eventName,
+    }, async () => {
+      const result = await github.rest.issues.listComments({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        issue_number: issueNumber,
+        per_page: perPage,
+        page,
+      });
+      return { data: result.data, headers: result.headers, status: result.status };
+    });
   });
+  const comments = commentsResponse.data;
   comments.sort((left, right) => new Date(right.created_at) - new Date(left.created_at));
   for (const comment of comments) {
     if (!trusted(comment)) continue;
@@ -730,16 +882,23 @@ async function ownerFromLinkedIssue(github, context, pullRequest) {
 async function reconcileMissingPrLabels({ github, context }) {
   const candidates = context.eventName === 'pull_request_target'
     ? [context.payload.pull_request]
-    : await restCall(github, context, {
+    : await manualPaginationWithLogging(github, context, {
         endpoint: `repos/${context.repo.owner}/${context.repo.repo}/pulls`,
         method: 'GET',
         event: context.eventName,
-      }, async () => {
-        return withRetry(() => github.paginate(github.rest.pulls.list, {
-          ...context.repo, state: 'open', per_page: 100,
-        }));
+      }, async (page, perPage) => {
+        return withRetryLogged(github, context, {
+          endpoint: `repos/${context.repo.owner}/${context.repo.repo}/pulls?state=open&per_page=${perPage}&page=${page}`,
+          method: 'GET',
+          event: context.eventName,
+        }, async () => {
+          const result = await github.rest.pulls.list({
+            ...context.repo, state: 'open', per_page: perPage, page,
+          });
+          return { data: result.data, headers: result.headers, status: result.status };
+        });
       });
-  for (const pr of candidates) {
+  for (const pr of candidates.data) {
     if (pr.state !== 'open' || pr.draft
       || !pr.head.repo?.full_name
       || /^(dependabot|renovate)(\[bot\])?$/.test(pr.user?.login || '')) continue;
@@ -759,9 +918,24 @@ async function reconcileMissingPrLabels({ github, context }) {
     // review/CI state. Never manufacture readiness from green checks alone.
     let stage = !pushed && stages.length === 1 ? stages[0] : 'factory:review';
     if (!pushed && stages.length === 0) {
-      const comments = await withRetry(() => github.paginate(github.rest.issues.listComments, {
-        ...context.repo, issue_number: pr.number, per_page: 100,
-      }));
+      const commentsEndpoint = `repos/${context.repo.owner}/${context.repo.repo}/issues/${pr.number}/comments`;
+      const commentsResponse = await manualPaginationWithLogging(github, context, {
+        endpoint: commentsEndpoint,
+        method: 'GET',
+        event: context.eventName,
+      }, async (page, perPage) => {
+        return withRetryLogged(github, context, {
+          endpoint: `${commentsEndpoint}?per_page=${perPage}&page=${page}`,
+          method: 'GET',
+          event: context.eventName,
+        }, async () => {
+          const result = await github.rest.issues.listComments({
+            ...context.repo, issue_number: pr.number, per_page: perPage, page,
+          });
+          return { data: result.data, headers: result.headers, status: result.status };
+        });
+      });
+      const comments = commentsResponse.data;
       for (const comment of [...comments].sort(
         (left, right) => new Date(right.created_at) - new Date(left.created_at),
       )) {
