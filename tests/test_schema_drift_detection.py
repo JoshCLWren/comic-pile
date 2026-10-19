@@ -74,12 +74,12 @@ def test_has_schema_drift_returns_false_for_matching_schema(
     assert test_conftest._has_schema_drift(object()) is False
 
 
-def test_has_schema_drift_detects_missing_issue_position_index(
+def test_has_schema_drift_detects_missing_issue_thread_id_index(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Missing indexes should trigger schema recreation."""
     fake_inspector = build_fake_inspector()
-    fake_inspector.indexes["issues"].remove("ix_issue_thread_position")
+    fake_inspector.indexes["issues"].remove("ix_issue_thread_id")
 
     def fake_inspect(_conn: object) -> FakeInspector:
         return fake_inspector

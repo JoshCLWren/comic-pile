@@ -79,11 +79,12 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
         return index_names
 
     # With sequential scans and bitmap scans disabled the planner must reach an
-    # index to answer a thread-scoped lookup. The position index (thread_id, position)
-    # is the index that serves both the WHERE and ORDER BY for this query pattern.
-    # Verify it appears in the plan; if the planner chooses a different thread-scoped
-    # index, the test will fail and alert us to investigate rather than silently
-    # accepting a plan that cannot guarantee ordered results without a sort.
+    # index to answer a thread-scoped lookup. The position ordering is now
+    # served by the uq_issue_thread_position unique constraint index, which is
+    # the retained index covering (thread_id, position). Verify it appears in
+    # the plan; if the planner chooses a different thread-scoped index, the test
+    # will fail and alert us to investigate rather than silently accepting a
+    # plan that cannot guarantee ordered results without a sort.
     index_names = collect_index_names(plan_nodes)
     assert index_names, (
         "Plan used no index after sequential and bitmap scans were disabled; "
@@ -91,23 +92,27 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
     )
     assert any(
         name in index_names
-        for name in ("ix_issue_thread_position", "uq_issue_thread_position")
+        for name in ("uq_issue_thread_position", "ix_issue_thread_id")
     ), (
         f"No position index used in plan; indexes found: {index_names}; "
         f"plan: {plan_nodes}"
     )
 
-    # Also verify the index actually exists
+    # Also verify the position index actually exists. The redundant
+    # ix_issue_thread_position index was dropped; the uq_issue_thread_position
+    # unique constraint now covers (thread_id, position).
     index_check = text("""
         SELECT 1 FROM pg_indexes
         WHERE tablename = 'issues'
-        AND indexname = 'ix_issue_thread_position'
+        AND indexname = 'uq_issue_thread_position'
     """)
 
     index_result = await async_db_committed.execute(index_check)
     index_exists = index_result.scalar()
 
-    assert index_exists is not None, "Index ix_issue_thread_position does not exist in database"
+    assert index_exists is not None, (
+        "Index uq_issue_thread_position does not exist in database"
+    )
 
     # The real query must return the issues in position order regardless of which
     # index the planner chose, so exercise the actual lookup instead of trusting

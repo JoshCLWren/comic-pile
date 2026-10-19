@@ -1,7 +1,7 @@
 """Remove redundant indexes covered by unique constraints.
 
 Revision ID: c32320000001
-Revises: d3a1c2b4e5f6
+Revises: a613b7c9d201
 Create Date: 2026-10-19 00:00:00.000000
 
 Removes redundant indexes that are already covered by unique constraints:
@@ -19,7 +19,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c32320000001"
-down_revision: str | Sequence[str] | None = "d3a1c2b4e5f6"
+down_revision: str | Sequence[str] | None = "a613b7c9d201"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
