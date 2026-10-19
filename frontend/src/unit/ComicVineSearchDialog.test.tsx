@@ -134,6 +134,9 @@ const defaultProps = (overrides = {}) => ({
   ...overrides,
 })
 
+/** The dialog debounces keystrokes before it asks the provider; tests must outlast it. */
+const SEARCH_DEBOUNCE_MS = 350
+
 describe('ComicVineSearchDialog mode branching', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -1520,6 +1523,38 @@ describe('ComicVineSearchDialog single-state loading (#3448)', () => {
     expect(
       screen.getByPlaceholderText('Search series title or paste a ComicVine URL'),
     ).toBeInTheDocument()
+  })
+
+  it('cancels a still-debouncing query when the reader closes the dialog', async () => {
+    const abandoned = deferred<SeriesResponse>()
+    searchSeriesSpy.mockImplementationOnce(() => abandoned.promise)
+
+    const { rerender } = render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+
+    // Dismissing inside the debounce window must cancel the armed timer instead of leaving
+    // it to ask the provider for a term the reader already walked away from (#3872).
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    rerender(<ComicVineSearchDialog {...defaultProps({ threadTitle: '', isOpen: false })} />)
+
+    // Outlast the debounce window the abandoned keystroke had already armed.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, SEARCH_DEBOUNCE_MS + 150))
+    })
+    await act(async () => {
+      abandoned.resolve({
+        query: 'Stormwatch',
+        results: [{ ...mockSeries, comicvine_volume_id: 31, name: 'Abandoned Series' }],
+        total_available: 1,
+        offset: 0,
+        limit: 10,
+        has_more: false,
+        next_offset: null,
+      })
+    })
+
+    expect(searchSeriesSpy).not.toHaveBeenCalled()
+    expect(screen.queryByText('Abandoned Series')).not.toBeInTheDocument()
   })
 })
 

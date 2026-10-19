@@ -10,6 +10,7 @@ import type {
 import ImageWithLoading from './ImageWithLoading'
 import SiblingSeriesMappingOffer from './SiblingSeriesMappingOffer'
 import { optimizedImageSrcSet, optimizedImageUrl } from '../services/imageDelivery'
+import { LatestRequestGuard, type LoadPhase, type RequestTicket } from '../utils/latestRequest'
 
 interface ComicVineSearchDialogProps {
   isOpen: boolean
@@ -30,9 +31,9 @@ type DialogStep = 'search' | 'select-issue' | 'confirm' | 'siblings'
  * The search step and the issue step each own exactly one of these phases at a time, so the
  * screen can be in exactly one of loading / results / empty / error. A phase is resolved only
  * by the request that is still current, which keeps out-of-order responses from flipping the
- * screen back to a state the reader already left.
+ * screen back to a state the reader already left. The type itself is shared with the Queue
+ * "Add from ComicVine" dialog so both surfaces cannot drift apart.
  */
-type LoadPhase = 'idle' | 'loading' | 'ready' | 'error'
 
 /** The provider volume a confirmed correction can license sibling scope for (#3159). */
 interface SiblingScope {
@@ -140,33 +141,40 @@ export default function ComicVineSearchDialog({
   const [siblingScope, setSiblingScope] = useState<SiblingScope | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const asyncRef = useRef(0)
+  const requestsRef = useRef(new LatestRequestGuard())
   const searchingRef = useRef(false)
 
   const searchLoading = searchPhase === 'loading'
   const issuesLoading = issuesPhase === 'loading'
 
   useEffect(() => {
+    const requests = requestsRef.current
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current)
         debounceRef.current = null
       }
+      // Closing the dialog abandons every outstanding request, so a late response cannot
+      // repaint a component the reader has already dismissed (#3448).
+      requests.abandon()
     }
   }, [])
 
   useEffect(() => {
+    // Dismissing the dialog cancels the debounce too, so a dismissed surface stops asking
+    // the provider for a term the reader already walked away from. The Queue "Add from
+    // ComicVine" dialog cancels on the same transition, so the two cannot drift (#3872).
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
     if (isOpen && threadTitle) {
       setQuery(stripParenthesizedYears(threadTitle))
     }
     if (isOpen) {
       // Resetting the dialog context abandons whatever request is in flight, so its late
       // response cannot repaint a dialog that has already moved on to different state (#3448).
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-        debounceRef.current = null
-      }
-      asyncRef.current += 1
+      requestsRef.current.abandon()
       searchingRef.current = false
       setStep('search')
       setSeriesResults([])
@@ -186,7 +194,7 @@ export default function ComicVineSearchDialog({
 
   const handlePlainSearch = useCallback(
     async (searchQuery: string, offset = 0, append = false) => {
-      const requestId = ++asyncRef.current
+      const requestId = requestsRef.current.begin()
       searchingRef.current = true
       setSearchPhase('loading')
       setError(null)
@@ -196,20 +204,20 @@ export default function ComicVineSearchDialog({
       }
       try {
         const response = await comicVineApi.searchSeries(searchQuery, SEARCH_PAGE_SIZE, offset)
-        if (requestId !== asyncRef.current) return
+        if (!requestsRef.current.isCurrent(requestId)) return
         setSeriesResults((previous) =>
           append ? mergeSeriesResults(previous, response.results) : response.results,
         )
         setPagination(paginationFromResponse(response))
         setSearchPhase('ready')
       } catch {
-        if (requestId !== asyncRef.current) return
+        if (!requestsRef.current.isCurrent(requestId)) return
         setError(SEARCH_ERROR_MESSAGE)
         setSeriesResults([])
         setPagination(EMPTY_PAGINATION)
         setSearchPhase('error')
       } finally {
-        if (requestId === asyncRef.current) {
+        if (requestsRef.current.isCurrent(requestId)) {
           searchingRef.current = false
         }
       }
@@ -283,9 +291,12 @@ export default function ComicVineSearchDialog({
 
   const handleSearch = useCallback(
     async (searchQuery: string, offset = 0, append = false) => {
-      let requestId = 0
+      // The guard issues no ticket until begin(), so the initial 0 is never current and a
+      // response can only be applied once this search owns the surface.
+      let requestId: RequestTicket = 0
       try {
         if (!searchQuery.trim()) {
+          requestsRef.current.abandon()
           setSeriesResults([])
           setPagination(EMPTY_PAGINATION)
           setSearchPhase('idle')
@@ -293,13 +304,23 @@ export default function ComicVineSearchDialog({
           searchingRef.current = false
           return
         }
-        requestId = ++asyncRef.current
+        requestId = requestsRef.current.begin()
         searchingRef.current = true
+        if (!append) {
+          // A first page owns the whole list, so it replaces it outright. Enter and Retry both
+          // reach this handler directly, and neither may leave the previous query's rows under
+          // the new one's spinner (#3448).
+          setSeriesResults([])
+          setPagination(EMPTY_PAGINATION)
+        }
+        // Enter and Retry reach here directly (bypassing handleQueryChange's debounce), so we
+        // must set the loading phase here so the spinner shows while ComicVine answers.
+        setSearchPhase('loading')
         setError(null)
         const trimmed = searchQuery.trim()
         if (isComicVineUrlLike(trimmed)) {
           const resolved = await comicVineApi.resolveIdentity(trimmed)
-          if (requestId !== asyncRef.current) {
+          if (!requestsRef.current.isCurrent(requestId)) {
             searchingRef.current = false
             return
           }
@@ -308,7 +329,7 @@ export default function ComicVineSearchDialog({
           return
         }
         const response = await comicVineApi.searchSeries(trimmed, SEARCH_PAGE_SIZE, offset)
-        if (requestId !== asyncRef.current) {
+        if (!requestsRef.current.isCurrent(requestId)) {
           searchingRef.current = false
           return
         }
@@ -322,7 +343,7 @@ export default function ComicVineSearchDialog({
         setPagination(paginationFromResponse(response))
         setSearchPhase('ready')
       } catch {
-        if (requestId !== asyncRef.current) {
+        if (!requestsRef.current.isCurrent(requestId)) {
           searchingRef.current = false
           return
         }
@@ -331,7 +352,7 @@ export default function ComicVineSearchDialog({
         setPagination(EMPTY_PAGINATION)
         setSearchPhase('error')
       } finally {
-        if (requestId !== 0 && requestId === asyncRef.current) {
+        if (requestsRef.current.isCurrent(requestId)) {
           searchingRef.current = false
         }
       }
@@ -357,7 +378,7 @@ export default function ComicVineSearchDialog({
       // fires, so a late response can never repaint results the reader has already left
       // behind. Clearing the field counts as a change: an in-flight search for the abandoned
       // term must not repopulate results under an empty query (#3448).
-      asyncRef.current += 1
+      requestsRef.current.abandon()
       searchingRef.current = false
       if (!value.trim()) {
         setSeriesResults([])
@@ -393,10 +414,10 @@ export default function ComicVineSearchDialog({
       // from being stuck on its loading phase when the reader navigates back.
       searchingRef.current = false
       setSearchPhase((phase) => (phase === 'loading' ? 'idle' : phase))
-      const requestId = ++asyncRef.current
+      const requestId = requestsRef.current.begin()
       try {
         const response = await comicVineApi.getSeriesIssues(series.comicvine_volume_id, series.name)
-        if (requestId !== asyncRef.current) return
+        if (!requestsRef.current.isCurrent(requestId)) return
         setIssueCandidates(response.issues)
         setIssuesPhase('ready')
         if (issueNumber) {
@@ -410,7 +431,7 @@ export default function ComicVineSearchDialog({
           }
         }
       } catch {
-        if (requestId !== asyncRef.current) return
+        if (!requestsRef.current.isCurrent(requestId)) return
         setError(ISSUES_ERROR_MESSAGE)
         setIssueCandidates([])
         setIssuesPhase('error')
@@ -623,7 +644,7 @@ export default function ComicVineSearchDialog({
                   // Leaving the issue step abandons its outstanding request, so a late success
                   // cannot pull the reader onto the confirm step and a late failure cannot
                   // follow them back onto the search screen (#3448).
-                  asyncRef.current += 1
+                  requestsRef.current.abandon()
                   searchingRef.current = false
                   setStep('search')
                   setSelectedSeries(null)

@@ -29,10 +29,10 @@ export default function LoginPage() {
       setError('Password is required')
       return false
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters')
-      return false
-    }
+    // Sign-in is deliberately not minimum-gated: the API's UserLoginRequest
+    // accepts any non-empty password so accounts created before the register
+    // minimum (#3103) can still authenticate. The six-character minimum lives
+    // only on the paths that set a password (register, reset). See #3165.
     return true
   }
 
