@@ -13,6 +13,39 @@ function normalizedPath(value: string): string {
 }
 
 /**
+ * Extract a reader-friendly source name from the full source path.
+ *
+ * The source path may include directories and the .cbl extension.
+ * This function strips those to show just the name.
+ *
+ * @param sourcePath - The full CBL source path.
+ * @returns A reader-friendly name without the .cbl extension.
+ *
+ * @example
+ * displayCblSourceName('Marvel/Events/CBH/[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH).cbl')
+ * // returns 'The New Marvel Ultimate Universe 2.0 (CBH)'
+ */
+export function displayCblSourceName(sourcePath: string): string | null {
+  const normalized = normalizedPath(sourcePath)
+  if (!normalized) return null
+
+  // Remove the .cbl extension if present
+  let name = normalized.replace(/\.cbl$/, '')
+
+  // If the path starts with a directory and the name is just the filename
+  // (after stripping .cbl), extract just the filename
+  const lastSlashIndex = name.lastIndexOf('/')
+  if (lastSlashIndex >= 0) {
+    name = name.slice(lastSlashIndex + 1)
+  }
+
+  // Return null if nothing remains after stripping
+  if (!name) return null
+
+  return name
+}
+
+/**
  * Return whether a stored source location looks like a local filesystem path.
  *
  * @param value - Repository or source path from the CBL API.

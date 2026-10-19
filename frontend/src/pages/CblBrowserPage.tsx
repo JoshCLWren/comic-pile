@@ -14,7 +14,7 @@ import {
 } from '../services/api-cbl-sources'
 import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
-import { displayCblRepository, displayCblSourcePath } from '../utils/cblSourceDisplay'
+import { displayCblRepository, displayCblSourceName, displayCblSourcePath } from '../utils/cblSourceDisplay'
 import { isObject, isString } from '../utils/runtimeChecks'
 import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
 
@@ -349,7 +349,7 @@ export default function CblBrowserPage() {
                 } hover:bg-white/5`}
               >
                 <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
-                  {source.name}
+                  {displayCblSourceName(source.source_path) ?? source.name}
                 </span>
                 {publicPath && (
                   <span className="mt-1 block text-xs text-[var(--theme-text-muted)]">
