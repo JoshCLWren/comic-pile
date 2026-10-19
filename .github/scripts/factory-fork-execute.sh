@@ -37,6 +37,10 @@ fi
 # These checks and normal commit hooks intentionally execute only in this VM.
 source "$TRUSTED_FORK_DIRECTORY/factory-fast-checks.sh"
 factory_run_fast_checks "$EXPECTED_HEAD" "$RUNNER_TEMP/fork-fast-checks.log"
+# The trusted pre-commit hook always runs scripts/lint.sh, which needs the
+# Python toolchain regardless of which files changed. Fast checks only run
+# `uv sync` for Python diffs, so install it here before committing.
+factory_ensure_commit_hook_toolchain
 bash "$TRUSTED_FORK_DIRECTORY/install-git-hooks.sh"
 git config user.name "ComicPile Factory ${FACTORY_WORKER}"
 git config user.email "factory-${FACTORY_WORKER}@users.noreply.github.com"
