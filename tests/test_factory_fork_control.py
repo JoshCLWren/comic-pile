@@ -60,6 +60,9 @@ def test_static_review_has_no_repository_credentials_or_tools(tmp_path: Path) ->
 
 def test_execution_rejects_writer_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """Fail before fetching source or metadata if a privileged token reaches execution."""
+    # Simulate the real secretless main workflow so only the credential fence can fire.
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_WORKFLOW_REF", f"{control.REPO}/{control.EXECUTION_PATH}@refs/heads/main")
     monkeypatch.setenv("PR_REBASE_TOKEN", "poison")
     with pytest.raises(ValueError, match="privileged credentials"):
         control._verify_execution(3897, "a" * 40, "46", "b" * 32)
