@@ -232,7 +232,7 @@ export default function QueueBulkMapSeriesDialog({
               type="button"
               onClick={handleDone}
               data-testid="queue-bulk-map-series-done"
-              className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition"
+              className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-950 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition"
             >
               Done
             </button>

@@ -153,7 +153,7 @@ export default function QueueMapSeriesDialog({
     () => () => {
       if (queryDebounceRef.current) clearTimeout(queryDebounceRef.current)
     },
-    [],
+    [threadId, isOpen],
   )
 
   const handleQueryChange = useCallback((value: string) => {
@@ -323,7 +323,7 @@ export default function QueueMapSeriesDialog({
                 role="alert"
                 className="rounded-lg bg-rose-900/30 border border-rose-700/40 p-3 text-sm text-rose-200"
               >
-                Failed to search ComicVine. Please try again.
+                {searchError?.message || 'Failed to search ComicVine. Please try again.'}
               </p>
             )}
             {originQuery.isError && (
@@ -360,7 +360,7 @@ export default function QueueMapSeriesDialog({
                       <button
                         type="button"
                         onClick={() => handleSelectSeries(series)}
-                        disabled={!originReady}
+                        disabled={!originReady || isSearchPlaceholder}
                         data-testid="queue-map-series-result"
                         aria-label={meta ? `${series.name} - ${meta}` : series.name}
                         className="w-full text-left rounded-xl bg-stone-800/50 border border-stone-700/50 p-3 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
