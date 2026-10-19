@@ -150,6 +150,7 @@ export default function QueueBulkMapSeriesDialog({
   const [failures, setFailures] = useState<Record<number, SeriesMappingFailure>>({})
   const [confirmedByThread, setConfirmedByThread] = useState<Record<number, number>>({})
   const [confirmedIssueIds, setConfirmedIssueIds] = useState<number[]>([])
+  const [batchIncomplete, setBatchIncomplete] = useState(false)
 
   // The Queue re-creates these arrays on every render, so hold only the newest
   // values in a ref. Run initialization reads them when the dialog opens without
@@ -210,6 +211,7 @@ export default function QueueBulkMapSeriesDialog({
     setConfirmedByThread({})
     setConfirmedIssueIds([])
     setCurrentIndex(0)
+    setBatchIncomplete(isScopeIncomplete)
     setPhase(nextBatch.length > 0 ? 'mapping' : 'results')
     // The batch is fixed from here on: a queue refresh after a saved mapping
     // drops the loaded pages, and re-draining would reopen the preparing dialog
@@ -308,6 +310,7 @@ export default function QueueBulkMapSeriesDialog({
     setConfirmedByThread({})
     setConfirmedIssueIds([])
     setCurrentIndex(0)
+    setBatchIncomplete(false)
     onClose()
   }, [onClose])
 
@@ -405,7 +408,7 @@ export default function QueueBulkMapSeriesDialog({
                 : `Reviewed ${summary.reviewed} of ${summary.total} series.`}
           </p>
 
-          {isScopeIncomplete && (
+          {batchIncomplete && (
             <p
               role="alert"
               className="rounded-lg border border-[var(--theme-warning)]/40 bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-text-primary)]"
