@@ -23,6 +23,7 @@ export type QueueSortBy = 'position' | 'alphabetical' | 'created'
 export function useQueueFilters(
   threads: ThreadListItem[] | null | undefined,
   _sortBy: QueueSortBy,
+  searchQuery: string = '',
 ) {
   const activeThreads = useMemo(
     () => threads?.filter((thread) => thread.status === 'active') ?? [],
@@ -37,7 +38,16 @@ export function useQueueFilters(
   // The active list is the displayed order: filtering preserves the server's
   // cursor order, and no client comparator may reshuffle it across pages.
   const sortedThreads = activeThreads
-  const filteredThreads = sortedThreads
+  const filteredThreads = useMemo(
+    () => {
+      if (!searchQuery || !searchQuery.trim()) return sortedThreads
+      const normalizedSearch = searchQuery.trim().toLowerCase()
+      return sortedThreads.filter((thread) =>
+        thread.title.toLowerCase().includes(normalizedSearch),
+      )
+    },
+    [sortedThreads, searchQuery],
+  )
 
   return {
     activeThreads,

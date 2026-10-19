@@ -2,11 +2,19 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
-const { importSeriesSpy, searchSeriesSpy, importStatusSpy, invalidateSpy, toastSpy } = vi.hoisted(() => ({
+const {
+  importSeriesSpy,
+  searchSeriesSpy,
+  importStatusSpy,
+  invalidateSpy,
+  invalidateImportStatusSpy,
+  toastSpy,
+} = vi.hoisted(() => ({
   importSeriesSpy: vi.fn(),
   searchSeriesSpy: vi.fn(),
   importStatusSpy: vi.fn(),
   invalidateSpy: vi.fn().mockResolvedValue(undefined),
+  invalidateImportStatusSpy: vi.fn().mockResolvedValue(undefined),
   toastSpy: {
     toasts: [],
     showToast: vi.fn(() => 'toast-id'),
@@ -24,6 +32,7 @@ vi.mock('../services/api-comicvine', () => ({
 
 vi.mock('../query/cacheEffects', () => ({
   invalidateAfterQueueMutation: invalidateSpy,
+  invalidateComicVineImportStatus: invalidateImportStatusSpy,
 }))
 
 vi.mock('../contexts/useToast', () => ({
@@ -524,7 +533,10 @@ describe('AddSeriesFromComicVineDialog confirm and add', () => {
     expect(screen.getByRole('button', { name: 'Add Series to ComicPile' })).toBeEnabled()
     expect(onClose).not.toHaveBeenCalled()
     expect(onAdded).not.toHaveBeenCalled()
-    expect(importStatusSpy).not.toHaveBeenCalled()
+    // The confirm copy lookup ran once when this series was selected; a bounded
+    // server failure stays definitive, so it must not trigger a second status
+    // re-check that could resurrect an ambiguous outcome the server answered.
+    expect(importStatusSpy).toHaveBeenCalledTimes(1)
   })
 
   it('falls back to a generic message when the import failure is not an Error', async () => {
@@ -614,6 +626,129 @@ describe('AddSeriesFromComicVineDialog confirm and add', () => {
         'success',
       ),
     )
+  })
+
+  /**
+   * Regression case for issue #3854: re-adding an existing volume adopts zero
+   * issues, which must not read as "Added 0 more issues" or "already up to
+   * date" when per-issue outcomes say otherwise.
+   */
+  it('reports a fully reused retry as already up to date instead of added-zero', async () => {
+    importSeriesSpy.mockResolvedValue({
+      thread_id: 501,
+      series_name: 'Stormwatch',
+      comicvine_volume_id: 42,
+      total_issues_in_series: 12,
+      issues_adopted: 0,
+      issues_skipped: 12,
+      issues_conflict: 0,
+      issue_results: [],
+      reading_order_id: null,
+      position: null,
+      total_items: null,
+      thread_created: false,
+    })
+
+    render(<AddSeriesFromComicVineDialog {...defaultProps()} />)
+    await selectStormwatch()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Series to ComicPile' }))
+
+    await waitFor(() =>
+      expect(toastSpy.showToast).toHaveBeenCalledWith(
+        '"Stormwatch" is already up to date',
+        'success',
+      ),
+    )
+  })
+
+  it('reports zero-added retries that only hit conflicts as conflicted, not up to date', async () => {
+    importSeriesSpy.mockResolvedValue({
+      thread_id: 501,
+      series_name: 'Stormwatch',
+      comicvine_volume_id: 42,
+      total_issues_in_series: 12,
+      issues_adopted: 0,
+      issues_skipped: 10,
+      issues_conflict: 2,
+      issue_results: [
+        { comicvine_issue_id: 301, issue_number: '7', issue_id: null, outcome: 'conflict', hydration: 'not_attempted', conflict_detail: 'Another series claims this issue' },
+        { comicvine_issue_id: 302, issue_number: '8', issue_id: null, outcome: 'conflict', hydration: 'not_attempted', conflict_detail: 'Another series claims this issue' },
+      ],
+      reading_order_id: null,
+      position: null,
+      total_items: null,
+      thread_created: false,
+    })
+
+    render(<AddSeriesFromComicVineDialog {...defaultProps()} />)
+    await selectStormwatch()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Series to ComicPile' }))
+
+    await waitFor(() =>
+      expect(toastSpy.showToast).toHaveBeenCalledWith(
+        '"Stormwatch" imported with 2 conflicts - check your queue for details',
+        'success',
+      ),
+    )
+  })
+
+  it('reports zero-added retries with import failures as incomplete, not up to date', async () => {
+    importSeriesSpy.mockResolvedValue({
+      thread_id: 501,
+      series_name: 'Stormwatch',
+      comicvine_volume_id: 42,
+      total_issues_in_series: 12,
+      issues_adopted: 0,
+      issues_skipped: 11,
+      issues_conflict: 0,
+      issue_results: [
+        { comicvine_issue_id: 305, issue_number: '11', issue_id: null, outcome: 'error', hydration: 'not_attempted', conflict_detail: 'Provider fetch failed' },
+      ],
+      reading_order_id: null,
+      position: null,
+      total_items: null,
+      thread_created: false,
+    })
+
+    render(<AddSeriesFromComicVineDialog {...defaultProps()} />)
+    await selectStormwatch()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Series to ComicPile' }))
+
+    await waitFor(() =>
+      expect(toastSpy.showToast).toHaveBeenCalledWith(
+        '"Stormwatch" imported but some issues couldn\'t be added - check your queue for details',
+        'success',
+      ),
+    )
+  })
+
+  it('does not promise a new series when the volume is already linked', async () => {
+    importStatusSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      imported: true,
+      thread_id: 501,
+      series_name: 'Stormwatch',
+      issue_count: 12,
+    })
+
+    render(<AddSeriesFromComicVineDialog {...defaultProps()} />)
+    await selectStormwatch()
+
+    expect(importStatusSpy).toHaveBeenCalledWith(42)
+    await waitFor(() =>
+      expect(screen.getByTestId('add-series-confirm-card')).toHaveTextContent(
+        '"Stormwatch" is already in your queue',
+      ),
+    )
+    expect(screen.getByTestId('add-series-confirm-card')).toContainHTML(
+      'only missing issues are added to the existing series',
+    )
+    expect(
+      screen.queryByText(/This will create a new series in your queue/),
+    ).not.toBeInTheDocument()
   })
 })
 
