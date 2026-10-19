@@ -9,6 +9,11 @@ const {
   trusted,
   performedViaUntrustedApp,
   TRUSTED_APP_SLUGS,
+  restCall,
+  restRequestLog,
+  restRequestCounts,
+  clearRestRequestLog,
+  currentLabels,
 } = reconcile._test;
 
 function contextFor(eventName, payload) {
@@ -1009,4 +1014,94 @@ test('pull_request_review trust: github-actions[bot] is trusted, worker App is n
   assert.equal(performedViaUntrustedApp(actionsReview), false);
   assert.equal(trusted(workerReview), false);
   assert.equal(performedViaUntrustedApp(workerReview), true);
+});
+
+test('request log records, reads, counts, and clears requests', async () => {
+  clearRestRequestLog();
+  assert.deepEqual(restRequestLog(), []);
+  assert.deepEqual(restRequestCounts(), {});
+  const context = contextFor('workflow_dispatch', {});
+  const github = {
+    rest: {
+      issues: {
+        listComments: async () => ({ data: [], headers: {}, status: 200 }),
+      },
+    },
+  };
+  await restCall(github, context, {
+    endpoint: 'repos/o/r/issues/1/comments',
+    method: 'GET',
+    event: 'workflow_dispatch',
+  }, async () => github.rest.issues.listComments({ owner: 'o', repo: 'r', issue_number: 1 }));
+  assert.equal(restRequestLog().length, 1);
+  const record = restRequestLog()[0];
+  const key = `${record.installation}|${record.workflow}|${record.event}|${record.kind}|${record.endpoint}|${record.status}`;
+  assert.equal(restRequestCounts()[key], 1);
+  clearRestRequestLog();
+  assert.deepEqual(restRequestLog(), []);
+  assert.deepEqual(restRequestCounts(), {});
+});
+
+test('restCall records each outbound request with status and headers', async () => {
+  clearRestRequestLog();
+  const context = contextFor('workflow_dispatch', {});
+  const github = {
+    rest: {
+      issues: {
+        listComments: async () => ({ data: [{ id: 1 }], headers: { 'x-ratelimit-remaining': '4999' }, status: 200 }),
+      },
+    },
+  };
+  const response = await restCall(github, context, {
+    endpoint: 'repos/o/r/issues/1/comments',
+    method: 'GET',
+    event: 'workflow_dispatch',
+  }, async () => github.rest.issues.listComments({ owner: 'o', repo: 'r', issue_number: 1 }));
+  assert.deepEqual(response.data, [{ id: 1 }]);
+  const log = restRequestLog();
+  assert.equal(log.length, 1);
+  assert.equal(log[0].endpoint, 'repos/o/r/issues/1/comments');
+  assert.equal(log[0].status, 200);
+  assert.equal(log[0].remaining, 4999);
+  const key = `${log[0].installation}|${log[0].workflow}|${log[0].event}|${log[0].kind}|${log[0].endpoint}|${log[0].status}`;
+  assert.equal(restRequestCounts()[key], 1);
+});
+
+test('restCall records a failed attempt then rethrows', async () => {
+  clearRestRequestLog();
+  const context = contextFor('workflow_dispatch', {});
+  const error = Object.assign(new Error('rate limited'), {
+    status: 429, response: { headers: { 'retry-after': '1' } },
+  });
+  const github = {
+    rest: { issues: { listComments: async () => { throw error; } } },
+  };
+  await assert.rejects(
+    restCall(github, context, {
+      endpoint: 'repos/o/r/issues/1/comments',
+      method: 'GET',
+      event: 'workflow_dispatch',
+    }, async () => github.rest.issues.listComments({})),
+    /rate limited/
+  );
+  const log = restRequestLog();
+  assert.equal(log.length, 1);
+  assert.equal(log[0].status, 429);
+  assert.equal(log[0].limited, true);
+  assert.equal(log[0].retryAfter, 1);
+});
+
+test('currentLabels reads are recorded in the request log', async () => {
+  clearRestRequestLog();
+  const github = githubFor({
+    labels: ['bug', 'factory'],
+    setLabels: async () => {},
+  });
+  const context = contextFor('workflow_dispatch', {});
+  const labels = await currentLabels(github, context, 12);
+  assert.deepEqual(labels, new Set(['bug', 'factory']));
+  const log = restRequestLog();
+  assert.equal(log.length, 1);
+  assert.equal(log[0].endpoint, 'repos/JoshCLWren/comic-pile/issues/12/labels');
+  assert.equal(log[0].method, 'GET');
 });

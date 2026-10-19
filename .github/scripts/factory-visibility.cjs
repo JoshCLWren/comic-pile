@@ -161,20 +161,21 @@ async function restCall(github, context, spec, operation) {
     || 'unknown';
   const event = spec.event || (context && context.eventName) || 'unknown';
   const observedAt = new Date().toISOString();
+  const record = recordRestRequest({
+    installation, workflow, endpoint: spec.endpoint, event,
+    kind: spec.kind || 'rest', method: spec.method || null,
+    status: null, headers: {}, observedAt,
+  });
   try {
     const response = await operation();
     const headers = response?.headers || {};
-    return recordRestRequest({
-      installation, workflow, endpoint: spec.endpoint, event,
-      kind: spec.kind || 'rest', method: spec.method || null,
-      status: response?.status ?? null, headers, observedAt,
-    }) && response;
+    Object.assign(record, { status: response?.status ?? null, ...restRateLimitHeaders(headers) });
+    return response;
   } catch (error) {
     const headers = error?.response?.headers || error?.headers || {};
-    recordRestRequest({
-      installation, workflow, endpoint: spec.endpoint, event,
-      kind: spec.kind || 'rest', method: spec.method || null,
-      status: error?.status ?? null, headers, observedAt,
+    Object.assign(record, {
+      status: error?.status ?? null,
+      ...restRateLimitHeaders(headers),
       limited: rateLimited(error),
     });
     throw error;
@@ -182,12 +183,12 @@ async function restCall(github, context, spec, operation) {
 }
 
 function restRequestLog() {
-  return restRequestLog.slice();
+  return restRequestLogEntries.slice();
 }
 
 function restRequestCounts() {
   const counts = {};
-  for (const record of restRequestLog) {
+  for (const record of restRequestLogEntries) {
     const key = `${record.installation}|${record.workflow}|${record.event}|${record.kind}|${record.endpoint}|${record.status}`;
     counts[key] = (counts[key] || 0) + 1;
   }
@@ -195,7 +196,7 @@ function restRequestCounts() {
 }
 
 function clearRestRequestLog() {
-  restRequestLog = [];
+  restRequestLogEntries = [];
 }
 
 // Open-thread rule, shared with .github/scripts/factory-review-findings.sh
@@ -605,13 +606,19 @@ async function withRetry(operation, { attempts = 3, delay = 250, maxRateLimitWai
 }
 
 async function currentLabels(github, context, number) {
-  const labels = await withRetry(() => github.paginate(github.rest.issues.listLabelsOnIssue, {
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: number,
-    per_page: 100,
-  }));
-  return new Set(labels.map(label => label.name));
+  const response = await restCall(github, context, {
+    endpoint: `repos/${context.repo.owner}/${context.repo.repo}/issues/${number}/labels`,
+    method: 'GET',
+    event: context.eventName,
+  }, async () => {
+    return withRetry(() => github.paginate(github.rest.issues.listLabelsOnIssue, {
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      issue_number: number,
+      per_page: 100,
+    }));
+  });
+  return new Set(response.map(label => label.name));
 }
 
 async function reconcileLabels(github, context, number, { owner, stage }) {
@@ -914,4 +921,5 @@ module.exports._test = {
   restRequestLog,
   restRequestCounts,
   clearRestRequestLog,
+  currentLabels,
 };
