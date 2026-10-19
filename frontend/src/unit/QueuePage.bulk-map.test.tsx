@@ -119,6 +119,7 @@ interface CapturedBulkProps {
 
 function lastBulkDialogProps(): CapturedBulkProps | undefined {
   const call = mockedBulkDialog.mock.calls.at(-1)
+  // SAFETY: the mock is called by QueuePage with a single props object; the test only reads isOpen/threadIds/threadTitles.
   return call?.[0] as unknown as CapturedBulkProps | undefined
 }
 
@@ -126,6 +127,7 @@ describe('QueuePage bulk mapping wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
+    // SAFETY: the test provides only the fields QueuePage reads; the hook's full return type is irrelevant to this wiring test.
     mockedUseQueueThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'unresolved' } },
@@ -139,11 +141,17 @@ describe('QueuePage bulk mapping wiring', () => {
       activeCount: 3,
     } as never)
 
+    // SAFETY: QueuePage only reads mutate and isPending from these hooks; the full return type is irrelevant.
     mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    // SAFETY: QueuePage only reads mutate and isPending from these hooks; the full return type is irrelevant.
     mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    // SAFETY: QueuePage only reads mutate and isPending from these hooks; the full return type is irrelevant.
     mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    // SAFETY: QueuePage only reads mutate and isPending from these hooks; the full return type is irrelevant.
     mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    // SAFETY: QueuePage only reads mutate and isPending from these hooks; the full return type is irrelevant.
     mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    // SAFETY: QueuePage only reads data.snoozed_threads, data.skipped_thread_ids, data.skipped_threads, and refetch; the full return type is irrelevant.
     mockedUseSession.mockReturnValue({
       data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
       refetch: vi.fn(),
@@ -182,6 +190,7 @@ describe('QueuePage bulk mapping wiring', () => {
   })
 
   it('disables the bulk action when every series is mapped', () => {
+    // SAFETY: the test provides only the fields QueuePage reads; the hook's full return type is irrelevant to this wiring test.
     mockedUseQueueThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'fully_mapped' } },

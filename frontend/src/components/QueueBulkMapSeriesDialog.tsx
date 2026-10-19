@@ -41,7 +41,7 @@ function buildBatch(threadIds: number[], threadTitles: string[]): BulkBatchItem[
   }))
 }
 
-function initialOutcomes(batch: BulkBatchItem[]): Record<number, SeriesOutcome> {
+function initialOutcomes(batch: BulkBatchItem[]) {
   const outcomes: Record<number, SeriesOutcome> = {}
   for (const item of batch) {
     outcomes[item.threadId] = 'pending'

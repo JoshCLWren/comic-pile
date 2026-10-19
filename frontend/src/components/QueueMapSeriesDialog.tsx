@@ -323,7 +323,7 @@ export default function QueueMapSeriesDialog({
                 role="alert"
                 className="rounded-lg bg-rose-900/30 border border-rose-700/40 p-3 text-sm text-rose-200"
               >
-                {searchError?.message || 'Failed to search ComicVine. Please try again.'}
+                Failed to search ComicVine. Please try again.
               </p>
             )}
             {originQuery.isError && (
