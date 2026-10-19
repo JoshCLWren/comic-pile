@@ -66,6 +66,7 @@ vi.mock('../components/Modal', () => ({
 }))
 
 import QueueMapSeriesDialog from '../components/QueueMapSeriesDialog'
+import type { SeriesBatchProgress, SeriesMappingFailure } from '../components/QueueMapSeriesDialog'
 
 const mockedSearchSeries = vi.mocked(comicVineApi.searchSeries)
 const mockedListIssues = vi.mocked(issuesApi.list)
@@ -814,7 +815,19 @@ describe('QueueMapSeriesDialog', () => {
   // Bulk-run reporting (issue #3922): a series that could not be mapped in this
   // pass has to be distinguishable from one the reader deliberately skipped.
   describe('bulk run reporting', () => {
-    function renderBulkSeriesDialog(overrides: Record<string, unknown> = {}) {
+    interface BulkSeriesDialogOverrides {
+      isOpen?: boolean
+      threadId?: number
+      threadTitle?: string
+      onClose?: () => void
+      onMapped?: (confirmedIssueIds: number[]) => void
+      onSkip?: () => void
+      onFailed?: (reason: SeriesMappingFailure) => void
+      batchProgress?: SeriesBatchProgress
+      onFinishBatch?: () => void
+    }
+
+    function renderBulkSeriesDialog(overrides: BulkSeriesDialogOverrides = {}) {
       const onSkip = vi.fn()
       const onFailed = vi.fn()
       const onFinishBatch = vi.fn()

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueBulkMapSeriesDialog from '../components/QueueBulkMapSeriesDialog'
 import QueueMapSeriesDialog from '../components/QueueMapSeriesDialog'
@@ -22,18 +23,26 @@ interface DialogOverrides {
 }
 
 function renderBulkDialog(overrides: DialogOverrides = {}) {
-  const props = {
+  const props: ComponentProps<typeof QueueBulkMapSeriesDialog> = {
     isOpen: overrides.isOpen ?? true,
     threadIds: overrides.threadIds ?? [1, 2],
     threadTitles: overrides.threadTitles ?? ['Batman', 'Superman'],
     onClose: overrides.onClose ?? vi.fn(),
-    ...(overrides.isScopeLoading !== undefined ? { isScopeLoading: overrides.isScopeLoading } : {}),
-    ...(overrides.scopeSeriesCount !== undefined ? { scopeSeriesCount: overrides.scopeSeriesCount } : {}),
-    ...(overrides.isScopeIncomplete !== undefined
-      ? { isScopeIncomplete: overrides.isScopeIncomplete }
-      : {}),
-    ...(overrides.onMapped ? { onMapped: overrides.onMapped } : {}),
-    ...(overrides.onBatchCaptured ? { onBatchCaptured: overrides.onBatchCaptured } : {}),
+  }
+  if (overrides.isScopeLoading !== undefined) {
+    props.isScopeLoading = overrides.isScopeLoading
+  }
+  if (overrides.scopeSeriesCount !== undefined) {
+    props.scopeSeriesCount = overrides.scopeSeriesCount
+  }
+  if (overrides.isScopeIncomplete !== undefined) {
+    props.isScopeIncomplete = overrides.isScopeIncomplete
+  }
+  if (overrides.onMapped) {
+    props.onMapped = overrides.onMapped
+  }
+  if (overrides.onBatchCaptured) {
+    props.onBatchCaptured = overrides.onBatchCaptured
   }
   const view = render(<QueueBulkMapSeriesDialog {...props} />)
   return { props, view }

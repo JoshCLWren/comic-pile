@@ -250,8 +250,8 @@ describe('QueuePage bulk mapping wiring', () => {
 
   it('reads the remaining queue pages before the batch is captured', async () => {
     const user = userEvent.setup()
-    // SAFETY: the test provides only the fields QueuePage reads; the hook's full return type is irrelevant to this wiring test.
     const loadMore = vi.fn().mockResolvedValue(undefined)
+    // SAFETY: the test provides only the fields QueuePage reads; the hook's full return type is irrelevant to this wiring test.
     mockedUseQueueThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'unresolved' } },
@@ -278,6 +278,7 @@ describe('QueuePage bulk mapping wiring', () => {
     expect(loadMore).toHaveBeenCalled()
     expect(lastBulkDialogProps()).toMatchObject({ isOpen: true, isScopeLoading: true })
 
+    // SAFETY: the test provides only the fields QueuePage reads; the hook's full return type is irrelevant to this wiring test.
     mockedUseQueueThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'unresolved' } },
@@ -339,6 +340,7 @@ describe('QueuePage bulk mapping wiring', () => {
 
     // The cursor finishes reading, so the batch is captured and the dialog
     // settles the run's scope with the host.
+    // SAFETY: the test provides only the fields QueuePage reads.
     mockedUseQueueThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'unresolved' } },
@@ -365,6 +367,7 @@ describe('QueuePage bulk mapping wiring', () => {
 
     // A saved mapping resets the Queue loader: pages drop and the cursor
     // returns. The settled run must leave the open dialog alone.
+    // SAFETY: the test provides only the fields QueuePage reads.
     mockedUseQueueThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Batman', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 10, comicvine_mapping: { status: 'unresolved' } },
