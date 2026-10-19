@@ -93,7 +93,7 @@ function QueueControlsInner({
             type="button"
             onClick={onBulkMapSeries}
             disabled={bulkMapDisabled}
-            className="hidden md:flex h-12 px-5 rounded-xl bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-200 font-semibold whitespace-nowrap hover:bg-[var(--theme-bg-hover)] items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="hidden md:flex h-12 px-5 rounded-xl bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] font-semibold whitespace-nowrap hover:bg-[var(--theme-bg-hover)] items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="queue-bulk-map-desktop"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
