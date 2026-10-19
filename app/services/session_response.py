@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.thread import normalize_format_value
+from app.services.queue_display import display_position
 from app.repositories import reading_session_repository, thread_repository
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.services.tag_inheritance_service import TagInheritanceService
@@ -183,7 +184,7 @@ async def get_session_with_thread_safe(
                 title=pending_thread.title,
                 format=normalize_format_value(pending_thread.format),
                 issues_remaining=issues_remaining,
-                queue_position=pending_thread.queue_position,
+                queue_position=await display_position(db, pending_thread),
                 last_rolled_result=last_rolled_result,
                 total_issues=pending_thread.total_issues,
                 reading_progress=pending_thread.reading_progress,
@@ -208,7 +209,7 @@ async def get_session_with_thread_safe(
                 title=thread.title,
                 format=normalize_format_value(thread.format),
                 issues_remaining=issues_remaining,
-                queue_position=thread.queue_position,
+                queue_position=await display_position(db, thread),
                 last_rolled_result=last_rolled_result,
                 total_issues=thread.total_issues,
                 reading_progress=thread.reading_progress,
@@ -262,7 +263,7 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
         title=thread.title,
         format=normalize_format_value(thread.format),
         issues_remaining=issues_remaining,
-        queue_position=thread.queue_position,
+        queue_position=await display_position(db, thread),
         last_rolled_result=event.result,
         total_issues=thread.total_issues,
         reading_progress=thread.reading_progress,
@@ -307,7 +308,7 @@ async def get_active_thread_info(
         title=thread.title,
         format=normalize_format_value(thread.format),
         issues_remaining=thread.issues_remaining,
-        queue_position=thread.queue_position,
+        queue_position=await display_position(db, thread),
         last_rolled_result=event.result,
     )
 
@@ -533,7 +534,7 @@ async def build_session_response(
                 title=thread.title,
                 format=normalize_format_value(thread.format),
                 issues_remaining=thread.issues_remaining,
-                queue_position=thread.queue_position,
+                queue_position=await display_position(db, thread),
                 last_rolled_result=None,
             )
 

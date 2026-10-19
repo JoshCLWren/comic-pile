@@ -101,21 +101,29 @@ async def threads_for_user(db: AsyncSession, user_id: int) -> list[Thread]:
 
 
 async def max_queue_position(db: AsyncSession, user_id: int) -> int:
-    """Return the highest queue position held by a user's threads (0 if none).
-
-    Args:
-        db: Database session.
-        user_id: Owner of the threads.
-
-    Returns:
-        The maximum queue position, or 0 when the user has no threads.
-    """
+    """Return the highest position in a user's active queue (0 if empty)."""
     result = await db.execute(
-        select(Thread.queue_position)
+        select(func.max(Thread.queue_position))
         .where(Thread.user_id == user_id)
-        .order_by(Thread.queue_position.desc())
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
     )
-    return result.scalar() or 0
+    return int(result.scalar_one() or 0)
+
+
+async def renormalize_queue_positions(db: AsyncSession, user_id: int) -> None:
+    """Rewrite active queue positions as a dense 1..N sequence."""
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .order_by(Thread.queue_position, Thread.id)
+    )
+    threads = result.scalars().all()
+    for index, thread in enumerate(threads, start=1):
+        thread.queue_position = index
+    await db.flush()
 
 
 async def find_recent_duplicate(
@@ -232,6 +240,7 @@ async def fetch_queue_page(
     cursor: QueueCursor | None,
     limit: int,
     eligibility: ReadingEligibilitySnapshot | None = None,
+    position_map: dict[int, int] | None = None,
 ) -> list[Thread]:
     """Fetch one deterministic page of a user's ACTIVE threads for the queue list.
 
@@ -245,12 +254,22 @@ async def fetch_queue_page(
 
         eligibility: Shared live result, or None for legacy execution.
 
+        position_map: Optional output map populated with whole-Queue display ranks.
+
     Returns:
         Active threads in canonical page order, at most ``limit`` rows.
     """
-    query = select(Thread).where(
+    ranks = (
+        select(
+            Thread.id.label("thread_id"),
+            func.row_number().over(order_by=build_sort_order("position", eligibility)).label("position"),
+        )
+        .where(Thread.user_id == user_id, Thread.status == "active")
+        .subquery()
+    )
+    query = select(Thread, ranks.c.position).join(ranks, ranks.c.thread_id == Thread.id).where(
         Thread.user_id == user_id,
-        Thread.status == "active"
+        Thread.status == "active",
     )
 
     if search:
@@ -266,7 +285,10 @@ async def fetch_queue_page(
 
     query = query.limit(limit)
     result = await db.execute(query)
-    return list(result.scalars().all())
+    rows = result.all()
+    if position_map is not None:
+        position_map.update({thread.id: position for thread, position in rows})
+    return [thread for thread, _position in rows]
 
 
 async def fetch_completed_page(

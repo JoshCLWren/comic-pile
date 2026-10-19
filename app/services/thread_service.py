@@ -41,6 +41,7 @@ from app.schemas import (
     ThreadUpdate,
 )
 from app.schemas.tags import TagResponse, TagTargetType
+from app.services.queue_display import display_position, display_positions
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership_guard import (
@@ -97,6 +98,7 @@ async def thread_to_response(
     db: AsyncSession,
     issue_number_map: dict[int, str] | None = None,
     issues_remaining_map: dict[int, int] | None = None,
+    position_map: dict[int, int] | None = None,
 ) -> ThreadResponse:
     """Convert Thread model to ThreadResponse.
 
@@ -109,6 +111,8 @@ async def thread_to_response(
             When provided and the thread uses issue tracking, avoids a per-thread
             COUNT query. Single-thread callers may omit this to use the per-row
             fallback.
+
+        position_map: Optional precomputed whole-Queue display ordinals.
 
     Returns:
         ThreadResponse schema.
@@ -131,12 +135,17 @@ async def thread_to_response(
             if next_issue:
                 next_unread_issue_number = next_issue.issue_number
 
+    position = (
+        position_map.get(thread.id, 0)
+        if position_map is not None
+        else await display_position(db, thread)
+    )
     return ThreadResponse(
         id=thread.id,
         title=thread.title,
         format=format_value,
         issues_remaining=issues_remaining,
-        queue_position=thread.queue_position,
+        queue_position=position,
         status=thread.status,
         last_rating=thread.last_rating,
         last_activity_at=thread.last_activity_at,
@@ -153,23 +162,32 @@ async def thread_to_response(
     )
 
 
-async def threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[ThreadResponse]:
+async def threads_to_responses(
+    threads: list[Thread], db: AsyncSession, position_map: dict[int, int] | None = None
+) -> list[ThreadResponse]:
     """Convert Thread models to responses with batched lookups.
 
     Args:
         threads: Threads appearing in one response payload.
         db: Database session.
+        position_map: Optional whole-Queue display positions from the page query.
 
     Returns:
         One ThreadResponse per input thread, in input order.
     """
     remaining_map, issue_map = await load_issue_stats(threads, db)
+    positions = position_map
+    if positions is None:
+        positions = {}
+        for user_id in {thread.user_id for thread in threads}:
+            positions.update(await display_positions(db, user_id))
     return [
         await thread_to_response(
             thread,
             db,
             issue_number_map=issue_map,
             issues_remaining_map=remaining_map,
+            position_map=positions,
         )
         for thread in threads
     ]
@@ -338,6 +356,7 @@ async def list_queue_threads(
         except ValueError as exc:
             raise InvalidRequestError(str(exc)) from exc
 
+    position_map: dict[int, int] = {}
     threads = await thread_repository.fetch_queue_page(
         db,
         user_id,
@@ -345,13 +364,14 @@ async def list_queue_threads(
         sort=validated_sort,
         cursor=cursor,
         limit=page_size + 1,
+        position_map=position_map,
         **eligibility_args,
     )
 
     has_more = len(threads) > page_size
     threads_to_return = threads[:page_size]
 
-    thread_responses = await threads_to_responses(threads_to_return, db)
+    thread_responses = await threads_to_responses(threads_to_return, db, position_map)
 
     # Fetch ComicVine mapping health for issue-tracking threads on this page only
     # (batched, no N+1). Legacy threads without total_issues skip the query
@@ -749,8 +769,13 @@ async def update_thread(
             if thread.issues_remaining == 0:
                 if thread.apply_derived_status("completed"):
                     thread.queue_position = 0
+                    await thread_repository.renormalize_queue_positions(db, user_id)
             else:
-                thread.apply_derived_status("active")
+                if thread.apply_derived_status("active") and thread.queue_position < 1:
+                    thread.queue_position = (
+                        await thread_repository.max_queue_position(db, user_id) + 1
+                    )
+                    await thread_repository.renormalize_queue_positions(db, user_id)
     if thread_data.notes is not None:
         thread.notes = thread_data.notes
     if thread_data.manual_creator_credits is not None:
@@ -882,6 +907,7 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
         await refresh_user_blocked_status(user_id, db)
 
         await thread_repository.delete_thread(db, thread)
+        await thread_repository.renormalize_queue_positions(db, user_id)
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
@@ -922,6 +948,7 @@ async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
 
     thread.status = EXCLUDED_STATUS
     thread.queue_position = 0
+    await thread_repository.renormalize_queue_positions(db, user_id)
     await db.commit()
     await db.refresh(thread)
     return await thread_to_response(thread, db)
@@ -968,6 +995,9 @@ async def restore_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
     else:
         thread.status = "completed"
         thread.queue_position = 0
+
+    if thread.status == "active":
+        await thread_repository.renormalize_queue_positions(db, user_id)
 
     await db.commit()
     await db.refresh(thread)
@@ -1041,6 +1071,7 @@ async def reactivate_completed_thread(
 
     thread.status = "active"
     thread.queue_position = 1
+    await thread_repository.renormalize_queue_positions(db, user_id)
     await db.commit()
     await db.refresh(thread)
 
@@ -1086,7 +1117,7 @@ async def set_pending_thread(db: AsyncSession, user_id: int, thread_id: int) -> 
     thread_title = thread.title
     thread_format = normalize_format_value(thread.format)
     thread_issues = thread.issues_remaining
-    thread_position = thread.queue_position
+    thread_position = await display_position(db, thread)
     thread_total_issues = thread.total_issues
     thread_reading_progress = thread.reading_progress
     thread_next_unread_issue_id = thread.next_unread_issue_id
@@ -1443,7 +1474,7 @@ async def set_current_issue(
     issues_remaining = thread.issues_remaining
     total_issues = thread.total_issues
     reading_progress = thread.reading_progress
-    queue_position = thread.queue_position
+    queue_position = await display_position(db, thread)
     thread_title = thread.title
     thread_format = normalize_format_value(thread.format)
 
