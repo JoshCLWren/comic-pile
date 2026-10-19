@@ -158,7 +158,7 @@ export default function BugReportModal({
           </div>
         )}
 
-        <p className="text-[10px] text-stone-500" data-testid="bug-report-hourly-limit-notice">
+        <p className="text-[10px] text-[var(--theme-text-muted)]" data-testid="bug-report-hourly-limit-notice">
           Non-admin accounts can submit one report per hour.
         </p>
 

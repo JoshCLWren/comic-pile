@@ -15,6 +15,13 @@ export type QueueSortBy = 'position' | 'alphabetical' | 'created'
  * comparator than the SQL ORDER BY and let a newly fetched page insert rows
  * ahead of rows already on screen (issue #2566, following #2452).
  *
+ * Search is owned by the server: `useQueueThreads` sends the debounced query
+ * as a `search` parameter and keeps the previous key's rows visible
+ * (`keepPreviousData`) while the new first page loads. Re-applying the
+ * in-flight query to those kept rows emptied the list and flashed
+ * "No active series match your search" before the server answered, so
+ * `filteredThreads` always presents the server's rows unchanged.
+ *
  * @param threads - All threads returned by the concatenated page query, in
  *   server cursor order.
  * @param _sortBy - Retained sort selector for API compatibility; the server
@@ -23,7 +30,6 @@ export type QueueSortBy = 'position' | 'alphabetical' | 'created'
 export function useQueueFilters(
   threads: ThreadListItem[] | null | undefined,
   _sortBy: QueueSortBy,
-  searchQuery: string = '',
 ) {
   const activeThreads = useMemo(
     () => threads?.filter((thread) => thread.status === 'active') ?? [],
@@ -37,17 +43,10 @@ export function useQueueFilters(
 
   // The active list is the displayed order: filtering preserves the server's
   // cursor order, and no client comparator may reshuffle it across pages.
+  // Search filtering is deliberately absent: the server already returns only
+  // matching rows for the committed query (see the docstring above).
   const sortedThreads = activeThreads
-  const filteredThreads = useMemo(
-    () => {
-      if (!searchQuery || !searchQuery.trim()) return sortedThreads
-      const normalizedSearch = searchQuery.trim().toLowerCase()
-      return sortedThreads.filter((thread) =>
-        thread.title.toLowerCase().includes(normalizedSearch),
-      )
-    },
-    [sortedThreads, searchQuery],
-  )
+  const filteredThreads = sortedThreads
 
   return {
     activeThreads,
