@@ -5,14 +5,19 @@ must aggregate only the filtered relation through its subquery's exported
 columns, never the base ``PerformanceMetric`` entity alongside the subquery
 (which produced a Cartesian product that multiplied counts and corrupted
 min/max/percentile results).
+
+The SQL guard captures the statements the repository actually executes rather
+than rebuilding the query in the test, so a regression in the repository's
+query construction fails it. Table-name comparisons use one consistent casing.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import func, select
-from sqlalchemy.dialects import postgresql
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models.performance_metric import PerformanceMetric
 from app.repositories import performance_metric_repository
@@ -38,6 +43,28 @@ def _make_metric(
     )
     session.add(metric)
     return metric
+
+
+@contextmanager
+def _captured_statements(db_engine: AsyncEngine) -> Iterator[list[str]]:
+    """Yield a list that records every statement executed on the engine."""
+    statements: list[str] = []
+
+    def _capture(
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        statements.append(" ".join(statement.split()))
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
+    try:
+        yield statements
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
 
 
 @pytest.fixture()
@@ -310,41 +337,45 @@ async def test_get_performance_metrics_summary_boundary_timestamps(
 
 
 @pytest.mark.asyncio
-async def test_get_performance_metrics_summary_compiled_sql_has_no_cartesian_product(
-    async_db: AsyncSession,
+async def test_get_performance_metrics_summary_executed_sql_has_no_cartesian_product(
+    async_db: AsyncSession, db_engine: AsyncEngine
 ) -> None:
-    """Compiled SQL aggregates through a single subquery WITHOUT a cross join."""
-    dialect = postgresql.dialect()
+    """The statements the repository executes aggregate one filtered subquery.
 
-    # Mirror the query construction used by get_performance_metrics_summary
-    # (app/repositories/performance_metric_repository.py:103) so regressions
-    # in the repository's subquery pattern are caught.
-    base_query = select(PerformanceMetric)
-    base_subquery = base_query.subquery()
+    Capturing real execution means a regression in the repository's query
+    construction fails this test, unlike a test that mirrors the query itself.
+    """
+    with _captured_statements(db_engine) as statements:
+        await performance_metric_repository.get_performance_metrics_summary(
+            async_db, metric_type="initial_response"
+        )
 
-    count_query = select(
-        base_subquery.c.cold,
-        func.count(base_subquery.c.id).label("count"),
-    ).select_from(base_subquery).group_by(base_subquery.c.cold)
-    count_sql = str(count_query.compile(dialect=dialect))
+    summary_sql = [
+        statement.upper()
+        for statement in statements
+        if statement.lstrip().upper().startswith("SELECT")
+        and "PERFORMANCE_METRICS" in statement.upper()
+    ]
+    # One count-by-cold query and one percentile/stats query.
+    assert len(summary_sql) == 2, summary_sql
 
-    stats_query = select(
-        base_subquery.c.cold,
-        func.min(base_subquery.c.response_time_ms).label("min"),
-        func.max(base_subquery.c.response_time_ms).label("max"),
-    ).select_from(base_subquery).group_by(base_subquery.c.cold)
-    stats_sql = str(stats_query.compile(dialect=dialect))
-
-    for sql in (count_sql, stats_sql):
-        upper = sql.upper()
-        assert "CROSS JOIN" not in upper
-        # The base table must appear only inside the subquery's FROM, never as
-        # a second top-level table (comma join) or join target.
-        # Use consistent uppercase casing so the check can actually match SQL.
-        assert ", PERFORMANCE_METRICS" not in upper
-        assert "JOIN PERFORMANCE_METRICS" not in upper
-        # Top-level FROM is the subquery.
-        assert "FROM (" in sql
+    for sql in summary_sql:
+        assert "CROSS JOIN" not in sql, sql
+        # The base table is reachable exactly once, inside the derived
+        # subquery's FROM.
+        assert sql.count("FROM PERFORMANCE_METRICS") == 1, sql
+        # A regression that selects the base entity alongside the subquery
+        # renders as a top-level comma join after the subquery alias
+        # ("... AS ANON_1, PERFORMANCE_METRICS") instead of a bare alias.
+        # Qualified columns always render as "PERFORMANCE_METRICS.<col>", so a
+        # trailing space distinguishes the join from a select-list entry.
+        assert ", PERFORMANCE_METRICS " not in sql, sql
+        # The base table must never be an explicit join target.
+        assert "JOIN PERFORMANCE_METRICS" not in sql, sql
+        # The outer FROM is the derived subquery rather than the base table.
+        assert "FROM (" in sql, sql
+        # The requested filter stays inside the subquery.
+        assert "METRIC_TYPE" in sql, sql
 
 
 @pytest.mark.asyncio

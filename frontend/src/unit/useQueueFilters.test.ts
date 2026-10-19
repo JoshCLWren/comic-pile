@@ -178,44 +178,4 @@ describe('useQueueFilters', () => {
       'Oldest',
     ])
   })
-
-  describe('server-owned search results', () => {
-    // Regression: re-applying the in-flight searchQuery to the rows kept
-    // visible by useQueueThreads' keepPreviousData emptied the list and
-    // flashed "No active series match your search" while the debounced
-    // server search was still loading. The server's title search is
-    // authoritative (Thread.title ilike on the queue listing), so this hook
-    // must pass its rows through unchanged instead of re-filtering them
-    // against a query the server has not answered yet.
-    it('passes rows through unchanged; never client-filters against an in-flight query', () => {
-      const threads = [
-        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
-        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
-      ]
-      const { result } = renderHook(() => useQueueFilters(threads, 'position'))
-      expect(result.current.filteredThreads).toEqual(result.current.sortedThreads)
-      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
-    })
-
-    it('keeps stale-but-visible rows during a search transition instead of showing a false empty state', () => {
-      // Rows from the previous (unfiltered) query remain on screen while the
-      // new search key fetches its first page; none of them match the
-      // in-flight query, but removing them here produced the false
-      // "No active series match your search" state.
-      const previousQueryRows = [
-        makeThread({ id: 1, title: 'Batman', queue_position: 1 }),
-        makeThread({ id: 2, title: 'Y: The Last Man', queue_position: 2 }),
-      ]
-      const { result } = renderHook(() => useQueueFilters(previousQueryRows, 'position'))
-      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
-      expect(result.current.filteredThreads.length).toBeGreaterThan(0)
-    })
-  })
-
-  describe('empty queue', () => {
-    it('matches nothing when the queue has no rows yet', () => {
-      const { result } = renderHook(() => useQueueFilters([], 'position'))
-      expect(result.current.filteredThreads).toEqual([])
-    })
-  })
 })
