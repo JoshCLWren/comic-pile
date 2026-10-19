@@ -819,6 +819,8 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
         NotFoundError: When the thread does not exist for this user.
         InvalidRequestError: When the database refuses the deletion.
     """
+    # Take the queue lock first to prevent deadlocks with concurrent shuffles.
+    await thread_repository.renormalize_queue_positions(db, user_id)
     thread = await _require_owned_thread(db, user_id, thread_id)
 
     await reading_session_repository.detach_pending_thread_references_from_reading_sessions(db, thread_id)
