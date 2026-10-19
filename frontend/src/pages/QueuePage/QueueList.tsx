@@ -49,7 +49,11 @@ export function QueueList({
   // and the current search is still loading, show a loading state instead of "No match".
   if (isSearching && filteredThreads.length === 0 && activeThreads.length > 0 && isLoading) {
     return (
-      <div className="text-center text-[var(--theme-text-muted)] py-8" data-testid="queue-search-loading">
+      <div
+        role="status"
+        className="text-center text-[var(--theme-text-muted)] py-8"
+        data-testid="queue-search-loading"
+      >
         Loading series...
       </div>
     )

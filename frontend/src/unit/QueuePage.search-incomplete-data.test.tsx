@@ -15,6 +15,7 @@ import {
   useUpdateThread,
 } from '../hooks/useThread'
 import QueuePage from '../pages/QueuePage'
+import { useQueueListLoading } from '../pages/QueuePage/useQueueListLoading'
 
 vi.mock('../hooks/useThread', () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
@@ -35,6 +36,7 @@ vi.mock('../hooks/useQueue', () => ({
 }))
 
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
+vi.mock('../pages/QueuePage/useQueueListLoading', () => ({ useQueueListLoading: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
@@ -91,6 +93,7 @@ function renderQueue(): void {
 beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver)
   vi.stubGlobal('alert', vi.fn())
+  vi.mocked(useQueueListLoading).mockReturnValue(false)
   // SAFETY: mockReturnValue accepts partial hook returns; never cast bypasses full-type requirements
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
@@ -127,6 +130,7 @@ beforeEach(() => {
 describe('Queue search with incomplete data', () => {
   it('shows loading state when searching and there are active threads but filtered results are empty (likely still loading)', async () => {
     const user = userEvent.setup()
+    vi.mocked(useQueueListLoading).mockReturnValue(true)
     mockedUseQueueThreads.mockReturnValue({
       data: [
         {
@@ -152,7 +156,6 @@ describe('Queue search with incomplete data', () => {
       nextPageToken: 'next-page-token',
       loadMore: vi.fn().mockResolvedValue(undefined),
       activeCount: 10, // Total count is higher than what's loaded
-      isLoading: true,
     })
 
     renderQueue()

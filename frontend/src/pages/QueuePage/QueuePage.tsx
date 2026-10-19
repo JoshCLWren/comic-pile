@@ -21,6 +21,7 @@ import ShuffleQueueDialog from './ShuffleQueueDialog'
 import QueueBulkMapSeriesDialog from '../../components/QueueBulkMapSeriesDialog'
 import { useQueueBulkMapping } from './useQueueBulkMapping'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
+import { useQueueListLoading } from './useQueueListLoading'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueThreadCards } from './useQueueThreadCards'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
@@ -39,19 +40,20 @@ export default function QueuePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const isSearching = searchQuery.trim() !== ''
 
-  const {
+  const queueLoader = useQueueThreads(searchQuery, sortBy)
+const {
     data: threads,
     isPending,
     isError,
     nextPageToken,
     loadMore,
     activeCount,
-    isLoading,
-  } = useQueueThreads(searchQuery, sortBy)
+  } = queueLoader
 
   // Series that show the per-row `Map series` repair action (everything except
-  // fully mapped or non-issue-tracked rows) are the bulk action's scope.
-  const bulkMapping = useQueueBulkMapping(threads)
+  // fully mapped or non-issue-tracked rows) are the bulk action's scope, and an
+  // open run keeps reading the cursor so the batch covers the whole queue.
+  const bulkMapping = useQueueBulkMapping(queueLoader)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -87,6 +89,9 @@ export default function QueuePage() {
     searchQuery,
   )
   const authoritativeActiveCount = activeCount ?? activeThreads.length
+  // True while the Queue list is still fetching; the list uses it to tell
+  // "still fetching" apart from a settled zero-match (#3912).
+  const queueListLoading = useQueueListLoading()
 
   const navigateToRoll = useCallback(
     (_thread: ThreadListItem, response: unknown) => {
@@ -225,7 +230,7 @@ export default function QueuePage() {
           isSearching={isSearching}
           sentinelRef={sentinelRef}
           hasNextPage={!!nextPageToken}
-          isLoading={isLoading}
+          isLoading={queueListLoading}
           onAddSeries={modals.showCreateModal}
         />
 

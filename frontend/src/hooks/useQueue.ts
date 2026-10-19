@@ -138,9 +138,12 @@ export function useQueueThreads(
   // rows visible: `isPending` drives the full-screen loader only before any
   // data exists, while `isNextPageLoading` drives the inline loading indicator.
   const isPending = query.isPending || query.isNextPageLoading
+  // The append alone, so a consumer can read the Queue cursor to completion
+  // without being confused by the combined "anything is loading" flag
+  // (issue #3922).
+  const isLoadingMore = query.isNextPageLoading
   const isError = query.isError
   const nextPageToken = query.nextPageToken
-  const isLoading = query.isLoading
 
   const refetch = useCallback(async (): Promise<void> => {
     await query.refetch()
@@ -150,7 +153,16 @@ export function useQueueThreads(
     await query.fetchNextPage()
   }, [query])
 
-  return { data, isPending, isError, refetch, nextPageToken, loadMore, activeCount, isLoading }
+  return {
+    data,
+    isPending,
+    isLoadingMore,
+    isError,
+    refetch,
+    nextPageToken,
+    loadMore,
+    activeCount,
+  }
 }
 
 /**
