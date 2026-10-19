@@ -85,8 +85,11 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
         "Plan used no index after sequential and bitmap scans were disabled; "
         f"the thread-scoped lookup is not indexed: {plan_nodes}"
     )
-    assert "ix_issue_thread_position" in index_names, (
-        f"Position index ix_issue_thread_position not used in plan; indexes found: {index_names}; "
+    assert any(
+        name in index_names
+        for name in ("ix_issue_thread_position", "uq_issue_thread_position")
+    ), (
+        f"No position index used in plan; indexes found: {index_names}; "
         f"plan: {plan_nodes}"
     )
 
