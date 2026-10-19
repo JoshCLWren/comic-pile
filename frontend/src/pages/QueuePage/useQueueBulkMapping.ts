@@ -34,7 +34,11 @@ export interface QueueBulkMappingScope {
 
 export interface QueueBulkMappingDialogProps {
   isOpen: boolean
-  /** True while the remaining queue pages are still loading. */
+  /**
+   * True while the remaining queue pages are still loading for a fresh run's
+   * batch capture. Once the batch is captured the run's scope is settled, so a
+   * mid-run queue refresh reports this false again.
+   */
   isScopeLoading: boolean
   /** Series discovered so far as needing mapping, shown while loading. */
   scopeSeriesCount: number
@@ -44,6 +48,14 @@ export interface QueueBulkMappingDialogProps {
   threadTitles: string[]
   onClose: () => void
   onBatchPendingChange: (hasPending: boolean) => void
+  /**
+   * Called when the open run's batch is fixed: a fresh run captured it, or a
+   * saved run resumed. The host stops preparing and draining from here — a
+   * queue refresh after a saved mapping drops the loaded pages again, and
+   * re-draining would reopen the preparing dialog beneath the mapping or
+   * results dialog after every saved series.
+   */
+  onBatchCaptured: () => void
 }
 
 export interface QueueBulkMappingState {
@@ -68,6 +80,11 @@ export interface QueueBulkMappingState {
  * reader with 49 unmapped series across a 164-series queue silently maps a
  * subset and the results cannot explain the difference (issue #3922).
  *
+ * The drain and the preparing state are scoped to the batch capture: once the
+ * dialog reports the batch fixed, a mid-run queue refresh (every saved mapping
+ * resets the loader and drops the loaded pages) leaves the open run alone. The
+ * drain starts again only for a fresh run.
+ *
  * Args:
  *   scope: The Queue rows and pagination state the run draws its batch from.
  *
@@ -79,24 +96,38 @@ export function useQueueBulkMapping(scope: QueueBulkMappingScope): QueueBulkMapp
   const hasMorePages = nextPageToken != null
   const [isOpen, setIsOpen] = useState(false)
   const [hasPendingBatch, setHasPendingBatch] = useState(false)
+  /**
+   * True once the open run's scope is settled: its batch was captured, or a
+   * saved run resumed. A saved mapping resets the Queue loader, which drops
+   * every loaded page; settling keeps that refresh from reopening the preparing
+   * dialog or restarting the drain mid-run. A fresh run unsettles it again.
+   */
+  const [scopeSettled, setScopeSettled] = useState(false)
 
-  // Declarative drain: while a run is open, keep appending cursor pages until
-  // the whole queue is loaded. A failed page stops the drain so the run reports
-  // a bounded batch instead of retrying forever.
+  // Declarative drain: while a fresh run is still capturing its batch, keep
+  // appending cursor pages until the whole queue is loaded. A failed page stops
+  // the drain so the run reports a bounded batch instead of retrying forever.
+  // A settled run never drains again — only a fresh run re-arms it.
   useEffect(() => {
-    if (!isOpen || !hasMorePages || isLoadingMore || isError) return
+    if (!isOpen || scopeSettled || !hasMorePages || isLoadingMore || isError) return
     void loadMore().catch(() => undefined)
-  }, [isOpen, hasMorePages, isLoadingMore, isError, loadMore])
+  }, [isOpen, scopeSettled, hasMorePages, isLoadingMore, isError, loadMore])
 
-  const isScopeLoading = isOpen && (isLoadingMore || (hasMorePages && !isError))
+  const isScopeLoading = isOpen && !scopeSettled && (isLoadingMore || (hasMorePages && !isError))
   const isScopeIncomplete = hasMorePages && isError
 
-  const openBulkMap = useCallback(() => setIsOpen(true), [])
+  const openBulkMap = useCallback(() => {
+    // A saved batch resumes with the scope it already captured; a fresh run
+    // unsettles the scope so the drain reads the cursor again before capture.
+    setScopeSettled(hasPendingBatch)
+    setIsOpen(true)
+  }, [hasPendingBatch])
   const closeBulkMap = useCallback(() => setIsOpen(false), [])
   const onBatchPendingChange = useCallback(
     (hasPending: boolean) => setHasPendingBatch(hasPending),
     [],
   )
+  const onBatchCaptured = useCallback(() => setScopeSettled(true), [])
 
   const seriesNeedingMapping = useMemo(
     () =>
@@ -126,12 +157,14 @@ export function useQueueBulkMapping(scope: QueueBulkMappingScope): QueueBulkMapp
       threadTitles,
       onClose: closeBulkMap,
       onBatchPendingChange,
+      onBatchCaptured,
     }),
     [
       closeBulkMap,
       isOpen,
       isScopeIncomplete,
       isScopeLoading,
+      onBatchCaptured,
       onBatchPendingChange,
       threadIds,
       threadTitles,

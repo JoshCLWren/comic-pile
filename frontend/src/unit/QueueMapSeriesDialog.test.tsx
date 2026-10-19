@@ -927,6 +927,31 @@ describe('QueueMapSeriesDialog', () => {
       expect(onSkip).not.toHaveBeenCalled()
     })
 
+    it('reports an unconfirmed commit outcome for review instead of a failure', async () => {
+      // A lost response may hide an already-committed mapping (issue #3776), so
+      // the bulk run must not report the series as a failed save.
+      const user = userEvent.setup()
+      mockedCommit.mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { status: 504, data: {} },
+        message: 'Gateway Timeout',
+      })
+      const { onSkip, onFailed } = renderBulkSeriesDialog()
+
+      await user.click(await screen.findByTestId('queue-map-series-result'))
+      await user.click(await screen.findByTestId('queue-map-series-approve'))
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Could not confirm the mapping result. Any saved mappings are safe; map again to replay the request.',
+      )
+
+      const advance = screen.getByTestId('queue-map-series-skip')
+      expect(advance).toHaveTextContent('Could not confirm — leave for review')
+      await user.click(advance)
+
+      expect(onFailed).toHaveBeenCalledWith('commit_outcome_unknown')
+      expect(onSkip).not.toHaveBeenCalled()
+    })
+
     it('keeps a stale preview in the review path instead of failing the series', async () => {
       const user = userEvent.setup()
       mockedCommit.mockRejectedValueOnce({

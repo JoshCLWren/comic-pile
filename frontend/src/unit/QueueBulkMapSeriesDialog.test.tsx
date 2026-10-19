@@ -18,6 +18,7 @@ interface DialogOverrides {
   threadTitles?: string[]
   onClose?: () => void
   onMapped?: (confirmedIssueIds: number[]) => void
+  onBatchCaptured?: () => void
 }
 
 function renderBulkDialog(overrides: DialogOverrides = {}) {
@@ -32,6 +33,7 @@ function renderBulkDialog(overrides: DialogOverrides = {}) {
       ? { isScopeIncomplete: overrides.isScopeIncomplete }
       : {}),
     ...(overrides.onMapped ? { onMapped: overrides.onMapped } : {}),
+    ...(overrides.onBatchCaptured ? { onBatchCaptured: overrides.onBatchCaptured } : {}),
   }
   const view = render(<QueueBulkMapSeriesDialog {...props} />)
   return { props, view }
@@ -63,6 +65,9 @@ describe('QueueBulkMapSeriesDialog', () => {
             </button>
             <button type="button" onClick={() => props.onFailed?.('scope_unavailable')}>
               fail-current
+            </button>
+            <button type="button" onClick={() => props.onFailed?.('commit_outcome_unknown')}>
+              fail-unknown-current
             </button>
             <button type="button" onClick={() => props.onFinishBatch?.()}>
               finish-batch
@@ -142,6 +147,61 @@ describe('QueueBulkMapSeriesDialog', () => {
     const failedRow = results.querySelector('[data-outcome="failed"]')
     expect(failedRow).toHaveTextContent('Batman')
     expect(failedRow).toHaveTextContent('no safe mapping scope was available')
+  })
+
+  it('marks an unconfirmed commit outcome as needing review instead of failed', async () => {
+    renderBulkDialog()
+
+    // A lost response may hide an already-committed mapping (issue #3776), so
+    // the results must not claim the save failed.
+    fireEvent.click(screen.getByText('fail-unknown-current'))
+    fireEvent.click(screen.getByText('complete-current'))
+
+    const results = await screen.findByTestId('queue-bulk-map-series-results')
+    const rows = results.querySelectorAll('[data-testid="queue-bulk-map-series-result-row"]')
+    expect(rows[0]).toHaveAttribute('data-outcome', 'skipped')
+    expect(rows[0]).toHaveTextContent('Batman')
+    expect(rows[0]).toHaveTextContent('the save result could not be confirmed')
+    expect(
+      results.querySelector('[data-testid="queue-bulk-map-series-count-skipped"]'),
+    ).toHaveAttribute('data-count', '1')
+    expect(
+      results.querySelector('[data-testid="queue-bulk-map-series-count-failed"]'),
+    ).toHaveAttribute('data-count', '0')
+  })
+
+  it('tells the host when the run batch is fixed so preparation stops', () => {
+    const onBatchCaptured = vi.fn()
+    const { view } = renderBulkDialog({ onBatchCaptured, onClose: vi.fn() })
+
+    // The fresh batch is fixed as soon as the dialog opens.
+    expect(onBatchCaptured).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByText('complete-current'))
+    fireEvent.click(screen.getByText('cancel-current'))
+    view.rerender(
+      <QueueBulkMapSeriesDialog
+        isOpen={false}
+        threadIds={[1, 2]}
+        threadTitles={['Batman', 'Superman']}
+        onClose={vi.fn()}
+        onBatchCaptured={onBatchCaptured}
+      />,
+    )
+    view.rerender(
+      <QueueBulkMapSeriesDialog
+        isOpen
+        threadIds={[1, 2]}
+        threadTitles={['Batman', 'Superman']}
+        onClose={vi.fn()}
+        onBatchCaptured={onBatchCaptured}
+      />,
+    )
+
+    // Resuming the saved batch settles the scope too, so the host does not
+    // restart the drain beneath the resumed mapping dialog.
+    expect(onBatchCaptured).toHaveBeenCalledTimes(2)
+    expect(screen.getByTestId('mock-series-dialog')).toHaveAttribute('data-thread-id', '2')
   })
 
   it('records a skipped series and still advances', async () => {

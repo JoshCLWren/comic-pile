@@ -18,11 +18,15 @@ import type {
 import { getApiErrorDetail, isIndeterminateApiOutcome } from '../utils/apiError'
 
 /**
- * Why a series could not be mapped in this pass (issue #3922).
+ * Why a series could not be mapped in this pass, or why its outcome is
+ * unconfirmed (issue #3922).
  *
  * A bulk run reports these instead of a bare "skipped" so its results can tell
  * the reader which series still need attention and which ones could not be
- * attempted at all.
+ * attempted at all. `commit_outcome_unknown` covers a lost response or server
+ * error where the mapping may already have saved (issue #3776): claiming the
+ * save failed would be false, so the bulk run leaves the series for review
+ * with that reason instead.
  */
 export type SeriesMappingFailure =
   | 'origin_unavailable'
@@ -30,6 +34,7 @@ export type SeriesMappingFailure =
   | 'preview_unavailable'
   | 'scope_unavailable'
   | 'commit_failed'
+  | 'commit_outcome_unknown'
 
 /**
  * Compact readout for the position of one series inside a bulk run (issue #3922).
@@ -330,8 +335,12 @@ export default function QueueMapSeriesDialog({
     if (preview.isError) return 'preview_unavailable'
     if (preview.data?.scope.status === 'unavailable') return 'scope_unavailable'
     // A refused commit left this series unmapped. A stale preview is still
-    // recoverable (the dialog re-reads it), so it stays a review case.
-    if (commit.isError && !previewIsStale) return 'commit_failed'
+    // recoverable (the dialog re-reads it), so it stays a review case. An
+    // indeterminate outcome may have saved the mapping (issue #3776), so it is
+    // reported as unconfirmed rather than claiming the save failed.
+    if (commit.isError && !previewIsStale) {
+      return commitOutcomeUnknown ? 'commit_outcome_unknown' : 'commit_failed'
+    }
     return null
   })()
 
@@ -353,7 +362,15 @@ export default function QueueMapSeriesDialog({
     onSkip?.()
   }
 
-  const skipLabel = canReportFailure ? 'Could not map — skip this series' : 'Skip / needs review'
+  // An unconfirmed save may have applied, so advancing from here is not a
+  // "could not map" failure — the results leave the series for review with the
+  // unconfirmed reason.
+  const skipLabel =
+    failureReason === 'commit_outcome_unknown'
+      ? 'Could not confirm — leave for review'
+      : canReportFailure
+        ? 'Could not map — skip this series'
+        : 'Skip / needs review'
 
   const toggleRow = (rowId: string, checked: boolean) => {
     setUncheckedRowIds((previous) => {

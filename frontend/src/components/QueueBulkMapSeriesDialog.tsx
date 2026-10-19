@@ -34,6 +34,15 @@ interface QueueBulkMapSeriesDialogProps {
    */
   onMapped?: (confirmedIssueIds: number[]) => void
   /**
+   * Called once per open when the run's batch is fixed: a fresh run captured
+   * it, or a saved run resumed. The host stops preparing and draining from
+   * here — a queue refresh after a saved mapping drops the loaded pages, and
+   * re-draining would reopen the preparing dialog beneath the mapping or
+   * results dialog after every saved series. Optional: hosts that do not drain
+   * the Queue cursor can omit it.
+   */
+  onBatchCaptured?: () => void
+  /**
    * Reports whether an unfinished batch is preserved and can be resumed.
    *
    * The Queue derives the bulk action's disabled state from the series it
@@ -79,6 +88,7 @@ const FAILURE_DETAIL: Record<SeriesMappingFailure, string> = {
   preview_unavailable: 'the mapping plan could not be loaded',
   scope_unavailable: 'no safe mapping scope was available',
   commit_failed: 'the mapping could not be saved',
+  commit_outcome_unknown: 'the save result could not be confirmed; the mapping may have applied',
 }
 
 function buildBatch(threadIds: number[], threadTitles: string[]): BulkBatchItem[] {
@@ -110,8 +120,11 @@ function initialOutcomes(batch: BulkBatchItem[]) {
  * shared dialog so the reader can reach later series instead of being trapped,
  * and a series that could not be mapped in this pass (an unloadable origin, no
  * tracked issues, an unavailable mapping scope, or a refused commit) reports a
- * failure instead so the two are never conflated. Closing mid-run preserves the
- * batch; reopening the action resumes at the first unprocessed series.
+ * failure instead so the two are never conflated. An unconfirmed commit outcome
+ * (a lost response or server error may have saved the mapping) is reported as
+ * needing review with that reason instead of as a failed save. Closing mid-run
+ * preserves the batch; reopening the action resumes at the first unprocessed
+ * series.
  *
  * Every step reports its position in the batch, and a `Finish & show results`
  * action ends a long run early instead of forcing the reader to process every
@@ -127,6 +140,7 @@ export default function QueueBulkMapSeriesDialog({
   threadTitles,
   onClose,
   onMapped,
+  onBatchCaptured,
   onBatchPendingChange,
 }: QueueBulkMapSeriesDialogProps) {
   const [phase, setPhase] = useState<RunPhase>('idle')
@@ -178,8 +192,10 @@ export default function QueueBulkMapSeriesDialog({
     if (!justOpened) return
 
     if (phase === 'mapping') {
-      // Resume the interrupted run at its first unprocessed series.
+      // Resume the interrupted run at its first unprocessed series. The saved
+      // batch already fixed this run's scope, so the host stops preparing.
       resumeAtFirstPending()
+      onBatchCaptured?.()
       return
     }
 
@@ -195,7 +211,11 @@ export default function QueueBulkMapSeriesDialog({
     setConfirmedIssueIds([])
     setCurrentIndex(0)
     setPhase(nextBatch.length > 0 ? 'mapping' : 'results')
-  }, [isOpen, isScopeLoading, phase, resumeAtFirstPending])
+    // The batch is fixed from here on: a queue refresh after a saved mapping
+    // drops the loaded pages, and re-draining would reopen the preparing dialog
+    // beneath the mapping or results dialog after every saved series.
+    onBatchCaptured?.()
+  }, [isOpen, isScopeLoading, phase, resumeAtFirstPending, onBatchCaptured])
 
   const currentItem = batch[currentIndex]
 
@@ -214,7 +234,9 @@ export default function QueueBulkMapSeriesDialog({
 
       setOutcomes((previous) => ({ ...previous, [item.threadId]: outcome }))
 
-      if (outcome === 'failed' && failure) {
+      // The reason is recorded for any outcome that carries one, so a series
+      // left for review can still explain why (an unconfirmed commit outcome).
+      if (failure) {
         setFailures((previous) => ({ ...previous, [item.threadId]: failure }))
       }
 
@@ -251,7 +273,16 @@ export default function QueueBulkMapSeriesDialog({
   const handleCurrentSkipped = useCallback(() => finishCurrent('skipped'), [finishCurrent])
 
   const handleCurrentFailed = useCallback(
-    (reason: SeriesMappingFailure) => finishCurrent('failed', [], reason),
+    (reason: SeriesMappingFailure) => {
+      // An unconfirmed commit outcome is not a known failure: the mapping may
+      // have saved (issue #3776), so the results mark the series as needing
+      // review instead of counting it as failed.
+      if (reason === 'commit_outcome_unknown') {
+        finishCurrent('skipped', [], reason)
+        return
+      }
+      finishCurrent('failed', [], reason)
+    },
     [finishCurrent],
   )
 
@@ -333,7 +364,7 @@ export default function QueueBulkMapSeriesDialog({
       <Modal isOpen={preparingOpen} title="Map Series" onClose={handleCancel} size="default">
         <div className="space-y-3" data-testid="queue-bulk-map-series-preparing">
           <div className="flex justify-center py-4" aria-label="Loading series">
-            <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-[var(--theme-border)] border-t-[var(--theme-primary-action)] rounded-full animate-spin" />
           </div>
           <p className="text-sm text-[var(--theme-text-muted)]">
             Loading the whole queue so the batch covers every series that still needs a ComicVine
