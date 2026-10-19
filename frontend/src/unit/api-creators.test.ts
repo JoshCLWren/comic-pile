@@ -43,6 +43,7 @@ const DETAIL_RESPONSE = {
   upcoming_issues: [],
   next_cursor: null,
   rating_distribution: null,
+  insights: null,
 }
 
 const LIST_RESPONSE = {

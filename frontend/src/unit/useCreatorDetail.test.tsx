@@ -76,6 +76,7 @@ function makePage(overrides: Partial<CreatorDetailResponse> = {}): CreatorDetail
     upcoming_issues: [],
     next_cursor: null,
     rating_distribution: null,
+    insights: null,
     ...overrides,
   }
 }
@@ -127,6 +128,7 @@ describe('useCreatorDetail (bounded incremental loader)', () => {
       ],
       next_cursor: null,
     rating_distribution: null,
+    insights: null,
     })
     getDetail
       .mockResolvedValueOnce(makePage({ next_cursor: '50' }))
@@ -211,5 +213,45 @@ describe('useCreatorDetail (bounded incremental loader)', () => {
     await waitFor(() => expect(result.current.summary?.display_name).toBe('Test Creator'))
     result.current.refetch()
     await waitFor(() => expect(getDetail).toHaveBeenCalledTimes(2))
+  })
+
+  it('exposes first-page insights and defaults to null without them', async () => {
+    getDetail.mockResolvedValue(
+      makePage({
+        insights: {
+          min_series_sample: 3,
+          series_sample_met: true,
+          series_message: null,
+          excluded_incomplete_series_count: 0,
+          individual_issue_limit: 3,
+          strongest_series: {
+            series_key: 'thread:1',
+            thread_id: 1,
+            thread_title: 'Series A',
+            rated_issue_count: 3,
+            average_rating: 4.7,
+            lowest_rating: 4,
+            highest_rating: 5,
+            roles: ['writer'],
+            metadata_complete: true,
+            sort_key: 'thread:1',
+          },
+          weakest_series: null,
+          most_rated_series: null,
+          highest_rated_issues: [],
+          lowest_rated_issues: [],
+        },
+      }),
+    )
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useCreatorDetail('creator:7', 50, detailApi), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(result.current.insights?.strongest_series?.thread_title).toBe('Series A')
+
+    getDetail.mockResolvedValue(makePage())
+    const empty = renderHook(() => useCreatorDetail('creator:8', 50, detailApi), { wrapper })
+    await waitFor(() => expect(empty.result.current.isPending).toBe(false))
+    expect(empty.result.current.insights).toBeNull()
   })
 })

@@ -38,6 +38,7 @@ function baseState(overrides: Partial<CreatorDetailState> = {}): CreatorDetailSt
       { role: 'cover', issue_count: 1, rated_issue_count: 0, average_rating: null },
     ],
     ratingDistribution: null,
+    insights: null,
     seriesGroups: [
       {
         series_key: 'thread:1',
@@ -367,5 +368,148 @@ describe('CreatorDetailPage rating distribution', () => {
     renderAt('creator:7')
 
     expect(screen.getAllByRole('note').map((n) => n.textContent).join(' ')).toContain('Distribution reflects only')
+  })
+})
+
+describe('CreatorDetailPage highlights (#3092)', () => {
+  const insights = {
+    min_series_sample: 3,
+    series_sample_met: true,
+    series_message: null,
+    excluded_incomplete_series_count: 0,
+    individual_issue_limit: 3,
+    strongest_series: {
+      series_key: 'thread:9',
+      thread_id: 9,
+      thread_title: 'Best Run',
+      rated_issue_count: 4,
+      average_rating: 4.8,
+      lowest_rating: 4,
+      highest_rating: 5,
+      roles: ['writer'],
+      metadata_complete: true,
+      sort_key: 'thread:9',
+    },
+    weakest_series: {
+      series_key: 'thread:11',
+      thread_id: 11,
+      thread_title: 'Weak Run',
+      rated_issue_count: 3,
+      average_rating: 2.5,
+      lowest_rating: 1.5,
+      highest_rating: 3.5,
+      roles: ['artist'],
+      metadata_complete: true,
+      sort_key: 'thread:11',
+    },
+    most_rated_series: {
+      series_key: 'thread:12',
+      thread_id: 12,
+      thread_title: 'Long Run',
+      rated_issue_count: 7,
+      average_rating: 4,
+      lowest_rating: 3,
+      highest_rating: 5,
+      roles: ['writer'],
+      metadata_complete: true,
+      sort_key: 'thread:12',
+    },
+    highest_rated_issues: [
+      {
+        issue_id: 91,
+        issue_number: '7',
+        thread_id: 9,
+        thread_title: 'Best Run',
+        effective_rating: 5,
+        roles: ['writer'],
+        sort_key: '91',
+      },
+    ],
+    lowest_rated_issues: [
+      {
+        issue_id: 92,
+        issue_number: '2',
+        thread_id: 11,
+        thread_title: 'Weak Run',
+        effective_rating: 1.5,
+        roles: ['artist'],
+        sort_key: '92',
+      },
+    ],
+  }
+
+  it('renders strongest, weakest, and most-rated series with drill-down links', () => {
+    mockedHook.mockReturnValue(baseState({ insights }))
+    renderAt('creator:7')
+
+    expect(screen.getByRole('heading', { name: 'Highlights' })).toBeInTheDocument()
+    expect(screen.getByText('Strongest series')).toBeInTheDocument()
+    expect(screen.getByText('Weakest series')).toBeInTheDocument()
+    expect(screen.getByText('Most rated series')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Strongest series.*Best Run/ })).toHaveAttribute(
+      'href',
+      '/thread/9',
+    )
+    expect(screen.getByRole('link', { name: /Weakest series.*Weak Run/ })).toHaveAttribute(
+      'href',
+      '/thread/11',
+    )
+    expect(screen.getByRole('link', { name: /Most rated series.*Long Run/ })).toHaveAttribute(
+      'href',
+      '/thread/12',
+    )
+  })
+
+  it('separates individual issue extremes from aggregate series conclusions', () => {
+    mockedHook.mockReturnValue(baseState({ insights }))
+    renderAt('creator:7')
+
+    expect(screen.getByRole('heading', { name: 'Individual issues' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Single ratings only, not an overall best or worst verdict on the creator.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Highest-rated issues' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Lowest-rated issues' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Best Run #7/ })).toHaveAttribute('href', '/thread/9')
+    expect(screen.getByRole('link', { name: /Weak Run #2/ })).toHaveAttribute('href', '/thread/11')
+  })
+
+  it('explains a thin series sample instead of ranking series', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        insights: {
+          ...insights,
+          series_sample_met: false,
+          series_message: 'Not enough rated issues in a single series yet.',
+          strongest_series: null,
+          weakest_series: null,
+          most_rated_series: null,
+        },
+      }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getByText('Not enough rated issues in a single series yet.')).toBeInTheDocument()
+    expect(screen.queryByText('Strongest series')).not.toBeInTheDocument()
+    // Individual issue extremes still surface even when series cannot be ranked.
+    expect(screen.getByRole('heading', { name: 'Highest-rated issues' })).toBeInTheDocument()
+  })
+
+  it('flags series excluded for incomplete metadata as lower bounds', () => {
+    mockedHook.mockReturnValue(
+      baseState({ insights: { ...insights, excluded_incomplete_series_count: 2 } }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getByRole('note')).toHaveTextContent(
+      '2 series with rated work are not compared because creator metadata is still incomplete',
+    )
+  })
+
+  it('omits the highlights section when the backend sends no insights', () => {
+    mockedHook.mockReturnValue(baseState({ insights: null }))
+    renderAt('creator:7')
+
+    expect(screen.queryByRole('heading', { name: 'Highlights' })).not.toBeInTheDocument()
   })
 })

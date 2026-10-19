@@ -82,6 +82,7 @@ function creatorDetailPayload() {
     upcoming_issues: [],
     next_cursor: null,
     rating_distribution: null,
+    insights: null,
   }
 }
 

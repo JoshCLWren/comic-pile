@@ -4,7 +4,7 @@ import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
-import type { CreatorIssueRow, CreatorSeriesGroup } from '../services/api-creators'
+import type { CreatorIssueInsight, CreatorIssueRow, CreatorSeriesGroup, CreatorSeriesInsight } from '../services/api-creators'
 import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { RatingHistoryChart } from '../components/RatingHistoryChart'
@@ -81,6 +81,48 @@ function SeriesGroupRow({ group }: { group: CreatorSeriesGroup }) {
   )
 }
 
+function SeriesInsightCard({ label, insight }: { label: string; insight: CreatorSeriesInsight }) {
+  return (
+    <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+      <Link
+        to={`/thread/${insight.thread_id}`}
+        className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+      >
+        <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+          {label}
+        </span>
+        <span className="mt-0.5 block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
+          {insight.thread_title}
+        </span>
+        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          <RatingValue value={insight.average_rating} label={`Average ${insight.average_rating} out of 5`} />
+          <span>{insight.rated_issue_count} rated {insight.rated_issue_count === 1 ? 'issue' : 'issues'}</span>
+          {insight.roles.length > 0 && <span className="break-words">{insight.roles.join(', ')}</span>}
+        </span>
+      </Link>
+    </li>
+  )
+}
+
+function IssueInsightCard({ insight }: { insight: CreatorIssueInsight }) {
+  return (
+    <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+      <Link
+        to={`/thread/${insight.thread_id}`}
+        className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+      >
+        <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
+          {insight.thread_title} #{insight.issue_number}
+        </span>
+        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          <RatingValue value={insight.effective_rating} label={`Rated ${insight.effective_rating} out of 5`} />
+          {insight.roles.length > 0 && <span className="break-words">{insight.roles.join(', ')}</span>}
+        </span>
+      </Link>
+    </li>
+  )
+}
+
 function SectionHeading({ id, children }: { id: string; children: ReactNode }) {
   return (
     <h2 id={id} className="text-base font-bold md:text-lg" style={{ color: 'var(--theme-text-primary)' }}>
@@ -98,6 +140,7 @@ export default function CreatorDetailPage() {
     coverage,
     roleStats,
     ratingDistribution,
+    insights,
     seriesGroups,
     seriesGroupsTotal,
     seriesGroupsComplete,
@@ -248,6 +291,80 @@ export default function CreatorDetailPage() {
           </p>
         )}
       </section>
+
+      {insights && (
+        <section aria-labelledby="creator-highlights-heading" className="mt-6">
+          <SectionHeading id="creator-highlights-heading">Highlights</SectionHeading>
+          <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            What is driving your average. Series comparisons need at least{' '}
+            {insights.min_series_sample} rated issues so a single rating cannot outrank a
+            longer run.
+          </p>
+
+          {insights.series_sample_met ? (
+            <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {insights.strongest_series && (
+                <SeriesInsightCard label="Strongest series" insight={insights.strongest_series} />
+              )}
+              {insights.weakest_series && (
+                <SeriesInsightCard label="Weakest series" insight={insights.weakest_series} />
+              )}
+              {insights.most_rated_series && (
+                <SeriesInsightCard label="Most rated series" insight={insights.most_rated_series} />
+              )}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+              {insights.series_message ?? 'Not enough rated issues in a single series yet.'}
+            </p>
+          )}
+
+          {insights.excluded_incomplete_series_count > 0 && (
+            <p className="mt-2 text-xs" role="note" style={{ color: 'var(--theme-text-muted)' }}>
+              {insights.excluded_incomplete_series_count} series with rated work{' '}
+              {insights.excluded_incomplete_series_count === 1 ? 'is' : 'are'} not compared
+              because creator metadata is still incomplete. Those counts are lower bounds.
+            </p>
+          )}
+
+          {(insights.highest_rated_issues.length > 0 || insights.lowest_rated_issues.length > 0) && (
+            <>
+              <h3 className="mt-4 text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
+                Individual issues
+              </h3>
+              <p className="mt-0.5 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+                Single ratings only, not an overall best or worst verdict on the creator.
+              </p>
+              <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {insights.highest_rated_issues.length > 0 && (
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
+                      Highest-rated issues
+                    </h4>
+                    <ul className="mt-1 space-y-2">
+                      {insights.highest_rated_issues.map((insight) => (
+                        <IssueInsightCard key={insight.issue_id} insight={insight} />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {insights.lowest_rated_issues.length > 0 && (
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
+                      Lowest-rated issues
+                    </h4>
+                    <ul className="mt-1 space-y-2">
+                      {insights.lowest_rated_issues.map((insight) => (
+                        <IssueInsightCard key={insight.issue_id} insight={insight} />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       {summary.ratings_count > 0 && (
         <section aria-labelledby="creator-rating-history-heading" className="mt-6">

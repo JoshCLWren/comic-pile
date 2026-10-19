@@ -117,6 +117,7 @@ async function installCreatorsDetail(page: Page) {
           upcoming_issues: [],
           next_cursor: null,
           rating_distribution: null,
+          insights: null,
         },
       }),
   )

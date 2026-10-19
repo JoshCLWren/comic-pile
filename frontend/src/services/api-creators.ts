@@ -77,6 +77,45 @@ export interface CreatorSeriesGroup {
   sort_key: string
 }
 
+/** One individual issue extreme behind a creator highlight (issue #3092). */
+export interface CreatorIssueInsight {
+  issue_id: number
+  issue_number: string
+  thread_id: number
+  thread_title: string
+  effective_rating: number
+  roles: string[]
+  sort_key: string
+}
+
+/** One series/run extreme backed by a minimum rated-issue sample (issue #3092). */
+export interface CreatorSeriesInsight {
+  series_key: string
+  thread_id: number
+  thread_title: string
+  rated_issue_count: number
+  average_rating: number
+  lowest_rating: number
+  highest_rating: number
+  roles: string[]
+  metadata_complete: boolean
+  sort_key: string
+}
+
+/** Evidence-backed strongest/weakest/most-read highlights (issue #3092). */
+export interface CreatorInsights {
+  min_series_sample: number
+  series_sample_met: boolean
+  series_message: string | null
+  excluded_incomplete_series_count: number
+  individual_issue_limit: number
+  strongest_series: CreatorSeriesInsight | null
+  weakest_series: CreatorSeriesInsight | null
+  most_rated_series: CreatorSeriesInsight | null
+  highest_rated_issues: CreatorIssueInsight[]
+  lowest_rated_issues: CreatorIssueInsight[]
+}
+
 /** Full personal creator detail payload (issue #2037). */
 export interface CreatorDetailResponse {
   summary: CreatorSummaryItem
@@ -90,6 +129,7 @@ export interface CreatorDetailResponse {
   upcoming_issues: CreatorIssueRow[]
   next_cursor: string | null
   rating_distribution: CreatorRatingDistribution | null
+  insights: CreatorInsights | null
 }
 
 export interface CreatorDetailPageParams {
