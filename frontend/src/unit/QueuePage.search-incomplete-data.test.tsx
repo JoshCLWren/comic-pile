@@ -152,6 +152,7 @@ describe('Queue search with incomplete data', () => {
       nextPageToken: 'next-page-token',
       loadMore: vi.fn().mockResolvedValue(undefined),
       activeCount: 10, // Total count is higher than what's loaded
+      isLoading: true,
     })
 
     renderQueue()
