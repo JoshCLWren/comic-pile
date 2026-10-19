@@ -618,10 +618,16 @@ async def mark_issue_unread(
             detail=f"Issue {issue_id} is already marked as unread",
         )
 
+    thread_was_completed = thread.status == "completed"
+    if thread_was_completed:
+        # Reactivating changes queue membership and the later renumbering
+        # takes the per-reader queue lock. Take it before any thread row is
+        # dirty or flushed so row locks always follow it (same ordering as
+        # move/shuffle) and the two cannot deadlock.
+        await thread_repository.acquire_queue_lock(db, current_user_id)
+
     issue.status = "unread"
     issue.read_at = None
-
-    thread_was_completed = thread.status == "completed"
 
     # Logic for updating next_unread
     current_next = await issue_repository.get_issue(db, thread.next_unread_issue_id) if thread.next_unread_issue_id else None
@@ -668,6 +674,12 @@ async def bulk_mark_issue_read(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="issue_ids must not be empty",
         )
+
+    # Any of these reads can complete a series and trigger renumbering, and
+    # the loop below flushes dirty thread rows between queries. Take the queue
+    # lock first so row locks always follow it (same ordering as move/shuffle)
+    # and the two cannot deadlock.
+    await thread_repository.acquire_queue_lock(db, current_user_id)
 
     # Load and verify ownership for all requested IDs
     issues: list[Issue] = []
@@ -736,6 +748,12 @@ async def bulk_mark_issue_unread(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="issue_ids must not be empty",
         )
+
+    # Any of these reads can reactivate or complete a series and trigger
+    # renumbering, and the loop below flushes dirty thread rows between
+    # queries. Take the queue lock first so row locks always follow it (same
+    # ordering as move/shuffle) and the two cannot deadlock.
+    await thread_repository.acquire_queue_lock(db, current_user_id)
 
     issues: list[Issue] = []
     for issue_id in issue_ids:

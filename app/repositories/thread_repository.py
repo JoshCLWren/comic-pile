@@ -111,6 +111,28 @@ async def max_queue_position(db: AsyncSession, user_id: int) -> int:
     return int(result.scalar_one() or 0)
 
 
+async def acquire_queue_lock(db: AsyncSession, user_id: int) -> None:
+    """Take the per-reader queue lock before this transaction writes any row.
+
+    Queue writers that may later renumber must take this lock before they
+    dirty or flush thread rows. Every move and shuffle takes the same
+    transaction-scoped advisory lock first and row locks second, so acquiring
+    it first here keeps one global lock order and prevents a deadlock with a
+    concurrent shuffle.
+
+    Autoflush is suppressed by the queue helper so this call itself cannot
+    flush pending row changes first. Re-acquiring the lock later in the same
+    transaction is a no-op.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the queue being modified.
+    """
+    from comic_pile.queue import acquire_queue_lock as _acquire_queue_lock
+
+    await _acquire_queue_lock(user_id, db)
+
+
 async def renormalize_queue_positions(db: AsyncSession, user_id: int) -> None:
     """Rewrite active queue positions as a dense 1..N sequence.
 
@@ -128,10 +150,7 @@ async def renormalize_queue_positions(db: AsyncSession, user_id: int) -> None:
         db: Database session.
         user_id: Owner of the queue being renumbered.
     """
-    from comic_pile.queue import acquire_queue_lock
-
-    with db.no_autoflush:
-        await acquire_queue_lock(user_id, db)
+    await acquire_queue_lock(db, user_id)
     result = await db.execute(
         select(Thread)
         .where(Thread.user_id == user_id)

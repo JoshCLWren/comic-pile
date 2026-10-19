@@ -7,19 +7,21 @@ current dense storage contract until sparse ordering lands.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import event, select, text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Issue, Thread, User
 from app.repositories import thread_repository
 from app.schemas.thread import ThreadCreate, ThreadUpdate
 from app.services import issue as issue_service
 from app.services import thread_service
-from comic_pile.queue import ADVISORY_LOCK_NAMESPACE
+from comic_pile.queue import ADVISORY_LOCK_NAMESPACE, acquire_queue_lock
 
 
 async def _active_positions(async_db: AsyncSession, user_id: int) -> list[int]:
@@ -61,6 +63,43 @@ def _assert_dense(positions: list[int]) -> None:
     """Assert ``positions`` is exactly ``1..N`` with no reusable gap."""
     assert positions == list(range(1, len(positions) + 1)), positions
     assert max(positions, default=0) <= len(positions)
+
+
+@contextmanager
+def _captured_statements(db_engine: AsyncEngine) -> Iterator[list[str]]:
+    """Record every SQL statement executed while the context is active."""
+    statements: list[str] = []
+
+    def _capture(conn, cursor, statement, parameters, context, executemany) -> None:
+        statements.append(str(statement))
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
+    try:
+        yield statements
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
+
+
+def _first_statement_index(statements: list[str], needle: str) -> int:
+    """Return the index of the first statement containing ``needle``, or -1."""
+    normalized_needle = needle.upper()
+    for index, statement in enumerate(statements):
+        if normalized_needle in " ".join(statement.upper().split()):
+            return index
+    return -1
+
+
+def _assert_queue_lock_precedes_thread_writes(statements: list[str]) -> None:
+    """The advisory queue lock must be acquired before any thread row write.
+
+    Taking a thread row lock first inverts the global order used by
+    move/shuffle and lets PostgreSQL abort one of two concurrent requests.
+    """
+    lock_index = _first_statement_index(statements, "pg_advisory_xact_lock")
+    write_index = _first_statement_index(statements, "UPDATE threads")
+    assert lock_index != -1, statements
+    assert write_index != -1, statements
+    assert lock_index < write_index, statements
 
 
 @pytest.mark.asyncio
@@ -385,3 +424,128 @@ async def test_renormalize_holds_the_shared_queue_lock(
     )
     assert held.scalar_one() == 1
     _assert_dense(await _active_positions(async_db, default_user.id))
+
+
+@pytest.mark.asyncio
+async def test_acquiring_queue_lock_does_not_flush_pending_rows_first(
+    async_db: AsyncSession, default_user: User, db_engine: AsyncEngine
+) -> None:
+    """The queue lock is acquired before pending thread rows are flushed.
+
+    A caller may reach the lock with dirty rows already pending. Flushing them
+    first takes row locks before the advisory lock and inverts the ordering
+    that a concurrent shuffle relies on.
+    """
+    thread = await _add_thread(async_db, default_user, title="A", position=1)
+    await async_db.commit()
+    thread.title = "pending title"
+
+    with _captured_statements(db_engine) as statements:
+        await acquire_queue_lock(default_user.id, async_db)
+        await async_db.flush()
+
+    _assert_queue_lock_precedes_thread_writes(statements)
+
+
+@pytest.mark.asyncio
+async def test_update_thread_takes_queue_lock_before_row_writes(
+    async_db: AsyncSession, default_user: User, db_engine: AsyncEngine
+) -> None:
+    """Returning a finished legacy series to the queue locks before writing.
+
+    Computing the append position issues a query, which used to autoflush the
+    dirty thread row first and take the row lock before the queue lock.
+    """
+    await _add_thread(async_db, default_user, title="A", position=1)
+    finished = Thread(
+        title="B",
+        format="comic",
+        user_id=default_user.id,
+        queue_position=0,
+        status="completed",
+        issues_remaining=0,
+        total_issues=None,
+        reading_progress="completed",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(finished)
+    await async_db.commit()
+
+    with _captured_statements(db_engine) as statements:
+        await thread_service.update_thread(
+            async_db, default_user.id, finished.id, ThreadUpdate(issues_remaining=2)
+        )
+
+    _assert_queue_lock_precedes_thread_writes(statements)
+
+
+@pytest.mark.asyncio
+async def test_mark_issue_unread_takes_queue_lock_before_row_writes(
+    async_db: AsyncSession, default_user: User, db_engine: AsyncEngine
+) -> None:
+    """Reactivating a finished series via mark-unread locks the queue first."""
+    await _add_thread(async_db, default_user, title="A", position=1)
+    completed = Thread(
+        title="B",
+        format="comic",
+        user_id=default_user.id,
+        queue_position=0,
+        status="completed",
+        issues_remaining=0,
+        total_issues=1,
+        reading_progress="completed",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(completed)
+    await async_db.flush()
+    read_issue = Issue(
+        thread_id=completed.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=datetime.now(UTC),
+    )
+    async_db.add(read_issue)
+    await async_db.commit()
+
+    with _captured_statements(db_engine) as statements:
+        await issue_service.mark_issue_unread(async_db, read_issue.id, default_user.id)
+
+    _assert_queue_lock_precedes_thread_writes(statements)
+
+
+@pytest.mark.asyncio
+async def test_bulk_mark_issue_unread_takes_queue_lock_before_row_writes(
+    async_db: AsyncSession, default_user: User, db_engine: AsyncEngine
+) -> None:
+    """Bulk reactivation locks the queue before the per-thread recalculation."""
+    await _add_thread(async_db, default_user, title="A", position=1)
+    completed = Thread(
+        title="B",
+        format="comic",
+        user_id=default_user.id,
+        queue_position=0,
+        status="completed",
+        issues_remaining=0,
+        total_issues=1,
+        reading_progress="completed",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(completed)
+    await async_db.flush()
+    read_issue = Issue(
+        thread_id=completed.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=datetime.now(UTC),
+    )
+    async_db.add(read_issue)
+    await async_db.commit()
+
+    with _captured_statements(db_engine) as statements:
+        await issue_service.bulk_mark_issue_unread(
+            async_db, [read_issue.id], default_user.id
+        )
+
+    _assert_queue_lock_precedes_thread_writes(statements)

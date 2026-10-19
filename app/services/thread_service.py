@@ -765,6 +765,11 @@ async def update_thread(
         thread.format = normalize_format_value(thread_data.format)
     if thread_data.issues_remaining is not None:
         if not thread.uses_issue_tracking():
+            # This edit can change queue membership, and computing the append
+            # position issues a query that would autoflush the dirty thread
+            # row. Take the queue lock first so row locks always follow it
+            # (same ordering as move/shuffle) and cannot deadlock.
+            await thread_repository.acquire_queue_lock(db, user_id)
             thread.issues_remaining = thread_data.issues_remaining
             if thread.issues_remaining == 0:
                 if thread.apply_derived_status("completed"):
