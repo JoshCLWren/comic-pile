@@ -425,17 +425,17 @@ function greptileSummaryFindings(body) {
 }
 
 async function greptileReviewCompletedAt(github, context, sha) {
-  const response = await restCall(github, context, {
+  const response = await withRetryLogged(github, context, {
     endpoint: `repos/${context.repo.owner}/${context.repo.repo}/commits/${sha}/check-runs`,
     method: 'GET',
     event: context.eventName,
   }, async () => {
-    return withRetry(() => github.rest.checks.listForRef({
+    return github.rest.checks.listForRef({
       owner: context.repo.owner,
       repo: context.repo.repo,
       ref: sha,
       per_page: 100,
-    }));
+    });
   });
   const times = (response?.data?.check_runs || [])
     .filter(run => /greptile/i.test(run.name || '') && run.completed_at)
@@ -479,16 +479,16 @@ function openSummaryFindings(summary, threads, head, reviewedAt, issueComments =
 // therefore harmless, because the next run sees the same live state. Routing
 // only ever moves a PR to factory:changes-requested; it never un-routes.
 async function routeGreptileFindings(github, context, number) {
-  const live = (await restCall(github, context, {
+  const live = (await withRetryLogged(github, context, {
     endpoint: `repos/${context.repo.owner}/${context.repo.repo}/pulls/${number}`,
     method: 'GET',
     event: context.eventName,
   }, async () => {
-    return withRetry(() => github.rest.pulls.get({
+    return github.rest.pulls.get({
       owner: context.repo.owner,
       repo: context.repo.repo,
       pull_number: number,
-    }));
+    });
   }))?.data;
   if (!live || (live.state && live.state !== 'open')) return { routed: false, reason: 'not-open' };
   const head = live.head?.sha;
