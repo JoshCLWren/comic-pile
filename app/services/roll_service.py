@@ -722,10 +722,38 @@ class RollService:
         selected_index: int,
         unread_count: int,
         snoozed_count: int,
+        issue_id: int | None = None,
+        issue_number: str | None = None,
+        next_issue_id: int | None = None,
+        next_issue_number: str | None = None,
+        recommendation_reason_codes: list[str] | None = None,
     ) -> RollResponse:
         """Convert selection artifacts into the public RollResponse.
 
-        Either ``selected_thread`` or ``thread_attrs`` must be provided.
+        Either ``selected_thread`` or ``thread_attrs`` must be provided. The
+        displayed Queue ordinal is resolved here, in the service layer, so the
+        router never performs the whole-queue lookup itself. Optional issue
+        fields and reason codes let callers surface the selected issue and its
+        reader-facing explanation while keeping response assembly in the
+        service.
+
+        Args:
+            selected_thread: ORM thread selected by the roll.
+            thread_attrs: Pre-extracted thread attributes (alternative to
+                ``selected_thread``).
+            current_die: Current die size at roll time.
+            selected_index: Zero-based index of the selected candidate.
+            unread_count: Remaining unread issue count.
+            snoozed_count: Number of snoozed series for the offset.
+            issue_id: Selected issue ID, when issue tracking applies.
+            issue_number: Selected issue number, when issue tracking applies.
+            next_issue_id: Next unread issue ID, mirrored to the client.
+            next_issue_number: Next unread issue number, mirrored to the client.
+            recommendation_reason_codes: Decision-time reason codes projected
+                into the reader-facing explanation.
+
+        Returns:
+            A fully populated ``RollResponse``.
         """
         if thread_attrs is not None:
             thread_id = thread_attrs["thread_id"]
@@ -756,13 +784,13 @@ class RollService:
             result=selected_index + 1,
             offset=snoozed_count,
             snoozed_count=snoozed_count,
-            issue_id=None,
-            issue_number=None,
-            next_issue_id=None,
-            next_issue_number=None,
+            issue_id=issue_id,
+            issue_number=issue_number,
+            next_issue_id=next_issue_id,
+            next_issue_number=next_issue_number,
             total_issues=total_issues,
             reading_progress=reading_progress,
-            explanation=None,
+            explanation=get_primary_explanation(recommendation_reason_codes),
         )
 
     async def execute_dismiss_pending(self, current_user_id: int) -> None:

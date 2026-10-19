@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.thread import normalize_format_value
-from app.services.queue_display import display_position
+from app.services.queue_display import display_position, display_positions
 from app.repositories import reading_session_repository, thread_repository
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.services.tag_inheritance_service import TagInheritanceService
@@ -311,6 +311,24 @@ async def get_active_thread_info(
         queue_position=await display_position(db, thread),
         last_rolled_result=event.result,
     )
+
+
+async def load_queue_position_map(db: AsyncSession, user_id: int) -> dict[int, int]:
+    """Return the reader's dense 1..N Queue ordinals in one whole-queue read.
+
+    Session history rows resolve their active thread's displayed position from
+    this single map, so a page of sessions never issues one position lookup per
+    row. The lookup itself belongs to the service layer; routers only consume
+    the returned mapping.
+
+    Args:
+        db: Database session.
+        user_id: Authenticated owner of the queue.
+
+    Returns:
+        Mapping of active thread ID to its 1-based Queue ordinal.
+    """
+    return await display_positions(db, user_id)
 
 
 async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str, list[str]]:

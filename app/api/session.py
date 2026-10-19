@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Issue, ReadingSession, Snapshot, Thread, User
+from app.models import Event, ReadingSession, Snapshot, Thread, User
 from app.models.thread import normalize_format_value
 from app.schemas import (
     ActiveThreadInfo,
@@ -31,8 +31,13 @@ from app.schemas.session import (
     build_session_intent_state,
 )
 from app.services.ownership import get_owned_session_or_404
-from app.services.queue_display import display_position, display_positions
-from app.services.session_response import build_ladder_path, build_session_event_details
+from app.services.session_response import (
+    build_ladder_path,
+    build_session_event_details,
+    get_active_thread,
+    get_session_with_thread_safe,
+    load_queue_position_map,
+)
 from app.services.summary_service import build_narrative_summary
 from app.services.reading_session_service import get_reading_session_service, ReadingSessionService
 from app.services.session_history_projection import project_session_history_events
@@ -69,200 +74,6 @@ def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
         last_rolled_result=sr.last_rolled_result,
         has_restore_point=sr.has_restore_point,
         snapshot_count=sr.snapshot_count,
-    )
-
-
-async def _fetch_thread_issue_metadata(
-    thread: Thread, db: AsyncSession
-) -> tuple[int | None, str | None]:
-    """Fetch issue metadata for a thread.
-
-    Args:
-        thread: The thread to fetch issue metadata for.
-        db: Database session.
-
-    Returns:
-        Tuple of (issue_id, issue_number) for the thread's next unread issue,
-        or (None, None) if the thread doesn't use issue tracking or has no next issue.
-    """
-    if not thread.uses_issue_tracking() or not thread.next_unread_issue_id:
-        return None, None
-
-    issue_result = await db.execute(select(Issue).where(Issue.id == thread.next_unread_issue_id))
-    next_issue = issue_result.scalar_one_or_none()
-    if next_issue:
-        return next_issue.id, next_issue.issue_number
-    return None, None
-
-
-async def get_session_with_thread_safe(
-    session_id: int, db: AsyncSession
-) -> tuple[ReadingSession | None, ActiveThreadInfo | None]:
-    """Get session and active thread with consistent lock ordering to prevent deadlocks.
-
-    Args:
-        session_id: The session ID to query.
-        db: Database session.
-
-    Returns:
-        Tuple of (session or None, active_thread or None).
-    """
-    session = await db.get(ReadingSession, session_id)
-    if not session:
-        return None, None
-
-    # Query the latest action event to determine if there's an active roll.
-    # An active roll exists only if the most recent action was a "roll".
-    event_result = await db.execute(
-        select(Event)
-        .where(Event.session_id == session_id)
-        .where(Event.type.in_(["roll", "rate", "snooze", "rolled_but_skipped"]))
-        .order_by(Event.timestamp.desc(), Event.id.desc())
-    )
-    latest_event = event_result.scalars().first()
-
-    event = latest_event if latest_event and latest_event.type == "roll" else None
-
-    last_rolled_result = event.result if event else None
-
-    # Prefer pending thread when present so UI and rate target stay consistent.
-    if session.pending_thread_id is not None:
-        pending_result = await db.execute(
-            select(Thread)
-            .where(Thread.id == session.pending_thread_id)
-            .where(Thread.user_id == session.user_id)
-        )
-        pending_thread = pending_result.scalar_one_or_none()
-        if pending_thread:
-            issues_remaining = await pending_thread.get_issues_remaining(db)
-            issue_id, issue_number = await _fetch_thread_issue_metadata(pending_thread, db)
-            tags = await TagInheritanceService(db).get_threads_direct_tags(
-                session.user_id, [pending_thread.id]
-            )
-            return session, ActiveThreadInfo(
-                id=pending_thread.id,
-                title=pending_thread.title,
-                format=normalize_format_value(pending_thread.format),
-                issues_remaining=issues_remaining,
-                queue_position=await display_position(db, pending_thread),
-                last_rolled_result=last_rolled_result,
-                total_issues=pending_thread.total_issues,
-                reading_progress=pending_thread.reading_progress,
-                issue_id=issue_id,
-                issue_number=issue_number,
-                next_issue_id=issue_id,
-                next_issue_number=issue_number,
-                tags=tags.get(pending_thread.id, []),
-            )
-        return session, None
-
-    if event and event.selected_thread_id:
-        thread = await db.get(Thread, event.selected_thread_id)
-        if thread and thread.user_id == session.user_id:
-            issues_remaining = await thread.get_issues_remaining(db)
-            issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
-            tags = await TagInheritanceService(db).get_threads_direct_tags(
-                session.user_id, [thread.id]
-            )
-            return session, ActiveThreadInfo(
-                id=thread.id,
-                title=thread.title,
-                format=normalize_format_value(thread.format),
-                issues_remaining=issues_remaining,
-                queue_position=await display_position(db, thread),
-                last_rolled_result=last_rolled_result,
-                total_issues=thread.total_issues,
-                reading_progress=thread.reading_progress,
-                issue_id=issue_id,
-                issue_number=issue_number,
-                next_issue_id=issue_id,
-                next_issue_number=issue_number,
-                tags=tags.get(thread.id, []),
-            )
-
-    # When a thread is just completed by rating and no pending thread is set,
-    # keep that completed thread visible to the UI for follow-up actions.
-    # NOTE: This behavior was removed as part of issue #297 to fix UX issue
-    # where completed threads remained in the active slot without clear signal
-    # that the thread was done. Now completed threads are removed from the
-    # active slot and the user must roll for a new thread.
-    # if latest_event and latest_event.type == "rate" and latest_event.thread_id:
-    #     rated_thread = await db.get(Thread, latest_event.thread_id)
-    #     if (
-    #         rated_thread
-    #         and rated_thread.user_id == session.user_id
-    #         and rated_thread.status == "completed"
-    #     ):
-    #         issues_remaining = await rated_thread.get_issues_remaining(db)
-    #         issue_id, issue_number = await _fetch_thread_issue_metadata(rated_thread, db)
-    #         return session, ActiveThreadInfo(
-    #             id=rated_thread.id,
-    #             title=rated_thread.title,
-    #             format=rated_thread.format,
-    #             issues_remaining=issues_remaining,
-    #             queue_position=rated_thread.queue_position,
-    #             last_rolled_result=last_rolled_result,
-    #             total_issues=rated_thread.total_issues,
-    #             reading_progress=rated_thread.reading_progress,
-    #             issue_id=issue_id,
-    #             issue_number=issue_number,
-    #             next_issue_id=issue_id,
-    #             next_issue_number=issue_number,
-    #         )
-
-    return session, None
-
-
-async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadInfo | None:
-    """Get the most recently rolled thread for the session.
-
-    Args:
-        session_id: The session ID to query.
-        db: Database session.
-
-    Returns:
-        ActiveThreadInfo if found, None otherwise.
-    """
-    session = await db.get(ReadingSession, session_id)
-    user_id = session.user_id if session else None
-
-    event_result = await db.execute(
-        select(Event)
-        .where(Event.session_id == session_id)
-        .where(Event.type == "roll")
-        .where(Event.selected_thread_id.is_not(None))
-        .order_by(Event.timestamp.desc())
-    )
-    event = event_result.scalars().first()
-
-    if not event or not event.selected_thread_id:
-        return None
-
-    thread = await db.get(Thread, event.selected_thread_id)
-    if not thread or (user_id and thread.user_id != user_id):
-        return None
-
-    issues_remaining = await thread.get_issues_remaining(db)
-    issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
-
-    tags = []
-    if user_id:
-        tags_map = await TagInheritanceService(db).get_threads_direct_tags(user_id, [thread.id])
-        tags = tags_map.get(thread.id, [])
-    return ActiveThreadInfo(
-        id=thread.id,
-        title=thread.title,
-        format=normalize_format_value(thread.format),
-        issues_remaining=issues_remaining,
-        queue_position=await display_position(db, thread),
-        last_rolled_result=event.result,
-        total_issues=thread.total_issues,
-        reading_progress=thread.reading_progress,
-        issue_id=issue_id,
-        issue_number=issue_number,
-        next_issue_id=issue_id,
-        next_issue_number=issue_number,
-        tags=tags,
     )
 
 
@@ -540,7 +351,7 @@ async def list_sessions(
         unread_counts, issue_numbers = await load_issue_stats(threads, db)
         # One whole-queue read for every history row on this page (the same
         # thread can appear in many sessions), instead of one per session.
-        position_map = await display_positions(db, current_user.id)
+        position_map = await load_queue_position_map(db, current_user.id)
         tags_map = await TagInheritanceService(db).get_threads_direct_tags(
             current_user.id, list(thread_ids)
         )

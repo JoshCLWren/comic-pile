@@ -1011,10 +1011,10 @@ async def restore_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
         thread.status = "completed"
         thread.queue_position = 0
 
-    # Renormalization was already done at the start to acquire the lock.
-    # However, if the status changed to active, we may need to ensure positions are dense.
-    # The start-of-function call acquired the lock, but we are changing the set of active threads.
-    # We call it again after the update to actually perform the renumbering.
+    # The first renormalize call only acquires the queue lock (it runs before
+    # the row is written). Returning the series to the active set changes queue
+    # membership, so renumber the survivors again now that the update is
+    # staged. The lock is already held, so the second call only renumbers.
     if thread.status == "active":
         await thread_repository.renormalize_queue_positions(db, user_id)
 

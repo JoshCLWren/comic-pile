@@ -17,16 +17,13 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, ReadingSession, Snapshot, Thread
 from app.models.recommendation_context import RecommendationContext
-from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
-from app.services.explanation_projection import get_primary_explanation
 from app.services.reading_effort import (
     EffortEstimate,
 )
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.services.roll_service import RollService
-from app.services.queue_display import display_position
 from app.services.session_response import (
     build_ladder_path,
     build_session_response,
@@ -169,35 +166,6 @@ async def _select_pending_thread(
         selection_method=artifacts["selection_method"],
         event=artifacts["event"],
         rec_context_create=artifacts["rec_context_create"],
-    )
-
-
-async def _build_roll_response(
-    *,
-    db: AsyncSession,
-    artifacts: _SelectionArtifacts,
-    current_die: int,
-    snoozed_count: int,
-) -> RollResponse:
-    """Convert shared selection artifacts into the public ``RollResponse``."""
-    selected_thread = artifacts.selected_thread
-    return RollResponse(
-        thread_id=selected_thread.id,
-        title=selected_thread.title,
-        format=normalize_format_value(selected_thread.format),
-        issues_remaining=artifacts.unread_count,
-        queue_position=await display_position(db, selected_thread),
-        die_size=current_die,
-        result=artifacts.selected_index + 1,
-        offset=snoozed_count,
-        snoozed_count=snoozed_count,
-        issue_id=artifacts.selected_thread_issue_id,
-        issue_number=artifacts.selected_thread_issue_number,
-        next_issue_id=artifacts.selected_thread_issue_id,
-        next_issue_number=artifacts.selected_thread_issue_number,
-        total_issues=selected_thread.total_issues,
-        reading_progress=selected_thread.reading_progress,
-        explanation=get_primary_explanation(artifacts.recommendation_reason_codes),
     )
 
 
@@ -380,11 +348,17 @@ async def roll_dice(
 
     await db.commit()
 
-    return await _build_roll_response(
-        db=db,
-        artifacts=artifacts,
+    return await RollService(db).build_roll_response(
+        selected_thread=artifacts.selected_thread,
         current_die=current_die,
+        selected_index=artifacts.selected_index,
+        unread_count=artifacts.unread_count,
         snoozed_count=len(snoozed_ids),
+        issue_id=artifacts.selected_thread_issue_id,
+        issue_number=artifacts.selected_thread_issue_number,
+        next_issue_id=artifacts.selected_thread_issue_id,
+        next_issue_number=artifacts.selected_thread_issue_number,
+        recommendation_reason_codes=artifacts.recommendation_reason_codes,
     )
 
 
@@ -496,11 +470,17 @@ async def skip_roll(
 
     await db.commit()
 
-    return await _build_roll_response(
-        db=db,
-        artifacts=artifacts,
+    return await RollService(db).build_roll_response(
+        selected_thread=artifacts.selected_thread,
         current_die=current_die,
+        selected_index=artifacts.selected_index,
+        unread_count=artifacts.unread_count,
         snoozed_count=len(snoozed_ids),
+        issue_id=artifacts.selected_thread_issue_id,
+        issue_number=artifacts.selected_thread_issue_number,
+        next_issue_id=artifacts.selected_thread_issue_id,
+        next_issue_number=artifacts.selected_thread_issue_number,
+        recommendation_reason_codes=artifacts.recommendation_reason_codes,
     )
 
 
