@@ -39,3 +39,5 @@
 91	orcarouter	z-ai/glm-5.3-flash-free	5	dispatcher	OrcaRouter GLM 5.3 Flash Free
 92	requesty	nvidia/nemotron-3-ultra-550b-a55b	10	dispatcher	Requesty Nemotron 3 Ultra
 93	requesty	nvidia/nemotron-3-super-120b-a12b	15	dispatcher	Requesty Nemotron 3 Super
+94	openrouter-free	minimax/minimax-m3.1-flash:free	40	dispatcher	OpenRouter MiniMax M3.1 Flash Free
+95	nvidia	nvidia/nemotron-3.5-super-vl-120b-a12b	20	dispatcher	NVIDIA Nemotron 3.5 Super VL
