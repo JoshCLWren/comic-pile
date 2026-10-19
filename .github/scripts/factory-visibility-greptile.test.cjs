@@ -73,19 +73,17 @@ function githubFor({
 } = {}) {
   const pages = threadPages || [{ nodes: threads }];
   const api = {
-    listLabelsForRepo() {},
-    listLabelsOnIssue() {},
-    listComments() {},
-    createLabel: async () => {},
-    updateLabel: async () => {},
-    setLabels: setLabels || (async () => {}),
+    listLabelsForRepo: async () => ({ data: [], headers: {}, status: 200 }),
+    listLabelsOnIssue: async () => ({ data: labels.map(name => ({ name })), headers: {}, status: 200 }),
+    listComments: async () => ({ data: issueComments, headers: {}, status: 200 }),
+    createLabel: async () => ({ data: {}, headers: {}, status: 201 }),
+    updateLabel: async () => ({ data: {}, headers: {}, status: 200 }),
+    setLabels: async params => {
+      if (setLabels) setLabels(params);
+      return { data: {}, headers: {}, status: 200 };
+    },
   };
   return {
-    paginate: async (operation) => {
-      if (operation === api.listLabelsForRepo) return [];
-      if (operation === api.listComments) return issueComments;
-      return labels.map(name => ({ name }));
-    },
     graphql: async (query, variables) => {
       if (graphqlCalls) graphqlCalls.push({ query, variables });
       if (variables.id) {

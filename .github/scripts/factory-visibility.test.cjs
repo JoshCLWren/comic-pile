@@ -54,24 +54,25 @@ function githubFor({
     ...extraDefinitions,
   ];
   const api = {
-    listLabelsForRepo() {},
-    listLabelsOnIssue() {},
-    listComments() {},
-    createLabel: async () => {},
-    updateLabel: updateLabel || (async () => {}),
-    setLabels: setLabels || (async () => {}),
+    listLabelsForRepo: async () => ({ data: definitions, headers: {}, status: 200 }),
+    listLabelsOnIssue: async () => ({ data: labels.map(name => ({ name })), headers: {}, status: 200 }),
+    listComments: async params => {
+      if (commentIssueNumbers) commentIssueNumbers.push(params.issue_number);
+      return { data: comments, headers: {}, status: 200 };
+    },
+    createLabel: async () => ({ data: {}, headers: {}, status: 201 }),
+    updateLabel: async params => {
+      if (updateLabel) updateLabel(params);
+      return { data: {}, headers: {}, status: 200 };
+    },
+    setLabels: async params => {
+      if (setLabels) setLabels(params);
+      return { data: {}, headers: {}, status: 200 };
+    },
   };
   return {
-    paginate: async (operation, params = {}) => {
-      if (operation === api.listLabelsForRepo) return definitions;
-      if (operation === api.listComments) {
-        if (commentIssueNumbers) commentIssueNumbers.push(params.issue_number);
-        return comments;
-      }
-      return labels.map(name => ({ name }));
-    },
-    // Greptile routing recomputes from live state on every submitted review;
-    // these PRs have no review threads and no Greptile summary.
+    // Reads and writes now go through direct REST requests (each page and every
+    // retry attempt is recorded), so the doubles return REST response objects.
     graphql: async () => ({
       repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } } } },
     }),
@@ -617,21 +618,22 @@ test('dismissed review resets to factory:review', async () => {
 
 function enrollGithubFor({ pulls, labelsByPr, comments = [], setLabels }) {
   const api = {
-    listLabelsOnIssue() {},
-    listComments() {},
-    setLabels,
-  };
-  const list = () => {};
-  return {
-    paginate: async (operation, params = {}) => {
-      if (operation === list) return pulls;
-      if (operation === api.listComments) return comments;
-      if (operation === api.listLabelsOnIssue) {
-        return (labelsByPr[params.issue_number] || []).map(name => ({ name }));
-      }
-      throw new Error('unexpected paginate operation');
+    listLabelsOnIssue: async params => ({
+      data: (labelsByPr[params.issue_number] || []).map(name => ({ name })),
+      headers: {},
+      status: 200,
+    }),
+    listComments: async () => ({ data: comments, headers: {}, status: 200 }),
+    setLabels: async params => {
+      if (setLabels) setLabels(params);
+      return { data: {}, headers: {}, status: 200 };
     },
-    rest: { issues: api, pulls: { list } },
+  };
+  return {
+    rest: {
+      issues: api,
+      pulls: { list: async () => ({ data: pulls, headers: {}, status: 200 }) },
+    },
   };
 }
 
@@ -1102,6 +1104,56 @@ test('currentLabels reads are recorded in the request log', async () => {
   assert.deepEqual(labels, new Set(['bug', 'factory']));
   const log = restRequestLog();
   assert.equal(log.length, 1);
-  assert.equal(log[0].endpoint, 'repos/JoshCLWren/comic-pile/issues/12/labels');
+  assert.equal(
+    log[0].endpoint,
+    'repos/JoshCLWren/comic-pile/issues/12/labels?per_page=100&page=1',
+  );
   assert.equal(log[0].method, 'GET');
+});
+
+test('paged reads record every page request separately', async () => {
+  clearRestRequestLog();
+  // Two pages: the first is full, the second short, so pagination stops.
+  const pages = [
+    Array.from({ length: 100 }, (_, index) => ({ name: `label-${index}` })),
+    [{ name: 'last-label' }],
+  ];
+  const github = {
+    rest: { issues: { listLabelsOnIssue: async ({ page }) => ({
+      data: pages[page - 1] || [],
+      headers: {},
+      status: 200,
+    }) } },
+  };
+  const labels = await currentLabels(github, contextFor('workflow_dispatch', {}), 12);
+  assert.equal(labels.size, 101);
+  const log = restRequestLog();
+  assert.equal(log.length, 2);
+  assert.equal(log[0].endpoint, 'repos/JoshCLWren/comic-pile/issues/12/labels?per_page=100&page=1');
+  assert.equal(log[1].endpoint, 'repos/JoshCLWren/comic-pile/issues/12/labels?per_page=100&page=2');
+});
+
+test('each retry attempt is recorded, including the failed request', async () => {
+  clearRestRequestLog();
+  let attempts = 0;
+  const github = {
+    rest: { issues: { listLabelsOnIssue: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw Object.assign(new Error('secondary rate limit'), {
+          status: 429, response: { headers: { 'retry-after': '1' } },
+        });
+      }
+      return { data: [{ name: 'bug' }], headers: {}, status: 200 };
+    } } },
+  };
+  const labels = await currentLabels(github, contextFor('workflow_dispatch', {}), 12);
+  assert.deepEqual(labels, new Set(['bug']));
+  const log = restRequestLog();
+  assert.equal(log.length, 2);
+  assert.equal(log[0].status, 429);
+  assert.equal(log[0].limited, true);
+  assert.equal(log[0].retryAfter, 1);
+  assert.equal(log[1].status, 200);
+  assert.equal(log[1].limited, false);
 });
