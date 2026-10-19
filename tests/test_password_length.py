@@ -1,13 +1,17 @@
-"""Server-side password policy tests for issues #3103 and #3112.
+"""Server-side password policy tests for issues #3103, #3112, and #3165.
 
-The Register, Login, and Reset Password pages all advertise a six-character
-minimum, but before #3103 only the browser enforced it: the register and
-reset-password schemas accepted a one-character password from any direct API
-client. #3112 closed the remaining gap in the reset-completion service, which
-hashed and stored whatever password it was handed even when the request schema
-was bypassed. These tests pin the backend to the same advertised policy through
+The Register and Reset Password pages advertise a six-character minimum, but
+before #3103 only the browser enforced it: the register and reset-password
+schemas accepted a one-character password from any direct API client. #3112
+closed the remaining gap in the reset-completion service, which hashed and
+stored whatever password it was handed even when the request schema was
+bypassed. These tests pin the backend to the same advertised policy through
 both the public HTTP surface and the service boundary so the rule cannot
 silently drift back to UI-only or to a single-path check.
+
+Sign-in is the deliberate exception: ``UserLoginRequest`` is not
+minimum-gated so pre-existing short passwords still work, and #3165 removed
+the matching client-side minimum from the login form.
 """
 
 import pytest

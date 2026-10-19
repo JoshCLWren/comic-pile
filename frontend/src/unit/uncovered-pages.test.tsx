@@ -86,16 +86,34 @@ describe('LoginPage', () => {
     api.post.mockReset()
   })
 
-  it('validates required and short credentials', () => {
+  it('validates required credentials', () => {
     renderRoute(<LoginPage />)
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
     expect(screen.getByText('Username is required')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'reader' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
     expect(screen.getByText('Password is required')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } })
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('submits passwords shorter than six characters instead of blocking sign-in (#3165)', async () => {
+    // The API's UserLoginRequest is deliberately not minimum-gated so accounts
+    // created before the register minimum (#3103) can still authenticate. The
+    // login form must not refuse those passwords client-side.
+    api.post.mockResolvedValueOnce({ access_token: 'token' })
+    auth.login.mockResolvedValueOnce(undefined)
+    renderRoute(<LoginPage />)
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'legacy' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'abc' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
-    expect(screen.getByText('Password must be at least 6 characters')).toBeInTheDocument()
+    expect(screen.queryByText('Password must be at least 6 characters')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/v1/auth/login', {
+        username: 'legacy',
+        password: 'abc',
+      }),
+    )
+    await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
   })
 
   it('rejects email-shaped usernames without calling the API', () => {
