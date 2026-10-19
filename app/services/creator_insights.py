@@ -123,7 +123,7 @@ def compute_creator_insights(
         aggregate
         for aggregate in series_aggregates
         if aggregate.metadata_complete
-        and aggregate.rated_issue_ids
+        and set(aggregate.rated_issue_ids).issubset(rated_issue_ids)
         and aggregate.rated_issue_count >= MIN_SERIES_SAMPLE
     ]
     excluded_incomplete = sum(
