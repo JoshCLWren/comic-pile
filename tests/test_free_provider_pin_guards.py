@@ -243,3 +243,20 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
     assert by_worker["80"]["source"] == "nvidia"
     assert "81" not in by_worker
 
+
+
+def test_workers_94_95_pin_minimax_m31_flash_and_nvidia_nemotron_35_super_vl(validate) -> None:
+    """Workers 94-95 are Harvy debian OpenCode smokes (fix bug + write/run test)."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    by_worker = {row["worker"]: row for row in rows}
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["94"]["source"] == "openrouter-free"
+    assert by_worker["94"]["model"] == "minimax/minimax-m3.1-flash:free"
+    assert by_worker["94"]["minute"] == "40"
+    assert validate.openrouter_model_is_free(by_worker["94"]["model"])
+    assert by_worker["95"]["source"] == "nvidia"
+    assert by_worker["95"]["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
+    assert by_worker["95"]["minute"] == "20"
+    # The OpenRouter :free Super VL id was not smoked (daily free cap), so it is not pinned.
+    assert "nvidia/nemotron-3.5-super-vl:free" not in {row["model"] for row in rows}

@@ -32,7 +32,8 @@
       {"id": "z-ai/glm-5.3-flash"},
       {"id": "deepseek-ai/deepseek-v4.1-flash"},
       {"id": "nvidia/nemotron-3.5-lightning-30b-a3b"},
-      {"id": "meta/muse-glimmer-30b"}
+      {"id": "meta/muse-glimmer-30b"},
+      {"id": "nvidia/nemotron-3.5-super-vl-120b-a12b"}
     ],
     "openrouter": [
       {"id": "cohere/north-mini-code:free"},
@@ -56,7 +57,8 @@
       {"id": "dots-studio/dots-3-note-preview:free"},
       {"id": "stealth/union-alpha"},
       {"id": "qwen/qwen3.8-27b"},
-      {"id": "apodex/apodex-1.1-mini:free"}
+      {"id": "apodex/apodex-1.1-mini:free"},
+      {"id": "minimax/minimax-m3.1-flash:free"}
     ]
   }
 }
