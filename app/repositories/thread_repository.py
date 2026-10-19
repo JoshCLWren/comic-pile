@@ -112,7 +112,26 @@ async def max_queue_position(db: AsyncSession, user_id: int) -> int:
 
 
 async def renormalize_queue_positions(db: AsyncSession, user_id: int) -> None:
-    """Rewrite active queue positions as a dense 1..N sequence."""
+    """Rewrite active queue positions as a dense 1..N sequence.
+
+    Takes the transaction-scoped per-reader queue lock that every move and
+    shuffle also takes, before reading positions. Without it, a concurrent
+    reorder could commit between this read and flush, and the rewrite would
+    then put the old order back and undo that reorder.
+
+    The lock is taken with autoflush suppressed so it is acquired before this
+    transaction writes any row. Every queue writer then takes the lock first
+    and row locks second, which is the ordering that cannot deadlock against a
+    concurrent move or shuffle.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the queue being renumbered.
+    """
+    from comic_pile.queue import acquire_queue_lock
+
+    with db.no_autoflush:
+        await acquire_queue_lock(user_id, db)
     result = await db.execute(
         select(Thread)
         .where(Thread.user_id == user_id)

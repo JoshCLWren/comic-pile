@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread, User
@@ -19,6 +19,7 @@ from app.repositories import thread_repository
 from app.schemas.thread import ThreadCreate, ThreadUpdate
 from app.services import issue as issue_service
 from app.services import thread_service
+from comic_pile.queue import ADVISORY_LOCK_NAMESPACE
 
 
 async def _active_positions(async_db: AsyncSession, user_id: int) -> list[int]:
@@ -357,3 +358,30 @@ async def test_display_positions_agree_after_queue_removal(
     assert roll.status_code == 200, roll.text
     assert roll.json()["thread_id"] == last.id
     assert roll.json()["queue_position"] == 1
+
+
+@pytest.mark.asyncio
+async def test_renormalize_holds_the_shared_queue_lock(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Renumbering takes the same per-reader lock as a move or shuffle.
+
+    Without it, a reorder that commits between the renumbering read and flush
+    would be overwritten and silently undone (#3449 review finding).
+    """
+    await _add_thread(async_db, default_user, title="A", position=7)
+    await _add_thread(async_db, default_user, title="B", position=621)
+    await async_db.commit()
+
+    await thread_repository.renormalize_queue_positions(async_db, default_user.id)
+
+    held = await async_db.execute(
+        text(
+            "SELECT count(*) FROM pg_locks "
+            "WHERE locktype = 'advisory' AND classid = :namespace "
+            "AND objid = :user_id AND pid = pg_backend_pid() AND granted"
+        ),
+        {"namespace": ADVISORY_LOCK_NAMESPACE, "user_id": default_user.id},
+    )
+    assert held.scalar_one() == 1
+    _assert_dense(await _active_positions(async_db, default_user.id))

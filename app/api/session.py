@@ -31,7 +31,7 @@ from app.schemas.session import (
     build_session_intent_state,
 )
 from app.services.ownership import get_owned_session_or_404
-from app.services.queue_display import display_position
+from app.services.queue_display import display_position, display_positions
 from app.services.session_response import build_ladder_path, build_session_event_details
 from app.services.summary_service import build_narrative_summary
 from app.services.reading_session_service import get_reading_session_service, ReadingSessionService
@@ -538,6 +538,9 @@ async def list_sessions(
         threads_by_id = {t.id: t for t in threads_result.scalars().all()}
         threads = list(threads_by_id.values())
         unread_counts, issue_numbers = await load_issue_stats(threads, db)
+        # One whole-queue read for every history row on this page (the same
+        # thread can appear in many sessions), instead of one per session.
+        position_map = await display_positions(db, current_user.id)
         tags_map = await TagInheritanceService(db).get_threads_direct_tags(
             current_user.id, list(thread_ids)
         )
@@ -574,7 +577,7 @@ async def list_sessions(
                         title=thread.title,
                         format=normalize_format_value(thread.format),
                         issues_remaining=issues_remaining,
-                        queue_position=await display_position(db, thread),
+                        queue_position=position_map.get(thread.id, 0),
                         last_rolled_result=safe_result,
                         total_issues=thread.total_issues,
                         reading_progress=thread.reading_progress,
@@ -617,7 +620,7 @@ async def list_sessions(
                         title=thread.title,
                         format=normalize_format_value(thread.format),
                         issues_remaining=issues_remaining,
-                        queue_position=await display_position(db, thread),
+                        queue_position=position_map.get(thread.id, 0),
                         last_rolled_result=safe_result,
                         total_issues=thread.total_issues,
                         reading_progress=thread.reading_progress,
