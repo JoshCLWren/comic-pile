@@ -173,6 +173,37 @@ class ThreadExclusionReason(BaseModel):
     detail: str | None = None
 
 
+class RollBlockedThreadsPage(BaseModel):
+    """One server-side page of the blocked-series category (issue #3330).
+
+    The Roll bootstrap only previews a bounded slice of each category, so this
+    page endpoint is how a reader reaches every counted record. ``total`` is
+    computed by the same filter that produces ``items``, so the page total and
+    the bootstrap ``blocked_count`` always describe the same set.
+    """
+
+    total: int
+    offset: int
+    limit: int
+    next_offset: int | None = None
+    items: list[RollBootstrapThread] = Field(default_factory=list)
+
+
+class RollInactiveThreadsPage(BaseModel):
+    """One server-side page of the out-of-pool category (issue #3330).
+
+    Same contract as :class:`RollBlockedThreadsPage`, scoped to the series the
+    bootstrap reports as inactive (completed plus vanished-from-queue), so the
+    page total and ``inactive_count`` always describe the same set.
+    """
+
+    total: int
+    offset: int
+    limit: int
+    next_offset: int | None = None
+    items: list[ThreadExclusionReason] = Field(default_factory=list)
+
+
 class RollBootstrapResponse(BaseModel):
     """Bounded bootstrap payload for the Roll initial render.
 
