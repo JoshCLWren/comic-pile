@@ -43,6 +43,16 @@ export function QueueList({
   useVirtualizer,
   onAddSeries,
 }: QueueListProps) {
+  // If we're searching and have no results, but there are active threads in the queue,
+  // we're likely still loading data. Show a loading state instead of "No match".
+  if (isSearching && filteredThreads.length === 0 && activeThreads.length > 0) {
+    return (
+      <div className="text-center text-stone-500 py-8" data-testid="queue-search-loading">
+        Loading series...
+      </div>
+    )
+  }
+
   if (isSearching && filteredThreads.length === 0) {
     return (
       <div className="text-center text-stone-500" data-testid="queue-search-empty">
