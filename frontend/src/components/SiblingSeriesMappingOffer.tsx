@@ -211,7 +211,7 @@ export default function SiblingSeriesMappingOffer({
           <span className="font-bold text-stone-100">{seriesLabel}</span> is linked for this issue.
           {' '}{preview.data?.scope.status === 'unavailable'
             ? seriesMappingScopeMessage(preview.data.scope.basis)
-            : (preview.data?.counts.already_confirmed ?? 0) > 0
+            : ownedRows.some((row) => row.issue_id !== originIssueId && row.classification === 'already_confirmed')
               ? 'Other issues already link to this volume. Any remaining issues need individual review.'
               : 'No other issue in the series matches that volume by number exactly.'}
         </p>

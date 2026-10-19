@@ -267,6 +267,49 @@ async def test_provider_rows_without_real_ids_are_never_offered(
     assert row["default_selected"] is False
 
 
+@pytest.mark.parametrize("stored_volume", [{"id": 6566}, {"id": 6566, "name": ""},
+                                         {"id": 999, "name": None}])
+async def test_update_fills_partial_volume_references_without_deep_hydration(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data,
+    stored_volume: dict[str, object],
+) -> None:
+    """A successful Update must expose a series name even when an imported volume is partial."""
+    issues, client = await _seed_case(async_db, sample_data["user"].id, 0)
+    issue_id = issues[7].id
+    identity = (await async_db.scalars(select(ExternalIdentity).join(
+        IssueExternalIdentityMapping,
+        IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
+    ).where(IssueExternalIdentityMapping.issue_id == issue_id))).one()
+    identity_id = identity.id
+    identity.metadata_json = {"volume": stored_volume, "description": "Retain deep description",
+                              "creator_credits": [{"name": "Retain creator", "role": "writer"}]}
+    await async_db.commit()
+    with patch("app.services.catalog._get_comicvine_client", return_value=client):
+        plan = (await auth_client.post(PREVIEW_URL, json={
+            "origin_issue_id": issue_id, "provider": "comicvine",
+            "provider_series_external_id": "6566", "scope_mode": "queue_thread_bootstrap",
+        })).json()
+        with patch("app.services.catalog_series_commit._hydrate_after_commit", new=AsyncMock()):
+            saved = await auth_client.post(COMMIT_URL, json={
+                "preview_token": plan["preview_token"], "idempotency_key": "partial-volume",
+                "approved_row_ids": [f"issue:{issue_id}"],
+            })
+        assert saved.status_code == 200, saved.text
+        after = (await auth_client.post(PREVIEW_URL, json={
+            "origin_issue_id": issue_id, "provider": "comicvine",
+            "provider_series_external_id": "6566", "scope_mode": "queue_thread_bootstrap",
+        })).json()
+    row = next(row for row in after["rows"] if row["issue_id"] == issue_id)
+    assert row["metadata_refresh_required"] is False
+    intelligence = await auth_client.get(f"/api/v1/issues/{issue_id}/comicvine")
+    assert intelligence.json()["series_name"] == "Tom Strong"
+    assert intelligence.json()["image_url"]
+    await async_db.refresh(identity)
+    assert identity.id == identity_id
+    assert identity.metadata_json["description"] == "Retain deep description"
+    assert identity.metadata_json["creator_credits"] == [{"name": "Retain creator", "role": "writer"}]
+
+
 @pytest.mark.parametrize("number", ["JSA: All Stars 4", "The Shade (2011) 1", "1/2", "1A", "#1"])
 def test_named_and_fractional_issue_labels_never_normalize_to_main_series_numbers(number: str) -> None:
     """Discarding a title, slash, or variant suffix must never create a safe exact match."""

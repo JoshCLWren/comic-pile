@@ -27,11 +27,28 @@ def fill_missing_identity_metadata(
         identity: Attached identity to update inside the caller's transaction.
         provider_metadata: Already-verified provider issue or series metadata.
     """
-    identity.metadata_json = {
+    merged = {
         **provider_metadata,
         **{key: value for key, value in identity.metadata_json.items()
            if value is not None and value != ""},
     }
+    # References can be partially populated by imports. Preserve their populated
+    # fields, rather than preserving the whole object and dropping a missing name.
+    # Raw payloads and credit lists remain untouched as provider evidence.
+    for key in ("volume", "publisher", "image"):
+        existing = identity.metadata_json.get(key)
+        incoming = provider_metadata.get(key)
+        if isinstance(existing, dict) and isinstance(incoming, dict):
+            if (existing.get("id") is not None and incoming.get("id") is not None
+                    and existing["id"] != incoming["id"]):
+                merged[key] = incoming
+            else:
+                merged[key] = {
+                    **incoming,
+                    **{name: value for name, value in existing.items()
+                       if value is not None and value != ""},
+                }
+    identity.metadata_json = merged
 
 
 async def search_catalog_series(

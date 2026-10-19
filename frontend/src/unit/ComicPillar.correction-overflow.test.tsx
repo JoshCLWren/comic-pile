@@ -45,6 +45,17 @@ vi.mock('../components/IssueCorrectionDialog', () => ({
   }) => (isOpen ? <div role="dialog"><h2>Fix Issue Number</h2>{threadTitle}</div> : null),
 }))
 
+vi.mock('../components/QueueMapSeriesDialog', () => ({
+  default: ({ threadTitle, onClose, onMapped }: { threadTitle: string; onClose: () => void;
+    onMapped: (ids: number[]) => void }) => (
+    <div role="dialog" aria-label="Series mapping">
+      <p>{threadTitle}</p>
+      <button onClick={() => onMapped([77])}>Update series</button>
+      <button onClick={onClose}>Close mapping</button>
+    </div>
+  ),
+}))
+
 vi.mock('../services/api-tags', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
@@ -254,6 +265,22 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     expect(within(menu).getByRole('menuitem', { name: 'Map series' })).toBeInTheDocument()
     // A confirmed mapping does not also offer the first-time match action.
     expect(within(menu).queryByRole('menuitem', { name: 'Find ComicVine match' })).toBeNull()
+  })
+
+  it('opens series mapping directly for a linked issue and refreshes identity after an update', async () => {
+    getIssueIdentitySpy.mockResolvedValue({ has_confirmed_identity: true,
+      comicvine_issue_id: '36956', confirmed_mappings: [{ comicvine_id: 36956 }],
+      candidate_mappings: [], has_unresolved: false })
+    renderPillar()
+    const menu = await openCorrections()
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Map series' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Series mapping' })
+    expect(dialog).toHaveTextContent('Stormwatch Vol. 1')
+    const previousCalls = getIssueIdentitySpy.mock.calls.length
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Update series' }))
+    await waitFor(() => expect(getIssueIdentitySpy.mock.calls.length).toBeGreaterThan(previousCalls))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close mapping' }))
+    expect(screen.queryByRole('dialog', { name: 'Series mapping' })).not.toBeInTheDocument()
   })
 
   it('offers the first-time match action in the menu when no mapping is confirmed', async () => {
