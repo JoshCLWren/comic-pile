@@ -5,6 +5,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
@@ -1306,6 +1308,9 @@ def test_transient_review_failures_cool_down_only_the_current_generation() -> No
         "review-agent-failed",
         "controller-assignment-read-failed",
         "semantic-review-head-read-failed",
+        "missing-semantic-verdict",
+        "conflicting-semantic-verdict",
+        "authoritative-diff-read-failed",
     ):
         comments = [
             {
@@ -1327,6 +1332,7 @@ def test_transient_review_failures_cool_down_only_the_current_generation() -> No
         )
         attempts = policy.parse_no_diff_attempts_from_comments(comments, now_epoch=now)
         assert len(attempts) == policy.FACTORY_NO_DIFF_RETRY_LIMIT
+        assert {attempt.reason for attempt in attempts} == {reason}
         selected = policy.build_candidates([], [target, other], no_diff_attempt_records=attempts)
         assert [item.number for item in selected] == [2265]
         pushed = {**target, "headRefOid": "b" * 40}
@@ -1349,3 +1355,34 @@ def test_genuine_head_changes_do_not_consume_review_failure_budget() -> None:
         ),
     }]
     assert not policy.parse_no_diff_attempts_from_comments(comments, now_epoch=2_000_000_000)
+
+
+def test_review_cooldown_reports_counts_by_reason(capsys: pytest.CaptureFixture[str]) -> None:
+    """Mixed failures retain reason evidence while suppressing only their PR head."""
+    now = 2_000_000_000
+    reasons = ["missing-semantic-verdict", "review-agent-failed", "authoritative-diff-read-failed"]
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+                f"{now - offset}:{reason}:sha={'a' * 40}:stage=factory:review:conflicted=0 -->"
+            ),
+        }
+        for offset, reason in enumerate(reasons)
+    ]
+    attempts = policy.parse_no_diff_attempts_from_comments(comments, now_epoch=now)
+    target = pr_fixture(
+        number=2264, issue=2200,
+        labels=["factory", "factory:unowned", "factory:review"],
+    )
+    assert not policy.build_candidates([], [target], no_diff_attempt_records=attempts)
+    diagnostic = capsys.readouterr().err
+    assert "recent_failures=3" in diagnostic
+    for reason in reasons:
+        assert f"'{reason}': 1" in diagnostic
+    issue_comments = [
+        {**comment, "body": comment["body"].replace("pr-2264", "issue-2264")}
+        for comment in comments
+    ]
+    assert not policy.parse_no_diff_attempts_from_comments(issue_comments, now_epoch=now)

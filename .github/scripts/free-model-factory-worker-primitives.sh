@@ -118,7 +118,7 @@ release_target() {
   local stage epoch marker generation="" bounded=0
   case "$reason" in
     no-persisted-change-handoff|repair-no-persisted-change-handoff) bounded=1 ;;
-    transient-model-interruption|review-agent-failed|controller-assignment-read-failed|semantic-review-head-read-failed)
+    transient-model-interruption|review-agent-failed|controller-assignment-read-failed|semantic-review-head-read-failed|missing-semantic-verdict|conflicting-semantic-verdict|authoritative-diff-read-failed)
       [[ "$target_kind" != pr ]] || bounded=1
       ;;
   esac

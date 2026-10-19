@@ -420,13 +420,16 @@ This is an attempt-level circuit breaker, not an issue-level failure. The issue 
 ## Review infrastructure retry cooldown
 
 For an unchanged PR head and stage, three trusted release records for transient
-model interruption, review-agent failure, head-read failure, or pre-session assignment-read failure
+model interruption, review-agent failure, head-read failure, pre-session assignment-read
+failure, missing/conflicting verdicts, or authoritative-diff read failure
 suppress further assignments for a rolling 30 minutes. The existing generation
 retry gate enforces the cap without labeling infrastructure failures as human
 blockers or semantic strikes. A real new head, changed stage, or newly developed
 merge conflict gets a fresh budget. Expired failures drop out automatically.
 Release markers retain the reason, worker, timestamp, exact SHA, stage, and
-conflict state; dispatcher logs show suppressed generations and failure counts. Untrusted comments do not
+conflict state; dispatcher logs show suppressed generations and counts by reason.
+Kilo JSON telemetry stays intact; only assistant-text events enter the verdict
+channel. Tool output and fenced examples cannot authorize an approval. Untrusted comments do not
 count, and one PR's failures do not suppress other work.
 
 ## Markers and leases

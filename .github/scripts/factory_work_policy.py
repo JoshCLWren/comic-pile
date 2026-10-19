@@ -4,6 +4,7 @@ import importlib
 import os
 import re
 import sys
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -52,7 +53,9 @@ REQUIRED_CHECK_FAILURE_STATES = frozenset({'CANCELLED', 'ERROR', 'FAILURE', 'STA
 NO_DIFF_ATTEMPT_RE = re.compile(
     r'<!--\s*comic-pile-factory-claim-released-v3:'
     r'(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):'
-    r'(?P<reason>(?:repair-)?no-persisted-change-handoff|transient-model-interruption|review-agent-failed|controller-assignment-read-failed|semantic-review-head-read-failed)'
+    r'(?P<reason>(?:repair-)?no-persisted-change-handoff|transient-model-interruption|'
+    r'review-agent-failed|controller-assignment-read-failed|semantic-review-head-read-failed|'
+    r'missing-semantic-verdict|conflicting-semantic-verdict|authoritative-diff-read-failed)'
     r'(?::sha=(?P<sha>[0-9a-fA-F]{7,40}))?'
     r'(?::stage=(?P<stage>factory:[a-z-]+))?'
     r'(?::conflicted=(?P<conflicted>[01]))?'
@@ -115,6 +118,7 @@ class NoDiffAttempt:
     sha: str | None = None
     stage: str | None = None
     conflicted: bool | None = None
+    reason: str = 'repair-no-persisted-change-handoff'
 
 
 @dataclass(frozen=True)
@@ -690,10 +694,18 @@ def build_candidates(
             no_diff_attempts=pr_attempts,
         ):
             if pr_attempts >= FACTORY_NO_DIFF_RETRY_LIMIT:
+                reasons = Counter(
+                    attempt.reason for attempt in attempt_records or []
+                    if matching_pr_no_diff_attempts(
+                        (attempt,), pr_number=pr_number, head_sha=pr_head_sha(pr),
+                        stage=stage_of(pr_labels), conflicted=pr_is_conflicted(pr),
+                    )
+                )
                 print(
                     f'[factory-controller] retry cooldown: PR #{pr_number} '
                     f'head={pr_head_sha(pr)} stage={stage_of(pr_labels)} '
-                    f'recent_failures={pr_attempts}; new head/stage or expiry restores eligibility',
+                    f'recent_failures={pr_attempts} reasons={dict(sorted(reasons.items()))}; '
+                    f'new head/stage or expiry restores eligibility',
                     file=sys.stderr,
                 )
             continue
@@ -830,7 +842,11 @@ def parse_no_diff_attempts_from_comments(
             transient = match.group('reason') in {
                 'transient-model-interruption', 'review-agent-failed',
                 'controller-assignment-read-failed', 'semantic-review-head-read-failed',
+                'missing-semantic-verdict', 'conflicting-semantic-verdict',
+                'authoritative-diff-read-failed',
             }
+            if transient and match.group('kind') != 'pr':
+                continue
             attempt_cutoff = max(cutoff, now_epoch - FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS) if transient else cutoff
             if epoch <= attempt_cutoff or epoch > now_epoch:
                 continue
@@ -844,6 +860,7 @@ def parse_no_diff_attempts_from_comments(
                     sha=None if sha is None else sha.lower(),
                     stage=match.group('stage'),
                     conflicted=None if conflicted_raw is None else conflicted_raw == '1',
+                    reason=match.group('reason'),
                 )
             )
     return attempts
