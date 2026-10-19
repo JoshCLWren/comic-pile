@@ -158,7 +158,7 @@ export default function SessionPage() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
   const { data: details, isPending, refetch: refetchDetails } = useSessionDetails(id)
-  const { data: snapshotsData, refetch: refetchSnapshots } = useSessionSnapshots(id)
+  const { data: snapshotsData } = useSessionSnapshots(id)
   const restoreMutation = useRestoreSessionStart()
   const undoMutation = useUndo()
   const [isRestoreConfirmationOpen, setIsRestoreConfirmationOpen] = useState(false)
@@ -178,10 +178,12 @@ export default function SessionPage() {
   // Both restore paths rewrite queue order, session state, Roll, and the
   // history aggregates, so each one confirms out loud and refreshes through the
   // shared helper instead of leaving Roll on its pre-undo snapshot (#3194).
+  // The helper also refreshes this page's snapshot list, so the callers only
+  // refetch session detail.
   const handleUndoLatest = async (snapshotId: number) => {
     try {
       await undoMutation.mutate({ sessionId: details.session_id, snapshotId })
-      await Promise.all([refetchDetails(), refetchSnapshots()])
+      await refetchDetails()
       await invalidateAfterUndo(queryClient)
       showToast('Last change undone.', 'success')
     } catch (error) {
@@ -194,7 +196,7 @@ export default function SessionPage() {
     try {
       await restoreMutation.mutate(details.session_id)
       setIsRestoreConfirmationOpen(false)
-      await Promise.all([refetchDetails(), refetchSnapshots()])
+      await refetchDetails()
       await invalidateAfterUndo(queryClient)
       showToast('Session restored to its starting state.', 'success')
     } catch (error) {

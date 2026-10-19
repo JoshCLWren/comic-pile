@@ -196,7 +196,7 @@ describe('canonical query keys', () => {
 })
 
 describe('targeted cache effects', () => {
-  it('uses an authoritative rating response and invalidates only current session', async () => {
+  it('uses an authoritative rating response and refreshes every snapshot surface', async () => {
     const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
 
     await applyRatedThreadCache(client, thread)
@@ -211,11 +211,20 @@ describe('targeted cache effects', () => {
       queryKeys.thread.summary(thread.id),
       thread,
     )
-    expect(invalidateQueries).toHaveBeenCalledOnce()
+    expect(invalidateQueries).toHaveBeenCalledTimes(4)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
     })
+    // A rating writes a new "After rating" snapshot (#3468), so both the Roll
+    // undo list (`undo.all`) and the session view's snapshot list
+    // (`session.snapshotsAll`) must stop serving the pre-rating list.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.undo.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.snapshotsAll(),
+    })
+    // The History card counts the same rows through the paginated session list.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })
     expect(resetQueries).not.toHaveBeenCalled()
   })
 
@@ -324,7 +333,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
-    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -339,6 +348,12 @@ describe('targeted cache effects', () => {
     })
     // The history card's "N issues read" total must stop counting an undone rating (#3194).
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })
+    // Both snapshot lists read the same rows the History card counts, so the
+    // session view must refresh with the undo instead of keeping the pre-undo
+    // list while History shows the new count (#3468).
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.snapshotsAll(),
+    })
     // The next undo reads from the snapshot list, so it cannot serve the pre-undo copy.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.undo.all })
 
@@ -348,7 +363,7 @@ describe('targeted cache effects', () => {
       (call) => (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey,
     )
     expect(invalidatedKeys.some((key) => key?.[0] === 'session' && key?.[1] === 'detail')).toBe(false)
-    expect(invalidatedKeys.some((key) => key?.[0] === 'session' && key?.[1] === 'snapshots')).toBe(false)
+    expect(invalidatedKeys.some((key) => key?.[0] === 'session' && key?.[1] === 'snapshots')).toBe(true)
     expect(invalidatedKeys).not.toContainEqual([...queryKeys.session.all])
     expect(setQueryData).not.toHaveBeenCalled()
   })

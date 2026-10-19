@@ -9,6 +9,8 @@ import {
   useSessionSnapshots,
 } from '../hooks/useSession'
 import { useUndo } from '../hooks/useUndo'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
 
 vi.mock('../hooks/useSession', () => ({
   useSessionDetails: vi.fn(),
@@ -76,6 +78,12 @@ beforeEach(() => {
 
 it('renders session details and only allows undoing the latest rating', async () => {
   const user = userEvent.setup()
+  // Seed the snapshot list the way a previous render would have cached it, so
+  // the assertions below can prove which layer refreshes it after an undo.
+  queryClient.setQueryData(queryKeys.session.snapshots(12), {
+    session_id: 12,
+    snapshots: [{ id: 4, description: 'Before twist', created_at: '2024-05-01T10:20:00Z' }],
+  })
   render(
     <MemoryRouter initialEntries={["/sessions/12"]}>
       <Routes>
@@ -89,6 +97,7 @@ it('renders session details and only allows undoing the latest rating', async ()
   expect(screen.getByText('Earlier rating')).toBeInTheDocument()
   expect(screen.getAllByText('History')).toHaveLength(1)
   expect(screen.getAllByRole('button', { name: /undo latest/i })).toHaveLength(1)
+  expect(queryClient.getQueryState(queryKeys.session.snapshots(12))?.isInvalidated).toBe(false)
 
   await user.click(screen.getByRole('button', { name: /restore start/i }))
   expect(screen.getByRole('dialog', { name: 'Restore session start?' })).toBeInTheDocument()
@@ -105,13 +114,18 @@ it('renders session details and only allows undoing the latest rating', async ()
   expect(restoreSpy).toHaveBeenCalledWith(12)
   expect(screen.queryByRole('dialog', { name: 'Restore session start?' })).not.toBeInTheDocument()
   expect(refetchDetailsSpy).toHaveBeenCalledOnce()
-  expect(refetchSnapshotsSpy).toHaveBeenCalledOnce()
+  // #3468: restore and undo refresh the snapshot list through the shared cache
+  // helper, which invalidates the same key the session view reads. A
+  // component-local refetch would leave the History card counting rows this page
+  // no longer shows, so the page must not call the hook's refetch at all.
+  expect(refetchSnapshotsSpy).not.toHaveBeenCalled()
+  expect(queryClient.getQueryState(queryKeys.session.snapshots(12))?.isInvalidated).toBe(true)
   expect(showToastSpy).toHaveBeenCalledWith('Session restored to its starting state.', 'success')
 
   await user.click(screen.getByRole('button', { name: /undo latest/i }))
   expect(undoSpy).toHaveBeenCalledWith({ sessionId: 12, snapshotId: 4 })
   expect(refetchDetailsSpy).toHaveBeenCalledTimes(2)
-  expect(refetchSnapshotsSpy).toHaveBeenCalledTimes(2)
+  expect(refetchSnapshotsSpy).not.toHaveBeenCalled()
   expect(showToastSpy).toHaveBeenCalledWith('Last change undone.', 'success')
 })
 

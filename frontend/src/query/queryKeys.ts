@@ -153,6 +153,18 @@ export const queryKeys = {
       ['session', 'pages', { pageToken: pageToken ?? null, pageSize }] as const,
     detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
     /**
+     * Canonical session snapshot list key. The session detail page and the
+     * History card count read the same `snapshots` rows, so every
+     * snapshot-changing mutation invalidates this space (and `undo.all`, the
+     * Roll undo list over the same rows) together. Without that, the session
+     * view could keep serving a pre-change list — even an empty one — while
+     * History showed the new count (#3468).
+     */
+    snapshots: (sessionId: number | string) =>
+      ['session', 'snapshots', sessionId] as const,
+    /** Prefix of every session snapshot list, for scanning invalidations. */
+    snapshotsAll: () => ['session', 'snapshots'] as const,
+    /**
      * Canonical key for the #2744 correction-sheet example lines. Examples are
      * derived from the reader's own rating history, so this key is invalidated
      * alongside the roll/queue mutations that change that history.
