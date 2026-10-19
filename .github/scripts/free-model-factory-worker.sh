@@ -74,6 +74,7 @@ unclean_git_state_json() {
 # changes below it are not inherited by this worker.
 source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
 source .github/scripts/factory-semantic-verdict.sh
+source .github/scripts/factory-fork-worker.sh
 
 TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"
 
@@ -171,6 +172,8 @@ stage_trusted_review_controller() {
   cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
   cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
   cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
+  cp .github/scripts/factory_fork_control.py "$trusted_dir/factory_fork_control.py"
+  TRUSTED_FORK_CONTROL="$trusted_dir/factory_fork_control.py"
   # The staged policy imports canonical eligibility rules; pin this dependency
   # from trusted main too, never from an untrusted PR checkout or /scripts.
   cp scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py"
@@ -185,6 +188,10 @@ eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
 run_agent() {
   local mode="$1" number="$2" timeout_seconds="$3"
   local target mission prompt findings status=0
+  if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" == 1 ]]; then
+    factory_run_fork_static_review "$timeout_seconds"
+    return $?
+  fi
   if [[ "$SOURCE" != 'kilo-auto' ]]; then
     legacy_run_agent "$@"
     return $?
@@ -405,7 +412,17 @@ if (( assignment_status != 0 )); then
 fi
 
 log "executing control-plane assignment: ${MODE} #${NUMBER}; runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
-checkout_target "$MODE" "$NUMBER" "$BRANCH"
+fork_route=1
+if factory_route_fork_assignment; then fork_route=0; else fork_route=$?; fi
+if (( fork_route == 10 )); then
+  exit 0
+elif (( fork_route != 0 && fork_route != 1 )); then
+  record_terminal_outcome control_plane_failure 'safe fork routing failed before source execution'
+  exit 2
+fi
+if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
+  checkout_target "$MODE" "$NUMBER" "$BRANCH"
+fi
 
 available="$(remaining)"
 # Reserve post-agent time for the pre-push fast checks (toolchain install,
@@ -624,7 +641,13 @@ verdict="$(factory_extract_semantic_verdict "$review_log" || true)"
 recovery_attempted=0
 recovery_status=0
 
-if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] && factory_review_is_substantive "$review_log"; then
+# Fork reviews run tool-free from a data snapshot. The recovery pass starts a
+# normal tool-enabled agent in this credentialed checkout, so it must never run
+# for a fork: a prompt-injected contributor could otherwise fetch and execute
+# its own branch here. A missing fork verdict is released for re-dispatch.
+if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
+  && [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]] \
+  && factory_review_is_substantive "$review_log"; then
   recovery_attempted=1
   recovery_log="/tmp/opencode-factory-${WORKER}-verdict-recovery.log"
   recovery_timeout=90

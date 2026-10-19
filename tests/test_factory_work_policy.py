@@ -30,6 +30,7 @@ def candidate(
     producer: str | None = None,
     lane: int = 3,
     head_contributors: frozenset[str] = frozenset(),
+    is_fork: bool = False,
 ) -> Candidate:
     """Build a deterministic candidate fixture."""
     return Candidate(
@@ -41,6 +42,7 @@ def candidate(
         stage=stage,
         producer_worker=producer,
         head_contributors=head_contributors,
+        is_fork=is_fork,
     )
 
 
@@ -172,6 +174,47 @@ def test_unresolved_contributor_record_does_not_block_an_independent_worker():
     unresolved = candidate(kind="pr", number=1390, stage="factory:review", producer="29")
     assert unresolved not in policy.order_candidates_for_worker([unresolved], "29")
     assert policy.order_candidates_for_worker([unresolved], "59") == [unresolved]
+
+
+def roster_with_sources(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin worker execution capabilities so fork routing is deterministic."""
+    factory_roster = importlib.import_module("factory_roster")
+    monkeypatch.setattr(
+        factory_roster,
+        "load_roster_rows",
+        lambda *args, **kwargs: [
+            {"worker": "46", "source": "kilo-auto"},
+            {"worker": "11", "source": "opencode-free"},
+        ],
+    )
+
+
+def test_fork_review_goes_to_a_tool_capable_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fork review must not land on the anonymous Kilo repair lane."""
+    roster_with_sources(monkeypatch)
+    review = candidate(kind="pr", number=1390, stage="factory:review", is_fork=True)
+    assert review not in policy.order_candidates_for_worker([review], "46")
+    assert policy.order_candidates_for_worker([review], "11") == [review]
+
+
+def test_fork_repair_goes_only_to_anonymous_kilo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fork repairs require the secretless anonymous Kilo execution capability."""
+    roster_with_sources(monkeypatch)
+    repair = candidate(kind="pr", number=1390, stage="factory:changes-requested", is_fork=True)
+    assert repair not in policy.order_candidates_for_worker([repair], "11")
+    assert policy.order_candidates_for_worker([repair], "46") == [repair]
+
+
+def test_build_candidates_marks_cross_repository_prs_as_forks():
+    """Fork identity comes from the live cross-repository flag, not the branch name."""
+    fork = pr_fixture(number=1390, issue=1391, labels=["factory", "factory:unowned", "factory:review"])
+    fork["headRefName"] = "contributor/patch"
+    fork["body"] = "Closes #1391"
+    fork["isCrossRepository"] = True
+    internal = pr_fixture(number=1392, issue=1393, labels=["factory", "factory:unowned", "factory:review"])
+    built = policy.build_candidates([], [fork, internal])
+    by_number = {item.number: item.is_fork for item in built}
+    assert by_number == {1390: True, 1392: False}
 
 
 def test_build_candidates_carries_captured_head_contributors():

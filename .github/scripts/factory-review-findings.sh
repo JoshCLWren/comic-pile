@@ -441,7 +441,7 @@ factory_validate_greptile_outcomes() {
   # A claimed fix commit must already be on this branch.
   while IFS=$'\t' read -r thread commit; do
     [[ -n "$thread" ]] || continue
-    if ! git merge-base --is-ancestor "$commit" HEAD 2>/dev/null; then
+    if ! git merge-base --is-ancestor "$commit" "${FACTORY_REVIEW_ANCESTOR:-HEAD}" 2>/dev/null; then
       result="$(jq -c --arg id "$thread" '
         .valid |= map(select(.thread_id != $id))
         | .invalid += [{thread_id: $id, reason: "fixed commit is not an ancestor of HEAD"}]' <<< "$result")"

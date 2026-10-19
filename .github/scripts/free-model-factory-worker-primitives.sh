@@ -93,7 +93,11 @@ pr_no_diff_generation_fields() {
   local number="$1" stage="$2" prefer_live="${3:-0}"
   local sha="" conflicted=0 meta='{}' mergeable='' merge_state=''
   if [[ "$prefer_live" != 1 ]]; then
-    sha="$(git rev-parse HEAD 2>/dev/null || true)"
+    if [[ -n "${PR_HEAD_REPOSITORY:-}" && "$PR_HEAD_REPOSITORY" != "${GITHUB_REPOSITORY:-}" ]]; then
+      sha="${EXPECTED_HEAD:-}"
+    else
+      sha="$(git rev-parse HEAD 2>/dev/null || true)"
+    fi
   fi
   meta="$(gh pr view "$number" --json headRefOid,mergeable,mergeStateStatus 2>/dev/null || true)"
   [[ -n "$meta" ]] || meta='{}'
@@ -118,7 +122,7 @@ release_target() {
   local stage epoch marker generation="" bounded=0
   case "$reason" in
     no-persisted-change-handoff|repair-no-persisted-change-handoff) bounded=1 ;;
-    transient-model-interruption|review-agent-failed|controller-assignment-read-failed|semantic-review-head-read-failed|missing-semantic-verdict|conflicting-semantic-verdict|authoritative-diff-read-failed)
+    transient-model-interruption|review-agent-failed|controller-assignment-read-failed|semantic-review-head-read-failed|missing-semantic-verdict|conflicting-semantic-verdict|authoritative-diff-read-failed|fork-repair-execution-failed|fork-repair-result-invalid|fork-dispatch-failed)
       [[ "$target_kind" != pr ]] || bounded=1
       ;;
   esac
@@ -373,6 +377,10 @@ checkout_target() {
     PR_HEAD_REPOSITORY="$(jq -er '.head.repo.full_name' <<< "$pr_json")" || return 1
     [[ "$PR_HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || return 1
     [[ "$(jq -r '.base.repo.full_name' <<< "$pr_json")" == "$GITHUB_REPOSITORY" ]] || return 1
+    if [[ "$PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]]; then
+      log 'refusing fork checkout in a credentialed worker; use the secretless execution workflow' >&2
+      return 1
+    fi
     head="$(jq -er '.head.sha' <<< "$pr_json")" || return 1
     [[ "$head" =~ ^[a-f0-9]{40}$ ]] || return 1
     git fetch origin "refs/pull/${number}/head" || return 1

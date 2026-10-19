@@ -299,11 +299,23 @@ Rules:
 
 ## Repository safety
 
-- Contributor fork PRs enter the normal factory lifecycle automatically. Fetch
-  their exact head through the base repository's `refs/pull/<n>/head`, never by
-  assuming their branch exists on the base repository. Preserve their commits
-  and authorship when repairing. Push repairs to the actual fork head using
-  maintainer edit access; never create a same-named base branch as a substitute.
+- Contributor fork PRs enter the normal factory lifecycle automatically. A
+  credentialed factory worker never checks out or executes fork source, even for
+  review. The worker resolves the fork head through the base repository's
+  `refs/pull/<n>/head`, refuses `checkout_target` for an external head repository,
+  and reviews fork source only as a bounded data snapshot with every model tool
+  and integration hard-denied. Review the exact head; never assume the fork branch
+  exists on the base repository and never create a same-named base branch.
+- Fork repairs never run in the credentialed worker. The worker writes a trusted
+  dispatch receipt and starts `.github/workflows/factory-fork-execution.yml`, which
+  has read-only permissions, no inherited secrets, and no registry publishing.
+  Contributor dependencies, tests, hooks, and the anonymous Kilo repair run only
+  on that secretless runner. Its result is data: `.github/workflows/factory-fork-persistence.yml`
+  runs trusted `main` code, validates workflow identity, the receipt, the live
+  lease, the exact head, and a single descendant commit, imports the bundle into a
+  bare quarantine without checkout, and only then pushes to the existing fork head
+  with maintainer edit access. Preserve contributor commits and authorship; never
+  execute artifact code on the persistence host.
 - Fork CI runs on `pull_request` with read-only credentials and no registry
   publishing. Metadata-only `pull_request_target` workflows use trusted default
   branch code and never execute the fork checkout with their write token.

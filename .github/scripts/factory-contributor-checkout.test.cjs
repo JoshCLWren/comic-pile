@@ -8,7 +8,7 @@ const source = readFileSync('.github/scripts/free-model-factory-worker-primitive
 const checkout = source.match(/^checkout_target\(\) \{\n.*?^\}/ms)[0];
 
 for (const collision of [false, true]) {
-  test(`fork checkout uses PR head with base branch collision=${collision}`, () => {
+  test(`credentialed checkout rejects fork with base branch collision=${collision}`, () => {
     const dir = mkdtempSync(join(tmpdir(), 'factory-fork-'));
     const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
     try {
@@ -35,12 +35,11 @@ for (const collision of [false, true]) {
         gh() { printf '%s' "$TEST_PR"; }
         log() { :; }
         checkout_target pr 3897 fix/issue-3893
-        test "$EXPECTED_HEAD" = "$TEST_HEAD"
-        test "$PR_HEAD_REPOSITORY" = contributor/comic-pile
-        test "$(cat file)" = contributor
       `], { cwd: dir, encoding: 'utf8', env: { ...process.env,
         GITHUB_REPOSITORY: 'JoshCLWren/comic-pile', TEST_PR: JSON.stringify(pr), TEST_HEAD: head } });
-      assert.equal(result.status, 0, result.stderr);
+      assert.notEqual(result.status, 0);
+      assert.equal(git('rev-parse', 'HEAD'), main);
+      assert.equal(readFileSync(join(dir, 'file'), 'utf8'), 'main');
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 }

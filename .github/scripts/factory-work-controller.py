@@ -78,7 +78,7 @@ def list_issues() -> list[dict[str, Any]]:
 
 def list_prs() -> list[dict[str, Any]]:
     """List open pull requests including current mergeability."""
-    return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus']))
+    return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository']))
 
 
 def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> set[int] | None:
@@ -575,16 +575,18 @@ def active_fixed_workers() -> ActiveWorkerResult:
     runs: list[dict[str, Any]] = []
     unresolved_run_ids: set[str] = set()
     unresolved_runs: dict[str, dict[str, Any]] = {}
-    for status in ('queued', 'in_progress'):
-        try:
-            pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/actions/workflows/free-model-factory-entry.yml/runs?status={status}&per_page=100'])
-        except RuntimeError:
-            unresolved_run_ids.add(f'{status}-run-query-unavailable')
-            continue
-        page_values = pages if isinstance(pages, list) else []
-        for page in page_values:
-            if isinstance(page, dict):
-                runs.extend(cast(list[dict[str, Any]], page.get('workflow_runs') or []))
+    for workflow in ('free-model-factory-entry.yml', 'factory-fork-execution.yml'):
+        for status in ('queued', 'in_progress'):
+            try:
+                pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/actions/workflows/{workflow}/runs?status={status}&per_page=100'])
+            except RuntimeError:
+                prefix = '' if workflow == 'free-model-factory-entry.yml' else 'fork-'
+                unresolved_run_ids.add(f'{prefix}{status}-run-query-unavailable')
+                continue
+            page_values = pages if isinstance(pages, list) else []
+            for page in page_values:
+                if isinstance(page, dict):
+                    runs.extend(cast(list[dict[str, Any]], page.get('workflow_runs') or []))
     for index, run in enumerate(runs):
         title = str(run.get('display_title') or run.get('name') or '')
         match = re.search(r'\bFactory\s+(\d+)\b', title)

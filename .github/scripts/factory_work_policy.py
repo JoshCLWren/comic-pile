@@ -55,7 +55,7 @@ NO_DIFF_ATTEMPT_RE = re.compile(
     r'(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):'
     r'(?P<reason>(?:repair-)?no-persisted-change-handoff|transient-model-interruption|'
     r'review-agent-failed|controller-assignment-read-failed|semantic-review-head-read-failed|'
-    r'missing-semantic-verdict|conflicting-semantic-verdict|authoritative-diff-read-failed)'
+    r'missing-semantic-verdict|conflicting-semantic-verdict|authoritative-diff-read-failed|fork-repair-execution-failed|fork-repair-result-invalid|fork-dispatch-failed)'
     r'(?::sha=(?P<sha>[0-9a-fA-F]{7,40}))?'
     r'(?::stage=(?P<stage>factory:[a-z-]+))?'
     r'(?::conflicted=(?P<conflicted>[01]))?'
@@ -134,6 +134,7 @@ class Candidate:
     producer_worker: str | None = None
     conflicted: bool = False
     head_contributors: frozenset[str] = frozenset()
+    is_fork: bool = False
 
     def sort_key(self) -> tuple[int, int, float, int]:
         """Return the deterministic queue ordering key (oldest work first)."""
@@ -732,6 +733,7 @@ def build_candidates(
                 producer_worker=producer_worker_from_pr(pr),
                 conflicted=pr_is_conflicted(pr),
                 head_contributors=head_contributors_from_pr(pr),
+                is_fork=pr.get('isCrossRepository') is True,
             )
         )
     return sorted(candidates, key=Candidate.sort_key)
@@ -767,6 +769,17 @@ def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bo
     eligible reviewer automatically instead of churning the same worker
     through a controller refusal.
     """
+    if candidate.kind == 'pr' and candidate.is_fork:
+        try:
+            from factory_roster import load_roster_rows
+            source = next((row['source'] for row in load_roster_rows() if row['worker'] == worker), '')
+        except (OSError, ValueError):
+            return False
+        if candidate.stage == 'factory:review':
+            if source == 'kilo-auto' or not source:
+                return False
+        elif source != 'kilo-auto':
+            return False
     if candidate.kind != 'pr' or candidate.stage != 'factory:review':
         return True
     if candidate.producer_worker == worker:
@@ -843,7 +856,8 @@ def parse_no_diff_attempts_from_comments(
                 'transient-model-interruption', 'review-agent-failed',
                 'controller-assignment-read-failed', 'semantic-review-head-read-failed',
                 'missing-semantic-verdict', 'conflicting-semantic-verdict',
-                'authoritative-diff-read-failed',
+                'authoritative-diff-read-failed', 'fork-repair-execution-failed',
+                'fork-repair-result-invalid', 'fork-dispatch-failed',
             }
             if transient and match.group('kind') != 'pr':
                 continue
