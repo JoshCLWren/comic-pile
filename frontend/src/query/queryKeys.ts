@@ -476,4 +476,13 @@ export const queryKeys = {
     page: ({ offset, limit }: { offset: number; limit: number }) =>
       ['releases', 'pages', { offset, limit }] as const,
   },
+  comicvine: {
+    /**
+     * Canonical ComicVine series search key. `query` is normalized to a trimmed value.
+     * `offset` is excluded from the key so pagination stays stable; it lives in `pageParam`.
+     */
+    search: (query: string, pageSize: number) => ['comicvine', 'series', 'search', normalizedSearch(query), { pageSize }] as const,
+    page: (query: string, offset: number, pageSize: number) => 
+      ['comicvine', 'series', 'search', normalizedSearch(query), { offset, pageSize }] as const,
+  },
 } as const

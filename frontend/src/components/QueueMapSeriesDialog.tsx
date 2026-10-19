@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Modal from './Modal'
-import { comicVineApi } from '../services/api-comicvine'
+import { useComicVineSearch } from '../hooks/useComicVineSearch'
 import type { ComicVineSeriesResult } from '../services/api-comicvine'
 import {
   useQueueMappingOriginIssue,
@@ -23,11 +23,19 @@ interface QueueMapSeriesDialogProps {
   threadTitle: string
   onClose: () => void
   onMapped: (confirmedIssueIds: number[]) => void
+  /**
+   * Optional batch affordance. When the host runs several series in one pass, a
+   * series with no safe matches (or that cannot be loaded) must not trap the
+   * reader on the current step. The host supplies this to record the series as
+   * needing review and advance. Standalone single-series callers omit it.
+   */
+  onSkip?: () => void
 }
 
 type DialogStep = 'search' | 'preview'
 
-const SEARCH_PAGE_SIZE = 10
+const SEARCH_PAGE_SIZE = 20
+const SEARCH_DEBOUNCE_MS = 300
 
 function stripParenthesizedYears(title: string): string {
   return title.replace(/\((\d{4}(-\d{4})?)\)/g, '').trim()
@@ -93,20 +101,20 @@ export default function QueueMapSeriesDialog({
   threadTitle,
   onClose,
   onMapped,
+  onSkip,
 }: QueueMapSeriesDialogProps) {
   const [step, setStep] = useState<DialogStep>('search')
   const [query, setQuery] = useState(threadTitle)
-  const [seriesResults, setSeriesResults] = useState<ComicVineSeriesResult[]>([])
+  const [searchTerm, setSearchTerm] = useState(() => stripParenthesizedYears(threadTitle))
   const [selectedSeries, setSelectedSeries] = useState<ComicVineSeriesResult | null>(null)
-  const [hasMore, setHasMore] = useState(false)
-  const [nextOffset, setNextOffset] = useState<number | null>(null)
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
-  const [hasSearched, setHasSearched] = useState(false)
   const [uncheckedRowIds, setUncheckedRowIds] = useState<ReadonlySet<string>>(() => new Set())
-  const asyncRef = useRef(0)
-  const searchingRef = useRef(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const queryDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const searchQuery = useComicVineSearch({
+    query: searchTerm,
+    pageSize: SEARCH_PAGE_SIZE,
+    enabled: isOpen && step === 'search',
+  })
 
   const originQuery = useQueueMappingOriginIssue(isOpen ? threadId : null, isOpen)
   const originIssueId = originQuery.data?.id ?? null
@@ -123,93 +131,79 @@ export default function QueueMapSeriesDialog({
   )
   const commit = useQueueSeriesMappingCommit()
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-        debounceRef.current = null
-      }
-    }
-  }, [])
+  
 
-  const handleSearch = useCallback(async (searchQuery: string, offset = 0, append = false) => {
-    const trimmed = searchQuery.trim()
-    if (!trimmed) {
-      setSeriesResults([])
-      setHasMore(false)
-      setNextOffset(null)
-      setHasSearched(false)
-      return
-    }
-    const requestId = ++asyncRef.current
-    searchingRef.current = true
-    setIsSearching(true)
-    setSearchError(null)
-    try {
-      const response = await comicVineApi.searchSeries(trimmed, SEARCH_PAGE_SIZE, offset)
-      if (requestId !== asyncRef.current) return
-      setSeriesResults((previous) => {
-        if (!append) return response.results
-        const seen = new Set(previous.map((series) => series.comicvine_volume_id))
-        return [...previous, ...response.results.filter((series) => !seen.has(series.comicvine_volume_id))]
-      })
-      setHasMore(response.has_more)
-      setNextOffset(response.next_offset)
-      setHasSearched(true)
-    } catch {
-      if (requestId !== asyncRef.current) return
-      setSearchError('Failed to search ComicVine. Please try again.')
-      if (!append) setSeriesResults([])
-    } finally {
-      if (requestId === asyncRef.current) {
-        setIsSearching(false)
-        searchingRef.current = false
-      }
-    }
-  }, [])
+  
 
   useEffect(() => {
     if (isOpen) {
       const initial = stripParenthesizedYears(threadTitle)
       setStep('search')
       setQuery(initial)
-      setSeriesResults([])
+      setSearchTerm(initial)
       setSelectedSeries(null)
-      setHasMore(false)
-      setNextOffset(null)
-      setSearchError(null)
-      setHasSearched(false)
       setUncheckedRowIds(new Set())
       commit.reset()
-      if (initial) void handleSearch(initial)
     }
-    // Reset only on open transitions; the search callback is stable.
+    // Reset only on open transitions; the search query is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, threadId])
 
-  const handleQueryChange = useCallback(
-    (value: string) => {
-      setQuery(value)
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      if (!value.trim()) {
-        setHasSearched(false)
-        setSeriesResults([])
-        setHasMore(false)
-        setNextOffset(null)
-        return
-      }
-      debounceRef.current = setTimeout(() => {
-        asyncRef.current += 1
-        void handleSearch(value)
-      }, 350)
+  useEffect(
+    () => () => {
+      if (queryDebounceRef.current) clearTimeout(queryDebounceRef.current)
     },
-    [handleSearch],
+    [threadId, isOpen],
   )
 
+  const handleQueryChange = useCallback((value: string) => {
+    // The input stays responsive, but only the debounced value reaches the
+    // provider search hook so each typed prefix does not spend a ComicVine
+    // request against the shared hourly budget (issue #3484 review).
+    setQuery(value)
+    if (queryDebounceRef.current) clearTimeout(queryDebounceRef.current)
+    queryDebounceRef.current = setTimeout(() => {
+      setSearchTerm(value)
+    }, SEARCH_DEBOUNCE_MS)
+  }, [])
+
+  const {
+    hasNextPage: searchHasNextPage,
+    isFetching: isSearchFetching,
+    isPlaceholderData: isSearchPlaceholder,
+    fetchNextPage,
+    data: searchData,
+    isLoading: isSearchLoading,
+    error: searchError,
+  } = searchQuery
+
+  // Flatten the infinite pages into one deduplicated list. React Query retains
+  // the previous pages while a new query settles, so a provider page that
+  // overlaps the prior one must not render the same volume twice.
+  const searchResults = useMemo(() => {
+    const seen = new Set<number>()
+    const unique: ComicVineSeriesResult[] = []
+    for (const page of searchData?.pages ?? []) {
+      for (const series of page.results) {
+        if (seen.has(series.comicvine_volume_id)) continue
+        seen.add(series.comicvine_volume_id)
+        unique.push(series)
+      }
+    }
+    return unique
+  }, [searchData])
+  const hasSearchText = query.trim().length > 0
+  // While a debounced re-search is in flight, React Query keeps the previous
+  // results as placeholder data but reports no next page for the *new* query.
+  // Keep the load-more control visible (disabled) so the list does not jump.
+  const showLoadMore =
+    hasSearchText && (searchHasNextPage || (isSearchPlaceholder && isSearchFetching))
+
   const handleLoadMore = useCallback(() => {
-    if (!hasMore || nextOffset == null || searchingRef.current) return
-    void handleSearch(query, nextOffset, true)
-  }, [handleSearch, hasMore, nextOffset, query])
+    if (searchHasNextPage && !isSearchFetching) {
+      void fetchNextPage()
+    }
+  }, [searchHasNextPage, isSearchFetching, fetchNextPage])
 
   const handleSelectSeries = useCallback((series: ComicVineSeriesResult) => {
     setSelectedSeries(series)
@@ -316,8 +310,7 @@ export default function QueueMapSeriesDialog({
               onChange={(event) => handleQueryChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && query.trim()) {
-                  if (debounceRef.current) clearTimeout(debounceRef.current)
-                  void handleSearch(query)
+                  // Search is handled automatically by the query hook
                 }
               }}
               placeholder="Search ComicVine volumes"
@@ -330,7 +323,7 @@ export default function QueueMapSeriesDialog({
                 role="alert"
                 className="rounded-lg bg-rose-900/30 border border-rose-700/40 p-3 text-sm text-rose-200"
               >
-                {searchError}
+                Failed to search ComicVine. Please try again.
               </p>
             )}
             {originQuery.isError && (
@@ -346,43 +339,59 @@ export default function QueueMapSeriesDialog({
                 This series has no tracked issues to map.
               </p>
             )}
-            {isSearching && seriesResults.length === 0 && (
+            {hasSearchText && isSearchFetching && searchResults.length === 0 && (
               <div className="flex justify-center py-6" aria-label="Searching">
                 <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
               </div>
             )}
-            {hasSearched && !isSearching && seriesResults.length === 0 && !searchError && (
-              <p className="text-sm text-stone-400">No volumes matched that search.</p>
+            {hasSearchText &&
+              !isSearchFetching &&
+              !isSearchLoading &&
+              searchResults.length === 0 &&
+              !searchError && (
+                <p className="text-sm text-stone-400">No volumes matched that search.</p>
+              )}
+            {hasSearchText && (
+              <ul className="space-y-2 max-h-72 overflow-y-auto overscroll-contain">
+                {searchResults.map((series) => {
+                  const meta = seriesMetaText(series)
+                  return (
+                    <li key={series.comicvine_volume_id}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectSeries(series)}
+                        disabled={!originReady || isSearchPlaceholder}
+                        data-testid="queue-map-series-result"
+                        aria-label={meta ? `${series.name} - ${meta}` : series.name}
+                        className="w-full text-left rounded-xl bg-stone-800/50 border border-stone-700/50 p-3 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
+                      >
+                        <span className="block text-sm font-bold text-stone-100">{series.name}</span>
+                        {meta && <span className="block text-xs text-stone-400">{meta}</span>}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
             )}
-            <ul className="space-y-2 max-h-72 overflow-y-auto overscroll-contain">
-              {seriesResults.map((series) => {
-                const meta = seriesMetaText(series)
-                return (
-                  <li key={series.comicvine_volume_id}>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectSeries(series)}
-                      disabled={!originReady}
-                      data-testid="queue-map-series-result"
-                      aria-label={meta ? `${series.name} - ${meta}` : series.name}
-                      className="w-full text-left rounded-xl bg-stone-800/50 border border-stone-700/50 p-3 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
-                    >
-                      <span className="block text-sm font-bold text-stone-100">{series.name}</span>
-                      {meta && <span className="block text-xs text-stone-400">{meta}</span>}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-            {hasMore && (
+            {showLoadMore && (
               <button
                 type="button"
                 onClick={handleLoadMore}
-                disabled={isSearching}
+                disabled={isSearchFetching}
                 data-testid="queue-map-series-load-more"
                 className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition disabled:opacity-50"
               >
-                {isSearching ? 'Loading...' : 'Show more volumes'}
+                {isSearchFetching ? 'Loading...' : 'Show more volumes'}
+              </button>
+            )}
+            {onSkip && (
+              <button
+                type="button"
+                onClick={onSkip}
+                data-testid="queue-map-series-skip"
+                className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
+              >
+                Skip / needs review
               </button>
             )}
           </div>
@@ -439,6 +448,16 @@ export default function QueueMapSeriesDialog({
                   >
                     {preview.isFetching ? 'Retrying...' : 'Try again'}
                   </button>
+                  {onSkip && (
+                    <button
+                      type="button"
+                      onClick={onSkip}
+                      data-testid="queue-map-series-skip"
+                      className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
+                    >
+                      Skip / needs review
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -449,14 +468,26 @@ export default function QueueMapSeriesDialog({
                   ComicPile could not establish a safe mapping scope for this series, so there is
                   no plan to approve. Nothing was changed.
                 </p>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  data-testid="queue-map-series-dismiss"
-                  className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
-                >
-                  Done
-                </button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    data-testid="queue-map-series-dismiss"
+                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
+                  >
+                    Done
+                  </button>
+                  {onSkip && (
+                    <button
+                      type="button"
+                      onClick={onSkip}
+                      data-testid="queue-map-series-skip"
+                      className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition"
+                    >
+                      Skip / needs review
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -555,6 +586,17 @@ export default function QueueMapSeriesDialog({
                   >
                     {commit.isSuccess ? 'Done' : 'Cancel'}
                   </button>
+                  {onSkip && !commit.isSuccess && (
+                    <button
+                      type="button"
+                      onClick={onSkip}
+                      disabled={commit.isPending}
+                      data-testid="queue-map-series-skip"
+                      className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] transition disabled:opacity-50"
+                    >
+                      Skip / needs review
+                    </button>
+                  )}
                   {!commit.isSuccess && (
                     <button
                       type="button"

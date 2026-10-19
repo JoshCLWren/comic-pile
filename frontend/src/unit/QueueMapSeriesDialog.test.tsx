@@ -170,7 +170,7 @@ function searchResponse(
     results,
     total_available: results.length,
     offset: 0,
-    limit: 10,
+    limit: 20,
     has_more: false,
     next_offset: null,
     ...overrides,
@@ -252,7 +252,7 @@ describe('QueueMapSeriesDialog', () => {
     renderDialog()
 
     const result = await screen.findByTestId('queue-map-series-result')
-    expect(mockedSearchSeries).toHaveBeenCalledWith('Saga', 10, 0)
+    expect(mockedSearchSeries).toHaveBeenCalledWith('Saga', 20, 0)
     expect(result).toHaveTextContent('Saga')
 
     await user.click(result)
@@ -488,10 +488,10 @@ describe('QueueMapSeriesDialog', () => {
   it('loads more results and deduplicates volumes already listed', async () => {
     const user = userEvent.setup()
     mockedSearchSeries.mockResolvedValueOnce(
-      searchResponse([VOLUME], { has_more: true, next_offset: 10 }),
+      searchResponse([VOLUME], { has_more: true, next_offset: 20 }),
     )
     mockedSearchSeries.mockResolvedValueOnce(
-      searchResponse([VOLUME, VOLUME_2], { offset: 10, has_more: false, next_offset: null }),
+      searchResponse([VOLUME, VOLUME_2], { offset: 20, has_more: false, next_offset: null }),
     )
     renderDialog()
 
@@ -501,7 +501,7 @@ describe('QueueMapSeriesDialog', () => {
 
     await user.click(screen.getByTestId('queue-map-series-load-more'))
 
-    expect(mockedSearchSeries).toHaveBeenLastCalledWith('Saga', 10, 10)
+    expect(mockedSearchSeries).toHaveBeenLastCalledWith('Saga', 20, 20)
     expect(await screen.findAllByTestId('queue-map-series-result')).toHaveLength(2)
     expect(screen.getByText('Saga (Book Two)')).toBeInTheDocument()
     expect(screen.queryByTestId('queue-map-series-load-more')).not.toBeInTheDocument()
@@ -510,7 +510,7 @@ describe('QueueMapSeriesDialog', () => {
   it('disables the load more button while a search is in flight', async () => {
     const user = userEvent.setup()
     mockedSearchSeries.mockResolvedValueOnce(
-      searchResponse([VOLUME], { has_more: true, next_offset: 10 }),
+      searchResponse([VOLUME], { has_more: true, next_offset: 20 }),
     )
     let resolveSecond!: (value: ComicVineSeriesSearchResponse) => void
     mockedSearchSeries.mockImplementationOnce(

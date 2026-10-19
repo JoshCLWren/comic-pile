@@ -18,6 +18,8 @@ import { QueueModals } from './QueueModals'
 import DeleteThreadDialog from './DeleteThreadDialog'
 import RemoveThreadDialog from './RemoveThreadDialog'
 import ShuffleQueueDialog from './ShuffleQueueDialog'
+import QueueBulkMapSeriesDialog from '../../components/QueueBulkMapSeriesDialog'
+import { useQueueBulkMapping } from './useQueueBulkMapping'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueThreadCards } from './useQueueThreadCards'
@@ -45,6 +47,10 @@ export default function QueuePage() {
     loadMore,
     activeCount,
   } = useQueueThreads(searchQuery, sortBy)
+
+  // Series that show the per-row `Map series` repair action (everything except
+  // fully mapped or non-issue-tracked rows) are the bulk action's scope.
+  const bulkMapping = useQueueBulkMapping(threads)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -191,6 +197,8 @@ export default function QueuePage() {
           onShuffle={actions.requestShuffle}
           onCreateThread={modals.showCreateModal}
           onAddFromComicVine={modals.showAddSeriesComicVineModal}
+          onBulkMapSeries={bulkMapping.openBulkMap}
+          bulkMapDisabled={bulkMapping.bulkMapDisabled}
           sortBy={sortBy}
           onSortChange={setSortBy}
           searchQuery={searchQuery}
@@ -325,6 +333,8 @@ export default function QueuePage() {
           onConfirm={() => void actions.confirmShuffle()}
           onCancel={actions.cancelShuffle}
         />
+
+        <QueueBulkMapSeriesDialog {...bulkMapping.dialogProps} />
       </div>
     </PositionMenuProvider>
   )
