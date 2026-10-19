@@ -39,7 +39,10 @@ export function displayCblSourceName(sourcePath: string): string | null {
     name = name.slice(lastSlashIndex + 1)
   }
 
-  // Return null if nothing remains after stripping
+  if (!name || name === MIRROR_NAME) return null
+
+  name = name.replace(/^(\[[^\]]+\]\s*)+/, '')
+
   if (!name) return null
 
   return name
@@ -94,7 +97,8 @@ export function displayCblSourcePath(sourcePath: string): string | null {
   }
   if (isFilesystemSourceLocation(normalized)) {
     const fileName = normalized.split('/').pop() ?? ''
-    return fileName.includes('.') ? fileName : null
+    if (!fileName.includes('.')) return null
+    return fileName.replace(/\.cbl$/, '') || null
   }
   return normalized
 }

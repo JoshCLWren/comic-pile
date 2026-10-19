@@ -330,7 +330,6 @@ export default function CblBrowserPage() {
       {sources.length > 0 && (
         <div className="grid gap-2" aria-label="Source candidates">
           {sources.map((source) => {
-            const publicPath = displayCblSourcePath(source.source_path)
             const publicRepo = displayCblRepository(source.source_repository)
             const meta = [
               publicRepo,
@@ -349,13 +348,8 @@ export default function CblBrowserPage() {
                 } hover:bg-white/5`}
               >
                 <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
-                  {displayCblSourceName(source.source_path) ?? source.name}
+                  {source.name || displayCblSourceName(source.source_path)}
                 </span>
-                {publicPath && (
-                  <span className="mt-1 block text-xs text-[var(--theme-text-muted)]">
-                    {publicPath}
-                  </span>
-                )}
                 {meta.length > 0 && (
                   <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">
                     {meta.join(' · ')}
