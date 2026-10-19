@@ -228,7 +228,8 @@ class SeriesMappingPreviewRow(BaseModel):
     provider: str | None = Field(default=None, description="External provider name")
     external_id: str | None = Field(default=None, description="Provider-specific identifier")
     proposed_mapping: bool = Field(..., description="Whether this issue would be mapped in the proposed scope")
-    default_selected: bool = Field(..., description="Whether this is a default selected row (only for safe_exact_match)")
+    default_selected: bool = Field(..., description="Whether this safe mapping or verified metadata refresh is selected by default")
+    metadata_refresh_required: bool = Field(default=False, description="Verified existing identity has no usable metadata and may be refreshed without replacing it")
     reason: str | None = Field(default=None, description="Explanation for the classification")
 
 
@@ -236,7 +237,7 @@ class SeriesMappingPreviewProviderSeries(BaseModel):
     """Schema for provider series information in preview responses."""
 
     id: str = Field(..., description="Provider series ID")
-    name: str = Field(..., description="Series name")
+    name: str | None = Field(default=None, description="Series name, when provider metadata is available")
     publisher: str | None = Field(default=None, description="Publisher name")
     start_year: int | None = Field(default=None, description="Start year")
     count_of_issues: int | None = Field(default=None, description="Total number of issues in the series")

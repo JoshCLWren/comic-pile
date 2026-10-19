@@ -60,6 +60,41 @@ existing timeout, retry, and deduplication controls. Provider failure leaves the
 intact; Roll and rating continue to serve stored data through their existing nonblocking reads.
 The origin remains excluded from sibling approval.
 
+### Series mapping and incomplete confirmed identities
+
+A confirmed mapping records an external ID; it does not prove that ComicPile has usable
+issue metadata. Queue's mapping-health projection separately reports
+`metadata_missing_count`, so a thread with confirmed IDs but missing issue numbers or series
+names keeps its **Map series** action. Roll's corrections menu exposes the same series flow
+directly, without requiring removal of the current issue's identity.
+
+Series previews compare the actual selected ComicVine volume roster with local issue numbers
+and external IDs. Existing IDs that agree with the roster but lack usable metadata are shown
+as **Missing details** and can be approved for an **Update** alongside new exact matches.
+The signed preview binds that refresh eligibility; commit recomputes it and retains ownership,
+conflict, expiry, stale-preview, and idempotency checks. An existing confirmation by itself
+does not authorize an update to a different provider ID.
+
+Commit saves the already-fetched roster's issue, volume and cover metadata in the same
+transaction as the approved mappings, preserving existing populated/deep metadata. This
+provides usable basic data even if the bounded post-commit singular-issue hydration cannot
+complete. Deep creator/story-arc enrichment still follows the normal runtime fallback.
+
+An all-confirmed volume with verified roster agreement retains its rows and counts rather
+than returning an empty “unsafe scope.” Mixed reading threads may contain annuals, specials,
+and other titles; those rows remain visible as unmatched, conflicting, or requiring review.
+Bootstrap provider failures return a retryable 503 instead of pretending the reader's series
+has no safe scope. A missing local series name is nullable at the response boundary and is
+filled from live provider data when available.
+
+Regression evidence is in `tests/test_comicvine_production_mapping_cases.py` and
+`tests/fixtures/comicvine/production_mapping_cases.json`. The fixture replays public provider
+rosters and the Tom Strong/Starman mapping shapes captured on 2026-10-19; it excludes account
+IDs, credentials, reading progress and history. The original Tom Strong case had 36 confirmed
+IDs, 29 with empty metadata, and a nameless series stub that caused preview response validation
+to fail. Starman combined a confirmed main volume with other titles, causing the old
+“no new exact matches” path to erase the useful classification details.
+
 Confirmation preserves an existing identity's metadata timestamp when only its URL or local
 normalization changes. Those edits are not a provider refresh: stale evidence must remain stale
 through the post-commit fallback's own freshness check.

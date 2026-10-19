@@ -251,6 +251,7 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     const menu = await openCorrections()
     expect(within(menu).getByRole('menuitem', { name: 'Fix issue number' })).toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: 'Wrong series?' })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Map series' })).toBeInTheDocument()
     // A confirmed mapping does not also offer the first-time match action.
     expect(within(menu).queryByRole('menuitem', { name: 'Find ComicVine match' })).toBeNull()
   })

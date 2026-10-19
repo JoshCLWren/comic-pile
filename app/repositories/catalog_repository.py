@@ -18,6 +18,22 @@ if TYPE_CHECKING:
     from app.models.external_identity import ThreadExternalSeriesMapping, IssueExternalIdentityMapping
 
 
+def fill_missing_identity_metadata(
+    identity: ExternalIdentity, provider_metadata: dict[str, object]
+) -> None:
+    """Fill missing metadata without replacing populated or deep provider evidence.
+
+    Args:
+        identity: Attached identity to update inside the caller's transaction.
+        provider_metadata: Already-verified provider issue or series metadata.
+    """
+    identity.metadata_json = {
+        **provider_metadata,
+        **{key: value for key, value in identity.metadata_json.items()
+           if value is not None and value != ""},
+    }
+
+
 async def search_catalog_series(
     db: AsyncSession,
     *,
@@ -270,6 +286,7 @@ async def get_series_with_issues(
             "external_id": issue_identity.external_id,
             "confidence": issue_mapping.confidence,
             "classification": "unresolved",
+            "_identity_metadata": issue_identity.metadata_json,
         }
         issues_with_mappings.append(issue_info)
     
@@ -513,6 +530,7 @@ async def get_thread_issues_for_sibling_scope(
                 "provider": identity.provider if identity is not None else None,
                 "external_id": identity.external_id if identity is not None else None,
                 "confidence": mapping.confidence if mapping is not None else None,
+                "_identity_metadata": identity.metadata_json if identity is not None else {},
             }
         )
     return rows
@@ -576,6 +594,7 @@ async def get_thread_issues_for_queue_bootstrap_scope(
                 "provider": identity.provider if identity is not None else None,
                 "external_id": identity.external_id if identity is not None else None,
                 "confidence": mapping.confidence if mapping is not None else None,
+                "_identity_metadata": identity.metadata_json if identity is not None else {},
             }
         )
     return rows
@@ -633,6 +652,7 @@ async def get_issue_by_id(
         "provider": identity.provider if identity is not None else None,
         "external_id": identity.external_id if identity is not None else None,
         "confidence": mapping.confidence if mapping is not None else None,
+        "_identity_metadata": identity.metadata_json if identity is not None else {},
     }
 
 

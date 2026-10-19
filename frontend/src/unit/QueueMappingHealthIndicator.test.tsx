@@ -4,10 +4,18 @@ import { render, screen } from '@testing-library/react'
 import QueueMappingHealthIndicator from '../pages/QueuePage/QueueMappingHealthIndicator'
 
 describe('QueueMappingHealthIndicator', () => {
+  it('keeps Map series reachable for confirmed IDs with missing metadata', () => {
+    render(<QueueMappingHealthIndicator mapping={{ status: 'fully_mapped', tracked_issue_count: 36,
+      confirmed_issue_count: 36, needs_mapping_count: 0, needs_review_count: 0,
+      metadata_missing_count: 29 }} onMapSeries={vi.fn()} />)
+    expect(screen.getByText('29 issues are missing details')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Map series' })).toBeInTheDocument()
+  })
+
   it('is quiet for fully_mapped', () => {
     const { container } = render(
       <QueueMappingHealthIndicator
-        mapping={{ status: 'fully_mapped', tracked_issue_count: 5, confirmed_issue_count: 5, needs_mapping_count: 0, needs_review_count: 0 }}
+        mapping={{ status: 'fully_mapped', tracked_issue_count: 5, confirmed_issue_count: 5, needs_mapping_count: 0, needs_review_count: 0, metadata_missing_count: 0 }}
       />,
     )
     expect(container.firstChild).toBeNull()
@@ -16,7 +24,7 @@ describe('QueueMappingHealthIndicator', () => {
   it('is quiet for not_applicable', () => {
     const { container } = render(
       <QueueMappingHealthIndicator
-        mapping={{ status: 'not_applicable', tracked_issue_count: 0, confirmed_issue_count: 0, needs_mapping_count: 0, needs_review_count: 0 }}
+        mapping={{ status: 'not_applicable', tracked_issue_count: 0, confirmed_issue_count: 0, needs_mapping_count: 0, needs_review_count: 0, metadata_missing_count: 0 }}
       />,
     )
     expect(container.firstChild).toBeNull()
@@ -25,7 +33,7 @@ describe('QueueMappingHealthIndicator', () => {
   it('shows unresolved count and Map series button', () => {
     render(
       <QueueMappingHealthIndicator
-        mapping={{ status: 'unresolved', tracked_issue_count: 4, confirmed_issue_count: 0, needs_mapping_count: 4, needs_review_count: 0 }}
+        mapping={{ status: 'unresolved', tracked_issue_count: 4, confirmed_issue_count: 0, needs_mapping_count: 4, needs_review_count: 0, metadata_missing_count: 0 }}
         onMapSeries={vi.fn()}
       />,
     )
@@ -36,7 +44,7 @@ describe('QueueMappingHealthIndicator', () => {
   it('uses singular wording for one unmapped issue', () => {
     render(
       <QueueMappingHealthIndicator
-        mapping={{ status: 'unresolved', tracked_issue_count: 1, confirmed_issue_count: 0, needs_mapping_count: 1, needs_review_count: 0 }}
+        mapping={{ status: 'unresolved', tracked_issue_count: 1, confirmed_issue_count: 0, needs_mapping_count: 1, needs_review_count: 0, metadata_missing_count: 0 }}
         onMapSeries={vi.fn()}
       />,
     )
@@ -46,7 +54,7 @@ describe('QueueMappingHealthIndicator', () => {
   it('shows partial count without button when callback omitted', () => {
     render(
       <QueueMappingHealthIndicator
-        mapping={{ status: 'partial', tracked_issue_count: 10, confirmed_issue_count: 3, needs_mapping_count: 7, needs_review_count: 0 }}
+        mapping={{ status: 'partial', tracked_issue_count: 10, confirmed_issue_count: 3, needs_mapping_count: 7, needs_review_count: 0, metadata_missing_count: 0 }}
       />,
     )
     expect(screen.getByText('3 of 10 mapped')).toBeInTheDocument()
@@ -56,7 +64,7 @@ describe('QueueMappingHealthIndicator', () => {
   it('distinguishes needs_review with review text instead of mapping text', () => {
     render(
       <QueueMappingHealthIndicator
-        mapping={{ status: 'needs_review', tracked_issue_count: 2, confirmed_issue_count: 1, needs_mapping_count: 0, needs_review_count: 1 }}
+        mapping={{ status: 'needs_review', tracked_issue_count: 2, confirmed_issue_count: 1, needs_mapping_count: 0, needs_review_count: 1, metadata_missing_count: 0 }}
         onMapSeries={vi.fn()}
       />,
     )
@@ -67,7 +75,7 @@ describe('QueueMappingHealthIndicator', () => {
   it('exposes status as text/ARIA, not color alone', () => {
     render(
       <QueueMappingHealthIndicator
-        mapping={{ status: 'needs_review', tracked_issue_count: 2, confirmed_issue_count: 1, needs_mapping_count: 0, needs_review_count: 1 }}
+        mapping={{ status: 'needs_review', tracked_issue_count: 2, confirmed_issue_count: 1, needs_mapping_count: 0, needs_review_count: 1, metadata_missing_count: 0 }}
         onMapSeries={vi.fn()}
       />,
     )
@@ -79,7 +87,7 @@ describe('QueueMappingHealthIndicator', () => {
     const onMapSeries = vi.fn()
     render(
       <QueueMappingHealthIndicator
-        mapping={{ status: 'unresolved', tracked_issue_count: 1, confirmed_issue_count: 0, needs_mapping_count: 1, needs_review_count: 0 }}
+        mapping={{ status: 'unresolved', tracked_issue_count: 1, confirmed_issue_count: 0, needs_mapping_count: 1, needs_review_count: 0, metadata_missing_count: 0 }}
         onMapSeries={onMapSeries}
       />,
     )

@@ -1,0 +1,3428 @@
+{
+  "captured_on": "2026-10-19",
+  "cases": [
+    {
+      "title": "Tom Strong",
+      "volume": {
+        "count_of_issues": 36,
+        "id": 6566,
+        "image": {
+          "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207737-01.jpg",
+          "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207737-01.jpg"
+        },
+        "name": "Tom Strong",
+        "publisher": {
+          "api_detail_url": "https://comicvine.gamespot.com/api/publisher/4010-10/",
+          "id": 10,
+          "name": "DC Comics"
+        },
+        "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/",
+        "start_year": "1999"
+      },
+      "roster": [
+        {
+          "cover_date": "1999-06-01",
+          "id": 46862,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207737-01.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207737-01.jpg"
+          },
+          "issue_number": "1",
+          "name": "How Tom Strong Got Started",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-1-how-tom-strong-got-started/4000-46862/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "1999-07-01",
+          "id": 46863,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207739-02.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207739-02.jpg"
+          },
+          "issue_number": "2",
+          "name": "Return of the Modular Man",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-2-return-of-the-modular-man/4000-46863/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "1999-08-01",
+          "id": 46864,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207740-03.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207740-03.jpg"
+          },
+          "issue_number": "3",
+          "name": "Aztech Nights",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-3-aztech-nights/4000-46864/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "1999-10-01",
+          "id": 46865,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207741-04.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207741-04.jpg"
+          },
+          "issue_number": "4",
+          "name": "Swastika Girls!",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-4-swastika-girls/4000-46865/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "1999-12-01",
+          "id": 46866,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207742-05.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207742-05.jpg"
+          },
+          "issue_number": "5",
+          "name": "Memories of Pangaea, Escape from Eden!",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-5-memories-of-pangaea-escape-from-eden/4000-46866/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2000-02-01",
+          "id": 46867,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207744-06.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207744-06.jpg"
+          },
+          "issue_number": "6",
+          "name": "Dead Man's Hand, The Big Heat?",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-6-dead-mans-hand-the-big-heat/4000-46867/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2000-03-31",
+          "id": 46868,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207745-07.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207745-07.jpg"
+          },
+          "issue_number": "7",
+          "name": "Sons and Heirs, Showdown in the Shimmering City",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-7-sons-and-heirs-showdown-in-the-shimme/4000-46868/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2000-07-01",
+          "id": 46869,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207746-08.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207746-08.jpg"
+          },
+          "issue_number": "8",
+          "name": "Riders of the Lost Mesa; The Old Skool!; Sparks",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-8-riders-of-the-lost-mesa-the-old-skool/4000-46869/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2000-09-01",
+          "id": 46870,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207747-09.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207747-09.jpg"
+          },
+          "issue_number": "9",
+          "name": "Terror Temple of Tayasal; Volcano Dreams; Flip Attitude!",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-9-terror-temple-of-tayasal-volcano-drea/4000-46870/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2000-11-01",
+          "id": 46871,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207748-10.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207748-10.jpg"
+          },
+          "issue_number": "10",
+          "name": "Tom Strong and his Phantom Autogyro; Funnyland!; Too Many Teslas?",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-10-tom-strong-and-his-phantom-autogyro-/4000-46871/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2001-01-01",
+          "id": 46872,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207751-11.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207751-11.jpg"
+          },
+          "issue_number": "11",
+          "name": "Strange Reunion",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-11-strange-reunion/4000-46872/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2001-06-01",
+          "id": 69337,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207752-12.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207752-12.jpg"
+          },
+          "issue_number": "12",
+          "name": "Terror on Terra Obscura!",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-12-terror-on-terra-obscura/4000-69337/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2001-07-01",
+          "id": 69338,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207753-13.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207753-13.jpg"
+          },
+          "issue_number": "13",
+          "name": "The Tower at Time's End!",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-13-the-tower-at-times-end/4000-69338/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2001-10-01",
+          "id": 69339,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207754-14.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207754-14.jpg"
+          },
+          "issue_number": "14",
+          "name": "Space Family Strong; The Land Of Heart's Desire!; Baubles Of The Brain Bazaar!",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-14-space-family-strong-the-land-of-hear/4000-69339/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2002-03-01",
+          "id": 69340,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207755-15.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207755-15.jpg"
+          },
+          "issue_number": "15",
+          "name": "Ring Of Fire!",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-15-ring-of-fire/4000-69340/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2002-04-01",
+          "id": 69341,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207762-16.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207762-16.jpg"
+          },
+          "issue_number": "16",
+          "name": "Some Call Him The Space Cowboy",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-16-some-call-him-the-space-cowboy/4000-69341/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2002-08-01",
+          "id": 69342,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207763-17.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207763-17.jpg"
+          },
+          "issue_number": "17",
+          "name": "Ant Fugue!",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-17-ant-fugue/4000-69342/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2002-12-01",
+          "id": 92578,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207764-18.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207764-18.jpg"
+          },
+          "issue_number": "18",
+          "name": "The Last Roundup",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-18-the-last-roundup/4000-92578/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2003-04-01",
+          "id": 92579,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207766-19.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207766-19.jpg"
+          },
+          "issue_number": "19",
+          "name": "Electric Ladyland!; Bad To The Bone; The Hero-Hoard Of Horatio Hogg!",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-19-electric-ladyland-bad-to-the-bone-th/4000-92579/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2003-06-01",
+          "id": 92580,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207767-20.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207767-20.jpg"
+          },
+          "issue_number": "20",
+          "name": "How Tom Stone Got Started: Chapter One",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-20-how-tom-stone-got-started-chapter-on/4000-92580/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2003-10-01",
+          "id": 92581,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207772-21.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207772-21.jpg"
+          },
+          "issue_number": "21",
+          "name": "How Tom Stone Got Started: Chapter Two - Strongmen In Silvertime",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-21-how-tom-stone-got-started-chapter-tw/4000-92581/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2003-12-31",
+          "id": 92582,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207773-22.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207773-22.jpg"
+          },
+          "issue_number": "22",
+          "name": "How Tom Stone Got Started: Chapter Three - Crisis In Infinite Hearts",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-22-how-tom-stone-got-started-chapter-th/4000-92582/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2004-01-01",
+          "id": 92583,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207774-23.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207774-23.jpg"
+          },
+          "issue_number": "23",
+          "name": "Moonday",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-23-moonday/4000-92583/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2004-03-01",
+          "id": 92584,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207775-24.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207775-24.jpg"
+          },
+          "issue_number": "24",
+          "name": "Snow Queen",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-24-snow-queen/4000-92584/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2004-05-01",
+          "id": 92585,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207776-25.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207776-25.jpg"
+          },
+          "issue_number": "25",
+          "name": "Tom Strong's Pal, Wally Willoughby",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-25-tom-strongs-pal-wally-willoughby/4000-92585/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2004-07-01",
+          "id": 96186,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207777-26.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207777-26.jpg"
+          },
+          "issue_number": "26",
+          "name": "The Day Tom Strong Renegotiated the Friendly Skies",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-26-the-day-tom-strong-renegotiated-the-/4000-96186/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2004-09-01",
+          "id": 96187,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207778-27.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207778-27.jpg"
+          },
+          "issue_number": "27",
+          "name": "Jenny Panic and the Bible of Dreams",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-27-jenny-panic-and-the-bible-of-dreams/4000-96187/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2004-11-01",
+          "id": 96188,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207779-28.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207779-28.jpg"
+          },
+          "issue_number": "28",
+          "name": "A Fire In His Belly",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-28-a-fire-in-his-belly/4000-96188/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2004-12-01",
+          "id": 96189,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207780-29.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207780-29.jpg"
+          },
+          "issue_number": "29",
+          "name": "The Terrible True Life of Tom Strong, Part 1",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-29-the-terrible-true-life-of-tom-strong/4000-96189/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2005-02-01",
+          "id": 99444,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207781-30.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207781-30.jpg"
+          },
+          "issue_number": "30",
+          "name": "The Terrible True Life of Tom Strong, Part 2",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-30-the-terrible-true-life-of-tom-strong/4000-99444/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2005-04-01",
+          "id": 105582,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207782-31.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207782-31.jpg"
+          },
+          "issue_number": "31",
+          "name": "The Black Blade of the Barbary Coast, Part 1",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-31-the-black-blade-of-the-barbary-coast/4000-105582/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2005-06-01",
+          "id": 105583,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207783-32.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207783-32.jpg"
+          },
+          "issue_number": "32",
+          "name": "The Black Blade of the Barbary Coast, Part 2",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-32-the-black-blade-of-the-barbary-coast/4000-105583/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2005-08-01",
+          "id": 105584,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207784-33.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207784-33.jpg"
+          },
+          "issue_number": "33",
+          "name": "The Journey Within",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-33-the-journey-within/4000-105584/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2005-10-01",
+          "id": 105585,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207785-34.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207785-34.jpg"
+          },
+          "issue_number": "34",
+          "name": "The Spires of Samakhara",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-34-the-spires-of-samakhara/4000-105585/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2006-01-01",
+          "id": 105586,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207786-35.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207786-35.jpg"
+          },
+          "issue_number": "35",
+          "name": "Cold Calling",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-35-cold-calling/4000-105586/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        },
+        {
+          "cover_date": "2006-05-01",
+          "id": 105608,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/2207787-36.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207787-36.jpg"
+          },
+          "issue_number": "36",
+          "name": "Tom Strong at the End of the World",
+          "site_detail_url": "https://comicvine.gamespot.com/tom-strong-36-tom-strong-at-the-end-of-the-world/4000-105608/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+            "id": 6566,
+            "name": "Tom Strong",
+            "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+          }
+        }
+      ],
+      "issues": [
+        {
+          "issue_number": "1",
+          "external_id": "46862",
+          "metadata": {
+            "name": "How Tom Strong Got Started",
+            "issue_number": "1",
+            "volume": {
+              "id": 6566,
+              "name": "Tom Strong",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+              "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207737-01.jpg"
+          }
+        },
+        {
+          "issue_number": "2",
+          "external_id": "46863",
+          "metadata": {
+            "name": "Return of the Modular Man",
+            "issue_number": "2",
+            "volume": {
+              "id": 6566,
+              "name": "Tom Strong",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+              "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207739-02.jpg"
+          }
+        },
+        {
+          "issue_number": "3",
+          "external_id": "46864",
+          "metadata": {
+            "name": "Aztech Nights",
+            "issue_number": "3",
+            "volume": {
+              "id": 6566,
+              "name": "Tom Strong",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+              "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207740-03.jpg"
+          }
+        },
+        {
+          "issue_number": "4",
+          "external_id": "46865",
+          "metadata": {
+            "name": "Swastika Girls!",
+            "issue_number": "4",
+            "volume": {
+              "id": 6566,
+              "name": "Tom Strong",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+              "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207741-04.jpg"
+          }
+        },
+        {
+          "issue_number": "5",
+          "external_id": "46866",
+          "metadata": {
+            "name": "Memories of Pangaea, Escape from Eden!",
+            "issue_number": "5",
+            "volume": {
+              "id": 6566,
+              "name": "Tom Strong",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+              "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207742-05.jpg"
+          }
+        },
+        {
+          "issue_number": "6",
+          "external_id": "46867",
+          "metadata": {
+            "name": "Dead Man's Hand, The Big Heat?",
+            "issue_number": "6",
+            "volume": {
+              "id": 6566,
+              "name": "Tom Strong",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+              "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207744-06.jpg"
+          }
+        },
+        {
+          "issue_number": "7",
+          "external_id": "46868",
+          "metadata": {
+            "name": "Sons and Heirs, Showdown in the Shimmering City",
+            "issue_number": "7",
+            "volume": {
+              "id": 6566,
+              "name": "Tom Strong",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-6566/",
+              "site_detail_url": "https://comicvine.gamespot.com/tom-strong/4050-6566/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67663/2207745-07.jpg"
+          }
+        },
+        {
+          "issue_number": "8",
+          "external_id": "46869",
+          "metadata": {}
+        },
+        {
+          "issue_number": "9",
+          "external_id": "46870",
+          "metadata": {}
+        },
+        {
+          "issue_number": "10",
+          "external_id": "46871",
+          "metadata": {}
+        },
+        {
+          "issue_number": "11",
+          "external_id": "46872",
+          "metadata": {}
+        },
+        {
+          "issue_number": "12",
+          "external_id": "69337",
+          "metadata": {}
+        },
+        {
+          "issue_number": "13",
+          "external_id": "69338",
+          "metadata": {}
+        },
+        {
+          "issue_number": "14",
+          "external_id": "69339",
+          "metadata": {}
+        },
+        {
+          "issue_number": "15",
+          "external_id": "69340",
+          "metadata": {}
+        },
+        {
+          "issue_number": "16",
+          "external_id": "69341",
+          "metadata": {}
+        },
+        {
+          "issue_number": "17",
+          "external_id": "69342",
+          "metadata": {}
+        },
+        {
+          "issue_number": "18",
+          "external_id": "92578",
+          "metadata": {}
+        },
+        {
+          "issue_number": "19",
+          "external_id": "92579",
+          "metadata": {}
+        },
+        {
+          "issue_number": "20",
+          "external_id": "92580",
+          "metadata": {}
+        },
+        {
+          "issue_number": "21",
+          "external_id": "92581",
+          "metadata": {}
+        },
+        {
+          "issue_number": "22",
+          "external_id": "92582",
+          "metadata": {}
+        },
+        {
+          "issue_number": "23",
+          "external_id": "92583",
+          "metadata": {}
+        },
+        {
+          "issue_number": "24",
+          "external_id": "92584",
+          "metadata": {}
+        },
+        {
+          "issue_number": "25",
+          "external_id": "92585",
+          "metadata": {}
+        },
+        {
+          "issue_number": "26",
+          "external_id": "96186",
+          "metadata": {}
+        },
+        {
+          "issue_number": "27",
+          "external_id": "96187",
+          "metadata": {}
+        },
+        {
+          "issue_number": "28",
+          "external_id": "96188",
+          "metadata": {}
+        },
+        {
+          "issue_number": "29",
+          "external_id": "96189",
+          "metadata": {}
+        },
+        {
+          "issue_number": "30",
+          "external_id": "99444",
+          "metadata": {}
+        },
+        {
+          "issue_number": "31",
+          "external_id": "105582",
+          "metadata": {}
+        },
+        {
+          "issue_number": "32",
+          "external_id": "105583",
+          "metadata": {}
+        },
+        {
+          "issue_number": "33",
+          "external_id": "105584",
+          "metadata": {}
+        },
+        {
+          "issue_number": "34",
+          "external_id": "105585",
+          "metadata": {}
+        },
+        {
+          "issue_number": "35",
+          "external_id": "105586",
+          "metadata": {}
+        },
+        {
+          "issue_number": "36",
+          "external_id": "105608",
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "title": "Starman",
+      "volume": {
+        "count_of_issues": 83,
+        "id": 5259,
+        "image": {
+          "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548023-01.jpg",
+          "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548023-01.jpg"
+        },
+        "name": "Starman",
+        "publisher": {
+          "api_detail_url": "https://comicvine.gamespot.com/api/publisher/4010-10/",
+          "id": 10,
+          "name": "DC Comics"
+        },
+        "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/",
+        "start_year": "1994"
+      },
+      "roster": [
+        {
+          "cover_date": "1994-10-31",
+          "id": 39762,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/9116/1995013-00.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/9116/1995013-00.jpg"
+          },
+          "issue_number": "0",
+          "name": "Sins of the Father: Part One - Falling Star, Rising Son",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-0-sins-of-the-father-part-one-falling-star/4000-39762/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1994-11-30",
+          "id": 39908,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548023-01.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548023-01.jpg"
+          },
+          "issue_number": "1",
+          "name": "Sins of the Father: Part Two - Oil (Paint) And Water",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-1-sins-of-the-father-part-two-oil-paint-an/4000-39908/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1994-12-31",
+          "id": 40045,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548024-02.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548024-02.jpg"
+          },
+          "issue_number": "2",
+          "name": "Sins of the Father: Part Three - Mercy",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-2-sins-of-the-father-part-three-mercy/4000-40045/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-01-31",
+          "id": 40286,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548025-03.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548025-03.jpg"
+          },
+          "issue_number": "3",
+          "name": "Sins of the Father: Part Four - Night F(l)ight",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-3-sins-of-the-father-part-four-night-fligh/4000-40286/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-02-28",
+          "id": 40429,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548026-04.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548026-04.jpg"
+          },
+          "issue_number": "4",
+          "name": "A Day in the Opal",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-4-a-day-in-the-opal/4000-40429/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-03-31",
+          "id": 40562,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548027-05.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548027-05.jpg"
+          },
+          "issue_number": "5",
+          "name": "Talking With David, '95",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-5-talking-with-david-95/4000-40562/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-04-30",
+          "id": 40697,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548028-06.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548028-06.jpg"
+          },
+          "issue_number": "6",
+          "name": "1882 - Back Stage, Back Then: A Tale of Times Past",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-6-1882-back-stage-back-then-a-tale-of-time/4000-40697/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-05-03",
+          "id": 40826,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548029-07.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548029-07.jpg"
+          },
+          "issue_number": "7",
+          "name": "A (K)night at the Circus",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-7-a-knight-at-the-circus/4000-40826/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-06-03",
+          "id": 40951,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548030-08.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548030-08.jpg"
+          },
+          "issue_number": "8",
+          "name": "A (K)night at the Circus II",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-8-a-k-night-at-the-circus-ii/4000-40951/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-07-03",
+          "id": 41087,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548031-09.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548031-09.jpg"
+          },
+          "issue_number": "9",
+          "name": "Shards",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-9-shards/4000-41087/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-08-03",
+          "id": 41229,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548032-10.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548032-10.jpg"
+          },
+          "issue_number": "10",
+          "name": "The Day Before the Day to Come",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-10-the-day-before-the-day-to-come/4000-41229/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-09-30",
+          "id": 41363,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548033-11.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548033-11.jpg"
+          },
+          "issue_number": "11",
+          "name": "13 Years Ago: Five Friends - A Tale of Times Past",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-11-13-years-ago-five-friends-a-tale-of-tim/4000-41363/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-10-03",
+          "id": 41496,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548034-12.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548034-12.jpg"
+          },
+          "issue_number": "12",
+          "name": "Sins of the Child, Part 1: Jack's Day",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-12-sins-of-the-child-part-1-jack-s-day/4000-41496/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-11-03",
+          "id": 41622,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548035-13.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548035-13.jpg"
+          },
+          "issue_number": "13",
+          "name": "Sins of the Child, Part 2: Ted's Day",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-13-sins-of-the-child-part-2-ted-s-day/4000-41622/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1995-12-03",
+          "id": 41749,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548036-14.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548036-14.jpg"
+          },
+          "issue_number": "14",
+          "name": "Sins of the Child, Part 3: The Opal's Day, The O'Dare's Day",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-14-sins-of-the-child-part-3-the-opal-s-day/4000-41749/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-01-03",
+          "id": 41971,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548037-15.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548037-15.jpg"
+          },
+          "issue_number": "15",
+          "name": "Sins of the Child, Part 4: Mikaal's Day",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-15-sins-of-the-child-part-4-mikaal-s-day/4000-41971/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-02-03",
+          "id": 42081,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548038-16.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548038-16.jpg"
+          },
+          "issue_number": "16",
+          "name": "Sin's of the Child, Part 5: Jack's Day (The Second Half)",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-16-sin-s-of-the-child-part-5-jack-s-day-th/4000-42081/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-03-03",
+          "id": 42191,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548039-17.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548039-17.jpg"
+          },
+          "issue_number": "17",
+          "name": "Encounters",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-17-encounters/4000-42191/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-04-03",
+          "id": 42281,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548040-18.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548040-18.jpg"
+          },
+          "issue_number": "18",
+          "name": "First Joust",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-18-first-joust/4000-42281/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-06-03",
+          "id": 42479,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548041-19.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548041-19.jpg"
+          },
+          "issue_number": "19",
+          "name": "Talking With David, '96",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-19-talking-with-david-96/4000-42479/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-07-03",
+          "id": 42587,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548042-20.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548042-20.jpg"
+          },
+          "issue_number": "20",
+          "name": "Sand and Stars, Part One",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-20-sand-and-stars-part-one/4000-42587/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-08-03",
+          "id": 42687,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548043-21.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548043-21.jpg"
+          },
+          "issue_number": "21",
+          "name": "Sand and Stars, Part Two",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-21-sand-and-stars-part-two/4000-42687/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-09-03",
+          "id": 42784,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548044-22.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548044-22.jpg"
+          },
+          "issue_number": "22",
+          "name": "Sand and Stars, Part Three",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-22-sand-and-stars-part-three/4000-42784/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-10-03",
+          "id": 42871,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548045-23.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548045-23.jpg"
+          },
+          "issue_number": "23",
+          "name": "Sand and Stars, Part Four",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-23-sand-and-stars-part-four/4000-42871/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-11-03",
+          "id": 42968,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548046-24.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548046-24.jpg"
+          },
+          "issue_number": "24",
+          "name": "Sand and Stars, an Epilogue; Hell and Back, a Prologue",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-24-sand-and-stars-an-epilogue-hell-and-bac/4000-42968/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1996-12-03",
+          "id": 43060,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/38337-5259-43060-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/38337-5259-43060-1-starman.jpg"
+          },
+          "issue_number": "25",
+          "name": "To Hell and Back, Part two",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-25-to-hell-and-back-part-two/4000-43060/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-01-03",
+          "id": 43256,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548047-26.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548047-26.jpg"
+          },
+          "issue_number": "26",
+          "name": "To Hell and Back, Conclusion",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-26-to-hell-and-back-conclusion/4000-43256/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-02-03",
+          "id": 43357,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548048-27.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548048-27.jpg"
+          },
+          "issue_number": "27",
+          "name": "Christmas Knight",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-27-christmas-knight/4000-43357/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-03-03",
+          "id": 43467,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548049-28.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548049-28.jpg"
+          },
+          "issue_number": "28",
+          "name": "Super Freaks and Backstabbers",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-28-super-freaks-and-backstabbers/4000-43467/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-04-03",
+          "id": 43567,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548050-29.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548050-29.jpg"
+          },
+          "issue_number": "29",
+          "name": "Welcome to the Revolution",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-29-welcome-to-the-revolution/4000-43567/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-05-03",
+          "id": 43671,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548052-30.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548052-30.jpg"
+          },
+          "issue_number": "30",
+          "name": "Infernal Devices, Part One",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-30-infernal-devices-part-one/4000-43671/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-06-30",
+          "id": 43758,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548053-31.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548053-31.jpg"
+          },
+          "issue_number": "31",
+          "name": "Infernal Devices, Part Two",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-31-infernal-devices-part-two/4000-43758/",
+          "store_date": "1997-04-09",
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-07-03",
+          "id": 43863,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548054-32.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548054-32.jpg"
+          },
+          "issue_number": "32",
+          "name": "Infernal Devices, Part Three",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-32-infernal-devices-part-three/4000-43863/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-08-03",
+          "id": 43962,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548055-33.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548055-33.jpg"
+          },
+          "issue_number": "33",
+          "name": "With Some Help from His Friends (Infernal Devices Interlude)",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-33-with-some-help-from-his-friends-inferna/4000-43962/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-09-03",
+          "id": 44067,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548056-34.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548056-34.jpg"
+          },
+          "issue_number": "34",
+          "name": "Merry Pranksters",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-34-merry-pranksters/4000-44067/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-10-03",
+          "id": 44175,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548057-35.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548057-35.jpg"
+          },
+          "issue_number": "35",
+          "name": "Mr. Pip and Mr. Black",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-35-mr-pip-and-mr-black/4000-44175/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-11-03",
+          "id": 44283,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/39361-5259-44283-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/39361-5259-44283-1-starman.jpg"
+          },
+          "issue_number": "36",
+          "name": "1990 - A Hero Once... Despite Himself",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-36-1990-a-hero-once-despite-himself/4000-44283/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1997-12-03",
+          "id": 44383,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548058-37.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548058-37.jpg"
+          },
+          "issue_number": "37",
+          "name": "Talking With David, '97",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-37-talking-with-david-97/4000-44383/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-01-31",
+          "id": 44552,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548059-38.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548059-38.jpg"
+          },
+          "issue_number": "38",
+          "name": "... La Fraternite de Justice et Liberte!",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-38-la-fraternite-de-justice-et-liberte/4000-44552/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-02-01",
+          "id": 44663,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548060-39.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548060-39.jpg"
+          },
+          "issue_number": "39",
+          "name": "Lightning and Stars, Part One",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-39-lightning-and-stars-part-one/4000-44663/",
+          "store_date": "1997-12-03",
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-03-01",
+          "id": 44760,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548061-40.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548061-40.jpg"
+          },
+          "issue_number": "40",
+          "name": "Lightning and Stars, Part Three",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-40-lightning-and-stars-part-three/4000-44760/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-04-03",
+          "id": 44855,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548062-41.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548062-41.jpg"
+          },
+          "issue_number": "41",
+          "name": "Villain's Redemption",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-41-villains-redemption/4000-44855/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-05-31",
+          "id": 44935,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/4/49481/909683-starman_v2__42___00___cover.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/4/49481/909683-starman_v2__42___00___cover.jpg"
+          },
+          "issue_number": "42",
+          "name": "1944: Science and Sorcery",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-42-1944-science-and-sorcery/4000-44935/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-06-29",
+          "id": 45020,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/3/34588/698975-43cover.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/3/34588/698975-43cover.jpg"
+          },
+          "issue_number": "43",
+          "name": "Knight's Past",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-43-knights-past/4000-45020/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-07-03",
+          "id": 45106,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/3/35249/721587-1040_20050924083009_large.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/3/35249/721587-1040_20050924083009_large.jpg"
+          },
+          "issue_number": "44",
+          "name": "\"1943: Things That Go Bump in the Night\"",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-44-1943-things-that-go-bump-in-the-night/4000-45106/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-08-03",
+          "id": 45199,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548064-45.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548064-45.jpg"
+          },
+          "issue_number": "45",
+          "name": "Destiny",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-45-destiny/4000-45199/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-09-03",
+          "id": 45286,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548065-46.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548065-46.jpg"
+          },
+          "issue_number": "46",
+          "name": "1952: Good Men and Bad",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-46-1952-good-men-and-bad/4000-45286/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-11-30",
+          "id": 78360,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548083-1000000.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548083-1000000.jpg"
+          },
+          "issue_number": "1000000",
+          "name": "All the Starlight Shining",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-1000000-all-the-starlight-shining/4000-78360/",
+          "store_date": "1998-09-09",
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-10-31",
+          "id": 78361,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/74871-5259-78361-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74871-5259-78361-1-starman.jpg"
+          },
+          "issue_number": "47",
+          "name": "City Without Light (A Prelude to Bad Times)",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-47-city-without-light-a-prelude-to-bad-tim/4000-78361/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1998-12-03",
+          "id": 78362,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/74872-5259-78362-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74872-5259-78362-1-starman.jpg"
+          },
+          "issue_number": "48",
+          "name": "Starman Blues: Stars My Destination, Part One",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-48-starman-blues-stars-my-destination-part/4000-78362/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-01-03",
+          "id": 78363,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/74873-5259-78363-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74873-5259-78363-1-starman.jpg"
+          },
+          "issue_number": "49",
+          "name": "Fighting with Grundy; Talking with David '99",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-49-fighting-with-grundy-talking-with-david/4000-78363/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-02-03",
+          "id": 78364,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548067-50.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548067-50.jpg"
+          },
+          "issue_number": "50",
+          "name": "Stars My Destination: Lighting the Way: Then, Now and Yet To Be",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-50-stars-my-destination-lighting-the-way-t/4000-78364/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-03-03",
+          "id": 78365,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/74875-5259-78365-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74875-5259-78365-1-starman.jpg"
+          },
+          "issue_number": "51",
+          "name": "Midnight in the House of El",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-51-midnight-in-the-house-of-el/4000-78365/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-04-03",
+          "id": 78366,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/74876-5259-78366-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74876-5259-78366-1-starman.jpg"
+          },
+          "issue_number": "52",
+          "name": "Men of Two Worlds",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-52-men-of-two-worlds/4000-78366/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-05-03",
+          "id": 78367,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548069-53.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548069-53.jpg"
+          },
+          "issue_number": "53",
+          "name": "The Long Goodbyes",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-53-the-long-goodbyes/4000-78367/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-06-03",
+          "id": 78368,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56245-5259-78368-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56245-5259-78368-1-starman.jpg"
+          },
+          "issue_number": "54",
+          "name": "1899: The Scalphunter Years: Rich Man's Folly",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-54-1899-the-scalphunter-years-rich-mans-fo/4000-78368/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-07-03",
+          "id": 78369,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548070-55.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548070-55.jpg"
+          },
+          "issue_number": "55",
+          "name": "Taxicab Confessions",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-55-taxicab-confessions/4000-78369/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-08-03",
+          "id": 78370,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56247-5259-78370-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56247-5259-78370-1-starman.jpg"
+          },
+          "issue_number": "56",
+          "name": "City without Light, Part II: Bad Times Loom",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-56-city-without-light-part-ii-bad-times-lo/4000-78370/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-09-30",
+          "id": 78371,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56248-5259-78371-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56248-5259-78371-1-starman.jpg"
+          },
+          "issue_number": "57",
+          "name": "The Stars My Destination: The Welcome Wagon",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-57-the-stars-my-destination-the-welcome-wa/4000-78371/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-10-31",
+          "id": 78372,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56249-5259-78372-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56249-5259-78372-1-starman.jpg"
+          },
+          "issue_number": "58",
+          "name": "Familiar Faces, Some Forgotten",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-58-familiar-faces-some-forgotten/4000-78372/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-11-30",
+          "id": 78373,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548071-59.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548071-59.jpg"
+          },
+          "issue_number": "59",
+          "name": "The Stars My Destination: The Secret of Will Payton",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-59-the-stars-my-destination-the-secret-of-/4000-78373/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "1999-12-31",
+          "id": 78374,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56251-5259-78374-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56251-5259-78374-1-starman.jpg"
+          },
+          "issue_number": "60",
+          "name": "The Stars My Destination, Finale: Worlds Collide",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-60-the-stars-my-destination-finale-worlds-/4000-78374/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-01-03",
+          "id": 78375,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548073-61.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548073-61.jpg"
+          },
+          "issue_number": "61",
+          "name": "In Tranquility and Fire: A Prologue to Grand Guignol",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-61-in-tranquility-and-fire-a-prologue-to-g/4000-78375/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-02-03",
+          "id": 78376,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548074-62.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548074-62.jpg"
+          },
+          "issue_number": "62",
+          "name": "Grand Guignol, Premiere Partie: ...And What Went Before",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-62-grand-guignol-premiere-partie-and-what-/4000-78376/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-03-03",
+          "id": 78377,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548075-63.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548075-63.jpg"
+          },
+          "issue_number": "63",
+          "name": "Grand Guignol, Deuxieme Partie: Friends and Foes",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-63-grand-guignol-deuxieme-partie-friends-a/4000-78377/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-04-30",
+          "id": 78378,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548076-64.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548076-64.jpg"
+          },
+          "issue_number": "64",
+          "name": "Grand Guignol, Troisieme Partie: Fighting with Evil, Talking with David",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-64-grand-guignol-troisieme-partie-fighting/4000-78378/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-05-31",
+          "id": 78379,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/74879-5259-78379-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74879-5259-78379-1-starman.jpg"
+          },
+          "issue_number": "65",
+          "name": "Grand Guignol, Quatri\u00e8me Partie: Darkness Not of Night",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-65-grand-guignol-quatrieme-partie-darkness/4000-78379/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-06-03",
+          "id": 78380,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/74880-5259-78380-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74880-5259-78380-1-starman.jpg"
+          },
+          "issue_number": "66",
+          "name": "Grand Guignol, Cinquieme Partie: A Villain's Tale",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-66-grand-guignol-cinquieme-partie-a-villai/4000-78380/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-07-31",
+          "id": 78381,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/74881-5259-78381-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74881-5259-78381-1-starman.jpg"
+          },
+          "issue_number": "67",
+          "name": "Grand Guignol, Sixieme Partie: Rules of Engagement",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-67-grand-guignol-sixieme-partie-rules-of-e/4000-78381/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-08-31",
+          "id": 78382,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548077-68.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548077-68.jpg"
+          },
+          "issue_number": "68",
+          "name": "Grand Guignol, Septieme Partie: A Villain's Tale II;  Grand Guignol: Huitieme Partie, A Great Man Recalled... and Recollecting",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-68-grand-guignol-septieme-partie-a-villain/4000-78382/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-09-30",
+          "id": 78383,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/74883-5259-78383-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74883-5259-78383-1-starman.jpg"
+          },
+          "issue_number": "69",
+          "name": "Grand Guignol, Neuvieme Partie: Heroes Reborn, Renewed... and Remembered",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-69-grand-guignol-neuvieme-partie-heroes-re/4000-78383/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-10-31",
+          "id": 78384,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548078-70.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548078-70.jpg"
+          },
+          "issue_number": "70",
+          "name": "Grand Guignol, Dixieme Partie: The Devil's in the Details",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-70-grand-guignol-dixieme-partie-the-devils/4000-78384/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-11-30",
+          "id": 78385,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/74885-5259-78385-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74885-5259-78385-1-starman.jpg"
+          },
+          "issue_number": "71",
+          "name": "Grand Guignol, Onzi\u00e8me Partie: Evils Old, New and Unexpected",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-71-grand-guignol-onzieme-partie-evils-old-/4000-78385/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2000-12-03",
+          "id": 78386,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548080-72.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548080-72.jpg"
+          },
+          "issue_number": "72",
+          "name": "Grand Guignol, Douzieme Partie: Finale",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-72-grand-guignol-douzieme-partie-finale/4000-78386/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2001-01-31",
+          "id": 78387,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/6/67663/3548082-73.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548082-73.jpg"
+          },
+          "issue_number": "73",
+          "name": "Grand Guignol: Eulogy",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-73-grand-guignol-eulogy/4000-78387/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2001-02-03",
+          "id": 78388,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56265-5259-78388-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56265-5259-78388-1-starman.jpg"
+          },
+          "issue_number": "74",
+          "name": "A Tale of Times Past, 1899. The Scalphunter Years: His Death and the Dying of It",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-74-a-tale-of-times-past-1899-the-scalphunt/4000-78388/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2001-03-03",
+          "id": 78389,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56266-5259-78389-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56266-5259-78389-1-starman.jpg"
+          },
+          "issue_number": "75",
+          "name": "Sons and their Fathers",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-75-sons-and-their-fathers/4000-78389/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2001-04-03",
+          "id": 78390,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56267-5259-78390-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56267-5259-78390-1-starman.jpg"
+          },
+          "issue_number": "76",
+          "name": "Talking with David (and Ted)",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-76-talking-with-david-and-ted/4000-78390/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2001-05-03",
+          "id": 78391,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56268-5259-78391-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56268-5259-78391-1-starman.jpg"
+          },
+          "issue_number": "77",
+          "name": "1951, Part One: --Who?",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-77-1951-part-one-who/4000-78391/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2001-06-03",
+          "id": 78392,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56269-5259-78392-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56269-5259-78392-1-starman.jpg"
+          },
+          "issue_number": "78",
+          "name": "1951 (Part 2) -- What?",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-78-1951-part-2-what/4000-78392/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2001-07-03",
+          "id": 78393,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56270-5259-78393-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56270-5259-78393-1-starman.jpg"
+          },
+          "issue_number": "79",
+          "name": "1951 (Part 3) - Why?",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-79-1951-part-3-why/4000-78393/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2001-08-31",
+          "id": 78394,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/4/56271-5259-78394-1-starman.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56271-5259-78394-1-starman.jpg"
+          },
+          "issue_number": "80",
+          "name": "Arrivederci, Bon Voyage, Goodbye",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-80-arrivederci-bon-voyage-goodbye/4000-78394/",
+          "store_date": null,
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        },
+        {
+          "cover_date": "2010-03-03",
+          "id": 193366,
+          "image": {
+            "small_url": "https://comicvine.gamespot.com/a/uploads/scale_small/0/9241/1199820-001.jpg",
+            "original_url": "https://comicvine.gamespot.com/a/uploads/original/0/9241/1199820-001.jpg"
+          },
+          "issue_number": "81",
+          "name": "Blackest Night Starman",
+          "site_detail_url": "https://comicvine.gamespot.com/starman-81-blackest-night-starman/4000-193366/",
+          "store_date": "2010-01-20",
+          "volume": {
+            "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+            "id": 5259,
+            "name": "Starman",
+            "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+          }
+        }
+      ],
+      "issues": [
+        {
+          "issue_number": "1",
+          "external_id": "39908",
+          "metadata": {
+            "name": "Sins of the Father: Part Two - Oil (Paint) And Water",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548023-01.jpg",
+            "volume_id": 5259,
+            "issue_number": "1"
+          }
+        },
+        {
+          "issue_number": "2",
+          "external_id": "40045",
+          "metadata": {
+            "name": "Sins of the Father: Part Three - Mercy",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548024-02.jpg",
+            "volume_id": 5259,
+            "issue_number": "2"
+          }
+        },
+        {
+          "issue_number": "3",
+          "external_id": "40286",
+          "metadata": {
+            "name": "Sins of the Father: Part Four - Night F(l)ight",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548025-03.jpg",
+            "volume_id": 5259,
+            "issue_number": "3"
+          }
+        },
+        {
+          "issue_number": "4",
+          "external_id": "40429",
+          "metadata": {
+            "name": "A Day in the Opal",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548026-04.jpg",
+            "volume_id": 5259,
+            "issue_number": "4"
+          }
+        },
+        {
+          "issue_number": "5",
+          "external_id": "40562",
+          "metadata": {
+            "name": "Talking With David, '95",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548027-05.jpg",
+            "volume_id": 5259,
+            "issue_number": "5"
+          }
+        },
+        {
+          "issue_number": "6",
+          "external_id": "40697",
+          "metadata": {
+            "name": "1882 - Back Stage, Back Then: A Tale of Times Past",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548028-06.jpg",
+            "volume_id": 5259,
+            "issue_number": "6"
+          }
+        },
+        {
+          "issue_number": "7",
+          "external_id": "40826",
+          "metadata": {
+            "name": "A (K)night at the Circus",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548029-07.jpg",
+            "volume_id": 5259,
+            "issue_number": "7"
+          }
+        },
+        {
+          "issue_number": "8",
+          "external_id": "40951",
+          "metadata": {
+            "name": "A (K)night at the Circus II",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548030-08.jpg",
+            "volume_id": 5259,
+            "issue_number": "8"
+          }
+        },
+        {
+          "issue_number": "9",
+          "external_id": "41087",
+          "metadata": {
+            "name": "Shards",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548031-09.jpg",
+            "volume_id": 5259,
+            "issue_number": "9"
+          }
+        },
+        {
+          "issue_number": "10",
+          "external_id": "41229",
+          "metadata": {
+            "name": "The Day Before the Day to Come",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548032-10.jpg",
+            "volume_id": 5259,
+            "issue_number": "10"
+          }
+        },
+        {
+          "issue_number": "11",
+          "external_id": "41363",
+          "metadata": {
+            "name": "13 Years Ago: Five Friends - A Tale of Times Past",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548033-11.jpg",
+            "volume_id": 5259,
+            "issue_number": "11"
+          }
+        },
+        {
+          "issue_number": "12",
+          "external_id": "41496",
+          "metadata": {
+            "name": "Sins of the Child, Part 1: Jack's Day",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548034-12.jpg",
+            "volume_id": 5259,
+            "issue_number": "12"
+          }
+        },
+        {
+          "issue_number": "13",
+          "external_id": "41622",
+          "metadata": {
+            "name": "Sins of the Child, Part 2: Ted's Day",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548035-13.jpg",
+            "volume_id": 5259,
+            "issue_number": "13"
+          }
+        },
+        {
+          "issue_number": "14",
+          "external_id": "41749",
+          "metadata": {
+            "name": "Sins of the Child, Part 3: The Opal's Day, The O'Dare's Day",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548036-14.jpg",
+            "volume_id": 5259,
+            "issue_number": "14"
+          }
+        },
+        {
+          "issue_number": "15",
+          "external_id": "41971",
+          "metadata": {
+            "name": "Sins of the Child, Part 4: Mikaal's Day",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548037-15.jpg",
+            "volume_id": 5259,
+            "issue_number": "15"
+          }
+        },
+        {
+          "issue_number": "16",
+          "external_id": "42081",
+          "metadata": {
+            "name": "Sin's of the Child, Part 5: Jack's Day (The Second Half)",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548038-16.jpg",
+            "volume_id": 5259,
+            "issue_number": "16"
+          }
+        },
+        {
+          "issue_number": "17",
+          "external_id": "42191",
+          "metadata": {
+            "name": "Encounters",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548039-17.jpg",
+            "volume_id": 5259,
+            "issue_number": "17"
+          }
+        },
+        {
+          "issue_number": "18",
+          "external_id": "42281",
+          "metadata": {
+            "name": "First Joust",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548040-18.jpg",
+            "volume_id": 5259,
+            "issue_number": "18"
+          }
+        },
+        {
+          "issue_number": "19",
+          "external_id": "42479",
+          "metadata": {
+            "name": "Talking With David, '96",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548041-19.jpg",
+            "volume_id": 5259,
+            "issue_number": "19"
+          }
+        },
+        {
+          "issue_number": "20",
+          "external_id": "42587",
+          "metadata": {
+            "name": "Sand and Stars, Part One",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548042-20.jpg",
+            "volume_id": 5259,
+            "issue_number": "20"
+          }
+        },
+        {
+          "issue_number": "21",
+          "external_id": "42687",
+          "metadata": {
+            "name": "Sand and Stars, Part Two",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548043-21.jpg",
+            "volume_id": 5259,
+            "issue_number": "21"
+          }
+        },
+        {
+          "issue_number": "22",
+          "external_id": "42784",
+          "metadata": {
+            "name": "Sand and Stars, Part Three",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548044-22.jpg",
+            "volume_id": 5259,
+            "issue_number": "22"
+          }
+        },
+        {
+          "issue_number": "23",
+          "external_id": "42871",
+          "metadata": {
+            "name": "Sand and Stars, Part Four",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548045-23.jpg",
+            "volume_id": 5259,
+            "issue_number": "23"
+          }
+        },
+        {
+          "issue_number": "24",
+          "external_id": "42968",
+          "metadata": {
+            "name": "Sand and Stars, an Epilogue; Hell and Back, a Prologue",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548046-24.jpg",
+            "volume_id": 5259,
+            "issue_number": "24"
+          }
+        },
+        {
+          "issue_number": "25",
+          "external_id": "43060",
+          "metadata": {
+            "name": "To Hell and Back, Part two",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/38337-5259-43060-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "25"
+          }
+        },
+        {
+          "issue_number": "26",
+          "external_id": "43256",
+          "metadata": {
+            "name": "To Hell and Back, Conclusion",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548047-26.jpg",
+            "volume_id": 5259,
+            "issue_number": "26"
+          }
+        },
+        {
+          "issue_number": "27",
+          "external_id": "43357",
+          "metadata": {
+            "name": "Christmas Knight",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548048-27.jpg",
+            "volume_id": 5259,
+            "issue_number": "27"
+          }
+        },
+        {
+          "issue_number": "28",
+          "external_id": "43467",
+          "metadata": {
+            "name": "Super Freaks and Backstabbers",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548049-28.jpg",
+            "volume_id": 5259,
+            "issue_number": "28"
+          }
+        },
+        {
+          "issue_number": "29",
+          "external_id": "43567",
+          "metadata": {
+            "name": "Welcome to the Revolution",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548050-29.jpg",
+            "volume_id": 5259,
+            "issue_number": "29"
+          }
+        },
+        {
+          "issue_number": "30",
+          "external_id": "43671",
+          "metadata": {
+            "name": "Infernal Devices, Part One",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548052-30.jpg",
+            "volume_id": 5259,
+            "issue_number": "30"
+          }
+        },
+        {
+          "issue_number": "31",
+          "external_id": "43758",
+          "metadata": {
+            "name": "Infernal Devices, Part Two",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548053-31.jpg",
+            "volume_id": 5259,
+            "issue_number": "31"
+          }
+        },
+        {
+          "issue_number": "32",
+          "external_id": "43863",
+          "metadata": {
+            "name": "Infernal Devices, Part Three",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548054-32.jpg",
+            "volume_id": 5259,
+            "issue_number": "32"
+          }
+        },
+        {
+          "issue_number": "33",
+          "external_id": "43962",
+          "metadata": {
+            "name": "With Some Help from His Friends (Infernal Devices Interlude)",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548055-33.jpg",
+            "volume_id": 5259,
+            "issue_number": "33"
+          }
+        },
+        {
+          "issue_number": "34",
+          "external_id": "44067",
+          "metadata": {
+            "name": "Merry Pranksters",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548056-34.jpg",
+            "volume_id": 5259,
+            "issue_number": "34"
+          }
+        },
+        {
+          "issue_number": "35",
+          "external_id": "44175",
+          "metadata": {
+            "name": "Mr. Pip and Mr. Black",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548057-35.jpg",
+            "volume_id": 5259,
+            "issue_number": "35"
+          }
+        },
+        {
+          "issue_number": "36",
+          "external_id": "44283",
+          "metadata": {
+            "name": "1990 - A Hero Once... Despite Himself",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/39361-5259-44283-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "36"
+          }
+        },
+        {
+          "issue_number": "37",
+          "external_id": "44383",
+          "metadata": {
+            "name": "Talking With David, '97",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548058-37.jpg",
+            "volume_id": 5259,
+            "issue_number": "37"
+          }
+        },
+        {
+          "issue_number": "38",
+          "external_id": "44552",
+          "metadata": {
+            "name": "... La Fraternite de Justice et Liberte!",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548059-38.jpg",
+            "volume_id": 5259,
+            "issue_number": "38"
+          }
+        },
+        {
+          "issue_number": "39",
+          "external_id": "44663",
+          "metadata": {
+            "name": "Lightning and Stars, Part One",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548060-39.jpg",
+            "volume_id": 5259,
+            "issue_number": "39"
+          }
+        },
+        {
+          "issue_number": "40",
+          "external_id": "44760",
+          "metadata": {
+            "name": "Lightning and Stars, Part Three",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548061-40.jpg",
+            "volume_id": 5259,
+            "issue_number": "40"
+          }
+        },
+        {
+          "issue_number": "41",
+          "external_id": "44855",
+          "metadata": {
+            "name": "Villain's Redemption",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548062-41.jpg",
+            "volume_id": 5259,
+            "issue_number": "41"
+          }
+        },
+        {
+          "issue_number": "Annual 2",
+          "external_id": "78395",
+          "metadata": {
+            "name": "Stars in My Eyes",
+            "issue_number": "2",
+            "volume": {
+              "id": 5765,
+              "name": "Starman Annual",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5765/",
+              "site_detail_url": "https://comicvine.gamespot.com/starman-annual/4050-5765/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548004-02.jpg"
+          }
+        },
+        {
+          "issue_number": "Secret files and origins 1",
+          "external_id": "218225",
+          "metadata": {
+            "name": null,
+            "issue_number": "1",
+            "volume": {
+              "id": 33613,
+              "name": "Starman Secret Files",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-33613/",
+              "site_detail_url": "https://comicvine.gamespot.com/starman-secret-files/4050-33613/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67310/1257078-starman_secret_files__1___page_1.jpg"
+          }
+        },
+        {
+          "issue_number": "42",
+          "external_id": "44935",
+          "metadata": {
+            "name": "1944: Science and Sorcery",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/4/49481/909683-starman_v2__42___00___cover.jpg",
+            "volume_id": 5259,
+            "issue_number": "42"
+          }
+        },
+        {
+          "issue_number": "80-Page Giant 1",
+          "external_id": "151228",
+          "metadata": {
+            "name": null,
+            "issue_number": "1",
+            "volume": {
+              "id": 25663,
+              "name": "Starman 80 Page Giant",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-25663/",
+              "site_detail_url": "https://comicvine.gamespot.com/starman-80-page-giant/4050-25663/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548006-01.jpg"
+          }
+        },
+        {
+          "issue_number": "43",
+          "external_id": "45020",
+          "metadata": {
+            "name": "Knight's Past",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/3/34588/698975-43cover.jpg",
+            "volume_id": 5259,
+            "issue_number": "43"
+          }
+        },
+        {
+          "issue_number": "The Mist 1",
+          "external_id": "149831",
+          "metadata": {
+            "name": "Good Girls and Bad",
+            "issue_number": "1",
+            "volume": {
+              "id": 25380,
+              "name": "Starman: The Mist",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-25380/",
+              "site_detail_url": "https://comicvine.gamespot.com/starman-the-mist/4050-25380/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/0/5551/670601-a0dfa83c_099f_415a_b12c_335f28c13e3c.jpg"
+          }
+        },
+        {
+          "issue_number": "44",
+          "external_id": "45106",
+          "metadata": {
+            "name": "\"1943: Things That Go Bump in the Night\"",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/3/35249/721587-1040_20050924083009_large.jpg",
+            "volume_id": 5259,
+            "issue_number": "44"
+          }
+        },
+        {
+          "issue_number": "45",
+          "external_id": "45199",
+          "metadata": {
+            "name": "Destiny",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548064-45.jpg",
+            "volume_id": 5259,
+            "issue_number": "45"
+          }
+        },
+        {
+          "issue_number": "46",
+          "external_id": "45286",
+          "metadata": {
+            "name": "1952: Good Men and Bad",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548065-46.jpg",
+            "volume_id": 5259,
+            "issue_number": "46"
+          }
+        },
+        {
+          "issue_number": "47",
+          "external_id": "78361",
+          "metadata": {
+            "name": "City Without Light (A Prelude to Bad Times)",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74871-5259-78361-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "47"
+          }
+        },
+        {
+          "issue_number": "1,000,000",
+          "external_id": "78360",
+          "metadata": {
+            "name": "All the Starlight Shining",
+            "issue_number": "1000000",
+            "volume": {
+              "id": 5259,
+              "name": "Starman",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+              "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548083-1000000.jpg"
+          }
+        },
+        {
+          "issue_number": "48",
+          "external_id": "78362",
+          "metadata": {
+            "name": "Starman Blues: Stars My Destination, Part One",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74872-5259-78362-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "48"
+          }
+        },
+        {
+          "issue_number": "49",
+          "external_id": "78363",
+          "metadata": {
+            "name": "Fighting with Grundy; Talking with David '99",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74873-5259-78363-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "49"
+          }
+        },
+        {
+          "issue_number": "50",
+          "external_id": "78364",
+          "metadata": {
+            "name": "Stars My Destination: Lighting the Way: Then, Now and Yet To Be",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548067-50.jpg",
+            "volume_id": 5259,
+            "issue_number": "50"
+          }
+        },
+        {
+          "issue_number": "51",
+          "external_id": "78365",
+          "metadata": {
+            "name": "Midnight in the House of El",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74875-5259-78365-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "51"
+          }
+        },
+        {
+          "issue_number": "52",
+          "external_id": "78366",
+          "metadata": {
+            "name": "Men of Two Worlds",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74876-5259-78366-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "52"
+          }
+        },
+        {
+          "issue_number": "53",
+          "external_id": "78367",
+          "metadata": {
+            "name": "The Long Goodbyes",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548069-53.jpg",
+            "volume_id": 5259,
+            "issue_number": "53"
+          }
+        },
+        {
+          "issue_number": "54",
+          "external_id": "78368",
+          "metadata": {
+            "name": "1899: The Scalphunter Years: Rich Man's Folly",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56245-5259-78368-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "54"
+          }
+        },
+        {
+          "issue_number": "55",
+          "external_id": "78369",
+          "metadata": {
+            "name": "Taxicab Confessions",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548070-55.jpg",
+            "volume_id": 5259,
+            "issue_number": "55"
+          }
+        },
+        {
+          "issue_number": "56",
+          "external_id": "78370",
+          "metadata": {
+            "name": "City without Light, Part II: Bad Times Loom",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56247-5259-78370-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "56"
+          }
+        },
+        {
+          "issue_number": "57",
+          "external_id": "78371",
+          "metadata": {
+            "name": "The Stars My Destination: The Welcome Wagon",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56248-5259-78371-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "57"
+          }
+        },
+        {
+          "issue_number": "58",
+          "external_id": "78372",
+          "metadata": {
+            "name": "Familiar Faces, Some Forgotten",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56249-5259-78372-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "58"
+          }
+        },
+        {
+          "issue_number": "59",
+          "external_id": "78373",
+          "metadata": {
+            "name": "The Stars My Destination: The Secret of Will Payton",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548071-59.jpg",
+            "volume_id": 5259,
+            "issue_number": "59"
+          }
+        },
+        {
+          "issue_number": "60",
+          "external_id": "78374",
+          "metadata": {
+            "name": "The Stars My Destination, Finale: Worlds Collide",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56251-5259-78374-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "60"
+          }
+        },
+        {
+          "issue_number": "JSA: All Stars 4",
+          "external_id": "40429",
+          "metadata": {
+            "name": "A Day in the Opal",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548026-04.jpg",
+            "volume_id": 5259,
+            "issue_number": "4"
+          }
+        },
+        {
+          "issue_number": "Stars and S.T.R.I.P.E. 0",
+          "external_id": "39762",
+          "metadata": {
+            "name": "Sins of the Father: Part One - Falling Star, Rising Son",
+            "issue_number": "0",
+            "volume": {
+              "id": 5259,
+              "name": "Starman",
+              "api_detail_url": "https://comicvine.gamespot.com/api/volume/4050-5259/",
+              "site_detail_url": "https://comicvine.gamespot.com/starman/4050-5259/"
+            },
+            "primary_image": "https://comicvine.gamespot.com/a/uploads/original/0/9116/1995013-00.jpg"
+          }
+        },
+        {
+          "issue_number": "All-Star Comics 80-Page Giant 1",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "61",
+          "external_id": "78375",
+          "metadata": {
+            "name": "In Tranquility and Fire: A Prologue to Grand Guignol",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548073-61.jpg",
+            "volume_id": 5259,
+            "issue_number": "61"
+          }
+        },
+        {
+          "issue_number": "62",
+          "external_id": "78376",
+          "metadata": {
+            "name": "Grand Guignol, Premiere Partie: ...And What Went Before",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548074-62.jpg",
+            "volume_id": 5259,
+            "issue_number": "62"
+          }
+        },
+        {
+          "issue_number": "63",
+          "external_id": "78377",
+          "metadata": {
+            "name": "Grand Guignol, Deuxieme Partie: Friends and Foes",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548075-63.jpg",
+            "volume_id": 5259,
+            "issue_number": "63"
+          }
+        },
+        {
+          "issue_number": "64",
+          "external_id": "78378",
+          "metadata": {
+            "name": "Grand Guignol, Troisieme Partie: Fighting with Evil, Talking with David",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548076-64.jpg",
+            "volume_id": 5259,
+            "issue_number": "64"
+          }
+        },
+        {
+          "issue_number": "65",
+          "external_id": "78379",
+          "metadata": {
+            "name": "Grand Guignol, Quatri\u00e8me Partie: Darkness Not of Night",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74879-5259-78379-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "65"
+          }
+        },
+        {
+          "issue_number": "66",
+          "external_id": "78380",
+          "metadata": {
+            "name": "Grand Guignol, Cinquieme Partie: A Villain's Tale",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74880-5259-78380-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "66"
+          }
+        },
+        {
+          "issue_number": "67",
+          "external_id": "78381",
+          "metadata": {
+            "name": "Grand Guignol, Sixieme Partie: Rules of Engagement",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74881-5259-78381-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "67"
+          }
+        },
+        {
+          "issue_number": "68",
+          "external_id": "78382",
+          "metadata": {
+            "name": "Grand Guignol, Septieme Partie: A Villain's Tale II;  Grand Guignol: Huitieme Partie, A Great Man Recalled... and Recollecting",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548077-68.jpg",
+            "volume_id": 5259,
+            "issue_number": "68"
+          }
+        },
+        {
+          "issue_number": "69",
+          "external_id": "78383",
+          "metadata": {
+            "name": "Grand Guignol, Neuvieme Partie: Heroes Reborn, Renewed... and Remembered",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74883-5259-78383-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "69"
+          }
+        },
+        {
+          "issue_number": "70",
+          "external_id": "78384",
+          "metadata": {
+            "name": "Grand Guignol, Dixieme Partie: The Devil's in the Details",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548078-70.jpg",
+            "volume_id": 5259,
+            "issue_number": "70"
+          }
+        },
+        {
+          "issue_number": "71",
+          "external_id": "78385",
+          "metadata": {
+            "name": "Grand Guignol, Onzi\u00e8me Partie: Evils Old, New and Unexpected",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/74885-5259-78385-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "71"
+          }
+        },
+        {
+          "issue_number": "72",
+          "external_id": "78386",
+          "metadata": {
+            "name": "Grand Guignol, Douzieme Partie: Finale",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548080-72.jpg",
+            "volume_id": 5259,
+            "issue_number": "72"
+          }
+        },
+        {
+          "issue_number": "73",
+          "external_id": "78387",
+          "metadata": {
+            "name": "Grand Guignol: Eulogy",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548082-73.jpg",
+            "volume_id": 5259,
+            "issue_number": "73"
+          }
+        },
+        {
+          "issue_number": "74",
+          "external_id": "78388",
+          "metadata": {
+            "name": "A Tale of Times Past, 1899. The Scalphunter Years: His Death and the Dying of It",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56265-5259-78388-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "74"
+          }
+        },
+        {
+          "issue_number": "75",
+          "external_id": "78389",
+          "metadata": {
+            "name": "Sons and their Fathers",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56266-5259-78389-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "75"
+          }
+        },
+        {
+          "issue_number": "76",
+          "external_id": "78390",
+          "metadata": {
+            "name": "Talking with David (and Ted)",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56267-5259-78390-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "76"
+          }
+        },
+        {
+          "issue_number": "77",
+          "external_id": "78391",
+          "metadata": {
+            "name": "1951, Part One: --Who?",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56268-5259-78391-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "77"
+          }
+        },
+        {
+          "issue_number": "78",
+          "external_id": "78392",
+          "metadata": {
+            "name": "1951 (Part 2) -- What?",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56269-5259-78392-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "78"
+          }
+        },
+        {
+          "issue_number": "79",
+          "external_id": "78393",
+          "metadata": {
+            "name": "1951 (Part 3) - Why?",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56270-5259-78393-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "79"
+          }
+        },
+        {
+          "issue_number": "80",
+          "external_id": "78394",
+          "metadata": {
+            "name": "Arrivederci, Bon Voyage, Goodbye",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/4/56271-5259-78394-1-starman.jpg",
+            "volume_id": 5259,
+            "issue_number": "80"
+          }
+        },
+        {
+          "issue_number": "81",
+          "external_id": "193366",
+          "metadata": {
+            "name": "Blackest Night Starman",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/0/9241/1199820-001.jpg",
+            "volume_id": 5259,
+            "issue_number": "81"
+          }
+        },
+        {
+          "issue_number": "Starman/Congorilla 1",
+          "external_id": "39908",
+          "metadata": {
+            "name": "Sins of the Father: Part Two - Oil (Paint) And Water",
+            "image_url": "https://comicvine.gamespot.com/a/uploads/original/6/67663/3548023-01.jpg",
+            "volume_id": 5259,
+            "issue_number": "1"
+          }
+        },
+        {
+          "issue_number": "The Shade (2011) 1",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 2",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 3",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 4",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 5",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 6",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 7",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 8",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 9",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 10",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 11",
+          "external_id": null,
+          "metadata": {}
+        },
+        {
+          "issue_number": "The Shade (2011) 12",
+          "external_id": null,
+          "metadata": {}
+        }
+      ]
+    }
+  ]
+}

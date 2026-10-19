@@ -3,6 +3,7 @@ import { useCommitSeriesMapping, useSiblingSeriesMappingPreview } from '../hooks
 import {
   bulkApprovableSeriesMappingRows,
   isOwnedSeriesMappingRow,
+  seriesMappingScopeMessage,
 } from '../services/api-series-mapping'
 import type {
   SeriesMappingClassification,
@@ -185,6 +186,14 @@ export default function SiblingSeriesMappingOffer({
         </p>
         <button
           type="button"
+          onClick={() => void preview.refetch()}
+          disabled={preview.isFetching}
+          className="min-h-11 w-full rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text)] hover:bg-[var(--theme-bg-hover)]"
+        >
+          Try again
+        </button>
+        <button
+          type="button"
           onClick={onDismiss}
           data-testid="sibling-mapping-dismiss"
           className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
@@ -200,7 +209,11 @@ export default function SiblingSeriesMappingOffer({
       <div className="space-y-4" data-testid="sibling-mapping-offer">
         <p className="text-sm text-stone-300">
           <span className="font-bold text-stone-100">{seriesLabel}</span> is linked for this issue.
-          No other issue in the series matches that volume by number exactly.
+          {' '}{preview.data?.scope.status === 'unavailable'
+            ? seriesMappingScopeMessage(preview.data.scope.basis)
+            : (preview.data?.counts.already_confirmed ?? 0) > 0
+              ? 'Other issues already link to this volume. Any remaining issues need individual review.'
+              : 'No other issue in the series matches that volume by number exactly.'}
         </p>
         <button
           type="button"
@@ -215,6 +228,9 @@ export default function SiblingSeriesMappingOffer({
   }
 
   const selectedCount = selectedRowIds.length
+  const includesMetadataRefresh = approvableRows.some(
+    (row) => row.metadata_refresh_required && selectedRowIds.includes(row.row_id),
+  )
 
   return (
     <div className="space-y-4" data-testid="sibling-mapping-offer">
@@ -223,6 +239,12 @@ export default function SiblingSeriesMappingOffer({
           <span className="font-bold text-stone-100">{seriesLabel}</span> is now matched for this
           issue. The remaining issues in the series can use the same volume.
         </p>
+        {approvableRows.some((row) => row.metadata_refresh_required) && (
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Some existing links have no issue details or cover. Update their data together
+            without removing the links first.
+          </p>
+        )}
 
         {commit.isSuccess && (
           <p
@@ -230,7 +252,7 @@ export default function SiblingSeriesMappingOffer({
             className="rounded-lg border border-[var(--theme-primary-action)]/40 bg-stone-800/40 p-3 text-sm text-stone-100"
           >
             {commit.data.confirmed_issue_ids.length} sibling{' '}
-            {commit.data.confirmed_issue_ids.length === 1 ? 'issue' : 'issues'} mapped to{' '}
+            {commit.data.confirmed_issue_ids.length === 1 ? 'issue' : 'issues'} {includesMetadataRefresh ? 'updated from' : 'mapped to'}{' '}
             {seriesLabel}.
           </p>
         )}
@@ -273,7 +295,7 @@ export default function SiblingSeriesMappingOffer({
                 <span
                   className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${STATUS_ACCENT_CLASS[row.classification]}`}
                 >
-                  {STATUS_LABEL[row.classification]}
+                  {row.metadata_refresh_required ? 'Missing details' : STATUS_LABEL[row.classification]}
                 </span>
               </li>
             )
@@ -310,7 +332,7 @@ export default function SiblingSeriesMappingOffer({
             ? 'Mapping...'
             : commit.isSuccess
               ? 'Mapped'
-              : `Map ${selectedCount} ${selectedCount === 1 ? 'issue' : 'issues'}`}
+              : `${includesMetadataRefresh ? 'Update' : 'Map'} ${selectedCount} ${selectedCount === 1 ? 'issue' : 'issues'}`}
         </button>
       </div>
     </div>

@@ -3,8 +3,8 @@ import { defaultHttpClient, type HttpClient } from './httpClient'
 /**
  * Preview classification vocabulary reported by the series-mapping surface.
  *
- * `safe_exact_match` is the only classification a caller may bulk-approve; every
- * other value stays needs-review or is reported as context.
+ * New mappings require `safe_exact_match`. Verified `already_confirmed` rows may
+ * also be approved when the server explicitly marks their metadata for refresh.
  */
 export type SeriesMappingClassification =
   | 'already_confirmed'
@@ -36,7 +36,7 @@ export interface SeriesMappingPreviewCounts {
 
 export interface SeriesMappingPreviewProviderSeries {
   id: string
-  name: string
+  name: string | null
   publisher: string | null
   start_year: number | null
   count_of_issues: number | null
@@ -55,6 +55,7 @@ export interface SeriesMappingPreviewRow {
   current_mapping_status: string | null
   proposed_mapping: boolean
   default_selected: boolean
+  metadata_refresh_required?: boolean
   reason: string | null
 }
 
@@ -118,16 +119,35 @@ export function isOwnedSeriesMappingRow(row: SeriesMappingPreviewRow): boolean {
 /**
  * Return the rows a caller may bulk-approve for this preview.
  *
- * Only rows the preview classified `safe_exact_match` that also belong to an owned
- * issue qualify, so provider inventory rows never reach the commit surface.
+ * Owned exact matches and explicitly flagged metadata refreshes qualify.
+ * Provider inventory and other confirmations never reach the commit surface.
  */
 export function bulkApprovableSeriesMappingRows(
   rows: SeriesMappingPreviewRow[],
 ): SeriesMappingPreviewRow[] {
   return rows.filter(
     (row) =>
-      row.classification === BULK_SAFE_SERIES_MAPPING_CLASSIFICATION && isOwnedSeriesMappingRow(row),
+      (row.classification === BULK_SAFE_SERIES_MAPPING_CLASSIFICATION ||
+        (row.classification === 'already_confirmed' && row.metadata_refresh_required === true)) &&
+      isOwnedSeriesMappingRow(row),
   )
+}
+
+/** Explain why no approval can be offered without confusing an outage with a mismatch. */
+export function seriesMappingScopeMessage(basis: string | null): string {
+  switch (basis) {
+    case 'provider_roster_unavailable':
+      return 'ComicVine did not return the issue list for this volume. Try again to check it. Nothing was changed.'
+    case 'queue_thread_bootstrap_no_exact_match':
+      return 'No issue numbers in this series match this ComicVine volume safely. Choose a different volume or check the individual issues. Nothing was changed.'
+    case 'thread_has_no_issues':
+      return 'This series has no tracked issues to map. Nothing was changed.'
+    case 'origin_issue_not_found':
+    case 'origin_issue_without_thread':
+      return 'The issue used to check this series is no longer available. Close this dialog and reopen Map series. Nothing was changed.'
+    default:
+      return 'ComicPile could not establish a safe mapping scope for this series, so there is no plan to approve. Nothing was changed.'
+  }
 }
 
 /**

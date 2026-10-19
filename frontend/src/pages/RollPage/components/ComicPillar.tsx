@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import ComicVineSearchDialog from '../../../components/ComicVineSearchDialog'
+import QueueMapSeriesDialog from '../../../components/QueueMapSeriesDialog'
 import OverflowMenu, { type OverflowMenuItem } from '../../../components/OverflowMenu'
 import { comicVineApi } from '../../../services/api-comicvine'
 import type { ComicVineIssueCandidate } from '../../../services/api-comicvine'
@@ -35,6 +36,7 @@ export function ComicPillar({
 }: ComicPillarProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false)
+  const [isSeriesMappingDialogOpen, setIsSeriesMappingDialogOpen] = useState(false)
   const [identityState, setIdentityState] = useState<IssueIdentityResponse | null>(null)
   const [searchMode, setSearchMode] = useState<'confirm' | 'replace'>('confirm')
 
@@ -121,7 +123,6 @@ export function ComicPillar({
   // state is discoverable without opening an edit flow.
   const correctionItems = useMemo<OverflowMenuItem[]>(() => {
     const entries: OverflowMenuItem[] = []
-
     if (issueNumber != null) {
       entries.push({
         key: 'fix-issue-number',
@@ -130,6 +131,16 @@ export function ComicPillar({
         description: `Set the current issue number for ${threadTitle}`,
         disabled: !activeRatingThread?.id,
         onSelect: () => setIsCorrectionDialogOpen(true),
+      })
+    }
+
+    if (activeRatingThread?.id && issueId) {
+      entries.push({
+        key: 'map-series',
+        label: 'Map series',
+        ariaLabel: 'Map series',
+        description: 'Check this series and update missing ComicVine details',
+        onSelect: () => setIsSeriesMappingDialogOpen(true),
       })
     }
 
@@ -186,6 +197,8 @@ export function ComicPillar({
     issueNumber,
     needsIdentity,
     threadTitle,
+    fetchIdentity,
+    handleIdentityConfirmed,
   ])
 
   const identityStatusLabel = isLinked ? 'Linked' : 'Not linked'
@@ -326,6 +339,15 @@ export function ComicPillar({
           onClose={() => setIsSearchDialogOpen(false)}
           onConfirmed={handleIdentityConfirmed}
           onSiblingsMapped={handleSiblingsMapped}
+        />
+      )}
+      {isSeriesMappingDialogOpen && activeRatingThread && (
+        <QueueMapSeriesDialog
+          isOpen
+          threadId={activeRatingThread.id}
+          threadTitle={threadTitle}
+          onClose={() => setIsSeriesMappingDialogOpen(false)}
+          onMapped={() => { void fetchIdentity() }}
         />
       )}
     </div>

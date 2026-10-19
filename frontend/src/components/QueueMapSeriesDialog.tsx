@@ -10,6 +10,7 @@ import {
 import {
   bulkApprovableSeriesMappingRows,
   isOwnedSeriesMappingRow,
+  seriesMappingScopeMessage,
 } from '../services/api-series-mapping'
 import type {
   SeriesMappingClassification,
@@ -230,6 +231,9 @@ export default function QueueMapSeriesDialog({
         .map((row) => row.row_id),
     [approvableRows, uncheckedRowIds],
   )
+  const includesMetadataRefresh = approvableRows.some(
+    (row) => row.metadata_refresh_required && selectedRowIds.includes(row.row_id),
+  )
 
   // The preview token is unique per preview and already embeds its issue time, so
   // deriving the key from it keeps one idempotency key across retries of the same
@@ -404,6 +408,12 @@ export default function QueueMapSeriesDialog({
               <span className="font-bold text-stone-100">{selectedSeries.name}</span>. Only exact
               matches are selected; review-needed rows stay untouched.
             </p>
+            {approvableRows.some((row) => row.metadata_refresh_required) && (
+              <p className="text-sm text-[var(--theme-text-muted)]">
+                Some existing links have no issue details or cover. Update them together from
+                this verified ComicVine volume; you do not need to remove the links first.
+              </p>
+            )}
             <button
               type="button"
               onClick={handleBackToSearch}
@@ -465,10 +475,19 @@ export default function QueueMapSeriesDialog({
             {preview.data && preview.data.scope.status === 'unavailable' && (
               <div className="space-y-3">
                 <p className="rounded-lg bg-stone-800/40 border border-stone-700/50 p-3 text-sm text-stone-300">
-                  ComicPile could not establish a safe mapping scope for this series, so there is
-                  no plan to approve. Nothing was changed.
+                  {seriesMappingScopeMessage(preview.data.scope.basis)}
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row">
+                  {preview.data.scope.basis === 'provider_roster_unavailable' && (
+                    <button
+                      type="button"
+                      onClick={() => void preview.refetch()}
+                      disabled={preview.isFetching}
+                      className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text)] hover:bg-[var(--theme-bg-hover)]"
+                    >
+                      Try again
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={onClose}
@@ -499,7 +518,7 @@ export default function QueueMapSeriesDialog({
                     className="rounded-lg border border-[var(--theme-primary-action)]/40 bg-stone-800/40 p-3 text-sm text-stone-100"
                   >
                     {commit.data.confirmed_issue_ids.length}{' '}
-                    {commit.data.confirmed_issue_ids.length === 1 ? 'issue' : 'issues'} mapped to{' '}
+                    {commit.data.confirmed_issue_ids.length === 1 ? 'issue' : 'issues'} {includesMetadataRefresh ? 'updated from' : 'mapped to'}{' '}
                     {selectedSeries.name}.
                     {commit.data.needs_review_issue_ids.length > 0 &&
                       ` ${commit.data.needs_review_issue_ids.length} still need${
@@ -519,8 +538,9 @@ export default function QueueMapSeriesDialog({
 
                 {approvableRows.length === 0 && !commit.isSuccess && (
                   <p className="rounded-lg bg-stone-800/40 border border-stone-700/50 p-3 text-sm text-stone-300">
-                    No exact matches for your issues in this volume. Ambiguous and special rows
-                    are never mapped automatically.
+                    {preview.data.counts.already_confirmed > 0
+                      ? `${preview.data.counts.already_confirmed} ${preview.data.counts.already_confirmed === 1 ? 'issue already links' : 'issues already link'} to this volume. Remaining rows need individual review or a different volume.`
+                      : 'No exact matches for your issues in this volume. Ambiguous and special rows are never mapped automatically.'}
                   </p>
                 )}
 
@@ -558,7 +578,7 @@ export default function QueueMapSeriesDialog({
                         <span
                           className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${STATUS_ACCENT_CLASS[row.classification]}`}
                         >
-                          {STATUS_LABEL[row.classification]}
+                          {row.metadata_refresh_required ? 'Missing details' : STATUS_LABEL[row.classification]}
                         </span>
                       </li>
                     )
@@ -607,7 +627,7 @@ export default function QueueMapSeriesDialog({
                     >
                       {commit.isPending
                         ? 'Mapping...'
-                        : `Map ${selectedRowIds.length} ${selectedRowIds.length === 1 ? 'issue' : 'issues'}`}
+                        : `${includesMetadataRefresh ? 'Update' : 'Map'} ${selectedRowIds.length} ${selectedRowIds.length === 1 ? 'issue' : 'issues'}`}
                     </button>
                   )}
                 </div>

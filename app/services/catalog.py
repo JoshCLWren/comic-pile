@@ -581,10 +581,12 @@ async def build_series_mapping_plan(
         # The local catalog answers the preview, so a sibling roster lookup is best-effort:
         # a provider outage degrades to local rows instead of failing the whole preview.
         try:
-            _, roster_rows = await _load_provider_volume_roster(
+            provider_series, roster_rows = await _load_provider_volume_roster(
                 provider_series_external_id,
                 [],
             )
+            if provider_series is not None:
+                series_info = {**series_info, **provider_series}
         except HTTPException as exc:
             if exc.status_code != status.HTTP_503_SERVICE_UNAVAILABLE:
                 raise
@@ -631,6 +633,7 @@ async def build_series_mapping_plan(
                 "confidence": origin_issue.get("confidence"),
                 "classification": "unresolved",
                 "_is_origin": True,
+                "_identity_metadata": origin_issue.get("_identity_metadata"),
             })
 
     # If we still don't have series info, return unavailable scope
@@ -650,6 +653,7 @@ async def build_series_mapping_plan(
         origin_issue_number=_issue_number_text(origin_issue.get("issue_number")),
         counts=counts,
     )
+    _attach_verified_roster_metadata(classified_rows, roster_rows)
     scope_key = _derive_scope_key(classified_rows, origin_issue_id)
 
     # Determine if scope is available
@@ -810,20 +814,23 @@ async def _load_provider_volume_roster(
                     pid = int(provider_issue_id) if provider_issue_id is not None else 0
                 except (TypeError, ValueError):
                     pid = 0
+                if pid <= 0:
+                    continue
                 # Roster rows carry no ComicPile thread. ``thread_id`` stays ``None`` and the row
                 # is flagged ``_roster_only`` so it is reported as provider inventory and can
                 # never be bulk-confirmed as if it were a local issue.
                 roster.append({
-                    "issue_id": pid if pid != 0 else 0,
+                    "issue_id": pid,
                     "issue_number": str(issue_number),
                     "title": row.get("name"),
                     "thread_id": None,
                     "thread_title": None,
                     "current_mapping_status": "unresolved",
                     "provider": "comicvine",
-                    "external_id": str(provider_issue_id),
+                    "external_id": str(pid),
                     "classification": "unresolved",
                     "_roster_only": True,
+                    "_provider_metadata": row,
                 })
         return series_info, roster
     except HTTPException:
@@ -1061,14 +1068,11 @@ async def _build_queue_thread_bootstrap_plan(
                 scope_mode=SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP,
             )
     else:
-        # The volume is known locally, so the roster lookup is best-effort: an outage degrades
-        # to an unavailable bootstrap scope instead of failing the whole request.
-        try:
-            _, roster_rows = await _load_provider_volume_roster(provider_series_external_id, [])
-        except HTTPException as exc:
-            if exc.status_code != status.HTTP_503_SERVICE_UNAVAILABLE:
-                raise
-            roster_rows = []
+        # Bootstrap always needs the real roster. Report provider failure as a retryable
+        # load error, even when a local series stub happens to exist.
+        provider_series, roster_rows = await _load_provider_volume_roster(provider_series_external_id, [])
+        if provider_series is not None:
+            series_info = {**series_info, **provider_series}
 
     if not roster_rows:
         # Without the real provider roster there is nothing to validate a match against.
@@ -1095,6 +1099,7 @@ async def _build_queue_thread_bootstrap_plan(
         provider=provider,
         counts=counts,
     )
+    _attach_verified_roster_metadata(classified_rows, roster_rows)
     scope_key = _derive_scope_key(classified_rows, origin_issue_id)
     scope_status = "available" if scope_key is not None else "unavailable"
     scope_basis = (
@@ -1258,10 +1263,9 @@ def _classify_confirmed_bootstrap_issue(
 ) -> str:
     """Classify an issue that already carries confirmed provider evidence.
 
-    A confirmed identity is settled evidence and is never rewritten. It is reported as
-    ``already_confirmed`` unless the selected volume's real roster holds exactly one issue with
-    the same normalized number and that issue's identity disagrees, which is a conflict the
-    caller must resolve rather than an idempotent replay.
+    A confirmed identity is never replaced here. Agreement with the selected volume is
+    ``already_confirmed``; disagreement, duplicate numbers and absent roster matches remain
+    conflicts, ambiguous rows or unresolved rows for individual review.
 
     Args:
         issue: Owned issue row with a confirmed mapping.
@@ -1269,14 +1273,19 @@ def _classify_confirmed_bootstrap_issue(
         roster_by_number: Provider roster rows keyed by normalized issue number.
 
     Returns:
-        ``already_confirmed`` or ``needs_review_conflict``.
+        The classification supported by the selected volume's actual roster.
     """
     normalized = _normalize_issue_number(raw_number)
     matches = roster_by_number.get(normalized, []) if normalized else []
     confirmed_external_id = str(issue.get("external_id") or "")
+    if not matches:
+        return "unresolved"
+    if len(matches) > 1:
+        return "needs_review_ambiguous"
     if len(matches) == 1 and str(matches[0].get("external_id")) != confirmed_external_id:
         return "needs_review_conflict"
-    # Same-provider agreement or an unavailable roster comparison stays settled evidence.
+    # Only verified agreement is a link to the selected volume. A confirmed flag for
+    # another volume must not be presented as proof that this volume is linked.
     return "already_confirmed"
 
 
@@ -1329,7 +1338,52 @@ def _derive_scope_key(classified_rows: list[dict[str, object]], origin_issue_id:
     for row in classified_rows:
         if row.get("classification") == "safe_exact_match":
             return f"exact:{origin_issue_id}:{row.get('issue_number')}"
+    if any(row.get("_roster_verified") for row in classified_rows):
+        return f"verified:{origin_issue_id}"
     return None
+
+
+def _attach_verified_roster_metadata(
+    rows: list[dict[str, object]], roster_rows: list[dict[str, object]]
+) -> None:
+    """Attach provider data only to uniquely verified owned issue identities.
+
+    A confirmed flag alone proves neither roster membership nor usable metadata. Blank
+    imported identities may be refreshed only when both the number and the existing ID
+    agree with the selected volume. A refresh never proposes a different identity.
+
+    Args:
+        rows: Classified local and provider-inventory preview rows to enrich in place.
+        roster_rows: Actual provider issue roster for the selected volume.
+    """
+    from app.comicvine_hydration import normalize_issue
+
+    by_number: dict[str, list[dict[str, object]]] = {}
+    for roster in roster_rows:
+        number = _normalize_issue_number(_issue_number_text(roster.get("issue_number")))
+        by_number.setdefault(number, []).append(roster)
+    for row in rows:
+        if not isinstance(row.get("thread_id"), int):
+            continue
+        if row.get("classification") not in ("safe_exact_match", "already_confirmed"):
+            continue
+        number = _normalize_issue_number(_issue_number_text(row.get("issue_number")))
+        matches = by_number.get(number, [])
+        if len(matches) != 1 or str(matches[0].get("external_id")) != str(row.get("external_id")):
+            continue
+        raw = matches[0].get("_provider_metadata")
+        row["_roster_verified"] = True
+        if isinstance(raw, dict):
+            row["_provider_metadata"] = normalize_issue(raw)
+            row["title"] = row.get("title") or raw.get("name")
+        metadata = row.get("_identity_metadata")
+        metadata = metadata if isinstance(metadata, dict) else {}
+        volume = metadata.get("volume")
+        series_name = volume.get("name") if isinstance(volume, dict) else metadata.get("volume_name")
+        incomplete = not metadata.get("issue_number") or not series_name
+        if row.get("classification") == "already_confirmed" and incomplete:
+            row["metadata_refresh_required"] = isinstance(raw, dict)
+            row["default_selected"] = isinstance(raw, dict)
 
 
 def _preview_row_id(issue_id: object, roster_only: bool = False) -> str:
@@ -1438,6 +1492,7 @@ def _plan_state_digest(
                     str(row.get("provider") or ""),
                     str(row.get("external_id") or ""),
                     str(row.get("thread_id") or ""),
+                    str(bool(row.get("metadata_refresh_required"))),
                 )
             )
         )
@@ -1456,9 +1511,10 @@ def _get_comicvine_client():
 
 def _normalize_issue_number(value: str) -> str:
     """Normalize an issue number for exact comparison."""
-    normalized = re.sub(r"[^0-9.]", "", value.lower().strip())
-    normalized = normalized.strip(".")
-    return normalized
+    stripped = value.strip().removesuffix(".")
+    if re.fullmatch(r"(?:\d+|\d{1,3}(?:,\d{3})+)", stripped) is None:
+        return ""
+    return stripped.replace(",", "")
 
 
 def _is_special_issue(issue_number: str) -> bool:
@@ -1516,7 +1572,9 @@ def _is_ambiguous(issue_number: str) -> bool:
     for pattern in ambiguous_patterns:
         if re.search(pattern, issue_number_lower):
             return True
-    return False
+    # A named issue such as "JSA: All Stars 4" is not issue #4 of the main
+    # volume. Never erase its title (or a slash/fraction) to manufacture a match.
+    return not bool(_normalize_issue_number(issue_number))
 
 
 def _generate_preview_token(

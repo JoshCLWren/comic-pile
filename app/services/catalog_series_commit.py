@@ -1,7 +1,7 @@
 """Transactional, idempotent commit of user-approved ComicVine series mappings.
 
 This is the write half of the read-only series-mapping preview contract (issue #2721). A
-caller approves only rows the preview classified ``safe_exact_match``, referencing the signed
+caller approves safe exact matches or verified existing identities missing metadata, using the signed
 preview token that proves which scope, series, and issue set it saw.
 
 Commit never trusts the token or the caller as a substitute for database revalidation:
@@ -11,8 +11,8 @@ Commit never trusts the token or the caller as a substitute for database revalid
    same logical result without duplicating confirmed identities;
 3. the current plan is rebuilt from the database and its state digest must equal the digest the
    token bound, otherwise the preview is stale;
-4. every approved row must still resolve to a locally owned issue the preview classified as a
-   safe exact match, and no approved row may conflict with an existing confirmed mapping;
+4. every approved row must still be an owned exact match or verified metadata refresh,
+   and no approved row may conflict with an existing confirmed mapping;
 5. all identity writes and the idempotency receipt commit in one transaction, so any failure
    leaves no partial writes;
 6. metadata hydration is handed off only after that transaction commits, so a hydration failure
@@ -48,6 +48,7 @@ from app.repositories.catalog_commit_repository import (
     list_confirmed_issue_identities,
     list_owned_issue_ids,
 )
+from app.repositories.catalog_repository import fill_missing_identity_metadata
 from app.services.catalog import (
     SCOPE_MODE_CONFIRMED_ORIGIN,
     build_series_mapping_plan,
@@ -61,7 +62,7 @@ COMMIT_ENDPOINT = "catalog_series_mapping_commit"
 """Logical endpoint name recorded with each durable idempotency receipt."""
 
 BULK_SAFE_CLASSIFICATION = "safe_exact_match"
-"""The only preview classification a caller may bulk-approve."""
+"""Classification authorizing a new mapping; verified metadata refreshes preserve existing IDs."""
 
 LEFTOVER_CLASSIFICATIONS = (
     "needs_review_ambiguous",
@@ -236,6 +237,7 @@ async def commit_series_mapping(
         idempotency_key=normalized_key,
         request_fingerprint=fingerprint,
         rows=plan_rows,
+        series_metadata=plan.get("provider_series"),
     )
 
     hydration_targets = [
@@ -341,7 +343,14 @@ def _resolve_approved_row(row_id: str, rows_by_id: dict[str, dict[str, object]])
             row that carries no ComicPile thread to attach.
     """
     row = rows_by_id.get(row_id)
-    if row is None or row.get("classification") != BULK_SAFE_CLASSIFICATION:
+    if row is None or not (
+        row.get("classification") == BULK_SAFE_CLASSIFICATION
+        or (
+            row.get("classification") == "already_confirmed"
+            and row.get("metadata_refresh_required") is True
+            and row.get("_roster_verified") is True
+        )
+    ):
         raise SeriesMappingCommitConflictError(
             ERROR_INVALID_APPROVED_ROW, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT
         )
@@ -418,6 +427,7 @@ async def _apply_identity_writes(
     idempotency_key: str,
     request_fingerprint: str,
     rows: Sequence[dict[str, object]],
+    series_metadata: object = None,
 ) -> dict[str, object]:
     """Confirm every approved identity, record the receipt, and commit exactly once.
 
@@ -435,6 +445,13 @@ async def _apply_identity_writes(
             external_id=str(row["external_id"]),
         )
         identity_id = identity.id
+        provider_metadata = row.get("_provider_metadata")
+        if isinstance(provider_metadata, dict):
+            # Persist the already-fetched roster data in the same transaction as the
+            # identity. Hundreds of follow-up issue requests must not be required just
+            # to display the selected volume, issue number and cover. Deep fields that
+            # were hydrated earlier remain authoritative.
+            fill_missing_identity_metadata(identity, provider_metadata)
         mapping = await link_issue_external_identity(
             db,
             user_id=user_id,
@@ -459,6 +476,8 @@ async def _apply_identity_writes(
         entity_type="series",
         external_id=series_external_id,
     )
+    if isinstance(series_metadata, dict):
+        fill_missing_identity_metadata(series_identity, series_metadata)
     series_identity_id = series_identity.id
     for thread_id in sorted(set(thread_ids)):
         await link_thread_external_series(

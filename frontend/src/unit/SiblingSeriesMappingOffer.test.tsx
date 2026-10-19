@@ -136,6 +136,17 @@ beforeEach(() => {
 })
 
 describe('SiblingSeriesMappingOffer loading', () => {
+  it('offers a metadata update for a verified blank sibling mapping', () => {
+    mockPreview(previewResponse([ORIGIN_ROW, previewRow({
+      classification: 'already_confirmed', current_mapping_status: 'confirmed',
+      metadata_refresh_required: true,
+    })]))
+    renderOffer()
+    expect(screen.getByText('Missing details')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Update 1 issue' })).toBeEnabled()
+    expect(screen.getByText(/without removing the links first/)).toBeInTheDocument()
+  })
+
   it('renders a loading state while the preview is pending', () => {
     mockPreview(undefined, { isPending: true })
 

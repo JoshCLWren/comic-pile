@@ -247,6 +247,36 @@ function renderDialog(onMapped = vi.fn(), onClose = vi.fn()) {
 })
 
 describe('QueueMapSeriesDialog', () => {
+  it('updates missing metadata on a verified existing identity without unlinking it', async () => {
+    mockedPreview.mockResolvedValue(previewResponse([previewRow({
+      classification: 'already_confirmed',
+      current_mapping_status: 'confirmed',
+      metadata_refresh_required: true,
+      default_selected: true,
+    })]))
+    renderDialog()
+    await userEvent.click(await screen.findByTestId('queue-map-series-result'))
+    expect(await screen.findByText('Missing details')).toBeInTheDocument()
+    expect(screen.getByText(/do not need to remove the links first/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Update 1 issue' }))
+    await waitFor(() => expect(mockedCommit).toHaveBeenCalledWith(expect.objectContaining({
+      approved_row_ids: ['issue:2'],
+    })))
+  })
+
+  it('shows existing links when no new issue needs mapping', async () => {
+    mockedPreview.mockResolvedValue(previewResponse([previewRow({
+      classification: 'already_confirmed', current_mapping_status: 'confirmed',
+      default_selected: false,
+    })], { counts: { already_confirmed: 1, safe_exact_match: 0, needs_review_ambiguous: 0,
+      needs_review_conflict: 0, unresolved: 0, excluded_special: 0 } }))
+    renderDialog()
+    await userEvent.click(await screen.findByTestId('queue-map-series-result'))
+    expect(await screen.findByText(/1 issue already links to this volume/)).toBeInTheDocument()
+    expect(screen.queryByText(/could not establish a safe mapping scope/)).not.toBeInTheDocument()
+    expect(screen.getByTestId('queue-map-series-approve')).toBeDisabled()
+  })
+
   it('searches on open and shows the mapping preview after a volume is selected', async () => {
     const user = userEvent.setup()
     renderDialog()
