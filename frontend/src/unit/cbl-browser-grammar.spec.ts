@@ -2,14 +2,9 @@
  * Unit tests for CBL browser grammar fixes
  */
 
-describe('CBL browser grammar', () => {
-  // Import the countPhraseWithArticle function from CblBrowserPage
-  // We'll test it directly since we can't easily import from a component file
-  const countPhraseWithArticle = (count: number, singular: string, plural: string): string => {
-    const word = count === 1 ? singular : plural
-    return count === 1 ? `1 ${word}` : `${count} ${word}`
-  }
+import { countPhraseWithArticle } from '../lib/countPhraseWithArticle'
 
+describe('CBL browser grammar', () => {
   test('correctly handles singular counts', () => {
     expect(countPhraseWithArticle(1, 'entry', 'entries')).toBe('1 entry')
     expect(countPhraseWithArticle(1, 'needs attention', 'need attention')).toBe('1 needs attention')

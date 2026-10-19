@@ -16,6 +16,7 @@ import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
 import { displayCblRepository, displayCblSourcePath } from '../utils/cblSourceDisplay'
 import { isObject, isString } from '../utils/runtimeChecks'
+import { countPhraseWithArticle } from '../lib/countPhraseWithArticle'
 
 function statusLabel(entry: CBLAdoptionPreviewEntry): string {
   switch (entry.adoption_decision) {
@@ -51,11 +52,6 @@ function errorMessage(error: Error, fallback: string): string {
     }
   }
   return error instanceof Error && error.message ? error.message : fallback
-}
-
-function countPhraseWithArticle(count: number, singular: string, plural: string): string {
-  const word = count === 1 ? singular : plural
-  return count === 1 ? `1 ${word}` : `${count} ${word}`
 }
 
 function choiceButtonClass(selected: boolean, muted = false): string {
