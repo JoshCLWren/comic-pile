@@ -40,6 +40,10 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
     await async_db_committed.execute(text("ANALYZE issues"))
     await async_db_committed.execute(text("SET LOCAL enable_seqscan = off"))
     await async_db_committed.execute(text("SET LOCAL enable_bitmapscan = off"))
+    # A 50-row sort is cheap enough that the planner may otherwise satisfy the
+    # ordered lookup from ix_issue_thread_id. Disable sorts so the plan can only
+    # be ordered by the (thread_id, position) index this test exists to cover.
+    await async_db_committed.execute(text("SET LOCAL enable_sort = off"))
 
     # Get EXPLAIN plan for the query pattern used by list_issues
     explain_query = text("""
