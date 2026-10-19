@@ -40,12 +40,13 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
     await async_db_committed.execute(text("ANALYZE issues"))
     await async_db_committed.execute(text("SET LOCAL enable_seqscan = off"))
     await async_db_committed.execute(text("SET LOCAL enable_bitmapscan = off"))
+    await async_db_committed.execute(text("SET LOCAL enable_indexonlyscan = off"))
 
     # Get EXPLAIN plan for the query pattern used by list_issues
     explain_query = text("""
         EXPLAIN (ANALYZE, FORMAT JSON)
-        SELECT * FROM issues 
-        WHERE thread_id = :thread_id 
+        SELECT * FROM issues
+        WHERE thread_id = :thread_id
         ORDER BY position
         LIMIT 50
     """)
@@ -73,16 +74,29 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
             index_names.update(collect_index_names(child))
         return index_names
 
-    # Either the explicit index or the unique constraint's index can be used
+    # With sequential scans and bitmap scans disabled the planner must reach an
+    # index to answer a thread-scoped lookup. The position index (thread_id, position)
+    # is the index that serves both the WHERE and ORDER BY for this query pattern.
+    # Verify it appears in the plan; if the planner chooses a different thread-scoped
+    # index, the test will fail and alert us to investigate rather than silently
+    # accepting a plan that cannot guarantee ordered results without a sort.
     index_names = collect_index_names(plan_nodes)
-    assert any(name in index_names for name in ["ix_issue_thread_position", "uq_issue_thread_position"]), (
-        f"Plan did not reference either ix_issue_thread_position or uq_issue_thread_position after sequential scans were disabled. Found indexes: {index_names}"
+    assert index_names, (
+        "Plan used no index after sequential and bitmap scans were disabled; "
+        f"the thread-scoped lookup is not indexed: {plan_nodes}"
+    )
+    assert any(
+        name in index_names
+        for name in ("ix_issue_thread_position", "uq_issue_thread_position")
+    ), (
+        f"No position index used in plan; indexes found: {index_names}; "
+        f"plan: {plan_nodes}"
     )
 
     # Also verify the index actually exists
     index_check = text("""
-        SELECT 1 FROM pg_indexes 
-        WHERE tablename = 'issues' 
+        SELECT 1 FROM pg_indexes
+        WHERE tablename = 'issues'
         AND indexname = 'ix_issue_thread_position'
     """)
 
@@ -90,6 +104,23 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
     index_exists = index_result.scalar()
 
     assert index_exists is not None, "Index ix_issue_thread_position does not exist in database"
+
+    # The real query must return the issues in position order regardless of which
+    # index the planner chose, so exercise the actual lookup instead of trusting
+    # the plan shape alone.
+    rows = await async_db_committed.execute(
+        text("""
+            SELECT position FROM issues
+            WHERE thread_id = :thread_id
+            ORDER BY position
+            LIMIT 50
+        """),
+        {"thread_id": thread.id},
+    )
+    positions = [row[0] for row in rows.all()]
+    assert positions == list(range(1, 51)), (
+        f"Indexed lookup did not return issues in position order: {positions[:5]}..."
+    )
 
 
 @pytest.mark.asyncio
@@ -132,6 +163,7 @@ async def test_issues_position_index_improves_pagination(
     await async_db_committed.execute(text("ANALYZE issues"))
     await async_db_committed.execute(text("SET LOCAL enable_seqscan = off"))
     await async_db_committed.execute(text("SET LOCAL enable_bitmapscan = off"))
+    await async_db_committed.execute(text("SET LOCAL enable_indexonlyscan = off"))
 
     await async_db_committed.execute(
         text(f"SET LOCAL enable_incremental_sort = {incremental_sort}")
