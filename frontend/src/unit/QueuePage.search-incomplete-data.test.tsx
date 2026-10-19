@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
@@ -124,7 +125,8 @@ beforeEach(() => {
 })
 
 describe('Queue search with incomplete data', () => {
-  it('shows loading state when searching and there are active threads but filtered results are empty (likely still loading)', () => {
+  it('shows loading state when searching and there are active threads but filtered results are empty (likely still loading)', async () => {
+    const user = userEvent.setup()
     mockedUseQueueThreads.mockReturnValue({
       data: [
         {
@@ -154,13 +156,18 @@ describe('Queue search with incomplete data', () => {
 
     renderQueue()
 
+    // Trigger a search to enter the searching state
+    const searchInput = screen.getByPlaceholderText('Search...')
+    await user.type(searchInput, 'Saga')
+
     // The search should show "Loading series..." instead of "No active series match your search"
     // because we have active threads in the queue and are likely still loading more pages
     expect(screen.getByText('Loading series...')).toBeInTheDocument()
     expect(screen.queryByText('No active series match your search')).not.toBeInTheDocument()
   })
 
-  it('shows "No active series match your search" when searching and there are no active threads at all', () => {
+  it('shows "No active series match your search" when searching and there are no active threads at all', async () => {
+    const user = userEvent.setup()
     mockedUseQueueThreads.mockReturnValue({
       data: [],
       isPending: false,
@@ -173,12 +180,17 @@ describe('Queue search with incomplete data', () => {
 
     renderQueue()
 
+    // Trigger a search to enter the searching state
+    const searchInput = screen.getByPlaceholderText('Search...')
+    await user.type(searchInput, 'Saga')
+
     // In this case, we genuinely have no active threads, so "No active series match your search" is correct
     expect(screen.getByText('No active series match your search')).toBeInTheDocument()
     expect(screen.queryByText('Loading series...')).not.toBeInTheDocument()
   })
 
-  it('shows search results when search has matches', () => {
+  it('shows search results when search has matches', async () => {
+    const user = userEvent.setup()
     mockedUseQueueThreads.mockReturnValue({
       data: [
         {
@@ -209,14 +221,14 @@ describe('Queue search with incomplete data', () => {
     renderQueue()
 
     // Simulate a search that matches "Saga"
-    const searchInput = screen.getByPlaceholderText('Search queue')
-    const searchEvent = new Event('input', { bubbles: true })
-    Object.defineProperty(searchEvent, 'target', { value: { value: 'Saga' }, enumerable: true })
-    searchInput.dispatchEvent(searchEvent)
+    const searchInput = screen.getByPlaceholderText('Search...')
+    await user.type(searchInput, 'Saga')
 
     // Should show the Saga result
     expect(screen.getByText('Saga')).toBeInTheDocument()
     expect(screen.queryByText('Loading series...')).not.toBeInTheDocument()
     expect(screen.queryByText('No active series match your search')).not.toBeInTheDocument()
+    // Verify that Spawn is filtered out
+    expect(screen.queryByText('Spawn')).not.toBeInTheDocument()
   })
 })
