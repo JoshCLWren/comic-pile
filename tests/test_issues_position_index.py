@@ -45,6 +45,10 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
     # ordered lookup from ix_issue_thread_id. Disable sorts so the plan can only
     # be ordered by the (thread_id, position) index this test exists to cover.
     await async_db_committed.execute(text("SET LOCAL enable_sort = off"))
+    # Incremental sort can otherwise let a plan ordered by thread_id satisfy the
+    # position ordering using ix_issue_thread_id. Disable it so only the
+    # (thread_id, position) index can serve this lookup without a sort.
+    await async_db_committed.execute(text("SET LOCAL enable_incremental_sort = off"))
 
     # Get EXPLAIN plan for the query pattern used by list_issues
     explain_query = text("""
@@ -78,22 +82,17 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
             index_names.update(collect_index_names(child))
         return index_names
 
-    # With sequential scans and bitmap scans disabled the planner must reach an
-    # index to answer a thread-scoped lookup. The position ordering is now
-    # served by the uq_issue_thread_position unique constraint index, which is
-    # the retained index covering (thread_id, position). Verify it appears in
-    # the plan; if the planner chooses a different thread-scoped index, the test
-    # will fail and alert us to investigate rather than silently accepting a
-    # plan that cannot guarantee ordered results without a sort.
+    # With sequential, bitmap, index-only, and sort paths disabled the planner
+    # must answer this thread-scoped ordered lookup from the retained
+    # (thread_id, position) unique index. Accepting ix_issue_thread_id here
+    # would pass even when the plan has to sort by position, which is exactly
+    # the coverage this test exists to guard against.
     index_names = collect_index_names(plan_nodes)
     assert index_names, (
         "Plan used no index after sequential and bitmap scans were disabled; "
         f"the thread-scoped lookup is not indexed: {plan_nodes}"
     )
-    assert any(
-        name in index_names
-        for name in ("uq_issue_thread_position", "ix_issue_thread_id")
-    ), (
+    assert "uq_issue_thread_position" in index_names, (
         f"No position index used in plan; indexes found: {index_names}; "
         f"plan: {plan_nodes}"
     )
