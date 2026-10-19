@@ -124,6 +124,9 @@ async def create_issues(
     Returns:
         A tuple of (newly_created_issues, total_issue_count).
     """
+    # Take the queue lock before the thread row lock so queue writers keep a
+    # single lock ordering and cannot deadlock with a concurrent shuffle.
+    await thread_repository.renormalize_queue_positions(db, current_user_id)
     thread = await get_owned_thread_or_404(db, current_user_id, thread_id, for_update=True)
 
     try:
@@ -431,6 +434,9 @@ async def delete_issue(
     if thread_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Issue {issue_id} not found")
 
+    # Take the queue lock before the thread row lock so queue writers keep a
+    # single lock ordering and cannot deadlock with a concurrent shuffle.
+    await thread_repository.renormalize_queue_positions(db, current_user_id)
     thread = await get_owned_thread_or_404(db, current_user_id, thread_id, for_update=True)
     thread_issues = await issue_repository.locked_issues(db, thread_id)
 

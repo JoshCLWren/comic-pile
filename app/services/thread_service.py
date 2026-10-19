@@ -950,6 +950,11 @@ async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
 
     thread.status = EXCLUDED_STATUS
     thread.queue_position = 0
+    # This thread has now left the active set, so renumber the survivors as a
+    # dense 1..N sequence before committing. The queue lock acquired at the
+    # start of this function is still held by this transaction, so the rewrite
+    # cannot interleave with a concurrent move or shuffle (#3924 review).
+    await thread_repository.renormalize_queue_positions(db, user_id)
     await db.commit()
     await db.refresh(thread)
     return await thread_to_response(thread, db)

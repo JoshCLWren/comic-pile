@@ -1243,7 +1243,10 @@ async def test_create_issues_comicvine_adoption_query_count(
     # The adoption path must not issue a thread ownership lookup, an in-thread
     # number lookup, or a per-issue tracking recalculation per new issue.
     # Bounded well below the pre-optimization count (18+ queries observed in prod).
-    assert total_statements <= 45, f"Too many statements ({total_statements}): {statements}"
+    # One per-transaction statement pair covers the per-reader queue lock and
+    # queue renumbering acquired before the thread row lock (constant cost, not
+    # per-issue growth), added by the #3924 dense-position/lock-order work.
+    assert total_statements <= 47, f"Too many statements ({total_statements}): {statements}"
     assert len(select_statements) <= 25, f"Too many SELECTs ({len(select_statements)})"
 
     # Confirm both mappings were actually written
