@@ -316,6 +316,9 @@ async def test_get_performance_metrics_summary_compiled_sql_has_no_cartesian_pro
     """Compiled SQL aggregates through a single subquery WITHOUT a cross join."""
     dialect = postgresql.dialect()
 
+    # Mirror the query construction used by get_performance_metrics_summary
+    # (app/repositories/performance_metric_repository.py:103) so regressions
+    # in the repository's subquery pattern are caught.
     base_query = select(PerformanceMetric)
     base_subquery = base_query.subquery()
 
@@ -337,8 +340,9 @@ async def test_get_performance_metrics_summary_compiled_sql_has_no_cartesian_pro
         assert "CROSS JOIN" not in upper
         # The base table must appear only inside the subquery's FROM, never as
         # a second top-level table (comma join) or join target.
-        assert ", performance_metrics" not in upper
-        assert "JOIN performance_metrics" not in upper
+        # Use consistent uppercase casing so the check can actually match SQL.
+        assert ", PERFORMANCE_METRICS" not in upper
+        assert "JOIN PERFORMANCE_METRICS" not in upper
         # Top-level FROM is the subquery.
         assert "FROM (" in sql
 
