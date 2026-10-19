@@ -177,7 +177,7 @@ async def threads_to_responses(
     """
     remaining_map, issue_map = await load_issue_stats(threads, db)
     positions = position_map
-    if positions is None:
+    if not positions:
         positions = {}
         for user_id in {thread.user_id for thread in threads}:
             positions.update(await display_positions(db, user_id))
