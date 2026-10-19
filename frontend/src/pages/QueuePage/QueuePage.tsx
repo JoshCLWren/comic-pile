@@ -39,18 +39,20 @@ export default function QueuePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const isSearching = searchQuery.trim() !== ''
 
-  const {
+  const queueLoader = useQueueThreads(searchQuery, sortBy)
+const {
     data: threads,
     isPending,
     isError,
     nextPageToken,
     loadMore,
     activeCount,
-  } = useQueueThreads(searchQuery, sortBy)
+  } = queueLoader
 
   // Series that show the per-row `Map series` repair action (everything except
-  // fully mapped or non-issue-tracked rows) are the bulk action's scope.
-  const bulkMapping = useQueueBulkMapping(threads)
+  // fully mapped or non-issue-tracked rows) are the bulk action's scope, and an
+  // open run keeps reading the cursor so the batch covers the whole queue.
+  const bulkMapping = useQueueBulkMapping(queueLoader)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()

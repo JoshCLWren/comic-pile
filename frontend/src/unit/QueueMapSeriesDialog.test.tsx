@@ -66,6 +66,7 @@ vi.mock('../components/Modal', () => ({
 }))
 
 import QueueMapSeriesDialog from '../components/QueueMapSeriesDialog'
+import type { SeriesBatchProgress, SeriesMappingFailure } from '../components/QueueMapSeriesDialog'
 
 const mockedSearchSeries = vi.mocked(comicVineApi.searchSeries)
 const mockedListIssues = vi.mocked(issuesApi.list)
@@ -862,5 +863,187 @@ describe('QueueMapSeriesDialog', () => {
     expect(await screen.findByTestId('queue-map-series-provider-inventory')).toHaveTextContent(
       '2 other issues are in this volume but not in your library',
     )
+  })
+
+  // Bulk-run reporting (issue #3922): a series that could not be mapped in this
+  // pass has to be distinguishable from one the reader deliberately skipped.
+  describe('bulk run reporting', () => {
+    interface BulkSeriesDialogOverrides {
+      isOpen?: boolean
+      threadId?: number
+      threadTitle?: string
+      onClose?: () => void
+      onMapped?: (confirmedIssueIds: number[]) => void
+      onSkip?: () => void
+      onFailed?: (reason: SeriesMappingFailure) => void
+      batchProgress?: SeriesBatchProgress
+      onFinishBatch?: () => void
+    }
+
+    function renderBulkSeriesDialog(overrides: BulkSeriesDialogOverrides = {}) {
+      const onSkip = vi.fn()
+      const onFailed = vi.fn()
+      const onFinishBatch = vi.fn()
+      const props = {
+        isOpen: true,
+        threadId: 7,
+        threadTitle: 'Saga',
+        onClose: vi.fn(),
+        onMapped: vi.fn(),
+        onSkip,
+        onFailed,
+        onFinishBatch,
+        batchProgress: { position: 3, total: 44, mapped: 2, skipped: 1, failed: 0 },
+        ...overrides,
+      }
+      return {
+        onSkip,
+        onFailed,
+        onFinishBatch,
+        ...render(<QueueMapSeriesDialog {...props} />, { wrapper: createWrapper() }),
+      }
+    }
+
+    it('shows the batch position and running counts on the step', () => {
+      renderBulkSeriesDialog()
+
+      expect(screen.getByTestId('queue-map-series-batch-progress')).toHaveTextContent(
+        'Series 3 of 44',
+      )
+      expect(screen.getByTestId('queue-map-series-batch-counts')).toHaveTextContent(
+        '2 mapped · 1 skipped · 0 failed',
+      )
+    })
+
+    it('ends a long batch early from the finish action', () => {
+      const { onFinishBatch } = renderBulkSeriesDialog()
+
+      fireEvent.click(screen.getByTestId('queue-map-series-finish-batch'))
+
+      expect(onFinishBatch).toHaveBeenCalledTimes(1)
+    })
+
+    it('reports a failure when the series cannot be loaded for mapping', async () => {
+      const user = userEvent.setup()
+      mockedListIssues.mockRejectedValueOnce(new Error('origin down'))
+      const { onSkip, onFailed } = renderBulkSeriesDialog()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'This series could not be loaded for mapping.',
+      )
+      const advance = screen.getByTestId('queue-map-series-skip')
+      expect(advance).toHaveTextContent('Could not map — skip this series')
+      await user.click(advance)
+
+      expect(onFailed).toHaveBeenCalledWith('origin_unavailable')
+      expect(onSkip).not.toHaveBeenCalled()
+    })
+
+    it('reports a failure when the series tracks no issues', async () => {
+      const user = userEvent.setup()
+      mockedListIssues.mockResolvedValue({
+        issues: [],
+        total_count: 0,
+        page_size: 100,
+        next_page_token: null,
+      })
+      const { onSkip, onFailed } = renderBulkSeriesDialog()
+
+      expect(
+        await screen.findByText('This series has no tracked issues to map.'),
+      ).toBeInTheDocument()
+      await user.click(screen.getByTestId('queue-map-series-skip'))
+
+      expect(onFailed).toHaveBeenCalledWith('no_tracked_issues')
+      expect(onSkip).not.toHaveBeenCalled()
+    })
+
+    it('reports a failure when the mapping plan cannot be loaded', async () => {
+      const user = userEvent.setup()
+      mockedPreview.mockRejectedValueOnce(new Error('preview down'))
+      const { onSkip, onFailed } = renderBulkSeriesDialog()
+
+      await user.click(await screen.findByTestId('queue-map-series-result'))
+      expect(
+        await screen.findByText('The mapping plan could not be loaded. Nothing was changed.'),
+      ).toBeInTheDocument()
+
+      const advance = screen.getByTestId('queue-map-series-skip')
+      expect(advance).toHaveTextContent('Could not map — skip this series')
+      await user.click(advance)
+
+      expect(onFailed).toHaveBeenCalledWith('preview_unavailable')
+      expect(onSkip).not.toHaveBeenCalled()
+    })
+
+    it('reports a failure when the mapping commit is refused', async () => {
+      const user = userEvent.setup()
+      mockedCommit.mockRejectedValueOnce(new Error('commit failed'))
+      const { onSkip, onFailed } = renderBulkSeriesDialog()
+
+      await user.click(await screen.findByTestId('queue-map-series-result'))
+      await user.click(await screen.findByTestId('queue-map-series-approve'))
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Could not map the series. Nothing was changed.',
+      )
+
+      await user.click(screen.getByTestId('queue-map-series-skip'))
+
+      expect(onFailed).toHaveBeenCalledWith('commit_failed')
+      expect(onSkip).not.toHaveBeenCalled()
+    })
+
+    it('reports an unconfirmed commit outcome for review instead of a failure', async () => {
+      // A lost response may hide an already-committed mapping (issue #3776), so
+      // the bulk run must not report the series as a failed save.
+      const user = userEvent.setup()
+      mockedCommit.mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { status: 504, data: {} },
+        message: 'Gateway Timeout',
+      })
+      const { onSkip, onFailed } = renderBulkSeriesDialog()
+
+      await user.click(await screen.findByTestId('queue-map-series-result'))
+      await user.click(await screen.findByTestId('queue-map-series-approve'))
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Could not confirm the mapping result. Any saved mappings are safe; map again to replay the request.',
+      )
+
+      const advance = screen.getByTestId('queue-map-series-skip')
+      expect(advance).toHaveTextContent('Could not confirm — leave for review')
+      await user.click(advance)
+
+      expect(onFailed).toHaveBeenCalledWith('commit_outcome_unknown')
+      expect(onSkip).not.toHaveBeenCalled()
+    })
+
+    it('keeps a stale preview in the review path instead of failing the series', async () => {
+      const user = userEvent.setup()
+      mockedCommit.mockRejectedValueOnce({
+        response: { status: 409, data: { detail: 'preview_expired' } },
+      })
+      const { onSkip, onFailed } = renderBulkSeriesDialog()
+
+      await user.click(await screen.findByTestId('queue-map-series-result'))
+      await user.click(await screen.findByTestId('queue-map-series-approve'))
+      await waitFor(() => expect(mockedCommit).toHaveBeenCalledTimes(1))
+
+      // The series is still mapable (the dialog re-reads the plan), so advancing
+      // from here is a deliberate review skip rather than a failure.
+      const advance = screen.getByTestId('queue-map-series-skip')
+      expect(advance).toHaveTextContent('Skip / needs review')
+      await user.click(advance)
+
+      expect(onSkip).toHaveBeenCalledTimes(1)
+      expect(onFailed).not.toHaveBeenCalled()
+    })
+
+    it('offers no advance action to a single-series reader', () => {
+      renderDialog()
+
+      expect(screen.queryByTestId('queue-map-series-skip')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('queue-map-series-batch-progress')).not.toBeInTheDocument()
+    })
   })
 })
