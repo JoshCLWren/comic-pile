@@ -91,14 +91,31 @@ function GlossaryPermalink({ id, term }: { id: string; term: string }) {
 }
 
 export default function HelpPage() {
+  const location = useLocation()
   useGlossaryAnchorScroll()
+  const targetId = location.hash.slice(1)
+
+  function isHighlighted(d: typeof GLOSSARY_TERMS[0]): boolean {
+    if (!targetId) return false
+    const allIds = [d.id, ...(d.aliases ?? [])]
+    return allIds.includes(targetId)
+  }
+
   return (
     <section aria-label="Help and glossary" className="pt-4 pb-12 w-full" data-testid="glossary-list">
       <h1 className="text-2xl font-bold mb-4">Glossary</h1>
       <p className="text-sm text-stone-600 mb-6">Definitions for every reader-facing concept in ComicPile. 1–2 sentence explanations, mobile-friendly layout.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {GLOSSARY_TERMS.map((d) => (
-          <div key={d.id} id={d.id} className="p-4 border rounded-lg bg-white/80 shadow-sm">
+          <div
+            key={d.id}
+            id={d.id}
+            className={`p-4 border rounded-lg bg-white/80 shadow-sm transition-all duration-300 ${
+              isHighlighted(d)
+                ? 'ring-2 ring-[var(--theme-focus-ring)] border-[var(--theme-focus-ring)]'
+                : ''
+            }`}
+          >
             {(d.aliases ?? []).map((alias) => (
               <span key={alias} id={alias} aria-hidden="true" className="sr-only" data-testid="glossary-anchor-alias" />
             ))}

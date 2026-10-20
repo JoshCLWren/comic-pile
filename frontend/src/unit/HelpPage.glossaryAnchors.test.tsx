@@ -261,3 +261,30 @@ describe('glossary deep-link scrolling (issue #3146)', () => {
     expect(scrollIntoView).not.toHaveBeenCalled()
   })
 })
+
+describe('glossary deep-link highlight (issue #3681)', () => {
+  it('visibly highlights the card matching the deep-link fragment', () => {
+    renderGlossary('/glossary#die-size')
+    const card = document.getElementById('die-size')
+    expect(card).not.toBeNull()
+    expect(card).toHaveClass('ring-2')
+    expect(card).toHaveClass('ring-[var(--theme-focus-ring)]')
+  })
+
+  it('highlights a card matched through a retired alias', () => {
+    renderGlossary('/glossary#die-ladder')
+    const card = document.getElementById('die-size')
+    expect(card).not.toBeNull()
+    expect(card).toHaveClass('ring-2')
+  })
+
+  it('does not highlight any card when the fragment is empty', () => {
+    renderGlossary('/glossary')
+    const cards = screen.getAllByTestId('glossary-definition').map(
+      (def) => def.closest('[id]') as HTMLElement,
+    )
+    for (const card of cards) {
+      expect(card).not.toHaveClass('ring-2')
+    }
+  })
+})
