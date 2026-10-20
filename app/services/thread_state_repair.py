@@ -17,6 +17,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread
+from app.repositories import thread_repository
 from comic_pile.dependencies import refresh_user_blocked_status
 
 
@@ -72,8 +73,22 @@ async def reconcile_contradictory_completed_threads(
     query = query.order_by(Thread.id).with_for_update()
 
     result = await db.execute(query)
-    candidates = list(result.scalars().all())
+    completed_candidates = list(result.scalars().all())
 
+    # Also repair active threads that have no unread issues left: an active
+    # series with an empty reading frontier violates the completion invariant
+    # and can leave a stale blocked flag behind.
+    empty_query = select(Thread).where(
+        Thread.status == "active",
+        Thread.issues_remaining <= 0,
+    )
+    if user_id is not None:
+        empty_query = empty_query.where(Thread.user_id == user_id)
+    empty_query = empty_query.order_by(Thread.id).with_for_update()
+    empty_result = await db.execute(empty_query)
+    empty_candidates = list(empty_result.scalars().all())
+
+    candidates = completed_candidates + empty_candidates
     inspected = len(candidates)
     repaired = 0
     repaired_ids: list[int] = []
@@ -89,20 +104,29 @@ async def reconcile_contradictory_completed_threads(
         )
         issues = list(issues_result.scalars().all())
         unread_count = sum(1 for issue in issues if issue.status != "read")
+        was_active = thread.status == "active"
         if unread_count == 0:
-            # No contradiction; ensure denormalization agrees (total may be stale).
+            # No unread issues: thread must be completed. Repair denormalized
+            # counters, status, queue position, and stale blocked flags.
             expected_total = len(issues)
-            if (
+            denormalized_stale = (
                 thread.total_issues != expected_total
                 or thread.issues_remaining != 0
                 or thread.next_unread_issue_id is not None
                 or thread.reading_progress != "completed"
-            ):
+                or thread.is_blocked
+                or was_active
+            )
+            if denormalized_stale:
                 thread.total_issues = expected_total
                 thread.issues_remaining = 0
                 thread.next_unread_issue_id = None
                 thread.reading_progress = "completed"
-                thread.apply_derived_status("completed")
+                thread.is_blocked = False
+                transitioned = thread.apply_derived_status("completed")
+                if was_active and transitioned:
+                    thread.queue_position = 0
+                    await thread_repository.renormalize_queue_positions(db, thread.user_id)
                 repaired += 1
                 repaired_ids.append(thread.id)
                 affected_user_ids.add(thread.user_id)

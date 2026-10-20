@@ -280,3 +280,35 @@ async def test_reconcile_does_not_infer_reads_from_completed_status(async_db) ->
         assert issue.status == "unread"
     await async_db.refresh(thread)
     assert thread.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_reconcile_active_thread_with_zero_issues_completes_and_clears_blocked(async_db) -> None:
+    """Active threads with no unread issues must be completed and unblocked."""
+    from app.services.thread_state_repair import reconcile_contradictory_completed_threads
+
+    user = await get_or_create_user_async(async_db)
+    thread = Thread(
+        title="Hellboy in Love: Shadow Theater",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+        total_issues=0,
+        reading_progress="not_started",
+        next_unread_issue_id=None,
+        is_blocked=True,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    summary = await reconcile_contradictory_completed_threads(async_db, user_id=user.id)
+    await async_db.commit()
+
+    await async_db.refresh(thread)
+    assert summary["repaired_threads"] == 1
+    assert thread.status == "completed"
+    assert thread.is_blocked is False
+    assert thread.queue_position == 0
