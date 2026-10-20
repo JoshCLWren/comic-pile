@@ -66,11 +66,15 @@ and they may not depend on untyped calls.
 
 ## Third-party stub boundary
 
-`mypy.ini` sets `ignore_missing_imports = True` for every third-party package
-that ships no type information (SQLAlchemy, FastAPI, Pydantic, asyncpg,
-python-jose, bcrypt, slowapi, httpx, Pillow, and the rest); `pyproject.toml`
-carries the same overrides for the ratchet commands. This is the
-**only** category of per-module override in either file.
+`mypy.ini` carries extensive third-party overrides (sqlalchemy, fastapi,
+pydantic, asyncpg, jose, bcrypt, slowapi, httpx, Pillow, and others); `pyproject.toml`
+only adds `pytest` and `sqlalchemy` overrides plus
+`disallow_untyped_decorators = false` for `tests.test_mypy_baseline`. The
+profiles do not mirror each other: `pyproject.toml` is the narrower ratchet
+configuration and `mypy.ini` is the broader ad-hoc reference. Both restrict
+overrides to deliberate categories—`pyproject.toml` to third-party stubs plus
+the single test-module decorator exception—so contributors know which settings
+the gate uses.
 
 Each entry is deliberate: the package genuinely has no stubs, and the import
 boundary is typed by hand at the call site. This is not a suppression of

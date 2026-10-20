@@ -6,8 +6,6 @@ transaction boundaries.
 """
 
 from collections.abc import Iterable
-from typing import Any
-
 from sqlalchemy import text
 from sqlalchemy.engine import Result
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,7 +39,7 @@ def _as_object_list(value: object) -> list[object]:
     return list(value)
 
 
-def _count_scalar(result: Result[Any]) -> int:
+def _count_scalar(result: Result[int]) -> int:
     """Return an integer scalar count from a SQLAlchemy result."""
     return int(result.scalar_one() or 0)
 
