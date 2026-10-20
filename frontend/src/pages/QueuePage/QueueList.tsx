@@ -13,6 +13,7 @@ interface QueueListProps {
   isSearching: boolean
   sentinelRef: React.Ref<HTMLDivElement>
   hasNextPage: boolean
+  isLoading?: boolean
   /**
    * Opens the existing series-create flow. The Queue page wires this to the
    * create modal; direct list consumers (tests, regression harnesses) may
@@ -42,7 +43,22 @@ export function QueueList({
   hasNextPage,
   useVirtualizer,
   onAddSeries,
+  isLoading = false,
 }: QueueListProps) {
+  // If we're searching and have no results, but there are active threads in the queue
+  // and the current search is still loading, show a loading state instead of "No match".
+  if (isSearching && filteredThreads.length === 0 && activeThreads.length > 0 && isLoading) {
+    return (
+      <div
+        role="status"
+        className="text-center text-[var(--theme-text-muted)] py-8"
+        data-testid="queue-search-loading"
+      >
+        Loading series...
+      </div>
+    )
+  }
+
   if (isSearching && filteredThreads.length === 0) {
     return (
       <div className="text-center text-stone-500" data-testid="queue-search-empty">

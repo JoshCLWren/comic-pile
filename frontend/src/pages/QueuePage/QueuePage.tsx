@@ -21,6 +21,7 @@ import ShuffleQueueDialog from './ShuffleQueueDialog'
 import QueueBulkMapSeriesDialog from '../../components/QueueBulkMapSeriesDialog'
 import { useQueueBulkMapping } from './useQueueBulkMapping'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
+import { useQueueListLoading } from './useQueueListLoading'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueThreadCards } from './useQueueThreadCards'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
@@ -88,6 +89,9 @@ const {
     searchQuery,
   )
   const authoritativeActiveCount = activeCount ?? activeThreads.length
+  // True while the Queue list is still fetching; the list uses it to tell
+  // "still fetching" apart from a settled zero-match (#3912).
+  const queueListLoading = useQueueListLoading()
 
   const navigateToRoll = useCallback(
     (_thread: ThreadListItem, response: unknown) => {
@@ -226,6 +230,7 @@ const {
           isSearching={isSearching}
           sentinelRef={sentinelRef}
           hasNextPage={!!nextPageToken}
+          isLoading={queueListLoading}
           onAddSeries={modals.showCreateModal}
         />
 
