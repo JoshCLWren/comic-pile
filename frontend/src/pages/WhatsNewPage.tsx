@@ -6,6 +6,13 @@ export const RELEASE_PAGE_SIZE = RELEASES_PAGE_SIZE
 
 const TICKET_REFERENCE_PATTERN = /(?<![\w&])#\d{1,7}\b/g
 const SCHEMA_IDENTIFIER_PATTERN = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g
+const ESCAPED_SINGLE_QUOTE_PATTERN = /\\+u(0027|2018|2019)/gi
+const ESCAPED_APOSTROPHE_PATTERN = /\\+'/g
+const SINGLE_QUOTE_ESCAPES: Record<string, string> = {
+  '0027': "'",
+  '2018': '\u2018',
+  '2019': '\u2019',
+}
 const PHASE_TERMINOLOGY_PATTERN =
   /\bphases?\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)(?:(?:\s+(?:and|or)\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)))?\b/gi
 
@@ -25,8 +32,16 @@ function releasedAtTimestamp(release: Release) {
   return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
 }
 
-export function releaseDisplayText(text: string) {
+export function decodeReleaseEscapes(text: string) {
   return text
+    .replace(ESCAPED_SINGLE_QUOTE_PATTERN, (_match, code: string) =>
+      SINGLE_QUOTE_ESCAPES[code.toLowerCase()] ?? "'",
+    )
+    .replace(ESCAPED_APOSTROPHE_PATTERN, "'")
+}
+
+export function releaseDisplayText(text: string) {
+  return decodeReleaseEscapes(text)
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '$1')
     .replace(/https?:\/\/github\.com\/[^\s)}\u2019"]+/g, '')
     .replace(/`([^`]+)`/g, '$1')

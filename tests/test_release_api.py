@@ -5,7 +5,9 @@ from datetime import UTC, datetime, timedelta
 from httpx import AsyncClient
 import pytest
 from sqlalchemy import event as sa_event
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+
+from app.models.release import Release
 
 
 @pytest.mark.asyncio
@@ -183,6 +185,88 @@ async def test_public_release_list_filters_and_orders(
     )
     assert second_page.status_code == 200
     assert [item["title"] for item in second_page.json()["releases"]] == ["Release 1205"]
+
+
+@pytest.mark.asyncio
+async def test_release_publish_decodes_escaped_apostrophes(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """New publications store plain apostrophes instead of escape artifacts.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1310, merge_sha="3" * 40)
+    payload["title"] = "GitHub links added to What\\u0027s New page"
+    payload["summary"] = "The Roll page\\'s rating view now remembers your place."
+
+    response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+
+    assert response.status_code == 200
+    stored = response.json()
+    assert stored["title"] == "GitHub links added to What's New page"
+    assert stored["summary"] == "The Roll page's rating view now remembers your place."
+
+    fetched = await auth_client.get(f"/api/v1/releases/{stored['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["title"] == "GitHub links added to What's New page"
+    assert (
+        fetched.json()["summary"]
+        == "The Roll page's rating view now remembers your place."
+    )
+
+
+@pytest.mark.asyncio
+async def test_public_release_read_decodes_historical_escape_artifacts(
+    auth_client: AsyncClient,
+    db: AsyncSession,
+) -> None:
+    """Historical rows with literal escapes render with decoded apostrophes.
+
+    Args:
+        auth_client: Authenticated async API client.
+        db: Async database session shared with the API dependency override.
+
+    Returns:
+        None.
+    """
+    stored = Release(
+        source_repository="JoshCLWren/comic-pile",
+        source_pr_number=None,
+        source_merge_sha=None,
+        merged_at=None,
+        released_at=datetime.now(UTC),
+        category="What's New",
+        title="GitHub links added to What\\u0027s New page",
+        summary="The Roll page\\'s rating view now remembers your place.",
+        body=None,
+        visibility="public",
+        status="published",
+        sort_order=0,
+        provenance_json={},
+    )
+    db.add(stored)
+    await db.commit()
+    await db.refresh(stored)
+
+    listed = await auth_client.get("/api/v1/releases/", params={"limit": 100, "offset": 0})
+
+    assert listed.status_code == 200
+    entries = [item for item in listed.json()["releases"] if item["id"] == stored.id]
+    assert len(entries) == 1
+    assert entries[0]["title"] == "GitHub links added to What's New page"
+    assert entries[0]["summary"] == "The Roll page's rating view now remembers your place."
+
+    fetched = await auth_client.get(f"/api/v1/releases/{stored.id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["title"] == "GitHub links added to What's New page"
 
 
 def _public_provenance() -> dict[str, object]:
