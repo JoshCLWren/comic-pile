@@ -317,15 +317,15 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         const { parseIssueRange, validateIssueRangeForStaging } = await import('../../utils/issueParser')
         const hasIssueRange = Boolean(createForm.issues && createForm.issues.trim())
         if (hasIssueRange) {
+          // #3631: block the save when the ISSUES entry is not a valid issue.
+          // `validateIssueRangeForStaging` is the single source of truth here: it
+          // rejects entries that carry no issue number (e.g. "abc", "-3", "19-")
+          // while still accepting numbered labels such as "2b", "1.5", and
+          // "1-Annual" that do identify an issue. The preview warnings are a
+          // display-only affordance (#3262) and must not block a valid entry.
           const validation = validateIssueRangeForStaging(createForm.issues.trim())
           if (!validation.valid) {
             window.alert(validation.error || 'Invalid issue range.')
-            creatingRef.current = false
-            return
-          }
-          // Block save when unrecognized tokens are present (warning shown but not enforced #3631).
-          if (issueParseWarnings.length > 0) {
-            window.alert('Unparseable issue tokens: please fix or remove them before saving.')
             creatingRef.current = false
             return
           }
@@ -382,7 +382,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         creatingRef.current = false
       }
     },
-    [createForm, closeCreateModal, onCreated, submitCreate, issueParseWarnings],
+    [createForm, closeCreateModal, onCreated, submitCreate],
   )
 
   const handleEditSubmit = useCallback(
