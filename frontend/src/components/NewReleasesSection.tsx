@@ -42,32 +42,39 @@ function formatLastSync(lastSyncedAt: string | null): string {
 
 function volumeLabel(source: ReadingPlanReleaseSourceStatus): string {
   const title = source.provider_title?.trim() || source.provider_volume_id
+  const issueCount = source.provider_issue_count
+  const issuePart = issueCount != null
+    ? `${issueCount}${issueCount === 1 ? ' issue' : ' issues'}`
+    : null
   const meta = [
     source.provider_publisher,
     source.provider_start_year != null ? `${source.provider_start_year}` : null,
-    source.provider_issue_count != null
-      ? `${source.provider_issue_count} issues`
-      : null,
+    issuePart,
   ].filter((part): part is string => Boolean(part))
   return meta.length ? `${title} · ${meta.join(' · ')}` : title
 }
 
 function candidateTitle(candidate: ReadingPlanReleaseCandidate): string {
-  return (
-    candidate.provider_title?.trim() ||
-    candidate.provider_volume_id?.trim() ||
-    'Unnamed volume'
-  )
+  const trimmedTitle = candidate.provider_title?.trim()
+  if (trimmedTitle) return trimmedTitle
+  if (candidate.provider_volume_id?.trim()) {
+    // If we have a volume ID but no title, fall back to the thread title
+    // so we don't show a bare numeric ID.
+    return `${candidate.thread_title} · ComicVine volume`
+  }
+  return 'Unnamed volume'
 }
 
 function candidateLabel(candidate: ReadingPlanReleaseCandidate): string {
   const title = candidateTitle(candidate)
+  const issueCount = candidate.provider_issue_count
+  const issuePart = issueCount != null
+    ? `${issueCount}${issueCount === 1 ? ' issue' : ' issues'}`
+    : null
   const meta = [
     candidate.provider_publisher,
     candidate.provider_start_year != null ? `${candidate.provider_start_year}` : null,
-    candidate.provider_issue_count != null
-      ? `${candidate.provider_issue_count} issues`
-      : null,
+    issuePart,
   ].filter((part): part is string => Boolean(part))
   return meta.length ? `${title} · ${meta.join(' · ')}` : title
 }
@@ -149,7 +156,7 @@ export function NewReleasesSection({
                   <p className="truncate text-xs text-[var(--theme-text-muted)]">
                     Target thread #{source.thread_id}
                   </p>
-                  <p className="mt-1 text-[11px] text-[var(--theme-text-dim)]">
+                  <p className="mt-1 text-sm text-[var(--theme-text-primary)]">
                     Last sync: {formatLastSync(source.last_synced_at)}
                   </p>
                 </div>
@@ -199,7 +206,7 @@ export function NewReleasesSection({
                     <p className="truncate text-xs text-[var(--theme-text-muted)]">
                       Target thread #{candidate.thread_id} · {candidate.thread_title}
                     </p>
-                    <p className="mt-1 text-[11px] text-[var(--theme-text-dim)]">
+                    <p className="mt-1 text-sm text-[var(--theme-text-primary)]">
                       Confirmed ComicVine mapping · not followed yet
                     </p>
                   </div>
@@ -247,7 +254,7 @@ export function NewReleasesSection({
                   <p className="truncate text-xs text-[var(--theme-text-muted)]">
                     Target thread #{candidate.thread_id} · {candidate.thread_title}
                   </p>
-                  <p className="mt-1 text-[11px] text-[var(--theme-text-dim)]">
+                  <p className="mt-1 text-sm text-[var(--theme-text-primary)]">
                     {needsReview
                       ? 'This volume mapping is not confirmed yet, so it cannot be followed.'
                       : 'No ComicVine volume is mapped to this thread yet, so it cannot be followed.'}
