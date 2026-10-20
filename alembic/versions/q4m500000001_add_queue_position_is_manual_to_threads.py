@@ -1,7 +1,7 @@
 """Add queue_position_is_manual to threads (#3638).
 
 Revision ID: q4m500000001
-Revises: c32320000001
+Revises: c36800000001
 Create Date: 2026-10-20 00:00:00.000000
 
 The reader's explicit queue placement (move to front/back/position) is stored
@@ -18,7 +18,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "q4m500000001"
-down_revision: str | Sequence[str] | None = "c32320000001"
+down_revision: str | Sequence[str] | None = "c36800000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

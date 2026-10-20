@@ -241,6 +241,11 @@ async def create_session_start_snapshot(db: AsyncSession, session: ReadingSessio
             if thread.last_activity_at
             else None,
             "queue_position": thread.queue_position,
+            # The manual-placement claim is part of the checkpoint: restoring
+            # a session that started with a reader-chosen queue position must
+            # bring the claim back, or a later below-threshold rating can
+            # demote the series again (#3638).
+            "queue_position_is_manual": thread.queue_position_is_manual,
             "status": thread.status,
             "notes": thread.notes,
             "is_test": thread.is_test,
