@@ -180,12 +180,25 @@ Workers may merge a PR without asking again only after all of these gates are sa
 
 - the PR is open, non-draft, and mergeable with no conflict;
 - every required CI check has completed successfully;
+- the deterministic change-scope guard passes (see "Change-scope guard" below);
 - all actionable current review findings are fixed, demonstrably outdated, or rebutted with evidence;
 - focused validation appropriate to the change has passed or exact-head CI provides that configured boundary;
 - the PR truthfully completes its declared scope and does not hide required issue work behind avoidable follow-ups;
 - merging will not violate ownership, migration, deployment, security, or data-safety constraints;
 - the merge method is allowed by repository settings;
 - the worker supplies the exact expected head SHA to prevent merging a moved branch.
+
+### Change-scope guard (deterministic)
+
+Incident #3964 merged a PR that declared `Closes #3609` but changed only a throwaway reproduction test and unrelated `frontend/pnpm-lock.yaml` churn; worker, semantic review, Greptile, PR-Agent, and CI all passed it. Model review is therefore not the only scope check. `.github/scripts/factory_change_scope.py` runs inside `factory-review-controller.py`'s exact-head `mechanical_merge_gate`, which every `factory:ready` promotion (semantic review, CI reconciliation) and every merge in `factory-ready-merge-drain.yml` and `fixed-model-factory-dispatch.yml` already calls. A `deny` routes the PR to `factory:changes-requested` with the reason posted as a controller repair finding (`demote-ready --reason`). Unreadable inputs are `retry`, never `pass`.
+
+- **Empty fix.** A PR that closes an issue (closing keyword in the body, the `factory/<worker>-<issue>-` branch, or GitHub's linked closing references) must change non-test application code: `app/`, `comic_pile/`, `api/`, `alembic/versions/`, `frontend/src/`, `frontend/public/`, `static/`, plus runtime config (`pyproject.toml`, `package.json`, `frontend/package.json`, `vercel.json`, `Dockerfile`, `alembic.ini`, `frontend/index.html`, `frontend/index.tsx`, `frontend/vite.config.ts`, `frontend/tailwind.config.ts`, `frontend/postcss.config.ts`, `frontend/tsconfig.json`). Tests (`tests/`, `tests_e2e/`, any `test`/`unit`/`e2e`/`__tests__`/`__mocks__`/`__fixtures__` directory, `test_*.py`, `*_test.py`, `conftest.py`, `*.test.*`, `*.spec.*`, `*.audit.*`), docs, `.github/`, `scripts/`, `tools/`, and lockfiles are not application code. Exemptions: every closed issue is labeled `test-only`; or every closed issue carries a docs/ops/testing label (`testing`, `docs`, `documentation`, `ops`, `infrastructure`, `ci-infrastructure`, `e2e-infrastructure`, `dependencies`) and none is a bug (`bug`, `bug-fix`, `user-reported`); or the PR body carries `<!-- factory-scope:no-app-code-allowed -->`; or the PR body carries `<!-- factory-execution:manual-only -->` and no closed issue is a bug.
+- **Orphan lockfile.** A changed lockfile (`pnpm-lock.yaml`, `uv.lock`, `package-lock.json`, `yarn.lock`, `poetry.lock`, ...) needs a matching manifest change (`package.json`/`pnpm-workspace.yaml`, `pyproject.toml`) in the lockfile's directory or below it. Exemptions: `<!-- factory-scope:lockfile-only-allowed -->` in the PR body, or every closed issue is labeled `dependencies`.
+- **Scratch files.** An added or modified file whose name contains `Repro`/`repro`/`reproduction`/`scratch` as a word, or whose added comment lines mark it as temporary (for example "scratch reproduction" or "remove/delete ... before commit/merge"), never merges; there is no override. Turn it into a permanently named regression test or delete it. `archive/` is excluded.
+
+The override markers are human-only. Agents must never add them to a PR body.
+
+The semantic review mission (`factory_review_scope_contract` in `.github/scripts/factory-review-findings.sh`) states the same rules and injects the authoritative `gh pr diff --name-only` file list, so the reviewer judges the PR's real diff instead of a local diff against a stale base and maps each acceptance criterion of every closed issue to the application change that implements it.
 
 Do not enable auto-merge. Perform the merge only after the gates are currently true. If any gate becomes false or cannot be verified, do not merge and return to repair or selection.
 

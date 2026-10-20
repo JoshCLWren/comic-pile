@@ -36,6 +36,9 @@ owner_attested_head_identity = _review_policy.owner_attested_head_identity
 review_marker = _review_policy.review_marker
 semantic_repair_heads = _review_policy.semantic_repair_heads
 trusted_comment_bodies = _review_policy.trusted_comment_bodies
+_change_scope = importlib.import_module("factory_change_scope")
+evaluate_change_scope = _change_scope.evaluate_change_scope
+closing_issue_numbers = _change_scope.closing_issue_numbers
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$")
@@ -1283,11 +1286,96 @@ def poll_mergeable_gate(
     return gate_result("retry", "mergeability remained UNKNOWN after bounded polling")
 
 
+def linked_closing_issue_numbers(pr_number: int) -> list[int]:
+    """GitHub's own closing references (sidebar links and closing keywords)."""
+    owner, name = REPO.split("/", 1)
+    result = json_object(
+        gh_json(
+            [
+                "api",
+                "graphql",
+                "-F",
+                f"owner={owner}",
+                "-F",
+                f"name={name}",
+                "-F",
+                f"number={pr_number}",
+                "-f",
+                (
+                    "query=query($owner:String!,$name:String!,$number:Int!){"
+                    "repository(owner:$owner,name:$name){pullRequest(number:$number){"
+                    "closingIssuesReferences(first:50){nodes{number}}}}}"
+                ),
+            ]
+        )
+    )
+    if result is None:
+        raise RuntimeError("closing issue references payload was not an object")
+    refs = (
+        ((result.get("data") or {}).get("repository") or {}).get("pullRequest") or {}
+    ).get("closingIssuesReferences") or {}
+    nodes = refs.get("nodes")
+    if not isinstance(nodes, list):
+        raise RuntimeError("closing issue references were unavailable")
+    return [int(node["number"]) for node in nodes if isinstance(node, dict) and node.get("number")]
+
+
+def change_scope_gate(pr_number: int, expected_head: str) -> GateResult:
+    """Deterministic change-scope guard (see factory_change_scope.py).
+
+    Blocks empty fixes (a PR that closes an issue but changes no non-test
+    application code), orphan lockfile churn and scratch/repro files. Any
+    unreadable input is ``retry``; this gate never passes on missing data.
+    """
+    try:
+        pr = pr_json(pr_number)
+    except RuntimeError:
+        return gate_result("retry", "pull request state could not be read for change scope")
+    if str(pr.get("headRefOid") or "") != expected_head:
+        return gate_result("deny", "pull request head changed after semantic review")
+    try:
+        files = flatten_pages(
+            gh_json(
+                [
+                    "api",
+                    "--paginate",
+                    "--slurp",
+                    f"repos/{REPO}/pulls/{pr_number}/files?per_page=100",
+                ]
+            )
+        )
+        linked = linked_closing_issue_numbers(pr_number)
+    except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        detail = redact_review_text(str(exc))[-500:]
+        return gate_result("retry", f"change scope could not be inspected: {detail}")
+    body = str(pr.get("body") or "")
+    branch = str(pr.get("headRefName") or "")
+    issues: dict[int, dict[str, Any]] = {}
+    for number in closing_issue_numbers(body=body, branch=branch, linked=linked):
+        try:
+            payload = json_object(target_json(number))
+        except (RuntimeError, json.JSONDecodeError):
+            payload = None
+        if payload is not None:
+            issues[number] = payload
+    result = evaluate_change_scope(
+        files=files,
+        body=body,
+        branch=branch,
+        issues=issues,
+        linked=linked,
+    )
+    return gate_result(result["decision"], result["reason"])
+
+
 def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
     """Single authoritative exact-head mechanical gate for controller and workflows."""
     mergeable = poll_mergeable_gate(pr_number, expected_head)
     if mergeable["decision"] != "pass":
         return mergeable
+    scope = change_scope_gate(pr_number, expected_head)
+    if scope["decision"] != "pass":
+        return scope
     checks = required_checks_gate(pr_number)
     if checks["decision"] != "pass":
         return checks
@@ -1842,13 +1930,31 @@ def handle_review(
     }
 
 
-def demote_ready(pr_number: int) -> dict[str, Any]:
-    """Demote a stuck factory:ready PR so its merge slot is released."""
+def demote_ready(pr_number: int, reason: str | None = None) -> dict[str, Any]:
+    """Demote a stuck factory:ready PR so its merge slot is released.
+
+    ``reason`` is the merge gate's deny reason. When given it is persisted as a
+    durable controller repair finding before the stage changes, so the repair
+    worker (and humans) see exactly why the ready PR was refused.
+    """
     pr = pr_json(pr_number)
     if str(pr.get("state")) != "OPEN":
         raise RuntimeError(f"PR #{pr_number} is not open")
     if "factory:ready" not in labels_of(pr):
         raise RuntimeError(f"PR #{pr_number} is not in factory:ready")
+
+    if reason and reason.strip():
+        post_review_comment(
+            pr_number=pr_number,
+            marker=None,
+            reviewer="controller",
+            verdict="repair",
+            excerpt=redact_review_text(reason.strip())[-7000:],
+            note=(
+                "Exact-head merge gates denied this factory:ready PR at "
+                f"{pr.get('headRefOid') or 'unknown head'}; it is returning to repair."
+            ),
+        )
 
     branch = str(pr.get("headRefName") or "")
     replace_factory_labels(pr_number, "factory:unowned", "factory:changes-requested")
@@ -2084,6 +2190,7 @@ def main() -> int:
 
     demote = subparsers.add_parser("demote-ready")
     demote.add_argument("--pr", type=int, required=True)
+    demote.add_argument("--reason")
 
     gates = subparsers.add_parser("gates")
     gates.add_argument("--pr", type=int, required=True)
@@ -2113,7 +2220,7 @@ def main() -> int:
     elif args.command == "authorized":
         result = authorize_ready(args.pr)
     elif args.command == "demote-ready":
-        result = demote_ready(args.pr)
+        result = demote_ready(args.pr, args.reason)
     elif args.command == "record-contribution":
         result = record_contribution(
             worker=args.worker,

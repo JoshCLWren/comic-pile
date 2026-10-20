@@ -327,6 +327,8 @@ stage_trusted_review_controller() {
     trusted_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/comic-pile-review-controller.XXXXXX")"
     cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
     cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+    # The controller imports the change-scope merge guard; pin it from trusted main.
+    cp .github/scripts/factory_change_scope.py "$trusted_dir/factory_change_scope.py"
     # Pin model identity to trusted main, never to the adopted PR checkout.
     cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
     cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"

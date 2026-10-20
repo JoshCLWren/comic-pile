@@ -524,8 +524,25 @@ factory_post_greptile_outcome_replies() {
 # open Greptile findings to ${out}.open-before.json (absent when unknown) and
 # clears the outcome file, so the wrapper gate can detect findings that arrive
 # during the run.
+# Acceptance/scope contract for every PR mission (incident #3964: a reviewer
+# approved a PR that closed a bug with only a throwaway reproduction test and
+# lockfile churn, after reviewing a stale local diff that was not the PR's). The file
+# list comes from GitHub, never from a local diff against a possibly stale
+# base. The deterministic guard in factory_change_scope.py enforces the same
+# rules at the merge gate; this text makes the reviewer check them first.
+factory_review_scope_contract() {
+  local pr="$1" files
+  files="$(gh pr diff "$pr" --name-only 2>/dev/null | awk 'NF' | head -n 200 || true)"
+  [[ -n "$files" ]] || files="UNAVAILABLE (run: gh pr diff ${pr} --name-only)"
+  printf '%s\n' "SCOPE AND ACCEPTANCE CHECK (mandatory before FACTORY_GATE_READY). Judge ONLY the authoritative PR diff from 'gh pr diff ${pr}' (changed files listed below); never a local git diff against origin/main or any other possibly stale base, and never describe files that are not in this list. Read every issue this PR closes (Closes/Fixes/Resolves #N in the body, the factory/<worker>-<issue>- branch, or GitHub's linked issues) with 'gh issue view N' and map each acceptance criterion to the concrete application-code change in this diff that implements it. FACTORY_GATE_READY is forbidden when: the PR closes an issue but changes no non-test application code (app/, comic_pile/, api/, alembic/versions/, frontend/src outside tests/unit/__tests__/*.test.*/*.spec.*); a lockfile (pnpm-lock.yaml, uv.lock) changed without its package.json/pyproject.toml; or any file is a scratch/repro file (name contains Repro or scratch, or a comment marking it temporary/throwaway). If you believe the fix is already on main, say so with the commit/file evidence and end FACTORY_GATE_NOT_READY; a test-only PR must not close a bug. Never add factory-scope override markers to the PR body yourself; they are human-only. The merge controller enforces these rules deterministically and will route violations back to factory:changes-requested.
+----- BEGIN AUTHORITATIVE CHANGED FILES -----
+${files}
+----- END AUTHORITATIVE CHANGED FILES -----"
+}
+
 factory_review_findings_mission() {
   local pr="$1" head="$2" out="${3:-}" content open_ids
+  factory_review_scope_contract "$pr"
   [[ -n "$out" ]] || out="/tmp/factory-review-findings-${WORKER:-agent}-pr${pr}.md"
   factory_collect_review_findings "$pr" "$head" "$out" || true
   rm -f "${out}.open-before.json"

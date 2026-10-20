@@ -13,6 +13,7 @@ on:
       - '.github/workflows/factory-ready-merge-drain.yml'
       - '.github/scripts/factory-review-controller.py'
       - '.github/scripts/factory_review_policy.py'
+      - '.github/scripts/factory_change_scope.py'
       - '.github/scripts/factory_post_merge_closure.py'
       - '.github/scripts/factory_migration_lane.py'
 
@@ -341,7 +342,7 @@ jobs:
                 ;;
               deny)
                 echo "PR #${pr} mechanical gates deny merge: ${gate_reason}"
-                python3 "$review_controller" demote-ready --pr "$pr" || echo "Unable to demote ready PR #${pr}; retrying next tick" >&2
+                python3 "$review_controller" demote-ready --pr "$pr" --reason "$gate_reason" || echo "Unable to demote ready PR #${pr}; retrying next tick" >&2
                 continue
                 ;;
               *)

@@ -32,6 +32,7 @@ on:
       - '.github/scripts/factory_rotisserie_adopter.py'
       - '.github/factory-rotisserie-control.json'
       - '.github/scripts/factory_review_policy.py'
+      - '.github/scripts/factory_change_scope.py'
       - '.github/scripts/factory_migration_lane.py'
       - '.github/scripts/factory-gh-rest-shim.sh'
       - '.github/scripts/free-model-factory-worker.sh'
@@ -356,7 +357,7 @@ jobs:
                 ;;
               deny)
                 echo "PR #${pr} mechanical gates deny merge: ${gate_reason}"
-                python3 "$review_controller" demote-ready --pr "$pr" || echo "Unable to demote ready PR #${pr}; retrying next tick" >&2
+                python3 "$review_controller" demote-ready --pr "$pr" --reason "$gate_reason" || echo "Unable to demote ready PR #${pr}; retrying next tick" >&2
                 continue
                 ;;
               *)
