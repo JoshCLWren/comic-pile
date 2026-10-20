@@ -164,3 +164,91 @@ async def test_skip_respects_blocked_governance(auth_client: AsyncClient, async_
         await auth_client.post("/api/v1/roll/dismiss-pending")
         roll_response = await auth_client.post("/api/v1/roll/")
         assert roll_response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_skip_records_skipped_event(auth_client: AsyncClient, sample_data: dict) -> None:
+    """Skip records a rolled_but_skipped event for the ORIGINAL thread (issue #3706)."""
+    _ = sample_data
+    roll_response = await auth_client.post("/api/v1/roll/")
+    assert roll_response.status_code == 200
+    original_thread_id = roll_response.json()["thread_id"]
+    original_title = roll_response.json()["title"]
+
+    skip_response = await auth_client.post("/api/v1/roll/skip")
+    assert skip_response.status_code == 200
+    replacement = skip_response.json()
+    assert replacement["thread_id"] != original_thread_id
+    assert replacement["title"] != original_title
+
+    session_response = await auth_client.get("/api/v1/sessions/current/")
+    session_id = session_response.json()["id"]
+    details_response = await auth_client.get(f"/api/v1/sessions/{session_id}/details")
+    assert details_response.status_code == 200
+    events = details_response.json()["events"]
+    skipped_events = [e for e in events if e["type"] == "rolled_but_skipped"]
+    assert len(skipped_events) == 1
+    # The event must name the thread the reader skipped, never the replacement.
+    assert skipped_events[0]["thread_title"] == original_title
+    summary = details_response.json()["narrative_summary"]
+    assert summary["skipped"] == [original_title]
+    assert replacement["title"] not in summary["skipped"]
+
+
+@pytest.mark.asyncio
+async def test_skip_event_precedes_replacement_roll(
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+) -> None:
+    """The skip event is saved before the replacement roll event (issue #3706).
+
+    Both history readers resolve event order by ``(timestamp, id)``:
+    ``get_session_with_thread_safe`` returns the latest action's roll result
+    for the pending comic's "Rolled ..." label, and
+    ``project_decision_history`` attaches an outcome to the open roll
+    attempt. Recording the skip after the replacement roll would hide the new
+    comic's rolled result and count the replacement roll as skipped.
+    """
+    from sqlalchemy import select
+
+    from app.models import Event
+    from app.services.recommendation_metrics import (
+        OUTCOME_OPEN,
+        OUTCOME_SKIPPED,
+        project_decision_history,
+    )
+
+    _ = sample_data
+    roll_response = await auth_client.post("/api/v1/roll/")
+    assert roll_response.status_code == 200
+    original_thread_id = roll_response.json()["thread_id"]
+
+    skip_response = await auth_client.post("/api/v1/roll/skip")
+    assert skip_response.status_code == 200
+    replacement_thread_id = skip_response.json()["thread_id"]
+    assert replacement_thread_id != original_thread_id
+
+    current_response = await auth_client.get("/api/v1/sessions/current/")
+    assert current_response.status_code == 200
+    current = current_response.json()
+    session_id = current["id"]
+    assert current["pending_thread_id"] == replacement_thread_id
+    # The new pending comic keeps its rolled result after reopening the page.
+    assert current["last_rolled_result"] is not None
+
+    events_result = await async_db.execute(select(Event).where(Event.session_id == session_id))
+    events = list(events_result.scalars().all())
+    skip_event = next(e for e in events if e.type == "rolled_but_skipped")
+    roll_event = next(
+        e for e in events if e.type == "roll" and e.selected_thread_id == replacement_thread_id
+    )
+    # Saved before the replacement roll: earlier timestamp and/or lower id.
+    assert (skip_event.timestamp, skip_event.id) < (roll_event.timestamp, roll_event.id)
+
+    projection = project_decision_history(events)
+    (decisions,) = projection.sessions
+    outcomes = [(attempt.thread_id, attempt.outcome) for attempt in decisions.attempts]
+    assert outcomes == [
+        (original_thread_id, OUTCOME_SKIPPED),
+        (replacement_thread_id, OUTCOME_OPEN),
+    ]
+    assert projection.unattributed.skips == 0

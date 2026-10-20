@@ -1118,6 +1118,28 @@ class RollService:
             snoozed_count=len(snoozed_ids),
         )
 
+    async def record_skip_outcome(self, *, session_id: int, thread_id: int) -> None:
+        """Record that a session's pending thread was abandoned by a skip (#3706).
+
+        Persistence goes through ``app.repositories.roll_repository.insert_event``.
+        Callers must invoke this BEFORE adding the replacement roll event to the
+        session: both history readers resolve event order by
+        ``(timestamp, id)`` (``get_session_with_thread_safe`` and
+        ``project_decision_history``), so a skip saved after the replacement
+        roll would hide the new pending comic's rolled result and would
+        attribute the skip to the replacement roll attempt instead of the
+        original one.
+
+        Args:
+            session_id: Session where the skip happened.
+            thread_id: The pending thread that was skipped.
+        """
+        event = Event(type="rolled_but_skipped", session_id=session_id, thread_id=thread_id)
+        await insert_event(self._db, event)
+        # Flush now so this event gets the earlier timestamp and id before the
+        # replacement roll event is inserted.
+        await self._db.flush()
+
     async def execute_override(self, *, thread_id: int, current_user: User) -> RollResponse:
         """Select an owned Thread using the active eligibility authority.
 

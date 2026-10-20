@@ -304,7 +304,7 @@ export default function RollPage() {
 
   const handleSkip = useCallback(async () => {
     try {
-      const response = await skipMutation.mutate()
+      const response = await skipMutation.mutate(bootstrap?.pending_thread_id ?? undefined)
       if (!response) return
       await refetchBootstrap()
       const threadMetadata: ThreadMetadata = {
@@ -327,7 +327,7 @@ export default function RollPage() {
     } catch (error) {
       state.setErrorMessage(getApiErrorDetail(error))
     }
-  }, [skipMutation, refetchBootstrap, rating, state])
+  }, [skipMutation, refetchBootstrap, rating, state, bootstrap?.pending_thread_id])
 
   const ratingViewData = useRatingView({
     state,
