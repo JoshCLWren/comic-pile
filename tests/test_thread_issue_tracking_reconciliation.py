@@ -215,3 +215,87 @@ async def test_unmigrated_counter_thread_is_not_migrated(async_db: AsyncSession)
     await async_db.refresh(thread)
     assert thread.total_issues is None
     assert thread.reading_progress is None
+
+
+@pytest.mark.asyncio
+async def test_clears_stale_blocked_flag_when_counters_are_correct(
+    async_db: AsyncSession,
+) -> None:
+    """All-read threads with correct counters still clear a stale blocked flag."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="All Read",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="completed",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="completed",
+        is_blocked=True,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    async_db.add_all(
+        [
+            Issue(
+                thread_id=thread.id,
+                issue_number="1",
+                position=1,
+                status="read",
+                read_at=datetime.now(UTC),
+            ),
+            Issue(
+                thread_id=thread.id,
+                issue_number="2",
+                position=2,
+                status="read",
+                read_at=datetime.now(UTC),
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    report = await reconcile_thread_issue_tracking(async_db, user_id=user.id, commit=True)
+
+    assert report.scanned == 1
+    assert report.repaired == 1
+    await async_db.refresh(thread)
+    assert thread.is_blocked is False
+    assert thread.total_issues == 2
+    assert thread.issues_remaining == 0
+
+
+@pytest.mark.asyncio
+async def test_clears_stale_blocked_flag_on_empty_tracked_thread(
+    async_db: AsyncSession,
+) -> None:
+    """An empty tracked thread with correct counters still clears its stale flag."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Empty Tracked",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=0,
+        reading_progress="not_started",
+        is_blocked=True,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    report = await reconcile_thread_issue_tracking(async_db, user_id=user.id, commit=True)
+
+    assert report.scanned == 1
+    assert report.repaired == 1
+    await async_db.refresh(thread)
+    assert thread.is_blocked is False
+    assert thread.total_issues == 0
+    assert thread.issues_remaining == 0
+    assert thread.reading_progress == "completed"

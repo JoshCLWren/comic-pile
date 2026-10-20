@@ -312,3 +312,37 @@ async def test_reconcile_active_thread_with_zero_issues_completes_and_clears_blo
     assert thread.status == "completed"
     assert thread.is_blocked is False
     assert thread.queue_position == 0
+
+
+@pytest.mark.asyncio
+async def test_reconcile_zero_issue_legacy_thread_keeps_counter_mode(async_db) -> None:
+    """Completing an empty legacy thread must not migrate it to issue tracking."""
+    from app.services.thread_state_repair import reconcile_contradictory_completed_threads
+
+    user = await get_or_create_user_async(async_db)
+    thread = Thread(
+        title="Legacy Counter Series",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=None,
+        reading_progress=None,
+        next_unread_issue_id=None,
+        is_blocked=True,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    summary = await reconcile_contradictory_completed_threads(async_db, user_id=user.id)
+    await async_db.commit()
+
+    await async_db.refresh(thread)
+    assert summary["repaired_threads"] == 1
+    assert thread.status == "completed"
+    assert thread.total_issues is None
+    assert thread.issues_remaining == 0
+    assert thread.is_blocked is False
+    assert thread.queue_position == 0

@@ -5,7 +5,9 @@ thread's reading commitment while adopting only a subset of that series
 locally. This reconciliation re-derives the denormalized counters from the
 issue rows a thread actually owns. It never mutates read history (issue
 status, read timestamps, ratings), never creates or deletes issue rows, and
-never changes thread lifecycle status.
+never changes thread lifecycle status. It also clears stale ``is_blocked``
+flags on threads whose counters report no remaining unread issues, since the
+canonical evaluator can only block a thread with a live next-unread frontier.
 """
 
 from dataclasses import dataclass

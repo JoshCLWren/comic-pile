@@ -24,6 +24,10 @@ from comic_pile.dependencies import refresh_user_blocked_status
 async def _recalculate_thread_state(thread: Thread, issues: list[Issue]) -> bool:
     """Recompute denormalized thread fields from in-memory issues.
 
+    Legacy counter-based threads (``total_issues is None``) keep their
+    tracking mode: repairing their lifecycle state must not silently migrate
+    them to issue tracking.
+
     Returns True when the thread transitioned out of completed.
     """
     was_completed = thread.status == "completed"
@@ -31,7 +35,8 @@ async def _recalculate_thread_state(thread: Thread, issues: list[Issue]) -> bool
     unread_count = len(unread)
     total = len(issues)
 
-    thread.total_issues = total
+    if thread.total_issues is not None:
+        thread.total_issues = total
     thread.issues_remaining = unread_count
     if unread:
         # Earliest unread by canonical position, then id.
@@ -47,6 +52,67 @@ async def _recalculate_thread_state(thread: Thread, issues: list[Issue]) -> bool
     return was_completed and thread.status == "active"
 
 
+async def _lock_repair_candidates(
+    db: AsyncSession,
+    *,
+    user_id: int | None,
+) -> list[Thread]:
+    """Return locked repair candidates after taking each owner's queue lock.
+
+    Every queue writer acquires the per-reader queue lock before locking or
+    dirtying thread rows. This repair follows the same global lock order:
+    identify candidates first, acquire the queue lock for each affected owner,
+    and only then lock the candidate thread rows. Locking rows first could
+    deadlock against a concurrent queue move that already holds the queue lock
+    and is waiting for a row this transaction locked.
+
+    Args:
+        db: Async database session.
+        user_id: When set, scope candidates to one user.
+
+    Returns:
+        Candidate threads locked for repair, ordered by ID.
+    """
+    candidate_selects = [
+        select(Thread.id, Thread.user_id).where(
+            Thread.status == "completed",
+            Thread.total_issues.is_not(None),
+        ),
+        # Active threads with no unread issues left violate the completion
+        # invariant and can leave a stale blocked flag behind.
+        select(Thread.id, Thread.user_id).where(
+            Thread.status == "active",
+            Thread.issues_remaining <= 0,
+        ),
+    ]
+    if user_id is not None:
+        candidate_selects = [stmt.where(Thread.user_id == user_id) for stmt in candidate_selects]
+
+    candidate_ids: list[int] = []
+    owner_ids: set[int] = set()
+    for statement in candidate_selects:
+        result = await db.execute(statement.order_by(Thread.id))
+        for thread_id, owner_id in result.all():
+            candidate_ids.append(thread_id)
+            owner_ids.add(owner_id)
+
+    # Sorted owner order keeps concurrent repair passes from deadlocking each
+    # other while they acquire multiple readers' queue locks.
+    for owner_id in sorted(owner_ids):
+        await thread_repository.acquire_queue_lock(db, owner_id)
+
+    if not candidate_ids:
+        return []
+
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.id.in_(candidate_ids))
+        .order_by(Thread.id)
+        .with_for_update()
+    )
+    return list(result.scalars().all())
+
+
 async def reconcile_contradictory_completed_threads(
     db: AsyncSession,
     *,
@@ -57,7 +123,9 @@ async def reconcile_contradictory_completed_threads(
     Does not mutate issue read state, ``read_at`` timestamps, or event/rating
     history. Only recomputes ``total_issues``, ``issues_remaining``,
     ``next_unread_issue_id``, ``reading_progress``, ``status``, and blocked
-    denormalization via the normal domain path.
+    denormalization via the normal domain path. Legacy counter-based threads
+    keep ``total_issues = None``; completing them never migrates them to issue
+    tracking.
 
     Args:
         db: Async database session.
@@ -66,29 +134,7 @@ async def reconcile_contradictory_completed_threads(
     Returns:
         Summary with counts of inspected and repaired threads.
     """
-    # Find candidate completed threads with issue tracking enabled.
-    query = select(Thread).where(Thread.status == "completed", Thread.total_issues.is_not(None))
-    if user_id is not None:
-        query = query.where(Thread.user_id == user_id)
-    query = query.order_by(Thread.id).with_for_update()
-
-    result = await db.execute(query)
-    completed_candidates = list(result.scalars().all())
-
-    # Also repair active threads that have no unread issues left: an active
-    # series with an empty reading frontier violates the completion invariant
-    # and can leave a stale blocked flag behind.
-    empty_query = select(Thread).where(
-        Thread.status == "active",
-        Thread.issues_remaining <= 0,
-    )
-    if user_id is not None:
-        empty_query = empty_query.where(Thread.user_id == user_id)
-    empty_query = empty_query.order_by(Thread.id).with_for_update()
-    empty_result = await db.execute(empty_query)
-    empty_candidates = list(empty_result.scalars().all())
-
-    candidates = completed_candidates + empty_candidates
+    candidates = await _lock_repair_candidates(db, user_id=user_id)
     inspected = len(candidates)
     repaired = 0
     repaired_ids: list[int] = []
@@ -108,9 +154,11 @@ async def reconcile_contradictory_completed_threads(
         if unread_count == 0:
             # No unread issues: thread must be completed. Repair denormalized
             # counters, status, queue position, and stale blocked flags.
-            expected_total = len(issues)
+            # Legacy threads keep their counter mode (total_issues stays NULL).
+            tracks_issues = thread.total_issues is not None
+            expected_total = len(issues) if tracks_issues else thread.total_issues
             denormalized_stale = (
-                thread.total_issues != expected_total
+                (tracks_issues and thread.total_issues != expected_total)
                 or thread.issues_remaining != 0
                 or thread.next_unread_issue_id is not None
                 or thread.reading_progress != "completed"
@@ -118,7 +166,8 @@ async def reconcile_contradictory_completed_threads(
                 or was_active
             )
             if denormalized_stale:
-                thread.total_issues = expected_total
+                if tracks_issues:
+                    thread.total_issues = expected_total
                 thread.issues_remaining = 0
                 thread.next_unread_issue_id = None
                 thread.reading_progress = "completed"
