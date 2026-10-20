@@ -143,7 +143,8 @@ _SHUFFLE_SQL = text("""
         ) AS shuffled(thread_id, new_position)
     )
     UPDATE threads AS t
-    SET queue_position = shuffled.new_position
+    SET queue_position = shuffled.new_position,
+        queue_position_is_manual = FALSE
     FROM shuffled
     WHERE t.id = shuffled.thread_id
       AND t.user_id = :uid

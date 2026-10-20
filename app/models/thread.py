@@ -120,6 +120,14 @@ class Thread(Base):
     )
     is_test: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # True while the reader's explicit queue placement (move to front/back/
+    # position) is still the authority for this series' queue location. The
+    # automatic below-threshold rating path must not demote a manually placed
+    # series (issue #3638). Any operation that invalidates the placement
+    # (shuffle, completion, exclusion/restoration, reactivation) clears it.
+    queue_position_is_manual: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
@@ -231,6 +239,10 @@ class Thread(Base):
         it explicitly. Only the exclude/restore transitions assign
         :data:`EXCLUDED_STATUS` or leave it directly.
 
+        Completing a series also ends any manual queue claim: the series has
+        left the active queue, so a later reactivation must not inherit a stale
+        "keep me here" instruction from before it finished (#3638).
+
         Args:
             status: Recomputed lifecycle status, normally ``active`` or
                 ``completed``.
@@ -242,6 +254,8 @@ class Thread(Base):
         if self.is_excluded():
             return False
         self.status = status
+        if status == "completed":
+            self.queue_position_is_manual = False
         return True
 
     def normalize_format(self) -> str:
