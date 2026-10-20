@@ -314,8 +314,22 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
       if (creatingRef.current) return
       creatingRef.current = true
       try {
-        const { parseIssueRange } = await import('../../utils/issueParser')
+        const { parseIssueRange, validateIssueRangeForStaging } = await import('../../utils/issueParser')
         const hasIssueRange = Boolean(createForm.issues && createForm.issues.trim())
+        if (hasIssueRange) {
+          // #3631: block the save when the ISSUES entry is not a valid issue.
+          // `validateIssueRangeForStaging` is the single source of truth here: it
+          // rejects entries that carry no issue number (e.g. "abc", "-3", "19-")
+          // while still accepting numbered labels such as "2b", "1.5", and
+          // "1-Annual" that do identify an issue. The preview warnings are a
+          // display-only affordance (#3262) and must not block a valid entry.
+          const validation = validateIssueRangeForStaging(createForm.issues.trim())
+          if (!validation.valid) {
+            window.alert(`Failed to create series: ${validation.error ?? 'Invalid issue range.'}`)
+            creatingRef.current = false
+            return
+          }
+        }
         let issuesRemaining = Number(createForm.issuesRemaining)
         if (hasIssueRange) {
           issuesRemaining = parseIssueRange(createForm.issues)
