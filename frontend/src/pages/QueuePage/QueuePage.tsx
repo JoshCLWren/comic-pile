@@ -41,7 +41,7 @@ export default function QueuePage() {
   const isSearching = searchQuery.trim() !== ''
 
   const queueLoader = useQueueThreads(searchQuery, sortBy)
-  const {
+const {
     data: threads,
     isPending,
     isError,

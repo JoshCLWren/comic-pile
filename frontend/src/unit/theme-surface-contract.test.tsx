@@ -172,6 +172,21 @@ describe('semantic theme stylesheet contract (#1646)', () => {
     }
   })
 
+  // The series-mapping dialogs use the short `var(--theme-text)` name for their
+  // retry buttons. Before this alias existed that declaration was invalid, so
+  // the retry text silently fell back to an inherited color instead of the
+  // theme's primary text role (#3925 review).
+  it('resolves the short text alias to the primary text role in every theme', () => {
+    const css = loadStylesheet()
+
+    for (const theme of THEMES) {
+      const tokens = extractTokenMap(extractThemeBlock(css, theme))
+      expect(tokens.get('--theme-text'), `--theme-text in ${theme}`).toBe(
+        'var(--theme-text-primary)',
+      )
+    }
+  })
+
   it('gives each theme a distinct page canvas through the body gradient aliases', () => {
     const css = loadStylesheet()
 

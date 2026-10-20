@@ -49,6 +49,7 @@ body {
   --theme-text-primary: #e8d5b0;
   --theme-text-muted: #a0937e;
   --theme-text-dim: #6b5f50;
+  --theme-text: var(--theme-text-primary);
   --theme-comic-accent: #d4890e;
   --theme-continuity-accent: #06b6d4;
   --theme-personal-accent: #a855f7;
@@ -78,6 +79,7 @@ body {
   --theme-text-primary: #f3dfae;
   --theme-text-muted: #c8a96f;
   --theme-text-dim: #8f7243;
+  --theme-text: var(--theme-text-primary);
   --theme-comic-accent: #e0a419;
   --theme-continuity-accent: #2f9e8f;
   --theme-personal-accent: #e0636a;
@@ -107,6 +109,7 @@ body {
   --theme-text-primary: #e0f7fa;
   --theme-text-muted: #a0d8f2;
   --theme-text-dim: #6b9dbd;
+  --theme-text: var(--theme-text-primary);
   --theme-comic-accent: #ffd166;
   --theme-continuity-accent: #00d4ff;
   --theme-personal-accent: #ff6b7a;

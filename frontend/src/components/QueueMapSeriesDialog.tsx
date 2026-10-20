@@ -630,7 +630,7 @@ export default function QueueMapSeriesDialog({
                       type="button"
                       onClick={() => void preview.refetch()}
                       disabled={preview.isFetching}
-                      className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
+                      className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text)] hover:bg-[var(--theme-bg-hover)]"
                     >
                       Try again
                     </button>
