@@ -115,12 +115,13 @@ export default function HistoryPage() {
     if (!ladderPath) return ''
     const dice = ladderPath.split(' → ')
     const progression = dice.map(d => `d${d}`).join(' → ')
-    
-    // If there was a roll result and it's greater than 0, append it
+
+    // Only a roll that landed on a number is reported; a missing or zero
+    // result would otherwise render a dangling "· Rolled" suffix.
     if (lastRolledResult != null && lastRolledResult > 0) {
       return `${progression} · Rolled ${lastRolledResult}`
     }
-    
+
     return progression
   }
 
@@ -128,25 +129,28 @@ export default function HistoryPage() {
     session: SessionSummary,
   ): string | null => {
     const parts: string[] = []
-    
+
+    const issuesRead = session.active_thread?.issues_read
+    const lastRating = session.active_thread?.last_rating
+
     // Add issues read information
-    if (session.active_thread?.issues_read != null && session.active_thread.issues_read > 0) {
-      parts.push(`${session.active_thread.issues_read} ${session.active_thread.issues_read === 1 ? 'issue' : 'issues'} read`)
+    if (issuesRead != null && issuesRead > 0) {
+      parts.push(`${issuesRead} ${issuesRead === 1 ? 'issue' : 'issues'} read`)
     }
-    
+
     // Add rating information
-    if (session.active_thread?.last_rating != null) {
-      parts.push(`rated ${session.active_thread.last_rating.toFixed(1)}`)
+    if (lastRating != null) {
+      parts.push(`rated ${lastRating.toFixed(1)}`)
     }
-    
-    // Add die information if there was a roll (moved to formatDiceProgression to avoid duplication)
-    
-    // Add die size information only if there's actual activity (read or rating)
-    // Use current_die for manual die overrides, ladder_path for progression
-    if ((session.active_thread?.issues_read != null && session.active_thread.issues_read > 0 || session.active_thread?.last_rating != null) && session.current_die) {
+
+    // The current die can differ from the last ladder step when the reader
+    // overrides it manually, so it is reported with the activity while the
+    // ladder itself stays on its own line.
+    const hasActivity = (issuesRead != null && issuesRead > 0) || lastRating != null
+    if (hasActivity && session.current_die != null) {
       parts.push(`Die size d${session.current_die}`)
     }
-    
+
     return parts.length > 0 ? parts.join(' · ') : null
   }
 
@@ -177,6 +181,12 @@ export default function HistoryPage() {
           const activityLine = session.active_thread
             ? buildActivityLine(session)
             : null
+          // The dice progression is rendered once per card, independently of the
+          // activity line, so a rated or read session never loses its ladder
+          // and roll (#3573).
+          const diceProgression = session.ladder_path
+            ? formatDiceProgression(session.ladder_path, session.last_rolled_result)
+            : ''
           return (
             <div key={session.id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
               <div className="w-16 md:w-20 shrink-0">
@@ -211,25 +221,18 @@ export default function HistoryPage() {
                         {activityLine}
                       </p>
                     ) : (
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                          {session.active_thread.issues_remaining != null
-                            ? `${session.active_thread.issues_remaining} left in queue`
-                            : 'In progress'}
-                        </p>
-                        {session.ladder_path && (
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
-                            {formatDiceProgression(session.ladder_path, session.last_rolled_result)}
-                          </p>
-                        )}
-                      </div>
+                      <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                        {session.active_thread.issues_remaining != null
+                          ? `${session.active_thread.issues_remaining} left in queue`
+                          : 'In progress'}
+                      </p>
                     )}
                   </>
                 ) : null}
 
-                {session.ladder_path && !activityLine && (
+                {diceProgression && (
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
-                    {formatDiceProgression(session.ladder_path, session.last_rolled_result)}
+                    {diceProgression}
                   </p>
                 )}
 
