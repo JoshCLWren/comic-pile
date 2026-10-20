@@ -117,6 +117,59 @@ async def get_thread_connected_dependencies(
     return blocking_deps, blocked_by_deps
 
 
+async def get_reader_dependency_graph(
+    db: AsyncSession, user_id: int
+) -> tuple[list[tuple[int, int]], dict[int, int]]:
+    """Get every dependency edge touching one reader's issues.
+
+    The issue -> issue dependency graph is the authority for circularity: a
+    cycle in it is the only reading order that is impossible. Reading the
+    whole reader-scoped graph keeps that verdict independent of which thread
+    the caller happens to be looking at.
+
+    Args:
+        db: Database session.
+        user_id: Reader whose dependency edges are read.
+
+    Returns:
+        Tuple of (edges, issue_thread_ids). Edges are
+        ``(source_issue_id, target_issue_id)`` pairs and issue_thread_ids maps
+        every issue on those edges to the thread that owns it.
+    """
+    source_issue = Issue.__table__.alias("graph_source_issue")
+    target_issue = Issue.__table__.alias("graph_target_issue")
+    source_thread = Thread.__table__.alias("graph_source_thread")
+    target_thread = Thread.__table__.alias("graph_target_thread")
+
+    result = await db.execute(
+        select(
+            Dependency.source_issue_id.label("source_issue_id"),
+            Dependency.target_issue_id.label("target_issue_id"),
+            source_thread.c.id.label("source_thread_id"),
+            target_thread.c.id.label("target_thread_id"),
+        )
+        .join(source_issue, source_issue.c.id == Dependency.source_issue_id)
+        .join(source_thread, source_thread.c.id == source_issue.c.thread_id)
+        .join(target_issue, target_issue.c.id == Dependency.target_issue_id)
+        .join(target_thread, target_thread.c.id == target_issue.c.thread_id)
+        .where(
+            or_(
+                source_thread.c.user_id == user_id,
+                target_thread.c.user_id == user_id,
+            )
+        )
+    )
+
+    edges: list[tuple[int, int]] = []
+    issue_thread_ids: dict[int, int] = {}
+    for source_issue_id, target_issue_id, source_thread_id, target_thread_id in result.all():
+        edges.append((source_issue_id, target_issue_id))
+        issue_thread_ids[source_issue_id] = source_thread_id
+        issue_thread_ids[target_issue_id] = target_thread_id
+
+    return edges, issue_thread_ids
+
+
 async def get_dependency_by_ids(
     db: AsyncSession, source_issue_id: int, target_issue_id: int
 ) -> Dependency | None:

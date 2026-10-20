@@ -133,7 +133,9 @@ class ConnectedThreadInfo(BaseModel):
     connection_type: str  # "blocks" | "blocked_by" | "blocks & blocked_by"
     dependency_id: int
     issue_number: str | None = None
-    is_circular: bool = False  # True when the thread both blocks and is blocked by this thread
+    # True when the thread shares a genuine issue-level dependency cycle with
+    # the thread being viewed, so no issue in that cycle can be read first.
+    is_circular: bool = False
 
 
 class ThreadConnectedResponse(BaseModel):
