@@ -1,4 +1,4 @@
-import { createElement, type FormEvent, type ReactNode } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, renderHook } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -92,7 +92,8 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
     act(() => {
       rendered.result.current.setCreateForm({ ...DEFAULT_CREATE_STATE, issues })
     })
-    const event = { preventDefault: vi.fn() } as unknown as FormEvent
+    // SAFETY: handleCreateSubmit reads only the stubbed preventDefault member
+    const event = { preventDefault: vi.fn() } as never
     await act(async () => {
       await rendered.result.current.handleCreateSubmit(event)
     })

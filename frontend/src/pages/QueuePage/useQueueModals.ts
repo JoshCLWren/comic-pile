@@ -325,7 +325,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           // display-only affordance (#3262) and must not block a valid entry.
           const validation = validateIssueRangeForStaging(createForm.issues.trim())
           if (!validation.valid) {
-            window.alert(validation.error || 'Invalid issue range.')
+            window.alert(`Failed to create series: ${validation.error ?? 'Invalid issue range.'}`)
             creatingRef.current = false
             return
           }
