@@ -1,7 +1,7 @@
 /* eslint-disable */
 // Scratch reproduction for #3609 — removed before commit.
 import { type PropsWithChildren } from 'react'
-import { render, screen, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, within, waitFor, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -171,10 +171,13 @@ describe('#3609 repro', () => {
     expect(await screen.findByText('Applied to Reading Plan: 3 added.')).toBeVisible()
 
     // The editor must reflect the server-side mutation immediately.
+    // Scope label lookups to the plan lane so they don't collide with the same
+    // labels still shown in the open CustomCBLBuilder source list (#3609).
     expect(await screen.findByText(/1 lane · 5 steps/)).toBeVisible()
-    expect(screen.getByText('Starman #55')).toBeVisible()
-    expect(screen.getByText('All-Star Comics #1')).toBeVisible()
-    expect(screen.getByText('JSA #1')).toBeVisible()
+    const laneMain = screen.getByTestId('lane-main')
+    expect(within(laneMain).getByText('Starman #55')).toBeVisible()
+    expect(within(laneMain).getByText('All-Star Comics #1')).toBeVisible()
+    expect(within(laneMain).getByText('JSA #1')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Save plan' })).toBeDisabled()
   })
 })
