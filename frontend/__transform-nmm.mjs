@@ -254,7 +254,7 @@ for (const call of findMockCalls()) {
     }
   }
 
-  if (manual.length === manualLen && lines.length > 0) {
+  if (manual.length === manualLen) {
     edits.push({ start: call.getStart(sf), end: call.getEnd(), text: lines.join('\n') })
   }
 }
