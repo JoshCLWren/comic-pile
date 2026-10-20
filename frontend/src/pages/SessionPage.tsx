@@ -89,6 +89,16 @@ function eventDetail(event: DisplayEvent): string | null {
 }
 
 /**
+ * Format a ladder path string by prepending 'd' to each die value.
+ * Mirrors the formatDiceProgression function from HistoryPage.tsx.
+ */
+function formatLadderPath(ladderPath: string | null | undefined): string {
+  if (!ladderPath) return ''
+  const dice = ladderPath.split(' → ')
+  return dice.map(d => `d${d}`).join(' → ')
+}
+
+/**
  * Event types that describe session-level state and never reference a thread.
  * Their description is the card's headline, so they must not inherit the
  * missing-thread placeholder reserved for dangling thread references (#3574).
@@ -260,7 +270,7 @@ export default function SessionPage() {
         </div>
         <div className="space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Ladder Path</p>
-          <p className="text-sm font-bold text-stone-300">{details.ladder_path}</p>
+          <p className="text-sm font-bold text-stone-300">{formatLadderPath(details.ladder_path)}</p>
         </div>
         {isEmptySession && (
           <p className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-text-muted)]">
