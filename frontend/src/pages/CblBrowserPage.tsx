@@ -426,7 +426,7 @@ export default function CblBrowserPage() {
             </p>
           )}
 
-          {summary && (
+          {preview && summary && (
             <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
               <div>
                 <dt className="text-[var(--theme-text-dim)]">
