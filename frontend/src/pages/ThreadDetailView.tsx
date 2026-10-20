@@ -19,6 +19,7 @@ import {
   invalidateAfterDependencyChange,
 } from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
+import { evaluateReadingProgress } from '../utils/readingProgress'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getManualCreatorCreditList } from '../types'
 import type { ManualCreatorCredit, Thread } from '../types'
@@ -249,50 +250,6 @@ export default function ThreadDetailView() {
     setIsEditOpen(true)
   }
 
-  const getProgressPercentage = (): string | null => {
-    // `total_issues` is optional in the generated ThreadResponse; an absent
-    // value and an explicit null both mean "no known total".
-    const totalIssues = thread?.total_issues ?? null
-    if (thread && totalIssues !== null) {
-      if (
-        totalIssues <= 0 ||
-        thread.issues_remaining < 0 ||
-        thread.issues_remaining > totalIssues
-      ) {
-        return null
-      }
-      const readCount = totalIssues - thread.issues_remaining
-      if (readCount < 0) {
-        return null
-      }
-      const percentage = Math.round((readCount / totalIssues) * 100)
-      if (percentage < 0 || percentage > 100) {
-        return null
-      }
-      return `${percentage}%`
-    }
-    return null
-  }
-
-  const getIssuesReadCount = (): string | null => {
-    const totalIssues = thread?.total_issues ?? null
-    if (thread && totalIssues !== null) {
-      if (
-        totalIssues <= 0 ||
-        thread.issues_remaining < 0 ||
-        thread.issues_remaining > totalIssues
-      ) {
-        return null
-      }
-      const readCount = totalIssues - thread.issues_remaining
-      if (readCount < 0) {
-        return null
-      }
-      return `${readCount} of ${totalIssues} issues read`
-    }
-    return null
-  }
-
   if (threadId === null || !thread) {
     if (threadId !== null && !thread && !threadError) {
       return <LoadingSpinner fullScreen />
@@ -316,8 +273,11 @@ export default function ThreadDetailView() {
   }
 
   const isMigrated = thread.total_issues !== null
-  const progressPercentage = getProgressPercentage()
-  const issuesReadCount = getIssuesReadCount()
+  // The counter invariant is resolved once, in one shared place, so this page
+  // can never print a percentage the counters do not support (#3595).
+  const progress = evaluateReadingProgress(thread)
+  const showReadingProgress =
+    progress.status === 'known' || progress.status === 'inconsistent'
   const crossoverGroups = crossoverGroupsByThreadId[thread.id] ?? []
   const seriesCreatorCredits = getManualCreatorCreditList(thread)
   const issueCreatorsByIssueId = issueCreatorsQuery.creatorsByIssueId
@@ -356,30 +316,34 @@ export default function ThreadDetailView() {
             />
           )}
         </section>
-        {isMigrated && (progressPercentage || (thread.issues_remaining < 0 || thread.issues_remaining > (thread.total_issues ?? 0))) && (
+        {showReadingProgress && (
           <div className="surface-panel p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-xs font-black uppercase tracking-widest text-stone-500">
                 Reading Progress
               </span>
-              {progressPercentage ? (
-                <span className="text-sm font-black text-amber-400">{progressPercentage}</span>
+              {progress.status === 'known' ? (
+                <span className="text-sm font-black text-amber-400">{progress.percentage}%</span>
               ) : (
-                <span className="text-sm font-black text-red-400">Unknown/inconsistent progress</span>
+                <span className="text-sm font-black text-[var(--theme-warning)]">
+                  Unknown/inconsistent progress
+                </span>
               )}
             </div>
-            {progressPercentage ? (
+            {progress.status === 'known' ? (
               <>
                 <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-300"
-                    style={{ width: progressPercentage }}
+                    style={{ width: `${progress.percentage}%` }}
                   />
                 </div>
-                <p className="text-xs text-stone-400">{issuesReadCount}</p>
+                <p className="text-xs text-stone-400">
+                  {progress.readCount} of {progress.totalIssues} issues read
+                </p>
               </>
             ) : (
-              <p className="text-xs text-red-300">
+              <p className="text-xs text-[var(--theme-warning)]">
                 Counter values appear inconsistent ({thread.issues_remaining} of {thread.total_issues} issues remaining).
               </p>
             )}

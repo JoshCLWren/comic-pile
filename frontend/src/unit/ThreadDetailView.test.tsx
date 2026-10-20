@@ -286,6 +286,58 @@ it('renders migrated progress, paginated issues, and saves edits', async () => {
   await waitFor(() => expect(mutate).toHaveBeenCalled())
 })
 
+it('replaces an impossible negative progress percentage with an inconsistent-counter warning (#3595)', async () => {
+  // The reported thread: one total issue with 36 still to read. The page used
+  // to render "-3500%" and "-35 of 1 issues read" for these counters.
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 36, queue_position: 1,
+    status: 'active', total_issues: 1, next_unread_issue_number: '8', notes: null,
+  } as never)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+  expect(screen.getByText('Unknown/inconsistent progress')).toBeInTheDocument()
+  expect(
+    screen.getByText('Counter values appear inconsistent (36 of 1 issues remaining).'),
+  ).toBeInTheDocument()
+  // The reported defect must never render again.
+  expect(screen.queryByText('-3500%')).not.toBeInTheDocument()
+  expect(screen.queryByText('-35 of 1 issues read')).not.toBeInTheDocument()
+})
+
+it('flags a negative remaining count instead of rendering a negative percentage (#3595)', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: -4, queue_position: 1,
+    status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
+  } as never)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+  expect(screen.getByText('Unknown/inconsistent progress')).toBeInTheDocument()
+  expect(
+    screen.getByText('Counter values appear inconsistent (-4 of 10 issues remaining).'),
+  ).toBeInTheDocument()
+  // The counters used to render an impossible 140% for a negative remainder.
+  expect(screen.queryByText('140%')).not.toBeInTheDocument()
+  expect(screen.queryByText('14 of 10 issues read')).not.toBeInTheDocument()
+})
+
+it('renders the read count beside a valid progress percentage (#3595)', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
+    status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
+  } as never)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+  expect(screen.getByText('80%')).toBeInTheDocument()
+  expect(screen.getByText('8 of 10 issues read')).toBeInTheDocument()
+  expect(screen.queryByText('Unknown/inconsistent progress')).not.toBeInTheDocument()
+})
+
 it('stops loading when the route has no thread id', async () => {
   routeParams.id = ''
   renderPage()

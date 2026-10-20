@@ -331,6 +331,25 @@ describe('IssueList', () => {
     expect(mockedIssuesApi.markUnread).toHaveBeenCalledWith(1)
   })
 
+  it('never reports more than 100% progress when the loaded issues exceed the reported total', async () => {
+    // The counters disagree: two loaded issues are marked read while the
+    // thread reports a single issue in total. The share must stay inside 0%
+    // and 100% instead of rendering an impossible 200% (#3595).
+    const readIssues: Issue[] = [
+      { ...BASE_ISSUES[0], id: 1, status: 'read', read_at: '2026-03-10T00:00:00Z' },
+      { ...BASE_ISSUES[1], id: 2, status: 'read', read_at: '2026-03-10T00:00:00Z' },
+    ]
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse(readIssues, null, 1))
+
+    render(
+      <IssueList thread={mockThread} issuesApi={mockedIssuesApi} dependenciesApi={mockedIssueDependenciesApi} />,
+    )
+
+    await waitFor(() => expect(screen.getByText(/Read 2 of 1/)).toBeInTheDocument())
+    expect(screen.getByText('Read 2 of 1 (0%)')).toBeInTheDocument()
+    expect(screen.queryByText(/200%/)).not.toBeInTheDocument()
+  })
+
   it('clears stale dependency indicators when the thread changes', async () => {
     const issue = BASE_ISSUES[0]
     mockedIssuesApi.list.mockResolvedValue(buildListResponse([issue]))

@@ -1,4 +1,5 @@
 import { DICE_LADDER } from '../../components/diceLadder'
+import { evaluateReadingProgress } from '../../utils/readingProgress'
 import type { SessionThread } from '../../types'
 import type { RatingThread, ThreadMetadata } from './types'
 
@@ -72,24 +73,19 @@ export function getRatingColorClass(rating: number): string {
   return 'text-[var(--theme-personal-accent)]'
 }
 
+/**
+ * Reading progress for the roll card, as a whole percentage.
+ *
+ * The counter invariant lives in `evaluateReadingProgress` so the roll card
+ * and the thread page can never disagree about whether a series is readable.
+ * Counters that violate the invariant report no progress instead of an
+ * impossible negative percentage (#3595).
+ */
 export function getProgressPercentage(
   thread: { total_issues?: number | null; issues_remaining?: number | null } | null,
 ): number {
-  if (!thread || !thread.total_issues) return 0
-  if (thread.total_issues <= 0) return 0
-  if (thread.issues_remaining !== undefined && thread.issues_remaining !== null) {
-    if (thread.issues_remaining < 0 || thread.issues_remaining > thread.total_issues) {
-      return 0
-    }
-  }
-  const remaining = thread.issues_remaining ?? 0
-  if (remaining < 0) return 0
-  if (remaining > thread.total_issues) return 0
-  const readCount = thread.total_issues - remaining
-  if (readCount < 0) return 0
-  const percent = Math.round((readCount / thread.total_issues) * 100)
-  if (percent < 0 || percent > 100) return 0
-  return percent
+  const progress = evaluateReadingProgress(thread)
+  return progress.status === 'known' ? progress.percentage : 0
 }
 
 export function createExplosion(): void {

@@ -262,7 +262,12 @@ export function IssueList({
 
   const nextUnreadId = thread.next_unread_issue_id
   const readCount = issues.filter((issue) => issue.status === 'read').length
-  const progressPercent = totalCount > 0 && readCount >= 0 && readCount <= totalCount ? Math.round((readCount / totalCount) * 100) : 0
+  // The loaded page can never hold more read issues than the thread has in
+  // total. Counters that disagree must not render a share above 100% (#3595).
+  const progressPercent =
+    totalCount > 0 && readCount <= totalCount
+      ? Math.round((readCount / totalCount) * 100)
+      : 0
 
   return (
     <div className="border border-[var(--theme-border)] rounded-lg p-4">
