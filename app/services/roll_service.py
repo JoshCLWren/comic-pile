@@ -22,11 +22,13 @@ from app.models import Event, ReadingSession, Thread, User
 from app.models.thread import normalize_format_value
 from app.models.recommendation_context import RecommendationContext as RecContextModel
 from app.repositories.roll_repository import (
+    fetch_blocked_threads_page,
     fetch_bootstrap_blocked_rows,
     fetch_bootstrap_excluded_thread_rows,
     fetch_bootstrap_library_rows,
     fetch_bootstrap_pool_rows,
     fetch_bootstrap_stale_rows,
+    fetch_inactive_threads_page,
     fetch_issue_by_id,
     fetch_latest_session_event,
     fetch_pending_thread_id,
@@ -134,6 +136,22 @@ class BootstrapThreadData:
     stale_thread: RollBootstrapThread | None
     stale_thread_count: int
     library: BootstrapLibrarySummary
+
+
+@dataclass(frozen=True)
+class BlockedThreadsPage:
+    """One server-side page of the blocked-series category (issue #3330)."""
+
+    total: int
+    items: list[RollBootstrapThread]
+
+
+@dataclass(frozen=True)
+class InactiveThreadsPage:
+    """One server-side page of the out-of-pool category (issue #3330)."""
+
+    total: int
+    items: list[ThreadExclusionReason]
 
 
 def _summary_thread(row: Row[Any]) -> RollBootstrapThread:
@@ -395,6 +413,101 @@ class RollService:
             stale_thread_count=stale_thread_count,
             library=library,
         )
+
+    async def load_blocked_threads_page(
+        self,
+        *,
+        user_id: int,
+        offset: int,
+        limit: int,
+    ) -> BlockedThreadsPage:
+        """Load one page of the blocked-series category (issue #3330).
+
+        The Roll bootstrap only previews ``summary_limit`` blocked rows while
+        reporting the true ``blocked_count``. This page read applies the exact
+        same predicate so the reader can reach every counted record.
+
+        Args:
+            user_id: Authenticated owner of the library.
+            offset: Number of blocked rows to skip.
+            limit: Maximum number of blocked rows to return.
+
+        Returns:
+            The unbounded blocked total and the requested page of summaries,
+            each carrying the same blocking reasons the bootstrap preview shows.
+        """
+        eligibility = await get_execution_eligibility(self._db, user_id)
+        eligibility_args = {"eligibility": eligibility} if eligibility is not None else {}
+        total, rows = await fetch_blocked_threads_page(
+            self._db, user_id, offset, limit, **eligibility_args
+        )
+        items = [_summary_thread(row) for row in rows]
+        if eligibility is not None:
+            for thread in items:
+                thread.blocking_reasons = project_blocking_explanation(
+                    eligibility, thread.id,
+                ).blocking_reasons
+        return BlockedThreadsPage(total=total, items=items)
+
+    async def load_inactive_threads_page(
+        self,
+        *,
+        user_id: int,
+        offset: int,
+        limit: int,
+    ) -> InactiveThreadsPage:
+        """Load one page of the out-of-pool category (issue #3330).
+
+        The bootstrap classifies ``inactive`` as completed series plus active
+        series that fell out of the queue. This page read reuses the current
+        session's snooze/skip scopes and the same library predicate so the page
+        total and ``inactive_count`` always describe the same set.
+
+        Args:
+            user_id: Authenticated owner of the library.
+            offset: Number of inactive rows to skip.
+            limit: Maximum number of inactive rows to return.
+
+        Returns:
+            The unbounded inactive total and the requested page of explained
+            exclusions.
+        """
+        current_session = await get_or_create(
+            self._db, user_id=user_id, existing_user=None
+        )
+        derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(
+            self._db, user_id
+        )
+        excluded_ids = sorted(
+            set(current_session.snoozed_thread_ids or [])
+            | set(current_session.skipped_thread_ids or [])
+            | set(derived_snoozed_ids)
+        )
+        eligibility = await get_execution_eligibility(self._db, user_id)
+        eligibility_args = {"eligibility": eligibility} if eligibility is not None else {}
+        total, rows = await fetch_inactive_threads_page(
+            self._db,
+            user_id,
+            offset,
+            limit,
+            excluded_ids=excluded_ids,
+            **eligibility_args,
+        )
+        items = [
+            ThreadExclusionReason(
+                thread_id=row.id,
+                title=row.title,
+                format=normalize_format_value(row.format),
+                reason="completed" if row.status == "completed" else "not_in_queue",
+                detail=(
+                    "Read the full series"
+                    if row.status == "completed"
+                    else "Not in the active queue"
+                ),
+            )
+            for row in rows
+        ]
+        return InactiveThreadsPage(total=total, items=items)
 
     async def select_pending_thread(
         self,

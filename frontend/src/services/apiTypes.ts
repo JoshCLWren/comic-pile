@@ -1,5 +1,9 @@
 import type { RatePayload, RollResponse, OverrideRollPayload, SnoozeSessionResponse, Thread } from '../types'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type {
+  RollBlockedThreadsPage,
+  RollBootstrapResponse,
+  RollInactiveThreadsPage,
+} from '../types/rollBootstrap'
 
 export interface RollApi {
   roll: () => Promise<RollResponse>
@@ -21,6 +25,16 @@ export interface ProtectedRollMutationApi {
 export interface RollBootstrapApi {
   get: (timezone?: string) => Promise<RollBootstrapResponse>
   switchPrerequisite: (request: import('../types/rollBootstrap').RollPrerequisiteSwitchRequest) => Promise<import('../types/rollBootstrap').RollPrerequisiteSwitchResponse>
+}
+
+/**
+ * The bounded category-page reads that sit beside the Roll bootstrap
+ * (issue #3330). Kept separate from {@link RollBootstrapApi} so existing
+ * mutation-dependency doubles do not have to grow page methods.
+ */
+export interface RollThreadPageApi {
+  getBlockedThreadsPage: (offset: number, limit: number) => Promise<RollBlockedThreadsPage>
+  getInactiveThreadsPage: (offset: number, limit: number) => Promise<RollInactiveThreadsPage>
 }
 
 export type SessionApi = ReturnType<typeof import('./api-sessions').createSessionApi>

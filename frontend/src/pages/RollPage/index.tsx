@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
+import { useRollBlockedThreads, useRollInactiveThreads } from '../../hooks/useRollThreadPages'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useClearManualDie,
@@ -347,8 +348,33 @@ export default function RollPage() {
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const skippedThreads = bootstrap?.skipped_threads ?? []
-  const blockedThreads = bootstrap?.blocked_threads ?? []
-  const inactiveThreads = bootstrap?.inactive_threads ?? []
+  // The bootstrap previews at most `summary_limit` rows per category while
+  // reporting the true totals. Report those totals and page the records the
+  // preview cannot reach (issue #3330).
+  const blockedPreview = bootstrap?.blocked_threads ?? []
+  const inactivePreview = bootstrap?.inactive_threads ?? []
+  const blockedCount = bootstrap?.blocked_count ?? blockedPreview.length
+  const inactiveCount = bootstrap?.inactive_count ?? inactivePreview.length
+
+  const blockedPager = useRollBlockedThreads({
+    startOffset: blockedPreview.length,
+    enabled:
+      !state.isRatingView
+      && state.blockedExpanded
+      && blockedPreview.length < blockedCount,
+  })
+  const inactivePager = useRollInactiveThreads({
+    startOffset: inactivePreview.length,
+    enabled:
+      !state.isRatingView
+      && state.inactiveExpanded
+      && inactivePreview.length < inactiveCount,
+  })
+
+  const blockedThreads = [...blockedPreview, ...blockedPager.items]
+  const inactiveThreads = [...inactivePreview, ...inactivePager.items]
+  const blockedHasMore = blockedThreads.length < blockedCount
+  const inactiveHasMore = inactiveThreads.length < inactiveCount
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -528,6 +554,14 @@ export default function RollPage() {
               staleExpanded={state.staleExpanded}
               inactiveExpanded={state.inactiveExpanded}
               inactiveThreads={inactiveThreads}
+              blockedCount={blockedCount}
+              inactiveCount={inactiveCount}
+              blockedHasMore={blockedHasMore}
+              inactiveHasMore={inactiveHasMore}
+              blockedLoadingMore={blockedPager.isFetching}
+              inactiveLoadingMore={inactivePager.isFetching}
+              onLoadMoreBlocked={blockedPager.loadMore}
+              onLoadMoreInactive={inactivePager.loadMore}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}
               onUnskip={skip.handleUnskip}

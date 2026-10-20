@@ -35,6 +35,20 @@ interface ThreadPoolProps {
   staleExpanded: boolean
   inactiveExpanded?: boolean
   inactiveThreads?: ThreadExclusionReason[]
+  /**
+   * Accurate category totals from the bootstrap (issue #3330). They may exceed
+   * the rendered preview length; the section header must report these counts so
+   * a reader never sees "20" when the server counted more.
+   */
+  blockedCount?: number
+  inactiveCount?: number
+  /** True while more counted records exist beyond the rendered rows. */
+  blockedHasMore?: boolean
+  inactiveHasMore?: boolean
+  blockedLoadingMore?: boolean
+  inactiveLoadingMore?: boolean
+  onLoadMoreBlocked?: () => void
+  onLoadMoreInactive?: () => void
   onToggleInactive?: () => void
   onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
@@ -67,6 +81,14 @@ export function ThreadPool({
   staleExpanded,
   inactiveExpanded,
   inactiveThreads = [],
+  blockedCount,
+  inactiveCount,
+  blockedHasMore = false,
+  inactiveHasMore = false,
+  blockedLoadingMore = false,
+  inactiveLoadingMore = false,
+  onLoadMoreBlocked,
+  onLoadMoreInactive,
   onToggleInactive,
   onThreadClick,
   onUnsnooze,
@@ -83,6 +105,11 @@ export function ThreadPool({
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
+  // The bootstrap bounds each preview list but reports the true category
+  // totals. Report the accurate total so a truncated preview never claims the
+  // whole category was only 20 series (issue #3330).
+  const totalBlocked = blockedCount ?? blockedThreads.length
+  const totalInactive = inactiveCount ?? inactiveThreads.length
 
   useEffect(() => {
     const returnedToRoll = wasRatingView.current && !isRatingView
@@ -215,7 +242,7 @@ export function ThreadPool({
         )}
       </div>}
 
-      {blockedThreads.length > 0 && !isRatingView && (
+      {totalBlocked > 0 && !isRatingView && (
         <div className="mt-4">
           <button
             type="button"
@@ -228,7 +255,7 @@ export function ThreadPool({
               ▶
             </span>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              {blockedThreads.length} series waiting for earlier issues
+              {totalBlocked} series waiting for earlier issues
             </span>
           </button>
           {blockedExpanded && (
@@ -245,6 +272,18 @@ export function ThreadPool({
                   </div>
                 </div>
               ))}
+              {blockedHasMore && onLoadMoreBlocked && (
+                <button
+                  type="button"
+                  onClick={onLoadMoreBlocked}
+                  disabled={blockedLoadingMore}
+                  className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-stone-400 hover:bg-stone-500/10 disabled:opacity-50 transition-colors"
+                >
+                  {blockedLoadingMore
+                    ? 'Loading more…'
+                    : `Load more (${Math.max(totalBlocked - blockedThreads.length, 0)} remaining)`}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -381,7 +420,7 @@ export function ThreadPool({
         </div>
       )}
 
-      {inactiveThreads && inactiveThreads.length > 0 && !isRatingView && onToggleInactive && (
+      {totalInactive > 0 && !isRatingView && onToggleInactive && (
         <div className="mt-4 md:mt-8">
           <button
             type="button"
@@ -395,7 +434,7 @@ export function ThreadPool({
               ▶
             </span>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              {inactiveThreads.length} series out of the roll pool
+              {totalInactive} series out of the roll pool
             </span>
           </button>
           {inactiveExpanded && (
@@ -411,6 +450,18 @@ export function ThreadPool({
                   </span>
                 </div>
               ))}
+              {inactiveHasMore && onLoadMoreInactive && (
+                <button
+                  type="button"
+                  onClick={onLoadMoreInactive}
+                  disabled={inactiveLoadingMore}
+                  className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-stone-400 hover:bg-stone-500/10 disabled:opacity-50 transition-colors"
+                >
+                  {inactiveLoadingMore
+                    ? 'Loading more…'
+                    : `Load more (${Math.max(totalInactive - inactiveThreads.length, 0)} remaining)`}
+                </button>
+              )}
             </div>
           )}
         </div>

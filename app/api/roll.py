@@ -39,7 +39,9 @@ from app.schemas import (
     ExplainableFactorResponse,
     OverrideRequest,
     RecommendationExplanationResponse,
+    RollBlockedThreadsPage,
     RollBootstrapResponse,
+    RollInactiveThreadsPage,
     RollRequest,
     RollResponse,
     SessionMode,
@@ -1012,6 +1014,82 @@ async def roll_bootstrap(
         excluded_threads=excluded_list,
         inactive_count=inactive_count,
         inactive_threads=library.inactive,
+    )
+
+
+@router.get("/blocked-threads", response_model=RollBlockedThreadsPage)
+async def roll_blocked_threads(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    offset: int = Query(default=0, ge=0, description="Rows to skip"),
+    limit: int = Query(default=20, ge=1, le=100, description="Page size"),
+) -> RollBlockedThreadsPage:
+    """Return one page of the blocked-series category.
+
+    The Roll bootstrap bounds its ``blocked_threads`` preview while reporting
+    the true ``blocked_count``. This endpoint pages the same filtered set so a
+    reader can reach every counted series (issue #3330).
+
+    Args:
+        current_user: The authenticated user.
+        db: Async database session.
+        offset: Number of blocked rows to skip.
+        limit: Maximum number of blocked rows to return.
+
+    Returns:
+        A RollBlockedThreadsPage whose ``total`` equals the bootstrap
+        ``blocked_count``.
+    """
+    page = await RollService(db).load_blocked_threads_page(
+        user_id=current_user.id,
+        offset=offset,
+        limit=limit,
+    )
+    next_offset = offset + limit if offset + limit < page.total else None
+    return RollBlockedThreadsPage(
+        total=page.total,
+        offset=offset,
+        limit=limit,
+        next_offset=next_offset,
+        items=page.items,
+    )
+
+
+@router.get("/inactive-threads", response_model=RollInactiveThreadsPage)
+async def roll_inactive_threads(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    offset: int = Query(default=0, ge=0, description="Rows to skip"),
+    limit: int = Query(default=20, ge=1, le=100, description="Page size"),
+) -> RollInactiveThreadsPage:
+    """Return one page of the out-of-pool category.
+
+    The Roll bootstrap bounds its ``inactive_threads`` preview while reporting
+    the true ``inactive_count``. This endpoint pages the same filtered set so a
+    reader can reach every counted series (issue #3330).
+
+    Args:
+        current_user: The authenticated user.
+        db: Async database session.
+        offset: Number of inactive rows to skip.
+        limit: Maximum number of inactive rows to return.
+
+    Returns:
+        A RollInactiveThreadsPage whose ``total`` equals the bootstrap
+        ``inactive_count``.
+    """
+    page = await RollService(db).load_inactive_threads_page(
+        user_id=current_user.id,
+        offset=offset,
+        limit=limit,
+    )
+    next_offset = offset + limit if offset + limit < page.total else None
+    return RollInactiveThreadsPage(
+        total=page.total,
+        offset=offset,
+        limit=limit,
+        next_offset=next_offset,
+        items=page.items,
     )
 
 

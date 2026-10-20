@@ -26,6 +26,24 @@ export interface ThreadExclusionReason {
   detail?: string | null
 }
 
+/**
+ * One server-side page of a bounded Roll category (issue #3330).
+ *
+ * The bootstrap only previews `summary_limit` rows of each category while
+ * reporting the accurate total, so `total` is the authoritative count and the
+ * page is how a reader reaches records beyond the preview.
+ */
+export interface RollThreadsPage<T> {
+  total: number
+  offset: number
+  limit: number
+  next_offset?: number | null
+  items: T[]
+}
+
+export type RollBlockedThreadsPage = RollThreadsPage<RollBootstrapThread>
+export type RollInactiveThreadsPage = RollThreadsPage<ThreadExclusionReason>
+
 /** One direct continuity blocker for a pending roll. */
 export interface RollRecoveryBlocker {
   rule_id: number | null

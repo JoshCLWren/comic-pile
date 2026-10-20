@@ -162,6 +162,18 @@ export const queryKeys = {
   roll: {
     all: ['roll'] as const,
     bootstrap: () => ['roll', 'bootstrap'] as const,
+    /**
+     * Canonical prefix for the bounded blocked-series pages (issue #3330).
+     * The cursor lives in `pageParam`, never in the key, so every page of one
+     * page size shares a stable prefix and an invalidation of `roll.all`
+     * refreshes the section alongside the bootstrap. `startOffset` records the
+     * preview boundary the section began from.
+     */
+    blockedThreads: ({ pageSize, startOffset }: { pageSize: number; startOffset: number }) =>
+      ['roll', 'blocked-threads', { pageSize, startOffset }] as const,
+    /** Canonical prefix for the bounded out-of-pool pages (issue #3330). */
+    inactiveThreads: ({ pageSize, startOffset }: { pageSize: number; startOffset: number }) =>
+      ['roll', 'inactive-threads', { pageSize, startOffset }] as const,
   },
   demo: {
     /**

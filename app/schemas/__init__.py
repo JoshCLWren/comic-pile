@@ -53,8 +53,10 @@ from app.schemas.recommendation_diagnostics import (
 )
 from app.schemas.roll import (
     OverrideRequest,
+    RollBlockedThreadsPage,
     RollBootstrapResponse,
     RollBootstrapThread,
+    RollInactiveThreadsPage,
     RollRequest,
     RollResponse,
     SetCurrentIssueRequest,
@@ -153,6 +155,8 @@ __all__ = [
     "OverrideRequest",
     "RollBootstrapThread",
     "RollBootstrapResponse",
+    "RollBlockedThreadsPage",
+    "RollInactiveThreadsPage",
     "ThreadExclusionReason",
     "SetCurrentIssueRequest",
     "SetCurrentIssueResponse",

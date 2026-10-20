@@ -1,6 +1,8 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
+  RollBlockedThreadsPage,
   RollBootstrapResponse,
+  RollInactiveThreadsPage,
   RollPrerequisiteSwitchRequest,
   RollPrerequisiteSwitchResponse,
 } from '../types/rollBootstrap'
@@ -19,6 +21,26 @@ export function createRollBootstrapApi(client: HttpClient) {
         params: { timezone },
       })
     },
+    /**
+     * Fetch one offset page of the blocked-series category (issue #3330).
+     *
+     * @param offset - Rows to skip, matching the bootstrap preview length.
+     * @param limit - Page size.
+     */
+    getBlockedThreadsPage: (offset: number, limit: number) =>
+      client.get<RollBlockedThreadsPage>('/v1/roll/blocked-threads', {
+        params: { offset, limit },
+      }),
+    /**
+     * Fetch one offset page of the out-of-pool category (issue #3330).
+     *
+     * @param offset - Rows to skip, matching the bootstrap preview length.
+     * @param limit - Page size.
+     */
+    getInactiveThreadsPage: (offset: number, limit: number) =>
+      client.get<RollInactiveThreadsPage>('/v1/roll/inactive-threads', {
+        params: { offset, limit },
+      }),
     switchPrerequisite: (request: RollPrerequisiteSwitchRequest) =>
       client.post<RollPrerequisiteSwitchResponse>('/v1/roll/switch-prerequisite', request),
   }

@@ -3890,6 +3890,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/roll/blocked-threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Roll Blocked Threads
+         * @description Return one page of the blocked-series category.
+         *
+         *     The Roll bootstrap bounds its ``blocked_threads`` preview while reporting
+         *     the true ``blocked_count``. This endpoint pages the same filtered set so a
+         *     reader can reach every counted series (issue #3330).
+         *
+         *     Args:
+         *         current_user: The authenticated user.
+         *         db: Async database session.
+         *         offset: Number of blocked rows to skip.
+         *         limit: Maximum number of blocked rows to return.
+         *
+         *     Returns:
+         *         A RollBlockedThreadsPage whose ``total`` equals the bootstrap
+         *         ``blocked_count``.
+         */
+        get: operations["roll_blocked_threads_api_v1_roll_blocked_threads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/roll/bootstrap": {
         parameters: {
             query?: never;
@@ -4004,6 +4038,40 @@ export interface paths {
          *         HTTPException 422: When the event type is not ``"roll"``.
          */
         get: operations["get_roll_recommendation_explanation_api_v1_roll_events__event_id__recommendation_explanation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/inactive-threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Roll Inactive Threads
+         * @description Return one page of the out-of-pool category.
+         *
+         *     The Roll bootstrap bounds its ``inactive_threads`` preview while reporting
+         *     the true ``inactive_count``. This endpoint pages the same filtered set so a
+         *     reader can reach every counted series (issue #3330).
+         *
+         *     Args:
+         *         current_user: The authenticated user.
+         *         db: Async database session.
+         *         offset: Number of inactive rows to skip.
+         *         limit: Maximum number of inactive rows to return.
+         *
+         *     Returns:
+         *         A RollInactiveThreadsPage whose ``total`` equals the bootstrap
+         *         ``inactive_count``.
+         */
+        get: operations["roll_inactive_threads_api_v1_roll_inactive_threads_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -12445,6 +12513,27 @@ export interface components {
             token: string;
         };
         /**
+         * RollBlockedThreadsPage
+         * @description One server-side page of the blocked-series category (issue #3330).
+         *
+         *     The Roll bootstrap only previews a bounded slice of each category, so this
+         *     page endpoint is how a reader reaches every counted record. ``total`` is
+         *     computed by the same filter that produces ``items``, so the page total and
+         *     the bootstrap ``blocked_count`` always describe the same set.
+         */
+        RollBlockedThreadsPage: {
+            /** Items */
+            items?: components["schemas"]["RollBootstrapThread"][];
+            /** Limit */
+            limit: number;
+            /** Next Offset */
+            next_offset?: number | null;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /**
          * RollBootstrapResponse
          * @description Bounded bootstrap payload for the Roll initial render.
          *
@@ -12532,6 +12621,26 @@ export interface components {
             tags?: components["schemas"]["TagResponse"][];
             /** Title */
             title: string;
+        };
+        /**
+         * RollInactiveThreadsPage
+         * @description One server-side page of the out-of-pool category (issue #3330).
+         *
+         *     Same contract as :class:`RollBlockedThreadsPage`, scoped to the series the
+         *     bootstrap reports as inactive (completed plus vanished-from-queue), so the
+         *     page total and ``inactive_count`` always describe the same set.
+         */
+        RollInactiveThreadsPage: {
+            /** Items */
+            items?: components["schemas"]["ThreadExclusionReason"][];
+            /** Limit */
+            limit: number;
+            /** Next Offset */
+            next_offset?: number | null;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
         };
         /**
          * RollLastRead
@@ -19883,6 +19992,40 @@ export interface operations {
             };
         };
     };
+    roll_blocked_threads_api_v1_roll_blocked_threads_get: {
+        parameters: {
+            query?: {
+                /** @description Rows to skip */
+                offset?: number;
+                /** @description Page size */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollBlockedThreadsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     roll_bootstrap_api_v1_roll_bootstrap_get: {
         parameters: {
             query?: {
@@ -19971,6 +20114,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecommendationExplanationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    roll_inactive_threads_api_v1_roll_inactive_threads_get: {
+        parameters: {
+            query?: {
+                /** @description Rows to skip */
+                offset?: number;
+                /** @description Page size */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollInactiveThreadsPage"];
                 };
             };
             /** @description Validation Error */

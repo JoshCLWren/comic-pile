@@ -8,10 +8,11 @@ Functions return ORM models or plain tuples/dicts; callers
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import Text, func, or_, select, update
+from sqlalchemy import Text, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.repositories.reading_eligibility_queries import (
     candidate_predicate,
@@ -394,6 +395,59 @@ async def fetch_bootstrap_excluded_thread_rows(
     return list(result.all())
 
 
+def _blocked_conditions(
+    user_id: int,
+    eligibility: ReadingEligibilitySnapshot | None,
+) -> tuple[ColumnElement[bool], ...]:
+    """Return the exact filter shared by the blocked preview and page reads.
+
+    Args:
+        user_id: Owner of the threads.
+        eligibility: Validated live result, or None for legacy execution.
+
+    Returns:
+        The identical predicate tuple every blocked read must apply.
+    """
+    return (
+        Thread.user_id == user_id,
+        Thread.status == "active",
+        blocked_predicate(eligibility),
+    )
+
+
+def _inactive_conditions(
+    user_id: int,
+    excluded_ids: Sequence[int],
+    eligibility: ReadingEligibilitySnapshot | None,
+) -> tuple[ColumnElement[bool], ...]:
+    """Return the exact filter that produces ``inactive_count``.
+
+    The bootstrap classifies ``inactive`` as completed series plus active
+    series that fell out of the queue (``queue_position < 1``) without being
+    blocked, snoozed, or skipped. Paging must use the same predicate so the
+    page ``total`` always matches the bootstrap ``inactive_count``.
+
+    Args:
+        user_id: Owner of the threads.
+        excluded_ids: Snoozed, backoff-snoozed, and skipped thread IDs.
+        eligibility: Validated live result, or None for legacy execution.
+
+    Returns:
+        The identical predicate tuple every inactive read must apply.
+    """
+    active_not_in_queue = and_(
+        Thread.queue_position < 1,
+        ~blocked_predicate(eligibility),
+    )
+    if excluded_ids:
+        active_not_in_queue = and_(active_not_in_queue, Thread.id.not_in(excluded_ids))
+    return (
+        Thread.user_id == user_id,
+        Thread.status.in_(("active", "completed")),
+        or_(Thread.status == "completed", active_not_in_queue),
+    )
+
+
 async def fetch_bootstrap_blocked_rows(
     db: AsyncSession,
     user_id: int,
@@ -426,13 +480,102 @@ async def fetch_bootstrap_blocked_rows(
             func.count().over().label("blocked_total"),
             Thread.last_activity_at,
         )
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(blocked_predicate(eligibility))
-        .order_by(Thread.queue_position)
+        .where(*_blocked_conditions(user_id, eligibility))
+        .order_by(Thread.queue_position, Thread.id)
         .limit(limit)
     )
     return list(result.all())
+
+
+async def fetch_blocked_threads_page(
+    db: AsyncSession,
+    user_id: int,
+    offset: int,
+    limit: int,
+    *,
+    eligibility: ReadingEligibilitySnapshot | None = None,
+) -> tuple[int, list[Row[int, str, str, datetime | None]]]:
+    """Return one blocked-series page plus the unbounded blocked total.
+
+    Uses the same predicate as :func:`fetch_bootstrap_blocked_rows`, so the
+    page total and the bootstrap ``blocked_count`` describe the same set. The
+    total is counted separately because an offset past the end returns no rows,
+    and a windowed count would then report zero.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        offset: Number of blocked rows to skip.
+        limit: Maximum number of blocked rows to return.
+
+        eligibility: Validated live result, or None for legacy execution.
+
+    Returns:
+        ``(total, rows)`` where rows are (id, title, format, last_activity_at).
+    """
+    conditions = _blocked_conditions(user_id, eligibility)
+    total_result = await db.execute(
+        select(func.count()).select_from(Thread).where(*conditions)
+    )
+    total = total_result.scalar() or 0
+    result = await db.execute(
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            Thread.last_activity_at,
+        )
+        .where(*conditions)
+        .order_by(Thread.queue_position, Thread.id)
+        .offset(offset)
+        .limit(limit)
+    )
+    return total, list(result.all())
+
+
+async def fetch_inactive_threads_page(
+    db: AsyncSession,
+    user_id: int,
+    offset: int,
+    limit: int,
+    *,
+    excluded_ids: Sequence[int],
+    eligibility: ReadingEligibilitySnapshot | None = None,
+) -> tuple[int, list[Row[int, str, str, str]]]:
+    """Return one out-of-pool page plus the unbounded inactive total.
+
+    Uses the same predicate as the bootstrap library classification, so the
+    page total and ``inactive_count`` describe the same set.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        offset: Number of inactive rows to skip.
+        limit: Maximum number of inactive rows to return.
+        excluded_ids: Snoozed, backoff-snoozed, and skipped thread IDs.
+        eligibility: Validated live result, or None for legacy execution.
+
+    Returns:
+        ``(total, rows)`` where rows are (id, title, format, status).
+    """
+    conditions = _inactive_conditions(user_id, excluded_ids, eligibility)
+    total_result = await db.execute(
+        select(func.count()).select_from(Thread).where(*conditions)
+    )
+    total = total_result.scalar() or 0
+    result = await db.execute(
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            Thread.status,
+        )
+        .where(*conditions)
+        .order_by(Thread.queue_position, Thread.id)
+        .offset(offset)
+        .limit(limit)
+    )
+    return total, list(result.all())
 
 
 async def fetch_bootstrap_stale_rows(
@@ -514,7 +657,7 @@ async def fetch_bootstrap_library_rows(
         )
         .where(Thread.user_id == user_id)
         .where(Thread.status.in_(("active", "completed")))
-        .order_by(Thread.queue_position)
+        .order_by(Thread.queue_position, Thread.id)
     )
     return list(result.all())
 

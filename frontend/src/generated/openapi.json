@@ -13826,6 +13826,48 @@
         "title": "ResetPasswordRequest",
         "type": "object"
       },
+      "RollBlockedThreadsPage": {
+        "description": "One server-side page of the blocked-series category (issue #3330).\n\nThe Roll bootstrap only previews a bounded slice of each category, so this\npage endpoint is how a reader reaches every counted record. ``total`` is\ncomputed by the same filter that produces ``items``, so the page total and\nthe bootstrap ``blocked_count`` always describe the same set.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RollBootstrapThread"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "RollBlockedThreadsPage",
+        "type": "object"
+      },
       "RollBootstrapResponse": {
         "description": "Bounded bootstrap payload for the Roll initial render.\n\nReturns only the retained data required for the first interactive screen.\nDoes not include the full queue, collection data, or secondary detail panels.",
         "properties": {
@@ -14102,6 +14144,48 @@
           "format"
         ],
         "title": "RollBootstrapThread",
+        "type": "object"
+      },
+      "RollInactiveThreadsPage": {
+        "description": "One server-side page of the out-of-pool category (issue #3330).\n\nSame contract as :class:`RollBlockedThreadsPage`, scoped to the series the\nbootstrap reports as inactive (completed plus vanished-from-queue), so the\npage total and ``inactive_count`` always describe the same set.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ThreadExclusionReason"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "RollInactiveThreadsPage",
         "type": "object"
       },
       "RollLastRead": {
@@ -27815,6 +27899,73 @@
         ]
       }
     },
+    "/api/v1/roll/blocked-threads": {
+      "get": {
+        "description": "Return one page of the blocked-series category.\n\nThe Roll bootstrap bounds its ``blocked_threads`` preview while reporting\nthe true ``blocked_count``. This endpoint pages the same filtered set so a\nreader can reach every counted series (issue #3330).\n\nArgs:\n    current_user: The authenticated user.\n    db: Async database session.\n    offset: Number of blocked rows to skip.\n    limit: Maximum number of blocked rows to return.\n\nReturns:\n    A RollBlockedThreadsPage whose ``total`` equals the bootstrap\n    ``blocked_count``.",
+        "operationId": "roll_blocked_threads_api_v1_roll_blocked_threads_get",
+        "parameters": [
+          {
+            "description": "Rows to skip",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Rows to skip",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Page size",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollBlockedThreadsPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Roll Blocked Threads",
+        "tags": [
+          "roll",
+          "roll"
+        ]
+      }
+    },
     "/api/v1/roll/bootstrap": {
       "get": {
         "description": "Return bounded bootstrap data for the Roll initial render.\n\nReplaces the need for separate session, full-thread-library, and stale-thread requests\nby returning only the retained data required for the first interactive screen.\n\nArgs:\n    current_user: The authenticated user.\n    db: Async database session.\n    timezone: Optional browser-resolved IANA timezone identifier captured once\n        per active reading session. Invalid or unusable values leave the field\n        unset and never break the roll.\n\nReturns:\n    RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.",
@@ -27965,6 +28116,73 @@
           }
         ],
         "summary": "Get Roll Recommendation Explanation",
+        "tags": [
+          "roll",
+          "roll"
+        ]
+      }
+    },
+    "/api/v1/roll/inactive-threads": {
+      "get": {
+        "description": "Return one page of the out-of-pool category.\n\nThe Roll bootstrap bounds its ``inactive_threads`` preview while reporting\nthe true ``inactive_count``. This endpoint pages the same filtered set so a\nreader can reach every counted series (issue #3330).\n\nArgs:\n    current_user: The authenticated user.\n    db: Async database session.\n    offset: Number of inactive rows to skip.\n    limit: Maximum number of inactive rows to return.\n\nReturns:\n    A RollInactiveThreadsPage whose ``total`` equals the bootstrap\n    ``inactive_count``.",
+        "operationId": "roll_inactive_threads_api_v1_roll_inactive_threads_get",
+        "parameters": [
+          {
+            "description": "Rows to skip",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Rows to skip",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Page size",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollInactiveThreadsPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Roll Inactive Threads",
         "tags": [
           "roll",
           "roll"
