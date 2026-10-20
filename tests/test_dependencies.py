@@ -1089,6 +1089,69 @@ async def test_connected_threads_flag_multi_thread_issue_cycle(
 
 
 @pytest.mark.asyncio
+async def test_connected_threads_ignore_inert_cbl_order_rows_for_circularity(
+    async_db, auth_client, default_user
+):
+    """Inert historical materialization rows cannot close a reading-order loop.
+
+    Regression coverage for issue #3596: a ``cbl-order:`` row is historical
+    CBL materialization that the frozen canonical runtime never treats as a
+    blocker, so it can never make a reading order impossible. Counting it
+    would reproduce the false "Circular Dependencies" warning the issue
+    reports for a reader whose dependency table is mostly inert rows.
+    """
+    user = default_user
+
+    thread_a = Thread(
+        title="Uncanny Spider-Man",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    thread_b = Thread(
+        title="The Amazing Spider-Man",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    async_db.add_all([thread_a, thread_b])
+    await async_db.flush()
+
+    a_issue_1 = Issue(thread_id=thread_a.id, issue_number="1", position=1, status="unread")
+    a_issue_2 = Issue(thread_id=thread_a.id, issue_number="2", position=2, status="unread")
+    b_issue_1 = Issue(thread_id=thread_b.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([a_issue_1, a_issue_2, b_issue_1])
+    await async_db.flush()
+
+    # A#2 -> B#1 is a live prerequisite. B#1 -> A#1 is inert historical
+    # materialization, so it must not close the loop A#1 -> A#2 -> B#1.
+    async_db.add_all([
+        Dependency(source_issue_id=a_issue_2.id, target_issue_id=b_issue_1.id),
+        Dependency(
+            source_issue_id=b_issue_1.id,
+            target_issue_id=a_issue_1.id,
+            note="cbl-order:source:test-hash:1->2",
+        ),
+    ])
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/threads/{thread_a.id}/connected")
+    assert response.status_code == 200
+
+    connected = {
+        ct["thread_id"]: ct for ct in response.json()["connected_threads"]
+    }
+
+    assert connected[thread_b.id]["is_circular"] is False
+
+
+@pytest.mark.asyncio
 async def test_connected_threads_omit_satisfied_read_blocker(
     async_db, auth_client, default_user
 ):

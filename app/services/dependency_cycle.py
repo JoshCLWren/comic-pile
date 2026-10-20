@@ -9,6 +9,12 @@ without any impossible order existing: an interleaved chain such as
 ``USM#22 -> USM#23`` order is included. A backward chain such as
 ``A#2 -> B#1 -> A#1`` is different: with ``A#1`` before ``A#2`` the implicit
 order closes a genuine loop, so no issue in it can be read first.
+
+Only live constraints belong to that graph. A prerequisite whose source issue
+is already read is satisfied, and an inert historical ``cbl-order:``
+materialization row can never block, so neither can close a loop that does not
+exist. The caller supplies the live prerequisite pairs; this module adds the
+within-series order and finds the loops.
 """
 
 from collections.abc import Iterable
@@ -29,10 +35,13 @@ def build_reading_order_graph(
     relation that remains.
 
     Args:
-        dependency_edges: Stored ``(source_issue_id, target_issue_id)`` pairs.
-            ``source`` must be read before ``target``.
+        dependency_edges: Live ``(source_issue_id, target_issue_id)`` pairs.
+            ``source`` must be read before ``target``. The caller supplies
+            only rows that can still constrain the reader.
         issues: ``(issue_id, thread_id, position, status)`` for the issues
-            those edges connect.
+            those edges connect. ``position`` is the canonical within-series
+            reading order and is unique per thread; a duplicated position is
+            broken by issue id so the resulting order stays deterministic.
 
     Returns:
         Tuple of live precedence edges and the thread that owns each issue.

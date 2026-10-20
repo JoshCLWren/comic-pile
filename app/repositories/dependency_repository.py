@@ -18,7 +18,9 @@ class ReaderDependencyGraph:
     """Reader-scoped dependency edges together with the issues they connect.
 
     Attributes:
-        edges: Stored ``(source_issue_id, target_issue_id)`` prerequisite pairs.
+        edges: Canonical ``(source_issue_id, target_issue_id)`` prerequisite
+            pairs. Inert ``cbl-order:`` materialization rows are excluded
+            because they can never constrain the reader.
         issues: ``(issue_id, thread_id, position, status)`` for every issue on
             either side of ``edges``. ``position`` is the canonical
             within-series reading order needed to complete the precedence
@@ -138,7 +140,7 @@ async def get_thread_connected_dependencies(
 async def get_reader_dependency_graph(
     db: AsyncSession, user_id: int
 ) -> ReaderDependencyGraph:
-    """Get every dependency edge touching one reader's issues, with issue order.
+    """Get every live dependency edge touching one reader's issues, with issue order.
 
     The issue -> issue dependency graph is the authority for circularity: a
     cycle in it is the only reading order that is impossible. Reading the
@@ -147,18 +149,30 @@ async def get_reader_dependency_graph(
     travels with the edge because the required within-series order is an
     implicit precedence constraint that the stored rows do not contain.
 
+    Only canonical Dependency rows take part. Historical ``cbl-order:``
+    materialization rows are inert for the frozen canonical runtime
+    (``comic_pile.dependencies``): they can never block, so they can never
+    make a reading order impossible and must not manufacture a circular
+    verdict. They are also the overwhelming majority of a real reader's rows,
+    so excluding them keeps this reader-wide read proportional to the live
+    constraints instead of the whole materialization history.
+
     Args:
         db: Database session.
         user_id: Reader whose dependency edges are read.
 
     Returns:
-        Stored edges plus the issue rows needed to complete the precedence
-        graph with the required within-series order.
+        Canonical stored edges plus the issue rows needed to complete the
+        precedence graph with the required within-series order.
     """
     source_issue = Issue.__table__.alias("graph_source_issue")
     target_issue = Issue.__table__.alias("graph_target_issue")
     source_thread = Thread.__table__.alias("graph_source_thread")
     target_thread = Thread.__table__.alias("graph_target_thread")
+
+    # Imported here because the legacy package's module init reaches back into
+    # ``app.repositories``; a module-level import would close that cycle.
+    from comic_pile.dependencies import _canonical_dependency_filter
 
     result = await db.execute(
         select(
@@ -175,6 +189,7 @@ async def get_reader_dependency_graph(
                 target_thread.c.user_id == user_id,
             )
         )
+        .where(_canonical_dependency_filter())
     )
 
     edges: list[tuple[int, int]] = []
@@ -183,6 +198,9 @@ async def get_reader_dependency_graph(
         edges.append((source_issue_id, target_issue_id))
         issue_ids.add(source_issue_id)
         issue_ids.add(target_issue_id)
+
+    if not issue_ids:
+        return ReaderDependencyGraph(edges=tuple(edges), issues=())
 
     issue_result = await db.execute(
         select(
