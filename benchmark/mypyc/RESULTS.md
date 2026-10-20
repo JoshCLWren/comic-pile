@@ -262,6 +262,39 @@ artifacts to be included, or a committed platform-specific artifact set that the
 current `.gitignore` and the "no tree-shaking" bundling behavior both work
 against.
 
+## Extended candidate evaluation (issue #3411)
+
+The six-candidate run above remains the recorded evidence for #3258.
+[#3411](https://github.com/JoshCLWren/comic-pile/issues/3411) extended the same
+comparison to four more strict-clean, standard-library-only candidates:
+
+- `comic_pile.snooze_backoff`
+- `comic_pile.reading_effort_observation_rules`
+- `comic_pile.comicvine_report_classification`
+- `comic_pile.dice_ladder`
+
+The extended harness measures ten workloads on the same two surfaces and records
+its results beside the originals:
+
+- [`results/cpython_extended.json`](results/cpython_extended.json)
+- [`results/mypyc_extended.json`](results/mypyc_extended.json)
+- [`results/comparison_extended.md`](results/comparison_extended.md)
+
+| Item | Value |
+| --- | --- |
+| Interpreter | CPython 3.14.7 (`cpython`) |
+| mypy / mypyc | 2.4.0 |
+| setuptools | 84.0.0 |
+| Platform | `Linux-6.12.105+deb13-amd64-x86_64-with-glibc2.41` |
+| Machine | `x86_64` |
+| C compiler | `cc (Debian 14.2.0-19) 14.2.0` |
+
+The extended cold-start sample covers request-shaped workloads only. Hydration
+report classification is offline batch work (`scripts/hydrate_comicvine_issues.py`),
+so it stays in the warm and cold per-workload rows but is not charged to
+`request_initialization`. Output equivalence is still **True** on both surfaces,
+and the extended run does not change the decision above: **no-go**.
+
 ## Cost / benefit summary
 
 | | Value |

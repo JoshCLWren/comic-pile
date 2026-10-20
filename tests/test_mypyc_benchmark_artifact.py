@@ -22,6 +22,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
 
@@ -32,6 +33,11 @@ BENCH_DIR = REPO_ROOT / "benchmark" / "mypyc"
 SOURCE_DIR = BENCH_DIR / "source" / "comic_pile"
 COMPILED_DIR = BENCH_DIR / "compiled" / "comic_pile"
 RESULTS_DIR = BENCH_DIR / "results"
+
+# Issue #3411 measured this module. Its benchmark copies must stay byte-identical
+# to the shipped module, so the strict-typing fix (`Any` -> `object`) has to land
+# in production as well. Nothing else may change under `app/` or `comic_pile/`.
+TYPE_ONLY_PRODUCTION_EDITS = frozenset({"comic_pile/comicvine_report_classification.py"})
 
 
 def _load_bench():
@@ -485,10 +491,66 @@ def test_recorded_decision_document_states_the_verdict() -> None:
 
 
 def test_recorded_decision_is_not_a_production_runtime_switch() -> None:
-    """The evaluation must not have touched any runtime or deployment file."""
-    protected = ("app/", "comic_pile/", "alembic/", "api/", "Dockerfile", "vercel.json", ".github/")
-    offenders = [path for path in _git_ls_files() if path.startswith(protected) and _is_new_in_head(path)]
-    assert offenders == [], f"issue #3258 forbids production changes, but found {offenders}"
+    """The evaluation must not add deployment wiring or compile production modules.
+
+    Type-only edits to a measured production module are allowed: the benchmark
+    copies have to stay byte-identical to production, so a typing fix must land
+    in both places. What stays forbidden is turning production into a compiled
+    or deployment surface.
+    """
+    deployment_surfaces = (
+        "api/",
+        "alembic/",
+        "Dockerfile",
+        "Dockerfile.ci",
+        "vercel.json",
+        ".github/",
+    )
+    deployment_offenders = [
+        path for path in _git_ls_files() if path.startswith(deployment_surfaces) and _is_new_in_head(path)
+    ]
+    assert deployment_offenders == [], (
+        f"issue #3258 forbids deployment changes, but found {deployment_offenders}"
+    )
+
+    production_changes = [
+        path
+        for path in _git_ls_files()
+        if path.startswith(("app/", "comic_pile/")) and _is_new_in_head(path)
+    ]
+    unexpected_changes = _unexpected_production_changes(production_changes)
+    assert unexpected_changes == [], (
+        f"issue #3258 forbids production changes, but found {unexpected_changes}"
+    )
+
+    compilation_markers = ("mypyc", "mypycify", "__mypyc")
+    runtime_offenders = [
+        path
+        for path in production_changes
+        if any(
+            marker in (REPO_ROOT / path).read_text(encoding="utf-8", errors="ignore")
+            for marker in compilation_markers
+        )
+    ]
+    assert runtime_offenders == [], (
+        f"issue #3258 forbids compiled production modules, but found {runtime_offenders}"
+    )
+
+
+def _unexpected_production_changes(paths: Iterable[str]) -> list[str]:
+    """Return changed production paths outside the reviewed type-only allowlist.
+
+    Args:
+        paths: Repository-relative paths changed on this branch.
+
+    Returns:
+        Sorted production paths that are not the issue #3411 typing fix.
+    """
+    return sorted(
+        path
+        for path in paths
+        if path.startswith(("app/", "comic_pile/")) and path not in TYPE_ONLY_PRODUCTION_EDITS
+    )
 
 
 def _base_ref(cwd: Path = REPO_ROOT) -> str | None:
@@ -617,3 +679,19 @@ def test_production_switch_guard_diffs_the_branch_not_the_working_tree(tmp_path:
 
     assert _is_new_in_head("benchmark/", cwd=repo) is True
     assert _is_new_in_head("app/", cwd=repo) is False
+
+
+def test_production_switch_guard_allows_only_the_reviewed_type_only_edit() -> None:
+    """Only the measured typing fix may change production code.
+
+    The previous revision allowed every production path that lacked a mypyc
+    marker, so an unrelated behavior change would have passed. This pins the
+    narrow allowlist to the file whose benchmark copies must stay byte-identical.
+    """
+    assert _unexpected_production_changes(TYPE_ONLY_PRODUCTION_EDITS) == []
+    assert _unexpected_production_changes(["app/services/runtime.py"]) == [
+        "app/services/runtime.py"
+    ]
+    assert _unexpected_production_changes(
+        [*TYPE_ONLY_PRODUCTION_EDITS, "comic_pile/other.py"]
+    ) == ["comic_pile/other.py"]

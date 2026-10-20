@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import TypedDict
 
 REPORT_CLASSIFICATIONS = (
     "matched",
@@ -19,8 +19,8 @@ REPORT_CLASSIFICATIONS = (
 class HydrationReport(TypedDict):
     """Normalized hydration report shape used by operators and tests."""
 
-    summary: dict[str, Any]
-    issues: list[dict[str, Any]]
+    summary: dict[str, object]
+    issues: list[dict[str, object]]
 
 
 def classify_hydration_report(report: dict[str, object]) -> HydrationReport:
@@ -37,7 +37,7 @@ def classify_hydration_report(report: dict[str, object]) -> HydrationReport:
         raise ValueError("hydration report issues must be a list")
 
     counts = dict.fromkeys(REPORT_CLASSIFICATIONS, 0)
-    classified: list[dict[str, Any]] = []
+    classified: list[dict[str, object]] = []
     for raw_issue in raw_issues:
         if not isinstance(raw_issue, dict):
             raise ValueError("hydration report issue rows must be objects")
