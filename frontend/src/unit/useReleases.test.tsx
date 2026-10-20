@@ -6,13 +6,9 @@ import { RELEASES_PAGE_SIZE, releasesQueryOptions, useReleases } from '../hooks/
 import { releasesApi, type Release } from '../services/api-releases'
 import { queryKeys } from '../query/queryKeys'
 
-vi.mock('../services/api-releases', () => ({
-  releasesApi: {
-    list: vi.fn(),
-  },
-}))
 
-const mockedList = vi.mocked(releasesApi.list)
+
+const mockedList = vi.spyOn(releasesApi, 'list')
 
 function release(overrides: Partial<Release> = {}): Release {
   // SAFETY: the release fixture supplies only the fields the hook returns
