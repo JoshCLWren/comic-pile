@@ -525,6 +525,98 @@ async def delete_threads_by_ids(db: AsyncSession, thread_ids: set[int], user_id:
     )
 
 
+async def fetch_repair_candidate_ids(
+    db: AsyncSession,
+    *,
+    user_id: int | None = None,
+) -> tuple[list[int], list[int]]:
+    """Return candidate thread IDs and affected owner IDs for state repair.
+
+    Args:
+        db: Async database session.
+        user_id: When set, scope candidates to one user.
+
+    Returns:
+        Tuple of (candidate thread IDs ordered by ID, sorted owner IDs).
+    """
+    candidate_selects = [
+        select(Thread.id, Thread.user_id).where(
+            Thread.status == "completed",
+            Thread.total_issues.is_not(None),
+        ),
+        select(Thread.id, Thread.user_id).where(
+            Thread.status == "active",
+            Thread.issues_remaining <= 0,
+        ),
+    ]
+    if user_id is not None:
+        candidate_selects = [stmt.where(Thread.user_id == user_id) for stmt in candidate_selects]
+
+    candidate_ids: list[int] = []
+    owner_ids: set[int] = set()
+    for statement in candidate_selects:
+        result = await db.execute(statement.order_by(Thread.id))
+        for thread_id, owner_id in result.all():
+            candidate_ids.append(thread_id)
+            owner_ids.add(owner_id)
+
+    return candidate_ids, sorted(owner_ids)
+
+
+async def fetch_locked_repair_candidates(
+    db: AsyncSession,
+    thread_ids: list[int],
+) -> list[Thread]:
+    """Load and lock candidate threads for repair by ID.
+
+    Args:
+        db: Async database session.
+        thread_ids: Candidate thread IDs to load and lock.
+
+    Returns:
+        Candidate threads locked for update, ordered by ID.
+    """
+    if not thread_ids:
+        return []
+
+    result = await db.execute(
+        select(Thread).where(Thread.id.in_(thread_ids)).order_by(Thread.id).with_for_update()
+    )
+    return list(result.scalars().all())
+
+
+async def fetch_locked_repair_candidates_rechecked(
+    db: AsyncSession,
+    *,
+    user_id: int | None = None,
+) -> list[Thread]:
+    """Fetch repair candidates after rechecking conditions under locks.
+
+    Locks affected owners' queue locks, then selects and revalidates candidates
+    to avoid overwriting concurrent edits.
+    """
+    candidate_ids, owner_ids = await fetch_repair_candidate_ids(db, user_id=user_id)
+    for owner_id in owner_ids:
+        await acquire_queue_lock(db, owner_id)
+    if not candidate_ids:
+        return []
+
+    # Recheck conditions after acquiring locks to avoid overwriting concurrent edits
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.id.in_(candidate_ids))
+        .where(
+            or_(
+                and_(Thread.status == "completed", Thread.total_issues.is_not(None)),
+                and_(Thread.status == "active", Thread.issues_remaining <= 0),
+            )
+        )
+        .order_by(Thread.id)
+        .with_for_update()
+    )
+    return list(result.scalars().all())
+
+
 async def fetch_threads_for_natural_order_scan(
     db: AsyncSession,
     *,

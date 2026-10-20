@@ -73,44 +73,9 @@ async def _lock_repair_candidates(
     Returns:
         Candidate threads locked for repair, ordered by ID.
     """
-    candidate_selects = [
-        select(Thread.id, Thread.user_id).where(
-            Thread.status == "completed",
-            Thread.total_issues.is_not(None),
-        ),
-        # Active threads with no unread issues left violate the completion
-        # invariant and can leave a stale blocked flag behind.
-        select(Thread.id, Thread.user_id).where(
-            Thread.status == "active",
-            Thread.issues_remaining <= 0,
-        ),
-    ]
-    if user_id is not None:
-        candidate_selects = [stmt.where(Thread.user_id == user_id) for stmt in candidate_selects]
-
-    candidate_ids: list[int] = []
-    owner_ids: set[int] = set()
-    for statement in candidate_selects:
-        result = await db.execute(statement.order_by(Thread.id))
-        for thread_id, owner_id in result.all():
-            candidate_ids.append(thread_id)
-            owner_ids.add(owner_id)
-
-    # Sorted owner order keeps concurrent repair passes from deadlocking each
-    # other while they acquire multiple readers' queue locks.
-    for owner_id in sorted(owner_ids):
-        await thread_repository.acquire_queue_lock(db, owner_id)
-
-    if not candidate_ids:
-        return []
-
-    result = await db.execute(
-        select(Thread)
-        .where(Thread.id.in_(candidate_ids))
-        .order_by(Thread.id)
-        .with_for_update()
+    return await thread_repository.fetch_locked_repair_candidates_rechecked(
+        db, user_id=user_id
     )
-    return list(result.scalars().all())
 
 
 async def reconcile_contradictory_completed_threads(
