@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field, field_serializer
 
@@ -93,14 +93,21 @@ def build_session_bandwidth_state(
         A SessionBandwidthState with invalid values normalized to None.
     """
     return SessionBandwidthState(
-        predicted_bandwidth=(
+        predicted_bandwidth=cast(
+            BandwidthLevel | None,
             predicted_bandwidth if predicted_bandwidth in _BANDWIDTH_LEVELS else None
         ),
-        active_bandwidth=active_bandwidth if active_bandwidth in _BANDWIDTH_LEVELS else None,
+        active_bandwidth=cast(
+            BandwidthLevel | None,
+            active_bandwidth if active_bandwidth in _BANDWIDTH_LEVELS else None
+        ),
         confidence=(
             confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None
         ),
-        source=source if source in _BANDWIDTH_SOURCES else None,
+        source=cast(
+            BandwidthSource | None,
+            source if source in _BANDWIDTH_SOURCES else None
+        ),
         mode_version=mode_version,
     )
 
@@ -147,10 +154,19 @@ def build_session_intent_state(
         A SessionIntentState with invalid values normalized to None.
     """
     return SessionIntentState(
-        predicted_intent=predicted_intent if predicted_intent in _INTENT_LEVELS else None,
-        active_intent=active_intent if active_intent in _INTENT_LEVELS else None,
+        predicted_intent=cast(
+            IntentLevel | None,
+            predicted_intent if predicted_intent in _INTENT_LEVELS else None
+        ),
+        active_intent=cast(
+            IntentLevel | None,
+            active_intent if active_intent in _INTENT_LEVELS else None
+        ),
         confidence=confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None,
-        source=source if source in _INTENT_SOURCES else None,
+        source=cast(
+            IntentSource | None,
+            source if source in _INTENT_SOURCES else None
+        ),
         mode_version=mode_version,
     )
 
@@ -463,7 +479,7 @@ class SessionMode(BaseModel):
     intent_version: str | None = Field(
         default=None, description="Version tag for the intent inference algorithm"
     )
-    session_mode_correction_guidance: dict | None = Field(
+    session_mode_correction_guidance: dict[str, Any] | None = Field(
         default=None,
         description="Compact guidance when mode differs from prediction (null when no correction)",
     )
