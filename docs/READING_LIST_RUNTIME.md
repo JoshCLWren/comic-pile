@@ -39,6 +39,9 @@ Unresolved references, stranded prerequisites and cycles fail closed. It derives
 the first unread, non-collection-excluded Issue by position and ID, includes
 inactive prerequisite sources, and retains concrete blocker IDs/provenance.
 Explicit `origin=reader` requirements remain effective regardless of note text.
+The Dependency Builder's `POST /api/v1/dependencies/` path persists new
+reader-authored edges with `origin=reader`, so authoring, thread details, Queue,
+and Roll use the same prerequisite. This does not reclassify existing rows.
 Unclassified historical rows and `origin=converted` generated/plan-compiled
 edges are inactive audit data; they cannot override today's canonical Reading
 Lists. A genuinely intended independent historical restriction must be explicitly

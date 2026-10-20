@@ -243,7 +243,7 @@ async def get_dependency_by_ids(
 async def create_dependency(
     db: AsyncSession, source_issue_id: int, target_issue_id: int
 ) -> Dependency:
-    """Create a new dependency.
+    """Create an explicit reader-authored dependency.
 
     Args:
         db: Database session.
@@ -256,6 +256,7 @@ async def create_dependency(
     dependency = Dependency(
         source_issue_id=source_issue_id,
         target_issue_id=target_issue_id,
+        origin="reader",
     )
     db.add(dependency)
     return dependency

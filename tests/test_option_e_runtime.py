@@ -1087,3 +1087,91 @@ async def test_rejected_current_issue_correction_does_not_commit_progress(
     )).all())
     assert statuses == ["unread", "unread"]
     assert await async_db.scalar(select(Event.id).where(Event.selection_method == "manual")) is None
+
+
+async def test_builder_dependency_blocks_across_live_surfaces(
+    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
+) -> None:
+    """A reader-created prerequisite survives reloads and agrees across all consumers."""
+    user = await get_or_create_user_async(async_db)
+    prerequisite, prerequisite_issues = await _series(async_db, user.id, "Iron Man", 1, count=1)
+    dependent, dependent_issues = await _series(async_db, user.id, "MySpace", 2, count=1)
+    prerequisite_id, dependent_id = prerequisite.id, dependent.id
+    source_id, target_id = prerequisite_issues[0].id, dependent_issues[0].id
+    await async_db.commit()
+
+    created = await auth_client.post("/api/v1/dependencies/", json={
+        "source_type": "issue", "source_id": source_id,
+        "target_type": "issue", "target_id": target_id,
+    })
+    assert created.status_code == 201, created.text
+    dependency_id = created.json()["id"]
+    async_db.expire_all()
+    stored = await async_db.get(Dependency, dependency_id)
+    assert stored is not None
+    assert stored.origin == "reader"
+
+    connected = await auth_client.get(f"/api/v1/threads/{dependent_id}/connected")
+    assert connected.status_code == 200, connected.text
+    assert [(row["thread_id"], row["connection_type"], row["issue_number"])
+            for row in connected.json()["connected_threads"]] == [
+        (prerequisite_id, "blocked_by", "1"),
+    ]
+    info = await auth_client.post(f"/api/v1/threads/{dependent_id}:getBlockingInfo")
+    assert info.status_code == 200, info.text
+    explanation = info.json()
+    assert explanation["is_blocked"] is True
+    assert "Iron Man #1" in explanation["blocking_reasons"][0]
+    detail = await auth_client.get(f"/api/v1/threads/{dependent_id}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["is_blocked"] is True
+    assert detail.json()["blocking_reasons"] == explanation["blocking_reasons"]
+    page = await auth_client.get("/api/v1/threads/", params={"page_size": 50})
+    assert page.status_code == 200, page.text
+    rows = {row["id"]: row for row in page.json()["threads"]}
+    assert set(rows) == {prerequisite_id, dependent_id}
+    assert rows[dependent_id]["is_blocked"] is True
+    assert rows[prerequisite_id]["is_blocked"] is False
+    assert rows[dependent_id]["blocking_reasons"] == explanation["blocking_reasons"]
+    bootstrap = await auth_client.get("/api/v1/roll/bootstrap")
+    assert bootstrap.status_code == 200, bootstrap.text
+    assert [row["id"] for row in bootstrap.json()["roll_pool"]] == [prerequisite_id]
+    assert [row["id"] for row in bootstrap.json()["blocked_threads"]] == [dependent_id]
+    selected = await auth_client.post(f"/api/v1/threads/{dependent_id}/set-pending")
+    assert selected.status_code == 400, selected.text
+
+    removed = await auth_client.delete(f"/api/v1/dependencies/{dependency_id}")
+    assert removed.status_code == 200, removed.text
+    unblocked = await auth_client.post(f"/api/v1/threads/{dependent_id}:getBlockingInfo")
+    assert unblocked.status_code == 200
+    assert unblocked.json()["is_blocked"] is False
+    bootstrap = await auth_client.get("/api/v1/roll/bootstrap")
+    assert {row["id"] for row in bootstrap.json()["roll_pool"]} == {
+        prerequisite_id, dependent_id,
+    }
+
+
+async def test_unclassified_legacy_dependency_is_not_reader_approval(
+    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
+) -> None:
+    """Fixing authoring must not activate existing rows with unknown provenance."""
+    user = await get_or_create_user_async(async_db)
+    prerequisite, prerequisite_issues = await _series(async_db, user.id, "Legacy source", 1)
+    dependent, dependent_issues = await _series(async_db, user.id, "Legacy target", 2)
+    prerequisite_id, dependent_id = prerequisite.id, dependent.id
+    async_db.add(Dependency(
+        source_issue_id=prerequisite_issues[0].id,
+        target_issue_id=dependent_issues[0].id,
+    ))
+    await async_db.commit()
+    info = await auth_client.post(f"/api/v1/threads/{dependent_id}:getBlockingInfo")
+    assert info.status_code == 200
+    assert info.json()["is_blocked"] is False
+    connected = await auth_client.get(f"/api/v1/threads/{dependent_id}/connected")
+    assert connected.status_code == 200
+    assert connected.json()["connected_threads"] == []
+    bootstrap = await auth_client.get("/api/v1/roll/bootstrap")
+    assert bootstrap.status_code == 200
+    assert {row["id"] for row in bootstrap.json()["roll_pool"]} == {
+        prerequisite_id, dependent_id,
+    }
