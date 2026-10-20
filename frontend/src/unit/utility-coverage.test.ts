@@ -154,6 +154,18 @@ describe('roll utilities', () => {
     expect(getProgressPercentage({ total_issues: 4, issues_remaining: 1 })).toBe(75)
   })
 
+  it('never reports a roll progress percentage outside 0% and 100%', () => {
+    // The reported #3595 counters: one total issue with 36 still to read.
+    expect(getProgressPercentage({ total_issues: 1, issues_remaining: 36 })).toBe(0)
+    expect(getProgressPercentage({ total_issues: 10, issues_remaining: -4 })).toBe(0)
+    expect(getProgressPercentage({ total_issues: 10, issues_remaining: 20 })).toBe(0)
+    expect(getProgressPercentage({ total_issues: 10, issues_remaining: Number.NaN })).toBe(0)
+    // The consistent boundaries still report their real share.
+    expect(getProgressPercentage({ total_issues: 4, issues_remaining: 0 })).toBe(100)
+    expect(getProgressPercentage({ total_issues: 4, issues_remaining: 4 })).toBe(0)
+    expect(getProgressPercentage({ total_issues: 4 })).toBe(100)
+  })
+
   it('creates an explosion and cleans particles', () => {
     vi.useFakeTimers()
     const layer = document.createElement('div')
