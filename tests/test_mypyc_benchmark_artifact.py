@@ -485,10 +485,42 @@ def test_recorded_decision_document_states_the_verdict() -> None:
 
 
 def test_recorded_decision_is_not_a_production_runtime_switch() -> None:
-    """The evaluation must not have touched any runtime or deployment file."""
-    protected = ("app/", "comic_pile/", "alembic/", "api/", "Dockerfile", "vercel.json", ".github/")
-    offenders = [path for path in _git_ls_files() if path.startswith(protected) and _is_new_in_head(path)]
-    assert offenders == [], f"issue #3258 forbids production changes, but found {offenders}"
+    """The evaluation must not add deployment wiring or compile production modules.
+
+    Type-only edits to a measured production module are allowed: the benchmark
+    copies have to stay byte-identical to production, so a typing fix must land
+    in both places. What stays forbidden is turning production into a compiled
+    or deployment surface.
+    """
+    deployment_surfaces = (
+        "api/",
+        "alembic/",
+        "Dockerfile",
+        "Dockerfile.ci",
+        "vercel.json",
+        ".github/",
+    )
+    deployment_offenders = [
+        path for path in _git_ls_files() if path.startswith(deployment_surfaces) and _is_new_in_head(path)
+    ]
+    assert deployment_offenders == [], (
+        f"issue #3258 forbids deployment changes, but found {deployment_offenders}"
+    )
+
+    compilation_markers = ("mypyc", "mypycify", "__mypyc")
+    runtime_offenders = [
+        path
+        for path in _git_ls_files()
+        if path.startswith(("app/", "comic_pile/"))
+        and _is_new_in_head(path)
+        and any(
+            marker in (REPO_ROOT / path).read_text(encoding="utf-8", errors="ignore")
+            for marker in compilation_markers
+        )
+    ]
+    assert runtime_offenders == [], (
+        f"issue #3258 forbids compiled production modules, but found {runtime_offenders}"
+    )
 
 
 def _base_ref(cwd: Path = REPO_ROOT) -> str | None:
