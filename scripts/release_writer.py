@@ -93,6 +93,8 @@ _SCOPE_FENCE_SOURCES: tuple[tuple[str, str], ...] = (
     ),
     (r"\bfollow[\s-]*up\s+(?:ui|work)\b", "follow-up user surface"),
     (r"\b(?:staged|partial|phased)\s+rollout\b", "staged rollout"),
+    # Internal engineering terms that indicate this is not a user-facing change
+    (r"\b(?:factory|controller|evidence|inspection|proof|session|reliability|audit|style-drift|endpoint|literal|jargon)\b", "internal engineering term"),
 )
 _SCOPE_FENCE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     (re.compile(pattern, re.IGNORECASE), label)
@@ -336,6 +338,24 @@ def _validate_release(raw: str) -> dict[str, object]:
     provenance = payload.get("provenance_json", {})
     if not isinstance(provenance, dict):
         _fail("provenance_json must be an object")
+    
+    # Auto-detect internal engineering terms and classify as internal
+    if payload.get("visibility") != "internal":  # Only check if not already explicitly internal
+        text_to_check = f"{payload.get('title', '')} {payload.get('summary', '')} {payload.get('body', '')}"
+        if _has_internal_engineering_terms(text_to_check):
+            payload["visibility"] = "internal"
+            if "provenance_json" not in payload:
+                payload["provenance_json"] = {}
+            payload["provenance_json"].update({
+                "classification": "internal",
+                "reason": "Auto-detected internal engineering terms",
+                "reader_reachable": False,
+                "user_visible_evidence": "",
+                "inspected_issue_numbers": [],
+                "scope_fences": [],
+                "contradicting_evidence": [],
+            })
+    
     payload.setdefault("visibility", "public")
     payload.setdefault("status", "published")
     payload.setdefault("sort_order", 0)
@@ -889,6 +909,43 @@ def _linked_references(text: str, own_number: int) -> dict[int, str]:
         if referenced != own_number:
             references.setdefault(referenced, _relationship_hints(text, match.start()))
     return references
+
+
+def _has_internal_engineering_terms(text: str) -> bool:
+    """Check if the text contains internal engineering terms that indicate this is not user-facing.
+
+    Args:
+        text: Release title, summary, or body that may contain internal engineering terms.
+
+    Returns:
+        True if internal engineering terms are detected, False otherwise.
+    """
+    internal_terms = [
+        r"\bfactory\b",
+        r"\bcontroller\b",
+        r"\bevidence\b",
+        r"\binspection\b", 
+        r"\bproof\b",
+        r"\bsession\b",
+        r"\breliability\b",
+        r"\baudit\b",
+        r"\bstyle-drift\b",
+        r"\bendpoint\b",
+        r"\bliteral\b",
+        r"\bjargon\b",
+        r"\bbackend\s+prerequisite\b",
+        r"\bapi\s+change\b",
+        r"\bserver\s+change\b",
+        r"\binternal\s+refactor\b",
+        r"\bimplementation\s+detail\b",
+        r"\bengineering\s+change\b",
+    ]
+    
+    visible_text = _visible_release_text(text)
+    for pattern in internal_terms:
+        if re.search(pattern, visible_text, re.IGNORECASE):
+            return True
+    return False
 
 
 def _scope_fences(text: str) -> list[str]:
