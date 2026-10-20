@@ -893,6 +893,380 @@ async def test_connected_threads_flag_circular_dependencies(
 
 
 @pytest.mark.asyncio
+async def test_connected_threads_interleaved_chain_is_not_circular(
+    async_db, auth_client, default_user
+):
+    """Two series linked in both directions are not an issue-level cycle.
+
+    Regression coverage for issue #3596: an interleaved chain such as
+    ``USM#22 -> TYI#1 -> USM#23`` points at the same two series in both
+    directions, so the thread pair looks mutual, but no issue-level loop
+    exists and the reading order stays possible.
+    """
+    user = default_user
+
+    thread_a = Thread(
+        title="Uncanny Spider-Man",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+    )
+    thread_b = Thread(
+        title="The Amazing Spider-Man",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    async_db.add_all([thread_a, thread_b])
+    await async_db.flush()
+
+    a_issue_22 = Issue(
+        thread_id=thread_a.id, issue_number="22", position=1, status="unread"
+    )
+    a_issue_23 = Issue(
+        thread_id=thread_a.id, issue_number="23", position=2, status="unread"
+    )
+    b_issue_1 = Issue(thread_id=thread_b.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([a_issue_22, a_issue_23, b_issue_1])
+    await async_db.flush()
+
+    # A#22 -> B#1 -> A#23: the series point at each other in both
+    # directions, but the issue graph itself stays acyclic.
+    async_db.add_all([
+        Dependency(source_issue_id=a_issue_22.id, target_issue_id=b_issue_1.id),
+        Dependency(source_issue_id=b_issue_1.id, target_issue_id=a_issue_23.id),
+    ])
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/threads/{thread_a.id}/connected")
+    assert response.status_code == 200
+
+    connected = {
+        ct["thread_id"]: ct for ct in response.json()["connected_threads"]
+    }
+
+    assert connected[thread_b.id]["connection_type"] == "blocks & blocked_by"
+    assert connected[thread_b.id]["is_circular"] is False
+
+
+@pytest.mark.asyncio
+async def test_connected_threads_flag_backward_series_chain_as_circular(
+    async_db, auth_client, default_user
+):
+    """A backward chain is circular once required series order is included.
+
+    Regression coverage for the Greptile finding on PR #3957: with A#1 before
+    A#2, ``A#2 -> B#1 -> A#1`` stays impossible because A#1 has to be read
+    before A#2. The stored rows alone look like a harmless chain, so the
+    implicit within-series order has to participate in cycle detection.
+    """
+    user = default_user
+
+    thread_a = Thread(
+        title="Uncanny Spider-Man",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    thread_b = Thread(
+        title="The Amazing Spider-Man",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    async_db.add_all([thread_a, thread_b])
+    await async_db.flush()
+
+    a_issue_1 = Issue(thread_id=thread_a.id, issue_number="1", position=1, status="unread")
+    a_issue_2 = Issue(thread_id=thread_a.id, issue_number="2", position=2, status="unread")
+    b_issue_1 = Issue(thread_id=thread_b.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([a_issue_1, a_issue_2, b_issue_1])
+    await async_db.flush()
+
+    async_db.add_all([
+        Dependency(source_issue_id=a_issue_2.id, target_issue_id=b_issue_1.id),
+        Dependency(source_issue_id=b_issue_1.id, target_issue_id=a_issue_1.id),
+    ])
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/threads/{thread_a.id}/connected")
+    assert response.status_code == 200
+
+    connected = {
+        ct["thread_id"]: ct for ct in response.json()["connected_threads"]
+    }
+
+    assert connected[thread_b.id]["connection_type"] == "blocks & blocked_by"
+    assert connected[thread_b.id]["is_circular"] is True
+
+    response_from_b = await auth_client.get(f"/api/v1/threads/{thread_b.id}/connected")
+    assert response_from_b.status_code == 200
+
+    connected_from_b = {
+        ct["thread_id"]: ct for ct in response_from_b.json()["connected_threads"]
+    }
+
+    assert connected_from_b[thread_a.id]["is_circular"] is True
+
+
+@pytest.mark.asyncio
+async def test_connected_threads_flag_multi_thread_issue_cycle(
+    async_db, auth_client, default_user
+):
+    """A cycle that runs through several series is a real issue-level loop.
+
+    Regression coverage for issue #3596: circularity is decided on the
+    issue -> issue graph, so a three-series cycle is reported even though no
+    single series points at another one in both directions.
+    """
+    user = default_user
+
+    thread_a = Thread(
+        title="X-Men",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    thread_b = Thread(
+        title="Magneto Rex",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    thread_c = Thread(
+        title="Astro City",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    async_db.add_all([thread_a, thread_b, thread_c])
+    await async_db.flush()
+
+    a_issue = Issue(thread_id=thread_a.id, issue_number="1", position=1, status="unread")
+    b_issue = Issue(thread_id=thread_b.id, issue_number="1", position=1, status="unread")
+    c_issue = Issue(thread_id=thread_c.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([a_issue, b_issue, c_issue])
+    await async_db.flush()
+
+    # A#1 -> B#1 -> C#1 -> A#1
+    async_db.add_all([
+        Dependency(source_issue_id=a_issue.id, target_issue_id=b_issue.id),
+        Dependency(source_issue_id=b_issue.id, target_issue_id=c_issue.id),
+        Dependency(source_issue_id=c_issue.id, target_issue_id=a_issue.id),
+    ])
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/threads/{thread_a.id}/connected")
+    assert response.status_code == 200
+
+    connected = {
+        ct["thread_id"]: ct for ct in response.json()["connected_threads"]
+    }
+
+    assert connected[thread_b.id]["is_circular"] is True
+    assert connected[thread_c.id]["is_circular"] is True
+
+
+@pytest.mark.asyncio
+async def test_connected_threads_ignore_inert_cbl_order_rows_for_circularity(
+    async_db, auth_client, default_user
+):
+    """Inert historical materialization rows cannot close a reading-order loop.
+
+    Regression coverage for issue #3596: a ``cbl-order:`` row is historical
+    CBL materialization that the frozen canonical runtime never treats as a
+    blocker, so it can never make a reading order impossible. Counting it
+    would reproduce the false "Circular Dependencies" warning the issue
+    reports for a reader whose dependency table is mostly inert rows.
+    """
+    user = default_user
+
+    thread_a = Thread(
+        title="Uncanny Spider-Man",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    thread_b = Thread(
+        title="The Amazing Spider-Man",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    async_db.add_all([thread_a, thread_b])
+    await async_db.flush()
+
+    a_issue_1 = Issue(thread_id=thread_a.id, issue_number="1", position=1, status="unread")
+    a_issue_2 = Issue(thread_id=thread_a.id, issue_number="2", position=2, status="unread")
+    b_issue_1 = Issue(thread_id=thread_b.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([a_issue_1, a_issue_2, b_issue_1])
+    await async_db.flush()
+
+    # A#2 -> B#1 is a live prerequisite. B#1 -> A#1 is inert historical
+    # materialization, so it must not close the loop A#1 -> A#2 -> B#1.
+    async_db.add_all([
+        Dependency(source_issue_id=a_issue_2.id, target_issue_id=b_issue_1.id),
+        Dependency(
+            source_issue_id=b_issue_1.id,
+            target_issue_id=a_issue_1.id,
+            note="cbl-order:source:test-hash:1->2",
+        ),
+    ])
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/threads/{thread_a.id}/connected")
+    assert response.status_code == 200
+
+    connected = {
+        ct["thread_id"]: ct for ct in response.json()["connected_threads"]
+    }
+
+    assert connected[thread_b.id]["is_circular"] is False
+
+
+@pytest.mark.asyncio
+async def test_connected_threads_omit_satisfied_read_blocker(
+    async_db, auth_client, default_user
+):
+    """A blocker whose source issue is already read is not an active prerequisite.
+
+    Regression coverage for issue #3596: the dependency panel used to list
+    prerequisites that were already satisfied, so a series looked blocked by
+    something the reader had finished long ago.
+    """
+    user = default_user
+
+    target_thread = Thread(
+        title="Promethea",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    blocker_thread = Thread(
+        title="Starman",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    async_db.add_all([target_thread, blocker_thread])
+    await async_db.flush()
+
+    read_issue = Issue(
+        thread_id=blocker_thread.id, issue_number="42", position=1, status="read"
+    )
+    target_issue = Issue(
+        thread_id=target_thread.id, issue_number="1", position=1, status="unread"
+    )
+    async_db.add_all([read_issue, target_issue])
+    await async_db.flush()
+
+    async_db.add(
+        Dependency(source_issue_id=read_issue.id, target_issue_id=target_issue.id)
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/threads/{target_thread.id}/connected")
+    assert response.status_code == 200
+
+    connected = response.json()["connected_threads"]
+    assert [ct["thread_id"] for ct in connected] == []
+
+
+@pytest.mark.asyncio
+async def test_connected_threads_keep_unread_blocker_from_same_series(
+    async_db, auth_client, default_user
+):
+    """A satisfied prerequisite does not hide an unread one from the same series.
+
+    Regression coverage for issue #3596: only the dependency rows whose
+    source issue is already read are left out, so a series that still holds
+    an unread prerequisite keeps its place in the dependency panel.
+    """
+    user = default_user
+
+    target_thread = Thread(
+        title="Promethea",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    blocker_thread = Thread(
+        title="Starman",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    async_db.add_all([target_thread, blocker_thread])
+    await async_db.flush()
+
+    read_issue = Issue(
+        thread_id=blocker_thread.id, issue_number="41", position=1, status="read"
+    )
+    unread_issue = Issue(
+        thread_id=blocker_thread.id, issue_number="42", position=2, status="unread"
+    )
+    target_issue = Issue(
+        thread_id=target_thread.id, issue_number="1", position=1, status="unread"
+    )
+    async_db.add_all([read_issue, unread_issue, target_issue])
+    await async_db.flush()
+
+    async_db.add_all([
+        Dependency(source_issue_id=read_issue.id, target_issue_id=target_issue.id),
+        Dependency(source_issue_id=unread_issue.id, target_issue_id=target_issue.id),
+    ])
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/threads/{target_thread.id}/connected")
+    assert response.status_code == 200
+
+    connected = response.json()["connected_threads"]
+    assert len(connected) == 1
+    assert connected[0]["thread_id"] == blocker_thread.id
+    assert connected[0]["connection_type"] == "blocked_by"
+    assert connected[0]["issue_number"] == "42"
+
+
+@pytest.mark.asyncio
 async def test_blocking_explanations_identify_comics_without_raw_thread_ids(async_db):
     """Queue blocked-thread copy uses human identity; raw thread ids never render.
 

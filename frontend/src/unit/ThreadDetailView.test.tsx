@@ -509,6 +509,9 @@ it('lists a circular dependency once instead of under both directions (#3239)', 
 
   expect(screen.getByRole('heading', { name: /Circular Dependencies/ })).toBeInTheDocument()
   expect(
+    screen.getByText(/part of a dependency loop with this series/),
+  ).toBeInTheDocument()
+  expect(
     screen.getByRole('link', { name: 'Open Magneto Rex (circular dependency)' }),
   ).toHaveAttribute('href', '/thread/9')
 

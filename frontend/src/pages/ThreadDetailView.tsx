@@ -375,11 +375,12 @@ export default function ThreadDetailView() {
           {!connectedError && !connectedPending && connectedThreads.length > 0 && (
             <div className="space-y-3">
               {(() => {
-                // A circular connection both blocks and is blocked by this
-                // series (#3239). Listing it under "Blocked by" and "Blocking"
-                // simultaneously is exactly the impossible reading order the
-                // report describes, so it is presented once in its own region
-                // and excluded from both directional lists.
+                // A circular connection shares a real dependency loop with
+                // this series (#3239, #3596). Listing it under "Blocked by"
+                // and "Blocking" simultaneously would present the impossible
+                // reading order as if it were ordinary, so it is presented
+                // once in its own region and excluded from both directional
+                // lists.
                 const circular = connectedThreads.filter((t) => t.is_circular)
                 const oneWay = connectedThreads.filter((t) => !t.is_circular)
                 const blockedBy = oneWay.filter((t) => t.connection_type.includes('blocked_by'))
@@ -391,9 +392,9 @@ export default function ThreadDetailView() {
                       <div className="space-y-1">
                         <h3 className="text-base font-bold text-[var(--theme-warning)]">⚠️ Circular Dependencies</h3>
                         <p className="text-xs text-[var(--theme-text-muted)]">
-                          Each series below both blocks and is blocked by this series — an impossible
-                          reading order until the dependency direction is corrected. They are listed
-                          here once instead of under both directions.
+                          Each series below is part of a dependency loop with this series — an
+                          impossible reading order until the loop is broken. They are listed here
+                          once instead of under both directions.
                         </p>
                         {circular.map((t) => (
                           <Link

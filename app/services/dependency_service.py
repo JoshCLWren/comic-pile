@@ -14,11 +14,15 @@ from fastapi import HTTPException
 from app.config import get_reading_execution_settings
 from app.models import Dependency, Issue, Thread
 from app.repositories import dependency_repository, issue_repository
+from app.services.dependency_cycle import (
+    build_reading_order_graph,
+    find_thread_cycle_issue_ids,
+)
+from app.services.ownership_guard import require_dependency_endpoints_owned
 from app.services.reading_eligibility_service import (
     get_execution_eligibility,
     project_blocking_explanation,
 )
-from app.services.ownership_guard import require_dependency_endpoints_owned
 from app.schemas.dependency import (
     BlockingDependency,
     BlockingExplanation,
@@ -514,6 +518,17 @@ async def get_thread_connected_threads(
         for thread_obj in result.scalars():
             thread_map[thread_obj.id] = thread_obj
 
+    # A prerequisite whose source issue is already read is satisfied: it can no
+    # longer hold this series back, so it is not an active blocker. The same
+    # rule governs Roll eligibility in comic_pile.dependencies, so the
+    # dependency panel and the blocked state can never disagree.
+    active_blocked_by_deps = [
+        dep
+        for dep in blocked_by_deps
+        if (source_issue_obj := issue_map.get(dep.source_issue_id)) is None
+        or source_issue_obj.status != "read"
+    ]
+
     # Track unique connected threads by thread_id, aggregating connection types.
     connected_by_thread: dict[int, dict] = {}
 
@@ -536,7 +551,7 @@ async def get_thread_connected_threads(
                         connected_by_thread[tid]["types"].add("blocks")
                         connected_by_thread[tid]["dependency_ids"].add(dep.id)
 
-    for dep in blocked_by_deps:
+    for dep in active_blocked_by_deps:
         if dep.source_issue_id is not None:
             source_issue_obj = issue_map.get(dep.source_issue_id)
             if source_issue_obj:
@@ -555,6 +570,23 @@ async def get_thread_connected_threads(
                         connected_by_thread[tid]["types"].add("blocked_by")
                         connected_by_thread[tid]["dependency_ids"].add(dep.id)
 
+    # Circularity is a verdict on the effective reading precedence graph: the
+    # stored dependencies plus the required within-series issue order. Two
+    # series that point at each other in both directions through different
+    # issues, such as a forward interleaving, are not a cycle; a backward chain
+    # closes a real loop because the earlier issue in the series must be read
+    # first (issue #3596).
+    graph = await dependency_repository.get_reader_dependency_graph(db, user_id)
+    graph_edges, graph_issue_threads = build_reading_order_graph(graph.edges, graph.issues)
+    cyclic_issue_ids = find_thread_cycle_issue_ids(
+        graph_edges, graph_issue_threads, thread_id
+    )
+    circular_thread_ids = {
+        graph_issue_threads[issue_id]
+        for issue_id in cyclic_issue_ids
+        if issue_id in graph_issue_threads
+    }
+
     connected: list[ConnectedThreadInfo] = []
 
     for entry in connected_by_thread.values():
@@ -566,9 +598,9 @@ async def get_thread_connected_threads(
         else:
             connection_type = "blocks & blocked_by"
 
-        # A thread that both blocks and is blocked by this thread forms a
-        # two-edge cycle: an impossible reading order (issue #3239).
-        is_circular = "blocks" in types and "blocked_by" in types
+        # The series shares a genuine issue-level cycle with this thread, so
+        # no issue in that cycle can be read first (issue #3239, #3596).
+        is_circular = entry["thread_id"] in circular_thread_ids
 
         connected.append(ConnectedThreadInfo(
             thread_id=entry["thread_id"],

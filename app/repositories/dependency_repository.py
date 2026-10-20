@@ -5,10 +5,30 @@ return ORM models or plain values; callers (services) own transactions.
 """
 
 
+from dataclasses import dataclass
+
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
+
+
+@dataclass(frozen=True)
+class ReaderDependencyGraph:
+    """Reader-scoped dependency edges together with the issues they connect.
+
+    Attributes:
+        edges: Canonical ``(source_issue_id, target_issue_id)`` prerequisite
+            pairs. Inert ``cbl-order:`` materialization rows are excluded
+            because they can never constrain the reader.
+        issues: ``(issue_id, thread_id, position, status)`` for every issue on
+            either side of ``edges``. ``position`` is the canonical
+            within-series reading order needed to complete the precedence
+            graph.
+    """
+
+    edges: tuple[tuple[int, int], ...]
+    issues: tuple[tuple[int, int, int, str], ...]
 
 
 async def get_dependency(db: AsyncSession, dependency_id: int) -> Dependency | None:
@@ -115,6 +135,87 @@ async def get_thread_connected_dependencies(
     blocked_by_deps = list(blocked_by_result.scalars().all())
 
     return blocking_deps, blocked_by_deps
+
+
+async def get_reader_dependency_graph(
+    db: AsyncSession, user_id: int
+) -> ReaderDependencyGraph:
+    """Get every live dependency edge touching one reader's issues, with issue order.
+
+    The issue -> issue dependency graph is the authority for circularity: a
+    cycle in it is the only reading order that is impossible. Reading the
+    whole reader-scoped graph keeps that verdict independent of which thread
+    the caller happens to be looking at. Each endpoint's series position
+    travels with the edge because the required within-series order is an
+    implicit precedence constraint that the stored rows do not contain.
+
+    Only canonical Dependency rows take part. Historical ``cbl-order:``
+    materialization rows are inert for the frozen canonical runtime
+    (``comic_pile.dependencies``): they can never block, so they can never
+    make a reading order impossible and must not manufacture a circular
+    verdict. They are also the overwhelming majority of a real reader's rows,
+    so excluding them keeps this reader-wide read proportional to the live
+    constraints instead of the whole materialization history.
+
+    Args:
+        db: Database session.
+        user_id: Reader whose dependency edges are read.
+
+    Returns:
+        Canonical stored edges plus the issue rows needed to complete the
+        precedence graph with the required within-series order.
+    """
+    source_issue = Issue.__table__.alias("graph_source_issue")
+    target_issue = Issue.__table__.alias("graph_target_issue")
+    source_thread = Thread.__table__.alias("graph_source_thread")
+    target_thread = Thread.__table__.alias("graph_target_thread")
+
+    # Imported here because the legacy package's module init reaches back into
+    # ``app.repositories``; a module-level import would close that cycle.
+    from comic_pile.dependencies import _canonical_dependency_filter
+
+    result = await db.execute(
+        select(
+            Dependency.source_issue_id.label("source_issue_id"),
+            Dependency.target_issue_id.label("target_issue_id"),
+        )
+        .join(source_issue, source_issue.c.id == Dependency.source_issue_id)
+        .join(source_thread, source_thread.c.id == source_issue.c.thread_id)
+        .join(target_issue, target_issue.c.id == Dependency.target_issue_id)
+        .join(target_thread, target_thread.c.id == target_issue.c.thread_id)
+        .where(
+            or_(
+                source_thread.c.user_id == user_id,
+                target_thread.c.user_id == user_id,
+            )
+        )
+        .where(_canonical_dependency_filter())
+    )
+
+    edges: list[tuple[int, int]] = []
+    issue_ids: set[int] = set()
+    for source_issue_id, target_issue_id in result.all():
+        edges.append((source_issue_id, target_issue_id))
+        issue_ids.add(source_issue_id)
+        issue_ids.add(target_issue_id)
+
+    if not issue_ids:
+        return ReaderDependencyGraph(edges=tuple(edges), issues=())
+
+    issue_result = await db.execute(
+        select(
+            Issue.id.label("issue_id"),
+            Issue.thread_id.label("thread_id"),
+            Issue.position.label("position"),
+            Issue.status.label("status"),
+        ).where(Issue.id.in_(issue_ids))
+    )
+    issues = tuple(
+        (row.issue_id, row.thread_id, row.position, row.status)
+        for row in issue_result.all()
+    )
+
+    return ReaderDependencyGraph(edges=tuple(edges), issues=issues)
 
 
 async def get_dependency_by_ids(
