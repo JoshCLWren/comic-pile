@@ -81,6 +81,18 @@ def test_release_writer_contract_requires_reader_facing_copy_rules() -> None:
     assert "Spell-check every title, category, and summary" in agent_text
 
 
+def test_release_writer_contract_forbids_engineering_artifacts_in_copy() -> None:
+    """The agent instructions must forbid engineering artifacts in public copy.
+
+    Returns:
+        None.
+    """
+    agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
+    assert "Never publish engineering artifacts" in agent_text
+    assert "POST /api/v1/threads" in agent_text
+    assert "classifies" in agent_text and "as internal" in agent_text
+
+
 def test_release_writer_contract_documents_exact_source_and_skip_shape() -> None:
     """Avoid wasting model calls on malformed check and skip helper invocations."""
     agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")

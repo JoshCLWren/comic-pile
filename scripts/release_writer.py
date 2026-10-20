@@ -45,6 +45,17 @@ _UNFINISHED_WORK_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Worker attribution boilerplate carried on every factory pull-request body.
+# The words "factory" and "model" in that boilerplate describe how the change
+# was produced, not what the change is, so those lines are removed before any
+# engineering-term scan. A real internal statement in the remaining text still
+# fences normally.
+_WORKER_BOILERPLATE_PATTERN = re.compile(
+    r"^Produced by [^\n]*\bFactory\b[^\n]*$"
+    r"|\bopencode-[a-z-]*factory-\d+\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
 _KNOWN_TYPOS: dict[str, str] = {
     "appearnence": "appearance",
     "appearence": "appearance",
@@ -93,6 +104,167 @@ _SCOPE_FENCE_SOURCES: tuple[tuple[str, str], ...] = (
     ),
     (r"\bfollow[\s-]*up\s+(?:ui|work)\b", "follow-up user surface"),
     (r"\b(?:staged|partial|phased)\s+rollout\b", "staged rollout"),
+)
+
+# Nouns that name factory automation concepts. The word "factory" only reads
+# as engineering work when it qualifies one of these, so a product sentence
+# that merely says "factory" never becomes a decisive scope fence.
+_FACTORY_AUTOMATION_NOUNS = (
+    "agent|artifact|artifacts|automation|backlog|branch|check|checks|claim|claims|"
+    "commit|control|controller|dispatch|dispatcher|dashboard|evidence|gate|gates|"
+    "heartbeat|head|inspection|instructions|ledger|lease|leases|lane|lanes|log|logs|"
+    "marker|merge|model|note|notes|output|plan|policy|policies|process|provenance|"
+    "proof|queue|release|review|run|runs|schedule|scheduler|session|sessions|"
+    "stack|state|tool|tools|triage|verdict|worker|workers|writer"
+)
+
+# Engineering terms that identify internal engineering work in reader-facing
+# release copy. This table drives the deterministic copy classification only;
+# it is deliberately not applied to pull-request and issue descriptions, so a
+# description that merely quotes an artifact such as `POST /api/roll` or a
+# diff frame can never block a public note whose served copy is clean.
+# Statements that the reader-visible portion is not in this change stay in
+# `_SCOPE_FENCE_SOURCES`, which is what the linked-context fence checks.
+#
+# "decisive" terms are engineering artifacts that reader-facing product copy
+# cannot contain, so they always classify a release as internal. "suggestive"
+# terms are ordinary words that are also engineering jargon; they only classify
+# a release as internal when the payload records no reader-facing evidence, so
+# a reader-facing note that happens to use one stays public.
+#
+# Ordinary product words are deliberately absent. Reading sessions, proofs,
+# audits, reliability, endpoints, inspections, and controllers are ordinary
+# language for a reader of a comic tracker, so no ordinary word may classify a
+# note on its own.
+_ENGINEERING_TERM_SOURCES: tuple[tuple[re.Pattern[str], str, str], ...] = (
+    (
+        re.compile(r"\bdiff\s+--git\b", re.IGNORECASE),
+        "diff fragment",
+        "decisive",
+    ),
+    (
+        re.compile(r"^\s*(?:---|\+\+\+)\s+[ab]/", re.MULTILINE),
+        "diff fragment",
+        "decisive",
+    ),
+    (
+        re.compile(r"\b(?:GET|POST|PUT|PATCH|DELETE)\s+/api\b", re.IGNORECASE),
+        "endpoint literal",
+        "decisive",
+    ),
+    (
+        re.compile(r"/api/v\d+/", re.IGNORECASE),
+        "endpoint literal",
+        "decisive",
+    ),
+    (
+        re.compile(r"(?<![\w.-])/api/[a-z]", re.IGNORECASE),
+        "endpoint literal",
+        "decisive",
+    ),
+    (
+        re.compile(r"\bstyle[-\s]drift\b", re.IGNORECASE),
+        "style-drift terminology",
+        "decisive",
+    ),
+    (
+        re.compile(r"\bfixed[-\s]model\b", re.IGNORECASE),
+        "factory model attribution",
+        "decisive",
+    ),
+    (
+        re.compile(r"\bomniroute\b", re.IGNORECASE),
+        "factory infrastructure",
+        "decisive",
+    ),
+    (
+        re.compile(
+            rf"\bfactory[\s-]+(?:{_FACTORY_AUTOMATION_NOUNS})\b",
+            re.IGNORECASE,
+        ),
+        "factory automation",
+        "decisive",
+    ),
+    (
+        re.compile(r"\binternal\s+refactor\b", re.IGNORECASE),
+        "internal refactor",
+        "decisive",
+    ),
+    (
+        re.compile(r"\bimplementation\s+detail", re.IGNORECASE),
+        "implementation detail",
+        "decisive",
+    ),
+    (
+        re.compile(r"\bengineering\s+change\b", re.IGNORECASE),
+        "engineering change",
+        "decisive",
+    ),
+    (
+        re.compile(r"\bapi\s+change\b", re.IGNORECASE),
+        "api change",
+        "decisive",
+    ),
+    (
+        re.compile(r"\bserver\s+change\b", re.IGNORECASE),
+        "server change",
+        "decisive",
+    ),
+    (
+        re.compile(r"\bbackend\s+prerequisite\b", re.IGNORECASE),
+        "backend prerequisite",
+        "decisive",
+    ),
+    (
+        re.compile(r"\bfactory\b", re.IGNORECASE),
+        "factory terminology",
+        "suggestive",
+    ),
+    (
+        re.compile(r"\bcontroller\b", re.IGNORECASE),
+        "controller terminology",
+        "suggestive",
+    ),
+    (
+        re.compile(r"\bevidence\b", re.IGNORECASE),
+        "evidence terminology",
+        "suggestive",
+    ),
+    (
+        re.compile(r"\binspection\b", re.IGNORECASE),
+        "inspection terminology",
+        "suggestive",
+    ),
+    (
+        re.compile(r"\bproof\b", re.IGNORECASE),
+        "proof terminology",
+        "suggestive",
+    ),
+    (
+        re.compile(r"\breliability\b", re.IGNORECASE),
+        "reliability terminology",
+        "suggestive",
+    ),
+    (
+        re.compile(r"\baudit\b", re.IGNORECASE),
+        "audit terminology",
+        "suggestive",
+    ),
+    (
+        re.compile(r"\bendpoint\b", re.IGNORECASE),
+        "endpoint terminology",
+        "suggestive",
+    ),
+    (
+        re.compile(r"\bliteral\b", re.IGNORECASE),
+        "literal terminology",
+        "suggestive",
+    ),
+    (
+        re.compile(r"\bjargon\b", re.IGNORECASE),
+        "jargon terminology",
+        "suggestive",
+    ),
 )
 _SCOPE_FENCE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     (re.compile(pattern, re.IGNORECASE), label)
@@ -336,6 +508,19 @@ def _validate_release(raw: str) -> dict[str, object]:
     provenance = payload.get("provenance_json", {})
     if not isinstance(provenance, dict):
         _fail("provenance_json must be an object")
+    payload.setdefault("provenance_json", provenance)
+
+    # Deterministic internal classification. A decisive engineering artifact
+    # always classifies the record as internal because reader-facing copy
+    # cannot contain one. A suggestive term only classifies the record as
+    # internal when the payload records no reader-facing evidence, so a
+    # reader-facing note that happens to use an ordinary word stays public.
+    if payload.get("visibility") != "internal":
+        decisive, suggestive = _engineering_terms(_release_copy_text(payload))
+        if decisive or (suggestive and not _records_reader_facing_evidence(provenance)):
+            payload["visibility"] = "internal"
+            _record_internal_classification(payload, decisive or suggestive)
+
     payload.setdefault("visibility", "public")
     payload.setdefault("status", "published")
     payload.setdefault("sort_order", 0)
@@ -520,6 +705,25 @@ def _changed_files(repository: str, number: int) -> list[dict[str, object]]:
     return [item for item in result if isinstance(item, dict)]
 
 
+def _strip_worker_boilerplate(text: str) -> str:
+    """Remove worker attribution boilerplate from text scanned for scope fences.
+
+    Every factory-written pull request carries an attribution footer
+    ("Produced by fixed-model Factory 46 (...)") and a durable worker
+    identifier ("opencode-free-model-factory-46"). Those tokens describe how
+    the change was produced, not what the change is, so they are removed
+    before scope-fence detection. A real internal statement in the remaining
+    text still fences normally.
+
+    Args:
+        text: Pull request or issue text that may carry worker boilerplate.
+
+    Returns:
+        The text with worker-boilerplate lines removed.
+    """
+    return _WORKER_BOILERPLATE_PATTERN.sub("", text)
+
+
 def _linked_scope_fences(repository: str, number: int) -> list[str]:
     """Return scope fences detected in the linked issue context of a pull request.
 
@@ -541,7 +745,7 @@ def _linked_scope_fences(repository: str, number: int) -> list[str]:
         if issue is None:
             continue
         text = f"{text}\n{issue.get('title') or ''}\n{issue.get('body') or ''}"
-    return _scope_fences(text)
+    return _scope_fences(_strip_worker_boilerplate(text))
 
 
 def _validate_publish_grounding(payload: dict[str, object]) -> None:
@@ -889,6 +1093,95 @@ def _linked_references(text: str, own_number: int) -> dict[int, str]:
         if referenced != own_number:
             references.setdefault(referenced, _relationship_hints(text, match.start()))
     return references
+
+
+def _engineering_terms(text: str) -> tuple[list[str], list[str]]:
+    """Return the decisive and suggestive engineering terms found in the text.
+
+    Args:
+        text: Reader-facing release copy (title, summary, body) to inspect.
+
+    Returns:
+        A tuple of (decisive labels, suggestive labels), each sorted and
+        deduplicated.
+    """
+    visible = _visible_release_text(text)
+    decisive: set[str] = set()
+    suggestive: set[str] = set()
+    for pattern, label, strength in _ENGINEERING_TERM_SOURCES:
+        if not pattern.search(visible):
+            continue
+        if strength == "decisive":
+            decisive.add(label)
+        else:
+            suggestive.add(label)
+    return sorted(decisive), sorted(suggestive)
+
+
+def _records_reader_facing_evidence(provenance: dict[str, object]) -> bool:
+    """Return True when the payload records a complete public classification.
+
+    Args:
+        provenance: Structured classification provenance from the payload.
+
+    Returns:
+        True when the payload already records why the change is reader
+        reachable, False otherwise.
+    """
+    if provenance.get("classification") != "public":
+        return False
+    if provenance.get("reader_reachable") is not True:
+        return False
+    reason = provenance.get("classification_reason")
+    if not isinstance(reason, str) or not reason.strip():
+        return False
+    evidence = provenance.get("user_visible_evidence")
+    if not isinstance(evidence, str):
+        return False
+    return len(_visible_release_text(evidence).strip()) >= _MIN_USER_VISIBLE_EVIDENCE
+
+
+def _release_copy_text(payload: dict[str, object]) -> str:
+    """Return the reader-facing copy of one release payload.
+
+    Args:
+        payload: Validated release payload.
+
+    Returns:
+        The title, summary, and body of the payload, joined with newlines so
+        a diff frame at the start of any field is still a line-start match.
+    """
+    return "\n".join(
+        str(payload.get(name) or "") for name in ("title", "summary", "body")
+    )
+
+
+def _record_internal_classification(
+    payload: dict[str, object], labels: list[str]
+) -> None:
+    """Record a deterministic internal classification in the payload provenance.
+
+    The reader-facing evidence a model supplied is cleared because the record
+    is internal, but the inspected issues, scope fences, and contradicting
+    evidence it recorded are kept so the ledger still audits the decision.
+
+    Args:
+        payload: Validated release payload whose visibility changed.
+        labels: Engineering-term labels that triggered the classification.
+
+    Returns:
+        None.
+    """
+    provenance = payload["provenance_json"]
+    reason = (
+        "Release copy contains internal engineering terms: " + ", ".join(labels) + "."
+    )
+    provenance["classification"] = "internal"
+    provenance["reason"] = reason
+    provenance["classification_reason"] = reason
+    provenance["reader_reachable"] = False
+    provenance["user_visible_evidence"] = ""
+    provenance["internal_engineering_terms"] = list(labels)
 
 
 def _scope_fences(text: str) -> list[str]:

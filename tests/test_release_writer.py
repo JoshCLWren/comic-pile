@@ -637,6 +637,20 @@ class TestReleaseWriterEnvironment:
             assert "RELEASE_WRITER_TOKEN is required" in stderr
 
 
+def _provenance(result: dict[str, object]) -> dict[str, object]:
+    """Return the provenance object of one validated release payload.
+
+    Args:
+        result: Validated release payload.
+
+    Returns:
+        The payload's provenance object.
+    """
+    provenance = result["provenance_json"]
+    assert isinstance(provenance, dict)
+    return provenance
+
+
 def _public_provenance() -> dict[str, object]:
     """Return complete reader-visible classification evidence for a public release.
 
@@ -1439,3 +1453,345 @@ class TestReleaseWriterPublishGrounding:
 
         with patch.object(release_writer, "_github_read", side_effect=unexpected_read):
             release_writer._validate_publish_grounding(payload)
+
+
+class TestReleaseWriterEngineeringClassification:
+    """Regression tests for deterministic internal classification and scope fences."""
+
+    def test_reading_session_note_stays_public(self) -> None:
+        """A reader-facing reading-session note is never auto-classified internal.
+
+        Reading sessions are a reader-facing feature, so the word "session" is
+        not engineering jargon and must not override recorded reader-facing
+        evidence.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Restore your reading session after an update."
+        result = release_writer._validate_release(json.dumps(payload))
+        assert result["visibility"] == "public"
+
+    def test_reading_session_title_is_not_a_scope_fence(self) -> None:
+        """A pull-request title about reading sessions never fences publication.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        assert (
+            release_writer._scope_fences(
+                "History: session detail renders a bare number instead of the die ladder"
+            )
+            == []
+        )
+
+    def test_ordinary_product_words_are_not_scope_fences(self) -> None:
+        """Ordinary reader language never creates an engineering scope fence.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        text = (
+            "Readers can audit their reading history, check the reliability of "
+            "their queue, and see proof that a session was saved."
+        )
+        assert release_writer._scope_fences(text) == []
+
+    def test_factory_automation_wording_classifies_copy_not_linked_context(
+        self,
+    ) -> None:
+        """Factory automation wording classifies served copy, never blocks a note.
+
+        A pull-request title that mentions internal factory work describes how
+        the change was built, but only copy that would actually reach readers
+        is classified against the engineering-term table, so a clean
+        reader-facing note for that change keeps publishing.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        decisive, _suggestive = release_writer._engineering_terms(
+            "Improve factory session reliability."
+        )
+        assert decisive == ["factory automation"]
+        assert release_writer._scope_fences("The factory is quiet today.") == []
+        assert release_writer._scope_fences("Improve factory session reliability.") == []
+
+    def test_suggestive_term_keeps_recorded_reader_facing_evidence_public(self) -> None:
+        """A suggestive term never overrides recorded reader-facing evidence.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Improved reliability of the reading history page."
+        result = release_writer._validate_release(json.dumps(payload))
+        assert result["visibility"] == "public"
+
+    def test_suggestive_term_without_evidence_classifies_internal(self) -> None:
+        """A suggestive term classifies internal when no reader evidence exists.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Improved reliability of the internal queue worker."
+        payload["provenance_json"] = {}
+        result = release_writer._validate_release(json.dumps(payload))
+        provenance = _provenance(result)
+        assert result["visibility"] == "internal"
+        assert provenance["reader_reachable"] is False
+        assert provenance["user_visible_evidence"] == ""
+
+    def test_endpoint_literal_classifies_release_internal(self) -> None:
+        """Release copy that quotes an endpoint literal is internal.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Added POST /api/v1/threads/1:setCurrentIssue for clients."
+        result = release_writer._validate_release(json.dumps(payload))
+        terms = _provenance(result)["internal_engineering_terms"]
+        assert isinstance(terms, list)
+        assert result["visibility"] == "internal"
+        assert "endpoint literal" in terms
+
+    def test_decisive_artifact_overrides_reader_facing_evidence(self) -> None:
+        """A decisive artifact classifies internal even with reader evidence.
+
+        Reader-facing copy cannot quote an endpoint literal, so recorded
+        reader-facing evidence cannot justify publishing it.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Added POST /api/v1/threads/1:setCurrentIssue for clients."
+        result = release_writer._validate_release(json.dumps(payload))
+        assert result["visibility"] == "internal"
+        assert _provenance(result)["classification"] == "internal"
+
+    def test_diff_fragment_classifies_release_internal(self) -> None:
+        """Release copy that quotes a diff fragment is internal.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Factory review controller accepts diff hunk evidence."
+        payload["body"] = "diff --git a/scripts/release_writer.py b/scripts/release_writer.py"
+        result = release_writer._validate_release(json.dumps(payload))
+        terms = _provenance(result)["internal_engineering_terms"]
+        assert isinstance(terms, list)
+        assert result["visibility"] == "internal"
+        assert "diff fragment" in terms
+
+    def test_diff_frame_at_summary_start_classifies_internal(self) -> None:
+        """A diff frame at the start of the summary cannot escape classification.
+
+        The copy fields are joined with newlines, so a fragment at the start
+        of a field is still a line-start match; a space-joined scan would move
+        it behind the preceding field and miss it.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "+++ b/frontend/src/pages/RollPage.tsx"
+        result = release_writer._validate_release(json.dumps(payload))
+        terms = _provenance(result)["internal_engineering_terms"]
+        assert isinstance(terms, list)
+        assert result["visibility"] == "internal"
+        assert "diff fragment" in terms
+
+    def test_diff_frame_at_body_start_classifies_internal(self) -> None:
+        """A diff header at the start of the body cannot escape classification.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["body"] = "--- a/frontend/src/services/api.ts"
+        result = release_writer._validate_release(json.dumps(payload))
+        terms = _provenance(result)["internal_engineering_terms"]
+        assert isinstance(terms, list)
+        assert result["visibility"] == "internal"
+        assert "diff fragment" in terms
+
+    def test_internal_classification_keeps_audit_provenance(self) -> None:
+        """Classifying a release internal never wipes the recorded audit trail.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Improve factory session reliability."
+        payload["provenance_json"] = {
+            "classification": "public",
+            "classification_reason": "Session page behavior changed.",
+            "user_visible_evidence": "frontend/src/pages/SessionPage.tsx now reloads.",
+            "reader_reachable": True,
+            "inspected_issue_numbers": [3649],
+            "scope_fences": ["no shipped ui"],
+            "contradicting_evidence": ["Session page ships today."],
+        }
+        result = release_writer._validate_release(json.dumps(payload))
+        provenance = _provenance(result)
+        assert result["visibility"] == "internal"
+        assert provenance["inspected_issue_numbers"] == [3649]
+        assert provenance["scope_fences"] == ["no shipped ui"]
+        assert provenance["contradicting_evidence"] == ["Session page ships today."]
+
+    def test_worker_boilerplate_does_not_create_scope_fence(self) -> None:
+        """The factory attribution footer must not fence a product pull request.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        repository = "JoshCLWren/comic-pile"
+        number = 100
+
+        def fake_read(url: str):
+            if f"/pulls/{number}" in url:
+                return {
+                    "number": number,
+                    "title": "Saved queue filters",
+                    "body": (
+                        "Add saved queue filters.\n\n"
+                        "Model: glm-4.5-flash\n"
+                        "Source: z-ai\n"
+                        "Worker: opencode-free-model-factory-94\n\n"
+                        "Produced by fixed-model Factory 94 (Z.AI GLM 4.5 Flash). "
+                        "Normal ComicPile exact-head factory merge gates apply."
+                    ),
+                }
+            return None
+
+        with patch.object(release_writer, "_github_read", side_effect=fake_read):
+            fences = release_writer._linked_scope_fences(repository, number)
+        assert fences == []
+
+    def test_durable_worker_identifier_does_not_create_scope_fence(self) -> None:
+        """A durable worker identifier alone never fences a product pull request.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        assert (
+            release_writer._scope_fences(
+                release_writer._strip_worker_boilerplate(
+                    "Worker: opencode-free-model-factory-94"
+                )
+            )
+            == []
+        )
+
+    def test_real_internal_statement_still_fences_with_boilerplate(self) -> None:
+        """A genuine internal statement still fences beside worker boilerplate.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        repository = "JoshCLWren/comic-pile"
+        number = 101
+
+        def fake_read(url: str):
+            if f"/pulls/{number}" in url:
+                return {
+                    "number": number,
+                    "title": "Internal refactor",
+                    "body": (
+                        "Internal refactor: behavior preserved.\n\n"
+                        "Produced by fixed-model Factory 46 (worker)."
+                    ),
+                }
+            return None
+
+        with patch.object(release_writer, "_github_read", side_effect=fake_read):
+            fences = release_writer._linked_scope_fences(repository, number)
+        assert "behavior preserved" in fences
+        assert "internal refactor" in fences
+
+    def test_linked_context_artifact_mentions_are_not_scope_fences(self) -> None:
+        """Engineering artifacts in a description never block a public note.
+
+        Issue and pull-request bodies legitimately quote endpoint literals
+        and diff frames (issue #3649 itself lists repro examples such as
+        `POST /api/v1/threads`). The decisive table applies only to served
+        copy; the linked-context scan fences on statements that the
+        reader-visible portion is not in the change, so a reader-facing fix
+        linked to an issue full of quoted artifacts still publishes with
+        valid public evidence and clean copy.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        decisive, _suggestive = release_writer._engineering_terms(
+            "POST /api/roll now reports the failure to readers."
+        )
+        assert decisive == ["endpoint literal"]
+        assert (
+            release_writer._scope_fences(
+                "Added POST /api/v1/threads/{}:setCurrentIssue; see diff --git a/x b/x "
+                "and the +++ b/utils line for where. No reader-visible behavior changed "
+                "in the UI, so the copy stays internal-only."
+            )
+            == ["internal only"]
+        )
+        assert (
+            release_writer._scope_fences(
+                "diff --git a/app/models.py b/app/models.py\n"
+                "--- a/app/models.py\n+++ b/app/models.py"
+            )
+            == []
+        )
