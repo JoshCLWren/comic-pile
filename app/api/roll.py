@@ -450,6 +450,18 @@ async def skip_roll(
         empty_pool_detail="No alternative threads available to skip to",
     )
 
+    # Record the skipped thread as a SKIPPED event so the session timeline and
+    # narrative summary reflect the skip (issue #3706). It must be saved
+    # BEFORE the replacement roll event below: readers resolve the latest
+    # action by (timestamp, id), so a later skip event would hide the new
+    # pending comic's rolled result and would attribute the skip to the
+    # replacement roll attempt instead of the original one. Recording is
+    # delegated to the service/repository layer; routers do not persist.
+    await RollService(db).record_skip_outcome(
+        session_id=current_session.id,
+        thread_id=skipped_thread_id,
+    )
+
     db.add(artifacts.event)
     await db.flush()
     rec_context = RecommendationContext(
@@ -478,16 +490,6 @@ async def skip_roll(
         current_session.skipped_thread_ids = existing_skipped_ids
     current_session.pending_thread_id = artifacts.selected_thread.id
     current_session.pending_thread_updated_at = datetime.now(UTC)
-
-    # Record the skipped thread as a SKIPPED event so the session timeline and
-    # narrative summary reflect the skip (issue #3706).
-    db.add(
-        Event(
-            type="rolled_but_skipped",
-            session_id=current_session.id,
-            thread_id=skipped_thread_id,
-        )
-    )
 
     await db.commit()
 
