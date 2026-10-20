@@ -1,5 +1,6 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import ModeSelectorSheet from '../components/ModeSelectorSheet'
@@ -143,6 +144,164 @@ describe('ModeSelectorSheet', () => {
     const bandwidthGroup = screen.getByRole('radiogroup', { name: 'Bandwidth' })
     await user.click(within(bandwidthGroup).getByRole('radio', { name: /Deep/ }))
     expect(within(bandwidthGroup).getByRole('radio', { name: /Light/ })).toBeDisabled()
+  })
+
+  it('moves and selects with ArrowRight/ArrowDown inside the bandwidth group', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <ModeSelectorSheet
+        {...defaultProps}
+        currentMode={mode({ bandwidth: 'balanced', intent: 'momentum' })}
+        onSubmit={onSubmit}
+      />,
+    )
+
+    const bandwidthGroup = screen.getByRole('radiogroup', { name: 'Bandwidth' })
+    const balanced = within(bandwidthGroup).getByRole('radio', { name: /Balanced/ })
+    balanced.focus()
+
+    await user.keyboard('{ArrowRight}')
+    expect(onSubmit).toHaveBeenLastCalledWith({ bandwidth: 'deep', intent: 'momentum' })
+
+    within(bandwidthGroup).getByRole('radio', { name: /Deep/ }).focus()
+    await user.keyboard('{ArrowDown}')
+    expect(onSubmit).toHaveBeenLastCalledWith({ bandwidth: 'light', intent: 'momentum' })
+  })
+
+  it('wraps arrow navigation at both ends of a group', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <ModeSelectorSheet
+        {...defaultProps}
+        currentMode={mode({ bandwidth: 'light', intent: 'familiar' })}
+        onSubmit={onSubmit}
+      />,
+    )
+
+    const bandwidthGroup = screen.getByRole('radiogroup', { name: 'Bandwidth' })
+    within(bandwidthGroup).getByRole('radio', { name: /Light/ }).focus()
+    await user.keyboard('{ArrowLeft}')
+    expect(onSubmit).toHaveBeenLastCalledWith({ bandwidth: 'deep', intent: 'familiar' })
+
+    within(bandwidthGroup).getByRole('radio', { name: /Deep/ }).focus()
+    await user.keyboard('{ArrowUp}')
+    expect(onSubmit).toHaveBeenLastCalledWith({ bandwidth: 'balanced', intent: 'familiar' })
+  })
+
+  it('jumps to the group edges with Home and End', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <ModeSelectorSheet
+        {...defaultProps}
+        currentMode={mode({ bandwidth: 'light', intent: 'explore' })}
+        onSubmit={onSubmit}
+      />,
+    )
+
+    const intentGroup = screen.getByRole('radiogroup', { name: 'Intent' })
+    within(intentGroup).getByRole('radio', { name: /Explore/ }).focus()
+
+    await user.keyboard('{Home}')
+    expect(onSubmit).toHaveBeenLastCalledWith({ bandwidth: 'light', intent: 'balanced' })
+
+    within(intentGroup).getByRole('radio', { name: /Balanced/ }).focus()
+    await user.keyboard('{End}')
+    expect(onSubmit).toHaveBeenLastCalledWith({ bandwidth: 'light', intent: 'random' })
+  })
+
+  it('keeps arrow navigation inside the focused group', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <ModeSelectorSheet
+        {...defaultProps}
+        currentMode={mode({ bandwidth: 'deep', intent: 'momentum' })}
+        onSubmit={onSubmit}
+      />,
+    )
+
+    const bandwidthGroup = screen.getByRole('radiogroup', { name: 'Bandwidth' })
+    within(bandwidthGroup).getByRole('radio', { name: /Deep/ }).focus()
+    await user.keyboard('{ArrowRight}')
+
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(onSubmit).toHaveBeenLastCalledWith({ bandwidth: 'light', intent: 'momentum' })
+  })
+
+  it('moves the checked selection and focus with arrow keys', async () => {
+    const user = userEvent.setup()
+
+    function StatefulSheet() {
+      const [current, setCurrent] = useState<SessionModeState>({
+        bandwidth: 'balanced',
+        intent: 'balanced',
+      })
+      return (
+        <ModeSelectorSheet
+          isOpen
+          currentMode={current}
+          onClose={() => undefined}
+          onSubmit={async (patch) => {
+            setCurrent((previous) => ({ ...previous, ...patch }))
+          }}
+        />
+      )
+    }
+
+    render(<StatefulSheet />)
+
+    const bandwidthGroup = screen.getByRole('radiogroup', { name: 'Bandwidth' })
+    const balanced = within(bandwidthGroup).getByRole('radio', { name: /Balanced/ })
+    balanced.focus()
+    await user.keyboard('{ArrowDown}')
+
+    const deep = within(bandwidthGroup).getByRole('radio', { name: /Deep/ })
+    expect(deep).toHaveAttribute('aria-checked', 'true')
+    expect(balanced).toHaveAttribute('aria-checked', 'false')
+    expect(deep).toHaveFocus()
+  })
+
+  it('ignores non-navigation keys in a radio group', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+
+    render(<ModeSelectorSheet {...defaultProps} onSubmit={onSubmit} />)
+
+    const bandwidthGroup = screen.getByRole('radiogroup', { name: 'Bandwidth' })
+    const balanced = within(bandwidthGroup).getByRole('radio', { name: /Balanced/ })
+    balanced.focus()
+    fireEvent.keyDown(balanced, { key: 'Tab' })
+    fireEvent.keyDown(balanced, { key: 'a' })
+
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(balanced).toHaveFocus()
+  })
+
+  it('moves focus to the error and keeps the sheet open when an arrow-selected mode fails', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn().mockRejectedValue(new Error('API error'))
+
+    render(
+      <ModeSelectorSheet
+        {...defaultProps}
+        currentMode={mode({ bandwidth: 'balanced', intent: 'balanced' })}
+        onSubmit={onSubmit}
+      />,
+    )
+
+    const bandwidthGroup = screen.getByRole('radiogroup', { name: 'Bandwidth' })
+    within(bandwidthGroup).getByRole('radio', { name: /Balanced/ }).focus()
+    await user.keyboard('{ArrowRight}')
+
+    expect(onSubmit).toHaveBeenCalledWith({ bandwidth: 'deep', intent: 'balanced' })
+    const error = await screen.findByTestId('mode-selector-error')
+    expect(error).toHaveFocus()
   })
 
   it('closes on Escape', async () => {
