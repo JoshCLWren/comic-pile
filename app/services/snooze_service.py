@@ -40,7 +40,7 @@ from comic_pile.bandwidth_correction import (
     classify_candidate_effort,
     compute_snooze_correction,
 )
-from comic_pile.dice_ladder import step_up
+from comic_pile.dice_ladder import automatic_die_after, step_up
 from comic_pile.snooze_backoff import is_eligible
 
 logger = logging.getLogger(__name__)
@@ -272,12 +272,12 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
     if current_die is None:
         for evt in all_events:
             if evt.type in ("rate", "snooze", "undo") and evt.die_after is not None:
-                current_die = evt.die_after
+                current_die = automatic_die_after(evt.die_after, evt.context)
                 break
         if current_die is None:
             current_die = current_session.start_die
 
-    new_die = step_up(current_die)
+    new_die = current_session.manual_die or step_up(current_die)
 
     # Ladder path: build from pre-fetched events instead of re-querying.
     die_events = [
@@ -387,6 +387,12 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
         "consecutive_snoozes": consecutive_snoozes,
         "suggest_clarification": correction_result.suggest_clarification,
     }
+    if current_session.manual_die is not None:
+        from comic_pile.reading_session import get_current_die_for_session
+
+        snooze_context["automatic_die_after"] = await get_current_die_for_session(
+            current_session, db, automatic=True,
+        )
 
     event = Event(
         type="snooze",

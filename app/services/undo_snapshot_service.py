@@ -24,6 +24,7 @@ from app.services.snapshot_contract import (
     SnapshotThreadState,
 )
 from comic_pile.bandwidth import restore_ephemeral_bandwidth
+from comic_pile.dice_ladder import automatic_die_after
 
 
 class UndoSnapshotService:
@@ -418,7 +419,7 @@ class UndoSnapshotService:
         if pre_current_die is None:
             for evt in all_events:
                 if evt.type in ("rate", "snooze", "undo") and evt.die_after is not None:
-                    pre_current_die = evt.die_after
+                    pre_current_die = automatic_die_after(evt.die_after, evt.context)
                     break
             if pre_current_die is None:
                 pre_current_die = session.start_die

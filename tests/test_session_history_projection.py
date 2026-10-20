@@ -76,3 +76,12 @@ def test_projection_preserves_empty_sessions_for_constant_time_fallbacks() -> No
     assert projection.die_path_by_session == {10: (), 11: ()}
     assert projection.latest_die_by_session == {}
     assert projection.latest_roll_by_session == {}
+
+
+def test_manual_die_history_keeps_visible_die_and_automatic_baseline_separate() -> None:
+    """History records the actual pinned die but AUTO resumes its preserved value."""
+    pinned = _event(event_id=3, session_id=10, event_type="rate", die_after=20)
+    pinned.context = {"automatic_die_after": 6}
+    projection = project_session_history_events([10], [pinned])
+    assert projection.die_path_by_session[10] == (20,)
+    assert projection.latest_die_by_session[10] == 6

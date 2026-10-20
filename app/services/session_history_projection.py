@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from app.models import Event
+from comic_pile.dice_ladder import automatic_die_after
 
 _DIE_EVENT_TYPES = frozenset({"rate", "snooze", "undo"})
 
@@ -52,7 +53,7 @@ def project_session_history_events(
 
         if event.type in _DIE_EVENT_TYPES and event.die_after is not None:
             die_path_lists[session_id].append(event.die_after)
-            latest_die_by_session[session_id] = event.die_after
+            latest_die_by_session[session_id] = automatic_die_after(event.die_after, event.context)
 
     return SessionHistoryEventProjection(
         latest_roll_by_session=latest_roll_by_session,

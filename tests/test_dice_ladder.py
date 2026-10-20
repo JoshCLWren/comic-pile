@@ -74,3 +74,13 @@ def test_dice_ladder_constant_values() -> None:
     assert len(DICE_LADDER) == 9
     assert DICE_LADDER[0] == 4
     assert DICE_LADDER[-1] == 100
+
+
+def test_automatic_die_after_preserves_manual_baseline_and_legacy_behavior() -> None:
+    """Manual metadata restores AUTO without reinterpreting old or invalid data."""
+    from comic_pile.dice_ladder import automatic_die_after
+
+    assert automatic_die_after(20, {"automatic_die_after": 6}) == 6
+    assert automatic_die_after(20, {"automatic_die_after": 12}) == 12
+    for context in (None, {}, {"automatic_die_after": "6"}, {"automatic_die_after": 7}):
+        assert automatic_die_after(30, context) == 30

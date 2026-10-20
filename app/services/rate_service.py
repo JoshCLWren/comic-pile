@@ -468,10 +468,15 @@ async def rate_thread(
     issue_changes: list[dict] = []
     created_issues_list: list[Issue] = []
     current_die = await get_current_die_for_session(current_session, db)
+    automatic_die = (
+        await get_current_die_for_session(current_session, db, automatic=True)
+        if current_session.manual_die is not None else current_die
+    )
     pre_session_state = {
         "start_die": current_session.start_die,
         "manual_die": current_session.manual_die,
         "current_die": current_die,
+        "automatic_die": automatic_die,
         "pending_thread_id": current_session.pending_thread_id,
         "pending_thread_updated_at": current_session.pending_thread_updated_at.isoformat()
         if current_session.pending_thread_updated_at
@@ -666,7 +671,7 @@ async def rate_thread(
 
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now(UTC)
-    new_die = (
+    new_die = current_session.manual_die or (
         step_down(current_die)
         if rate_data.rating >= rating_threshold
         else step_up(current_die)
@@ -685,6 +690,8 @@ async def rate_thread(
         issues_read=issues_read,
         die=current_die,
         die_after=new_die,
+        context={"automatic_die_after": automatic_die}
+        if current_session.manual_die is not None else None,
         issue_id=rated_issue_id,
         issue_number=rated_issue_number,
         source_roll_event_id=source_roll_event_id,
