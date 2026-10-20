@@ -5,7 +5,6 @@ import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
-from jose.exceptions import ExpiredSignatureError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +18,7 @@ from app.auth import (
     validate_password_length,
     verify_password,
     verify_token,
+    ExpiredSignatureError,
     JWTError,
 )
 from app.csrf import ensure_csrf_cookie, is_secure_request
@@ -357,7 +357,7 @@ async def logout_user(
     request: Request,
     response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
+) -> dict[str, str]:
     """Logout user by revoking their current token if valid.
 
     Args:

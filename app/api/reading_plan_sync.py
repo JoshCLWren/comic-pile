@@ -11,6 +11,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.reading_plan_sync import (
+    SourceSyncFailure,
     SyncReport,
     SyncRequest,
     SyncResponse,
@@ -52,13 +53,13 @@ def _to_report(report: ServiceReport) -> SyncReport:
         excluded_issues=report.excluded_issues,
         skipped_sources=report.skipped_sources,
         failures=[
-            {
-                "source_id": failure.source_id,
-                "plan_id": failure.plan_id,
-                "thread_id": failure.thread_id,
-                "volume_id": failure.volume_id,
-                "error": failure.error,
-            }
+            SourceSyncFailure(
+                source_id=failure.source_id,
+                plan_id=failure.plan_id,
+                thread_id=failure.thread_id,
+                volume_id=failure.volume_id,
+                error=failure.error,
+            )
             for failure in report.failures
         ],
     )

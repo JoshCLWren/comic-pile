@@ -21,6 +21,8 @@ from app.schemas.continuity_plan import (
     CrossoverTemplateParallelCandidatePreview,
     CrossoverTemplateSerialSpinePreview,
     CrossoverTemplateUnresolvedMatchPreview,
+    ContinuityPlanLane,
+    ContinuityPlanNode,
     ContinuityPlanResponse,
     ContinuityPlanWrite,
     CrossoverTemplateAdoptRequest,
@@ -160,7 +162,7 @@ async def adopt_crossover_template(
     )
 
     lane = {"id": request.lane_id, "name": request.lane_name, "order": 0}
-    nodes = []
+    node_payloads: list[dict[str, object]] = []
 
     issue_ids = [item.issue_id for item in template.items]
     if issue_ids:
@@ -181,7 +183,7 @@ async def adopt_crossover_template(
                     )
 
     for position, item in enumerate(template.items):
-        nodes.append(
+        node_payloads.append(
             {
                 "id": f"{request.issue_node_id_prefix}{item.issue_id}",
                 "node_type": "issue",
@@ -209,8 +211,8 @@ async def adopt_crossover_template(
     payload = ContinuityPlanWrite(
         name=request.plan_name,
         ordering_mode=request.ordering_mode,
-        lanes=[lane],
-        nodes=nodes,
+        lanes=[ContinuityPlanLane.model_validate(lane)],
+        nodes=[ContinuityPlanNode.model_validate(node) for node in node_payloads],
     )
     await validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
     plan = ContinuityPlan(
@@ -218,7 +220,7 @@ async def adopt_crossover_template(
         name=payload.name,
         ordering_mode=payload.ordering_mode,
         lanes_json=[lane],
-        nodes_json=nodes,
+        nodes_json=node_payloads,
     )
     db.add(plan)
     await db.flush()

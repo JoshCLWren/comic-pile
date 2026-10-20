@@ -13,7 +13,11 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.cbl_adoption import CBLAdoptionCommitRequest, CBLAdoptionCommitResponse
-from app.schemas.continuity_plan import ContinuityPlanLane, ContinuityPlanNode
+from app.schemas.continuity_plan import (
+    ContinuityPlanLane,
+    ContinuityPlanNode,
+    PlanOrderingMode,
+)
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_plan_adoption import (
     AdoptionCommitError,
@@ -54,14 +58,21 @@ def _is_database_outage(error: BaseException) -> bool:
     )
 
 
+def _ordering_mode(value: str) -> PlanOrderingMode:
+    """Validate a persisted ordering mode against the public literal contract."""
+    if value == "informational":
+        return "informational"
+    if value == "strict_sequential":
+        return "strict_sequential"
+    raise ValueError(f"Unsupported continuity plan ordering mode: {value!r}")
+
+
 def _response(commit: AdoptionCommitResult) -> CBLAdoptionCommitResponse:
     """Convert one adoption result to the public response schema."""
     plan = commit.plan
 
     def lane(value: dict[str, object]) -> ContinuityPlanLane:
-        return ContinuityPlanLane(
-            id=str(value["id"]), name=str(value["name"]), order=int(value["order"])
-        )
+        return ContinuityPlanLane.model_validate(value)
 
     def node(value: dict[str, object]) -> ContinuityPlanNode:
         return ContinuityPlanNode.model_validate(value)
@@ -70,7 +81,7 @@ def _response(commit: AdoptionCommitResult) -> CBLAdoptionCommitResponse:
         id=plan.id,
         user_id=plan.user_id,
         name=plan.name,
-        ordering_mode=plan.ordering_mode,
+        ordering_mode=_ordering_mode(plan.ordering_mode),
         lanes=[lane(value) for value in plan.lanes_json or []],
         nodes=[node(value) for value in plan.nodes_json or []],
         created_at=plan.created_at,

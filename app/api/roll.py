@@ -54,7 +54,12 @@ from app.services.tag_inheritance_service import TagInheritanceService
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
 )
-from app.schemas.session import build_session_bandwidth_state, build_session_intent_state, SnoozedThreadInfo
+from app.schemas.session import (
+    SnoozedThreadInfo,
+    build_session_bandwidth_state,
+    build_session_intent_state,
+    normalize_reading_mode_source,
+)
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
     DEFAULT_INTENT,
@@ -91,7 +96,7 @@ class _SelectionArtifacts:
         bounded_rows: list[tuple[Thread, int, str | None]],
         selected_index: int,
         bounded_candidate_ids: list[int],
-        candidate_weights: list,
+        candidate_weights: list[object],
         selected_effort_estimate: EffortEstimate,
         json_candidate_weights: list[dict[str, object]] | None,
         json_selected_weight: float | None,
@@ -564,10 +569,10 @@ async def unskip_thread(
 
     # Pre-fetch ladder and snapshot count before commit
     pre_ladder_path = await build_ladder_path(session_id, db)
-    result = await db.execute(
+    snapshot_count_result = await db.execute(
         select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session_id)
     )
-    pre_snapshot_count = result.scalar() or 0
+    pre_snapshot_count = snapshot_count_result.scalar() or 0
 
     # Pre-fetch current die before commit
     pre_current_die = await get_current_die_for_session(current_session, db)
@@ -811,12 +816,12 @@ async def update_session_mode(
         active_bandwidth=active_bandwidth,
         predicted_bandwidth=predicted_bandwidth,
         bandwidth_confidence=bandwidth_confidence,
-        bandwidth_source=bandwidth_source,
+        bandwidth_source=normalize_reading_mode_source(bandwidth_source),
         bandwidth_version=bandwidth_version,
         active_intent=active_intent,
         predicted_intent=predicted_intent,
         intent_confidence=intent_confidence,
-        intent_source=intent_source,
+        intent_source=normalize_reading_mode_source(intent_source),
         intent_version=intent_version,
         session_mode_correction_guidance=guidance,
     )
@@ -877,12 +882,12 @@ async def roll_bootstrap(
         active_bandwidth=current_session.active_bandwidth,
         predicted_bandwidth=current_session.predicted_bandwidth,
         bandwidth_confidence=current_session.bandwidth_confidence,
-        bandwidth_source=current_session.bandwidth_source,
+        bandwidth_source=normalize_reading_mode_source(current_session.bandwidth_source),
         bandwidth_version=current_session.bandwidth_version,
         active_intent=current_session.active_intent,
         predicted_intent=current_session.predicted_intent,
         intent_confidence=current_session.intent_confidence,
-        intent_source=current_session.intent_source,
+        intent_source=normalize_reading_mode_source(current_session.intent_source),
         intent_version=current_session.intent_version,
         session_mode_correction_guidance=current_session.session_mode_correction_guidance,
     )
@@ -1056,12 +1061,12 @@ async def roll_v2_bootstrap(
         active_bandwidth=current_session.active_bandwidth,
         predicted_bandwidth=current_session.predicted_bandwidth,
         bandwidth_confidence=current_session.bandwidth_confidence,
-        bandwidth_source=current_session.bandwidth_source,
+        bandwidth_source=normalize_reading_mode_source(current_session.bandwidth_source),
         bandwidth_version=current_session.bandwidth_version,
         active_intent=current_session.active_intent,
         predicted_intent=current_session.predicted_intent,
         intent_confidence=current_session.intent_confidence,
-        intent_source=current_session.intent_source,
+        intent_source=normalize_reading_mode_source(current_session.intent_source),
         intent_version=current_session.intent_version,
         session_mode_correction_guidance=current_session.session_mode_correction_guidance,
     )

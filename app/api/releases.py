@@ -125,7 +125,12 @@ async def list_releases(
         Paginated public release list and total count.
     """
     releases, total = await list_published_releases(db, limit=limit, offset=offset)
-    return ReleaseListResponse(releases=releases, total=total, limit=limit, offset=offset)
+    return ReleaseListResponse(
+        releases=[PublicReleaseResponse.model_validate(release) for release in releases],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(

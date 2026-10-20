@@ -6,7 +6,8 @@ from typing import Annotated
 import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+from jose import JWTError as JWTError, jwt
+from jose.exceptions import ExpiredSignatureError as ExpiredSignatureError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_auth_settings

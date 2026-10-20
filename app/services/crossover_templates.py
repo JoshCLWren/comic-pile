@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.issue import Issue
+from app.schemas.continuity_plan import TemplateConfidence, TemplateRole
 from app.services.cbl_source_public import public_cbl_source_ref
 
 
@@ -39,8 +40,8 @@ class CrossoverTemplateItem:
 
     issue_id: int
     suggested_position: int
-    role: str
-    confidence: str
+    role: TemplateRole
+    confidence: TemplateConfidence
     explanation: str
     source_paths: tuple[str, ...]
     cbl_placements: tuple[CBLPlacement, ...]
@@ -351,7 +352,7 @@ def _role(
     *,
     first_core: float | None,
     last_core: float | None,
-) -> str:
+) -> TemplateRole:
     if _is_core(item):
         return "core"
     position = _median_position(item)
