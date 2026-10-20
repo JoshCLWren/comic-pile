@@ -647,10 +647,12 @@ The DependencyBuilder component visualizes the chain:
 # Thread is blocked if:
 target_thread.next_unread_issue_id == target_issue.id
 AND
+target_issue.status != "read"
+AND
 source_issue.status != "read"
 ```
 
-**Translation:** The target thread is only blocked if the TARGETED issue is the NEXT one to read. This prevents blocking entire threads when you're still reading earlier issues.
+**Translation:** The target thread is only blocked if the TARGETED issue is the NEXT one to read and the reader has not finished it yet. This prevents blocking entire threads when you're still reading earlier issues, and prevents a finished series from staying blocked on a prerequisite the reader no longer has to wait for (#3590).
 
 **Example:**
 ```
@@ -1219,6 +1221,7 @@ target_thread.is_blocked = true IF
 ```
 target_thread.is_blocked = true IF
   target_thread.next_unread_issue_id == target_issue.id AND
+  target_issue.status != "read" AND
   source_issue.status != "read" AND
   dependency exists (source_issue → target_issue)
 ```
