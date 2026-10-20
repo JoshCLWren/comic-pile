@@ -6,8 +6,6 @@ import { RELEASES_PAGE_SIZE, releasesQueryOptions, useReleases } from '../hooks/
 import { releasesApi, type Release } from '../services/api-releases'
 import { queryKeys } from '../query/queryKeys'
 
-
-
 const mockedList = vi.spyOn(releasesApi, 'list')
 
 function release(overrides: Partial<Release> = {}): Release {
