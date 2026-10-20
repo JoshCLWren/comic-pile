@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Literal, cast
+from typing import Literal, cast
 
 from pydantic import BaseModel, Field, field_serializer
 
@@ -479,7 +479,7 @@ class SessionMode(BaseModel):
     intent_version: str | None = Field(
         default=None, description="Version tag for the intent inference algorithm"
     )
-    session_mode_correction_guidance: dict[str, Any] | None = Field(
+    session_mode_correction_guidance: dict[str, object] | None = Field(
         default=None,
         description="Compact guidance when mode differs from prediction (null when no correction)",
     )

@@ -1,6 +1,6 @@
 """Roll-related Pydantic schemas for request/response validation."""
 
-from typing import Any, ClassVar, Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -108,7 +108,7 @@ class SessionModeResponse(BaseModel):
     intent_confidence: float | None = None
     intent_source: IntentSource | None = None
     intent_version: str | None = None
-    session_mode_correction_guidance: dict[str, Any] | None = None
+    session_mode_correction_guidance: dict[str, object] | None = None
 
 
 class RollBootstrapThread(BaseModel):
