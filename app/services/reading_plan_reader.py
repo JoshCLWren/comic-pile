@@ -263,6 +263,9 @@ async def get_reading_plan_reader(
     release_sources = await release_source_service.list_release_sources_for_reader(
         db, plan_id=plan_id_value, user_id=user_id
     )
+    release_candidates = await release_source_service.list_release_candidates_for_reader(
+        db, plan_id=plan_id_value, user_id=user_id
+    )
     return ReadingPlanReaderResponse(
         execution_mode="option_e" if eligibility is not None else "legacy",
         plan_id=plan_id_value,
@@ -297,4 +300,5 @@ async def get_reading_plan_reader(
             for source in sources
         ],
         release_sources=release_sources,
+        release_candidates=release_candidates,
     )

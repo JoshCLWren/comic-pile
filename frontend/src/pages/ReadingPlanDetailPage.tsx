@@ -214,8 +214,9 @@ export default function ReadingPlanDetailPage() {
       </div>
 
       <NewReleasesSection
+        planId={planId}
         sources={view.release_sources ?? []}
-        emptyLabel="No followed ComicVine volumes are subscribed to new releases for this plan yet. Add a confirmed mapping from the plan editor or Queue mapping repair to start tracking new releases."
+        candidates={view.release_candidates ?? []}
       />
 
       <section aria-labelledby="available-now-heading" data-testid="available-now">

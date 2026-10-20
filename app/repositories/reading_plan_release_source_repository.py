@@ -6,6 +6,8 @@ transaction boundaries.
 
 from __future__ import annotations
 
+from collections.abc import Collection
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import Select, delete, select, update
@@ -15,6 +17,20 @@ from sqlalchemy.orm import joinedload
 from app.models.continuity_plan import ContinuityPlan
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.models.reading_plan_release_source import ReadingPlanReleaseSource
+
+
+@dataclass(frozen=True, slots=True)
+class ThreadSeriesMappingRow:
+    """One Thread's provider series mapping with its identity metadata."""
+
+    mapping_id: int
+    thread_id: int
+    external_identity_id: int
+    status: str
+    provider: str
+    entity_type: str
+    provider_volume_id: str
+    metadata_json: dict[str, object]
 
 
 def _base_statement() -> Select[ReadingPlanReleaseSource]:
@@ -118,6 +134,75 @@ async def list_for_user(db: AsyncSession, *, user_id: int) -> list[ReadingPlanRe
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+async def list_followed_volume_keys(
+    db: AsyncSession, *, plan_id: int
+) -> set[tuple[int, int]]:
+    """List the ``(thread_id, external_identity_id)`` volumes a plan follows.
+
+    Args:
+        db: Database session.
+        plan_id: Plan whose followed volumes to list.
+
+    Returns:
+        The set of followed volume keys for the plan.
+    """
+    stmt = select(
+        ReadingPlanReleaseSource.thread_id,
+        ReadingPlanReleaseSource.external_identity_id,
+    ).where(ReadingPlanReleaseSource.plan_id == plan_id)
+    result = await db.execute(stmt)
+    return {(row.thread_id, row.external_identity_id) for row in result.all()}
+
+
+async def list_series_mappings_for_threads(
+    db: AsyncSession, *, thread_ids: Collection[int]
+) -> list[ThreadSeriesMappingRow]:
+    """List every provider series mapping attached to the given Threads.
+
+    Args:
+        db: Database session.
+        thread_ids: Threads whose series mappings to list.
+
+    Returns:
+        Mapping rows with their provider identity metadata, ordered by thread
+        and mapping id.
+    """
+    if not thread_ids:
+        return []
+    stmt = (
+        select(
+            ThreadExternalSeriesMapping.id.label("mapping_id"),
+            ThreadExternalSeriesMapping.thread_id.label("thread_id"),
+            ThreadExternalSeriesMapping.external_identity_id.label("external_identity_id"),
+            ThreadExternalSeriesMapping.status.label("status"),
+            ExternalIdentity.provider.label("provider"),
+            ExternalIdentity.entity_type.label("entity_type"),
+            ExternalIdentity.external_id.label("provider_volume_id"),
+            ExternalIdentity.metadata_json.label("metadata_json"),
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+        )
+        .where(ThreadExternalSeriesMapping.thread_id.in_(list(thread_ids)))
+        .order_by(ThreadExternalSeriesMapping.thread_id, ThreadExternalSeriesMapping.id)
+    )
+    result = await db.execute(stmt)
+    return [
+        ThreadSeriesMappingRow(
+            mapping_id=row.mapping_id,
+            thread_id=row.thread_id,
+            external_identity_id=row.external_identity_id,
+            status=row.status,
+            provider=row.provider,
+            entity_type=row.entity_type,
+            provider_volume_id=row.provider_volume_id,
+            metadata_json=row.metadata_json if isinstance(row.metadata_json, dict) else {},
+        )
+        for row in result.all()
+    ]
 
 
 async def list_enabled_for_user(

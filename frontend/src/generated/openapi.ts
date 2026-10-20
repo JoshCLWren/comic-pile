@@ -12250,10 +12250,56 @@ export interface components {
             /** Plan Id */
             plan_id: number;
             progress: components["schemas"]["ReadingPlanProgress"];
+            /** Release Candidates */
+            release_candidates?: components["schemas"]["ReadingPlanReleaseCandidate"][];
             /** Release Sources */
             release_sources?: components["schemas"]["ReadingPlanReleaseSourceStatus"][];
             /** Sources */
             sources: components["schemas"]["ReadingPlanSourceSnapshot"][];
+        };
+        /**
+         * ReadingPlanReleaseCandidate
+         * @description One ComicVine volume a reader may follow for a Reading Plan thread.
+         *
+         *     ``enableable`` is true only for a confirmed series mapping that is not
+         *     already followed. Ambiguous and unmapped threads are reported so the
+         *     reader is routed to mapping repair instead of being offered a volume
+         *     whose identity is still undecided.
+         */
+        ReadingPlanReleaseCandidate: {
+            /**
+             * Enableable
+             * @default false
+             */
+            enableable: boolean;
+            /** External Identity Id */
+            external_identity_id?: number | null;
+            /**
+             * Followed
+             * @default false
+             */
+            followed: boolean;
+            /**
+             * Mapping State
+             * @enum {string}
+             */
+            mapping_state: "confirmed" | "ambiguous" | "unmapped";
+            /** Mapping Status */
+            mapping_status?: string | null;
+            /** Provider Issue Count */
+            provider_issue_count?: number | null;
+            /** Provider Publisher */
+            provider_publisher?: string | null;
+            /** Provider Start Year */
+            provider_start_year?: number | null;
+            /** Provider Title */
+            provider_title?: string | null;
+            /** Provider Volume Id */
+            provider_volume_id?: string | null;
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string;
         };
         /**
          * ReadingPlanReleaseSourceStatus

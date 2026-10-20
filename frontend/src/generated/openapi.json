@@ -13236,6 +13236,13 @@
           "progress": {
             "$ref": "#/components/schemas/ReadingPlanProgress"
           },
+          "release_candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanReleaseCandidate"
+            },
+            "title": "Release Candidates",
+            "type": "array"
+          },
           "release_sources": {
             "items": {
               "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
@@ -13262,6 +13269,122 @@
           "sources"
         ],
         "title": "ReadingPlanReaderResponse",
+        "type": "object"
+      },
+      "ReadingPlanReleaseCandidate": {
+        "description": "One ComicVine volume a reader may follow for a Reading Plan thread.\n\n``enableable`` is true only for a confirmed series mapping that is not\nalready followed. Ambiguous and unmapped threads are reported so the\nreader is routed to mapping repair instead of being offered a volume\nwhose identity is still undecided.",
+        "properties": {
+          "enableable": {
+            "default": false,
+            "title": "Enableable",
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Identity Id"
+          },
+          "followed": {
+            "default": false,
+            "title": "Followed",
+            "type": "boolean"
+          },
+          "mapping_state": {
+            "enum": [
+              "confirmed",
+              "ambiguous",
+              "unmapped"
+            ],
+            "title": "Mapping State",
+            "type": "string"
+          },
+          "mapping_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapping Status"
+          },
+          "provider_issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Issue Count"
+          },
+          "provider_publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Publisher"
+          },
+          "provider_start_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Start Year"
+          },
+          "provider_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Title"
+          },
+          "provider_volume_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Volume Id"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "mapping_state"
+        ],
+        "title": "ReadingPlanReleaseCandidate",
         "type": "object"
       },
       "ReadingPlanReleaseSourceStatus": {
