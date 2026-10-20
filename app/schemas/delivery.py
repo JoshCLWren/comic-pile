@@ -20,7 +20,7 @@ class DeliveryRecordCreate(BaseModel):
     target_branch: str = Field(..., min_length=1)
     issue_number: int | None = Field(default=None, ge=1)
     worker_id: str = Field(..., min_length=1)
-    metadata_json: dict | None = Field(default_factory=dict)
+    metadata_json: dict[str, object] | None = Field(default_factory=dict)
 
     @field_validator("target_repository")
     @classmethod
@@ -45,7 +45,7 @@ class DeliveryRecordResponse(BaseModel):
     status: str
     worker_id: str
     error_message: str | None
-    metadata_json: dict
+    metadata_json: dict[str, object]
     created_at: datetime
     updated_at: datetime
 

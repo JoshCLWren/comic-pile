@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.json_schema import WithJsonSchema
@@ -20,7 +20,7 @@ MAX_MANUAL_ROLE_LENGTH = 60
 
 
 def normalize_manual_creator_credits(
-    raw: list[dict[str, Any]],
+    raw: list[object],
 ) -> list[dict[str, Any]]:
     """Coerce raw client-supplied creator credits into the stored shape.
 
@@ -101,7 +101,7 @@ class ThreadCreate(BaseModel):
         Returns:
             The normalized credit list that is persisted.
         """
-        return normalize_manual_creator_credits(value)
+        return normalize_manual_creator_credits(cast(list[object], value))
 
 
 class ThreadUpdate(BaseModel):
@@ -130,7 +130,7 @@ class ThreadUpdate(BaseModel):
         """
         if value is None:
             return None
-        return normalize_manual_creator_credits(value)
+        return normalize_manual_creator_credits(cast(list[object], value))
 
 
 class ThreadResponse(BaseModel):

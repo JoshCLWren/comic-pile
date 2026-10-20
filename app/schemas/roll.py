@@ -108,7 +108,7 @@ class SessionModeResponse(BaseModel):
     intent_confidence: float | None = None
     intent_source: IntentSource | None = None
     intent_version: str | None = None
-    session_mode_correction_guidance: dict | None = None
+    session_mode_correction_guidance: dict[str, object] | None = None
 
 
 class RollBootstrapThread(BaseModel):

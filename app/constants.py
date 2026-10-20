@@ -1,6 +1,7 @@
 """Application constants and enums."""
 
 from enum import StrEnum
+from typing import Literal
 
 
 class EventType(StrEnum):
@@ -88,15 +89,16 @@ DICE_LADDER = [4, 6, 8, 10, 12, 20, 30, 50, 100]
 DEFAULT_SESSION_GAP_HOURS = 6
 
 # Supported visual theme identifiers persisted per user (issue #1398).
-THEME_CLASSIC = "classic"
-THEME_INK_GOLD = "ink-gold"
-THEME_COMMAND_CENTER = "command-center"
+THEME_CLASSIC: Literal["classic"] = "classic"
+THEME_INK_GOLD: Literal["ink-gold"] = "ink-gold"
+THEME_COMMAND_CENTER: Literal["command-center"] = "command-center"
 SUPPORTED_THEMES: tuple[str, ...] = (
     THEME_CLASSIC,
     THEME_INK_GOLD,
     THEME_COMMAND_CENTER,
 )
-DEFAULT_THEME = THEME_CLASSIC
+ThemeId = Literal["classic", "ink-gold", "command-center"]
+DEFAULT_THEME: ThemeId = THEME_CLASSIC
 
 # Deadlock retry configuration
 DEADLOCK_MAX_RETRIES = 3
