@@ -35,6 +35,7 @@ WITH canonically_blocked AS (
     WHERE source_thread.user_id = target_thread.user_id
       AND source_issue.status <> 'read'
       AND target_thread.next_unread_issue_id IS NOT NULL
+      AND next_unread_issue.status <> 'read'
       AND (
           dependencies.note IS NULL
           OR dependencies.note NOT LIKE 'cbl-order:%'
