@@ -17,6 +17,11 @@ hits the statement timeout leaves the revision unapplied, so Alembic retries the
 downgrade from the first index. The restore therefore skips indexes that an earlier
 attempt already created and rebuilds indexes that a failed concurrent build left
 behind in an invalid state instead of failing with "relation already exists".
+
+Only one migration run may touch the database at a time, which is what Alembic's
+version table serializes. A second, concurrent downgrade of this revision is not
+supported: it could recreate an index between the drop and the rebuild, and the
+idempotent create would then keep that index instead of the rebuilt one.
 """
 
 from collections.abc import Sequence

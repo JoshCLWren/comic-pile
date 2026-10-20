@@ -51,5 +51,3 @@ class UserPreferences(Base):
     user: Mapped[User] = relationship(
         "User", back_populates="preferences", uselist=False, lazy="raise"
     )
-
-    __table_args__ = ()
