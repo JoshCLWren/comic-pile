@@ -69,13 +69,17 @@ export function useRollExclusions(
   /**
    * Retry a failed load of this category.
    *
-   * A failed first page has nothing to resume from, so the retry refetches the
-   * collection from its first page. A failed next page keeps the rows the
-   * reader already has, so the retry asks for the missing page instead of
-   * reloading every page they already read (issue #3330).
+   * The retry resumes the request that actually failed. A failed next-page
+   * request keeps the rows the reader already has, so the retry asks for the
+   * missing page instead of reloading every page they already read (issue
+   * #3330). Every other failure — the first page, or a stale-cache refresh
+   * that failed after the category was fully loaded — has no next page to
+   * resume, so the retry refetches the collection instead. Firing a
+   * next-page fetch there would silently do nothing and leave the reader
+   * stuck with the stale list and the error.
    */
   const retry = useCallback(async (): Promise<void> => {
-    if (query.pages.length > 0) {
+    if (query.isFetchNextPageError) {
       await query.fetchNextPage()
       return
     }

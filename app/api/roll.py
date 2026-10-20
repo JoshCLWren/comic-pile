@@ -74,6 +74,11 @@ from app.services.dependency_service import get_blocking_details
 
 router = APIRouter(tags=["roll"])
 v2_router = APIRouter(tags=["roll"])
+
+#: Versioned-only router for new client resources. Mounted solely under
+#: ``/api/v1/roll`` so new endpoints never introduce bare ``/api/*`` routes
+#: (see ``tests/test_route_versioning.py`` and docs/API.md).
+v1_router = APIRouter(tags=["roll"])
 logger = logging.getLogger(__name__)
 
 
@@ -1005,7 +1010,7 @@ async def roll_bootstrap(
     )
 
 
-@router.get("/exclusions", response_model=RollExclusionPageResponse)
+@v1_router.get("/exclusions", response_model=RollExclusionPageResponse)
 async def roll_exclusion_page(
     current_user: Annotated[User, Depends(get_current_user)],
     category: Annotated[
