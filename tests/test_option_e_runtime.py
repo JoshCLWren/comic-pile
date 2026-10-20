@@ -1098,6 +1098,7 @@ async def test_builder_dependency_blocks_across_live_surfaces(
     dependent, dependent_issues = await _series(async_db, user.id, "MySpace", 2, count=1)
     prerequisite_id, dependent_id = prerequisite.id, dependent.id
     source_id, target_id = prerequisite_issues[0].id, dependent_issues[0].id
+    user_id = user.id
     await async_db.commit()
 
     created = await auth_client.post("/api/v1/dependencies/", json={
@@ -1110,6 +1111,22 @@ async def test_builder_dependency_blocks_across_live_surfaces(
     stored = await async_db.get(Dependency, dependency_id)
     assert stored is not None
     assert stored.origin == "reader"
+    assert stored.classification == "A"
+    assert stored.provenance == "Reader-authored through the Dependency Builder"
+
+    eligibility = await get_execution_eligibility(async_db, user_id)
+    assert eligibility is not None
+    prerequisite_blockers = [
+        blocker
+        for blocker in eligibility.threads[dependent_id].blockers
+        if blocker.kind == "prerequisite"
+    ]
+    assert len(prerequisite_blockers) == 1
+    assert prerequisite_blockers[0].origin == "reader"
+    assert "classification:None" not in prerequisite_blockers[0].provenance
+    assert "Reader-authored through the Dependency Builder" in (
+        prerequisite_blockers[0].provenance
+    )
 
     connected = await auth_client.get(f"/api/v1/threads/{dependent_id}/connected")
     assert connected.status_code == 200, connected.text
