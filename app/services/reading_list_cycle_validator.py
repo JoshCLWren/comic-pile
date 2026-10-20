@@ -159,20 +159,21 @@ def validate_reading_constraints(
         ]
         while stack:
             node, iterator = stack[-1]
-            edge = next(iterator, None)
-            if edge is None:
+            next_edge: ConstraintEdge | None = next(iterator, None)
+            if next_edge is None:
                 visited.add(node)
                 del active[node]
                 stack.pop()
                 if path:
                     path.pop()
                 continue
-            target = edge.target_issue_id
+            assert next_edge is not None
+            target = next_edge.target_issue_id
             if target in active:
-                raise ReadingCycleError(tuple(path[active[target] :] + [edge]))
+                raise ReadingCycleError(tuple(path[active[target] :] + [next_edge]))
             if target not in visited:
                 active[target] = len(path) + 1
-                path.append(edge)
+                path.append(next_edge)
                 stack.append(
                     (
                         target,
