@@ -20,7 +20,7 @@ from app.services.reading_eligibility_service import (
 )
 
 from app.models import Event, Issue, Thread
-from app.models.thread import EXCLUDED_STATUS, normalize_format_value
+from app.models.thread import EXCLUDED_STATUS, normalize_format_value, normalize_notes_value
 from app.repositories import (
     continuity_repository,
     issue_repository,
@@ -693,7 +693,7 @@ async def create_thread_with_retry(
                 total_issues=thread_data.total_issues,
                 queue_position=max_position + 1,
                 user_id=user_id,
-                notes=thread_data.notes,
+                notes=normalize_notes_value(thread_data.notes),
                 manual_creator_credits=thread_data.manual_creator_credits,
                 is_test=thread_data.is_test,
             )
@@ -748,6 +748,13 @@ async def update_thread(
     Only legacy (non-issue-tracked) threads honor manual ``issues_remaining``
     edits; such edits also drive the active/completed status transition.
 
+    ``notes`` follows explicit-presence semantics (issue #3629): when the client
+    includes the field, its value is written verbatim, so an emptied field
+    (``""``) or an explicit ``null`` clears the stored notes instead of silently
+    preserving them. Omitting the field (for example a title-only edit) leaves
+    notes untouched. A blank or whitespace-only value is stored as ``NULL`` so a
+    cleared series reads back as "no notes" everywhere.
+
     Args:
         db: Database session.
         user_id: Owner that must own the thread.
@@ -783,8 +790,8 @@ async def update_thread(
                         await thread_repository.max_queue_position(db, user_id) + 1
                     )
                     await thread_repository.renormalize_queue_positions(db, user_id)
-    if thread_data.notes is not None:
-        thread.notes = thread_data.notes
+    if "notes" in thread_data.model_fields_set:
+        thread.notes = normalize_notes_value(thread_data.notes)
     if thread_data.manual_creator_credits is not None:
         thread.manual_creator_credits = thread_data.manual_creator_credits
     if thread_data.is_test is not None:

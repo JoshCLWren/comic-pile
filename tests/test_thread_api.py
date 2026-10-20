@@ -1148,6 +1148,84 @@ async def test_update_thread_normalizes_format_variants(
 
 
 @pytest.mark.asyncio
+async def test_update_thread_clears_notes_when_field_is_sent(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A cleared Notes field persists as no notes (issue #3629).
+
+    Notes use explicit-presence semantics: sending an emptied string or an
+    explicit ``null`` clears the stored note, while leaving the field out of the
+    request keeps the existing note untouched.
+    """
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Notes Test",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        notes="Read the tie-in first",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    # An emptied Notes field must clear the stored note instead of being treated
+    # as "leave unchanged".
+    response = await auth_client.put(
+        f"/api/v1/threads/{thread.id}",
+        json={"title": "Notes Test", "format": "Comic", "notes": ""},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["notes"] is None
+
+    await async_db.refresh(thread)
+    assert thread.notes is None
+
+    # A whitespace-only value is also "no notes".
+    thread.notes = "Keep the annual out of the run"
+    await async_db.commit()
+    response = await auth_client.put(
+        f"/api/v1/threads/{thread.id}",
+        json={"notes": "   "},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["notes"] is None
+
+    await async_db.refresh(thread)
+    assert thread.notes is None
+
+    # An explicit null clears too.
+    thread.notes = "Has notes again"
+    await async_db.commit()
+    response = await auth_client.put(
+        f"/api/v1/threads/{thread.id}",
+        json={"notes": None},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["notes"] is None
+
+    await async_db.refresh(thread)
+    assert thread.notes is None
+
+    # Omitting the field leaves the existing note in place.
+    thread.notes = "Preserve me"
+    await async_db.commit()
+    response = await auth_client.put(
+        f"/api/v1/threads/{thread.id}",
+        json={"title": "Renamed Notes Test"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["notes"] == "Preserve me"
+
+    await async_db.refresh(thread)
+    assert thread.notes == "Preserve me"
+
+
+@pytest.mark.asyncio
 async def test_queue_items_show_normalized_format(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
@@ -1215,4 +1293,25 @@ def test_normalize_format_value_covers_issue_variants_with_no_data_loss() -> Non
     source_values = ["Comic", "Comics", "comic", "digital", "Digital"]
     normalized = {normalize_format_value(value) for value in source_values}
     assert normalized == {"Comic", "Digital"}
+
+
+def test_normalize_notes_value_stores_empty_notes_as_none() -> None:
+    """An empty or whitespace-only note is stored as "no notes" (#3629)."""
+    from app.models.thread import normalize_notes_value
+
+    assert normalize_notes_value(None) is None
+    assert normalize_notes_value("") is None
+    assert normalize_notes_value("   ") is None
+    assert normalize_notes_value("\n\t ") is None
+
+
+def test_normalize_notes_value_preserves_non_empty_notes_verbatim() -> None:
+    """Real notes, including internal and edge whitespace, survive unchanged."""
+    from app.models.thread import normalize_notes_value
+
+    assert normalize_notes_value("Read the tie-in first") == "Read the tie-in first"
+    assert normalize_notes_value("Line one\n\nLine two") == "Line one\n\nLine two"
+    # A non-empty note keeps its surrounding whitespace; only *all-whitespace*
+    # values collapse to "no notes".
+    assert normalize_notes_value("  padded  ") == "  padded  "
 
