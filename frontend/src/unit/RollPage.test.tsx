@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
@@ -16,6 +17,7 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { threadsApi } from '../services/api-threads'
+import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { cast } from '../utils/cast'
 
 const navigateSpy = vi.fn()
@@ -55,6 +57,11 @@ vi.mock('../hooks', async (importOriginal) => {
 })
 vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
+}))
+vi.mock('../services/api-dependencies', () => ({
+  dependenciesApi: {
+    getBatchBlockingInfo: vi.fn().mockResolvedValue({ threads: {} }),
+  },
 }))
 vi.mock('../services/api-threads', () => ({
   threadsApi: {
@@ -104,12 +111,18 @@ const bootstrap = {
   stale_thread: null,
 }
 
-function renderRollPage() {
-  return render(
-    <ToastProvider>
-      <RollPage />
-    </ToastProvider>
+function rollPageElement() {
+  return (
+    <MemoryRouter>
+      <ToastProvider>
+        <RollPage />
+      </ToastProvider>
+    </MemoryRouter>
   )
+}
+
+function renderRollPage() {
+  return render(rollPageElement())
 }
 
 beforeEach(() => {
@@ -228,4 +241,72 @@ it('shows a retry action when bootstrap loading fails', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Retry' }))
   expect(refetch).toHaveBeenCalled()
+})
+
+it('reads fresh blocked pages after the bootstrap refreshes the preview', async () => {
+  const user = userEvent.setup()
+  const preview = Array.from({ length: 20 }, (_, index) => ({
+    id: index + 1,
+    title: `Blocked ${index + 1}`,
+    format: 'Comic',
+  }))
+  const staleTail = Array.from({ length: 5 }, (_, index) => ({
+    id: 100 + index,
+    title: `Tail ${index + 1}`,
+    format: 'Comic',
+  }))
+  const freshTail = staleTail.slice(1)
+  const getBlockedThreadsPage = vi
+    .spyOn(rollBootstrapApi, 'getBlockedThreadsPage')
+    .mockResolvedValueOnce({
+      total: 25,
+      offset: 20,
+      limit: 20,
+      next_offset: null,
+      items: staleTail,
+    })
+    .mockResolvedValueOnce({
+      total: 24,
+      offset: 20,
+      limit: 20,
+      next_offset: null,
+      items: freshTail,
+    })
+
+  const initial = { ...bootstrap, blocked_count: 25, blocked_threads: preview }
+  mockedUseRollBootstrap.mockReturnValue({
+    data: initial,
+    refetch: vi.fn().mockResolvedValue(initial),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+
+  const { rerender } = renderRollPage()
+
+  await user.click(screen.getByRole('button', { name: /series waiting for earlier issues/i }))
+  await waitFor(() => expect(screen.getByText('Tail 1')).toBeInTheDocument())
+
+  // One series left the blocked category, so the refreshed preview now holds
+  // the first series of the previous tail. The cached pages described the old
+  // category and must not be appended to the refreshed preview.
+  const refreshed = {
+    ...initial,
+    blocked_count: 24,
+    blocked_threads: [...preview.slice(0, 19), staleTail[0]],
+  }
+  mockedUseRollBootstrap.mockReturnValue({
+    data: refreshed,
+    refetch: vi.fn().mockResolvedValue(refreshed),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  rerender(rollPageElement())
+
+  await waitFor(() => expect(screen.getByText('Tail 5')).toBeInTheDocument())
+  expect(getBlockedThreadsPage).toHaveBeenCalledTimes(2)
+  expect(screen.getAllByText('Tail 1')).toHaveLength(1)
+
+  getBlockedThreadsPage.mockRestore()
 })

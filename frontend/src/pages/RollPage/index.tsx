@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
-import { useRollBlockedThreads, useRollInactiveThreads } from '../../hooks/useRollThreadPages'
+import {
+  rollSectionRevision,
+  useRollBlockedThreads,
+  useRollInactiveThreads,
+} from '../../hooks/useRollThreadPages'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useClearManualDie,
@@ -355,9 +359,23 @@ export default function RollPage() {
   const inactivePreview = bootstrap?.inactive_threads ?? []
   const blockedCount = bootstrap?.blocked_count ?? blockedPreview.length
   const inactiveCount = bootstrap?.inactive_count ?? inactivePreview.length
+  // The paged sections continue after the bootstrap preview, so their cached
+  // pages only describe the category while that category is unchanged. The
+  // revision token changes with the counted total or the previewed
+  // membership, which is exactly when stale pages would repeat rows the
+  // refreshed preview already shows (issue #3330).
+  const blockedRevision = rollSectionRevision(
+    blockedCount,
+    blockedPreview.map((thread) => thread.id),
+  )
+  const inactiveRevision = rollSectionRevision(
+    inactiveCount,
+    inactivePreview.map((thread) => thread.thread_id),
+  )
 
   const blockedPager = useRollBlockedThreads({
     startOffset: blockedPreview.length,
+    revision: blockedRevision,
     enabled:
       !state.isRatingView
       && state.blockedExpanded
@@ -365,6 +383,7 @@ export default function RollPage() {
   })
   const inactivePager = useRollInactiveThreads({
     startOffset: inactivePreview.length,
+    revision: inactiveRevision,
     enabled:
       !state.isRatingView
       && state.inactiveExpanded
@@ -560,6 +579,8 @@ export default function RollPage() {
               inactiveHasMore={inactiveHasMore}
               blockedLoadingMore={blockedPager.isFetching}
               inactiveLoadingMore={inactivePager.isFetching}
+              blockedLoadError={blockedPager.isError}
+              inactiveLoadError={inactivePager.isError}
               onLoadMoreBlocked={blockedPager.loadMore}
               onLoadMoreInactive={inactivePager.loadMore}
               onThreadClick={actions.handleThreadClick}

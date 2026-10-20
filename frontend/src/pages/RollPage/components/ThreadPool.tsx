@@ -18,6 +18,67 @@ function exclusionReasonLabel(thread: ThreadExclusionReason): string {
   return thread.detail ?? EXCLUSION_REASON_LABELS[thread.reason]
 }
 
+/**
+ * Ordinary secondary action styling for the paged-section controls.
+ *
+ * The visual grammar reserves the small uppercase eyebrow treatment for status
+ * and category labels, and requires ordinary controls to use the semantic
+ * theme roles instead of raw palette colors.
+ */
+const SECTION_ACTION_CLASS =
+  'w-full min-h-11 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-2 text-sm font-semibold text-[var(--theme-text-primary)] transition-colors hover:border-[var(--theme-text-muted)]/50 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]'
+
+interface LoadMoreControlProps {
+  /** Total records the section counts. */
+  total: number
+  /** Records the section currently renders. */
+  shown: number
+  /** True while a page request is in flight. */
+  loading: boolean
+  /** True when the last page request failed. */
+  failed: boolean
+  /** Human name of the section, used in the recovery copy. */
+  label: string
+  onLoadMore: () => void
+}
+
+/**
+ * The load-more control of one bounded Roll category section.
+ *
+ * A failed page keeps the rows already listed and offers a working retry, so a
+ * reader never gets an enabled control that does nothing.
+ */
+function LoadMoreControl({
+  total,
+  shown,
+  loading,
+  failed,
+  label,
+  onLoadMore,
+}: LoadMoreControlProps) {
+  const remaining = Math.max(total - shown, 0)
+  return (
+    <div className="space-y-2 pt-1">
+      <p className="text-xs text-[var(--theme-text-muted)]">
+        Showing {shown} of {total} series.
+      </p>
+      {failed && (
+        <p role="alert" className="text-xs text-[var(--theme-text-muted)]">
+          Could not load more {label}. The series already listed are still shown.
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={onLoadMore}
+        disabled={loading}
+        className={SECTION_ACTION_CLASS}
+      >
+        {loading ? 'Loading more…' : failed ? 'Retry' : `Load more (${remaining} remaining)`}
+      </button>
+    </div>
+  )
+}
+
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
@@ -47,6 +108,10 @@ interface ThreadPoolProps {
   inactiveHasMore?: boolean
   blockedLoadingMore?: boolean
   inactiveLoadingMore?: boolean
+  /** True when the last blocked page request failed. */
+  blockedLoadError?: boolean
+  /** True when the last inactive page request failed. */
+  inactiveLoadError?: boolean
   onLoadMoreBlocked?: () => void
   onLoadMoreInactive?: () => void
   onToggleInactive?: () => void
@@ -87,6 +152,8 @@ export function ThreadPool({
   inactiveHasMore = false,
   blockedLoadingMore = false,
   inactiveLoadingMore = false,
+  blockedLoadError = false,
+  inactiveLoadError = false,
   onLoadMoreBlocked,
   onLoadMoreInactive,
   onToggleInactive,
@@ -273,16 +340,14 @@ export function ThreadPool({
                 </div>
               ))}
               {blockedHasMore && onLoadMoreBlocked && (
-                <button
-                  type="button"
-                  onClick={onLoadMoreBlocked}
-                  disabled={blockedLoadingMore}
-                  className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-stone-400 hover:bg-stone-500/10 disabled:opacity-50 transition-colors"
-                >
-                  {blockedLoadingMore
-                    ? 'Loading more…'
-                    : `Load more (${Math.max(totalBlocked - blockedThreads.length, 0)} remaining)`}
-                </button>
+                <LoadMoreControl
+                  total={totalBlocked}
+                  shown={blockedThreads.length}
+                  loading={blockedLoadingMore}
+                  failed={blockedLoadError}
+                  label="blocked series"
+                  onLoadMore={onLoadMoreBlocked}
+                />
               )}
             </div>
           )}
@@ -444,23 +509,26 @@ export function ThreadPool({
                   key={thread.thread_id}
                   className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
-                  <p className="flex-1 min-w-0 text-sm text-stone-400 truncate">{thread.title}</p>
+                  <Link
+                    to={`/thread/${thread.thread_id}`}
+                    className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] underline truncate"
+                  >
+                    {thread.title}
+                  </Link>
                   <span className="shrink-0 text-xs text-stone-500">
                     {exclusionReasonLabel(thread)}
                   </span>
                 </div>
               ))}
               {inactiveHasMore && onLoadMoreInactive && (
-                <button
-                  type="button"
-                  onClick={onLoadMoreInactive}
-                  disabled={inactiveLoadingMore}
-                  className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-stone-400 hover:bg-stone-500/10 disabled:opacity-50 transition-colors"
-                >
-                  {inactiveLoadingMore
-                    ? 'Loading more…'
-                    : `Load more (${Math.max(totalInactive - inactiveThreads.length, 0)} remaining)`}
-                </button>
+                <LoadMoreControl
+                  total={totalInactive}
+                  shown={inactiveThreads.length}
+                  loading={inactiveLoadingMore}
+                  failed={inactiveLoadError}
+                  label="out-of-pool series"
+                  onLoadMore={onLoadMoreInactive}
+                />
               )}
             </div>
           )}

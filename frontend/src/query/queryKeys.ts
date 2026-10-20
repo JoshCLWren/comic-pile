@@ -167,13 +167,30 @@ export const queryKeys = {
      * The cursor lives in `pageParam`, never in the key, so every page of one
      * page size shares a stable prefix and an invalidation of `roll.all`
      * refreshes the section alongside the bootstrap. `startOffset` records the
-     * preview boundary the section began from.
+     * preview boundary the section began from, and `revision` records the
+     * category state those pages were read against, so a category that
+     * changed after the preview reads fresh pages instead of reusing rows the
+     * refreshed preview already shows.
      */
-    blockedThreads: ({ pageSize, startOffset }: { pageSize: number; startOffset: number }) =>
-      ['roll', 'blocked-threads', { pageSize, startOffset }] as const,
+    blockedThreads: ({
+      pageSize,
+      startOffset,
+      revision,
+    }: {
+      pageSize: number
+      startOffset: number
+      revision: string
+    }) => ['roll', 'blocked-threads', { pageSize, startOffset, revision }] as const,
     /** Canonical prefix for the bounded out-of-pool pages (issue #3330). */
-    inactiveThreads: ({ pageSize, startOffset }: { pageSize: number; startOffset: number }) =>
-      ['roll', 'inactive-threads', { pageSize, startOffset }] as const,
+    inactiveThreads: ({
+      pageSize,
+      startOffset,
+      revision,
+    }: {
+      pageSize: number
+      startOffset: number
+      revision: string
+    }) => ['roll', 'inactive-threads', { pageSize, startOffset, revision }] as const,
   },
   demo: {
     /**

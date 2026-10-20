@@ -23,11 +23,13 @@ function renderPool(overrides: {
   blockedCount?: number
   blockedHasMore?: boolean
   blockedExpanded?: boolean
+  blockedLoadError?: boolean
   onLoadMoreBlocked?: () => void
   inactiveThreads?: ThreadExclusionReason[]
   inactiveCount?: number
   inactiveHasMore?: boolean
   inactiveExpanded?: boolean
+  inactiveLoadError?: boolean
   onLoadMoreInactive?: () => void
 } = {}) {
   return render(
@@ -49,11 +51,13 @@ function renderPool(overrides: {
         staleExpanded={false}
         blockedCount={overrides.blockedCount}
         blockedHasMore={overrides.blockedHasMore}
+        blockedLoadError={overrides.blockedLoadError}
         onLoadMoreBlocked={overrides.onLoadMoreBlocked}
         inactiveThreads={overrides.inactiveThreads ?? []}
         inactiveExpanded={overrides.inactiveExpanded ?? false}
         inactiveCount={overrides.inactiveCount}
         inactiveHasMore={overrides.inactiveHasMore}
+        inactiveLoadError={overrides.inactiveLoadError}
         onLoadMoreInactive={overrides.onLoadMoreInactive}
         onThreadClick={vi.fn()}
         onUnsnooze={vi.fn()}
@@ -140,5 +144,79 @@ describe('ThreadPool accurate category totals (#3330)', () => {
     })
 
     expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument()
+  })
+
+  it('states how many of the counted series are rendered while the list is truncated', () => {
+    renderPool({
+      blockedThreads: [previewBlocked],
+      blockedCount: 25,
+      blockedHasMore: true,
+      blockedExpanded: true,
+      onLoadMoreBlocked: vi.fn(),
+    })
+
+    expect(screen.getByText('Showing 1 of 25 series.')).toBeInTheDocument()
+  })
+
+  it('offers a working retry when a blocked page failed to load', () => {
+    const onLoadMoreBlocked = vi.fn()
+    renderPool({
+      blockedThreads: [previewBlocked],
+      blockedCount: 25,
+      blockedHasMore: true,
+      blockedExpanded: true,
+      blockedLoadError: true,
+      onLoadMoreBlocked,
+    })
+
+    expect(
+      screen.getByText(/could not load more blocked series/i),
+    ).toBeInTheDocument()
+
+    const retry = screen.getByRole('button', { name: /retry/i })
+    fireEvent.click(retry)
+
+    expect(onLoadMoreBlocked).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers a working retry when an inactive page failed to load', () => {
+    const onLoadMoreInactive = vi.fn()
+    renderPool({
+      inactiveThreads: [previewInactive],
+      inactiveCount: 30,
+      inactiveHasMore: true,
+      inactiveExpanded: true,
+      inactiveLoadError: true,
+      onLoadMoreInactive,
+    })
+
+    expect(
+      screen.getByText(/could not load more out-of-pool series/i),
+    ).toBeInTheDocument()
+
+    const retry = screen.getByRole('button', { name: /retry/i })
+    fireEvent.click(retry)
+
+    expect(onLoadMoreInactive).toHaveBeenCalledTimes(1)
+  })
+
+  it('styles the load-more controls with semantic theme roles and ordinary button typography', () => {
+    renderPool({
+      blockedThreads: [previewBlocked],
+      blockedCount: 25,
+      blockedHasMore: true,
+      blockedExpanded: true,
+      onLoadMoreBlocked: vi.fn(),
+    })
+
+    const loadMore = screen.getByRole('button', { name: /load more \(24 remaining\)/i })
+    const className = loadMore.getAttribute('class') ?? ''
+
+    expect(className).toContain('var(--theme-bg-panel)')
+    expect(className).toContain('var(--theme-border)')
+    expect(className).toContain('var(--theme-text-primary)')
+    expect(className).not.toContain('stone')
+    expect(className).not.toContain('uppercase')
+    expect(className).not.toContain('tracking-widest')
   })
 })

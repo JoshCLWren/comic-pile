@@ -129,6 +129,17 @@ describe('ThreadPool exclusion transparency', () => {
     expect(screen.getByText('Snoozed')).toBeInTheDocument()
   })
 
+  it('links every excluded series to its own thread', () => {
+    renderPool({
+      inactiveThreads: [
+        { thread_id: 7, title: 'Saga', format: 'Comic', reason: 'completed', detail: 'Read the full series' },
+      ],
+      inactiveExpanded: true,
+    })
+
+    expect(screen.getByRole('link', { name: 'Saga' })).toHaveAttribute('href', '/thread/7')
+  })
+
   it('never renders raw reason codes', () => {
     renderPool({
       inactiveThreads: [
