@@ -190,6 +190,34 @@ describe('ThreadPool exclusion category totals and pagination (#3330)', () => {
     expect(screen.getByText('Blocked 20')).toBeInTheDocument()
   })
 
+  it('keeps the pagination controls off the eyebrow action-text treatment', () => {
+    const { props, rerender } = renderPool({
+      blockedExpanded: true,
+      blockedThreads: blockedRows(20),
+      blockedPagination: pagination({ total: 25, hasNextPage: true }),
+    })
+
+    // The visual grammar reserves the small uppercase eyebrow treatment for
+    // status labels and excludes buttons and action text from it.
+    const loadMore = screen.getByRole('button', { name: /load more/i })
+    expect(loadMore.className).not.toMatch(/uppercase/)
+    expect(loadMore.className).not.toMatch(/tracking-/)
+
+    rerender(
+      <MemoryRouter>
+        <ThreadPool
+          {...props}
+          blockedThreads={blockedRows(20)}
+          blockedPagination={pagination({ total: 25, hasNextPage: true, isError: true })}
+        />
+      </MemoryRouter>,
+    )
+
+    const retry = screen.getByRole('button', { name: /retry/i })
+    expect(retry.className).not.toMatch(/uppercase/)
+    expect(retry.className).not.toMatch(/tracking-/)
+  })
+
   it('keeps the empty state when both categories are truly empty', () => {
     renderPool({
       blockedPagination: pagination({ total: 0 }),

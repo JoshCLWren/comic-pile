@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useInfiniteCollection } from '../pagination'
 import { queryKeys } from '../query/queryKeys'
 import { rollExclusionsApi } from '../services/rollExclusionsApi'
@@ -38,7 +39,8 @@ export interface UseRollExclusionsOptions {
  *
  * @param category - `blocked` or `inactive`.
  * @param options - Lazy-load gate and injectable API.
- * @returns Canonical pagination state plus the authoritative category total.
+ * @returns Canonical pagination state, the authoritative category total, and a
+ *   `retry` that resumes the page that actually failed.
  */
 export function useRollExclusions(
   category: RollExclusionCategory,
@@ -64,5 +66,21 @@ export function useRollExclusions(
 
   const total = query.pages[0]?.total ?? 0
 
-  return { ...query, total }
+  /**
+   * Retry a failed load of this category.
+   *
+   * A failed first page has nothing to resume from, so the retry refetches the
+   * collection from its first page. A failed next page keeps the rows the
+   * reader already has, so the retry asks for the missing page instead of
+   * reloading every page they already read (issue #3330).
+   */
+  const retry = useCallback(async (): Promise<void> => {
+    if (query.pages.length > 0) {
+      await query.fetchNextPage()
+      return
+    }
+    await query.refetch()
+  }, [query])
+
+  return { ...query, total, retry }
 }

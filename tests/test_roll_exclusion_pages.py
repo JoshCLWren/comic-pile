@@ -11,7 +11,7 @@ relies on: the bootstrap count and the drill-down total are the same number
 for the same category scope, and every counted row is reachable by paging.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -313,6 +313,63 @@ async def test_blocked_page_explains_dependency_details(
     assert dependency.issue_number == "1"
     assert dependency.thread_title == "Unread Prerequisite"
     assert dependency.label.startswith("Blocked by Unread Prerequisite")
+
+
+@pytest.mark.asyncio
+async def test_inactive_page_uses_the_same_reading_session_as_the_bootstrap(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """The drill-down classifies rows with the session the bootstrap resolved.
+
+    Two unended sessions can exist at once. The bootstrap resolves the one
+    that still carries pending reading work, while the newest unended session
+    may carry none. Reading the newest one here would classify a snoozed
+    series as out-of-pool, so the drill-down total would disagree with the
+    bootstrap count printed beside the same heading (#3330).
+    """
+    user = await get_or_create_user_async(async_db)
+    # Both series sit outside the active queue, so the only thing that keeps
+    # the snoozed one out of the out-of-pool category is the session.
+    snoozed = await _thread(async_db, user.id, title="Snoozed", position=0)
+    deprioritized = await _thread(async_db, user.id, title="Not queued", position=0)
+    pending = await _thread(async_db, user.id, title="Pending", position=2)
+    await async_db.commit()
+
+    now = datetime.now(UTC)
+    # The older session still carries pending reading work, so it stays the
+    # authoritative current session even though a newer one exists.
+    async_db.add(
+        ReadingSession(
+            start_die=6,
+            user_id=user.id,
+            started_at=now - timedelta(minutes=5),
+            pending_thread_id=pending.id,
+            pending_thread_updated_at=now - timedelta(minutes=5),
+            snoozed_thread_ids=[snoozed.id],
+        )
+    )
+    await async_db.flush()
+    async_db.add(
+        ReadingSession(
+            start_die=6,
+            user_id=user.id,
+            started_at=now,
+        )
+    )
+    await async_db.commit()
+
+    bootstrap = await _bootstrap(auth_client)
+    inactive_page = await _exclusion_page(auth_client, category="inactive")
+
+    # The bootstrap resolved the session that carries the pending work.
+    assert bootstrap.session_id != 0
+    assert bootstrap.inactive_count == 1
+    # The drill-down agrees with that heading instead of reporting the snoozed
+    # series as out-of-pool because it read the other session.
+    assert inactive_page.total == bootstrap.inactive_count
+    assert [item.thread_id for item in inactive_page.items] == [deprioritized.id]
+    assert snoozed.id not in {item.thread_id for item in inactive_page.items}
 
 
 @pytest.mark.asyncio

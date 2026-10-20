@@ -114,6 +114,61 @@ describe('useRollExclusions', () => {
     expect(result.current.total).toBe(40)
   })
 
+  it('retries the missing page instead of reloading the pages already read', async () => {
+    api.list
+      .mockResolvedValueOnce(page(0, items(1, 20), 40))
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce(page(20, items(21, 40), 40))
+
+    const { result } = renderExclusions({ enabled: true })
+
+    await waitFor(() => expect(result.current.items).toHaveLength(20))
+
+    await act(async () => {
+      await result.current.fetchNextPage()
+    })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+
+    api.list.mockClear()
+
+    await act(async () => {
+      await result.current.retry()
+    })
+
+    // The retry asks for the page that failed, not the first page the reader
+    // already read (#3330).
+    expect(api.list).toHaveBeenCalledTimes(1)
+    expect(api.list).toHaveBeenCalledWith('blocked', {
+      limit: ROLL_EXCLUSION_PAGE_SIZE,
+      offset: 20,
+    })
+    await waitFor(() => expect(result.current.items).toHaveLength(40))
+    expect(result.current.isError).toBe(false)
+  })
+
+  it('refetches the first page when the initial load failed', async () => {
+    api.list
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce(page(0, items(1, 20), 20))
+
+    const { result } = renderExclusions({ enabled: true })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.items).toHaveLength(0)
+
+    await act(async () => {
+      await result.current.retry()
+    })
+
+    // Nothing was loaded yet, so the retry starts the collection over.
+    expect(api.list).toHaveBeenNthCalledWith(2, 'blocked', {
+      limit: ROLL_EXCLUSION_PAGE_SIZE,
+      offset: 0,
+    })
+    await waitFor(() => expect(result.current.items).toHaveLength(20))
+    expect(result.current.isError).toBe(false)
+  })
+
   it('reports the authoritative total when the category is empty', async () => {
     api.list.mockResolvedValueOnce(page(0, [], 0))
 

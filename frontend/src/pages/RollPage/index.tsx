@@ -556,7 +556,11 @@ export default function RollPage() {
                 isLoading: blockedExclusions.isPending,
                 isError: blockedExclusions.isError,
                 onLoadMore: blockedExclusions.fetchNextPage,
-                onRetry: blockedExclusions.refetch,
+                // A failed "Load more" resumes the missing page instead of
+                // reloading every page the reader already read (#3330).
+                onRetry: () => {
+                  void blockedExclusions.retry()
+                },
               }}
               blockingDependencyMap={blockingDependencyMap}
               dieSize={dieSize}
@@ -580,7 +584,11 @@ export default function RollPage() {
                 isLoading: inactiveExclusions.isPending,
                 isError: inactiveExclusions.isError,
                 onLoadMore: inactiveExclusions.fetchNextPage,
-                onRetry: inactiveExclusions.refetch,
+                // A failed "Load more" resumes the missing page instead of
+                // reloading every page the reader already read (#3330).
+                onRetry: () => {
+                  void inactiveExclusions.retry()
+                },
               }}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}

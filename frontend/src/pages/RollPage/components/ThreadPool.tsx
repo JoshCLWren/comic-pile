@@ -39,6 +39,21 @@ interface ExclusionPaginationFooterProps {
   label: string
 }
 
+/**
+ * Shared secondary-button treatment for the exclusion pagination footer.
+ *
+ * `docs/FRONTEND_VISUAL_GRAMMAR.md` reserves the small uppercase eyebrow
+ * treatment for status and metadata labels and explicitly excludes buttons
+ * and action text from it, so both footer controls use ordinary sentence-case
+ * secondary typography. They also share one height, radius, and focus
+ * behavior, because they are peers in the same action group.
+ */
+const EXCLUSION_FOOTER_BUTTON_CLASS = [
+  'min-h-9 rounded-lg border px-3 text-sm font-semibold',
+  'transition-colors focus:outline-none focus-visible:ring-2',
+  'focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50',
+].join(' ')
+
 /** Bounded "showing N of M" footer shared by exclusion sections. */
 function ExclusionPaginationFooter({
   pagination,
@@ -54,7 +69,7 @@ function ExclusionPaginationFooter({
       data-testid="exclusion-pagination"
     >
       <p
-        className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]"
+        className="text-xs font-medium text-[var(--theme-text-dim)]"
         aria-live="polite"
       >
         {isInitialLoad
@@ -65,7 +80,7 @@ function ExclusionPaginationFooter({
         <button
           type="button"
           onClick={pagination.onRetry}
-          className="min-h-7 rounded-lg border border-[var(--theme-warning)]/40 px-2 text-[10px] font-black uppercase tracking-widest text-[var(--theme-warning)] transition-colors hover:bg-[var(--theme-warning)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+          className={`${EXCLUSION_FOOTER_BUTTON_CLASS} border-[var(--theme-warning)]/40 text-[var(--theme-warning)] hover:bg-[var(--theme-warning)]/10`}
         >
           Retry
         </button>
@@ -74,7 +89,7 @@ function ExclusionPaginationFooter({
           type="button"
           onClick={pagination.onLoadMore}
           disabled={pagination.isLoading}
-          className="min-h-7 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+          className={`${EXCLUSION_FOOTER_BUTTON_CLASS} border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]`}
         >
           {pagination.isLoading ? 'Loading…' : 'Load more'}
         </button>

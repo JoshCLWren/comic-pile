@@ -216,6 +216,14 @@ export async function invalidateAfterQueueMovement(
     // that changes membership. Reset it the same way the Queue list resets:
     // a cached page still lists a series on the wrong side of the boundary.
     client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
+    // The Roll exclusion drill-down caches the same blocked and out-of-pool
+    // rows plus their authoritative category totals (#3330). A queue change
+    // that adds, removes, or reorders a series changes both the rows and the
+    // order behind each offset cursor, so those pages reset instead of
+    // invalidating: an invalidated page set would keep serving a deleted
+    // series and the old count inside the query's stale window.
+    client.resetQueries({ queryKey: queryKeys.roll.exclusions('blocked') }),
+    client.resetQueries({ queryKey: queryKeys.roll.exclusions('inactive') }),
   ])
 }
 
@@ -226,8 +234,9 @@ export async function invalidateAfterQueueMovement(
  * queries automatically — callers must not also call `refetch()`.
  *
  * This is intentionally an alias of `invalidateAfterQueueMovement` — both
- * operations refresh the same four retained resources (queue pages, current
- * session, roll bootstrap, excluded library pages) and must stay in sync.
+ * operations refresh the same retained resources (queue pages, current
+ * session, roll bootstrap, excluded library pages, Roll exclusion drill-down
+ * pages) and must stay in sync.
  */
 export async function invalidateAfterQueueMutation(
   client: QueryClient,

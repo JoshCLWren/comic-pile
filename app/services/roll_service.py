@@ -24,7 +24,6 @@ from app.models.recommendation_context import RecommendationContext as RecContex
 from app.repositories.roll_repository import (
     count_blocked_exclusion_rows,
     count_inactive_exclusion_rows,
-    fetch_active_session,
     fetch_blocked_exclusion_page,
     fetch_bootstrap_blocked_rows,
     fetch_bootstrap_excluded_thread_rows,
@@ -79,7 +78,11 @@ from comic_pile.recommendation_version import (
     RECOMMENDATION_ALGORITHM_VERSION,
     recommendation_algorithm_version,
 )
-from comic_pile.reading_session import get_current_die_for_session, get_or_create
+from comic_pile.reading_session import (
+    get_current_die_for_session,
+    get_or_create,
+    resolve_current_session,
+)
 
 from app.config import get_recommendation_settings
 from app.schemas import RollBootstrapThread, RollResponse, ThreadExclusionReason
@@ -483,14 +486,19 @@ class RollService:
                 )
             return ExclusionPage(category=category, items=items, total=total)
 
-        session = await fetch_active_session(self._db, user_id)
+        # The drill-down must classify rows exactly like the bootstrap did, so it
+        # resolves the same current reading session the bootstrap resolves
+        # (`get_or_create` prefers a recent session that still has pending
+        # reading work over the newest unended one). Reading the newest
+        # unended session instead could disagree with the bootstrap about
+        # which series are skipped or snoozed, and a series the bootstrap
+        # classified as skipped would then appear here as inactive (#3330).
+        session = await resolve_current_session(self._db, user_id)
         snoozed_ids = set(session.snoozed_thread_ids or []) if session is not None else set()
         skipped_ids = set(session.skipped_thread_ids or []) if session is not None else set()
-        derived_snoozed_ids = (
-            await derive_cross_session_excluded_thread_ids(self._db, user_id)
-            if session is not None
-            else set()
-        )
+        # The bootstrap derives cross-session backoff exclusions whether or not a
+        # session row exists, so the drill-down derives them the same way.
+        derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(self._db, user_id)
         session_excluded_ids = sorted(snoozed_ids | derived_snoozed_ids | skipped_ids)
 
         total = await count_inactive_exclusion_rows(
