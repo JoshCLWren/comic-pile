@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
+import { useRollExclusions } from '../../hooks/useRollExclusions'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useClearManualDie,
@@ -147,6 +148,13 @@ export default function RollPage() {
   })
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
+
+  // Issue #3330: the bootstrap only carries bounded previews of these two
+  // categories. Load the authoritative drill-down lazily, only while the
+  // reader has the section expanded, so the initial Roll payload stays bounded
+  // and the collapsed heading still reports the real category total.
+  const blockedExclusions = useRollExclusions('blocked', { enabled: state.blockedExpanded })
+  const inactiveExclusions = useRollExclusions('inactive', { enabled: state.inactiveExpanded })
 
   useRollPendingSession({ state, bootstrap, rollPool })
 
@@ -347,8 +355,36 @@ export default function RollPage() {
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const skippedThreads = bootstrap?.skipped_threads ?? []
-  const blockedThreads = bootstrap?.blocked_threads ?? []
-  const inactiveThreads = bootstrap?.inactive_threads ?? []
+  const blockedPreview = useMemo(() => bootstrap?.blocked_threads ?? [], [bootstrap?.blocked_threads])
+  const inactivePreview = useMemo(() => bootstrap?.inactive_threads ?? [], [bootstrap?.inactive_threads])
+  const blockedCount = bootstrap?.blocked_count ?? blockedPreview.length
+  const inactiveCount = bootstrap?.inactive_count ?? inactivePreview.length
+
+  // The bootstrap preview stands in until the first drill-down page lands, so
+  // expanding a section never flashes an empty list. Page rows replace it with
+  // the same deterministic slice plus dependency details for every loaded row.
+  const blockedThreads = useMemo(() => {
+    if (blockedExclusions.items.length === 0) return blockedPreview
+    return blockedExclusions.items.map((item) => ({
+      id: item.thread_id,
+      title: item.title,
+      format: item.format,
+      blocking_reasons: item.blocking_reasons ?? [],
+      last_activity_at: item.last_activity_at ?? null,
+    }))
+  }, [blockedExclusions.items, blockedPreview])
+  const inactiveThreads = inactiveExclusions.items.length > 0
+    ? inactiveExclusions.items
+    : inactivePreview
+  const blockingDependencyMap = useMemo(() => {
+    const merged = { ...state.blockingDependencyMap }
+    for (const item of blockedExclusions.items) {
+      if (item.blocking_dependencies && item.blocking_dependencies.length > 0) {
+        merged[item.thread_id] = item.blocking_dependencies
+      }
+    }
+    return merged
+  }, [blockedExclusions.items, state.blockingDependencyMap])
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -356,7 +392,7 @@ export default function RollPage() {
   )
   const pool = filteredThreads.slice(0, dieSize)
   const displayDie = isDiceSide(state.currentDie) ? state.currentDie : 6
-  const hasRollableContent = pool.length > 0 || blockedThreads.length > 0 || snoozedThreads.length > 0
+  const hasRollableContent = pool.length > 0 || blockedCount > 0 || snoozedThreads.length > 0
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
     // A timed-out bootstrap stays pending through the shared retry policy
@@ -514,20 +550,38 @@ export default function RollPage() {
             <ThreadPool
               pool={pool}
               blockedThreads={blockedThreads}
-              blockingDependencyMap={state.blockingDependencyMap}
+              blockedPagination={{
+                total: blockedExclusions.pages.length > 0 ? blockedExclusions.total : blockedCount,
+                hasNextPage: blockedExclusions.hasNextPage,
+                isLoading: blockedExclusions.isPending,
+                isError: blockedExclusions.isError,
+                onLoadMore: blockedExclusions.fetchNextPage,
+                onRetry: blockedExclusions.refetch,
+              }}
+              blockingDependencyMap={blockingDependencyMap}
               dieSize={dieSize}
               isRatingView={state.isRatingView}
               selectedThreadId={state.selectedThreadId}
               staleThread={state.staleThread}
               staleThreadCount={state.staleThreadCount}
               snoozedThreads={snoozedThreads}
+              snoozedCount={bootstrap?.snoozed_count ?? snoozedThreads.length}
               snoozedExpanded={state.snoozedExpanded}
               blockedExpanded={state.blockedExpanded}
               skippedThreads={skippedThreads}
+              skippedCount={bootstrap?.skipped_thread_ids?.length ?? skippedThreads.length}
               skippedExpanded={state.skippedExpanded}
               staleExpanded={state.staleExpanded}
               inactiveExpanded={state.inactiveExpanded}
               inactiveThreads={inactiveThreads}
+              inactivePagination={{
+                total: inactiveExclusions.pages.length > 0 ? inactiveExclusions.total : inactiveCount,
+                hasNextPage: inactiveExclusions.hasNextPage,
+                isLoading: inactiveExclusions.isPending,
+                isError: inactiveExclusions.isError,
+                onLoadMore: inactiveExclusions.fetchNextPage,
+                onRetry: inactiveExclusions.refetch,
+              }}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}
               onUnskip={skip.handleUnskip}

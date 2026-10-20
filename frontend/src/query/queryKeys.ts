@@ -174,6 +174,13 @@ export const queryKeys = {
   roll: {
     all: ['roll'] as const,
     bootstrap: () => ['roll', 'bootstrap'] as const,
+    /**
+     * Canonical key for one paginated Roll exclusion category (issue #3330).
+     * The offset cursor lives in `pageParam`, never in the key, so loading the
+     * next page of blocked or out-of-pool series appends instead of resetting.
+     */
+    exclusions: (category: 'blocked' | 'inactive') =>
+      ['roll', 'exclusions', category] as const,
   },
   demo: {
     /**
