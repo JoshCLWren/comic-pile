@@ -522,6 +522,48 @@ async def test_release_retract_missing_release_is_404(
 
 
 @pytest.mark.asyncio
+async def test_release_retract_hidden_row_is_allowed(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A published release whose title equals its summary can still be retracted.
+
+    The public read filter hides malformed backfill rows from What's New, but
+    the writer-only retraction lookup must not, otherwise such rows can never
+    leave the ledger.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    now = datetime.now(UTC).isoformat()
+
+    hidden = _release_payload(pr_number=1304, merge_sha="c" * 40)
+    hidden["title"] = "makes issue and pull-request"
+    hidden["summary"] = "makes issue and pull-request"
+    hidden["category"] = "ROLL RECOVERY"
+    hidden["released_at"] = now
+
+    created = await auth_client.put("/api/v1/releases/", json=hidden, headers=headers)
+    assert created.status_code == 200
+    hidden_id = created.json()["id"]
+
+    # The public read filter must still hide the malformed row.
+    fetched = await auth_client.get(f"/api/v1/releases/{hidden_id}")
+    assert fetched.status_code == 404
+
+    # Writer retraction must still locate and retract it.
+    retracted = await auth_client.post(
+        f"/api/v1/releases/{hidden_id}/retract", headers=headers
+    )
+    assert retracted.status_code == 200
+    assert retracted.json()["id"] == hidden_id
+    assert retracted.json()["status"] == "retracted"
+
+
+@pytest.mark.asyncio
 async def test_public_release_payload_requires_classification_evidence(
     auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,

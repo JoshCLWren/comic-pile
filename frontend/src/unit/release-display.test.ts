@@ -31,21 +31,38 @@ describe('isDisplayableRelease', () => {
     expect(isDisplayableRelease(broken)).toBe(false)
   })
 
-  it('hides a release with a dev-internal all-caps category', () => {
-    const broken = release({
+  it('shows a release with an all-caps acronym category', () => {
+    const good = release({
+      title: 'Some reader-facing title',
+      summary: 'A real reader-facing summary here.',
+      category: 'UI',
+    })
+    expect(isDisplayableRelease(good)).toBe(true)
+  })
+
+  it('shows a release whose title starts lowercase', () => {
+    const good = release({
+      title: 'e-reader display improvements',
+      summary: 'Text rendering is sharper on high-density screens.',
+    })
+    expect(isDisplayableRelease(good)).toBe(true)
+  })
+
+  it('shows a release with a lowercase PR-fragment title', () => {
+    const good = release({
+      title: 'makes issue and pull-request',
+      summary: 'A real reader-facing summary here.',
+    })
+    expect(isDisplayableRelease(good)).toBe(true)
+  })
+
+  it('shows a release with a dev-internal all-caps category', () => {
+    const good = release({
       title: 'Some reader-facing title',
       summary: 'A real reader-facing summary here.',
       category: 'CBL REFERENCE IMPORTS',
     })
-    expect(isDisplayableRelease(broken)).toBe(false)
-  })
-
-  it('hides a release with a lowercase PR-fragment title', () => {
-    const broken = release({
-      title: 'makes issue and pull-request',
-      summary: 'A real reader-facing summary here.',
-    })
-    expect(isDisplayableRelease(broken)).toBe(false)
+    expect(isDisplayableRelease(good)).toBe(true)
   })
 
   it('hides the backfill announcement note', () => {

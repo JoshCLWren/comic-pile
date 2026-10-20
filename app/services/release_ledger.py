@@ -72,6 +72,29 @@ async def get_published_release(db: AsyncSession, release_id: int) -> Release | 
     return result.scalar_one_or_none()
 
 
+async def get_release_for_retraction(db: AsyncSession, release_id: int) -> Release | None:
+    """Fetch one published release by id for writer-only retraction.
+
+    Unlike the public read filter, this lookup does not exclude releases whose
+    title equals their summary, so malformed backfill records can still be
+    retracted even though they never appear in What's New.
+
+    Args:
+        db: Async database session.
+        release_id: Release primary key.
+
+    Returns:
+        The published release, or None when unavailable.
+    """
+    result = await db.execute(
+        select(Release).where(
+            Release.id == release_id,
+            Release.status == "published",
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def find_release_by_source(
     db: AsyncSession,
     *,

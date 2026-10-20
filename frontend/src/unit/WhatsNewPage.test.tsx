@@ -438,4 +438,41 @@ describe('WhatsNewPage', () => {
       expect(screen.getByText('See for details.')).toBeInTheDocument()
       expect(screen.queryByText(/github\.com/)).not.toBeInTheDocument()
     })
+
+    it('auto-loads the next page when an entire fetched page is filtered out', async () => {
+      api.list
+        .mockResolvedValueOnce({
+          releases: [release({ id: 2, title: 'T', summary: 'S', category: 'bug' })],
+          total: 2,
+          limit: RELEASE_PAGE_SIZE,
+          offset: 0,
+        })
+        .mockResolvedValueOnce({
+          releases: [release({ id: 1, title: 'Real release note' })],
+          total: 2,
+          limit: RELEASE_PAGE_SIZE,
+          offset: 1,
+        })
+
+      renderPage()
+
+      expect(await screen.findByText('Real release note')).toBeInTheDocument()
+      expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, 1)
+      expect(screen.queryByRole('button', { name: 'Load older updates' })).not.toBeInTheDocument()
+    })
+
+    it('shows the empty state when every fetched release is filtered out', async () => {
+      api.list.mockResolvedValue({
+        releases: [release({ id: 2, title: 'T', summary: 'S', category: 'bug' })],
+        total: 1,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 0,
+      })
+
+      renderPage()
+
+      expect(
+        await screen.findByText('No release notes have been published yet.'),
+      ).toBeInTheDocument()
+    })
   })
