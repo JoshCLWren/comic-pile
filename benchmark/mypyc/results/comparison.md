@@ -1,6 +1,6 @@
 # mypyc evaluation - measured comparison (issue #3258)
 
-- Interpreter: CPython 3.12.3 (cpython)
+- Interpreter: CPython 3.14.8 (cpython)
 - Platform: Linux-6.17.0-1022-azure-x86_64-with-glibc2.39 / x86_64
 - mypy / mypyc: 2.4.0
 - C compiler: cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
@@ -11,12 +11,12 @@
 
 | Workload | CPython ms | mypyc ms | Speedup | Warm spread CPython | Warm spread mypyc |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `build_candidate_weights` | 0.4663 | 0.4864 | 0.959x | 0.68% | 2.23% |
-| `weight_pool` | 1.6469 | 1.4594 | 1.128x | 1.39% | 0.93% |
-| `select_from_pool` | 0.0481 | 0.0358 | 1.344x | 4.18% | 0.76% |
-| `recommendation_version` | 0.0001 | 0.0001 | 1.0x | 33.41% | 2.92% |
-| `compute_familiar_factors` | 2.6732 | 1.8862 | 1.417x | 0.53% | 0.87% |
-| `aggregate_efforts` | 5.5767 | 5.2545 | 1.061x | 0.61% | 1.11% |
+| `build_candidate_weights` | 0.3795 | 0.3869 | 0.981x | 1.2% | 1.46% |
+| `weight_pool` | 1.2415 | 1.0864 | 1.143x | 0.51% | 0.43% |
+| `select_from_pool` | 0.0397 | 0.0312 | 1.272x | 1.45% | 4.26% |
+| `recommendation_version` | 0.0001 | 0.0002 | 0.5x | 33.12% | 2.14% |
+| `compute_familiar_factors` | 2.5242 | 1.8827 | 1.341x | 2.65% | 0.37% |
+| `aggregate_efforts` | 4.7727 | 4.1372 | 1.154x | 0.54% | 2.16% |
 
 ## Cold start (fresh process wall time, median)
 
@@ -24,17 +24,17 @@
 
 | Workload | CPython ms | mypyc ms | Delta ms | Import delta ms |
 | --- | ---: | ---: | ---: | ---: |
-| `build_candidate_weights` | 89.2455 | 92.5478 | 3.302 | 1.212 |
-| `weight_pool` | 89.7538 | 93.8658 | 4.112 | 1.208 |
-| `select_from_pool` | 84.6267 | 88.7968 | 4.17 | 1.264 |
-| `recommendation_version` | 84.81 | 87.6607 | 2.851 | 1.301 |
-| `compute_familiar_factors` | 91.2623 | 92.0512 | 0.789 | 1.189 |
-| `aggregate_efforts` | 93.6273 | 94.9736 | 1.346 | 1.108 |
-| `request_initialization` | 108.0166 | 107.847 | -0.17 | 1.074 |
+| `build_candidate_weights` | 71.8177 | 72.9726 | 1.155 | 1.045 |
+| `weight_pool` | 72.5056 | 73.9652 | 1.46 | 1.066 |
+| `select_from_pool` | 67.7927 | 69.0672 | 1.275 | 1.091 |
+| `recommendation_version` | 68.0912 | 69.8156 | 1.724 | 1.187 |
+| `compute_familiar_factors` | 71.8226 | 72.6381 | 0.816 | 1.134 |
+| `aggregate_efforts` | 74.1101 | 75.2827 | 1.173 | 1.107 |
+| `request_initialization` | 86.6112 | 86.8298 | 0.219 | 1.083 |
 
-- Representative request wall time: CPython 108.0166 ms, mypyc 107.847 ms (-0.17 ms)
-- Representative request in-process work: CPython 11.7213 ms, mypyc 9.9693 ms
-- Representative request surface import: CPython 12.245 ms, mypyc 13.3194 ms (1.074 ms)
+- Representative request wall time: CPython 86.6112 ms, mypyc 86.8298 ms (0.219 ms)
+- Representative request in-process work: CPython 9.9042 ms, mypyc 8.4059 ms
+- Representative request surface import: CPython 9.5014 ms, mypyc 10.5847 ms (1.083 ms)
 
 ## Output equivalence
 
@@ -55,17 +55,17 @@
 ## Native artifacts
 
 - Count: 12
-- Total size: 1422848 bytes
-  - `familiar_weighting.cpython-312-x86_64-linux-gnu.so` 15736 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `familiar_weighting__mypyc.cpython-312-x86_64-linux-gnu.so` 264208 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `reading_effort.cpython-312-x86_64-linux-gnu.so` 15728 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `reading_effort__mypyc.cpython-312-x86_64-linux-gnu.so` 215680 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `recommendation_selection.cpython-312-x86_64-linux-gnu.so` 15752 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `recommendation_selection__mypyc.cpython-312-x86_64-linux-gnu.so` 220448 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `recommendation_version.cpython-312-x86_64-linux-gnu.so` 15744 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `recommendation_version__mypyc.cpython-312-x86_64-linux-gnu.so` 169176 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `recommendation_weighting.cpython-312-x86_64-linux-gnu.so` 15752 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `recommendation_weighting__mypyc.cpython-312-x86_64-linux-gnu.so` 256968 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `recommendation_weights.cpython-312-x86_64-linux-gnu.so` 15744 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
-  - `recommendation_weights__mypyc.cpython-312-x86_64-linux-gnu.so` 201912 bytes, ELF64/x86-64, abi `cpython-312-x86_64-linux-gnu`
+- Total size: 1408032 bytes
+  - `familiar_weighting.cpython-314-x86_64-linux-gnu.so` 15616 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `familiar_weighting__mypyc.cpython-314-x86_64-linux-gnu.so` 262488 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `reading_effort.cpython-314-x86_64-linux-gnu.so` 15608 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `reading_effort__mypyc.cpython-314-x86_64-linux-gnu.so` 213992 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `recommendation_selection.cpython-314-x86_64-linux-gnu.so` 15632 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `recommendation_selection__mypyc.cpython-314-x86_64-linux-gnu.so` 218704 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `recommendation_version.cpython-314-x86_64-linux-gnu.so` 15624 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `recommendation_version__mypyc.cpython-314-x86_64-linux-gnu.so` 167728 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `recommendation_weighting.cpython-314-x86_64-linux-gnu.so` 15632 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `recommendation_weighting__mypyc.cpython-314-x86_64-linux-gnu.so` 251160 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `recommendation_weights.cpython-314-x86_64-linux-gnu.so` 15624 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
+  - `recommendation_weights__mypyc.cpython-314-x86_64-linux-gnu.so` 200224 bytes, ELF64/x86-64, abi `cpython-314-x86_64-linux-gnu`
 

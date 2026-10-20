@@ -326,6 +326,10 @@ class Workload:
     module: str
     call: Callable[[ModuleType, dict[str, ModuleType]], object]
     describe: str
+    #: Whether this workload belongs in the request-shaped cold-start sample.
+    #: Offline batch work (for example hydration-report classification) is still
+    #: measured warm and cold, but it is not charged to a serverless request.
+    request_shaped: bool = True
 
 
 def _w_build_candidate_weights(mod: ModuleType, _mods: dict[str, ModuleType]) -> object:
@@ -504,6 +508,7 @@ WORKLOADS: tuple[Workload, ...] = (
         module="comic_pile.comicvine_report_classification",
         call=_w_classify_hydration_reports,
         describe="classify 200 hydration reports with 5-20 issues each",
+        request_shaped=False,
     ),
     Workload(
         name="dice_ladder",
@@ -519,7 +524,10 @@ def request_initialization(mods: Mapping[str, ModuleType]) -> dict[str, object]:
 
     This is the cold-start case that matters for serverless deployment: a fresh
     function instance imports the whole candidate surface and then runs one
-    roll-shaped slice of each workload exactly once, with nothing warmed.
+    roll-shaped slice of each request-shaped workload exactly once, with nothing
+    warmed. Workloads flagged ``request_shaped=False`` are offline batch work:
+    they are still measured warm and cold, but charging them here would report
+    offline CPU as request initialization cost.
 
     Args:
         mods: Already-imported candidate modules for one surface.
@@ -527,7 +535,11 @@ def request_initialization(mods: Mapping[str, ModuleType]) -> dict[str, object]:
     Returns:
         Per-workload one-shot results, used only for equivalence checking.
     """
-    return {workload.name: workload.call(mods[workload.module], dict(mods)) for workload in WORKLOADS}
+    return {
+        workload.name: workload.call(mods[workload.module], dict(mods))
+        for workload in WORKLOADS
+        if workload.request_shaped
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -752,7 +764,7 @@ def run_child_request_init(root: str) -> dict[str, object]:
 
     Returns:
         Cold-sample payload covering the whole candidate import surface plus one
-        roll-shaped call of every workload.
+        roll-shaped call of every request-shaped workload.
     """
     started = time.perf_counter()
     mods = import_candidates(root)
@@ -1395,9 +1407,11 @@ def render_markdown(report: dict[str, object]) -> str:
     lines.append("")
     lines.append(
         "`request_initialization` imports the whole candidate surface and then runs "
-        "one roll-shaped call of every workload, which is the sequence a serverless "
-        "cold instance actually pays. The per-workload rows import the same surface "
-        "and add a single workload call."
+        "one roll-shaped call of every request-shaped workload, which is the sequence "
+        "a serverless cold instance actually pays. Offline batch workloads "
+        "(`request_shaped=False`) are measured warm and cold but are not charged to "
+        "this number. The per-workload rows import the same surface and add a single "
+        "workload call."
     )
     lines.append("")
     lines.append("| Workload | CPython ms | mypyc ms | Delta ms | Import delta ms |")
