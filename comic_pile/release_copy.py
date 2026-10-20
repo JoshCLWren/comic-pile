@@ -240,6 +240,11 @@ def find_internal_artifact(
 def normalize_title(title: str) -> str:
     """Return a reader-facing title with historical prefixes and artifacts removed.
 
+    Historical titles may carry internal ticket references, schema/database
+    identifiers, implementation-phase prefixes, or dangling separators left
+    behind by the writer's prefix stripping. Each is removed so internal
+    engineering names never reach readers.
+
     Args:
         title: Stored release title.
 
@@ -252,6 +257,7 @@ def normalize_title(title: str) -> str:
     text = _LEADING_SEPARATOR_PATTERN.sub("", text)
     text = _remove_artifact_parentheticals(text)
     text = _TICKET_REFERENCE_PATTERN.sub("", text)
+    text = _SCHEMA_IDENTIFIER_PATTERN.sub("", text)
     text = _PHASE_INLINE_PATTERN.sub("", text)
     text = _clean_punctuation(text).strip(" \t,;:-–—")
     if text and text[0].islower():
