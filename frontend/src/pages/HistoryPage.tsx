@@ -139,18 +139,12 @@ export default function HistoryPage() {
       parts.push(`rated ${session.active_thread.last_rating.toFixed(1)}`)
     }
     
-    // Add die information if there was a roll
-    if (session.last_rolled_result != null && session.last_rolled_result > 0) {
-      parts.push(`Rolled ${session.last_rolled_result}`)
-    }
+    // Add die information if there was a roll (moved to formatDiceProgression to avoid duplication)
     
-    // Add die size information if available
-    if (session.ladder_path) {
-      const dice = session.ladder_path.split(' → ')
-      const lastDie = dice[dice.length - 1]
-      if (lastDie) {
-        parts.push(`Die size d${lastDie}`)
-      }
+    // Add die size information only if there's actual activity (read or rating)
+    // Use current_die for manual die overrides, ladder_path for progression
+    if ((session.active_thread?.issues_read != null && session.active_thread.issues_read > 0 || session.active_thread?.last_rating != null) && session.current_die) {
+      parts.push(`Die size d${session.current_die}`)
     }
     
     return parts.length > 0 ? parts.join(' · ') : null
@@ -224,7 +218,7 @@ export default function HistoryPage() {
                             : 'In progress'}
                         </p>
                         {session.ladder_path && (
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
                             {formatDiceProgression(session.ladder_path, session.last_rolled_result)}
                           </p>
                         )}
@@ -234,7 +228,7 @@ export default function HistoryPage() {
                 ) : null}
 
                 {session.ladder_path && (
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
                     {formatDiceProgression(session.ladder_path, session.last_rolled_result)}
                   </p>
                 )}

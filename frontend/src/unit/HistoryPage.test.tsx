@@ -116,12 +116,18 @@ it('leads with comic identity and readable activity summary for a typical rated 
   expect(screen.getByText(/1 issue read/)).toBeInTheDocument()
   expect(screen.getByText(/rated 4\.5/)).toBeInTheDocument()
 
-  const dieLine = listitem.querySelector('p.text-stone-500')
+  const dieLine = listitem.querySelector('p.text-[var(--theme-text-dim)]')
   expect(dieLine).not.toBeNull()
-  expect(dieLine!.textContent).toContain('Die size')
   expect(dieLine!.textContent).toContain('d6 → d4 → d6')
   expect(dieLine!.textContent).toContain('Rolled 3')
-  expect(dieLine!.textContent).toBe('Die size d6 → d4 → d6 · Rolled 3')
+  expect(dieLine!.textContent).toBe('d6 → d4 → d6 · Rolled 3')
+  
+  // Check that activity line contains read/rating info with die size
+  const activityLine = listitem.querySelector('p.text-xs')
+  expect(activityLine).not.toBeNull()
+  expect(activityLine!.textContent).toContain('1 issue read')
+  expect(activityLine!.textContent).toContain('rated 4.5')
+  expect(activityLine!.textContent).toContain('Die size d6')
 
   const headlineIndex = listitem.children[1]!.children[0]!.compareDocumentPosition(dieLine!)
   expect(headlineIndex & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -171,7 +177,7 @@ it('renders session rows with metadata, duration, and footer links', () => {
   ], isPending: false })
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
   expect(screen.getByRole('list')).toBeInTheDocument()
-  expect(screen.getAllByText(/Die size/)).toHaveLength(3)
+  expect(screen.getAllByText(/d/)).toHaveLength(3)
   expect(screen.getByText(/d6 → d8/)).toBeInTheDocument()
   expect(screen.getByText(/Rolled 4/)).toBeInTheDocument()
   expect(screen.queryByText(/Rolled 0/)).not.toBeInTheDocument()
