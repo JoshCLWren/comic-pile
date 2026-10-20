@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { requestSemanticScroll } from '../scroll/scrollCoordinator'
-import { GLOSSARY_TERMS } from '../utils/glossaryTerms'
+import { GLOSSARY_TERMS, type GlossaryTerm } from '../utils/glossaryTerms'
 
 // Simple, static glossary help page for core app concepts.
 // This is intentionally content-forward and does not touch backend.
@@ -95,10 +95,17 @@ export default function HelpPage() {
   useGlossaryAnchorScroll()
   const targetId = location.hash.slice(1)
 
-  function isHighlighted(d: typeof GLOSSARY_TERMS[0]): boolean {
+  /**
+   * Whether this card is the definition the URL fragment points at.
+   *
+   * A deep link identifies its target by fragment, so the card that owns that
+   * fragment has to be the one the reader sees highlighted (#3681). Retired
+   * alias ids stay resolvable inside the same card, so an old deep link still
+   * highlights the definition the reader expects.
+   */
+  function isHighlighted(d: GlossaryTerm): boolean {
     if (!targetId) return false
-    const allIds = [d.id, ...(d.aliases ?? [])]
-    return allIds.includes(targetId)
+    return d.id === targetId || (d.aliases?.includes(targetId) ?? false)
   }
 
   return (
@@ -106,26 +113,28 @@ export default function HelpPage() {
       <h1 className="text-2xl font-bold mb-4">Glossary</h1>
       <p className="text-sm text-stone-600 mb-6">Definitions for every reader-facing concept in ComicPile. 1–2 sentence explanations, mobile-friendly layout.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {GLOSSARY_TERMS.map((d) => (
-          <div
-            key={d.id}
-            id={d.id}
-            className={`p-4 border rounded-lg bg-white/80 shadow-sm transition-all duration-300 motion-reduce:transition-none ${
-              isHighlighted(d)
-                ? 'ring-2 ring-[var(--theme-focus-ring)] border-[var(--theme-focus-ring)]'
-                : ''
-            }`}
-          >
-            {(d.aliases ?? []).map((alias) => (
-              <span key={alias} id={alias} aria-hidden="true" className="sr-only" data-testid="glossary-anchor-alias" />
-            ))}
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <div className="text-sm font-semibold uppercase tracking-widest text-stone-600" data-testid="glossary-term">{d.term}</div>
-              <GlossaryPermalink id={d.id} term={d.term} />
+        {GLOSSARY_TERMS.map((d) => {
+          const highlighted = isHighlighted(d)
+          return (
+            <div
+              key={d.id}
+              id={d.id}
+              aria-current={highlighted ? 'location' : undefined}
+              className={`p-4 border rounded-lg bg-white/80 shadow-sm transition-all duration-300 motion-reduce:transition-none ${
+                highlighted ? 'ring-2 ring-[var(--theme-focus-ring)] border-[var(--theme-focus-ring)]' : ''
+              }`}
+            >
+              {(d.aliases ?? []).map((alias) => (
+                <span key={alias} id={alias} aria-hidden="true" className="sr-only" data-testid="glossary-anchor-alias" />
+              ))}
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="text-sm font-semibold uppercase tracking-widest text-stone-600" data-testid="glossary-term">{d.term}</div>
+                <GlossaryPermalink id={d.id} term={d.term} />
+              </div>
+              <div className="text-sm text-stone-700" data-testid="glossary-definition">{d.def}</div>
             </div>
-            <div className="text-sm text-stone-700" data-testid="glossary-definition">{d.def}</div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </section>
   )
