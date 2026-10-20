@@ -1,8 +1,8 @@
 """Undo snapshot repository for database operations."""
 
 import logging
+from collections.abc import Collection
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,8 @@ from app.services.snapshot_contract import (
     SNAPSHOT_KIND_DELTA,
     SNAPSHOT_VERSION,
     SNAPSHOT_VERSION_KEY,
+    SnapshotIssueState,
+    SnapshotThreadState,
 )
 
 logger = logging.getLogger(__name__)
@@ -291,13 +293,13 @@ class UndoSnapshotRepository:
         await self.db.execute(delete(Snapshot).where(Snapshot.id == snapshot_id))
 
     async def update_session_pending_thread_ids(
-        self, session_id: int, thread_ids_to_clear: list[int]
+        self, session_id: int, thread_ids_to_clear: Collection[int]
     ) -> None:
         """Clear pending_thread_id for specified threads in a session.
 
         Args:
             session_id: Session ID to update.
-            thread_ids_to_clear: List of thread IDs to clear.
+            thread_ids_to_clear: Thread IDs to clear.
         """
         if thread_ids_to_clear:
             await self.db.execute(
@@ -308,13 +310,13 @@ class UndoSnapshotRepository:
             )
 
     async def update_event_thread_references(
-        self, session_id: int, thread_ids_to_clear: list[int]
+        self, session_id: int, thread_ids_to_clear: Collection[int]
     ) -> None:
         """Clear thread references in events for specified thread IDs.
 
         Args:
             session_id: Session ID to update events for.
-            thread_ids_to_clear: List of thread IDs to clear references for.
+            thread_ids_to_clear: Thread IDs to clear references for.
         """
         if thread_ids_to_clear:
             await self.db.execute(
@@ -352,12 +354,12 @@ class UndoSnapshotRepository:
                 .values(issue_id=None)
             )
 
-    async def delete_user_threads(self, user_id: int, thread_ids: list[int]) -> None:
+    async def delete_user_threads(self, user_id: int, thread_ids: Collection[int]) -> None:
         """Delete threads for a user.
 
         Args:
             user_id: User ID who owns the threads.
-            thread_ids: List of thread IDs to delete.
+            thread_ids: Thread IDs to delete.
         """
         if thread_ids:
             await self.db.execute(
@@ -417,7 +419,7 @@ class UndoSnapshotRepository:
             )
 
     async def create_thread_from_state(
-        self, thread_id: int, state: dict[str, Any], session_user_id: int
+        self, thread_id: int, state: SnapshotThreadState, session_user_id: int
     ) -> Thread:
         """Create a new thread from snapshot state.
 
@@ -450,7 +452,7 @@ class UndoSnapshotRepository:
         await self.db.flush()
         return thread
 
-    async def update_thread_from_state(self, thread: Thread, state: dict[str, Any]) -> None:
+    async def update_thread_from_state(self, thread: Thread, state: SnapshotThreadState) -> None:
         """Update an existing thread from snapshot state.
 
         Args:
@@ -482,7 +484,7 @@ class UndoSnapshotRepository:
         self,
         issue_id: int,
         thread_id: int,
-        issue_state: dict[str, Any],
+        issue_state: SnapshotIssueState,
         fallback_position: int,
     ) -> Issue:
         """Create a new issue from snapshot state.
@@ -511,7 +513,7 @@ class UndoSnapshotRepository:
         return issue
 
     async def update_issue_from_state(
-        self, issue: Issue, issue_state: dict[str, Any], fallback_position: int
+        self, issue: Issue, issue_state: SnapshotIssueState, fallback_position: int
     ) -> None:
         """Update an existing issue from snapshot state.
 

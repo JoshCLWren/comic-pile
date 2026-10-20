@@ -29,8 +29,11 @@ setting.
 **Status:** enabled for strict-clean modules. The `type-arg` errors in the
 Phase 0 inventory are local typing cleanup, not design problems. Each is
 fixed by narrowing the element type at the call site, not by suppressing the
-check. Genuinely dynamic payloads (for example undo-snapshot JSON) are typed
-as `dict[str, Any]` at that boundary rather than left as a bare `dict`.
+check. Genuinely dynamic payloads name their wire contract instead of falling
+back to `dict[str, Any]`: undo-snapshot thread and issue states are typed with
+`SnapshotThreadState` / `SnapshotIssueState` in
+`app/services/snapshot_contract.py`, so a strict-clean module describes the
+fields it reads and never hides them behind `Any`.
 
 ### 2. `disallow_subclassing_any`
 

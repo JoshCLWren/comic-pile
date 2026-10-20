@@ -882,7 +882,7 @@
     "tests/test_verify_clone_export.py",
     "tests/test_worker_id_fixture.py"
   ],
-  "error_count": 2307,
+  "error_count": 2302,
   "triage_note": "Conservative code-based triage, not proof of a runtime defect; inspect evidence before changing interfaces.",
   "modules": [
     {
@@ -4773,21 +4773,8 @@
       "module": "app.services.undo_snapshot_service",
       "package": "app",
       "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "arg-type",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 3
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 2
-        }
-      ]
+      "error_count": 0,
+      "groups": []
     },
     {
       "path": "app/startup_diagnostics.py",
@@ -15234,41 +15221,6 @@
       "code": "arg-type",
       "severity": "error",
       "message": "Argument \"spec\" to \"_factual_snapshot\" has incompatible type \"UltimateUniverseDryRunSpec\"; expected \"ReaderOrderMigrationSpec\""
-    },
-    {
-      "file": "app/services/undo_snapshot_service.py",
-      "line": 156,
-      "code": "arg-type",
-      "severity": "error",
-      "message": "Argument 2 to \"update_session_pending_thread_ids\" of \"UndoSnapshotRepository\" has incompatible type \"set[int]\"; expected \"list[int]\""
-    },
-    {
-      "file": "app/services/undo_snapshot_service.py",
-      "line": 159,
-      "code": "arg-type",
-      "severity": "error",
-      "message": "Argument 2 to \"update_event_thread_references\" of \"UndoSnapshotRepository\" has incompatible type \"set[int]\"; expected \"list[int]\""
-    },
-    {
-      "file": "app/services/undo_snapshot_service.py",
-      "line": 162,
-      "code": "arg-type",
-      "severity": "error",
-      "message": "Argument 2 to \"delete_user_threads\" of \"UndoSnapshotRepository\" has incompatible type \"set[int]\"; expected \"list[int]\""
-    },
-    {
-      "file": "app/services/undo_snapshot_service.py",
-      "line": 263,
-      "code": "type-arg",
-      "severity": "error",
-      "message": "Missing type arguments for generic type \"dict\""
-    },
-    {
-      "file": "app/services/undo_snapshot_service.py",
-      "line": 288,
-      "code": "type-arg",
-      "severity": "error",
-      "message": "Missing type arguments for generic type \"dict\""
     },
     {
       "file": "comic_pile/bandwidth.py",
