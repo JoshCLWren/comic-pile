@@ -61,3 +61,15 @@ def test_inventory_includes_clean_modules_and_imported_errors() -> None:
     assert modules[0]["error_count"] == 0
     assert modules[1]["explicit_surface"] is False
     assert modules[1]["groups"][0]["triage"] == "design-interface-review"
+
+
+def test_repositories_package_stays_in_clean_manifest() -> None:
+    """Keep every app.repositories module inside the strict-clean ratchet."""
+    manifest = json.loads((baseline.ROOT / "mypy-clean.json").read_text())
+    assert isinstance(manifest, list)
+    repositories = {
+        path.relative_to(baseline.ROOT).as_posix()
+        for path in (baseline.ROOT / "app/repositories").glob("*.py")
+    }
+    assert repositories
+    assert repositories <= set(manifest)

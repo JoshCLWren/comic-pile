@@ -425,11 +425,13 @@ async def load_creator_summary_inputs(
     )
     effective_ratings: dict[int, float] = {}
     effective_rating_timestamps: dict[int, datetime] = {}
-    for issue_id, rating, timestamp in rate_result.all():
-        if issue_id is not None:
-            effective_ratings[int(issue_id)] = float(rating)
-            if timestamp is not None:
-                effective_rating_timestamps[int(issue_id)] = timestamp
+    for rated_issue_id, rating, timestamp in rate_result.all():
+        if rated_issue_id is None or rating is None:
+            continue
+        normalized_issue_id = int(rated_issue_id)
+        effective_ratings[normalized_issue_id] = float(rating)
+        if timestamp is not None:
+            effective_rating_timestamps[normalized_issue_id] = timestamp
 
     return CreatorSummaryInputs(
         owned_issues=owned_issues,

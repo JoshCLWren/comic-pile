@@ -13,10 +13,12 @@ missing stored metadata yields nulls, never bootstrap failure.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from typing import TypedDict
 
 from sqlalchemy import Text, and_, bindparam, func, or_, select, text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
@@ -81,13 +83,19 @@ class LastReadRow(TypedDict):
     read_at: datetime | None
 
 
+def _sorted_route_labels(value: object) -> list[str]:
+    """Normalize an aggregated route-label array into sorted string labels."""
+    if value is None:
+        return []
+    if not isinstance(value, Iterable) or isinstance(value, str | bytes):
+        raise TypeError("Expected an iterable route-label array")
+    return sorted(str(label) for label in value)
+
+
 def _route_labels_subquery(
     user_id: int, eligibility: ReadingEligibilitySnapshot | None = None
-) -> ColumnElement[object]:
+) -> ColumnElement[Sequence[str]]:
     """Aggregate owned route names touching a thread or its next issue."""
-    from sqlalchemy.dialects.postgresql import ARRAY
-    from sqlalchemy import cast
-
     subq = (
         select(func.array_agg(func.distinct(DependencyGroup.name)))
         .select_from(DependencyGroupMembership)
@@ -101,8 +109,9 @@ def _route_labels_subquery(
         )
         .correlate(Thread)
         .scalar_subquery()
+        .cast(ARRAY(Text))
     )
-    return cast(subq, ARRAY(Text))
+    return subq
 
 
 async def fetch_rollable_candidates(
@@ -229,7 +238,7 @@ async def fetch_rollable_candidates(
                 issue_id=row[4],
                 issue_number=row[5],
                 issue_status=row[6],
-                route_labels=sorted(row[7] or []),
+                route_labels=_sorted_route_labels(row[7]),
                 mapping_status=row[8],
                 mapping_confidence=row[9],
                 mapping_external_id=row[10],

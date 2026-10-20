@@ -208,9 +208,12 @@ async def load_creator_comparison_inputs(
         .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
     )
     effective_ratings: dict[int, float] = {}
-    for issue_id, rating in rate_result.all():
-        if issue_id is not None and int(issue_id) not in effective_ratings:
-            effective_ratings[int(issue_id)] = float(rating)
+    for rated_issue_id, rating in rate_result.all():
+        if rated_issue_id is None or rating is None:
+            continue
+        normalized_issue_id = int(rated_issue_id)
+        if normalized_issue_id not in effective_ratings:
+            effective_ratings[normalized_issue_id] = float(rating)
 
     return CreatorComparisonInputs(
         owned_issues=owned_issues,

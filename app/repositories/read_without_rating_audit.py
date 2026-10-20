@@ -224,10 +224,13 @@ async def _load_thread_historical_ratings(
         .order_by(Event.thread_id, Event.timestamp.asc(), Event.id.asc())
     )
     for event_id, thread_id, rating, recorded_at in result.all():
-        historical.setdefault(int(thread_id), []).append(
+        if event_id is None or thread_id is None or rating is None:
+            continue
+        normalized_thread_id = int(thread_id)
+        historical.setdefault(normalized_thread_id, []).append(
             ThreadHistoricalRating(
                 event_id=int(event_id),
-                thread_id=int(thread_id),
+                thread_id=normalized_thread_id,
                 rating=float(rating),
                 recorded_at=recorded_at,
             )
@@ -399,7 +402,11 @@ async def load_repair_event_issue_ids(
     )
     repaired: set[int] = set()
     for issue_id, context in result.all():
-        if isinstance(context, dict) and context.get("source") == repair_source:
+        if (
+            issue_id is not None
+            and isinstance(context, dict)
+            and context.get("source") == repair_source
+        ):
             repaired.add(int(issue_id))
     return repaired
 

@@ -2,6 +2,7 @@
 
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -199,7 +200,7 @@ class UndoSnapshotRepository:
         result = await self.db.execute(
             select(Issue).where(Issue.thread_id.in_(thread_ids)).order_by(Issue.position)
         )
-        issues_by_thread = {}
+        issues_by_thread: dict[int, list[Issue]] = {}
         for issue in result.scalars().all():
             issues_by_thread.setdefault(issue.thread_id, []).append(issue)
         return issues_by_thread
@@ -416,7 +417,7 @@ class UndoSnapshotRepository:
             )
 
     async def create_thread_from_state(
-        self, thread_id: int, state: dict, session_user_id: int
+        self, thread_id: int, state: dict[str, Any], session_user_id: int
     ) -> Thread:
         """Create a new thread from snapshot state.
 
@@ -449,7 +450,7 @@ class UndoSnapshotRepository:
         await self.db.flush()
         return thread
 
-    async def update_thread_from_state(self, thread: Thread, state: dict) -> None:
+    async def update_thread_from_state(self, thread: Thread, state: dict[str, Any]) -> None:
         """Update an existing thread from snapshot state.
 
         Args:
@@ -481,7 +482,7 @@ class UndoSnapshotRepository:
         self,
         issue_id: int,
         thread_id: int,
-        issue_state: dict,
+        issue_state: dict[str, Any],
         fallback_position: int,
     ) -> Issue:
         """Create a new issue from snapshot state.
@@ -510,7 +511,7 @@ class UndoSnapshotRepository:
         return issue
 
     async def update_issue_from_state(
-        self, issue: Issue, issue_state: dict, fallback_position: int
+        self, issue: Issue, issue_state: dict[str, Any], fallback_position: int
     ) -> None:
         """Update an existing issue from snapshot state.
 

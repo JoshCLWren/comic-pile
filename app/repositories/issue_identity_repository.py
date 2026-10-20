@@ -6,7 +6,7 @@ transaction boundaries.
 """
 
 from collections.abc import Iterable
-from typing import cast
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import Result
@@ -16,20 +16,32 @@ from sqlalchemy.sql.elements import TextClause
 
 def _as_int_tuple(value: object) -> tuple[int, ...]:
     """Convert a database array value to a tuple of integers."""
-    return tuple(int(item) for item in cast(Iterable[object], value or ()))
+    if value is None:
+        return ()
+    if not isinstance(value, Iterable) or isinstance(value, str | bytes):
+        raise TypeError("Expected an iterable database array value")
+    return tuple(int(item) for item in value)
 
 
 def _as_str_tuple(value: object) -> tuple[str, ...]:
     """Convert a database array value to a tuple of strings."""
-    return tuple(str(item) for item in cast(Iterable[object], value or ()))
+    if value is None:
+        return ()
+    if not isinstance(value, Iterable) or isinstance(value, str | bytes):
+        raise TypeError("Expected an iterable database array value")
+    return tuple(str(item) for item in value)
 
 
 def _as_object_list(value: object) -> list[object]:
     """Convert a database array value to a list of objects."""
-    return list(cast(Iterable[object], value or ()))
+    if value is None:
+        return []
+    if not isinstance(value, Iterable) or isinstance(value, str | bytes):
+        raise TypeError("Expected an iterable database array value")
+    return list(value)
 
 
-def _count_scalar(result: Result[tuple[int, ...]]) -> int:
+def _count_scalar(result: Result[Any]) -> int:
     """Return an integer scalar count from a SQLAlchemy result."""
     return int(result.scalar_one() or 0)
 
