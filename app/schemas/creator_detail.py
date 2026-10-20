@@ -217,6 +217,127 @@ class CreatorSeriesIssueListResponse(BaseModel):
     )
 
 
+class CreatorIssueInsight(BaseModel):
+    """One individual issue extreme backing a creator highlight (issue #3092).
+
+    Individual issue extremes are deliberately modeled separately from the
+    aggregate series conclusions so a one-off rating is never presented as a
+    creator's overall "best work".
+    """
+
+    model_config = {"frozen": True}
+
+    issue_id: int = Field(..., description="Local ComicPile issue ID.")
+    issue_number: str = Field(..., description="Issue number of the comic.")
+    thread_id: int = Field(..., description="Local thread the issue belongs to.")
+    thread_title: str = Field(..., description="Title of the containing thread.")
+    effective_rating: float = Field(
+        ...,
+        description="Latest effective rating for this issue, one per issue.",
+    )
+    roles: list[str] = Field(
+        ...,
+        description="Sorted distinct roles the creator held on this issue.",
+    )
+    sort_key: str = Field(
+        ...,
+        description="Stable deterministic key for this issue extreme.",
+    )
+
+
+class CreatorSeriesInsight(BaseModel):
+    """One series/run extreme backed by a minimum rated-issue sample (#3092).
+
+    A series only qualifies as strongest/weakest/most-rated when it has at
+    least :attr:`CreatorInsights.min_series_sample` rated issues and complete
+    creator metadata, so a single 5★ issue cannot outrank a long loved run.
+    """
+
+    model_config = {"frozen": True}
+
+    series_key: str = Field(
+        ...,
+        description="Stable series identity key (``thread:<thread_id>``).",
+    )
+    thread_id: int = Field(..., description="Local thread (series/run) id.")
+    thread_title: str = Field(..., description="Current local thread title.")
+    rated_issue_count: int = Field(
+        ...,
+        ge=0,
+        description="Rated attributed issues backing this series insight.",
+    )
+    average_rating: float = Field(
+        ...,
+        description="Personal average over the series' rated issues.",
+    )
+    lowest_rating: float = Field(..., description="Lowest effective rating in the series.")
+    highest_rating: float = Field(..., description="Highest effective rating in the series.")
+    roles: list[str] = Field(
+        ...,
+        description="Sorted distinct roles the creator held in this series.",
+    )
+    metadata_complete: bool = Field(
+        ...,
+        description="Always true for a qualifying insight; incomplete series are excluded.",
+    )
+    sort_key: str = Field(..., description="Stable deterministic key for this series extreme.")
+
+
+class CreatorInsights(BaseModel):
+    """Evidence-backed strongest/weakest/most-read highlights (issue #3092).
+
+    Every highlight links back to its supporting series or issues so a reader
+    never has to trust an unexplained summary. Series conclusions require a
+    minimum rated-issue sample and complete creator metadata; individual issue
+    extremes are labeled separately from the aggregate series conclusions.
+    """
+
+    min_series_sample: int = Field(
+        ...,
+        ge=1,
+        description="Rated issues a series needs before it can be ranked as best/worst.",
+    )
+    series_sample_met: bool = Field(
+        ...,
+        description="True when at least one series meets the minimum rated-issue sample.",
+    )
+    series_message: str | None = Field(
+        default=None,
+        description="Plain-language explanation when no series comparison is available.",
+    )
+    excluded_incomplete_series_count: int = Field(
+        default=0,
+        ge=0,
+        description="Series with attributed rated work excluded because their creator metadata "
+        "is incomplete; a partial series is never presented as exhaustive evidence.",
+    )
+    individual_issue_limit: int = Field(
+        ...,
+        ge=0,
+        description="Maximum number of individual issue extremes listed per direction.",
+    )
+    strongest_series: CreatorSeriesInsight | None = Field(
+        default=None,
+        description="Highest-average qualifying series, or null when the sample is too thin.",
+    )
+    weakest_series: CreatorSeriesInsight | None = Field(
+        default=None,
+        description="Lowest-average qualifying series, or null when the sample is too thin.",
+    )
+    most_rated_series: CreatorSeriesInsight | None = Field(
+        default=None,
+        description="Qualifying series with the most rated issues, or null when none qualify.",
+    )
+    highest_rated_issues: list[CreatorIssueInsight] = Field(
+        default_factory=list,
+        description="Top individual rated issues, distinct from aggregate series conclusions.",
+    )
+    lowest_rated_issues: list[CreatorIssueInsight] = Field(
+        default_factory=list,
+        description="Bottom individual rated issues, distinct from aggregate series conclusions.",
+    )
+
+
 class CreatorDetailResponse(BaseModel):
     """Full detail response for a single creator identity."""
 
@@ -266,4 +387,9 @@ class CreatorDetailResponse(BaseModel):
         default=None,
         description="Headline-eligible rating distribution (half-star buckets, median, "
         "range, mean, sample count). ``null`` when the creator has no eligible ratings.",
+    )
+    insights: CreatorInsights | None = Field(
+        default=None,
+        description="Evidence-backed strongest/weakest/most-read highlights (issue #3092). "
+        "``null`` when the creator has no headline-eligible ratings.",
     )

@@ -7828,6 +7828,8 @@ export interface components {
         CreatorDetailResponse: {
             /** @description Metadata coverage state (from #2028). */
             coverage: components["schemas"]["CreatorSummaryCoverage"];
+            /** @description Evidence-backed strongest/weakest/most-read highlights (issue #3092). ``null`` when the creator has no headline-eligible ratings. */
+            insights?: components["schemas"]["CreatorInsights"] | null;
             /**
              * Next Cursor
              * @description Cursor for paginating long collections.
@@ -8111,6 +8113,104 @@ export interface components {
              * @description True when more creators qualified than the bounded response returns.
              */
             truncated: boolean;
+        };
+        /**
+         * CreatorInsights
+         * @description Evidence-backed strongest/weakest/most-read highlights (issue #3092).
+         *
+         *     Every highlight links back to its supporting series or issues so a reader
+         *     never has to trust an unexplained summary. Series conclusions require a
+         *     minimum rated-issue sample and complete creator metadata; individual issue
+         *     extremes are labeled separately from the aggregate series conclusions.
+         */
+        CreatorInsights: {
+            /**
+             * Excluded Incomplete Series Count
+             * @description Series with attributed rated work excluded because their creator metadata is incomplete; a partial series is never presented as exhaustive evidence.
+             * @default 0
+             */
+            excluded_incomplete_series_count: number;
+            /**
+             * Highest Rated Issues
+             * @description Top individual rated issues, distinct from aggregate series conclusions.
+             */
+            highest_rated_issues?: components["schemas"]["CreatorIssueInsight"][];
+            /**
+             * Individual Issue Limit
+             * @description Maximum number of individual issue extremes listed per direction.
+             */
+            individual_issue_limit: number;
+            /**
+             * Lowest Rated Issues
+             * @description Bottom individual rated issues, distinct from aggregate series conclusions.
+             */
+            lowest_rated_issues?: components["schemas"]["CreatorIssueInsight"][];
+            /**
+             * Min Series Sample
+             * @description Rated issues a series needs before it can be ranked as best/worst.
+             */
+            min_series_sample: number;
+            /** @description Qualifying series with the most rated issues, or null when none qualify. */
+            most_rated_series?: components["schemas"]["CreatorSeriesInsight"] | null;
+            /**
+             * Series Message
+             * @description Plain-language explanation when no series comparison is available.
+             */
+            series_message?: string | null;
+            /**
+             * Series Sample Met
+             * @description True when at least one series meets the minimum rated-issue sample.
+             */
+            series_sample_met: boolean;
+            /** @description Highest-average qualifying series, or null when the sample is too thin. */
+            strongest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
+            /** @description Lowest-average qualifying series, or null when the sample is too thin. */
+            weakest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
+        };
+        /**
+         * CreatorIssueInsight
+         * @description One individual issue extreme backing a creator highlight (issue #3092).
+         *
+         *     Individual issue extremes are deliberately modeled separately from the
+         *     aggregate series conclusions so a one-off rating is never presented as a
+         *     creator's overall "best work".
+         */
+        CreatorIssueInsight: {
+            /**
+             * Effective Rating
+             * @description Latest effective rating for this issue, one per issue.
+             */
+            effective_rating: number;
+            /**
+             * Issue Id
+             * @description Local ComicPile issue ID.
+             */
+            issue_id: number;
+            /**
+             * Issue Number
+             * @description Issue number of the comic.
+             */
+            issue_number: string;
+            /**
+             * Roles
+             * @description Sorted distinct roles the creator held on this issue.
+             */
+            roles: string[];
+            /**
+             * Sort Key
+             * @description Stable deterministic key for this issue extreme.
+             */
+            sort_key: string;
+            /**
+             * Thread Id
+             * @description Local thread the issue belongs to.
+             */
+            thread_id: number;
+            /**
+             * Thread Title
+             * @description Title of the containing thread.
+             */
+            thread_title: string;
         };
         /**
          * CreatorIssueRow
@@ -8684,6 +8784,66 @@ export interface components {
              * @description Attributed unread issues of this creator still in this thread. Includes an unread issue that is also already rated, matching the existing upcoming semantics.
              */
             unread_issue_count: number;
+        };
+        /**
+         * CreatorSeriesInsight
+         * @description One series/run extreme backed by a minimum rated-issue sample (#3092).
+         *
+         *     A series only qualifies as strongest/weakest/most-rated when it has at
+         *     least :attr:`CreatorInsights.min_series_sample` rated issues and complete
+         *     creator metadata, so a single 5★ issue cannot outrank a long loved run.
+         */
+        CreatorSeriesInsight: {
+            /**
+             * Average Rating
+             * @description Personal average over the series' rated issues.
+             */
+            average_rating: number;
+            /**
+             * Highest Rating
+             * @description Highest effective rating in the series.
+             */
+            highest_rating: number;
+            /**
+             * Lowest Rating
+             * @description Lowest effective rating in the series.
+             */
+            lowest_rating: number;
+            /**
+             * Metadata Complete
+             * @description Always true for a qualifying insight; incomplete series are excluded.
+             */
+            metadata_complete: boolean;
+            /**
+             * Rated Issue Count
+             * @description Rated attributed issues backing this series insight.
+             */
+            rated_issue_count: number;
+            /**
+             * Roles
+             * @description Sorted distinct roles the creator held in this series.
+             */
+            roles: string[];
+            /**
+             * Series Key
+             * @description Stable series identity key (``thread:<thread_id>``).
+             */
+            series_key: string;
+            /**
+             * Sort Key
+             * @description Stable deterministic key for this series extreme.
+             */
+            sort_key: string;
+            /**
+             * Thread Id
+             * @description Local thread (series/run) id.
+             */
+            thread_id: number;
+            /**
+             * Thread Title
+             * @description Current local thread title.
+             */
+            thread_title: string;
         };
         /**
          * CreatorSeriesIssueListResponse

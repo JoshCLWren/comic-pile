@@ -815,3 +815,262 @@ async def test_rated_collection_matches_headline_when_roles_are_mixed(
     assert rated[0]["issue_id"] == issues[0].id
     assert rated[0]["effective_rating"] == pytest.approx(4.0)
     assert body["next_cursor"] is None
+
+
+@pytest.mark.asyncio
+async def test_insights_rank_strongest_weakest_and_most_rated_series(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Highlights surface the strongest, weakest, and most-rated qualifying series.
+
+    Each series clears the minimum rated-issue sample, so the aggregate
+    conclusions are meaningful; individual issue extremes are listed separately.
+    """
+    strong_thread, strong_issues = await _make_thread(
+        async_db, default_user, title="Strong", issue_count=3, queue_position=1, read_through=3
+    )
+    _weak_thread, weak_issues = await _make_thread(
+        async_db, default_user, title="Weak", issue_count=3, queue_position=2, read_through=3
+    )
+    _long_thread, long_issues = await _make_thread(
+        async_db, default_user, title="Long", issue_count=4, queue_position=3, read_through=4
+    )
+    for issue in [*strong_issues, *weak_issues, *long_issues]:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 500, "name": "Ranked Rita", "role": "writer"}]
+        )
+    for issue in strong_issues:
+        await _rate(async_db, issue, rating=5.0, timestamp=D1)
+    for issue in weak_issues:
+        await _rate(async_db, issue, rating=1.0, timestamp=D2)
+    for issue in long_issues:
+        await _rate(async_db, issue, rating=3.0, timestamp=D3)
+
+    response = await auth_client.get("/api/v1/creators/creator:500")
+
+    assert response.status_code == 200
+    insights = response.json()["insights"]
+    assert insights["min_series_sample"] == 3
+    assert insights["series_sample_met"] is True
+    assert insights["series_message"] is None
+    assert insights["strongest_series"]["thread_title"] == "Strong"
+    assert insights["strongest_series"]["thread_id"] == strong_thread.id
+    assert insights["strongest_series"]["average_rating"] == pytest.approx(5.0)
+    assert insights["weakest_series"]["thread_title"] == "Weak"
+    assert insights["most_rated_series"]["thread_title"] == "Long"
+    assert insights["most_rated_series"]["rated_issue_count"] == 4
+    # Individual extremes are the separate, correctly ordered category.
+    highest = insights["highest_rated_issues"]
+    lowest = insights["lowest_rated_issues"]
+    assert len(highest) == 3
+    assert len(lowest) == 3
+    assert [row["effective_rating"] for row in highest] == [5.0, 5.0, 5.0]
+    assert [row["effective_rating"] for row in lowest] == [1.0, 1.0, 1.0]
+    assert highest[0]["thread_id"] == strong_thread.id
+
+
+@pytest.mark.asyncio
+async def test_insights_tie_break_is_deterministic(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Two equal series resolve to the stable lowest series key every request."""
+    first_thread, first_issues = await _make_thread(
+        async_db, default_user, title="Tie One", issue_count=3, queue_position=1, read_through=3
+    )
+    second_thread, second_issues = await _make_thread(
+        async_db, default_user, title="Tie Two", issue_count=3, queue_position=2, read_through=3
+    )
+    for issue in [*first_issues, *second_issues]:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 501, "name": "Tied Tim", "role": "writer"}]
+        )
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+
+    first = await auth_client.get("/api/v1/creators/creator:501")
+    second = await auth_client.get("/api/v1/creators/creator:501")
+
+    assert first.status_code == 200
+    expected_key = sorted([f"thread:{first_thread.id}", f"thread:{second_thread.id}"])[0]
+    for body in (first.json(), second.json()):
+        insights = body["insights"]
+        assert insights["strongest_series"]["series_key"] == expected_key
+        assert insights["weakest_series"]["series_key"] == expected_key
+        assert insights["most_rated_series"]["series_key"] == expected_key
+
+
+@pytest.mark.asyncio
+async def test_insights_explain_thin_series_sample(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A single 2-issue series cannot define strongest/weakest; the UI is told why."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Thin", issue_count=2, queue_position=1, read_through=2
+    )
+    for issue in issues:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 502, "name": "Thin Thea", "role": "writer"}]
+        )
+        await _rate(async_db, issue, rating=5.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/creator:502")
+
+    assert response.status_code == 200
+    insights = response.json()["insights"]
+    assert insights["series_sample_met"] is False
+    assert insights["strongest_series"] is None
+    assert insights["weakest_series"] is None
+    assert insights["most_rated_series"] is None
+    assert insights["series_message"]
+    # Individual issue extremes still surface even without a series conclusion.
+    assert len(insights["highest_rated_issues"]) == 2
+    assert len(insights["lowest_rated_issues"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_insights_exclude_series_with_incomplete_metadata(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A series with unconfirmed creator metadata is excluded, not ranked, and flagged."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Patchy Run", issue_count=4, queue_position=1, read_through=4
+    )
+    for issue in issues[:3]:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 503, "name": "Partial Pat", "role": "writer"}]
+        )
+        await _rate(async_db, issue, rating=5.0, timestamp=D1)
+    # issues[3] stays unconfirmed and unrated, so the thread's counts are lower bounds.
+
+    response = await auth_client.get("/api/v1/creators/creator:503")
+
+    assert response.status_code == 200
+    insights = response.json()["insights"]
+    assert insights["series_sample_met"] is False
+    assert insights["excluded_incomplete_series_count"] == 1
+    assert insights["strongest_series"] is None
+
+
+@pytest.mark.asyncio
+async def test_insights_ignore_cover_only_ratings_in_a_mixed_role_series(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A cover-only rating never enters its series count, average, or extremes.
+
+    Regression coverage for the mixed-role fix: the creator writes three issues
+    and only drew the cover of a fourth, so the series highlight must describe
+    the three headline-eligible issues instead of all four rated ones.
+    """
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Mixed Roles", issue_count=4, queue_position=1, read_through=4
+    )
+    for issue, rating in zip(issues[:3], (5.0, 4.0, 3.0), strict=True):
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 505, "name": "Mixed Max", "role": "writer"}]
+        )
+        await _rate(async_db, issue, rating=rating, timestamp=D1)
+    await _confirm_identity(
+        async_db, issues[3], creators=[{"id": 505, "name": "Mixed Max", "role": "cover"}]
+    )
+    await _rate(async_db, issues[3], rating=1.0, timestamp=D2)
+
+    response = await auth_client.get("/api/v1/creators/creator:505")
+
+    assert response.status_code == 200
+    body = response.json()
+    insights = body["insights"]
+    assert insights["series_sample_met"] is True
+    strongest = insights["strongest_series"]
+    assert strongest["rated_issue_count"] == 3
+    assert strongest["average_rating"] == pytest.approx(4.0)
+    assert strongest["lowest_rating"] == pytest.approx(3.0)
+    assert strongest["highest_rating"] == pytest.approx(5.0)
+    # The cover-only issue is not part of the individual issue evidence either.
+    assert [row["issue_id"] for row in insights["highest_rated_issues"]] == [
+        issues[0].id,
+        issues[1].id,
+        issues[2].id,
+    ]
+    assert [row["issue_id"] for row in insights["lowest_rated_issues"]] == [
+        issues[2].id,
+        issues[1].id,
+        issues[0].id,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_insights_cover_only_ratings_cannot_reach_the_series_sample_gate(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Cover-only ratings never push a series over the minimum sample gate.
+
+    Regression coverage for the mixed-role fix: two headline-eligible issues
+    plus two cover-only ones are four rated issues, but only two of them may
+    count toward the series comparison, so the series stays unranked.
+    """
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Patchy Roles", issue_count=4, queue_position=1, read_through=4
+    )
+    for issue, rating in zip(issues[:2], (5.0, 4.0), strict=True):
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 506, "name": "Patchy Pat", "role": "writer"}]
+        )
+        await _rate(async_db, issue, rating=rating, timestamp=D1)
+    for issue in issues[2:]:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 506, "name": "Patchy Pat", "role": "cover"}]
+        )
+        await _rate(async_db, issue, rating=1.0, timestamp=D2)
+
+    response = await auth_client.get("/api/v1/creators/creator:506")
+
+    assert response.status_code == 200
+    body = response.json()
+    insights = body["insights"]
+    assert insights["series_sample_met"] is False
+    assert insights["strongest_series"] is None
+    assert insights["weakest_series"] is None
+    assert insights["most_rated_series"] is None
+    assert insights["series_message"]
+    # Individual issue extremes still surface, and only for headline-eligible issues.
+    assert [row["issue_id"] for row in insights["highest_rated_issues"]] == [
+        issues[0].id,
+        issues[1].id,
+    ]
+    assert [row["issue_id"] for row in insights["lowest_rated_issues"]] == [
+        issues[1].id,
+        issues[0].id,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_insights_absent_without_eligible_ratings(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """An unrated creator has no insights, matching the null distribution contract."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Unrated", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 504, "name": "No Rate Ned", "role": "writer"}]
+    )
+
+    response = await auth_client.get("/api/v1/creators/creator:504")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rating_distribution"] is None
+    assert body["insights"] is None

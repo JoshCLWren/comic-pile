@@ -4010,6 +4010,17 @@
             "$ref": "#/components/schemas/CreatorSummaryCoverage",
             "description": "Metadata coverage state (from #2028)."
           },
+          "insights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorInsights"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Evidence-backed strongest/weakest/most-read highlights (issue #3092). ``null`` when the creator has no headline-eligible ratings."
+          },
           "next_cursor": {
             "anyOf": [
               {
@@ -4478,6 +4489,157 @@
           "max_entries"
         ],
         "title": "CreatorDiscoveryView",
+        "type": "object"
+      },
+      "CreatorInsights": {
+        "description": "Evidence-backed strongest/weakest/most-read highlights (issue #3092).\n\nEvery highlight links back to its supporting series or issues so a reader\nnever has to trust an unexplained summary. Series conclusions require a\nminimum rated-issue sample and complete creator metadata; individual issue\nextremes are labeled separately from the aggregate series conclusions.",
+        "properties": {
+          "excluded_incomplete_series_count": {
+            "default": 0,
+            "description": "Series with attributed rated work excluded because their creator metadata is incomplete; a partial series is never presented as exhaustive evidence.",
+            "minimum": 0.0,
+            "title": "Excluded Incomplete Series Count",
+            "type": "integer"
+          },
+          "highest_rated_issues": {
+            "description": "Top individual rated issues, distinct from aggregate series conclusions.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueInsight"
+            },
+            "title": "Highest Rated Issues",
+            "type": "array"
+          },
+          "individual_issue_limit": {
+            "description": "Maximum number of individual issue extremes listed per direction.",
+            "minimum": 0.0,
+            "title": "Individual Issue Limit",
+            "type": "integer"
+          },
+          "lowest_rated_issues": {
+            "description": "Bottom individual rated issues, distinct from aggregate series conclusions.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueInsight"
+            },
+            "title": "Lowest Rated Issues",
+            "type": "array"
+          },
+          "min_series_sample": {
+            "description": "Rated issues a series needs before it can be ranked as best/worst.",
+            "minimum": 1.0,
+            "title": "Min Series Sample",
+            "type": "integer"
+          },
+          "most_rated_series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Qualifying series with the most rated issues, or null when none qualify."
+          },
+          "series_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plain-language explanation when no series comparison is available.",
+            "title": "Series Message"
+          },
+          "series_sample_met": {
+            "description": "True when at least one series meets the minimum rated-issue sample.",
+            "title": "Series Sample Met",
+            "type": "boolean"
+          },
+          "strongest_series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Highest-average qualifying series, or null when the sample is too thin."
+          },
+          "weakest_series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lowest-average qualifying series, or null when the sample is too thin."
+          }
+        },
+        "required": [
+          "min_series_sample",
+          "series_sample_met",
+          "individual_issue_limit"
+        ],
+        "title": "CreatorInsights",
+        "type": "object"
+      },
+      "CreatorIssueInsight": {
+        "description": "One individual issue extreme backing a creator highlight (issue #3092).\n\nIndividual issue extremes are deliberately modeled separately from the\naggregate series conclusions so a one-off rating is never presented as a\ncreator's overall \"best work\".",
+        "properties": {
+          "effective_rating": {
+            "description": "Latest effective rating for this issue, one per issue.",
+            "title": "Effective Rating",
+            "type": "number"
+          },
+          "issue_id": {
+            "description": "Local ComicPile issue ID.",
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "description": "Issue number of the comic.",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "roles": {
+            "description": "Sorted distinct roles the creator held on this issue.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "sort_key": {
+            "description": "Stable deterministic key for this issue extreme.",
+            "title": "Sort Key",
+            "type": "string"
+          },
+          "thread_id": {
+            "description": "Local thread the issue belongs to.",
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "description": "Title of the containing thread.",
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "effective_rating",
+          "roles",
+          "sort_key"
+        ],
+        "title": "CreatorIssueInsight",
         "type": "object"
       },
       "CreatorIssueRow": {
@@ -5377,6 +5539,79 @@
           "sort_key"
         ],
         "title": "CreatorSeriesGroup",
+        "type": "object"
+      },
+      "CreatorSeriesInsight": {
+        "description": "One series/run extreme backed by a minimum rated-issue sample (#3092).\n\nA series only qualifies as strongest/weakest/most-rated when it has at\nleast :attr:`CreatorInsights.min_series_sample` rated issues and complete\ncreator metadata, so a single 5★ issue cannot outrank a long loved run.",
+        "properties": {
+          "average_rating": {
+            "description": "Personal average over the series' rated issues.",
+            "title": "Average Rating",
+            "type": "number"
+          },
+          "highest_rating": {
+            "description": "Highest effective rating in the series.",
+            "title": "Highest Rating",
+            "type": "number"
+          },
+          "lowest_rating": {
+            "description": "Lowest effective rating in the series.",
+            "title": "Lowest Rating",
+            "type": "number"
+          },
+          "metadata_complete": {
+            "description": "Always true for a qualifying insight; incomplete series are excluded.",
+            "title": "Metadata Complete",
+            "type": "boolean"
+          },
+          "rated_issue_count": {
+            "description": "Rated attributed issues backing this series insight.",
+            "minimum": 0.0,
+            "title": "Rated Issue Count",
+            "type": "integer"
+          },
+          "roles": {
+            "description": "Sorted distinct roles the creator held in this series.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "series_key": {
+            "description": "Stable series identity key (``thread:<thread_id>``).",
+            "title": "Series Key",
+            "type": "string"
+          },
+          "sort_key": {
+            "description": "Stable deterministic key for this series extreme.",
+            "title": "Sort Key",
+            "type": "string"
+          },
+          "thread_id": {
+            "description": "Local thread (series/run) id.",
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "description": "Current local thread title.",
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
+          "roles",
+          "metadata_complete",
+          "sort_key"
+        ],
+        "title": "CreatorSeriesInsight",
         "type": "object"
       },
       "CreatorSeriesIssueListResponse": {

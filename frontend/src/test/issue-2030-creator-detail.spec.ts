@@ -75,6 +75,7 @@ function creatorDetailPayload() {
     ],
     next_cursor: null,
     rating_distribution: null,
+    insights: null,
   }
 }
 

@@ -46,6 +46,7 @@ from app.schemas.creator_summary import (
     CreatorSummaryCoverage,
     CreatorSummaryItem,
 )
+from app.services.creator_insights import compute_creator_insights
 from app.services.creator_rating_stats import compute_rating_distribution
 from app.services.creator_series import (
     aggregate_creator_series_groups,
@@ -370,6 +371,16 @@ async def get_creator_detail(
         for aggregate in series_aggregates[page_offset : page_offset + limit]
     ]
 
+    # 6. Evidence-backed highlights (issue #3092). Computed over the creator's
+    #    complete attributed work, never just the requested page, so the
+    #    strongest/weakest/most-rated conclusions never shift with paging.
+    insights = compute_creator_insights(
+        inputs,
+        creator_id=creator_id,
+        rated_issue_ids=rated_ids,
+        series_aggregates=series_aggregates,
+    )
+
     has_next_page = (
         len(rated_ids) > page_offset + len(rated_rows)
         or len(read_unrated_ids) > page_offset + len(read_unrated_rows)
@@ -390,6 +401,7 @@ async def get_creator_detail(
         upcoming_issues=upcoming_issues,
         next_cursor=next_cursor,
         rating_distribution=rating_distribution,
+        insights=insights,
     )
 
 
