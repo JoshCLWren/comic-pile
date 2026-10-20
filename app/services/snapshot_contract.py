@@ -52,6 +52,7 @@ class SnapshotThreadState(TypedDict, total=False):
     last_rating: float | None
     last_activity_at: str | None
     queue_position: int
+    queue_position_is_manual: bool
     status: str
     notes: str | None
     is_test: bool

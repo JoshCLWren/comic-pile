@@ -462,6 +462,9 @@ async def restore_reading_session_start(
             thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
             thread.last_rating = state.get("last_rating", thread.last_rating)
             thread.queue_position = state.get("queue_position", thread.queue_position)
+            thread.queue_position_is_manual = state.get(
+                "queue_position_is_manual", thread.queue_position_is_manual
+            )
             thread.status = state.get("status", thread.status)
             if "notes" in state:
                 thread.notes = state["notes"]
@@ -509,6 +512,7 @@ async def restore_reading_session_start(
                 issues_remaining=state.get("issues_remaining", 0),
                 last_rating=state.get("last_rating"),
                 queue_position=state.get("queue_position", 1),
+                queue_position_is_manual=state.get("queue_position_is_manual", False),
                 status=state.get("status", "active"),
                 notes=state.get("notes"),
                 is_test=state.get("is_test", False),
