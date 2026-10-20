@@ -27,9 +27,9 @@ from setuptools import setup
 
 from mypyc.build import mypycify
 
-#: The strict-clean candidate modules compiled for issue #3258. Keep this in
-#: sync with ``benchmark/mypyc/bench.py`` (``MODULES``) and with the drift guard
-#: in ``tests/test_mypyc_benchmark_artifact.py``.
+#: The strict-clean candidate modules compiled for issue #3411 (extended from #3258).
+#: Keep this in sync with ``benchmark/mypyc/bench.py`` (``MODULES``) and with the
+#: drift guard in ``tests/test_mypyc_benchmark_artifact.py``.
 COMPILED_MODULES = (
     "compiled/comic_pile/recommendation_version.py",
     "compiled/comic_pile/recommendation_weights.py",
@@ -37,6 +37,10 @@ COMPILED_MODULES = (
     "compiled/comic_pile/recommendation_selection.py",
     "compiled/comic_pile/familiar_weighting.py",
     "compiled/comic_pile/reading_effort.py",
+    "compiled/comic_pile/snooze_backoff.py",
+    "compiled/comic_pile/reading_effort_observation_rules.py",
+    "compiled/comic_pile/comicvine_report_classification.py",
+    "compiled/comic_pile/dice_ladder.py",
 )
 
 setup(

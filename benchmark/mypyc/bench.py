@@ -69,9 +69,10 @@ from importlib import metadata
 from types import ModuleType
 
 # ---------------------------------------------------------------------------
-# Candidate modules (strict-clean, stdlib-only) from issue #3258. They are
-# imported dynamically after the benchmark root is placed first on sys.path so
-# this one file runs unchanged against both the CPython and mypyc surfaces.
+# Candidate modules (strict-clean, stdlib-only) from issue #3411 (extended
+# from #3258). They are imported dynamically after the benchmark root is placed
+# first on sys.path so this one file runs unchanged against both the CPython and
+# mypyc surfaces.
 # ---------------------------------------------------------------------------
 
 MODULES = (
@@ -81,6 +82,10 @@ MODULES = (
     "comic_pile.recommendation_version",
     "comic_pile.familiar_weighting",
     "comic_pile.reading_effort",
+    "comic_pile.snooze_backoff",
+    "comic_pile.reading_effort_observation_rules",
+    "comic_pile.comicvine_report_classification",
+    "comic_pile.dice_ladder",
 )
 
 #: Seed shared by every generated input. Fixed so both surfaces are fed
@@ -397,6 +402,54 @@ def _w_aggregate_efforts(mod: ModuleType, _mods: dict[str, ModuleType]) -> objec
     )
 
 
+def _w_snooze_backoff(mod: ModuleType, _mods: dict[str, ModuleType]) -> object:
+    """Compute backoff sequences and eligibility checks."""
+    rng = _rng()
+    snooze_counts = [rng.randint(0, 20) for _ in range(200)]
+    later_counts = [rng.randint(0, 30) for _ in range(200)]
+    return {
+        "backoff_sequences": [mod.generate_sequence(20) for _ in range(5)],
+        "eligibility_checks": [
+            mod.is_eligible(sc, lc) for sc, lc in zip(snooze_counts, later_counts, strict=True)
+        ],
+        "backoff_values": [mod.compute_backoff_sessions(sc) for sc in snooze_counts],
+    }
+
+
+def _w_classify_observations(mod: ModuleType, _mods: dict[str, ModuleType]) -> object:
+    """Classify reading-effort observations against thresholds."""
+    thresholds_mod = _mods["comic_pile.reading_effort_observation_rules"]
+    rng = _rng()
+    observations = [
+        thresholds_mod.DurationObservation(duration_seconds=rng.uniform(10.0, 20000.0))
+        for _ in range(5000)
+    ]
+    return mod.classify_reading_effort_observations(observations)
+
+
+def _w_classify_hydration_reports(mod: ModuleType, _mods: dict[str, ModuleType]) -> object:
+    """Classify hydration reports into stable categories."""
+    rng = _rng()
+    reports = []
+    for i in range(200):
+        issues = []
+        for j in range(rng.randint(5, 20)):
+            status = rng.choice(["matched", "local-miss", "unresolved", "error", "pending"])
+            issues.append({"status": status, "issue_id": 1000 + i * 20 + j})
+        reports.append({"issues": issues, "summary": {"total": len(issues)}})
+    return [mod.classify_hydration_report(report) for report in reports]
+
+
+def _w_dice_ladder(mod: ModuleType, _mods: dict[str, ModuleType]) -> object:
+    """Step through dice ladder transitions."""
+    rng = _rng()
+    die_sizes = [rng.choice([4, 6, 8, 10, 12, 20, 30, 50, 100]) for _ in range(5000)]
+    return {
+        "step_down": [mod.step_down(d) for d in die_sizes],
+        "step_up": [mod.step_up(d) for d in die_sizes],
+    }
+
+
 WORKLOADS: tuple[Workload, ...] = (
     Workload(
         name="build_candidate_weights",
@@ -433,6 +486,30 @@ WORKLOADS: tuple[Workload, ...] = (
         module="comic_pile.reading_effort",
         call=_w_aggregate_efforts,
         describe="aggregate_efforts over 4000 reading-effort observations",
+    ),
+    Workload(
+        name="snooze_backoff",
+        module="comic_pile.snooze_backoff",
+        call=_w_snooze_backoff,
+        describe="snooze backoff sequence generation and eligibility over 200 checks",
+    ),
+    Workload(
+        name="classify_observations",
+        module="comic_pile.reading_effort_observation_rules",
+        call=_w_classify_observations,
+        describe="classify 5000 reading-effort observations against thresholds",
+    ),
+    Workload(
+        name="classify_hydration_reports",
+        module="comic_pile.comicvine_report_classification",
+        call=_w_classify_hydration_reports,
+        describe="classify 200 hydration reports with 5-20 issues each",
+    ),
+    Workload(
+        name="dice_ladder",
+        module="comic_pile.dice_ladder",
+        call=_w_dice_ladder,
+        describe="dice ladder step_up/step_down over 5000 transitions",
     ),
 )
 

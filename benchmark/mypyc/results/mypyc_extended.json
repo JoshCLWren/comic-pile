@@ -1,0 +1,649 @@
+{
+  "benchmark": "mypyc-cpu-evaluation",
+  "configuration": {
+    "cold_samples": 7,
+    "warm_iterations": 500,
+    "warm_samples": 7,
+    "workload_sizes": {
+      "effort_count": 120,
+      "familiar_candidate_count": 100,
+      "familiar_signal_count": 24,
+      "observation_count": 4000,
+      "pool_sizes": [
+        20,
+        60
+      ],
+      "signal_count": 120
+    }
+  },
+  "environment": {
+    "artifact_total_bytes": 2200512,
+    "artifacts": [
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "comicvine_report_classification.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 15760
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "comicvine_report_classification__mypyc.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 177624
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "dice_ladder.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 15720
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "dice_ladder__mypyc.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 173176
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "familiar_weighting.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 15736
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "familiar_weighting__mypyc.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 264208
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "reading_effort.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 15728
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "reading_effort__mypyc.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 215680
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "reading_effort_observation_rules.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 15768
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "reading_effort_observation_rules__mypyc.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 193992
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "recommendation_selection.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 15752
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "recommendation_selection__mypyc.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 220448
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "recommendation_version.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 15744
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "recommendation_version__mypyc.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 169176
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "recommendation_weighting.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 15752
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "recommendation_weighting__mypyc.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 256968
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "recommendation_weights.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 15744
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "recommendation_weights__mypyc.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 201912
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "snooze_backoff.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 15728
+      },
+      {
+        "abi_tag": "cpython-312-x86_64-linux-gnu",
+        "elf_class": "ELF64",
+        "elf_machine": "x86-64",
+        "file": "snooze_backoff__mypyc.cpython-312-x86_64-linux-gnu.so",
+        "size_bytes": 169896
+      }
+    ],
+    "c_compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "machine": "x86_64",
+    "mypy_version": "2.4.0",
+    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "python_full_version": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "python_implementation": "cpython",
+    "python_version": "3.12.3",
+    "root": "compiled",
+    "seed": 20261017,
+    "setuptools_version": "68.1.2",
+    "source_total_bytes": 90485,
+    "surface": "mypyc"
+  },
+  "issue": 3258,
+  "request_initialization": {
+    "candidate_import": {
+      "count": 7,
+      "max_ms": 17.5703,
+      "mean_ms": 17.2125,
+      "median_ms": 17.1975,
+      "min_ms": 16.9606,
+      "spread_pct": 3.55,
+      "stdev_ms": 0.1962
+    },
+    "process_wall": {
+      "count": 7,
+      "max_ms": 199.2173,
+      "mean_ms": 197.1331,
+      "median_ms": 197.2781,
+      "min_ms": 195.3966,
+      "spread_pct": 1.94,
+      "stdev_ms": 1.3997
+    },
+    "workload": {
+      "count": 7,
+      "max_ms": 25.7217,
+      "mean_ms": 25.4513,
+      "median_ms": 25.4287,
+      "min_ms": 25.1282,
+      "spread_pct": 2.33,
+      "stdev_ms": 0.2479
+    }
+  },
+  "results": [
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.4987,
+          "mean_ms": 17.3665,
+          "median_ms": 17.3751,
+          "min_ms": 17.2067,
+          "spread_pct": 1.68,
+          "stdev_ms": 0.1046
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 99.7076,
+          "mean_ms": 97.9397,
+          "median_ms": 98.3267,
+          "min_ms": 96.5089,
+          "spread_pct": 3.25,
+          "stdev_ms": 1.2436
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 0.6841,
+          "mean_ms": 0.6526,
+          "median_ms": 0.6503,
+          "min_ms": 0.6325,
+          "spread_pct": 7.93,
+          "stdev_ms": 0.0177
+        }
+      },
+      "describe": "build_candidate_weights over 120 effort pairs x 3 bandwidth modes",
+      "module": "comic_pile.recommendation_weights",
+      "module_file": "recommendation_weights.cpython-312-x86_64-linux-gnu.so",
+      "warm": {
+        "count": 7,
+        "max_ms": 0.4856,
+        "mean_ms": 0.4838,
+        "median_ms": 0.4834,
+        "min_ms": 0.4811,
+        "spread_pct": 0.94,
+        "stdev_ms": 0.0017
+      },
+      "workload": "build_candidate_weights"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 19.4246,
+          "mean_ms": 17.6172,
+          "median_ms": 17.2988,
+          "min_ms": 17.1411,
+          "spread_pct": 13.2,
+          "stdev_ms": 0.8295
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 101.1419,
+          "mean_ms": 98.9088,
+          "median_ms": 98.4908,
+          "min_ms": 97.959,
+          "spread_pct": 3.23,
+          "stdev_ms": 1.1129
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 1.7877,
+          "mean_ms": 1.7527,
+          "median_ms": 1.7623,
+          "min_ms": 1.7133,
+          "spread_pct": 4.22,
+          "stdev_ms": 0.0253
+        }
+      },
+      "describe": "weight_pool over 120 candidate signals x 3 bandwidth/intent pairs",
+      "module": "comic_pile.recommendation_weighting",
+      "module_file": "recommendation_weighting.cpython-312-x86_64-linux-gnu.so",
+      "warm": {
+        "count": 7,
+        "max_ms": 1.4781,
+        "mean_ms": 1.4638,
+        "median_ms": 1.4602,
+        "min_ms": 1.4582,
+        "spread_pct": 1.36,
+        "stdev_ms": 0.0073
+      },
+      "workload": "weight_pool"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.4423,
+          "mean_ms": 17.2783,
+          "median_ms": 17.2467,
+          "min_ms": 17.1719,
+          "spread_pct": 1.57,
+          "stdev_ms": 0.0998
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 93.7179,
+          "mean_ms": 92.8996,
+          "median_ms": 92.807,
+          "min_ms": 92.4575,
+          "spread_pct": 1.36,
+          "stdev_ms": 0.4443
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 0.1328,
+          "mean_ms": 0.1102,
+          "median_ms": 0.1073,
+          "min_ms": 0.1042,
+          "spread_pct": 26.63,
+          "stdev_ms": 0.01
+        }
+      },
+      "describe": "select_from_pool over pool sizes 20 and 60 x 3 control paths",
+      "module": "comic_pile.recommendation_selection",
+      "module_file": "recommendation_selection.cpython-312-x86_64-linux-gnu.so",
+      "warm": {
+        "count": 7,
+        "max_ms": 0.0362,
+        "mean_ms": 0.0359,
+        "median_ms": 0.0357,
+        "min_ms": 0.0357,
+        "spread_pct": 1.58,
+        "stdev_ms": 0.0002
+      },
+      "workload": "select_from_pool"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 18.5592,
+          "mean_ms": 17.4336,
+          "median_ms": 17.175,
+          "min_ms": 17.0767,
+          "spread_pct": 8.63,
+          "stdev_ms": 0.5342
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 95.482,
+          "mean_ms": 92.8009,
+          "median_ms": 92.3529,
+          "min_ms": 92.0704,
+          "spread_pct": 3.69,
+          "stdev_ms": 1.2001
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 0.003,
+          "mean_ms": 0.0025,
+          "median_ms": 0.0024,
+          "min_ms": 0.002,
+          "spread_pct": 39.89,
+          "stdev_ms": 0.0003
+        }
+      },
+      "describe": "read RECOMMENDATION_ALGORITHM_VERSION (import-surface constant read)",
+      "module": "comic_pile.recommendation_version",
+      "module_file": "recommendation_version.cpython-312-x86_64-linux-gnu.so",
+      "warm": {
+        "count": 7,
+        "max_ms": 0.0002,
+        "mean_ms": 0.0001,
+        "median_ms": 0.0001,
+        "min_ms": 0.0001,
+        "spread_pct": 56.85,
+        "stdev_ms": 0.0
+      },
+      "workload": "recommendation_version"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.3288,
+          "mean_ms": 17.2181,
+          "median_ms": 17.2749,
+          "min_ms": 17.0411,
+          "spread_pct": 1.67,
+          "stdev_ms": 0.1161
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 97.3512,
+          "mean_ms": 96.2078,
+          "median_ms": 96.4057,
+          "min_ms": 93.8331,
+          "spread_pct": 3.65,
+          "stdev_ms": 1.1284
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 2.1581,
+          "mean_ms": 2.107,
+          "median_ms": 2.1062,
+          "min_ms": 2.0785,
+          "spread_pct": 3.78,
+          "stdev_ms": 0.027
+        }
+      },
+      "describe": "compute_familiar_factors over 100 candidates and 24 taste signals",
+      "module": "comic_pile.familiar_weighting",
+      "module_file": "familiar_weighting.cpython-312-x86_64-linux-gnu.so",
+      "warm": {
+        "count": 7,
+        "max_ms": 1.8325,
+        "mean_ms": 1.8215,
+        "median_ms": 1.8217,
+        "min_ms": 1.8089,
+        "spread_pct": 1.29,
+        "stdev_ms": 0.0073
+      },
+      "workload": "compute_familiar_factors"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.4191,
+          "mean_ms": 17.2772,
+          "median_ms": 17.3159,
+          "min_ms": 17.1164,
+          "spread_pct": 1.75,
+          "stdev_ms": 0.1148
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 100.9839,
+          "mean_ms": 100.4956,
+          "median_ms": 100.5437,
+          "min_ms": 100.1235,
+          "spread_pct": 0.86,
+          "stdev_ms": 0.2837
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 6.1378,
+          "mean_ms": 5.808,
+          "median_ms": 5.7513,
+          "min_ms": 5.6853,
+          "spread_pct": 7.87,
+          "stdev_ms": 0.1611
+        }
+      },
+      "describe": "aggregate_efforts over 4000 reading-effort observations",
+      "module": "comic_pile.reading_effort",
+      "module_file": "reading_effort.cpython-312-x86_64-linux-gnu.so",
+      "warm": {
+        "count": 7,
+        "max_ms": 5.2891,
+        "mean_ms": 5.2333,
+        "median_ms": 5.2257,
+        "min_ms": 5.2178,
+        "spread_pct": 1.36,
+        "stdev_ms": 0.025
+      },
+      "workload": "aggregate_efforts"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.3482,
+          "mean_ms": 17.2484,
+          "median_ms": 17.222,
+          "min_ms": 17.16,
+          "spread_pct": 1.09,
+          "stdev_ms": 0.0716
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 94.2225,
+          "mean_ms": 93.4924,
+          "median_ms": 93.4245,
+          "min_ms": 92.9864,
+          "spread_pct": 1.32,
+          "stdev_ms": 0.3976
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 0.2516,
+          "mean_ms": 0.2281,
+          "median_ms": 0.2242,
+          "min_ms": 0.2222,
+          "spread_pct": 13.07,
+          "stdev_ms": 0.0105
+        }
+      },
+      "describe": "snooze backoff sequence generation and eligibility over 200 checks",
+      "module": "comic_pile.snooze_backoff",
+      "module_file": "snooze_backoff.cpython-312-x86_64-linux-gnu.so",
+      "warm": {
+        "count": 7,
+        "max_ms": 0.1831,
+        "mean_ms": 0.1814,
+        "median_ms": 0.1809,
+        "min_ms": 0.1806,
+        "spread_pct": 1.36,
+        "stdev_ms": 0.001
+      },
+      "workload": "snooze_backoff"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.4957,
+          "mean_ms": 17.201,
+          "median_ms": 17.1967,
+          "min_ms": 17.0564,
+          "spread_pct": 2.55,
+          "stdev_ms": 0.1456
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 157.0572,
+          "mean_ms": 152.7804,
+          "median_ms": 152.2127,
+          "min_ms": 151.0629,
+          "spread_pct": 3.94,
+          "stdev_ms": 1.9556
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 9.9844,
+          "mean_ms": 9.5848,
+          "median_ms": 9.5185,
+          "min_ms": 9.4275,
+          "spread_pct": 5.85,
+          "stdev_ms": 0.1856
+        }
+      },
+      "describe": "classify 5000 reading-effort observations against thresholds",
+      "module": "comic_pile.reading_effort_observation_rules",
+      "module_file": "reading_effort_observation_rules.cpython-312-x86_64-linux-gnu.so",
+      "warm": {
+        "count": 7,
+        "max_ms": 9.4381,
+        "mean_ms": 9.3791,
+        "median_ms": 9.3893,
+        "min_ms": 9.3179,
+        "spread_pct": 1.28,
+        "stdev_ms": 0.0464
+      },
+      "workload": "classify_observations"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.6811,
+          "mean_ms": 17.2449,
+          "median_ms": 17.2118,
+          "min_ms": 17.0131,
+          "spread_pct": 3.88,
+          "stdev_ms": 0.2199
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 109.1511,
+          "mean_ms": 106.2019,
+          "median_ms": 106.5986,
+          "min_ms": 103.958,
+          "spread_pct": 4.87,
+          "stdev_ms": 1.8924
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 2.8874,
+          "mean_ms": 2.8407,
+          "median_ms": 2.8547,
+          "min_ms": 2.7892,
+          "spread_pct": 3.44,
+          "stdev_ms": 0.0393
+        }
+      },
+      "describe": "classify 200 hydration reports with 5-20 issues each",
+      "module": "comic_pile.comicvine_report_classification",
+      "module_file": "comicvine_report_classification.cpython-312-x86_64-linux-gnu.so",
+      "warm": {
+        "count": 7,
+        "max_ms": 2.3061,
+        "mean_ms": 2.2893,
+        "median_ms": 2.2911,
+        "min_ms": 2.2765,
+        "spread_pct": 1.29,
+        "stdev_ms": 0.0111
+      },
+      "workload": "classify_hydration_reports"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.2947,
+          "mean_ms": 17.146,
+          "median_ms": 17.139,
+          "min_ms": 17.053,
+          "spread_pct": 1.41,
+          "stdev_ms": 0.0776
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 103.0109,
+          "mean_ms": 102.3148,
+          "median_ms": 102.1209,
+          "min_ms": 101.5165,
+          "spread_pct": 1.46,
+          "stdev_ms": 0.5302
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 3.3711,
+          "mean_ms": 3.3166,
+          "median_ms": 3.311,
+          "min_ms": 3.254,
+          "spread_pct": 3.54,
+          "stdev_ms": 0.0491
+        }
+      },
+      "describe": "dice ladder step_up/step_down over 5000 transitions",
+      "module": "comic_pile.dice_ladder",
+      "module_file": "dice_ladder.cpython-312-x86_64-linux-gnu.so",
+      "warm": {
+        "count": 7,
+        "max_ms": 3.1425,
+        "mean_ms": 3.1019,
+        "median_ms": 3.1044,
+        "min_ms": 3.0832,
+        "spread_pct": 1.91,
+        "stdev_ms": 0.0207
+      },
+      "workload": "dice_ladder"
+    }
+  ]
+}
