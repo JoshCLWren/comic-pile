@@ -196,3 +196,51 @@ describe('ThreadDetailView Edit dialog defers issue Add until Save (#3444)', () 
     expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
   })
 })
+
+/**
+ * Regression coverage for #3586 (consolidating #3633): the Edit Series Add
+ * box must reject input that is not an issue instead of staging a phantom
+ * pending issue chip.
+ */
+describe('ThreadDetailView Edit dialog rejects invalid issue entries (#3586)', () => {
+  it.each([
+    ['non-numeric garbage', 'abc'],
+    ['a negative issue number', '-3'],
+    ['a zero-width space', '\u200b'],
+  ])('does not stage a pending chip for %s', async (_label, value) => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+    const { user, addInput } = await openEditDialog()
+    await user.type(addInput, value)
+    await user.click(screen.getByTestId('issue-add-button'))
+
+    expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
+    expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
+    expect(screen.getByTestId('issue-add-validation-error')).toBeInTheDocument()
+  })
+
+  it('keeps the Save button from persisting a rejected entry', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+    const { user, addInput } = await openEditDialog()
+    await user.type(addInput, 'abc')
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
+  })
+
+  it('does not stage a pending chip for an entry that names no issue at all', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+    const { user, addInput } = await openEditDialog()
+    await user.type(addInput, ',')
+    await user.click(screen.getByTestId('issue-add-button'))
+
+    expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
+    expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
+    expect(screen.getByTestId('issue-add-validation-error')).toBeInTheDocument()
+  })
+})

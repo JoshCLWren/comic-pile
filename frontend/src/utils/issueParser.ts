@@ -27,6 +27,22 @@ function isRecognizedLiteral(literal: string): boolean {
 }
 
 /**
+ * Characters that carry no visible identity: zero-width spaces, joiners, bidi
+ * controls, and similar formatting characters. An identifier built only from
+ * these renders as an empty issue number ("#"), which is how a phantom chip
+ * with no identity gets created.
+ */
+const INVISIBLE_CHARACTER_PATTERN =
+  /[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/;
+
+/**
+ * Whether the value contains a character that renders as nothing.
+ */
+function hasInvisibleCharacters(value: string): boolean {
+  return INVISIBLE_CHARACTER_PATTERN.test(value);
+}
+
+/**
  * Detailed result of parsing an issue range string.
  */
 export interface ParsedIssueRangeDetail {
@@ -74,6 +90,11 @@ export interface ParsedTokenBreakdown {
  * and `breakdown` is a preview-only affordance (#3262): it never changes what is
  * submitted, and the backend still accepts any literal identifier.
  *
+ * One deliberate divergence: a range endpoint above `Number.MAX_SAFE_INTEGER`
+ * is rejected here, because JavaScript cannot expand it without looping
+ * forever. The backend's arbitrary-precision integers would expand it, but an
+ * issue number that large is not a real issue.
+ *
  * @param input - Issue range string (e.g., "0-25" or "0, Annual 1, 5-7")
  * @returns Detailed parsing result with breakdown and warnings
  * @throws Error if input is invalid
@@ -110,6 +131,16 @@ export function parseIssueRangeDetailed(input: string): ParsedIssueRangeDetail {
       if (!Number.isNaN(start) && !Number.isNaN(end) && isNumeric(left) && isNumeric(right)) {
         if (start < 0 || end < 0) {
           throw new Error('Range endpoints must be >= 0');
+        }
+        // JavaScript numbers cannot represent every integer above 2^53 - 1, so
+        // a pasted range such as "9007199254740992-9007199254740992" parses
+        // into endpoints that `i++` can never advance past. The expansion loop
+        // below would then run forever and freeze the page. Reject endpoints
+        // that are not exactly representable before expanding anything.
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) {
+          throw new Error(
+            `Range endpoints must be safe integers (up to ${Number.MAX_SAFE_INTEGER})`,
+          );
         }
         if (start > end) {
           throw new Error(`Range start (${start}) cannot exceed end (${end})`);
@@ -218,4 +249,222 @@ export function parseIssueRangeDetailed(input: string): ParsedIssueRangeDetail {
  */
 export function parseIssueRange(input: string): number {
   return parseIssueRangeDetailed(input).total;
+}
+
+/**
+ * Why a token cannot be staged as an issue.
+ */
+export type IssueRangeInvalidReason =
+  /** The token carries no issue number at all, e.g. "abc". */
+  | 'no-issue-number'
+  /** The token is a negative number, e.g. "-3". */
+  | 'negative'
+  /** The token is a half-written range, e.g. "19-" or "1-". */
+  | 'malformed-range'
+  /** The token is built from characters that render as nothing. */
+  | 'invisible-characters'
+  /** The entry names no issue at all, e.g. "," or ",,". */
+  | 'no-issues'
+  /** The parser itself rejected the entry, e.g. an inverted range. */
+  | 'parser-error';
+
+/**
+ * Result of validating an issue-range input before it is staged.
+ */
+export interface IssueRangeValidationResult {
+  /** True when the input is empty (nothing to validate) or fully valid. */
+  valid: boolean;
+  /** True when the input carries no user content at all. */
+  empty: boolean;
+  /** The trimmed input. */
+  normalized: string;
+  /** Parsed issue identifiers. Empty when the input is invalid. */
+  issues: string[];
+  /** The tokens that failed validation. */
+  invalidTokens: string[];
+  /** Why the tokens failed validation. */
+  invalidReason: IssueRangeInvalidReason | null;
+  /** A user-facing error message. Null when the input is valid or empty. */
+  error: string | null;
+}
+
+/**
+ * Guidance appended to every staging error so the reader knows what a valid
+ * issue entry looks like.
+ */
+const ISSUE_RANGE_INPUT_HINT =
+  'Enter an issue number or range (19-24), or a named issue such as Annual 1.';
+
+/**
+ * Quote the offending tokens for an error message.
+ */
+function describeTokens(tokens: string[]): string {
+  const quoted = tokens.map((token) => `'${token}'`);
+  const last = quoted[quoted.length - 1];
+  if (quoted.length === 1) {
+    return quoted[0];
+  }
+  return `${quoted.slice(0, -1).join(', ')} and ${last}`;
+}
+
+/**
+ * Build the user-facing message for a rejected input.
+ */
+function buildInvalidMessage(
+  tokens: string[],
+  reason: Exclude<IssueRangeInvalidReason, 'parser-error'>,
+): string {
+  if (reason === 'invisible-characters') {
+    return `Invalid issue: that entry contains invisible characters. ${ISSUE_RANGE_INPUT_HINT}`;
+  }
+
+  if (reason === 'no-issues') {
+    return `Invalid issue: that entry does not name an issue. ${ISSUE_RANGE_INPUT_HINT}`;
+  }
+
+  const subject = describeTokens(tokens);
+  const label = tokens.length === 1 ? 'Invalid issue' : 'Invalid issues';
+  const verb = tokens.length === 1 ? 'is' : 'are';
+
+  let reasonClause = '';
+  if (reason === 'negative') {
+    reasonClause = ' Issue numbers cannot be negative.';
+  } else if (reason === 'malformed-range') {
+    reasonClause = ' A range needs a number on both sides, like 19-24.';
+  }
+
+  return `${label}: ${subject} ${verb} not a valid issue number.${reasonClause} ${ISSUE_RANGE_INPUT_HINT}`;
+}
+
+/**
+ * Validate an issue-range input before it is staged as a pending issue chip.
+ *
+ * The backend parser deliberately accepts any literal identifier, so the
+ * client needs its own guard: without one, arbitrary text such as "abc", a
+ * negative number such as "-3", or a zero-width character becomes a phantom
+ * issue chip that is one Save away from becoming a real record (issue #3586).
+ *
+ * This guard is deliberately stricter than the backend parser and has no
+ * backend counterpart. It accepts:
+ *
+ * - issue numbers ("19", "0");
+ * - numeric ranges ("19-24");
+ * - recognized named forms ("Annual 1", "Special 2", "½", "FCBD 2024",
+ *   "#19", "Vol. 2 #5");
+ * - other numbered labels that carry an issue number ("2b", "1.5",
+ *   "1-Annual").
+ *
+ * It rejects anything else, because a token without an issue number is not
+ * an issue. It also rejects an entry that names no issue at all (for example
+ * "," or ",,"), which the parser resolves to an empty result. The
+ * tokenization itself still comes from {@link parseIssueRangeDetailed} so the
+ * guard stays aligned with the backend's parser.
+ *
+ * @param input - Raw text from the issue entry field
+ * @returns The validation result, including a user-facing error message
+ */
+export function validateIssueRangeForStaging(input: string): IssueRangeValidationResult {
+  const normalized = input.trim();
+
+  if (!normalized) {
+    return {
+      valid: true,
+      empty: true,
+      normalized,
+      issues: [],
+      invalidTokens: [],
+      invalidReason: null,
+      error: null,
+    };
+  }
+
+  if (hasInvisibleCharacters(normalized)) {
+    return {
+      valid: false,
+      empty: false,
+      normalized,
+      issues: [],
+      invalidTokens: [],
+      invalidReason: 'invisible-characters',
+      error: buildInvalidMessage([], 'invisible-characters'),
+    };
+  }
+
+  let detail: ParsedIssueRangeDetail;
+  try {
+    detail = parseIssueRangeDetailed(normalized);
+  } catch (error: unknown) {
+    return {
+      valid: false,
+      empty: false,
+      normalized,
+      issues: [],
+      invalidTokens: [],
+      invalidReason: 'parser-error',
+      error: error instanceof Error ? error.message : 'Invalid issue range',
+    };
+  }
+
+  const invalidTokens: string[] = [];
+  let invalidReason: IssueRangeInvalidReason | null = null;
+
+  for (const item of detail.breakdown) {
+    if (item.type !== 'unrecognized-literal') {
+      continue;
+    }
+
+    let reason: IssueRangeInvalidReason;
+    if (item.token.startsWith('-')) {
+      reason = /^-\d/.test(item.token) ? 'negative' : 'malformed-range';
+    } else if (item.token.endsWith('-')) {
+      reason = 'malformed-range';
+    } else if (!/\d/.test(item.token)) {
+      reason = 'no-issue-number';
+    } else {
+      // A numbered label such as "2b" or "1-Annual" still identifies an issue.
+      continue;
+    }
+
+    invalidTokens.push(item.token);
+    invalidReason = invalidReason ?? reason;
+  }
+
+  if (invalidTokens.length > 0) {
+    const reason = invalidReason ?? 'no-issue-number';
+    return {
+      valid: false,
+      empty: false,
+      normalized,
+      issues: [],
+      invalidTokens,
+      invalidReason: reason,
+      error: buildInvalidMessage(invalidTokens, reason),
+    };
+  }
+
+  if (detail.issues.length === 0) {
+    // Every part was empty, so the entry names no issue at all (for example
+    // "," or ",,"). The parser skips empty parts, so without this check the
+    // entry would look valid, stage a pending chip with nothing in it, and
+    // only fail later when the server rejects the empty result.
+    return {
+      valid: false,
+      empty: false,
+      normalized,
+      issues: [],
+      invalidTokens: [],
+      invalidReason: 'no-issues',
+      error: buildInvalidMessage([], 'no-issues'),
+    };
+  }
+
+  return {
+    valid: true,
+    empty: false,
+    normalized,
+    issues: detail.issues,
+    invalidTokens: [],
+    invalidReason: null,
+    error: null,
+  };
 }
