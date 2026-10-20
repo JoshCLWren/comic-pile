@@ -129,6 +129,7 @@ function EditHarness() {
 describe('QueueModals title validation (create dialog)', () => {
   it('blocks empty titles, shows the linked error, and disables submit', () => {
     render(<CreateHarness />)
+    // SAFETY: getByLabelText returns HTMLElement; test reads input.value and types into it
     const input = screen.getByLabelText('Title') as HTMLInputElement
     const submit = screen.getByRole('button', { name: 'Create Series' })
     expect(input).toHaveAttribute('aria-invalid', 'true')
@@ -139,6 +140,7 @@ describe('QueueModals title validation (create dialog)', () => {
   it('recovers after a valid title is entered', async () => {
     const user = userEvent.setup()
     render(<CreateHarness />)
+    // SAFETY: getByLabelText returns HTMLElement; test reads input.value and types into it
     const input = screen.getByLabelText('Title') as HTMLInputElement
     const submit = screen.getByRole('button', { name: 'Create Series' })
     await user.type(input, 'Valid Title')
@@ -150,6 +152,7 @@ describe('QueueModals title validation (create dialog)', () => {
   it('blocks whitespace-only input typed into the field', async () => {
     const user = userEvent.setup()
     render(<CreateHarness />)
+    // SAFETY: getByLabelText returns HTMLElement; test reads input.value and types into it
     const input = screen.getByLabelText('Title') as HTMLInputElement
     const submit = screen.getByRole('button', { name: 'Create Series' })
     await user.type(input, '   ')
@@ -162,6 +165,7 @@ describe('QueueModals title validation (create dialog)', () => {
 describe('QueueModals title validation (edit dialog)', () => {
   it('blocks empty titles, shows the linked error, and disables submit', () => {
     render(<EditHarness />)
+    // SAFETY: getByLabelText returns HTMLElement; test reads input.value and types into it
     const input = screen.getByLabelText('Title') as HTMLInputElement
     const submit = screen.getByRole('button', { name: 'Save Changes' })
     expect(input).toHaveAttribute('aria-invalid', 'true')
@@ -172,6 +176,7 @@ describe('QueueModals title validation (edit dialog)', () => {
   it('recovers after a valid title is entered', async () => {
     const user = userEvent.setup()
     render(<EditHarness />)
+    // SAFETY: getByLabelText returns HTMLElement; test reads input.value and types into it
     const input = screen.getByLabelText('Title') as HTMLInputElement
     const submit = screen.getByRole('button', { name: 'Save Changes' })
     await user.type(input, 'Valid Title')
@@ -183,6 +188,7 @@ describe('QueueModals title validation (edit dialog)', () => {
   it('blocks whitespace-only input typed into the field', async () => {
     const user = userEvent.setup()
     render(<EditHarness />)
+    // SAFETY: getByLabelText returns HTMLElement; test reads input.value and types into it
     const input = screen.getByLabelText('Title') as HTMLInputElement
     const submit = screen.getByRole('button', { name: 'Save Changes' })
     await user.type(input, '   ')
