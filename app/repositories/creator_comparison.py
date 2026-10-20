@@ -8,8 +8,8 @@ fixed, small number of queries regardless of library size.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,7 +83,7 @@ def _coerce_creator_id(value: object) -> int | None:
     return None
 
 
-def extract_creator_credits(metadata: dict[str, Any]) -> list[CreatorCredit]:
+def extract_creator_credits(metadata: Mapping[str, object]) -> list[CreatorCredit]:
     """Extract deduplicated creator credits from confirmed issue metadata."""
     raw = metadata.get("creator_credits")
     if not isinstance(raw, list):

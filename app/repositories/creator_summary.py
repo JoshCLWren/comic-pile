@@ -12,9 +12,9 @@ requested.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import distinct_on
@@ -149,7 +149,7 @@ def extract_creator_credit_list(raw: object) -> list[CreatorCredit]:
     return credits
 
 
-def extract_creator_credits(metadata: dict[str, Any]) -> list[CreatorCredit]:
+def extract_creator_credits(metadata: Mapping[str, object]) -> list[CreatorCredit]:
     """Extract deduplicated creator credits from confirmed issue metadata.
 
     Credits must carry a stable external person id and a display name to be
