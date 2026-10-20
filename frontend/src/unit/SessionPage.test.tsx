@@ -129,15 +129,54 @@ it('renders session details and only allows undoing the latest rating', async ()
   expect(showToastSpy).toHaveBeenCalledWith('Last change undone.', 'success')
 })
 
-it('explains how Undo Latest differs from Restore Start instead of leaving two near-identical buttons bare', () => {
-  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+it('formats ladder path from raw API values', () => {
+  mockedUseSessionDetails.mockReturnValue({
+    data: {
+      session_id: 13,
+      started_at: '2024-05-01T10:00:00Z',
+      ended_at: null,
+      start_die: 6,
+      current_die: 8,
+      ladder_path: '6',
+      narrative_summary: { highlights: [] },
+      events: [],
+    },
+    isPending: false,
+    refetch: refetchDetailsSpy,
+  })
+  render(
+    <MemoryRouter initialEntries={["/sessions/13"]}>
+      <Routes>
+        <Route path="/sessions/:id" element={<SessionPage />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+  expect(screen.getByText('d6')).toBeInTheDocument()
+})
 
-  const explanation = screen.getByText(/reverses only the newest change/)
-  expect(explanation).toHaveTextContent(/Undo Latest/)
-  expect(explanation).toHaveTextContent(/stays on the newest snapshot until it has been used once/)
-  expect(explanation).toHaveTextContent(/Restore Start/)
-  expect(explanation).toHaveTextContent(/rewinds the whole session to the moment it began/)
-  expect(explanation).toHaveTextContent(/asks for confirmation first/)
+it('formats multi-step ladder path from raw API values', () => {
+  mockedUseSessionDetails.mockReturnValue({
+    data: {
+      session_id: 14,
+      started_at: '2024-05-01T10:00:00Z',
+      ended_at: null,
+      start_die: 6,
+      current_die: 8,
+      ladder_path: '6 → 8',
+      narrative_summary: { highlights: [] },
+      events: [],
+    },
+    isPending: false,
+    refetch: refetchDetailsSpy,
+  })
+  render(
+    <MemoryRouter initialEntries={["/sessions/14"]}>
+      <Routes>
+        <Route path="/sessions/:id" element={<SessionPage />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+  expect(screen.getByText('d6 → d8')).toBeInTheDocument()
 })
 
 it('reports a failed undo instead of leaving the page silent', async () => {

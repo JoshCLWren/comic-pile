@@ -95,7 +95,16 @@ function eventDetail(event: DisplayEvent): string | null {
 function formatLadderPath(ladderPath: string | null | undefined): string {
   if (!ladderPath) return ''
   const dice = ladderPath.split(' → ')
-  return dice.map(d => `d${d}`).join(' → ')
+  return dice
+    .map((d) => {
+      const trimmed = d.trim()
+      if (!trimmed) return trimmed
+      if (trimmed.toLowerCase().startsWith('d')) {
+        return trimmed
+      }
+      return `d${trimmed}`
+    })
+    .join(' → ')
 }
 
 /**
