@@ -290,6 +290,26 @@ export async function invalidateReadingPlans(client: QueryClient): Promise<void>
 }
 
 /**
+ * Refresh every surface a release-source follow or toggle rewrites.
+ *
+ * Both the create (follow) and enable/disable mutations invalidate the same
+ * reader-view and release-source list prefixes, so they share this helper
+ * instead of duplicating `invalidateQueries` calls in each hook.
+ */
+export async function invalidateReadingPlanReleaseSources(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({
+      queryKey: queryKeys.readingPlans.reader(0).slice(0, 2),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.readingPlans.releaseSources(0).slice(0, 2),
+    }),
+  ])
+}
+
+/**
  * Apply a committed reading plan to the cache and refresh dependent queries.
  * Centralizes the pattern used in useReadingPlans.ts useSaveReadingPlan and
  * CustomCBLBuilder.tsx apply mutation.

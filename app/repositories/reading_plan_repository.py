@@ -69,6 +69,76 @@ class CanonicalIncomingBlocker:
     source_thread_title: str
 
 
+@dataclass(frozen=True, slots=True)
+class PlanThread:
+    """One Thread that a Reading Plan is about."""
+
+    thread_id: int
+    thread_title: str
+    position: int
+
+
+async def list_plan_threads(
+    db: AsyncSession, *, plan_id: int, extra_thread_ids: Collection[int] = ()
+) -> list[PlanThread]:
+    """List the Threads a Reading Plan is about, in plan order.
+
+    A plan's Threads are the Threads of its membership Issues plus any
+    whole-series ``thread`` node the plan references directly. Membership
+    positions order the result; node-only Threads follow in title order.
+
+    Args:
+        db: Database session.
+        plan_id: Plan whose Threads to list.
+        extra_thread_ids: Additional Thread ids referenced by the plan.
+
+    Returns:
+        Plan Threads ordered by first membership position, then title.
+    """
+    membership = (
+        select(
+            Thread.id.label("thread_id"),
+            Thread.title.label("thread_title"),
+            func.min(ReadingPlanIssue.display_position).label("position"),
+        )
+        .join(Issue, Issue.thread_id == Thread.id)
+        .join(ReadingPlanIssue, ReadingPlanIssue.issue_id == Issue.id)
+        .where(ReadingPlanIssue.plan_id == plan_id)
+        .group_by(Thread.id, Thread.title)
+    )
+    rows = list((await db.execute(membership)).all())
+    membership_threads = [
+        PlanThread(
+            thread_id=row.thread_id,
+            thread_title=row.thread_title,
+            position=row.position,
+        )
+        for row in rows
+    ]
+    known = {thread.thread_id for thread in membership_threads}
+    missing = [thread_id for thread_id in extra_thread_ids if thread_id not in known]
+    node_threads: list[PlanThread] = []
+    if missing:
+        node_threads_query = (
+            select(Thread.id.label("thread_id"), Thread.title.label("thread_title"))
+            .where(Thread.id.in_(missing))
+            .order_by(Thread.title)
+        )
+        for row in (await db.execute(node_threads_query)).all():
+            node_threads.append(
+                PlanThread(
+                    thread_id=row.thread_id,
+                    thread_title=row.thread_title,
+                    position=0,
+                )
+            )
+    # Membership threads order by first membership position then title;
+    # node-only threads follow membership threads in title order.
+    membership_threads.sort(key=lambda thread: (thread.position, thread.thread_title))
+    node_threads.sort(key=lambda thread: thread.thread_title)
+    return membership_threads + node_threads
+
+
 async def replace_plan_issues(
     db: AsyncSession, *, plan_id: int, rows: list[ReadingPlanIssue]
 ) -> None:

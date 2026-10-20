@@ -153,6 +153,36 @@ const readerView: ReadingPlanReaderView = {
         last_synced_at: '2026-10-17T05:00:00Z',
       },
     ],
+    release_candidates: [
+      {
+        thread_id: 9,
+        thread_title: 'Ultimate Spider-Man',
+        mapping_state: 'confirmed',
+        external_identity_id: 88,
+        provider_volume_id: '60520-1234',
+        provider_title: 'Ultimate Spider-Man (2024)',
+        provider_publisher: 'Marvel',
+        provider_start_year: 2024,
+        provider_issue_count: 8,
+        mapping_status: 'confirmed',
+        enableable: true,
+        followed: false,
+      },
+      {
+        thread_id: 10,
+        thread_title: 'Unmapped Series',
+        mapping_state: 'unmapped',
+        external_identity_id: null,
+        provider_volume_id: null,
+        provider_title: null,
+        provider_publisher: null,
+        provider_start_year: null,
+        provider_issue_count: null,
+        mapping_status: null,
+        enableable: false,
+        followed: false,
+      },
+    ],
   }
 
 beforeEach(() => {
@@ -191,7 +221,28 @@ describe('ReadingPlanDetailPage', () => {
     expect(newRelease.getByText(/X-Men/)).toBeInTheDocument()
     expect(newRelease.getByText('Target thread #4')).toBeInTheDocument()
     expect(newRelease.getByText(/Last sync:/)).toBeInTheDocument()
-    expect(newRelease.getByRole('button', { name: 'Enabled' })).toBeInTheDocument()
+    expect(
+      newRelease.getByRole('button', { name: 'Stop following X-Men' }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers confirmed release candidates and explains unmapped threads need a mapping', async () => {
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Age of Apocalypse' })
+    const candidate = within(screen.getByTestId('new-release-candidate'))
+    expect(candidate.getByText(/Ultimate Spider-Man \(2024\)/)).toBeInTheDocument()
+    expect(
+      candidate.getByRole('button', { name: 'Follow Ultimate Spider-Man (2024)' }),
+    ).toBeInTheDocument()
+
+    const blocked = within(screen.getByTestId('new-release-blocked-candidate'))
+    expect(blocked.getByText(/No ComicVine volume is mapped/)).toBeInTheDocument()
+    expect(blocked.queryByRole('button', { name: /^Follow/ })).not.toBeInTheDocument()
+    expect(
+      blocked.getByText(/Track issues in this thread first, then map its series/),
+    ).toBeInTheDocument()
+    expect(blocked.queryByRole('link', { name: 'Repair the mapping' })).not.toBeInTheDocument()
   })
 
   it('rejects an invalid plan id before fetching', () => {

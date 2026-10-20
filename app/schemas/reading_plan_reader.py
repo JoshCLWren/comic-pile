@@ -11,6 +11,7 @@ from app.schemas.reading_plan_membership import (
     ReadingPlanProgress,
     ReadingPlanSourceSnapshot,
 )
+from app.schemas.reading_plan_release_source import ReadingPlanReleaseCandidate
 
 ReadingPlanIssueAvailability = Literal["read", "available", "blocked", "later", "excluded", "inactive"]
 
@@ -82,3 +83,4 @@ class ReadingPlanReaderResponse(BaseModel):
     lanes: list[ReadingPlanReaderLane]
     sources: list[ReadingPlanSourceSnapshot]
     release_sources: list[ReadingPlanReleaseSourceStatus] = Field(default_factory=list)
+    release_candidates: list[ReadingPlanReleaseCandidate] = Field(default_factory=list)

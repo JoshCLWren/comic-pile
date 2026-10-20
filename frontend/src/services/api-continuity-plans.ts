@@ -144,6 +144,53 @@ export interface ReadingPlanReleaseSourceStatus {
   last_synced_at: string | null
 }
 
+/** How a plan thread's ComicVine series mapping currently stands. */
+export type ReadingPlanReleaseMappingState = 'confirmed' | 'ambiguous' | 'unmapped'
+
+/**
+ * One ComicVine volume a reader may follow for a plan thread.
+ *
+ * `enableable` is true only for a confirmed series mapping that is not already
+ * followed. Ambiguous and unmapped threads carry no usable volume yet and are
+ * routed to mapping repair instead.
+ */
+export interface ReadingPlanReleaseCandidate {
+  thread_id: number
+  thread_title: string
+  mapping_state: ReadingPlanReleaseMappingState
+  external_identity_id: number | null
+  provider_volume_id: string | null
+  provider_title: string | null
+  provider_publisher: string | null
+  provider_start_year: number | null
+  provider_issue_count: number | null
+  mapping_status: string | null
+  enableable: boolean
+  followed: boolean
+}
+
+/** A followed ComicVine volume and its provider display metadata. */
+export interface ReadingPlanReleaseSource {
+  id: number
+  plan_id: number
+  thread_id: number
+  external_identity_id: number
+  provider: string
+  provider_volume_id: string
+  provider_title: string | null
+  enabled: boolean
+  last_synced_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Payload that subscribes a plan thread to a confirmed ComicVine volume. */
+export interface ReleaseSourceCreateRequest {
+  plan_id: number
+  thread_id: number
+  external_identity_id: number
+}
+
 export interface ReadingPlanReaderView {
   execution_mode?: 'legacy' | 'option_e'
   plan_id: number
@@ -155,6 +202,7 @@ export interface ReadingPlanReaderView {
   lanes: ReadingPlanReaderLane[]
   sources: ReadingPlanSourceSnapshot[]
   release_sources: ReadingPlanReleaseSourceStatus[]
+  release_candidates: ReadingPlanReleaseCandidate[]
 }
 
 
@@ -235,6 +283,11 @@ export function createContinuityPlansApi(client: HttpClient) {
     listReleaseSources: (planId: number) =>
       client.get<ReadingPlanReleaseSourceStatus[]>(
         `/v1/continuity-plans/${planId}/release-sources/reader`,
+      ),
+    createReleaseSource: (payload: ReleaseSourceCreateRequest) =>
+      client.post<ReadingPlanReleaseSource, ReleaseSourceCreateRequest>(
+        '/v1/continuity-plans/release-sources/',
+        payload,
       ),
     updateReleaseSource: (sourceId: number, payload: ReleaseSourceUpdateRequest) =>
       client.patch<ReadingPlanReleaseSourceStatus>(

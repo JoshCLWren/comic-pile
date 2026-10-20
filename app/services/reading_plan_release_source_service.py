@@ -16,26 +16,27 @@ from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesM
 from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.models.thread import Thread
 from app.repositories import reading_plan_release_source_repository as repo
+from app.repositories import reading_plan_repository
 from app.schemas.reading_plan_reader import ReadingPlanReleaseSourceStatus
 from app.schemas.reading_plan_release_source import (
+    ReadingPlanReleaseCandidate,
     ReleaseSourceCreate,
     ReleaseSourceResponse,
     ReleaseSourceUpdate,
 )
 
 
-def _provider_display_metadata(identity: ExternalIdentity) -> dict[str, object]:
-    """Extract reader-safe display metadata from a provider identity.
+def _provider_display_from_metadata(metadata: dict[str, object]) -> dict[str, object]:
+    """Extract reader-safe display metadata from provider identity metadata.
 
     Args:
-        identity: Confirmed ComicVine series identity.
+        metadata: Provider identity metadata payload.
 
     Returns:
         A mapping with title, publisher, start_year, and issue_count when the
         provider metadata carries them. Internal confidence and identity
         evidence fields are never surfaced.
     """
-    metadata = identity.metadata_json or {}
     display: dict[str, object] = {}
     title = metadata.get("name") or metadata.get("title")
     if isinstance(title, str) and title.strip():
@@ -58,6 +59,20 @@ def _provider_display_metadata(identity: ExternalIdentity) -> dict[str, object]:
     elif isinstance(issue_count, str) and issue_count.strip().isdigit():
         display["issue_count"] = int(issue_count.strip())
     return display
+
+
+def _provider_display_metadata(identity: ExternalIdentity) -> dict[str, object]:
+    """Extract reader-safe display metadata from a provider identity.
+
+    Args:
+        identity: Confirmed ComicVine series identity.
+
+    Returns:
+        A mapping with title, publisher, start_year, and issue_count when the
+        provider metadata carries them. Internal confidence and identity
+        evidence fields are never surfaced.
+    """
+    return _provider_display_from_metadata(identity.metadata_json or {})
 
 
 def _to_release_source_status(
@@ -116,6 +131,139 @@ async def list_release_sources_for_reader(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Provider identity not found")
         responses.append(_to_release_source_status(source, identity))
     return responses
+
+
+def _thread_node_ids(nodes_json: list[dict[str, object]]) -> list[int]:
+    """Collect the Thread ids a plan references as whole-series nodes.
+
+    Args:
+        nodes_json: Plan node payload.
+
+    Returns:
+        Thread ids referenced by ``thread``-type nodes, in first-seen order.
+    """
+    thread_ids: list[int] = []
+    for node in nodes_json:
+        if not isinstance(node, dict):
+            continue
+        if node.get("node_type") != "thread":
+            continue
+        ref_id = node.get("ref_id")
+        if isinstance(ref_id, int) and not isinstance(ref_id, bool):
+            thread_ids.append(ref_id)
+    return thread_ids
+
+
+def _candidate_volume_fields(
+    mapping: repo.ThreadSeriesMappingRow,
+) -> dict[str, object]:
+    """Project provider display metadata onto candidate volume fields.
+
+    Args:
+        mapping: Series mapping row with its provider identity metadata.
+
+    Returns:
+        Reader-safe provider fields for the candidate volume.
+    """
+    display = _provider_display_from_metadata(mapping.metadata_json)
+    title = display.get("title")
+    publisher = display.get("publisher")
+    start_year = display.get("start_year")
+    issue_count = display.get("issue_count")
+    return {
+        "external_identity_id": mapping.external_identity_id,
+        "provider_volume_id": mapping.provider_volume_id,
+        "provider_title": title if isinstance(title, str) else None,
+        "provider_publisher": publisher if isinstance(publisher, str) else None,
+        "provider_start_year": start_year if isinstance(start_year, int) else None,
+        "provider_issue_count": issue_count if isinstance(issue_count, int) else None,
+        "mapping_status": mapping.status,
+    }
+
+
+async def list_release_candidates_for_reader(
+    db: AsyncSession, *, plan_id: int, user_id: int
+) -> list[ReadingPlanReleaseCandidate]:
+    """List the ComicVine volumes a plan's threads could follow.
+
+    A candidate is a confirmed ComicVine series mapping for one of the plan's
+    threads that is not already followed. Threads whose ComicVine series
+    mapping is still undecided are reported as ambiguous, and threads with no
+    ComicVine series mapping at all are reported as unmapped, so the reader
+    can be routed to mapping repair instead of being offered a volume whose
+    identity is not settled.
+
+    Args:
+        db: Database session.
+        plan_id: Plan to inspect.
+        user_id: Authenticated plan owner.
+
+    Returns:
+        Candidate volumes in plan thread order.
+    """
+    plan = await _get_plan(db, plan_id=plan_id, user_id=user_id)
+    threads = await reading_plan_repository.list_plan_threads(
+        db,
+        plan_id=plan_id,
+        extra_thread_ids=_thread_node_ids(plan.nodes_json),
+    )
+    if not threads:
+        return []
+    mappings = await repo.list_series_mappings_for_threads(
+        db, thread_ids=[thread.thread_id for thread in threads]
+    )
+    followed = await repo.list_followed_volume_keys(db, plan_id=plan_id)
+
+    by_thread: dict[int, list[repo.ThreadSeriesMappingRow]] = {}
+    for mapping in mappings:
+        if mapping.provider != "comicvine" or mapping.entity_type != "series":
+            continue
+        if mapping.status == "rejected":
+            continue
+        by_thread.setdefault(mapping.thread_id, []).append(mapping)
+
+    candidates: list[ReadingPlanReleaseCandidate] = []
+    for thread in threads:
+        thread_mappings = by_thread.get(thread.thread_id, [])
+        confirmed = [m for m in thread_mappings if m.status == "confirmed"]
+        if confirmed:
+            for mapping in confirmed:
+                if (thread.thread_id, mapping.external_identity_id) in followed:
+                    continue
+                candidates.append(
+                    ReadingPlanReleaseCandidate(
+                        thread_id=thread.thread_id,
+                        thread_title=thread.thread_title,
+                        mapping_state="confirmed",
+                        **_candidate_volume_fields(mapping),
+                        enableable=True,
+                        followed=False,
+                    )
+                )
+            continue
+        if not thread_mappings:
+            candidates.append(
+                ReadingPlanReleaseCandidate(
+                    thread_id=thread.thread_id,
+                    thread_title=thread.thread_title,
+                    mapping_state="unmapped",
+                    enableable=False,
+                    followed=False,
+                )
+            )
+            continue
+        for mapping in thread_mappings:
+            candidates.append(
+                ReadingPlanReleaseCandidate(
+                    thread_id=thread.thread_id,
+                    thread_title=thread.thread_title,
+                    mapping_state="ambiguous",
+                    **_candidate_volume_fields(mapping),
+                    enableable=False,
+                    followed=False,
+                )
+            )
+    return candidates
 
 
 async def _get_plan(db: AsyncSession, *, plan_id: int, user_id: int) -> ContinuityPlan:

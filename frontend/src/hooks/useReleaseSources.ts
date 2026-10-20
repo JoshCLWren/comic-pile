@@ -3,8 +3,10 @@ import { queryKeys } from '../query/queryKeys'
 import {
   continuityPlansApi,
   type ReadingPlanReaderView,
+  type ReleaseSourceCreateRequest,
 } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
+import { invalidateReadingPlanReleaseSources } from '../query/cacheEffects'
 
 /**
  * List the reader's release sources for one plan.
@@ -82,11 +84,36 @@ export function useEnableReleaseSource(deps: EnableReleaseSourceDeps = {}) {
     onSuccess: async () => {
       // Re-fetch every plan reader view that cached this source so the server
       // truth (enable flag and last_synced_at) replaces the optimistic value.
-      const readerPrefix = queryKeys.readingPlans.reader(0).slice(0, 2)
-      await client.invalidateQueries({ queryKey: readerPrefix })
-      await client.invalidateQueries({
-        queryKey: queryKeys.readingPlans.releaseSources(0).slice(0, 2),
-      })
+      await invalidateReadingPlanReleaseSources(client)
+    },
+  })
+}
+
+/**
+ * Dependencies for the follow-candidate mutation, injectable for tests.
+ */
+export interface CreateReleaseSourceDeps {
+  /** Service used for the create request; defaults to the shared API. */
+  api?: Pick<typeof continuityPlansApi, 'createReleaseSource'>
+}
+
+/**
+ * Follow one confirmed ComicVine volume for a plan thread.
+ *
+ * The create endpoint is idempotent and same-owner validated, so a repeated
+ * click returns the existing subscription instead of a duplicate. The reader
+ * view is invalidated on success so the volume moves from the candidate list
+ * into the followed list.
+ */
+export function useCreateReleaseSource(deps: CreateReleaseSourceDeps = {}) {
+  const { api = continuityPlansApi } = deps
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: ReleaseSourceCreateRequest) => api.createReleaseSource(payload),
+    onSuccess: async () => {
+      // Re-fetch the reader view so the volume moves from the candidate list
+      // into the followed list.
+      await invalidateReadingPlanReleaseSources(client)
     },
   })
 }
