@@ -262,7 +262,7 @@ export function IssueList({
 
   const nextUnreadId = thread.next_unread_issue_id
   const readCount = issues.filter((issue) => issue.status === 'read').length
-  const progressPercent = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0
+  const progressPercent = totalCount > 0 && readCount >= 0 && readCount <= totalCount ? Math.round((readCount / totalCount) * 100) : 0
 
   return (
     <div className="border border-[var(--theme-border)] rounded-lg p-4">

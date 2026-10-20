@@ -254,8 +254,21 @@ export default function ThreadDetailView() {
     // value and an explicit null both mean "no known total".
     const totalIssues = thread?.total_issues ?? null
     if (thread && totalIssues !== null) {
+      if (
+        totalIssues <= 0 ||
+        thread.issues_remaining < 0 ||
+        thread.issues_remaining > totalIssues
+      ) {
+        return null
+      }
       const readCount = totalIssues - thread.issues_remaining
+      if (readCount < 0) {
+        return null
+      }
       const percentage = Math.round((readCount / totalIssues) * 100)
+      if (percentage < 0 || percentage > 100) {
+        return null
+      }
       return `${percentage}%`
     }
     return null
@@ -264,7 +277,17 @@ export default function ThreadDetailView() {
   const getIssuesReadCount = (): string | null => {
     const totalIssues = thread?.total_issues ?? null
     if (thread && totalIssues !== null) {
+      if (
+        totalIssues <= 0 ||
+        thread.issues_remaining < 0 ||
+        thread.issues_remaining > totalIssues
+      ) {
+        return null
+      }
       const readCount = totalIssues - thread.issues_remaining
+      if (readCount < 0) {
+        return null
+      }
       return `${readCount} of ${totalIssues} issues read`
     }
     return null
@@ -333,21 +356,33 @@ export default function ThreadDetailView() {
             />
           )}
         </section>
-        {progressPercentage && (
+        {isMigrated && (progressPercentage || (thread.issues_remaining < 0 || thread.issues_remaining > (thread.total_issues ?? 0))) && (
           <div className="surface-panel p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-xs font-black uppercase tracking-widest text-stone-500">
                 Reading Progress
               </span>
-              <span className="text-sm font-black text-amber-400">{progressPercentage}</span>
+              {progressPercentage ? (
+                <span className="text-sm font-black text-amber-400">{progressPercentage}</span>
+              ) : (
+                <span className="text-sm font-black text-red-400">Unknown/inconsistent progress</span>
+              )}
             </div>
-            <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-300"
-                style={{ width: progressPercentage }}
-              />
-            </div>
-            <p className="text-xs text-stone-400">{issuesReadCount}</p>
+            {progressPercentage ? (
+              <>
+                <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-300"
+                    style={{ width: progressPercentage }}
+                  />
+                </div>
+                <p className="text-xs text-stone-400">{issuesReadCount}</p>
+              </>
+            ) : (
+              <p className="text-xs text-red-300">
+                Counter values appear inconsistent ({thread.issues_remaining} of {thread.total_issues} issues remaining).
+              </p>
+            )}
           </div>
         )}
 

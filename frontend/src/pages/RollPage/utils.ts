@@ -76,8 +76,20 @@ export function getProgressPercentage(
   thread: { total_issues?: number | null; issues_remaining?: number | null } | null,
 ): number {
   if (!thread || !thread.total_issues) return 0
-  const readCount = thread.total_issues - (thread.issues_remaining || 0)
-  return Math.round((readCount / thread.total_issues) * 100)
+  if (thread.total_issues <= 0) return 0
+  if (thread.issues_remaining !== undefined && thread.issues_remaining !== null) {
+    if (thread.issues_remaining < 0 || thread.issues_remaining > thread.total_issues) {
+      return 0
+    }
+  }
+  const remaining = thread.issues_remaining ?? 0
+  if (remaining < 0) return 0
+  if (remaining > thread.total_issues) return 0
+  const readCount = thread.total_issues - remaining
+  if (readCount < 0) return 0
+  const percent = Math.round((readCount / thread.total_issues) * 100)
+  if (percent < 0 || percent > 100) return 0
+  return percent
 }
 
 export function createExplosion(): void {
