@@ -5,7 +5,9 @@ thread's reading commitment while adopting only a subset of that series
 locally. This reconciliation re-derives the denormalized counters from the
 issue rows a thread actually owns. It never mutates read history (issue
 status, read timestamps, ratings), never creates or deletes issue rows, and
-never changes thread lifecycle status.
+never changes thread lifecycle status. It also clears stale ``is_blocked``
+flags on threads whose counters report no remaining unread issues, since the
+canonical evaluator can only block a thread with a live next-unread frontier.
 """
 
 from dataclasses import dataclass
@@ -65,19 +67,27 @@ async def reconcile_thread_issue_tracking(
     )
 
     repairs: list[ThreadIssueTrackingRepair] = []
+    affected_user_ids: set[int] = set()
     for thread in drifted_threads:
         adopted_issues = await issue_repository.issues_ordered(db, thread.id)
         total_issues_before = thread.total_issues
         issues_remaining_before = thread.issues_remaining
         next_unread_issue_id_before = thread.next_unread_issue_id
         reading_progress_before = thread.reading_progress
+        is_blocked_before = thread.is_blocked
 
         state = apply_thread_issue_tracking_state(thread, adopted_issues)
+        # Even a thread whose counters did not drift may carry a stale
+        # blocked flag when it has no unread frontier; clear it in place.
+        if state.issues_remaining == 0:
+            thread.is_blocked = False
+
         if (
             total_issues_before == state.total_issues
             and issues_remaining_before == state.issues_remaining
             and next_unread_issue_id_before == state.next_unread_issue_id
             and reading_progress_before == state.reading_progress
+            and is_blocked_before == thread.is_blocked
         ):
             continue
 
@@ -94,6 +104,15 @@ async def reconcile_thread_issue_tracking(
                 reading_progress_after=state.reading_progress,
             )
         )
+        affected_user_ids.add(thread.user_id)
+
+    # Keep denormalized blocked flags consistent with the canonical evaluator
+    # for every user touched by this pass.
+    if affected_user_ids:
+        from comic_pile.dependencies import refresh_user_blocked_status
+
+        for uid in affected_user_ids:
+            await refresh_user_blocked_status(uid, db)
 
     if commit:
         await db.commit()

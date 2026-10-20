@@ -525,6 +525,98 @@ async def delete_threads_by_ids(db: AsyncSession, thread_ids: set[int], user_id:
     )
 
 
+async def fetch_repair_candidate_ids(
+    db: AsyncSession,
+    *,
+    user_id: int | None = None,
+) -> tuple[list[int], list[int]]:
+    """Return candidate thread IDs and affected owner IDs for state repair.
+
+    Args:
+        db: Async database session.
+        user_id: When set, scope candidates to one user.
+
+    Returns:
+        Tuple of (candidate thread IDs ordered by ID, sorted owner IDs).
+    """
+    candidate_selects = [
+        select(Thread.id, Thread.user_id).where(
+            Thread.status == "completed",
+            Thread.total_issues.is_not(None),
+        ),
+        select(Thread.id, Thread.user_id).where(
+            Thread.status == "active",
+            Thread.issues_remaining <= 0,
+        ),
+    ]
+    if user_id is not None:
+        candidate_selects = [stmt.where(Thread.user_id == user_id) for stmt in candidate_selects]
+
+    candidate_ids: list[int] = []
+    owner_ids: set[int] = set()
+    for statement in candidate_selects:
+        result = await db.execute(statement.order_by(Thread.id))
+        for thread_id, owner_id in result.all():
+            candidate_ids.append(thread_id)
+            owner_ids.add(owner_id)
+
+    return candidate_ids, sorted(owner_ids)
+
+
+async def fetch_locked_repair_candidates(
+    db: AsyncSession,
+    thread_ids: list[int],
+) -> list[Thread]:
+    """Load and lock candidate threads for repair by ID.
+
+    Args:
+        db: Async database session.
+        thread_ids: Candidate thread IDs to load and lock.
+
+    Returns:
+        Candidate threads locked for update, ordered by ID.
+    """
+    if not thread_ids:
+        return []
+
+    result = await db.execute(
+        select(Thread).where(Thread.id.in_(thread_ids)).order_by(Thread.id).with_for_update()
+    )
+    return list(result.scalars().all())
+
+
+async def fetch_locked_repair_candidates_rechecked(
+    db: AsyncSession,
+    *,
+    user_id: int | None = None,
+) -> list[Thread]:
+    """Fetch repair candidates after rechecking conditions under locks.
+
+    Locks affected owners' queue locks, then selects and revalidates candidates
+    to avoid overwriting concurrent edits.
+    """
+    candidate_ids, owner_ids = await fetch_repair_candidate_ids(db, user_id=user_id)
+    for owner_id in owner_ids:
+        await acquire_queue_lock(db, owner_id)
+    if not candidate_ids:
+        return []
+
+    # Recheck conditions after acquiring locks to avoid overwriting concurrent edits
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.id.in_(candidate_ids))
+        .where(
+            or_(
+                and_(Thread.status == "completed", Thread.total_issues.is_not(None)),
+                and_(Thread.status == "active", Thread.issues_remaining <= 0),
+            )
+        )
+        .order_by(Thread.id)
+        .with_for_update()
+    )
+    return list(result.scalars().all())
+
+
 async def fetch_threads_for_natural_order_scan(
     db: AsyncSession,
     *,
@@ -569,12 +661,18 @@ async def fetch_threads_with_drifted_issue_tracking(
     user_id: int | None = None,
     limit: int | None = None,
 ) -> list[Thread]:
-    """Return tracked threads whose counters disagree with their issue rows.
+    """Return tracked threads that need reconciliation.
 
-    Only threads already using issue tracking (``total_issues`` set) that own
-    at least one issue row are considered, so old counter-based threads and
-    threads still tracking a declared total without local rows are never
-    reported or migrated by the reconciliation pass.
+    Threads are reported when either their counters disagree with their issue
+    rows or they carry a stale blocked flag: the canonical evaluator only
+    blocks threads with a live next-unread frontier, so ``is_blocked=True`` on
+    a tracked thread without a next-unread pointer is stale even when its
+    counters are otherwise correct.
+
+    Only threads already using issue tracking (``total_issues`` set) are
+    considered, so old counter-based threads are never reported or migrated.
+    Threads that declare a nonzero total without local rows are also left
+    alone, preserving a declared series size until rows are adopted.
 
     Args:
         db: Database session.
@@ -582,7 +680,7 @@ async def fetch_threads_with_drifted_issue_tracking(
         limit: Optional maximum number of threads to return.
 
     Returns:
-        Drifted threads ordered by ID.
+        Threads needing repair ordered by ID.
     """
     issue_stats = (
         select(
@@ -594,33 +692,46 @@ async def fetch_threads_with_drifted_issue_tracking(
         .subquery()
     )
     pointer_issue = aliased(Issue)
+    has_issue_rows = issue_stats.c.thread_id.is_not(None)
+
+    counter_drift = and_(
+        has_issue_rows,
+        or_(
+            Thread.total_issues.is_distinct_from(issue_stats.c.row_count),
+            Thread.issues_remaining != issue_stats.c.unread_count,
+            and_(
+                issue_stats.c.unread_count > 0,
+                Thread.next_unread_issue_id.is_(None),
+            ),
+            and_(
+                issue_stats.c.unread_count == 0,
+                Thread.next_unread_issue_id.is_not(None),
+            ),
+            and_(
+                Thread.next_unread_issue_id.is_not(None),
+                or_(
+                    pointer_issue.status != "unread",
+                    pointer_issue.thread_id != Thread.id,
+                ),
+            ),
+        ),
+    )
+    # Empty tracked threads (``total_issues == 0``) and all-read threads with
+    # correct counters can still hold a stale blocked flag. The canonical
+    # evaluator can only block a thread with a live next-unread frontier, so
+    # ``is_blocked`` with no pointer is stale regardless of the counters.
+    stale_blocked_flag = and_(
+        Thread.is_blocked.is_(True),
+        Thread.next_unread_issue_id.is_(None),
+        or_(has_issue_rows, Thread.total_issues == 0),
+    )
 
     query = (
         select(Thread)
-        .join(issue_stats, issue_stats.c.thread_id == Thread.id)
+        .outerjoin(issue_stats, issue_stats.c.thread_id == Thread.id)
         .outerjoin(pointer_issue, pointer_issue.id == Thread.next_unread_issue_id)
         .where(Thread.total_issues.is_not(None))
-        .where(
-            or_(
-                Thread.total_issues.is_distinct_from(issue_stats.c.row_count),
-                Thread.issues_remaining != issue_stats.c.unread_count,
-                and_(
-                    issue_stats.c.unread_count > 0,
-                    Thread.next_unread_issue_id.is_(None),
-                ),
-                and_(
-                    issue_stats.c.unread_count == 0,
-                    Thread.next_unread_issue_id.is_not(None),
-                ),
-                and_(
-                    Thread.next_unread_issue_id.is_not(None),
-                    or_(
-                        pointer_issue.status != "unread",
-                        pointer_issue.thread_id != Thread.id,
-                    ),
-                ),
-            )
-        )
+        .where(or_(counter_drift, stale_blocked_flag))
         .order_by(Thread.id)
     )
     if user_id is not None:

@@ -75,4 +75,8 @@ def apply_thread_issue_tracking_state(
     thread.issues_remaining = state.issues_remaining
     thread.next_unread_issue_id = state.next_unread_issue_id
     thread.reading_progress = state.reading_progress
+    # A thread with no unread issues cannot be blocked by a dependency: its
+    # next-unread frontier is empty, so any stored blocked flag is stale.
+    if state.issues_remaining == 0:
+        thread.is_blocked = False
     return state
