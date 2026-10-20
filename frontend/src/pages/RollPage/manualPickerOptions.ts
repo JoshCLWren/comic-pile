@@ -117,7 +117,9 @@ function pickerDetailSegments(thread: ManualPickerThread): string[] {
   const segments: string[] = []
   const nextIssueNumber = thread.next_unread_issue_number ?? thread.issue_number
   if (nextIssueNumber) segments.push(`Up next: #${nextIssueNumber}`)
-  if (typeof thread.issues_remaining === 'number') {
+  // `!= null` is the domain check for the optional count: absent (null/undefined)
+  // rows show no remaining count, while a real 0 still does.
+  if (thread.issues_remaining != null) {
     segments.push(
       `${thread.issues_remaining} issue${thread.issues_remaining === 1 ? '' : 's'} remaining`,
     )
@@ -193,11 +195,11 @@ export function buildManualPickerOptions(params: {
   resolveResidualCollisions(rows)
 
   return {
-    activeOptions: rows
-      .filter((row) => row.group === 'active')
-      .map((row) => ({ id: row.thread.id, label: row.label })),
-    snoozedOptions: rows
-      .filter((row) => row.group === 'snoozed')
-      .map((row) => ({ id: row.thread.id, label: row.label })),
+    activeOptions: rows.flatMap((row) =>
+      row.group === 'active' ? [{ id: row.thread.id, label: row.label }] : [],
+    ),
+    snoozedOptions: rows.flatMap((row) =>
+      row.group === 'snoozed' ? [{ id: row.thread.id, label: row.label }] : [],
+    ),
   }
 }
