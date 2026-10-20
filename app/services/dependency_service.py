@@ -14,7 +14,10 @@ from fastapi import HTTPException
 from app.config import get_reading_execution_settings
 from app.models import Dependency, Issue, Thread
 from app.repositories import dependency_repository, issue_repository
-from app.services.dependency_cycle import find_thread_cycle_issue_ids
+from app.services.dependency_cycle import (
+    build_reading_order_graph,
+    find_thread_cycle_issue_ids,
+)
 from app.services.ownership_guard import require_dependency_endpoints_owned
 from app.services.reading_eligibility_service import (
     get_execution_eligibility,
@@ -567,13 +570,14 @@ async def get_thread_connected_threads(
                         connected_by_thread[tid]["types"].add("blocked_by")
                         connected_by_thread[tid]["dependency_ids"].add(dep.id)
 
-    # Circularity is an issue-level verdict: only a real cycle in the
-    # issue -> issue dependency graph makes a reading order impossible. Two
+    # Circularity is a verdict on the effective reading precedence graph: the
+    # stored dependencies plus the required within-series issue order. Two
     # series that point at each other in both directions through different
-    # issues, such as an interleaved chain, are not a cycle (issue #3596).
-    graph_edges, graph_issue_threads = await dependency_repository.get_reader_dependency_graph(
-        db, user_id
-    )
+    # issues, such as a forward interleaving, are not a cycle; a backward chain
+    # closes a real loop because the earlier issue in the series must be read
+    # first (issue #3596).
+    graph = await dependency_repository.get_reader_dependency_graph(db, user_id)
+    graph_edges, graph_issue_threads = build_reading_order_graph(graph.edges, graph.issues)
     cyclic_issue_ids = find_thread_cycle_issue_ids(
         graph_edges, graph_issue_threads, thread_id
     )

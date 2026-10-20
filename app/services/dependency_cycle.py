@@ -1,14 +1,69 @@
 """Issue-level dependency cycle detection for connected-thread presentation.
 
-Two series can point at each other in both directions without any issue-level
-loop existing. An interleaved chain such as ``USM#22 -> TYI#1 -> USM#23``
-links the same two series in both directions while the issue graph stays
-acyclic, so the reading order stays possible. Only a real cycle in the
-issue -> issue dependency graph makes a reading order impossible, so
-circularity is decided from the strongly connected components of that graph.
+Circularity is decided from the effective reading precedence graph, not from
+the stored dependency rows alone. Within a series the reader reaches issues in
+``position`` order, so an earlier unread issue is an implicit prerequisite of
+the next unread issue. Two series can point at each other in both directions
+without any impossible order existing: an interleaved chain such as
+``USM#22 -> TYI#1 -> USM#23`` stays acyclic once the required
+``USM#22 -> USM#23`` order is included. A backward chain such as
+``A#2 -> B#1 -> A#1`` is different: with ``A#1`` before ``A#2`` the implicit
+order closes a genuine loop, so no issue in it can be read first.
 """
 
 from collections.abc import Iterable
+from itertools import pairwise
+
+
+def build_reading_order_graph(
+    dependency_edges: Iterable[tuple[int, int]],
+    issues: Iterable[tuple[int, int, int, str]],
+) -> tuple[list[tuple[int, int]], dict[int, int]]:
+    """Combine stored prerequisites with the required within-series order.
+
+    Only unread issues participate. A stored prerequisite whose source issue is
+    already read is satisfied and no longer constrains the reader, and a read
+    issue can no longer be blocked, so both endpoints of a live constraint are
+    unread. Earlier unread issues in a series then precede later ones through
+    consecutive ``position`` pairs, transitively covering every earlier/later
+    relation that remains.
+
+    Args:
+        dependency_edges: Stored ``(source_issue_id, target_issue_id)`` pairs.
+            ``source`` must be read before ``target``.
+        issues: ``(issue_id, thread_id, position, status)`` for the issues
+            those edges connect.
+
+    Returns:
+        Tuple of live precedence edges and the thread that owns each issue.
+    """
+    issue_thread_ids: dict[int, int] = {}
+    unread_by_thread: dict[int, list[tuple[int, int]]] = {}
+    for issue_id, thread_id, position, status in issues:
+        issue_thread_ids[issue_id] = thread_id
+        if status != "read":
+            unread_by_thread.setdefault(thread_id, []).append((position, issue_id))
+
+    unread_issue_ids = {
+        issue_id
+        for thread_issues in unread_by_thread.values()
+        for _position, issue_id in thread_issues
+    }
+
+    edges: list[tuple[int, int]] = [
+        (source_issue_id, target_issue_id)
+        for source_issue_id, target_issue_id in dependency_edges
+        if source_issue_id in unread_issue_ids and target_issue_id in unread_issue_ids
+    ]
+
+    for thread_issues in unread_by_thread.values():
+        thread_issues.sort()
+        for (_earlier_position, earlier_issue_id), (_later_position, later_issue_id) in pairwise(
+            thread_issues
+        ):
+            edges.append((earlier_issue_id, later_issue_id))
+
+    return edges, issue_thread_ids
 
 
 def find_cyclic_component_members(

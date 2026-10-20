@@ -5,10 +5,28 @@ return ORM models or plain values; callers (services) own transactions.
 """
 
 
+from dataclasses import dataclass
+
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
+
+
+@dataclass(frozen=True)
+class ReaderDependencyGraph:
+    """Reader-scoped dependency edges together with the issues they connect.
+
+    Attributes:
+        edges: Stored ``(source_issue_id, target_issue_id)`` prerequisite pairs.
+        issues: ``(issue_id, thread_id, position, status)`` for every issue on
+            either side of ``edges``. ``position`` is the canonical
+            within-series reading order needed to complete the precedence
+            graph.
+    """
+
+    edges: tuple[tuple[int, int], ...]
+    issues: tuple[tuple[int, int, int, str], ...]
 
 
 async def get_dependency(db: AsyncSession, dependency_id: int) -> Dependency | None:
@@ -119,22 +137,23 @@ async def get_thread_connected_dependencies(
 
 async def get_reader_dependency_graph(
     db: AsyncSession, user_id: int
-) -> tuple[list[tuple[int, int]], dict[int, int]]:
-    """Get every dependency edge touching one reader's issues.
+) -> ReaderDependencyGraph:
+    """Get every dependency edge touching one reader's issues, with issue order.
 
     The issue -> issue dependency graph is the authority for circularity: a
     cycle in it is the only reading order that is impossible. Reading the
     whole reader-scoped graph keeps that verdict independent of which thread
-    the caller happens to be looking at.
+    the caller happens to be looking at. Each endpoint's series position
+    travels with the edge because the required within-series order is an
+    implicit precedence constraint that the stored rows do not contain.
 
     Args:
         db: Database session.
         user_id: Reader whose dependency edges are read.
 
     Returns:
-        Tuple of (edges, issue_thread_ids). Edges are
-        ``(source_issue_id, target_issue_id)`` pairs and issue_thread_ids maps
-        every issue on those edges to the thread that owns it.
+        Stored edges plus the issue rows needed to complete the precedence
+        graph with the required within-series order.
     """
     source_issue = Issue.__table__.alias("graph_source_issue")
     target_issue = Issue.__table__.alias("graph_target_issue")
@@ -145,8 +164,6 @@ async def get_reader_dependency_graph(
         select(
             Dependency.source_issue_id.label("source_issue_id"),
             Dependency.target_issue_id.label("target_issue_id"),
-            source_thread.c.id.label("source_thread_id"),
-            target_thread.c.id.label("target_thread_id"),
         )
         .join(source_issue, source_issue.c.id == Dependency.source_issue_id)
         .join(source_thread, source_thread.c.id == source_issue.c.thread_id)
@@ -161,13 +178,26 @@ async def get_reader_dependency_graph(
     )
 
     edges: list[tuple[int, int]] = []
-    issue_thread_ids: dict[int, int] = {}
-    for source_issue_id, target_issue_id, source_thread_id, target_thread_id in result.all():
+    issue_ids: set[int] = set()
+    for source_issue_id, target_issue_id in result.all():
         edges.append((source_issue_id, target_issue_id))
-        issue_thread_ids[source_issue_id] = source_thread_id
-        issue_thread_ids[target_issue_id] = target_thread_id
+        issue_ids.add(source_issue_id)
+        issue_ids.add(target_issue_id)
 
-    return edges, issue_thread_ids
+    issue_result = await db.execute(
+        select(
+            Issue.id.label("issue_id"),
+            Issue.thread_id.label("thread_id"),
+            Issue.position.label("position"),
+            Issue.status.label("status"),
+        ).where(Issue.id.in_(issue_ids))
+    )
+    issues = tuple(
+        (row.issue_id, row.thread_id, row.position, row.status)
+        for row in issue_result.all()
+    )
+
+    return ReaderDependencyGraph(edges=tuple(edges), issues=issues)
 
 
 async def get_dependency_by_ids(
