@@ -470,8 +470,8 @@ describe('CreatorDetailPage highlights (#3092)', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Highest-rated issues' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Lowest-rated issues' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Best Run #7/ })).toHaveAttribute('href', '/thread/9')
-    expect(screen.getByRole('link', { name: /Weak Run #2/ })).toHaveAttribute('href', '/thread/11')
+    expect(screen.getByRole('link', { name: /Best Run #7/ })).toHaveAttribute('href', '/thread/9?issue=91#issue-91')
+    expect(screen.getByRole('link', { name: /Weak Run #2/ })).toHaveAttribute('href', '/thread/11?issue=92#issue-92')
   })
 
   it('explains a thin series sample instead of ranking series', () => {

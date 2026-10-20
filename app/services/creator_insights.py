@@ -97,6 +97,49 @@ def build_series_insight(aggregate: SeriesAggregate) -> CreatorSeriesInsight:
     )
 
 
+def _filter_aggregate_to_headline(
+    aggregate: SeriesAggregate,
+    *,
+    rated_issue_ids: frozenset[int],
+) -> SeriesAggregate | None:
+    """Return a filtered copy of the aggregate containing only headline-eligible issues.
+
+    The aggregate's `rated_issue_ids` and `ratings` include all credited roles,
+    but the headline average only counts issues in `rated_issue_ids`. This
+    function builds a new aggregate with only those headline-eligible issues so
+    that series highlights reflect the same ratings the headline average uses.
+
+    Args:
+        aggregate: The original series aggregate.
+        rated_issue_ids: Headline-eligible rated issue ids (the rated subset).
+
+    Returns:
+        A new SeriesAggregate with only headline-eligible issues, or None if
+        fewer than MIN_SERIES_SAMPLE headline-eligible issues exist.
+    """
+    # Filter to only headline-eligible rated issues
+    headline_issue_ids = [iid for iid in aggregate.rated_issue_ids if iid in rated_issue_ids]
+    if len(headline_issue_ids) < MIN_SERIES_SAMPLE:
+        return None
+
+    # Map issue_id -> rating for filtering ratings list
+    id_to_rating = dict(zip(aggregate.rated_issue_ids, aggregate.ratings, strict=False))
+    headline_ratings = [id_to_rating[iid] for iid in headline_issue_ids]
+
+    # Create a new aggregate with only headline-eligible data
+    return SeriesAggregate(
+        thread_id=aggregate.thread_id,
+        thread_title=aggregate.thread_title,
+        attributed_issue_count=aggregate.attributed_issue_count,
+        rated_issue_ids=headline_issue_ids,
+        ratings=headline_ratings,
+        roles=aggregate.roles,
+        unread_issue_count=aggregate.unread_issue_count,
+        read_unrated_issue_count=aggregate.read_unrated_issue_count,
+        metadata_complete=aggregate.metadata_complete,
+    )
+
+
 def compute_creator_insights(
     inputs: CreatorSummaryInputs,
     *,
@@ -119,12 +162,14 @@ def compute_creator_insights(
     if not rated_issue_ids:
         return None
 
-    qualifying = [
-        aggregate
+    # Filter each aggregate to only headline-eligible issues before qualifying
+    filtered_aggregates = [
+        _filter_aggregate_to_headline(aggregate, rated_issue_ids=rated_issue_ids)
         for aggregate in series_aggregates
         if aggregate.metadata_complete
-        and len(set(aggregate.rated_issue_ids) & rated_issue_ids) >= MIN_SERIES_SAMPLE
     ]
+    qualifying = [agg for agg in filtered_aggregates if agg is not None]
+
     excluded_incomplete = sum(
         1
         for aggregate in series_aggregates
