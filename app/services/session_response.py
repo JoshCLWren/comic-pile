@@ -235,6 +235,21 @@ async def get_session_with_thread_safe(
 
     last_rolled_result = event.result if event else None
 
+    # Aggregate all rate events to get issues_read and last_rating
+    rate_events_result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "rate")
+        .order_by(Event.timestamp, Event.id)
+    )
+    rate_events = rate_events_result.scalars().all()
+    
+    # Compute total issues read from all rate events
+    total_issues_read = sum(ev.issues_read or 0 for ev in rate_events)
+    
+    # Get the last rating from the most recent rate event
+    last_rating = rate_events[-1].rating if rate_events and rate_events[-1].rating else None
+
     # Prefer pending thread when present so UI and rate target stay consistent.
     if session.pending_thread_id is not None:
         pending_result = await db.execute(
@@ -258,6 +273,8 @@ async def get_session_with_thread_safe(
                 last_rolled_result=last_rolled_result,
                 total_issues=pending_thread.total_issues,
                 reading_progress=pending_thread.reading_progress,
+                issues_read=total_issues_read if total_issues_read > 0 else None,
+                last_rating=last_rating,
                 issue_id=issue_id,
                 issue_number=issue_number,
                 next_issue_id=issue_id,
@@ -283,6 +300,8 @@ async def get_session_with_thread_safe(
                 last_rolled_result=last_rolled_result,
                 total_issues=thread.total_issues,
                 reading_progress=thread.reading_progress,
+                issues_read=total_issues_read if total_issues_read > 0 else None,
+                last_rating=last_rating,
                 issue_id=issue_id,
                 issue_number=issue_number,
                 next_issue_id=issue_id,
@@ -324,6 +343,22 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
 
     issues_remaining = await thread.get_issues_remaining(db)
     issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
+    
+    # Aggregate all rate events to get issues_read and last_rating
+    rate_events_result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "rate")
+        .order_by(Event.timestamp, Event.id)
+    )
+    rate_events = rate_events_result.scalars().all()
+    
+    # Compute total issues read from all rate events
+    total_issues_read = sum(ev.issues_read or 0 for ev in rate_events)
+    
+    # Get the last rating from the most recent rate event
+    last_rating = rate_events[-1].rating if rate_events and rate_events[-1].rating else None
+    
     tags = []
     if user_id:
         tags_map = await TagInheritanceService(db).get_threads_direct_tags(user_id, [thread.id])
@@ -337,6 +372,8 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
         last_rolled_result=event.result,
         total_issues=thread.total_issues,
         reading_progress=thread.reading_progress,
+        issues_read=total_issues_read if total_issues_read > 0 else None,
+        last_rating=last_rating,
         issue_id=issue_id,
         issue_number=issue_number,
         next_issue_id=issue_id,
