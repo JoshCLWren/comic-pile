@@ -81,6 +81,7 @@ def normalize_notes_value(notes: str | None) -> str | None:
         return None
     return notes
 
+
 if TYPE_CHECKING:
     from app.models.event import Event
     from app.models.user import User
