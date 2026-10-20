@@ -618,10 +618,10 @@ export function validateBaselineRecord(record) {
   if (!/^https?:\/\/[^\s]+$/.test(String(record.origin ?? ''))) {
     problems.push('The baseline record must name the audited origin.')
   }
-  if (record.recordedAt !== null && record.recordedAt !== undefined) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(record.recordedAt))) {
-      problems.push('recordedAt must be an ISO date such as 2026-10-19.')
-    }
+  if (record.recordedAt === null || record.recordedAt === undefined) {
+    problems.push('recordedAt has not been recorded yet.')
+  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(String(record.recordedAt))) {
+    problems.push('recordedAt must be an ISO date such as 2026-10-19.')
   }
   if (record.linkPolicy !== REQUIRED_LINK_POLICY) {
     problems.push(
@@ -650,33 +650,40 @@ export function validateBaselineRecord(record) {
     }
   }
   const opportunities = record.offsiteOpportunities
-  if (!Array.isArray(opportunities) || opportunities.length < MINIMUM_OFFSITE_OPPORTUNITIES) {
+  const validOpportunities = Array.isArray(opportunities) 
+    ? opportunities.filter(o => o !== null && o !== undefined)
+    : []
+  
+  if (validOpportunities.length < MINIMUM_OFFSITE_OPPORTUNITIES) {
     problems.push(
       `At least ${MINIMUM_OFFSITE_OPPORTUNITIES} realistic off-site discovery opportunities must be identified.`,
     )
-  } else {
-    for (const opportunity of opportunities) {
-      const name = opportunity === null || opportunity === undefined ? '' : String(opportunity.name ?? '')
-      const url = opportunity === null || opportunity === undefined ? '' : String(opportunity.url ?? '')
-      const relevance =
-        opportunity === null || opportunity === undefined ? '' : String(opportunity.relevance ?? '')
-      if (name.length === 0) {
-        problems.push('Every off-site opportunity needs a name.')
-      }
-      if (!/^https?:\/\/[^\s]+$/.test(url)) {
-        problems.push(`The off-site opportunity "${name}" needs an absolute URL.`)
-      }
-      if (relevance.length === 0) {
-        problems.push(`The off-site opportunity "${name}" needs a relevance reason.`)
-      }
-      if (opportunity.paid === true) {
-        problems.push(`The off-site opportunity "${name}" is marked as a paid link.`)
-      }
-      if (!OFFSITE_OUTREACH_STATES.includes(String(opportunity.outreach ?? ''))) {
-        problems.push(
-          `The off-site opportunity "${name}" needs an outreach state of ${OFFSITE_OUTREACH_STATES.join(', ')}.`,
-        )
-      }
+  }
+  
+  for (const opportunity of opportunities) {
+    if (opportunity === null || opportunity === undefined) {
+      problems.push('Every off-site opportunity must be an object with name, url, and relevance fields.')
+      continue
+    }
+    const name = String(opportunity.name ?? '')
+    const url = String(opportunity.url ?? '')
+    const relevance = String(opportunity.relevance ?? '')
+    if (name.length === 0) {
+      problems.push('Every off-site opportunity needs a name.')
+    }
+    if (!/^https?:\/\/[^\s]+$/.test(url)) {
+      problems.push(`The off-site opportunity "${name}" needs an absolute URL.`)
+    }
+    if (relevance.length === 0) {
+      problems.push(`The off-site opportunity "${name}" needs a relevance reason.`)
+    }
+    if (opportunity.paid === true) {
+      problems.push(`The off-site opportunity "${name}" is marked as a paid link.`)
+    }
+    if (!OFFSITE_OUTREACH_STATES.includes(String(opportunity.outreach ?? ''))) {
+      problems.push(
+        `The off-site opportunity "${name}" needs an outreach state of ${OFFSITE_OUTREACH_STATES.join(', ')}.`,
+      )
     }
   }
   return problems
@@ -692,6 +699,7 @@ export function validateBaselineRecord(record) {
 export function pendingOperatorSteps(record, readProblems = []) {
   if (record === null || record === undefined) {
     return [
+      ...readProblems,
       'Create the launch baseline record and verify Google Search Console ownership.',
       'Submit the production sitemap.',
       'Record the baseline index and search metrics.',

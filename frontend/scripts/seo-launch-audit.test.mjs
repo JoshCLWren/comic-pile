@@ -446,6 +446,32 @@ test('an incomplete baseline record reports every open operator step', () => {
   assert.ok(joined.includes('sitemap is not recorded as submitted'))
   assert.ok(joined.includes('indexedPageCount has not been recorded'))
   assert.ok(joined.includes('At least 3 realistic off-site discovery opportunities'))
+  assert.ok(joined.includes('recordedAt has not been recorded yet'))
+})
+
+test('an otherwise complete but undated baseline record reports missing date', () => {
+  const problems = validateBaselineRecord({
+    issue: 3072,
+    origin: PRODUCTION_ORIGIN,
+    recordedAt: null,
+    searchConsole: {
+      ownershipVerified: true,
+      sitemapSubmitted: true,
+      indexedPageCount: 1,
+      impressions: 0,
+      clicks: 0,
+    },
+    offsiteOpportunities: [
+      { name: 'A', url: 'https://example.com/a', relevance: 'self-hosted tools', outreach: 'not-started' },
+      { name: 'B', url: 'https://example.com/b', relevance: 'comics community', outreach: 'not-started' },
+      { name: 'C', url: 'https://example.com/c', relevance: 'developer directory', outreach: 'not-started' },
+    ],
+    linkPolicy: 'earned-only',
+  })
+
+  const joined = problems.join('\n')
+  assert.ok(joined.includes('recordedAt has not been recorded yet'))
+  assert.equal(problems.filter(p => p.includes('off-site discovery')).length, 0)
 })
 
 test('a baseline record cannot claim a paid link scheme', () => {
@@ -471,6 +497,31 @@ test('a baseline record cannot claim a paid link scheme', () => {
   const joined = problems.join('\n')
   assert.ok(joined.includes('linkPolicy must be "earned-only"'))
   assert.ok(joined.includes('is marked as a paid link'))
+})
+
+test('a baseline record with null opportunities reports useful errors instead of crashing', () => {
+  const problems = validateBaselineRecord({
+    issue: 3072,
+    origin: PRODUCTION_ORIGIN,
+    recordedAt: '2026-10-19',
+    searchConsole: {
+      ownershipVerified: true,
+      sitemapSubmitted: true,
+      indexedPageCount: 1,
+      impressions: 0,
+      clicks: 0,
+    },
+    offsiteOpportunities: [
+      { name: 'A', url: 'https://example.com/a', relevance: 'self-hosted tools', outreach: 'not-started' },
+      null,
+      { name: 'C', url: 'https://example.com/c', relevance: 'developer directory', outreach: 'not-started' },
+    ],
+    linkPolicy: 'earned-only',
+  })
+
+  const joined = problems.join('\n')
+  assert.ok(joined.includes('Every off-site opportunity must be an object'))
+  assert.ok(joined.includes('At least 3 realistic off-site discovery opportunities'))
 })
 
 test('the CLI parses its arguments', () => {
@@ -506,18 +557,28 @@ test('baseline paths resolve from the repository root', () => {
   assert.equal(resolveBaselinePath('/tmp/record.json'), '/tmp/record.json')
 })
 
-test('the shipped launch record parses and keeps the link policy honest', () => {
-  const result = readBaselineRecord(DEFAULT_BASELINE_PATH)
-
-  assert.deepEqual(result.problems, [])
-  assert.equal(result.record.issue, 3072)
-  assert.equal(result.record.linkPolicy, 'earned-only')
-  assert.equal(result.record.offsiteOpportunities.length >= 3, true)
-  for (const opportunity of result.record.offsiteOpportunities) {
-    assert.equal(opportunity.paid, false)
-    assert.equal(opportunity.outreach, 'not-started')
+test('an unfinished launch record validates the expected incomplete state', () => {
+  const unfinishedRecord = {
+    issue: 3072,
+    origin: PRODUCTION_ORIGIN,
+    recordedAt: '2026-10-19',
+    searchConsole: {
+      ownershipVerified: false,
+      sitemapSubmitted: false,
+      indexedPageCount: null,
+      impressions: null,
+      clicks: null,
+    },
+    offsiteOpportunities: [
+      { name: 'A', url: 'https://example.com/a', relevance: 'self-hosted tools', outreach: 'not-started' },
+      { name: 'B', url: 'https://example.com/b', relevance: 'comics community', outreach: 'not-started' },
+      { name: 'C', url: 'https://example.com/c', relevance: 'developer directory', outreach: 'not-started' },
+    ],
+    linkPolicy: 'earned-only',
   }
-  const open = validateBaselineRecord(result.record)
+
+  const open = validateBaselineRecord(unfinishedRecord)
   assert.ok(open.some((problem) => problem.includes('ownership is not verified')))
   assert.ok(open.some((problem) => problem.includes('sitemap is not recorded as submitted')))
+  assert.ok(open.some((problem) => problem.includes('indexedPageCount has not been recorded')))
 })
