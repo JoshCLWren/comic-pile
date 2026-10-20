@@ -190,7 +190,7 @@ export function NewReleasesSection({
                 <li
                   key={`${candidate.thread_id}-${candidate.external_identity_id}`}
                   data-testid="new-release-candidate"
-                  className="flex flex-col gap-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between surface-panel"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-[var(--theme-text-primary)]">
@@ -237,7 +237,7 @@ export function NewReleasesSection({
                 <li
                   key={`blocked-${candidate.thread_id}-${candidate.external_identity_id ?? 0}`}
                   data-testid="new-release-blocked-candidate"
-                  className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
+                  className="p-3 surface-panel"
                 >
                   <p className="truncate text-sm font-semibold text-[var(--theme-text-primary)]">
                     {candidate.provider_volume_id
@@ -250,13 +250,24 @@ export function NewReleasesSection({
                   <p className="mt-1 text-[11px] text-[var(--theme-text-dim)]">
                     {needsReview
                       ? 'This volume mapping is not confirmed yet, so it cannot be followed.'
-                      : 'No ComicVine volume is mapped to this thread yet, so it cannot be followed.'}{' '}
-                    <Link
-                      to={MAPPING_REPAIR_PATH}
-                      className="text-[var(--theme-continuity-accent)] underline hover:text-[var(--theme-text-primary)]"
-                    >
-                      Repair the mapping
-                    </Link>
+                      : 'No ComicVine volume is mapped to this thread yet, so it cannot be followed.'}
+                    {candidate.external_identity_id === null ? (
+                      <>
+                        {' '}
+                        Track issues in this thread first, then map its series to follow new
+                        releases.
+                      </>
+                    ) : (
+                      <>
+                        {' '}
+                        <Link
+                          to={MAPPING_REPAIR_PATH}
+                          className="text-[var(--theme-continuity-accent)] underline hover:text-[var(--theme-text-primary)]"
+                        >
+                          Repair the mapping
+                        </Link>
+                      </>
+                    )}
                   </p>
                 </li>
               )

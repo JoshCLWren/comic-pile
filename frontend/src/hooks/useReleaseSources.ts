@@ -6,6 +6,7 @@ import {
   type ReleaseSourceCreateRequest,
 } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
+import { invalidateReadingPlanReleaseSources } from '../query/cacheEffects'
 
 /**
  * List the reader's release sources for one plan.
@@ -83,11 +84,7 @@ export function useEnableReleaseSource(deps: EnableReleaseSourceDeps = {}) {
     onSuccess: async () => {
       // Re-fetch every plan reader view that cached this source so the server
       // truth (enable flag and last_synced_at) replaces the optimistic value.
-      const readerPrefix = queryKeys.readingPlans.reader(0).slice(0, 2)
-      await client.invalidateQueries({ queryKey: readerPrefix })
-      await client.invalidateQueries({
-        queryKey: queryKeys.readingPlans.releaseSources(0).slice(0, 2),
-      })
+      await invalidateReadingPlanReleaseSources(client)
     },
   })
 }
@@ -114,11 +111,9 @@ export function useCreateReleaseSource(deps: CreateReleaseSourceDeps = {}) {
   return useMutation({
     mutationFn: (payload: ReleaseSourceCreateRequest) => api.createReleaseSource(payload),
     onSuccess: async () => {
-      const readerPrefix = queryKeys.readingPlans.reader(0).slice(0, 2)
-      await client.invalidateQueries({ queryKey: readerPrefix })
-      await client.invalidateQueries({
-        queryKey: queryKeys.readingPlans.releaseSources(0).slice(0, 2),
-      })
+      // Re-fetch the reader view so the volume moves from the candidate list
+      // into the followed list.
+      await invalidateReadingPlanReleaseSources(client)
     },
   })
 }

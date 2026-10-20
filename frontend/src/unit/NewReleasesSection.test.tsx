@@ -273,7 +273,7 @@ describe('NewReleasesSection', () => {
     expect(repairLink).toHaveAttribute('href', '/queue')
   })
 
-  it('does not offer an unmapped thread as followable but links to repair', () => {
+  it('does not offer an unmapped thread as followable but explains the required step', () => {
     render(
       <NewReleasesSection planId={12} sources={[]} candidates={[unmappedCandidate]} />,
       { wrapper: createWrapper() },
@@ -283,10 +283,19 @@ describe('NewReleasesSection', () => {
       screen.queryByRole('button', { name: /^Follow/ }),
     ).not.toBeInTheDocument()
     expect(screen.getByText(/No ComicVine volume is mapped to this thread/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Repair the mapping' })).toHaveAttribute(
-      'href',
-      '/queue',
+    expect(screen.queryByRole('link', { name: 'Repair the mapping' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Track issues in this thread first/)).toBeInTheDocument()
+  })
+
+  it('offers an ambiguous mapping a Repair the mapping link', () => {
+    render(
+      <NewReleasesSection planId={12} sources={[]} candidates={[ambiguousCandidate]} />,
+      { wrapper: createWrapper() },
     )
+    expect(screen.getByTestId('new-release-blocked-candidate')).toBeInTheDocument()
+    expect(screen.getByText(/not confirmed yet/)).toBeInTheDocument()
+    const repairLink = screen.getByRole('link', { name: 'Repair the mapping' })
+    expect(repairLink).toHaveAttribute('href', '/queue')
   })
 
   it('shows a visible error when following a candidate fails', () => {

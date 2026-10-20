@@ -107,7 +107,7 @@ async def list_plan_threads(
         .group_by(Thread.id, Thread.title)
     )
     rows = list((await db.execute(membership)).all())
-    threads = [
+    membership_threads = [
         PlanThread(
             thread_id=row.thread_id,
             thread_title=row.thread_title,
@@ -115,24 +115,28 @@ async def list_plan_threads(
         )
         for row in rows
     ]
-    known = {thread.thread_id for thread in threads}
+    known = {thread.thread_id for thread in membership_threads}
     missing = [thread_id for thread_id in extra_thread_ids if thread_id not in known]
+    node_threads: list[PlanThread] = []
     if missing:
-        node_threads = (
+        node_threads_query = (
             select(Thread.id.label("thread_id"), Thread.title.label("thread_title"))
             .where(Thread.id.in_(missing))
             .order_by(Thread.title)
         )
-        for row in (await db.execute(node_threads)).all():
-            threads.append(
+        for row in (await db.execute(node_threads_query)).all():
+            node_threads.append(
                 PlanThread(
                     thread_id=row.thread_id,
                     thread_title=row.thread_title,
                     position=0,
                 )
             )
-    threads.sort(key=lambda thread: (thread.position, thread.thread_title))
-    return threads
+    # Membership threads order by first membership position then title;
+    # node-only threads follow membership threads in title order.
+    membership_threads.sort(key=lambda thread: (thread.position, thread.thread_title))
+    node_threads.sort(key=lambda thread: thread.thread_title)
+    return membership_threads + node_threads
 
 
 async def replace_plan_issues(
