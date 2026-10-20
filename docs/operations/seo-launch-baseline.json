@@ -1,0 +1,56 @@
+{
+  "issue": 3072,
+  "origin": "https://comic-pile.vercel.app",
+  "recordedAt": null,
+  "searchConsole": {
+    "ownershipVerified": null,
+    "sitemapSubmitted": null,
+    "indexedPageCount": null,
+    "impressions": null,
+    "clicks": null
+  },
+  "offsiteOpportunities": [
+    {
+      "name": "Show HN launch post",
+      "url": "https://news.ycombinator.com/show",
+      "relevance": "Show HN readers are exactly the self-hosted and personal-software audience that wants a dice-driven reading queue, and a launch post is an earned mention rather than a purchased link.",
+      "notes": "One genuine launch announcement, written for the audience. Do not repost it later to re-drive traffic, and do not ask for a second front page.",
+      "outreach": "not-started",
+      "paid": false
+    },
+    {
+      "name": "awesome-selfhosted list",
+      "url": "https://github.com/awesome-selfhosted/awesome-selfhosted",
+      "relevance": "ComicPile is a self-hosted application with no external service dependencies, which is exactly what this curated list catalogs for people who run their own infrastructure.",
+      "notes": "The list has an explicit contribution process: a working project, a description, and a license. The entry is earned by meeting the list criteria, never by trading links.",
+      "outreach": "not-started",
+      "paid": false
+    },
+    {
+      "name": "Comics reader communities",
+      "url": "https://www.reddit.com/r/comics/",
+      "relevance": "Comic collectors repeatedly ask what to read next from a growing stack; a dice-driven queue answers that question with the reader's own history instead of a generic recommendation list.",
+      "notes": "Only post where the community rules allow it, contribute to the discussion first, and make the post useful to readers who will never use ComicPile. Expect moderation to remove a thin promotion.",
+      "outreach": "not-started",
+      "paid": false
+    },
+    {
+      "name": "Indie product directories",
+      "url": "https://www.indiehackers.com/",
+      "relevance": "Directories for personal software projects already host tools with a comparable audience and let the maintainer describe the problem the tool solves, which suits a small self-hosted project without a marketing team.",
+      "notes": "List the product once, write an honest description, and keep the listing maintained. Do not submit the same listing to many directories in bulk; that is link spam.",
+      "outreach": "not-started",
+      "paid": false
+    },
+    {
+      "name": "Product launch platforms",
+      "url": "https://www.producthunt.com/",
+      "relevance": "A launch platform gives a personal project one concentrated day of discovery from people who actively look for new tools, which is more efficient than scattered link building.",
+      "notes": "Submit only a working product, and treat it as a launch date rather than a link farm. A maker badge or an upvote is not a durable citation, so do not depend on it.",
+      "outreach": "not-started",
+      "paid": false
+    }
+  ],
+  "linkPolicy": "earned-only",
+  "notes": "Machine-readable launch record for issue #3072. The operator fills the Search Console fields and the outreach states; the SEO launch audit validates the record and proves that the deployed origin still matches the canonical indexability policy."
+}

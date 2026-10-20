@@ -55,11 +55,40 @@ The policy is enforced across artifacts, so drift fails CI rather than shipping:
 - `frontend/src/test/issue-3068-seo-route-cleanup.spec.ts` — browser-level crawlability and
   redirect-chain behavior.
 
+## Production launch audit
+
+The regression suites above cover the build output and the FastAPI surface. They
+cannot cover the deployed origin, because the production routing layer (Vercel's
+catch-all) can serve a different document than the backend would. Issue #3905
+is that class of defect: the per-route HTML was built correctly, but the
+deployment never served it.
+
+`frontend/scripts/seo-launch-audit.mjs` audits a live origin against the same
+canonical table and reports what the deployment actually serves:
+
+```bash
+pnpm --filter frontend run audit:seo-launch -- --base-url https://comic-pile.vercel.app
+```
+
+It checks that every indexable route serves one stable canonical URL and is not
+blocked, that every utility and authenticated route carries an explicit
+`noindex` directive and is disallowed in `robots.txt`, and that the served
+`robots.txt` and `sitemap.xml` agree with the canonical table. A route that is
+only disallowed in `robots.txt` is a blocking finding, because `robots.txt`
+prevents crawling rather than indexing.
+
+The audit also renders the launch evidence record used by the manual steps: the
+URL checklist for a Search Console inspection, the sitemap URL to submit, and
+the operator steps that are still open. It never asserts that a manual step
+happened. `frontend/scripts/seo-launch-audit.test.mjs` covers the parsing and
+finding rules, and runs the whole audit against a local server that imitates
+both a compliant deployment and the production regression.
+
 ## Manual launch steps
 
-Some launch work cannot be done in code and must not be simulated by automation. These
-steps are tracked separately from implementation issues so no factory can claim they
-happened (see issue #3072):
+Some launch work cannot be done in code and must not be simulated by automation.
+These steps are tracked separately from implementation issues so no factory can
+claim they happened (see issue #3072):
 
 1. Verify the production ComicPile origin in Google Search Console.
 2. Submit the production `sitemap.xml` after the sitemap and indexability work ships.
@@ -68,6 +97,10 @@ happened (see issue #3072):
 4. Record the baseline indexed-page count and search impressions/clicks with the date.
 5. Identify realistic, product-relevant off-site discovery opportunities and pursue only
    legitimate, earned links.
+
+The operator procedure for all five steps, the machine-readable launch record, and the
+rules for legitimate outreach live in
+[`docs/operations/SEO_LAUNCH_RUNBOOK.md`](operations/SEO_LAUNCH_RUNBOOK.md).
 
 Automated work stops at producing the crawlable, policy-correct surface and its regression
 coverage. It does not verify Search Console ownership, submit sitemaps, or earn backlinks.

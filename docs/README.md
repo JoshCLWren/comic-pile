@@ -21,6 +21,8 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [Project README](../README.md): project overview and local-development entry point.
 - [Code of Conduct](../CODE_OF_CONDUCT.md): community participation and enforcement expectations.
 - [Deployment](DEPLOYMENT.md): maintained Vercel/Neon production architecture and the Neon self-hosting path.
+- [Public SEO surface](SEO_PUBLIC_SURFACE.md): crawlable public routes, indexability policy, and the production launch audit.
+- [SEO launch runbook](operations/SEO_LAUNCH_RUNBOOK.md): operator steps for Search Console ownership, sitemap submission, index inspection, baseline metrics, and legitimate off-site discovery.
 - [Agent engineering rules](../AGENTS.md): mandatory repository conventions for coding agents.
 - [Manual QA behavior inventory](manual-qa/README.md): agent-friendly workflows and expected outcomes for manual product QA.
 - [Autonomous factory policy](AUTONOMOUS_FACTORY_POLICY.md): canonical autonomous delivery lifecycle and merge policy.
