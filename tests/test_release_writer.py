@@ -1507,8 +1507,15 @@ class TestReleaseWriterEngineeringClassification:
         )
         assert release_writer._scope_fences(text) == []
 
-    def test_bare_factory_word_is_not_decisive(self) -> None:
-        """The word "factory" alone is not a statement that the change is internal.
+    def test_factory_automation_wording_classifies_copy_not_linked_context(
+        self,
+    ) -> None:
+        """Factory automation wording classifies served copy, never blocks a note.
+
+        A pull-request title that mentions internal factory work describes how
+        the change was built, but only copy that would actually reach readers
+        is classified against the engineering-term table, so a clean
+        reader-facing note for that change keeps publishing.
 
         Args:
             None.
@@ -1516,10 +1523,12 @@ class TestReleaseWriterEngineeringClassification:
         Returns:
             None.
         """
+        decisive, _suggestive = release_writer._engineering_terms(
+            "Improve factory session reliability."
+        )
+        assert decisive == ["factory automation"]
         assert release_writer._scope_fences("The factory is quiet today.") == []
-        assert release_writer._scope_fences("Improve factory session reliability.") == [
-            "factory automation"
-        ]
+        assert release_writer._scope_fences("Improve factory session reliability.") == []
 
     def test_suggestive_term_keeps_recorded_reader_facing_evidence_public(self) -> None:
         """A suggestive term never overrides recorded reader-facing evidence.
@@ -1600,6 +1609,44 @@ class TestReleaseWriterEngineeringClassification:
         payload = _valid_payload()
         payload["summary"] = "Factory review controller accepts diff hunk evidence."
         payload["body"] = "diff --git a/scripts/release_writer.py b/scripts/release_writer.py"
+        result = release_writer._validate_release(json.dumps(payload))
+        terms = _provenance(result)["internal_engineering_terms"]
+        assert isinstance(terms, list)
+        assert result["visibility"] == "internal"
+        assert "diff fragment" in terms
+
+    def test_diff_frame_at_summary_start_classifies_internal(self) -> None:
+        """A diff frame at the start of the summary cannot escape classification.
+
+        The copy fields are joined with newlines, so a fragment at the start
+        of a field is still a line-start match; a space-joined scan would move
+        it behind the preceding field and miss it.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "+++ b/frontend/src/pages/RollPage.tsx"
+        result = release_writer._validate_release(json.dumps(payload))
+        terms = _provenance(result)["internal_engineering_terms"]
+        assert isinstance(terms, list)
+        assert result["visibility"] == "internal"
+        assert "diff fragment" in terms
+
+    def test_diff_frame_at_body_start_classifies_internal(self) -> None:
+        """A diff header at the start of the body cannot escape classification.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["body"] = "--- a/frontend/src/services/api.ts"
         result = release_writer._validate_release(json.dumps(payload))
         terms = _provenance(result)["internal_engineering_terms"]
         assert isinstance(terms, list)
@@ -1712,8 +1759,16 @@ class TestReleaseWriterEngineeringClassification:
         assert "behavior preserved" in fences
         assert "internal refactor" in fences
 
-    def test_scope_fences_and_copy_share_one_term_table(self) -> None:
-        """The scope fence and the release copy read one canonical term table.
+    def test_linked_context_artifact_mentions_are_not_scope_fences(self) -> None:
+        """Engineering artifacts in a description never block a public note.
+
+        Issue and pull-request bodies legitimately quote endpoint literals
+        and diff frames (issue #3649 itself lists repro examples such as
+        `POST /api/v1/threads`). The decisive table applies only to served
+        copy; the linked-context scan fences on statements that the
+        reader-visible portion is not in the change, so a reader-facing fix
+        linked to an issue full of quoted artifacts still publishes with
+        valid public evidence and clean copy.
 
         Args:
             None.
@@ -1721,10 +1776,22 @@ class TestReleaseWriterEngineeringClassification:
         Returns:
             None.
         """
-        fence_labels = {label for _pattern, label in release_writer._SCOPE_FENCE_PATTERNS}
-        decisive_labels = {
-            label
-            for _pattern, label, strength in release_writer._ENGINEERING_TERM_SOURCES
-            if strength == "decisive"
-        }
-        assert decisive_labels <= fence_labels
+        decisive, _suggestive = release_writer._engineering_terms(
+            "POST /api/roll now reports the failure to readers."
+        )
+        assert decisive == ["endpoint literal"]
+        assert (
+            release_writer._scope_fences(
+                "Added POST /api/v1/threads/{}:setCurrentIssue; see diff --git a/x b/x "
+                "and the +++ b/utils line for where. No reader-visible behavior changed "
+                "in the UI, so the copy stays internal-only."
+            )
+            == ["internal only"]
+        )
+        assert (
+            release_writer._scope_fences(
+                "diff --git a/app/models.py b/app/models.py\n"
+                "--- a/app/models.py\n+++ b/app/models.py"
+            )
+            == []
+        )

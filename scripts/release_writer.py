@@ -118,9 +118,13 @@ _FACTORY_AUTOMATION_NOUNS = (
     "stack|state|tool|tools|triage|verdict|worker|workers|writer"
 )
 
-# Engineering terms that identify internal engineering work. This table is the
-# single source of truth for both the release-copy classification and the
-# linked-context scope fence, so the two can never drift apart.
+# Engineering terms that identify internal engineering work in reader-facing
+# release copy. This table drives the deterministic copy classification only;
+# it is deliberately not applied to pull-request and issue descriptions, so a
+# description that merely quotes an artifact such as `POST /api/roll` or a
+# diff frame can never block a public note whose served copy is clean.
+# Statements that the reader-visible portion is not in this change stay in
+# `_SCOPE_FENCE_SOURCES`, which is what the linked-context fence checks.
 #
 # "decisive" terms are engineering artifacts that reader-facing product copy
 # cannot contain, so they always classify a release as internal. "suggestive"
@@ -265,10 +269,6 @@ _ENGINEERING_TERM_SOURCES: tuple[tuple[re.Pattern[str], str, str], ...] = (
 _SCOPE_FENCE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     (re.compile(pattern, re.IGNORECASE), label)
     for pattern, label in _SCOPE_FENCE_SOURCES
-) + tuple(
-    (pattern, label)
-    for pattern, label, strength in _ENGINEERING_TERM_SOURCES
-    if strength == "decisive"
 )
 
 # Reader-facing capability claims. A public note may only promise a new reader
@@ -1099,7 +1099,7 @@ def _engineering_terms(text: str) -> tuple[list[str], list[str]]:
     """Return the decisive and suggestive engineering terms found in the text.
 
     Args:
-        text: Release copy, or linked pull-request and issue text, to inspect.
+        text: Reader-facing release copy (title, summary, body) to inspect.
 
     Returns:
         A tuple of (decisive labels, suggestive labels), each sorted and
@@ -1148,9 +1148,10 @@ def _release_copy_text(payload: dict[str, object]) -> str:
         payload: Validated release payload.
 
     Returns:
-        The title, summary, and body of the payload joined for inspection.
+        The title, summary, and body of the payload, joined with newlines so
+        a diff frame at the start of any field is still a line-start match.
     """
-    return " ".join(
+    return "\n".join(
         str(payload.get(name) or "") for name in ("title", "summary", "body")
     )
 
