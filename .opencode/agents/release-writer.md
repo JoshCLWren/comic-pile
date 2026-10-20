@@ -119,6 +119,9 @@ language for ComicPile readers:
 - Rewrite low-information fragments such as `loading states` into the concrete reader benefit, or
   skip the release.
 - Spell-check every title, category, and summary before publishing.
+- Use plain apostrophes in reader-facing copy. Never emit JSON escape artifacts such as
+  `\u0027` or `\'`; the publication gate decodes accidental apostrophe escapes, but clean
+  source copy is the expected input.
 
 The publication API returns HTTP 422 for public copy that violates these rules. Rewrite the copy in
 reader-facing language rather than bypassing the check.

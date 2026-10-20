@@ -305,6 +305,49 @@ class TestReleaseWriterValidation:
         assert result["sort_order"] == 0
         assert result["provenance_json"] == _public_provenance()
 
+    def test_publish_decodes_escaped_apostrophes(self) -> None:
+        """Literal apostrophe escapes never reach the stored release copy.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "GitHub links added to What\\u0027s New page"
+        payload["summary"] = "The Roll page\\'s rating view now remembers your place."
+        payload["body"] = "Reader copy with What\\u2019s inside."
+
+        result = release_writer._validate_release(json.dumps(payload))
+
+        assert result["title"] == "GitHub links added to What's New page"
+        assert result["summary"] == "The Roll page's rating view now remembers your place."
+        assert result["body"] == "Reader copy with What\u2019s inside."
+        assert release_writer._decode_release_escapes("What\\\\u0027s New page") == (
+            "What's New page"
+        )
+
+    def test_publish_preserves_legitimate_backslashes(self) -> None:
+        """Decoding apostrophe escapes must not strip ordinary backslashes.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "Read notes in C:\\Users\\reader"
+        payload["summary"] = "Match \\d+ rows in your reading log."
+        payload["body"] = "Keep the \\n sequence literal."
+
+        result = release_writer._validate_release(json.dumps(payload))
+
+        assert result["title"] == "Read notes in C:\\Users\\reader"
+        assert result["summary"] == "Match \\d+ rows in your reading log."
+        assert result["body"] == "Keep the \\n sequence literal."
+
     def test_publish_sets_defaults(self) -> None:
         """Optional non-evidence fields should get default values.
 

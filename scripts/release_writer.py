@@ -31,6 +31,13 @@ _ORDINAL_INDICATORS = {"step", "build", "section", "phase", "version", "stage", 
 _VERSION_STEP_PATTERN = re.compile(r"v?\d+(?:\.\d+)*")
 _MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?:\/\/[^)]+)\)")
 _BACKTICK_PATTERN = re.compile(r"`([^`]+)`")
+_ESCAPED_SINGLE_QUOTE_PATTERN = re.compile(r"\\+u(0027|2018|2019)", re.IGNORECASE)
+_ESCAPED_APOSTROPHE_PATTERN = re.compile(r"\\+'")
+_SINGLE_QUOTE_ESCAPES = {
+    "0027": "'",
+    "2018": "\u2018",
+    "2019": "\u2019",
+}
 _MIN_PUBLIC_CONTENT = {"category": 2, "title": 4, "summary": 12}
 _READER_FACING_FIELDS = ("category", "title", "summary")
 
@@ -308,6 +315,27 @@ _MAX_ISSUE_REFERENCES = 25
 _MAX_ISSUE_BODY = 4000
 
 
+def _decode_release_escapes(value: str) -> str:
+    r"""Decode escaped apostrophes that leak into reader-facing release copy.
+
+    Models occasionally emit a doubly escaped apostrophe, so a payload can
+    contain a literal ``\\u0027`` or ``\\'`` that would render verbatim on
+    What's New. Only single-quote escape artifacts are decoded; legitimate
+    backslashes such as Windows paths or regular-expression fragments remain.
+
+    Args:
+        value: Release copy that may contain literal apostrophe escapes.
+
+    Returns:
+        The copy with apostrophe escape artifacts decoded.
+    """
+    text = _ESCAPED_SINGLE_QUOTE_PATTERN.sub(
+        lambda match: _SINGLE_QUOTE_ESCAPES[match.group(1).lower()],
+        value,
+    )
+    return _ESCAPED_APOSTROPHE_PATTERN.sub("'", text)
+
+
 def _visible_release_text(value: object) -> str:
     """Return release copy as readers see it after stripping Markdown formatting.
 
@@ -483,6 +511,10 @@ def _validate_release(raw: str) -> dict[str, object]:
         _fail(f"missing release fields: {', '.join(missing)}")
     if set(payload) - (_REQUIRED | {"body", "visibility", "status", "sort_order", "provenance_json"}):
         _fail("release payload contains unsupported fields")
+    for name in (*_READER_FACING_FIELDS, "body"):
+        value = payload.get(name)
+        if isinstance(value, str):
+            payload[name] = _decode_release_escapes(value)
     repository = payload["source_repository"]
     if not isinstance(repository, str) or not (1 <= len(repository) <= 255):
         _fail("source_repository must be 1..255 characters")

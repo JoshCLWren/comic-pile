@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WhatsNewPage, {
+  decodeReleaseEscapes,
   groupReleasesByDay,
   hasUnfinishedWorkMarkers,
   isDisplayableRelease,
@@ -110,6 +111,27 @@ describe('release ordering helpers', () => {
       expect(releaseDisplayText('`queue` search')).toBe('queue search')
       expect(releaseDisplayText('incomplete #1551 fix for the roll screen')).toBe(
         'incomplete fix for the roll screen',
+      )
+    })
+
+    it('decodes escaped apostrophes without corrupting legitimate backslashes', () => {
+      expect(releaseDisplayText('GitHub links added to What\\u0027s New page')).toBe(
+        "GitHub links added to What's New page",
+      )
+      expect(releaseDisplayText("the Roll page\\'s rating view")).toBe(
+        "the Roll page's rating view",
+      )
+      expect(decodeReleaseEscapes('What\\\\u0027s New page')).toBe(
+        "What's New page",
+      )
+      expect(decodeReleaseEscapes('The What\\u2019s New page')).toBe(
+        'The What\u2019s New page',
+      )
+      expect(releaseDisplayText('Open C:\\Users\\reader\\notes')).toBe(
+        'Open C:\\Users\\reader\\notes',
+      )
+      expect(releaseDisplayText('Match \\d+ rows in your reading log')).toBe(
+        'Match \\d+ rows in your reading log',
       )
     })
 
@@ -222,6 +244,32 @@ describe('WhatsNewPage', () => {
       expect(screen.queryByText(/1096/)).not.toBeInTheDocument()
       expect(screen.queryByText(/release-import-v1/)).not.toBeInTheDocument()
       expect(screen.queryByText(/github\.com/)).not.toBeInTheDocument()
+    })
+
+    it('renders decoded apostrophes in card titles and summaries', async () => {
+      api.list.mockResolvedValue({
+        releases: [
+          release({
+            id: 12,
+            title: 'GitHub links added to What\\u0027s New page',
+            summary: "The Roll page\\'s rating view now remembers your place.",
+          }),
+        ],
+        total: 1,
+        limit: RELEASE_PAGE_SIZE,
+        offset: 0,
+      })
+
+      renderPage()
+
+      expect(
+        await screen.findByText("GitHub links added to What's New page"),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText("The Roll page's rating view now remembers your place."),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/\\u0027/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/\\'s/)).not.toBeInTheDocument()
     })
 
     it('renders the plural day summary for multiple same-day releases', async () => {

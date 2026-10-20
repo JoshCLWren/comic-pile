@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 ReleaseVisibility = Literal["public", "internal"]
 ReleaseStatus = Literal["draft", "published", "retracted"]
@@ -15,6 +15,13 @@ _MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?:\/\/[^)]+)\)")
 _BACKTICK_PATTERN = re.compile(r"`([^`]+)`")
 _MIN_PUBLIC_CONTENT = {"category": 2, "title": 4, "summary": 12}
 _READER_FACING_FIELDS = ("category", "title", "summary")
+_ESCAPED_SINGLE_QUOTE_PATTERN = re.compile(r"\\+u(0027|2018|2019)", re.IGNORECASE)
+_ESCAPED_APOSTROPHE_PATTERN = re.compile(r"\\+'")
+_SINGLE_QUOTE_ESCAPES = {
+    "0027": "'",
+    "2018": "\u2018",
+    "2019": "\u2019",
+}
 
 _TICKET_REFERENCE_PATTERN = re.compile(r"(?<![\w&])#\d{1,7}\b")
 _SCHEMA_IDENTIFIER_PATTERN = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
@@ -56,6 +63,53 @@ _PUBLIC_EVIDENCE_TEXT_LIMITS: dict[str, int] = {
     "user_visible_evidence": 2000,
     "reader_reachable_path": 500,
 }
+
+
+def decode_release_escapes(value: str) -> str:
+    r"""Decode escaped apostrophes that leak into reader-facing release copy.
+
+    A model-generated payload can carry a doubly escaped apostrophe, so stored
+    copy may contain a literal ``\\u0027`` or ``\\'``. Only single-quote escape
+    artifacts are decoded; other backslashes, such as a Windows path or a
+    regular-expression fragment, are left untouched.
+
+    Args:
+        value: Release copy that may contain literal apostrophe escapes.
+
+    Returns:
+        The copy with apostrophe escape artifacts decoded.
+    """
+    text = _ESCAPED_SINGLE_QUOTE_PATTERN.sub(
+        lambda match: _SINGLE_QUOTE_ESCAPES[match.group(1).lower()],
+        value,
+    )
+    return _ESCAPED_APOSTROPHE_PATTERN.sub("'", text)
+
+
+class _ReleaseCopyEscapeFields(BaseModel):
+    """Decode apostrophe escapes on every reader-facing release field."""
+
+    @field_validator(
+        "category",
+        "title",
+        "summary",
+        "body",
+        mode="before",
+        check_fields=False,
+    )
+    @classmethod
+    def decode_escaped_copy(cls, value: object) -> object:
+        """Decode literal apostrophe escapes before validation or serialization.
+
+        Args:
+            value: Raw field value from a payload or stored release row.
+
+        Returns:
+            The decoded string, or the original non-string value unchanged.
+        """
+        if isinstance(value, str):
+            return decode_release_escapes(value)
+        return value
 
 
 def visible_release_text(value: object) -> str:
@@ -198,7 +252,7 @@ def _provenance_issue_numbers(provenance: dict[str, object]) -> list[int]:
     return sorted(set(value))
 
 
-class ReleaseUpsertRequest(BaseModel):
+class ReleaseUpsertRequest(_ReleaseCopyEscapeFields):
     """Idempotent release publication payload from trusted automation."""
 
     source_repository: str = Field(min_length=1, max_length=255)
@@ -330,7 +384,7 @@ class ReleaseUpsertRequest(BaseModel):
         return self
 
 
-class ReleaseResponse(BaseModel):
+class ReleaseResponse(_ReleaseCopyEscapeFields):
     """One complete release ledger record returned to trusted automation."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -353,7 +407,7 @@ class ReleaseResponse(BaseModel):
     updated_at: datetime
 
 
-class PublicReleaseResponse(BaseModel):
+class PublicReleaseResponse(_ReleaseCopyEscapeFields):
     """One release ledger record returned by public-facing endpoints."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -378,7 +432,7 @@ class ReleaseListResponse(BaseModel):
     offset: int
 
 
-class MinimalReleaseResponse(BaseModel):
+class MinimalReleaseResponse(_ReleaseCopyEscapeFields):
     """Minimal release data for reconciliation endpoints."""
     
     model_config = ConfigDict(from_attributes=True)
