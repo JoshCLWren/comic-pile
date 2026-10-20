@@ -104,10 +104,12 @@ def _filter_aggregate_to_headline(
 ) -> SeriesAggregate | None:
     """Return a filtered copy of the aggregate containing only headline-eligible issues.
 
-    The aggregate's `rated_issue_ids` and `ratings` include all credited roles,
-    but the headline average only counts issues in `rated_issue_ids`. This
-    function builds a new aggregate with only those headline-eligible issues so
-    that series highlights reflect the same ratings the headline average uses.
+    A series aggregate accumulates every attributed issue the creator was
+    credited on, whatever the role. The headline average, however, only counts
+    issues the creator holds a headline-eligible role on (a pure cover credit
+    never feeds it). This function rebuilds the aggregate from the headline
+    eligible issues only, so the series highlights are computed over exactly the
+    same ratings the headline average uses instead of a mixed-role set.
 
     Args:
         aggregate: The original series aggregate.
@@ -122,8 +124,11 @@ def _filter_aggregate_to_headline(
     if len(headline_issue_ids) < MIN_SERIES_SAMPLE:
         return None
 
-    # Map issue_id -> rating for filtering ratings list
-    id_to_rating = dict(zip(aggregate.rated_issue_ids, aggregate.ratings, strict=False))
+    # Map issue_id -> rating for filtering ratings list. The two lists are
+    # appended in lockstep by the series aggregator, so a length mismatch would
+    # mean the aggregate is corrupt; fail loudly instead of silently dropping
+    # ratings and reporting a wrong average.
+    id_to_rating = dict(zip(aggregate.rated_issue_ids, aggregate.ratings, strict=True))
     headline_ratings = [id_to_rating[iid] for iid in headline_issue_ids]
 
     # Create a new aggregate with only headline-eligible data

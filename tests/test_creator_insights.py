@@ -29,6 +29,7 @@ def _build_inputs(
     series: dict[int, tuple[int, str]],
     credited: frozenset[int] | None = None,
     complete: frozenset[int] | None = None,
+    roles: dict[int, tuple[str, ...]] | None = None,
 ) -> CreatorSummaryInputs:
     """Build summary inputs from simple issue/thread/rating maps.
 
@@ -38,12 +39,15 @@ def _build_inputs(
         series: Mapping of issue id to ``(thread_id, thread_title)``.
         credited: Issue ids credited to the creator; defaults to every issue.
         complete: Issue ids with confirmed creator metadata; defaults to every issue.
+        roles: Mapping of issue id to the creator's roles on that issue;
+            defaults to a single ``writer`` credit per credited issue.
 
     Returns:
         User-scoped inputs suitable for the series aggregator.
     """
     credited_ids = credited if credited is not None else frozenset(series)
     complete_ids = complete if complete is not None else frozenset(series)
+    issue_roles = roles or {}
     return CreatorSummaryInputs(
         owned_issues=dict.fromkeys(series, "read"),
         owned_issue_series={
@@ -58,7 +62,7 @@ def _build_inputs(
             issue_id: (
                 CreatorCredit(
                     external_id=creator_id,
-                    roles=("writer",),
+                    roles=issue_roles.get(issue_id, ("writer",)),
                     display_name="Insight Ivy",
                 ),
             )
@@ -77,14 +81,22 @@ def _insights(
     series: dict[int, tuple[int, str]],
     credited: frozenset[int] | None = None,
     complete: frozenset[int] | None = None,
+    roles: dict[int, tuple[str, ...]] | None = None,
+    headline: frozenset[int] | None = None,
 ) -> CreatorInsights | None:
-    """Compute insights for one synthetic creator library."""
+    """Compute insights for one synthetic creator library.
+
+    ``rated`` holds every effective rating, while ``headline`` holds the
+    headline-eligible subset (issues the creator holds a headline role on).
+    It defaults to every rated issue, which is the all-writer case.
+    """
     inputs = _build_inputs(
         creator_id=creator_id,
         rated=rated,
         series=series,
         credited=credited,
         complete=complete,
+        roles=roles,
     )
     aggregates = aggregate_creator_series_groups(
         inputs,
@@ -94,7 +106,7 @@ def _insights(
     return compute_creator_insights(
         inputs,
         creator_id=creator_id,
-        rated_issue_ids=frozenset(rated),
+        rated_issue_ids=frozenset(rated) if headline is None else headline,
         series_aggregates=aggregates,
     )
 
@@ -224,3 +236,85 @@ def test_individual_issue_extremes_are_sorted_capped_and_distinct() -> None:
     assert [row.effective_rating for row in insights.lowest_rated_issues] == [1.0, 2.0, 3.0]
     assert insights.highest_rated_issues[0].thread_title == "Run"
     assert insights.highest_rated_issues[0].roles == ["writer"]
+
+
+def test_mixed_role_series_ignores_cover_only_ratings() -> None:
+    """A cover-only rating never enters the series count, average, or extremes.
+
+    Regression coverage for the mixed-role fix: the creator writes three
+    issues and only drew the cover of a fourth, so the series highlight must
+    describe the three headline-eligible issues, not all four rated ones.
+    """
+    series = {
+        11: (1, "Mixed Roles"),
+        12: (1, "Mixed Roles"),
+        13: (1, "Mixed Roles"),
+        14: (1, "Mixed Roles"),
+    }
+    rated = {11: 5.0, 12: 4.0, 13: 3.0, 14: 1.0}
+    roles = {11: ("writer",), 12: ("writer",), 13: ("writer",), 14: ("cover",)}
+
+    insights = _insights(
+        creator_id=9,
+        rated=rated,
+        series=series,
+        roles=roles,
+        headline=frozenset({11, 12, 13}),
+    )
+
+    assert insights is not None
+    assert insights.series_sample_met is True
+    assert insights.series_message is None
+    assert insights.strongest_series is not None
+    assert insights.strongest_series.thread_title == "Mixed Roles"
+    assert insights.strongest_series.rated_issue_count == 3
+    assert insights.strongest_series.average_rating == 4.0
+    assert insights.strongest_series.lowest_rating == 3.0
+    assert insights.strongest_series.highest_rating == 5.0
+    assert insights.weakest_series is not None
+    assert insights.weakest_series.rated_issue_count == 3
+    assert insights.weakest_series.average_rating == 4.0
+    assert insights.weakest_series.lowest_rating == 3.0
+    assert insights.weakest_series.highest_rating == 5.0
+    assert insights.most_rated_series is not None
+    assert insights.most_rated_series.rated_issue_count == 3
+    # The roles the creator held in the series stay truthful even though the
+    # cover-only rating is excluded from the numbers.
+    assert insights.strongest_series.roles == ["cover", "writer"]
+    # The cover-only issue is not part of the individual issue evidence either.
+    assert [row.issue_id for row in insights.highest_rated_issues] == [11, 12, 13]
+    assert [row.issue_id for row in insights.lowest_rated_issues] == [13, 12, 11]
+
+
+def test_cover_only_ratings_cannot_reach_the_series_sample_gate() -> None:
+    """Cover-only ratings never push a series over the minimum sample gate.
+
+    Regression coverage for the mixed-role fix: two headline-eligible issues
+    plus two cover-only ones are four rated issues, but only two of them may
+    count toward the series comparison, so the series stays unranked.
+    """
+    series = {
+        11: (1, "Patchy Roles"),
+        12: (1, "Patchy Roles"),
+        13: (1, "Patchy Roles"),
+        14: (1, "Patchy Roles"),
+    }
+    rated = {11: 5.0, 12: 4.0, 13: 1.0, 14: 1.0}
+    roles = {11: ("writer",), 12: ("writer",), 13: ("cover",), 14: ("cover",)}
+
+    insights = _insights(
+        creator_id=9,
+        rated=rated,
+        series=series,
+        roles=roles,
+        headline=frozenset({11, 12}),
+    )
+
+    assert insights is not None
+    assert insights.series_sample_met is False
+    assert insights.series_message == INSUFFICIENT_SERIES_MESSAGE
+    assert insights.strongest_series is None
+    assert insights.weakest_series is None
+    assert insights.most_rated_series is None
+    assert [row.issue_id for row in insights.highest_rated_issues] == [11, 12]
+    assert [row.issue_id for row in insights.lowest_rated_issues] == [12, 11]

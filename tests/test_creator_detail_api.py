@@ -959,6 +959,102 @@ async def test_insights_exclude_series_with_incomplete_metadata(
 
 
 @pytest.mark.asyncio
+async def test_insights_ignore_cover_only_ratings_in_a_mixed_role_series(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A cover-only rating never enters its series count, average, or extremes.
+
+    Regression coverage for the mixed-role fix: the creator writes three issues
+    and only drew the cover of a fourth, so the series highlight must describe
+    the three headline-eligible issues instead of all four rated ones.
+    """
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Mixed Roles", issue_count=4, queue_position=1, read_through=4
+    )
+    for issue, rating in zip(issues[:3], (5.0, 4.0, 3.0), strict=True):
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 505, "name": "Mixed Max", "role": "writer"}]
+        )
+        await _rate(async_db, issue, rating=rating, timestamp=D1)
+    await _confirm_identity(
+        async_db, issues[3], creators=[{"id": 505, "name": "Mixed Max", "role": "cover"}]
+    )
+    await _rate(async_db, issues[3], rating=1.0, timestamp=D2)
+
+    response = await auth_client.get("/api/v1/creators/creator:505")
+
+    assert response.status_code == 200
+    body = response.json()
+    insights = body["insights"]
+    assert insights["series_sample_met"] is True
+    strongest = insights["strongest_series"]
+    assert strongest["rated_issue_count"] == 3
+    assert strongest["average_rating"] == pytest.approx(4.0)
+    assert strongest["lowest_rating"] == pytest.approx(3.0)
+    assert strongest["highest_rating"] == pytest.approx(5.0)
+    # The cover-only issue is not part of the individual issue evidence either.
+    assert [row["issue_id"] for row in insights["highest_rated_issues"]] == [
+        issues[0].id,
+        issues[1].id,
+        issues[2].id,
+    ]
+    assert [row["issue_id"] for row in insights["lowest_rated_issues"]] == [
+        issues[2].id,
+        issues[1].id,
+        issues[0].id,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_insights_cover_only_ratings_cannot_reach_the_series_sample_gate(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Cover-only ratings never push a series over the minimum sample gate.
+
+    Regression coverage for the mixed-role fix: two headline-eligible issues
+    plus two cover-only ones are four rated issues, but only two of them may
+    count toward the series comparison, so the series stays unranked.
+    """
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Patchy Roles", issue_count=4, queue_position=1, read_through=4
+    )
+    for issue, rating in zip(issues[:2], (5.0, 4.0), strict=True):
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 506, "name": "Patchy Pat", "role": "writer"}]
+        )
+        await _rate(async_db, issue, rating=rating, timestamp=D1)
+    for issue in issues[2:]:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 506, "name": "Patchy Pat", "role": "cover"}]
+        )
+        await _rate(async_db, issue, rating=1.0, timestamp=D2)
+
+    response = await auth_client.get("/api/v1/creators/creator:506")
+
+    assert response.status_code == 200
+    body = response.json()
+    insights = body["insights"]
+    assert insights["series_sample_met"] is False
+    assert insights["strongest_series"] is None
+    assert insights["weakest_series"] is None
+    assert insights["most_rated_series"] is None
+    assert insights["series_message"]
+    # Individual issue extremes still surface, and only for headline-eligible issues.
+    assert [row["issue_id"] for row in insights["highest_rated_issues"]] == [
+        issues[0].id,
+        issues[1].id,
+    ]
+    assert [row["issue_id"] for row in insights["lowest_rated_issues"]] == [
+        issues[1].id,
+        issues[0].id,
+    ]
+
+
+@pytest.mark.asyncio
 async def test_insights_absent_without_eligible_ratings(
     auth_client: AsyncClient,
     async_db: AsyncSession,
