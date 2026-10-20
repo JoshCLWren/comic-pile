@@ -151,7 +151,10 @@ it('formats ladder path from raw API values', () => {
       </Routes>
     </MemoryRouter>,
   )
-  expect(screen.getByText('d6')).toBeInTheDocument()
+  // start_die also renders "d6" under Start Die, so the assertion must be
+  // scoped to the Ladder Path section to check the formatted output.
+  const ladderPathSection = screen.getByText('Ladder Path').parentElement
+  expect(within(ladderPathSection!).getByText('d6')).toBeInTheDocument()
 })
 
 it('formats multi-step ladder path from raw API values', () => {
@@ -177,6 +180,17 @@ it('formats multi-step ladder path from raw API values', () => {
     </MemoryRouter>,
   )
   expect(screen.getByText('d6 → d8')).toBeInTheDocument()
+})
+
+it('explains how Undo Latest differs from Restore Start instead of leaving two near-identical buttons bare', () => {
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  const explanation = screen.getByText(/reverses only the newest change/)
+  expect(explanation).toHaveTextContent(/Undo Latest/)
+  expect(explanation).toHaveTextContent(/stays on the newest snapshot until it has been used once/)
+  expect(explanation).toHaveTextContent(/Restore Start/)
+  expect(explanation).toHaveTextContent(/rewinds the whole session to the moment it began/)
+  expect(explanation).toHaveTextContent(/asks for confirmation first/)
 })
 
 it('reports a failed undo instead of leaving the page silent', async () => {
