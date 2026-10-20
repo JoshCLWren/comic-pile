@@ -19767,7 +19767,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
+                  "additionalProperties": {
+                    "type": "string"
+                  },
                   "title": "Response Logout User Api V1 Auth Logout Post",
                   "type": "object"
                 }

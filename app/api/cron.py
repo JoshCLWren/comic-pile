@@ -13,6 +13,7 @@ from app.schemas.reading_plan_sync import (
     ScheduledSyncReport,
     ScheduledSyncResponse,
     ScheduledUserFailure,
+    SourceSyncFailure,
 )
 from app.services.reading_plan_sync_service import (
     ScheduledSyncReport as ServiceScheduledReport,
@@ -60,13 +61,13 @@ def _to_report(report: ServiceScheduledReport) -> ScheduledSyncReport:
         skipped_sources=report.skipped_sources,
         excluded_issues=report.excluded_issues,
         failures=[
-            {
-                "source_id": failure.source_id,
-                "plan_id": failure.plan_id,
-                "thread_id": failure.thread_id,
-                "volume_id": failure.volume_id,
-                "error": failure.error,
-            }
+            SourceSyncFailure(
+                source_id=failure.source_id,
+                plan_id=failure.plan_id,
+                thread_id=failure.thread_id,
+                volume_id=failure.volume_id,
+                error=failure.error,
+            )
             for failure in report.failures
         ],
         user_failures=[

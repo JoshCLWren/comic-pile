@@ -50,13 +50,14 @@ from app.services.comicvine_resolution import (
     search_comicvine_series,
 )
 from app.services.ownership import get_owned_issue_or_404
+from comic_pile.comicvine_provider import ComicVineClient
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/comicvine", tags=["comicvine-resolution"])
 
 
-def _get_comicvine_client():
+def _get_comicvine_client() -> ComicVineClient | None:
     """Build a ComicVine client from environment settings.
 
     Returns the client or None if ComicVine API key is not configured.
@@ -68,7 +69,7 @@ def _get_comicvine_client():
     if not api_key:
         return None
 
-    from comic_pile.comicvine_provider import ComicVineClient, get_shared_http_client
+    from comic_pile.comicvine_provider import get_shared_http_client
 
     cache_dir = Path(os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicpile-comicvine"))
 

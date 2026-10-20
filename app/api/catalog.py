@@ -41,8 +41,13 @@ from app.services.catalog_series_commit import (
     commit_series_mapping as commit_series_mapping_svc,
 )
 
-def _dt_to_ts(dt: datetime | None) -> float | None:
-    """Convert datetime to Unix timestamp."""
+def _dt_to_ts(dt: datetime) -> float:
+    """Convert a required datetime to a Unix timestamp."""
+    return dt.timestamp()
+
+
+def _optional_dt_to_ts(dt: datetime | None) -> float | None:
+    """Convert an optional datetime to a Unix timestamp."""
     return dt.timestamp() if dt is not None else None
 
 
@@ -84,7 +89,7 @@ async def search_catalog_series(
             external_id=identity.external_id,
             external_url=identity.external_url,
             metadata_json=identity.metadata_json,
-            provider_updated_at=_dt_to_ts(identity.provider_updated_at),
+            provider_updated_at=_optional_dt_to_ts(identity.provider_updated_at),
             created_at=_dt_to_ts(identity.created_at),
             updated_at=_dt_to_ts(identity.updated_at),
         )
@@ -132,7 +137,7 @@ async def search_catalog_issues(
             external_id=identity.external_id,
             external_url=identity.external_url,
             metadata_json=identity.metadata_json,
-            provider_updated_at=_dt_to_ts(identity.provider_updated_at),
+            provider_updated_at=_optional_dt_to_ts(identity.provider_updated_at),
             created_at=_dt_to_ts(identity.created_at),
             updated_at=_dt_to_ts(identity.updated_at),
         )
@@ -179,7 +184,7 @@ async def upsert_catalog_series(
         external_id=identity.external_id,
         external_url=identity.external_url,
         metadata_json=identity.metadata_json,
-        provider_updated_at=_dt_to_ts(identity.provider_updated_at),
+        provider_updated_at=_optional_dt_to_ts(identity.provider_updated_at),
         created_at=_dt_to_ts(identity.created_at),
         updated_at=_dt_to_ts(identity.updated_at),
     )
@@ -222,7 +227,7 @@ async def upsert_catalog_issue(
         external_id=identity.external_id,
         external_url=identity.external_url,
         metadata_json=identity.metadata_json,
-        provider_updated_at=_dt_to_ts(identity.provider_updated_at),
+        provider_updated_at=_optional_dt_to_ts(identity.provider_updated_at),
         created_at=_dt_to_ts(identity.created_at),
         updated_at=_dt_to_ts(identity.updated_at),
     )
@@ -447,16 +452,10 @@ async def preview_series_mapping(
         scope_mode=request.scope_mode,
     )
     
-    # Convert the service response to the schema response format
-    return SeriesMappingPreviewResponse(
-        preview_token=preview_data.get("preview_token"),
-        scope=preview_data["scope"],
-        provider_series=preview_data["provider_series"],
-        counts=preview_data["counts"],
-        rows=preview_data["rows"],
-        issued_at=preview_data["issued_at"],
-        expires_at=preview_data.get("expires_at"),
-    )
+    # Convert the service response to the schema response format. Pydantic
+    # validates the service's documented dict contract instead of relying on
+    # the router to restate every nested field type.
+    return SeriesMappingPreviewResponse.model_validate(preview_data)
 
 
 @router.post(
@@ -500,4 +499,4 @@ async def commit_series_mapping(
     except SeriesMappingCommitConflictError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
-    return SeriesMappingCommitResponse(**commit_data)
+    return SeriesMappingCommitResponse.model_validate(commit_data)

@@ -68,6 +68,26 @@ class SessionBandwidthState(BaseModel):
     mode_version: str | None
 
 
+def normalize_reading_mode_source(value: str | None) -> BandwidthSource | None:
+    """Normalize a stored session-mode source to its public literal contract.
+
+    Args:
+        value: Stored source value, which may be legacy garbage or None.
+
+    Returns:
+        The recognized literal source, or None when the value is not usable.
+    """
+    if value == "inferred":
+        return "inferred"
+    if value == "manual":
+        return "manual"
+    if value == "snooze":
+        return "snooze"
+    if value == "quiz":
+        return "quiz"
+    return None
+
+
 def build_session_bandwidth_state(
     *,
     predicted_bandwidth: str | None,
@@ -104,10 +124,7 @@ def build_session_bandwidth_state(
         confidence=(
             confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None
         ),
-        source=cast(
-            BandwidthSource | None,
-            source if source in _BANDWIDTH_SOURCES else None,
-        ),
+        source=normalize_reading_mode_source(source),
         mode_version=mode_version,
     )
 
@@ -163,10 +180,7 @@ def build_session_intent_state(
             active_intent if active_intent in _INTENT_LEVELS else None,
         ),
         confidence=confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None,
-        source=cast(
-            IntentSource | None,
-            source if source in _INTENT_SOURCES else None,
-        ),
+        source=normalize_reading_mode_source(source),
         mode_version=mode_version,
     )
 

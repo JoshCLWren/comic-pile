@@ -583,6 +583,14 @@ async def api_cbl_reconciliation(
 
 
 
+def _cbl_position(entry: dict[str, object]) -> int:
+    """Return a validated CBL source position from one adoption-plan entry."""
+    position = entry.get("cbl_position")
+    if isinstance(position, bool) or not isinstance(position, int):
+        raise ValueError("CBL adoption entry is missing an integer cbl_position")
+    return position
+
+
 def _adoption_payload(
     report: CBLReconciliationReport,
     plan: CBLAdoptionPlan,
@@ -593,7 +601,7 @@ def _adoption_payload(
     adoption_entries = list(plan.entries)
     positions_by_decision = {
         decision: [
-            int(entry["cbl_position"])
+            _cbl_position(entry)
             for entry in adoption_entries
             if entry.get("adoption_decision") == decision
         ]
