@@ -9,7 +9,9 @@ import { cast } from '../utils/cast'
 const mocks = vi.hoisted(() => ({
   updateReleaseSourceEnabled: vi.fn(),
   createReleaseSource: vi.fn(),
+  // SAFETY: the hoisted mock starts with no mutation error; the assertion widens the never-assigned null so tests can inject an Error before render.
   enableError: null as Error | null,
+  // SAFETY: the hoisted mock starts with no mutation error; the assertion widens the never-assigned null so tests can inject an Error before render.
   followError: null as Error | null,
 }))
 

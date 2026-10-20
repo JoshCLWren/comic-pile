@@ -226,7 +226,7 @@ describe('ReadingPlanDetailPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('offers confirmed release candidates and routes unmapped threads to repair', async () => {
+  it('offers confirmed release candidates and explains unmapped threads need a mapping', async () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Age of Apocalypse' })
@@ -238,10 +238,11 @@ describe('ReadingPlanDetailPage', () => {
 
     const blocked = within(screen.getByTestId('new-release-blocked-candidate'))
     expect(blocked.getByText(/No ComicVine volume is mapped/)).toBeInTheDocument()
-    expect(blocked.getByRole('link', { name: 'Repair the mapping' })).toHaveAttribute(
-      'href',
-      '/queue',
-    )
+    expect(blocked.queryByRole('button', { name: /^Follow/ })).not.toBeInTheDocument()
+    expect(
+      blocked.getByText(/Track issues in this thread first, then map its series/),
+    ).toBeInTheDocument()
+    expect(blocked.queryByRole('link', { name: 'Repair the mapping' })).not.toBeInTheDocument()
   })
 
   it('rejects an invalid plan id before fetching', () => {
