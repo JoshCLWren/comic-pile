@@ -314,8 +314,22 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
       if (creatingRef.current) return
       creatingRef.current = true
       try {
-        const { parseIssueRange } = await import('../../utils/issueParser')
+        const { parseIssueRange, validateIssueRangeForStaging } = await import('../../utils/issueParser')
         const hasIssueRange = Boolean(createForm.issues && createForm.issues.trim())
+        if (hasIssueRange) {
+          const validation = validateIssueRangeForStaging(createForm.issues.trim())
+          if (!validation.valid) {
+            window.alert(validation.error || 'Invalid issue range.')
+            creatingRef.current = false
+            return
+          }
+          // Block save when unrecognized tokens are present (warning shown but not enforced #3631).
+          if (issueParseWarnings.length > 0) {
+            window.alert('Unparseable issue tokens: please fix or remove them before saving.')
+            creatingRef.current = false
+            return
+          }
+        }
         let issuesRemaining = Number(createForm.issuesRemaining)
         if (hasIssueRange) {
           issuesRemaining = parseIssueRange(createForm.issues)
@@ -368,7 +382,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         creatingRef.current = false
       }
     },
-    [createForm, closeCreateModal, onCreated, submitCreate],
+    [createForm, closeCreateModal, onCreated, submitCreate, issueParseWarnings],
   )
 
   const handleEditSubmit = useCallback(
