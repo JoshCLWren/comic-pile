@@ -66,7 +66,7 @@ export default function PlannerAddSteps({
             value={editor.selectedIssue}
             onChange={editor.setSelectedIssue}
             isLoading={issuesLoading}
-            disabled={!editor.selectedThread || lanesEmpty}
+            disabled={lanesEmpty}
             error={issueLoadError}
           />
           <button

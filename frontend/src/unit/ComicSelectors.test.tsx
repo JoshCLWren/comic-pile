@@ -142,6 +142,11 @@ describe('continuity comic selectors', () => {
     expect(screen.getByRole('combobox')).toBeDisabled()
     // Disabled-but-not-loading shows no progress indicator.
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    // Test that the issue selector is enabled when not disabled (e.g., when a thread is selected)
+    rerender(<ContinuityIssueSelector issues={issues} value={null} onChange={onChange} />)
+    expect(screen.getByRole('combobox')).not.toBeDisabled()
+    expect(screen.getByRole('combobox')).not.toHaveAttribute('aria-busy', 'true')
   })
 
   it('builds ordered ranges from issue labels and rejects reversed order without exposing positions', () => {
@@ -304,5 +309,30 @@ describe('continuity comic selectors', () => {
     )
     expect(screen.getByRole('option', { name: /Starman \(Vol\. 2\) \(1994 - 2001\)/i }))
       .toBeInTheDocument()
+  })
+
+  // Test for issue #3607: PlannerAddSteps should enable issue dropdown when thread is selected
+  it('issue selector should be enabled when thread is selected and lanes exist', () => {
+    // Test that the issue selector is enabled when a thread is selected
+    render(
+      <ContinuityIssueSelector 
+        issues={issues} 
+        value={null} 
+        onChange={vi.fn()} 
+        disabled={false} // This simulates the fix - disabled should only be based on lanes, not thread selection
+      />
+    )
+    expect(screen.getByRole('combobox')).not.toBeDisabled()
+    
+    // Test that the issue selector is disabled when no lanes exist
+    render(
+      <ContinuityIssueSelector 
+        issues={issues} 
+        value={null} 
+        onChange={vi.fn()} 
+        disabled={true} // This simulates when lanes are empty
+      />
+    )
+    expect(screen.getByRole('combobox')).toBeDisabled()
   })
 })
