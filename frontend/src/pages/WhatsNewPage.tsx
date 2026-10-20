@@ -54,7 +54,20 @@ function displayWordCount(release: Release): number {
 export function isDisplayableRelease(release: Release): boolean {
   if (hasUnfinishedWorkMarkers(release)) return false
   if (releaseDisplayText(release.title).length <= 1) return false
+  if (releaseDisplayText(release.title) === releaseDisplayText(release.summary)) return false
+  if (isInternalCategory(release.category)) return false
+  if (isLowercaseFragmentTitle(release.title)) return false
   return displayWordCount(release) >= MIN_DISPLAY_WORDS
+}
+
+function isInternalCategory(category: string): boolean {
+  const lettersOnly = category.replace(/[^A-Za-z]/g, '')
+  return lettersOnly.length > 0 && lettersOnly === lettersOnly.toUpperCase()
+}
+
+function isLowercaseFragmentTitle(title: string): boolean {
+  const displayTitle = releaseDisplayText(title)
+  return displayTitle.length > 0 && /^[a-z]/.test(displayTitle)
 }
 
 export function sortReleasesNewestFirst(releases: Release[]): Release[] {

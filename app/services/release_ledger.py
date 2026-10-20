@@ -31,7 +31,11 @@ async def list_published_releases(
     Returns:
         The page of releases and total matching release count.
     """
-    filters = (Release.status == "published", Release.visibility == "public")
+    filters = (
+        Release.status == "published",
+        Release.visibility == "public",
+        Release.title != Release.summary,
+    )
     total = await db.scalar(select(func.count(Release.id)).where(*filters))
     result = await db.execute(
         select(Release)
@@ -62,6 +66,7 @@ async def get_published_release(db: AsyncSession, release_id: int) -> Release | 
             Release.id == release_id,
             Release.status == "published",
             Release.visibility == "public",
+            Release.title != Release.summary,
         )
     )
     return result.scalar_one_or_none()

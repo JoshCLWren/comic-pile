@@ -185,6 +185,82 @@ async def test_public_release_list_filters_and_orders(
     assert [item["title"] for item in second_page.json()["releases"]] == ["Release 1205"]
 
 
+@pytest.mark.asyncio
+async def test_public_release_list_excludes_title_equals_summary(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Releases whose title equals their summary never reach the public list.
+
+    The Aug 7-10 historical backfill published cards that duplicate their
+    title as their summary. Those raw PR-description fragments must be
+    filtered out of What's New.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    now = datetime.now(UTC).isoformat()
+
+    broken = _release_payload(pr_number=1301, merge_sha="a" * 40)
+    broken["title"] = "persists normalized CBL reading-list sources, ordered entries"
+    broken["summary"] = "persists normalized CBL reading-list sources, ordered entries"
+    broken["category"] = "CBL REFERENCE IMPORTS"
+    broken["released_at"] = now
+
+    good = _release_payload(pr_number=1302, merge_sha="b" * 40)
+    good["title"] = "Real reader-facing release title"
+    good["summary"] = "A real reader-facing release summary for What's New."
+    good["category"] = "What's New"
+    good["released_at"] = now
+
+    broken_response = await auth_client.put("/api/v1/releases/", json=broken, headers=headers)
+    assert broken_response.status_code == 200
+    broken_id = broken_response.json()["id"]
+
+    good_response = await auth_client.put("/api/v1/releases/", json=good, headers=headers)
+    assert good_response.status_code == 200
+    good_id = good_response.json()["id"]
+
+    listed = await auth_client.get("/api/v1/releases/", params={"limit": 100, "offset": 0})
+    assert listed.status_code == 200
+    titles = [item["title"] for item in listed.json()["releases"]]
+    assert good_id in [item["id"] for item in listed.json()["releases"]]
+    assert broken_id not in [item["id"] for item in listed.json()["releases"]]
+    assert "persists normalized CBL" not in titles
+
+
+@pytest.mark.asyncio
+async def test_public_release_get_excludes_title_equals_summary(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A release whose title equals its summary is not fetchable by id.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    now = datetime.now(UTC).isoformat()
+
+    broken = _release_payload(pr_number=1303, merge_sha="c" * 40)
+    broken["title"] = "makes issue and pull-request"
+    broken["summary"] = "makes issue and pull-request"
+    broken["category"] = "ROLL RECOVERY"
+    broken["released_at"] = now
+
+    created = await auth_client.put("/api/v1/releases/", json=broken, headers=headers)
+    assert created.status_code == 200
+    broken_id = created.json()["id"]
+
+    fetched = await auth_client.get(f"/api/v1/releases/{broken_id}")
+    assert fetched.status_code == 404
+
+
 def _public_provenance() -> dict[str, object]:
     """Return complete reader-visible classification evidence for public payloads.
 
