@@ -335,13 +335,13 @@ export function QueueModals({
               id="create-thread-title"
               value={createForm.title}
               onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
-              className={`w-full rounded-xl px-3 py-2 text-sm form-control ${createTitleError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+              className={`w-full rounded-xl px-3 py-2 text-sm form-control ${createTitleError ? 'border-[var(--theme-danger)] focus:border-[var(--theme-focus-ring)] focus:ring-[var(--theme-focus-ring)]/20' : ''}`}
               required
               aria-invalid={createTitleError}
               aria-describedby={createTitleError ? 'create-title-error' : undefined}
             />
             {createTitleError && (
-              <p id="create-title-error" className="text-xs text-red-400" role="alert">
+              <p id="create-title-error" className="text-xs text-[var(--theme-danger)]" role="alert">
                 Title cannot be empty or whitespace only
               </p>
             )}
@@ -432,7 +432,7 @@ export function QueueModals({
               Enter the exact issues you want to track, such as 71. You do not need to add earlier
               issues.
             </p>
-            {issueParseError && <p className="text-xs text-red-400">{issueParseError}</p>}
+            {issueParseError && <p className="text-xs text-[var(--theme-danger)]">{issueParseError}</p>}
           </div>
           <div className="space-y-2">
             <label
@@ -515,13 +515,13 @@ export function QueueModals({
                 id="edit-thread-title"
                 value={editForm.title}
                 onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-                className={`w-full rounded-xl px-3 py-2 text-sm form-control ${editTitleError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+                className={`w-full rounded-xl px-3 py-2 text-sm form-control ${editTitleError ? 'border-[var(--theme-danger)] focus:border-[var(--theme-focus-ring)] focus:ring-[var(--theme-focus-ring)]/20' : ''}`}
                 required
                 aria-invalid={editTitleError}
                 aria-describedby={editTitleError ? 'edit-title-error' : undefined}
               />
               {editTitleError && (
-                <p id="edit-title-error" className="text-xs text-red-400" role="alert">
+                <p id="edit-title-error" className="text-xs text-[var(--theme-danger)]" role="alert">
                   Title cannot be empty or whitespace only
                 </p>
               )}
