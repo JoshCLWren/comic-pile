@@ -76,6 +76,17 @@ describe('releasesQueryOptions', () => {
       ]),
     ).toBeUndefined()
   })
+
+  it('stops paging when the ledger returns an empty page for the next offset', () => {
+    const options = releasesQueryOptions()
+
+    expect(
+      options.getNextPageParam(pageOf([], 5, 1), [
+        pageOf([release({ id: 1 })], 5, 0),
+        pageOf([], 5, 1),
+      ]),
+    ).toBeUndefined()
+  })
 })
 
 describe('useReleases', () => {

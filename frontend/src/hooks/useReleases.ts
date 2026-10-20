@@ -34,6 +34,12 @@ export function releasesQueryOptions(
     queryFn: ({ pageParam }: { pageParam: number }) => listApi.list(limit, pageParam),
     initialPageParam: 0,
     getNextPageParam: (lastPage: ReleaseListResponse, allPages: ReleaseListResponse[]) => {
+      // An empty page means the ledger has nothing more at this offset. Stop
+      // instead of re-requesting the same offset, so the page traversal always
+      // terminates even when the server's total count is stale.
+      if (lastPage.releases.length === 0) {
+        return undefined
+      }
       const loaded = allPages.reduce((sum, page) => sum + page.releases.length, 0)
       return loaded < lastPage.total ? loaded : undefined
     },

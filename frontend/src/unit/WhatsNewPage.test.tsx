@@ -556,4 +556,29 @@ describe('WhatsNewPage', () => {
       expect(api.list).toHaveBeenNthCalledWith(3, RELEASE_PAGE_SIZE, 1)
       expect(api.list).toHaveBeenNthCalledWith(4, RELEASE_PAGE_SIZE, 2)
     })
+
+    it('stops the automatic page traversal when the ledger returns an empty page', async () => {
+      api.list
+        .mockResolvedValueOnce({
+          releases: [release({ id: 2, title: 'T', summary: 'S', category: 'bug' })],
+          total: 5,
+          limit: RELEASE_PAGE_SIZE,
+          offset: 0,
+        })
+        .mockResolvedValue({
+          releases: [],
+          total: 5,
+          limit: RELEASE_PAGE_SIZE,
+          offset: 1,
+        })
+
+      renderPage()
+
+      await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2))
+
+      // The empty page ends the traversal instead of re-requesting the same
+      // offset forever.
+      await new Promise(resolve => setTimeout(resolve, 100))
+      expect(api.list).toHaveBeenCalledTimes(2)
+    })
   })
