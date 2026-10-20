@@ -95,18 +95,18 @@ def build_session_bandwidth_state(
     return SessionBandwidthState(
         predicted_bandwidth=cast(
             BandwidthLevel | None,
-            predicted_bandwidth if predicted_bandwidth in _BANDWIDTH_LEVELS else None
+            predicted_bandwidth if predicted_bandwidth in _BANDWIDTH_LEVELS else None,
         ),
         active_bandwidth=cast(
             BandwidthLevel | None,
-            active_bandwidth if active_bandwidth in _BANDWIDTH_LEVELS else None
+            active_bandwidth if active_bandwidth in _BANDWIDTH_LEVELS else None,
         ),
         confidence=(
             confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None
         ),
         source=cast(
             BandwidthSource | None,
-            source if source in _BANDWIDTH_SOURCES else None
+            source if source in _BANDWIDTH_SOURCES else None,
         ),
         mode_version=mode_version,
     )
@@ -156,16 +156,16 @@ def build_session_intent_state(
     return SessionIntentState(
         predicted_intent=cast(
             IntentLevel | None,
-            predicted_intent if predicted_intent in _INTENT_LEVELS else None
+            predicted_intent if predicted_intent in _INTENT_LEVELS else None,
         ),
         active_intent=cast(
             IntentLevel | None,
-            active_intent if active_intent in _INTENT_LEVELS else None
+            active_intent if active_intent in _INTENT_LEVELS else None,
         ),
         confidence=confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None,
         source=cast(
             IntentSource | None,
-            source if source in _INTENT_SOURCES else None
+            source if source in _INTENT_SOURCES else None,
         ),
         mode_version=mode_version,
     )

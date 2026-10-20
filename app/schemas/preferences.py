@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.constants import DEFAULT_THEME, ThemeId
+from app.constants import DEFAULT_THEME, ThemeId as ThemeId
 
 
 class UserPreferencesResponse(BaseModel):
