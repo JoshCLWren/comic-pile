@@ -133,6 +133,94 @@ def test_repair_summary_keeps_complete_sentences_after_removing_paths() -> None:
 
 
 @pytest.mark.parametrize(
+    "summary",
+    [
+        "The API now supports importing a saved reading list.",
+        "The frontend now supports a dark theme.",
+    ],
+)
+def test_repair_summary_keeps_reader_copy_that_names_one_engineering_term(
+    summary: str,
+) -> None:
+    """A single technical word does not make reader-visible copy internal.
+
+    Args:
+        summary: Reader-facing summary that names one product surface.
+
+    Returns:
+        None.
+    """
+    assert repair_summary(summary, title="Improve imports") == summary
+
+
+def test_repair_summary_drops_engineering_only_narrative() -> None:
+    """Sentences built entirely from implementation vocabulary are omitted.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    repaired = repair_summary(
+        "Refactor the repository layout and migrate the schema. "
+        "Your saved filters now survive a reload.",
+        title="Saved filters survive reloads",
+    )
+
+    assert repaired == "Your saved filters now survive a reload."
+
+
+def test_repair_summary_removes_a_summary_that_repeats_its_title() -> None:
+    """A summary that restates the title keeps only its new reader content.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    title = (
+        "Fixed blocked threads not displaying their blocking dependency name "
+        "on Queue cards and thread pages"
+    )
+    repaired = repair_summary(
+        f"{title}. Users can now see which thread is blocking another directly in the UI.",
+        title=title,
+    )
+
+    assert repaired == "Users can now see which thread is blocking another directly in the UI."
+
+
+def test_duplicate_reading_plan_release_titles_are_disambiguated() -> None:
+    """The two merged Reading Plan changes keep distinct canonical titles.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    stored_title = "Commit reviewed material into a Reading Plan"
+    commit_title, _ = repair_release_copy(
+        source_repository="JoshCLWren/comic-pile",
+        source_pr_number=2387,
+        title=stored_title,
+        summary="Reviewed material can now be committed into a plan.",
+    )
+    add_title, _ = repair_release_copy(
+        source_repository="JoshCLWren/comic-pile",
+        source_pr_number=2394,
+        title=stored_title,
+        summary="Reviewed material can now be committed into a plan.",
+    )
+
+    assert commit_title == stored_title
+    assert add_title == "Add reviewed material to an existing Reading Plan"
+    assert commit_title != add_title
+
+
+@pytest.mark.parametrize(
     ("pr_number", "stored_title", "expected_title"),
     [
         (

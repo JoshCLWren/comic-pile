@@ -1,9 +1,9 @@
 """Deterministic reader-facing copy rules for the What's New release ledger.
 
-The release writer, the public publication schema, and the public read path all
-share this module so one contract decides what can appear in reader-facing
-release notes. The module is intentionally dependency-free: the release-writer
-workflow loads it by file path from a standard-library-only Python runtime.
+The public read path repairs historical copy with these rules, while
+``app/schemas/release.py`` enforces the reader-facing artifact gate when new
+releases are written. The module is intentionally dependency-free so it can be
+inspected or reused from a standard-library-only Python runtime.
 
 Historical entries may still contain copy that predates the publication gate.
 The public read path repairs that copy deterministically instead of mutating
@@ -71,6 +71,11 @@ _ENGINEERING_ONLY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _READER_CUE_PATTERN = re.compile(r"\b(?:you|your|reader|readers)\b", re.IGNORECASE)
+# A single engineering word does not make a sentence internal: release notes
+# legitimately mention "the API" or "the frontend" when describing a reader
+# change. Only sentences that accumulate several distinct implementation terms
+# are treated as engineering-only narrative and omitted.
+_MIN_ENGINEERING_TERMS = 2
 
 _KNOWN_TYPOS: dict[str, str] = {
     "appearnence": "appearance",
@@ -443,9 +448,10 @@ def _remove_artifact_clauses(text: str) -> str:
 
 
 def _is_engineering_only(text: str) -> bool:
-    return bool(_ENGINEERING_ONLY_PATTERN.search(text)) and not bool(
-        _READER_CUE_PATTERN.search(text)
-    )
+    if _READER_CUE_PATTERN.search(text):
+        return False
+    terms = {match.group(0).lower() for match in _ENGINEERING_ONLY_PATTERN.finditer(text)}
+    return len(terms) >= _MIN_ENGINEERING_TERMS
 
 
 def _clean_punctuation(text: str) -> str:
