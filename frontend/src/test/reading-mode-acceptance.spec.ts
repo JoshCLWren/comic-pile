@@ -234,6 +234,44 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
     expect(mode.active_bandwidth).toBe('deep')
   })
 
+  test('arrow keys move and select within the mode selector radio groups', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+
+    await setSessionMode(page, { bandwidth: 'balanced', intent: 'momentum' })
+    await gotoRollPage(page)
+    await waitForRollPageReady(page)
+
+    const control = page.getByTestId('reading-mode-control')
+    await expect(control).toHaveText('Balanced · Momentum')
+    await control.click()
+
+    const sheet = page.getByTestId('mode-selector-sheet')
+    await expect(sheet).toBeVisible()
+
+    // ArrowRight moves to the next bandwidth option and selects it immediately,
+    // matching the sheet's click-to-commit behavior (issue #3682).
+    const bandwidthGroup = page.getByRole('radiogroup', { name: 'Bandwidth' })
+    await bandwidthGroup.getByRole('radio', { name: /Balanced/ }).focus()
+    await page.keyboard.press('ArrowRight')
+
+    await expect(sheet).toBeHidden()
+    await expect(control).toHaveText('Deep · Momentum')
+    expect((await getSessionMode(page)).active_bandwidth).toBe('deep')
+
+    // ArrowLeft wraps backward from the first intent option to the last one.
+    await control.click()
+    await expect(sheet).toBeVisible()
+    const intentGroup = page.getByRole('radiogroup', { name: 'Intent' })
+    await intentGroup.getByRole('radio', { name: /Balanced/ }).focus()
+    await page.keyboard.press('ArrowLeft')
+
+    await expect(sheet).toBeHidden()
+    await expect(control).toHaveText('Deep · Random')
+    expect((await getSessionMode(page)).active_intent).toBe('random')
+  })
+
   test('mode selector closes on Escape without changing state', async ({
     authenticatedPage,
   }) => {
