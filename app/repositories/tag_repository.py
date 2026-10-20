@@ -238,7 +238,7 @@ async def count_assignments_for_tag_by_target_type(
         .where(TagAssignment.tag_id == tag_id)
         .group_by(TagAssignment.target_type)
     )
-    return {row.target_type: row.count for row in result.all()}
+    return {str(target_type): int(count) for target_type, count in result.all()}
 
 
 async def has_assignment(

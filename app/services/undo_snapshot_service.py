@@ -21,6 +21,7 @@ from app.services.snapshot_contract import (
     SNAPSHOT_VERSION,
     SNAPSHOT_VERSION_KEY,
     USES_ISSUE_TRACKING_KEY,
+    SnapshotThreadState,
 )
 from comic_pile.bandwidth import restore_ephemeral_bandwidth
 
@@ -260,7 +261,7 @@ class UndoSnapshotService:
     async def _restore_thread_from_state(
         self,
         thread_id: int,
-        state: dict,
+        state: SnapshotThreadState,
         session_user_id: int,
         pre_loaded_thread: Thread | None = None,
         pre_loaded_issues: list[Issue] | None = None,
@@ -285,7 +286,10 @@ class UndoSnapshotService:
         await self._restore_issue_states(thread, state, pre_loaded_issues)
 
     async def _restore_issue_states(
-        self, thread: Thread, state: dict, pre_loaded_issues: list[Issue] | None = None
+        self,
+        thread: Thread,
+        state: SnapshotThreadState,
+        pre_loaded_issues: list[Issue] | None = None,
     ) -> None:
         """Restore issue state in place so surviving associations remain intact."""
         # Compact delta path (#3226): apply only changed-issue preimages.

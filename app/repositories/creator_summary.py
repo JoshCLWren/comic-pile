@@ -12,9 +12,9 @@ requested.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import distinct_on
@@ -149,7 +149,7 @@ def extract_creator_credit_list(raw: object) -> list[CreatorCredit]:
     return credits
 
 
-def extract_creator_credits(metadata: dict[str, Any]) -> list[CreatorCredit]:
+def extract_creator_credits(metadata: Mapping[str, object]) -> list[CreatorCredit]:
     """Extract deduplicated creator credits from confirmed issue metadata.
 
     Credits must carry a stable external person id and a display name to be
@@ -425,11 +425,13 @@ async def load_creator_summary_inputs(
     )
     effective_ratings: dict[int, float] = {}
     effective_rating_timestamps: dict[int, datetime] = {}
-    for issue_id, rating, timestamp in rate_result.all():
-        if issue_id is not None:
-            effective_ratings[int(issue_id)] = float(rating)
-            if timestamp is not None:
-                effective_rating_timestamps[int(issue_id)] = timestamp
+    for rated_issue_id, rating, timestamp in rate_result.all():
+        if rated_issue_id is None or rating is None:
+            continue
+        normalized_issue_id = int(rated_issue_id)
+        effective_ratings[normalized_issue_id] = float(rating)
+        if timestamp is not None:
+            effective_rating_timestamps[normalized_issue_id] = timestamp
 
     return CreatorSummaryInputs(
         owned_issues=owned_issues,

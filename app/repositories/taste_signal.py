@@ -74,7 +74,7 @@ async def upsert_signal(
     external_key: str,
     display_name: str,
     verdict: str,
-    now,
+    now: datetime,
 ) -> TasteSignal:
     """Record a user verdict for a Taste Bank signal.
 

@@ -145,7 +145,9 @@ async def get_performance_metrics_summary(
     ).select_from(base_subquery).group_by(base_subquery.c.cold)
 
     count_result = await db.execute(count_query)
-    by_cold: dict[bool, int] = {row.cold: int(row.count) for row in count_result.all()}
+    by_cold: dict[bool, int] = {
+        cold: int(count) for cold, count in count_result.all()
+    }
 
     # Response time stats by cold/warm — aggregates only the filtered relation.
     stats_query = select(
