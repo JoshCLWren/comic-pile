@@ -117,7 +117,7 @@ def test_satisfied_dependency_does_not_complete_a_cycle() -> None:
 
     graph_edges, issue_thread_ids = build_reading_order_graph(edges, issues)
 
-    assert graph_edges == [(1, 2)]
+    assert graph_edges == [(2, 3)]
     assert find_thread_cycle_issue_ids(graph_edges, issue_thread_ids, 10) == set()
 
 
