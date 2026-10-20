@@ -61,12 +61,18 @@ export default function PlannerAddSteps({
             onChange={(thread) => editor.selectThread(thread)}
             label="Comic series"
           />
+          {/*
+            Availability is lane-driven only (#3607). The selector already
+            disables itself while issues load or when the selected series has
+            none, so a second flag based on thread selection can only render
+            available issues as unusable.
+          */}
           <ContinuityIssueSelector
             issues={issues}
             value={editor.selectedIssue}
             onChange={editor.setSelectedIssue}
             isLoading={issuesLoading}
-            disabled={!editor.selectedThread || lanesEmpty}
+            disabled={lanesEmpty}
             error={issueLoadError}
           />
           <button

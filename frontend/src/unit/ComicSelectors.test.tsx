@@ -142,6 +142,11 @@ describe('continuity comic selectors', () => {
     expect(screen.getByRole('combobox')).toBeDisabled()
     // Disabled-but-not-loading shows no progress indicator.
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    // Test that the issue selector is enabled when not disabled (e.g., when a thread is selected)
+    rerender(<ContinuityIssueSelector issues={issues} value={null} onChange={onChange} />)
+    expect(screen.getByRole('combobox')).not.toBeDisabled()
+    expect(screen.getByRole('combobox')).not.toHaveAttribute('aria-busy', 'true')
   })
 
   it('builds ordered ranges from issue labels and rejects reversed order without exposing positions', () => {
