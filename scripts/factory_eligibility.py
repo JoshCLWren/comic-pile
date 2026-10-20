@@ -232,6 +232,9 @@ def owner_of(labels: Iterable[str]) -> str | None:
     """Return the active factory owner represented by a label set."""
     owners = [label for label in labels if FACTORY_OWNER_RE.fullmatch(label)]
     active = [label for label in owners if label != "factory:unowned"]
+    # factory:local is a hard stop and dominates any coexisting worker label.
+    if "factory:local" in active:
+        return "factory:local"
     if active:
         return sorted(active)[0]
     return "factory:unowned" if "factory:unowned" in owners else None

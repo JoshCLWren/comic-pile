@@ -56,11 +56,11 @@ def test_chatgpt_factory_lease_is_not_reaped_using_fixed_model_run_state(
     )
 
 
-def test_local_lease_requires_explicit_stale_activity_evidence(
+def test_local_lease_is_a_hard_hold_never_reaped(
     controller: types.ModuleType,
 ) -> None:
-    """Verify local lease requires explicit stale activity evidence."""
-    assert controller.lease_is_stale(
+    """factory:local is a local/manual hold and is never auto-released."""
+    assert not controller.lease_is_stale(
         "factory:local",
         active_fixed_workers=set(),
         latest_activity_epoch=1_000,

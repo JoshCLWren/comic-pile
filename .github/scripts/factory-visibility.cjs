@@ -535,7 +535,8 @@ async function routeGreptileFindings(github, context, number) {
   }
   if (current.has('factory:changes-requested')) return { routed: false, reason: 'already-routed' };
   await reconcileLabels(github, context, number, {
-    owner: [...current].find(isOwnerLabel) || await ownerFromLinkedIssue(github, context, { ...live, number }),
+    owner: (current.has('factory:local') ? 'factory:local' : [...current].find(isOwnerLabel))
+      || await ownerFromLinkedIssue(github, context, { ...live, number }),
     stage: 'factory:changes-requested',
   });
   return { routed: true, openThreads: openThreads.length, openSummary: openSummary.length };
@@ -907,7 +908,11 @@ async function reconcile({ github, context }) {
       && ADVANCED_PR_STAGES.has(currentStage);
 
     await reconcileLabels(github, context, number, {
-      owner: released ? 'factory:unowned' : worker ? ownerFor(worker) : currentOwner,
+      // factory:local is a hard local/manual hold: a worker claim, progress, or
+      // release marker must never take it over or return it to the queue.
+      owner: current.has('factory:local')
+        ? 'factory:local'
+        : released ? 'factory:unowned' : worker ? ownerFor(worker) : currentOwner,
       stage: preserveAdvancedPrStage ? currentStage : requestedStage || currentStage,
     });
     return;
@@ -962,7 +967,9 @@ async function reconcile({ github, context }) {
       return;
     }
 
-    const currentOwner = [...current].find(isOwnerLabel) || null;
+    const currentOwner = current.has('factory:local')
+      ? 'factory:local'
+      : [...current].find(isOwnerLabel) || null;
     if (context.payload.action === 'dismissed') {
       await reconcileLabels(github, context, pullRequest.number, {
         owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),

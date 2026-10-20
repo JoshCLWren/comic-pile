@@ -39,6 +39,10 @@ OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$')
 
 FIXED_OWNER_RE = re.compile('^factory:(?P<worker>[6-9]|[1-3][0-9]|[4-9][0-9])$')
 
+# Local/manual-only ownership. Workers and controllers must never claim,
+# continue, reclaim, promote, or merge targets carrying this label.
+LOCAL_OWNER = 'factory:local'
+
 STAGE_LABELS = {'factory:building', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:ready', 'factory:blocked'}
 STAGE_PRECEDENCE = ('factory:blocked', 'factory:ready', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:building')
 
@@ -165,6 +169,10 @@ def owner_of(labels: Iterable[str]) -> str | None:
     """Return the active factory owner represented by a label set."""
     owners = [label for label in labels if OWNER_RE.fullmatch(label)]
     active = [label for label in owners if label != 'factory:unowned']
+    # factory:local is a hard stop: it dominates any coexisting numeric worker
+    # label so no fixed-model worker continues, releases, or re-leases it.
+    if LOCAL_OWNER in active:
+        return LOCAL_OWNER
     if active:
         return sorted(active)[0]
     return 'factory:unowned' if 'factory:unowned' in owners else None
@@ -899,8 +907,10 @@ def no_diff_attempts_from_comments(
 
 def lease_is_stale(owner: str, *, active_fixed_workers: set[int], has_unresolved_active_runs: bool | None = None, latest_activity_epoch: int | None, now_epoch: int, local_ttl_seconds: int=LOCAL_LEASE_TTL_SECONDS, fixed_ttl_seconds: int=FIXED_LEASE_TTL_SECONDS) -> bool:
     """Return whether a factory lease can be proven stale."""
-    if owner == 'factory:local':
-        return latest_activity_epoch is not None and now_epoch - latest_activity_epoch > local_ttl_seconds
+    if owner == LOCAL_OWNER:
+        # Never auto-release a local/manual hold back into the queue; only a
+        # human (or the local session) removes factory:local.
+        return False
     match = FIXED_OWNER_RE.fullmatch(owner)
     if match:
         # Callers predating the run-identity fence did not provide this bit.

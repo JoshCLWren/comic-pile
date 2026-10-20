@@ -225,7 +225,7 @@ def test_github_actions_heartbeat_resolves_unlabeled_run(
     assert unresolved == set()
 
 
-def test_unresolvable_run_holds_fixed_leases_but_local_gc_continues(
+def test_unresolvable_run_holds_fixed_leases_and_never_reaps_local_hold(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     controller = load_controller()
@@ -244,8 +244,8 @@ def test_unresolvable_run_holds_fixed_leases_but_local_gc_continues(
         lambda number, owner, stage=None: released.append((number, owner)),
     )
 
-    assert controller.reconcile_stale_leases(now_epoch=now) == [3]
-    assert released == [(3, "factory:unowned")]
+    assert controller.reconcile_stale_leases(now_epoch=now) == []
+    assert released == []
 
 
 def test_resolved_inactive_fixed_worker_reclaims_only_after_ttl() -> None:

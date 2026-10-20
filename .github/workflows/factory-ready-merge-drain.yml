@@ -302,6 +302,12 @@ jobs:
           for candidate in "${ready_prs[@]}"; do
             IFS=$'\t' read -r pr expected_head pr_labels <<< "$candidate"
             [[ -n "$pr" && -n "$expected_head" ]] || continue
+            case ",${pr_labels}," in
+              *,factory:local,*)
+                echo "PR #${pr} skipped: factory:local is a local/manual hold and never merges from a factory drain"
+                continue
+                ;;
+            esac
             if [[ "${DEPLOY_FROZEN}" == "true" ]]; then
               case ",${pr_labels}," in
                 *,deploy-fix,*)

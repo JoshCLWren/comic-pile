@@ -112,6 +112,9 @@ class GateResult(TypedDict):
     reason: str
 
 
+LOCAL_HOLD_LABEL = "factory:local"
+
+
 def gate_result(decision: GateDecision, reason: str) -> GateResult:
     return {"decision": decision, "reason": reason}
 
@@ -1003,6 +1006,9 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
     labels = labels_of(pr)
     if str(pr.get("state")) != "OPEN" or "factory:ci" not in labels:
         return {"pr": pr_number, "status": "skipped"}
+    if LOCAL_HOLD_LABEL in labels:
+        # Local/manual hold: never promote, demote, or hand off to a worker.
+        return {"pr": pr_number, "status": "local-hold"}
 
     owner = active_factory_owner(labels)
     if owner is not None:
@@ -1941,6 +1947,10 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
     pr = pr_json(pr_number)
     branch = str(pr.get("headRefName") or "")
     head = str(pr.get("headRefOid") or "")
+    if LOCAL_HOLD_LABEL in labels_of(pr):
+        # Local/manual hold is a hard merge stop. Leave labels untouched so the
+        # hold is never converted into factory:unowned review work.
+        return {"authorized": False, "head": head, "reason": "factory:local hold"}
     producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
     comments = review_comment_bodies(pr_number)
     model_comments = model_comment_bodies(pr_number)
