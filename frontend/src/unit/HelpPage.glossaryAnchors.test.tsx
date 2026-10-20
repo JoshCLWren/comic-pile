@@ -261,3 +261,68 @@ describe('glossary deep-link scrolling (issue #3146)', () => {
     expect(scrollIntoView).not.toHaveBeenCalled()
   })
 })
+
+describe('glossary deep-link highlight (issue #3681)', () => {
+  let scrollIntoView: MockInstance<Element['scrollIntoView']>
+
+  beforeEach(() => {
+    scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    scrollIntoView.mockRestore()
+  })
+
+  it('visibly highlights the card matching the deep-link fragment', () => {
+    renderGlossary('/glossary#die-size')
+    const card = document.getElementById('die-size')
+    expect(card).not.toBeNull()
+    expect(card).toHaveClass('ring-2')
+    expect(card).toHaveClass('ring-[var(--theme-focus-ring)]')
+    expect(card).toHaveAttribute('aria-current', 'location')
+  })
+
+  it('highlights a card matched through a retired alias', () => {
+    renderGlossary('/glossary#die-ladder')
+    const card = document.getElementById('die-size')
+    expect(card).not.toBeNull()
+    expect(card).toHaveClass('ring-2')
+    expect(card).toHaveAttribute('aria-current', 'location')
+  })
+
+  it('does not highlight any card when the fragment is empty', () => {
+    renderGlossary('/glossary')
+    // SAFETY: every rendered glossary definition sits inside a card container that owns an id.
+    const cards = screen.getAllByTestId('glossary-definition').map(
+      (def) => def.closest('[id]') as HTMLElement,
+    )
+    for (const card of cards) {
+      expect(card).not.toHaveClass('ring-2')
+      expect(card).not.toHaveAttribute('aria-current')
+    }
+  })
+
+  it('does not highlight any card when the fragment matches no definition', () => {
+    renderGlossary('/glossary#not-a-definition')
+    // SAFETY: every rendered glossary definition sits inside a card container that owns an id.
+    const cards = screen.getAllByTestId('glossary-definition').map(
+      (def) => def.closest('[id]') as HTMLElement,
+    )
+    for (const card of cards) {
+      expect(card).not.toHaveClass('ring-2')
+    }
+  })
+
+  it('moves the highlight when the reader follows another glossary deep link', async () => {
+    const user = userEvent.setup()
+    renderGlossary('/glossary#die-size')
+    expect(document.getElementById('die-size')).toHaveClass('ring-2')
+
+    await user.click(screen.getByRole('link', { name: 'Copy link to Auto definition' }))
+
+    expect(document.getElementById('auto')).toHaveClass('ring-2')
+    expect(document.getElementById('die-size')).not.toHaveClass('ring-2')
+  })
+})
