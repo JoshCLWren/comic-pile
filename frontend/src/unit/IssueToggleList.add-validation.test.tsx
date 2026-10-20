@@ -230,6 +230,39 @@ describe('IssueToggleList Add box validation (#3586)', () => {
     expect(ref.current?.hasPendingMutations()).toBe(false)
   })
 
+  it('refuses to stage an entry that names no issue at all', async () => {
+    const ref = await renderDeferred()
+    const input = screen.getByTestId('issue-add-input')
+
+    fireEvent.change(input, { target: { value: ',' } })
+
+    expect(screen.getByTestId('issue-add-button')).toBeDisabled()
+    expect(screen.getByTestId('issue-add-validation-error')).toHaveTextContent(
+      'does not name an issue',
+    )
+
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
+    expect(ref.current?.hasPendingMutations()).toBe(false)
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+  })
+
+  it('does not freeze the page on a pasted range endpoint that cannot be represented', async () => {
+    const ref = await renderDeferred()
+    const input = screen.getByTestId('issue-add-input')
+
+    // 2^53 is the first integer a JavaScript number cannot hold exactly, so
+    // expanding this range in a loop would never end.
+    fireEvent.change(input, { target: { value: '9007199254740992-9007199254740992' } })
+
+    expect(screen.getByTestId('issue-add-validation-error')).toHaveTextContent('safe integers')
+    expect(screen.getByTestId('issue-add-button')).toBeDisabled()
+    expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
+    expect(ref.current?.hasPendingMutations()).toBe(false)
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+  })
+
   it('discards the draft when the dialog closes without saving', async () => {
     const ref = await renderDeferred()
     const input = screen.getByTestId('issue-add-input')

@@ -101,4 +101,35 @@ describe('validateIssueRangeForStaging', () => {
     expect(result.valid).toBe(false)
     expect(result.error).toContain('Range too large')
   })
+
+  it('rejects a pasted range whose endpoint a JavaScript number cannot hold exactly', () => {
+    // 2^53 is the first integer a double cannot represent, so the expansion
+    // loop could never advance past it. The entry must be rejected instead of
+    // freezing the page.
+    const result = validateIssueRangeForStaging('9007199254740992-9007199254740992')
+
+    expect(result.valid).toBe(false)
+    expect(result.empty).toBe(false)
+    expect(result.invalidReason).toBe('parser-error')
+    expect(result.error).toContain('safe integers')
+  })
+
+  it('rejects an entry that names no issue at all', () => {
+    for (const input of [',', ',,', ' , , ']) {
+      const result = validateIssueRangeForStaging(input)
+
+      expect(result.valid, `${input} should be rejected`).toBe(false)
+      expect(result.empty).toBe(false)
+      expect(result.issues).toEqual([])
+      expect(result.invalidReason).toBe('no-issues')
+      expect(result.error).toContain('does not name an issue')
+    }
+  })
+
+  it('still accepts an entry that names an issue alongside a stray comma', () => {
+    const result = validateIssueRangeForStaging('19,')
+
+    expect(result.valid).toBe(true)
+    expect(result.issues).toEqual(['19'])
+  })
 })

@@ -67,4 +67,24 @@ describe('parseIssueRangeDetailed', () => {
     expect(() => parseIssueRangeDetailed('')).toThrow('cannot be empty')
     expect(parseIssueRange('1-3, Annual 1, 3')).toBe(4)
   })
+
+  it('rejects a range endpoint that a JavaScript number cannot hold exactly', () => {
+    // 2^53 is the first integer a double cannot represent, so `i++` in the
+    // expansion loop can never advance past it. Expanding such a range would
+    // loop forever and freeze the page.
+    expect(() =>
+      parseIssueRangeDetailed('9007199254740992-9007199254740992'),
+    ).toThrow('safe integers')
+    expect(() => parseIssueRangeDetailed('1-9007199254740992')).toThrow('safe integers')
+  })
+
+  it('still expands a range that ends at the largest safe integer', () => {
+    expect(parseIssueRangeDetailed('9007199254740991-9007199254740991').issues).toEqual([
+      '9007199254740991',
+    ])
+  })
+
+  it('still accepts a single oversized issue number as a literal', () => {
+    expect(parseIssueRangeDetailed('9007199254740992').issues).toEqual(['9007199254740992'])
+  })
 })

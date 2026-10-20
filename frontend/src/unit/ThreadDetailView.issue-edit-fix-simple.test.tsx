@@ -230,4 +230,17 @@ describe('ThreadDetailView Edit dialog rejects invalid issue entries (#3586)', (
 
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
   })
+
+  it('does not stage a pending chip for an entry that names no issue at all', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+    const { user, addInput } = await openEditDialog()
+    await user.type(addInput, ',')
+    await user.click(screen.getByTestId('issue-add-button'))
+
+    expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
+    expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
+    expect(screen.getByTestId('issue-add-validation-error')).toBeInTheDocument()
+  })
 })
