@@ -475,4 +475,85 @@ describe('WhatsNewPage', () => {
         await screen.findByText('No release notes have been published yet.'),
       ).toBeInTheDocument()
     })
+
+    it('stops the automatic page traversal after a failed page request', async () => {
+      api.list
+        .mockResolvedValueOnce({
+          releases: [release({ id: 2, title: 'T', summary: 'S', category: 'bug' })],
+          total: 2,
+          limit: RELEASE_PAGE_SIZE,
+          offset: 0,
+        })
+        .mockRejectedValueOnce(new Error('older page unavailable'))
+
+      renderPage()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('older page unavailable')
+      expect(api.list).toHaveBeenCalledTimes(2)
+      expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, 1)
+
+      // The failed page must not be re-requested on its own; the reader owns
+      // the retry through the visible "Try again" control.
+      await new Promise(resolve => setTimeout(resolve, 100))
+      expect(api.list).toHaveBeenCalledTimes(2)
+    })
+
+    it('retries a failed automatic page request only when the reader asks', async () => {
+      api.list
+        .mockResolvedValueOnce({
+          releases: [release({ id: 2, title: 'T', summary: 'S', category: 'bug' })],
+          total: 2,
+          limit: RELEASE_PAGE_SIZE,
+          offset: 0,
+        })
+        .mockRejectedValueOnce(new Error('older page unavailable'))
+        .mockResolvedValueOnce({
+          releases: [release({ id: 1, title: 'Recovered release note', released_at: '2026-08-10T20:00:00Z' })],
+          total: 2,
+          limit: RELEASE_PAGE_SIZE,
+          offset: 1,
+        })
+
+      renderPage()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('older page unavailable')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+      expect(await screen.findByText('Recovered release note')).toBeInTheDocument()
+      expect(api.list).toHaveBeenNthCalledWith(3, RELEASE_PAGE_SIZE, 1)
+    })
+
+    it('resumes the automatic traversal after a reader-driven retry succeeds', async () => {
+      api.list
+        .mockResolvedValueOnce({
+          releases: [release({ id: 3, title: 'T', summary: 'S', category: 'bug' })],
+          total: 3,
+          limit: RELEASE_PAGE_SIZE,
+          offset: 0,
+        })
+        .mockRejectedValueOnce(new Error('older page unavailable'))
+        .mockResolvedValueOnce({
+          releases: [release({ id: 2, title: 'S', summary: 'S', category: 'bug' })],
+          total: 3,
+          limit: RELEASE_PAGE_SIZE,
+          offset: 1,
+        })
+        .mockResolvedValueOnce({
+          releases: [release({ id: 1, title: 'Real release note', released_at: '2026-08-10T20:00:00Z' })],
+          total: 3,
+          limit: RELEASE_PAGE_SIZE,
+          offset: 2,
+        })
+
+      renderPage()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('older page unavailable')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+      expect(await screen.findByText('Real release note')).toBeInTheDocument()
+      expect(api.list).toHaveBeenNthCalledWith(3, RELEASE_PAGE_SIZE, 1)
+      expect(api.list).toHaveBeenNthCalledWith(4, RELEASE_PAGE_SIZE, 2)
+    })
   })

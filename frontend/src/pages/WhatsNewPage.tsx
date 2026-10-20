@@ -167,13 +167,15 @@ export default function WhatsNewPage() {
 
   // Auto-fetch the next page when an entire fetched page is filtered out, so a
   // server page holding only non-displayable records never leaves readers with
-  // a blank list or a stale "Load older updates" button.
+  // a blank list or a stale "Load older updates" button. A failed page request
+  // stops the automatic traversal: the reader retries that exact page with
+  // "Try again" instead of the page loop re-requesting it forever.
   useEffect(() => {
-    if (loading || loadingMore || visibleReleases.length > 0 || !hasMore) {
+    if (loading || loadingMore || isError || visibleReleases.length > 0 || !hasMore) {
       return
     }
     void loadMore()
-  }, [loading, loadingMore, visibleReleases.length, hasMore, loadMore])
+  }, [loading, loadingMore, isError, visibleReleases.length, hasMore, loadMore])
 
   return (
     <section aria-labelledby="whats-new-title" className="mx-auto max-w-3xl pb-8">

@@ -20,8 +20,8 @@ from app.services.release_ledger import (
     ReleaseSourceConflictError,
     find_release_minimal_by_source,
     get_published_release,
-    get_release_for_retraction,
     list_published_releases,
+    retract_published_release,
     upsert_release,
 )
 
@@ -233,11 +233,8 @@ async def retract_release(
             detail="Invalid release writer credential",
         )
 
-    release = await get_release_for_retraction(db, release_id)
+    release = await retract_published_release(db, release_id)
     if release is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
 
-    release.status = "retracted"
-    await db.commit()
-    await db.refresh(release)
     return ReleaseResponse.model_validate(release)
