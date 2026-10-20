@@ -1,5 +1,6 @@
 import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
+import type { SessionSummary } from '../types'
 
 /**
  * Shared recovery action for the bounded-loading and load-failure states.
@@ -110,23 +111,48 @@ export default function HistoryPage() {
     return `${hours}h ${mins}m`
   }
 
-  const formatDiceProgression = (ladderPath: string | null | undefined) => {
+  const formatDiceProgression = (ladderPath: string | null | undefined, lastRolledResult: number | null | undefined) => {
     if (!ladderPath) return ''
     const dice = ladderPath.split(' → ')
-    return dice.map(d => `d${d}`).join(' → ')
+    const progression = dice.map(d => `d${d}`).join(' → ')
+    
+    // If there was a roll result and it's greater than 0, append it
+    if (lastRolledResult != null && lastRolledResult > 0) {
+      return `${progression} · Rolled ${lastRolledResult}`
+    }
+    
+    return progression
   }
 
   const buildActivityLine = (
-    issuesRead: number | null | undefined,
-    lastRating: number | null | undefined,
+    session: SessionSummary,
   ): string | null => {
     const parts: string[] = []
-    if (issuesRead != null && issuesRead > 0) {
-      parts.push(`${issuesRead} ${issuesRead === 1 ? 'issue' : 'issues'} read`)
+    
+    // Add issues read information
+    if (session.active_thread?.issues_read != null && session.active_thread.issues_read > 0) {
+      parts.push(`${session.active_thread.issues_read} ${session.active_thread.issues_read === 1 ? 'issue' : 'issues'} read`)
     }
-    if (lastRating != null) {
-      parts.push(`rated ${lastRating.toFixed(1)}`)
+    
+    // Add rating information
+    if (session.active_thread?.last_rating != null) {
+      parts.push(`rated ${session.active_thread.last_rating.toFixed(1)}`)
     }
+    
+    // Add die information if there was a roll
+    if (session.last_rolled_result != null && session.last_rolled_result > 0) {
+      parts.push(`Rolled ${session.last_rolled_result}`)
+    }
+    
+    // Add die size information if available
+    if (session.ladder_path) {
+      const dice = session.ladder_path.split(' → ')
+      const lastDie = dice[dice.length - 1]
+      if (lastDie) {
+        parts.push(`Die size d${lastDie}`)
+      }
+    }
+    
     return parts.length > 0 ? parts.join(' · ') : null
   }
 
@@ -155,7 +181,7 @@ export default function HistoryPage() {
             && (session.snapshot_count ?? 0) <= 1
           )
           const activityLine = session.active_thread
-            ? buildActivityLine(session.active_thread.issues_read, session.active_thread.last_rating)
+            ? buildActivityLine(session)
             : null
           return (
             <div key={session.id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
@@ -191,21 +217,25 @@ export default function HistoryPage() {
                         {activityLine}
                       </p>
                     ) : (
-                      <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                        {session.active_thread.issues_remaining != null
-                          ? `${session.active_thread.issues_remaining} left in queue`
-                          : 'In progress'}
-                      </p>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                          {session.active_thread.issues_remaining != null
+                            ? `${session.active_thread.issues_remaining} left in queue`
+                            : 'In progress'}
+                        </p>
+                        {session.ladder_path && (
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                            {formatDiceProgression(session.ladder_path, session.last_rolled_result)}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </>
                 ) : null}
 
                 {session.ladder_path && (
                   <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                    Die size {formatDiceProgression(session.ladder_path)}
-                    {session.last_rolled_result != null && session.last_rolled_result > 0 && (
-                      <span className="text-amber-400/70"> · Rolled {session.last_rolled_result}</span>
-                    )}
+                    {formatDiceProgression(session.ladder_path, session.last_rolled_result)}
                   </p>
                 )}
 
