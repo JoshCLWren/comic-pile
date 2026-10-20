@@ -267,3 +267,53 @@ async def test_session_mode_event_records_manual_source(
     assert event.context.get("source") == "manual"
     assert event.context.get("changed") == ["bandwidth"]
     assert event.context.get("bandwidth") == "deep"
+
+
+@pytest.mark.asyncio
+async def test_session_mode_events_describe_the_change_in_timeline(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Timeline cards explain mode changes instead of claiming a missing thread.
+
+    ``session_mode`` events are session-level state changes with no thread
+    reference. They used to render the generic "Thread unavailable" fallback
+    (#3574), so the session details endpoint now composes a plain description
+    from the event context and falls back to a neutral sentence for legacy
+    events without context.
+    """
+    user = await get_or_create_user_async(async_db)
+    session = ReadingSession(user_id=user.id, start_die=6, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    assert (
+        await auth_client.patch("/api/roll/session-mode", json={"bandwidth": "deep"})
+    ).status_code == 200
+    assert (
+        await auth_client.patch("/api/roll/session-mode", json={"intent": "explore"})
+    ).status_code == 200
+    assert (
+        await auth_client.patch(
+            "/api/roll/session-mode", json={"bandwidth": "light", "intent": "random"}
+        )
+    ).status_code == 200
+
+    # Legacy rows predate the structured context and still need plain language.
+    async_db.add(Event(type="session_mode", session_id=session.id, context=None))
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+
+    events = [event for event in response.json()["events"] if event["type"] == "session_mode"]
+    assert len(events) == 4
+    assert {event["description"] for event in events} == {
+        "Bandwidth set to Deep",
+        "Intent set to Explore",
+        "Bandwidth set to Light · Intent set to Random",
+        "Session mode changed",
+    }
+    for event in events:
+        assert event["thread_title"] is None
+        assert event["thread_deleted"] is False

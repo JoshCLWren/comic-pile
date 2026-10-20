@@ -67,6 +67,76 @@ def _deleted_title(title: str | None) -> str:
     return "deleted thread"
 
 
+def _context_text(event: Event, key: str) -> str | None:
+    """Return a trimmed string value from an event's JSON context.
+
+    Args:
+        event: The session event carrying the context.
+        key: The context key to read.
+
+    Returns:
+        The trimmed value, or None when the key is absent or not a string.
+    """
+    context = event.context
+    if not isinstance(context, dict):
+        return None
+    value = context.get(key)
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def _mode_label(value: str) -> str:
+    """Return a display label for a stored reading-mode value.
+
+    Args:
+        value: Stored bandwidth or intent value such as ``deep``.
+
+    Returns:
+        The value with underscores spaced and its first letter capitalized.
+    """
+    label = value.replace("_", " ").strip()
+    if not label:
+        return value
+    return label[:1].upper() + label[1:]
+
+
+def _session_mode_description(event: Event) -> str:
+    """Describe a manual session-mode change in reader language.
+
+    ``session_mode`` events are session-level state changes with no thread
+    reference. Sending them through the generic thread fallback made them read
+    like a broken thread reference (#3574). The event context records which
+    dimensions changed and their new values, so the timeline can say exactly
+    what changed instead of showing a placeholder.
+
+    Args:
+        event: The ``session_mode`` event to describe.
+
+    Returns:
+        A plain-language summary of the changed dimensions, or a generic
+        fallback for legacy events without usable context.
+    """
+    context = event.context
+    changed_raw = context.get("changed") if isinstance(context, dict) else None
+    changed = (
+        {value for value in changed_raw if isinstance(value, str)}
+        if isinstance(changed_raw, (list, tuple))
+        else set()
+    )
+
+    parts: list[str] = []
+    if "bandwidth" in changed:
+        bandwidth = _context_text(event, "bandwidth")
+        if bandwidth:
+            parts.append(f"Bandwidth set to {_mode_label(bandwidth)}")
+    if "intent" in changed:
+        intent = _context_text(event, "intent")
+        if intent:
+            parts.append(f"Intent set to {_mode_label(intent)}")
+    return " · ".join(parts) or "Session mode changed"
+
+
 async def build_ladder_path(
     session_id: int,
     db: AsyncSession,
@@ -385,7 +455,9 @@ async def build_session_event_details(
     caller forgot to prefetch its reference. Events that reference a deleted
     thread resolve their title from the session's snapshots when possible and
     are flagged with ``thread_deleted`` so the timeline can render a graceful
-    placeholder instead of an error-like missing state (#3265).
+    placeholder instead of an error-like missing state (#3265). Session-level
+    events such as ``session_mode`` never reference a thread and instead
+    describe the state change directly (#3574).
 
     Args:
         db: Database session.
@@ -490,6 +562,8 @@ async def build_session_event_details(
                 event_data.description = f"Shuffled {_deleted_title(thread_title)}"
             else:
                 event_data.description = f"Shuffled {thread_title or 'thread'}"
+        elif event.type == "session_mode":
+            event_data.description = _session_mode_description(event)
         elif event.type in ("reorder", "undo", "restore"):
             word = _event_word(event.type)
             if thread_deleted:

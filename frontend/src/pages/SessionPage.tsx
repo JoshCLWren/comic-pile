@@ -67,12 +67,12 @@ function rollLabel(event: DisplayEvent): string | null {
  * Reader-facing detail line for an event card, or `null` when the description
  * only repeats what the card already prints.
  *
- * `app/api/session.py` composes descriptions as `<label> <thread>` followed by
- * optional ` · `-separated extras, so an undo/restore card showed the word
- * "Restored" in the eyebrow and again in its description while the title line
- * already carried the thread name. Two cards that differed only in that
- * repeated word read as duplicates (#3300). Only the redundant leading segment
- * is dropped; trailing extras such as `#12` stay visible.
+ * `app/services/session_response.py` composes descriptions as `<label> <thread>`
+ * followed by optional ` · `-separated extras, so an undo/restore card showed
+ * the word "Restored" in the eyebrow and again in its description while the
+ * title line already carried the thread name. Two cards that differed only in
+ * that repeated word read as duplicates (#3300). Only the redundant leading
+ * segment is dropped; trailing extras such as `#12` stay visible.
  */
 function eventDetail(event: DisplayEvent): string | null {
   const description = event.description?.trim()
@@ -86,6 +86,17 @@ function eventDetail(event: DisplayEvent): string | null {
   }
 
   return description
+}
+
+/**
+ * Event types that describe session-level state and never reference a thread.
+ * Their description is the card's headline, so they must not inherit the
+ * missing-thread placeholder reserved for dangling thread references (#3574).
+ */
+const THREADLESS_EVENT_TYPES = new Set(['session_mode'])
+
+function isThreadlessEvent(event: DisplayEvent): boolean {
+  return THREADLESS_EVENT_TYPES.has(event.type)
 }
 
 function EventRecord({ event }: { event: DisplayEvent }) {
@@ -131,6 +142,8 @@ function EventRecord({ event }: { event: DisplayEvent }) {
               <span className="text-stone-400"> · #{event.issue_number}</span>
             ) : null}
           </>
+        ) : isThreadlessEvent(event) ? (
+          detail ?? 'Session mode changed'
         ) : (
           'Thread unavailable'
         )}
@@ -141,9 +154,9 @@ function EventRecord({ event }: { event: DisplayEvent }) {
             <li key={item} className="break-words">{item}</li>
           ))}
         </ul>
-      ) : detail ? (
+      ) : !isThreadlessEvent(event) && detail ? (
         <p className="mt-1 text-xs text-stone-400 break-words">{detail}</p>
-      ) : !hasRecordedDescription ? (
+      ) : !isThreadlessEvent(event) && !hasRecordedDescription ? (
         <p className="mt-1 text-xs text-stone-500">No additional event details recorded.</p>
       ) : null}
       {event.queue_move && (
