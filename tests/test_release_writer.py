@@ -1439,3 +1439,124 @@ class TestReleaseWriterPublishGrounding:
 
         with patch.object(release_writer, "_github_read", side_effect=unexpected_read):
             release_writer._validate_publish_grounding(payload)
+
+
+class TestReleaseWriterInternalEngineeringClassification:
+    """Regression tests for automatic internal classification and scope fences."""
+
+    def test_has_internal_engineering_terms_flags_internal_wording(self) -> None:
+        """Genuine internal engineering wording is still detected.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        assert release_writer._has_internal_engineering_terms("Backend audit completed.") is True
+        assert release_writer._has_internal_engineering_terms("factory routing change") is True
+
+    def test_reading_session_note_is_not_an_internal_term(self) -> None:
+        """'session' is reader-facing (reading sessions), not engineering jargon.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        assert (
+            release_writer._has_internal_engineering_terms(
+                "Restore your reading session after an update."
+            )
+            is False
+        )
+        assert release_writer._has_internal_engineering_terms(
+            "The queue page now offers saved filters."
+        ) is False
+
+    def test_internal_engineering_summary_auto_classifies_as_internal(self) -> None:
+        """A release note containing an internal term is classified internal.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Backend audit completed."
+        result = release_writer._validate_release(json.dumps(payload))
+        assert result["visibility"] == "internal"
+
+    def test_reading_session_note_stays_public(self) -> None:
+        """A reader-facing reading-session note is not auto-classified internal.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["summary"] = "Restore your reading session after an update."
+        result = release_writer._validate_release(json.dumps(payload))
+        assert result["visibility"] == "public"
+
+    def test_worker_boilerplate_does_not_create_scope_fence(self) -> None:
+        """'Produced by fixed-model Factory' boilerplate must not fence a product PR.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        repository = "JoshCLWren/comic-pile"
+        number = 100
+
+        def fake_read(url: str):
+            if f"/pulls/{number}" in url:
+                return {
+                    "number": number,
+                    "title": "Saved queue filters",
+                    "body": (
+                        "Add saved queue filters.\n\n"
+                        "Produced by fixed-model Factory 46 "
+                        "(opencode-free-model-factory-46). Normal ComicPile "
+                        "exact-head factory merge gates apply."
+                    ),
+                }
+            return None
+
+        with patch.object(release_writer, "_github_read", side_effect=fake_read):
+            fences = release_writer._linked_scope_fences(repository, number)
+        assert fences == []
+
+    def test_real_internal_statement_still_fences_with_boilerplate(self) -> None:
+        """A genuine internal statement still fences beside worker boilerplate.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        repository = "JoshCLWren/comic-pile"
+        number = 101
+
+        def fake_read(url: str):
+            if f"/pulls/{number}" in url:
+                return {
+                    "number": number,
+                    "title": "Internal refactor",
+                    "body": (
+                        "Internal refactor: behavior preserved.\n\n"
+                        "Produced by fixed-model Factory 46 (worker)."
+                    ),
+                }
+            return None
+
+        with patch.object(release_writer, "_github_read", side_effect=fake_read):
+            fences = release_writer._linked_scope_fences(repository, number)
+        assert "behavior preserved" in fences

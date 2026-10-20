@@ -45,6 +45,14 @@ _UNFINISHED_WORK_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Fixed-model worker boilerplate carried on product PRs too. The word "factory"
+# in "Produced by fixed-model Factory ..." must not be mistaken for a decisive
+# statement that the change is internal, so those lines are stripped before
+# scope-fence detection.
+_WORKER_BOILERPLATE_PATTERN = re.compile(
+    r"^Produced by fixed-model Factory .*$", re.IGNORECASE | re.MULTILINE
+)
+
 _KNOWN_TYPOS: dict[str, str] = {
     "appearnence": "appearance",
     "appearence": "appearance",
@@ -94,7 +102,11 @@ _SCOPE_FENCE_SOURCES: tuple[tuple[str, str], ...] = (
     (r"\bfollow[\s-]*up\s+(?:ui|work)\b", "follow-up user surface"),
     (r"\b(?:staged|partial|phased)\s+rollout\b", "staged rollout"),
     # Internal engineering terms that indicate this is not a user-facing change
-    (r"\b(?:factory|controller|evidence|inspection|proof|session|reliability|audit|style-drift|endpoint|literal|jargon)\b", "internal engineering term"),
+    (
+        r"\b(?:factory|controller|evidence|inspection|proof|"
+        r"session|reliability|audit|style-drift|endpoint|literal|jargon)\b",
+        "internal engineering term",
+    ),
 )
 _SCOPE_FENCE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     (re.compile(pattern, re.IGNORECASE), label)
@@ -341,7 +353,10 @@ def _validate_release(raw: str) -> dict[str, object]:
     
     # Auto-detect internal engineering terms and classify as internal
     if payload.get("visibility") != "internal":  # Only check if not already explicitly internal
-        text_to_check = f"{payload.get('title', '')} {payload.get('summary', '')} {payload.get('body', '')}"
+        text_to_check = (
+            f"{payload.get('title', '')} {payload.get('summary', '')} "
+            f"{payload.get('body', '')}"
+        )
         if _has_internal_engineering_terms(text_to_check):
             payload["visibility"] = "internal"
             if "provenance_json" not in payload:
@@ -540,6 +555,24 @@ def _changed_files(repository: str, number: int) -> list[dict[str, object]]:
     return [item for item in result if isinstance(item, dict)]
 
 
+def _strip_worker_boilerplate(text: str) -> str:
+    """Remove fixed-model worker boilerplate from text scanned for scope fences.
+
+    Worker-written PR descriptions carry "Produced by fixed-model Factory ..."
+    boilerplate on product PRs too. The word "factory" in that boilerplate must
+    not be mistaken for a decisive statement that the change is internal, so
+    those lines are stripped before scope-fence detection. A real internal
+    statement in the remaining text still fences normally.
+
+    Args:
+        text: Pull request or issue text that may carry worker boilerplate.
+
+    Returns:
+        The text with worker-boilerplate lines removed.
+    """
+    return _WORKER_BOILERPLATE_PATTERN.sub("", text)
+
+
 def _linked_scope_fences(repository: str, number: int) -> list[str]:
     """Return scope fences detected in the linked issue context of a pull request.
 
@@ -561,7 +594,7 @@ def _linked_scope_fences(repository: str, number: int) -> list[str]:
         if issue is None:
             continue
         text = f"{text}\n{issue.get('title') or ''}\n{issue.get('body') or ''}"
-    return _scope_fences(text)
+    return _scope_fences(_strip_worker_boilerplate(text))
 
 
 def _validate_publish_grounding(payload: dict[str, object]) -> None:
@@ -926,7 +959,6 @@ def _has_internal_engineering_terms(text: str) -> bool:
         r"\bevidence\b",
         r"\binspection\b", 
         r"\bproof\b",
-        r"\bsession\b",
         r"\breliability\b",
         r"\baudit\b",
         r"\bstyle-drift\b",
