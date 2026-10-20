@@ -310,29 +310,4 @@ describe('continuity comic selectors', () => {
     expect(screen.getByRole('option', { name: /Starman \(Vol\. 2\) \(1994 - 2001\)/i }))
       .toBeInTheDocument()
   })
-
-  // Test for issue #3607: PlannerAddSteps should enable issue dropdown when thread is selected
-  it('issue selector should be enabled when thread is selected and lanes exist', () => {
-    // Test that the issue selector is enabled when a thread is selected
-    render(
-      <ContinuityIssueSelector 
-        issues={issues} 
-        value={null} 
-        onChange={vi.fn()} 
-        disabled={false} // This simulates the fix - disabled should only be based on lanes, not thread selection
-      />
-    )
-    expect(screen.getByRole('combobox')).not.toBeDisabled()
-    
-    // Test that the issue selector is disabled when no lanes exist
-    render(
-      <ContinuityIssueSelector 
-        issues={issues} 
-        value={null} 
-        onChange={vi.fn()} 
-        disabled={true} // This simulates when lanes are empty
-      />
-    )
-    expect(screen.getByRole('combobox')).toBeDisabled()
-  })
 })

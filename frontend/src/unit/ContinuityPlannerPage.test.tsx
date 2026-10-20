@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { type ComponentProps, type PropsWithChildren } from 'react'
-import { render, screen, waitFor, act, cleanup } from '@testing-library/react'
+import { render, screen, waitFor, act, cleanup, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -258,6 +258,50 @@ describe('ContinuityPlannerPage', () => {
     // SAFETY: mock call shape matches the create API payload
     const payload = mocks.create.mock.calls[0][0] as { ordering_mode: string }
     expect(payload.ordering_mode).toBe('informational')
+  })
+
+  it('enables the issue selector and its options after picking a series in the plan editor (#3607)', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Saved lane',
+      ordering_mode: 'informational',
+      lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+      nodes: [],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12/edit']}>
+        <Routes>
+          <Route path="/continuity-plans/:id/edit" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper: queryWrapper },
+    )
+
+    // Pick the series exactly like the reported editor flow.
+    await user.type(await screen.findByLabelText('Comic series'), 'Mister')
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+
+    // The reported defect: every ISSUE option rendered disabled and the
+    // control could not be used with a pointer even though the series' issues
+    // had loaded. Both the control and each option must be available.
+    const issueSelect = screen.getByLabelText('Issue')
+    await waitFor(() => expect(issueSelect).toBeEnabled())
+    const issueOptions = within(issueSelect).getAllByRole('option')
+    expect(issueOptions.length).toBeGreaterThan(1)
+    for (const option of issueOptions) {
+      expect(option).not.toBeDisabled()
+    }
+
+    // The pointer path works end to end: choose an issue, add it, and the step
+    // lands in the plan's only lane.
+    await user.selectOptions(issueSelect, '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    expect(await screen.findByTestId('lane-main')).toHaveTextContent('Mister Miracle #Annual 1')
   })
 
   it('saves informational after moving to a second lane, and disables strict mode', async () => {
