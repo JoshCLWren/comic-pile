@@ -4,6 +4,14 @@ import { RELEASES_PAGE_SIZE, useReleases } from '../hooks/useReleases'
 
 export const RELEASE_PAGE_SIZE = RELEASES_PAGE_SIZE
 
+const ESCAPED_SINGLE_QUOTE_PATTERN = /\\+u(0027|2018|2019)/gi
+const ESCAPED_APOSTROPHE_PATTERN = /\\+'/g
+const SINGLE_QUOTE_ESCAPES = new Map([
+  ['0027', "'"],
+  ['2018', '\u2018'],
+  ['2019', '\u2019'],
+])
+
 export const UNFINISHED_WORK_PATTERN =
   /\b(?:incomplete|unfinished|todo|wip|not yet implemented)\b/i
 
@@ -21,6 +29,22 @@ function releasedAtTimestamp(release: Release) {
 }
 
 /**
+ * Decode escaped apostrophes that older stored release copy contains.
+ *
+ * Release copy is written by the publishing API, which the backend gate now
+ * validates, but historical rows can still carry JSON escape artifacts such as
+ * `\u0027` or `\'`. Decoding them here keeps the reader-facing text correct
+ * without touching stored rows.
+ */
+export function decodeReleaseEscapes(text: string) {
+  return text
+    .replace(ESCAPED_SINGLE_QUOTE_PATTERN, (_match, code: string) =>
+      SINGLE_QUOTE_ESCAPES.get(code.toLowerCase()) ?? "'",
+    )
+    .replace(ESCAPED_APOSTROPHE_PATTERN, "'")
+}
+
+/**
  * Render release copy supplied by the public API.
  *
  * Reader-facing artifact repair (ticket references, schema identifiers,
@@ -29,7 +53,7 @@ function releasedAtTimestamp(release: Release) {
  * entries that still contain link syntax stay readable.
  */
 export function releaseDisplayText(text: string) {
-  return text
+  return decodeReleaseEscapes(text)
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '$1')
     .replace(/https?:\/\/github\.com\/[^\s)}\u2019"]+/g, '')
     .replace(/`([^`]+)`/g, '$1')
