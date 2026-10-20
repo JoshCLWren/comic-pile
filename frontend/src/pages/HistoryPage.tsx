@@ -1,5 +1,6 @@
 import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
+import type { SessionSummary } from '../types'
 
 /**
  * Shared recovery action for the bounded-loading and load-failure states.
@@ -110,23 +111,46 @@ export default function HistoryPage() {
     return `${hours}h ${mins}m`
   }
 
-  const formatDiceProgression = (ladderPath: string | null | undefined) => {
+  const formatDiceProgression = (ladderPath: string | null | undefined, lastRolledResult: number | null | undefined) => {
     if (!ladderPath) return ''
     const dice = ladderPath.split(' → ')
-    return dice.map(d => `d${d}`).join(' → ')
+    const progression = dice.map(d => `d${d}`).join(' → ')
+
+    // Only a roll that landed on a number is reported; a missing or zero
+    // result would otherwise render a dangling "· Rolled" suffix.
+    if (lastRolledResult != null && lastRolledResult > 0) {
+      return `${progression} · Rolled ${lastRolledResult}`
+    }
+
+    return progression
   }
 
   const buildActivityLine = (
-    issuesRead: number | null | undefined,
-    lastRating: number | null | undefined,
+    session: SessionSummary,
   ): string | null => {
     const parts: string[] = []
+
+    const issuesRead = session.active_thread?.issues_read
+    const lastRating = session.active_thread?.last_rating
+
+    // Add issues read information
     if (issuesRead != null && issuesRead > 0) {
       parts.push(`${issuesRead} ${issuesRead === 1 ? 'issue' : 'issues'} read`)
     }
+
+    // Add rating information
     if (lastRating != null) {
       parts.push(`rated ${lastRating.toFixed(1)}`)
     }
+
+    // The current die can differ from the last ladder step when the reader
+    // overrides it manually, so it is reported with the activity while the
+    // ladder itself stays on its own line.
+    const hasActivity = (issuesRead != null && issuesRead > 0) || lastRating != null
+    if (hasActivity && session.current_die != null) {
+      parts.push(`Die size d${session.current_die}`)
+    }
+
     return parts.length > 0 ? parts.join(' · ') : null
   }
 
@@ -155,8 +179,14 @@ export default function HistoryPage() {
             && (session.snapshot_count ?? 0) <= 1
           )
           const activityLine = session.active_thread
-            ? buildActivityLine(session.active_thread.issues_read, session.active_thread.last_rating)
+            ? buildActivityLine(session)
             : null
+          // The dice progression is rendered once per card, independently of the
+          // activity line, so a rated or read session never loses its ladder
+          // and roll (#3573).
+          const diceProgression = session.ladder_path
+            ? formatDiceProgression(session.ladder_path, session.last_rolled_result)
+            : ''
           return (
             <div key={session.id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
               <div className="w-16 md:w-20 shrink-0">
@@ -200,12 +230,9 @@ export default function HistoryPage() {
                   </>
                 ) : null}
 
-                {session.ladder_path && (
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                    Die size {formatDiceProgression(session.ladder_path)}
-                    {session.last_rolled_result != null && session.last_rolled_result > 0 && (
-                      <span className="text-amber-400/70"> · Rolled {session.last_rolled_result}</span>
-                    )}
+                {diceProgression && (
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
+                    {diceProgression}
                   </p>
                 )}
 

@@ -46,6 +46,9 @@ it('labels an empty session as No issue selected', () => {
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
 
   expect(screen.getByText('No issue selected')).toBeInTheDocument()
+  // The card still reports the start die so an empty session is never a
+  // summary-free card (#3573).
+  expect(screen.getByText('d6')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /view full session/i })).toHaveAttribute(
     'href',
     '/sessions/9',
@@ -116,15 +119,58 @@ it('leads with comic identity and readable activity summary for a typical rated 
   expect(screen.getByText(/1 issue read/)).toBeInTheDocument()
   expect(screen.getByText(/rated 4\.5/)).toBeInTheDocument()
 
-  const dieLine = listitem.querySelector('p.text-stone-500')
-  expect(dieLine).not.toBeNull()
-  expect(dieLine!.textContent).toContain('Die size')
-  expect(dieLine!.textContent).toContain('d6 → d4 → d6')
-  expect(dieLine!.textContent).toContain('Rolled 3')
-  expect(dieLine!.textContent).toBe('Die size d6 → d4 → d6 · Rolled 3')
+  const dieLine = screen.getByText('d6 → d4 → d6 · Rolled 3')
+  expect(dieLine).toBeInTheDocument()
+  expect(dieLine).toHaveClass('text-[var(--theme-text-dim)]')
+  expect(listitem).toContainElement(dieLine)
+  // The progression and the roll stay visible exactly once for a rated card.
+  expect(screen.getAllByText(/^d\d/)).toHaveLength(1)
 
-  const headlineIndex = listitem.children[1]!.children[0]!.compareDocumentPosition(dieLine!)
+  // Check that activity line contains read/rating info with die size
+  const activityLine = listitem.querySelector('p.text-xs')
+  expect(activityLine).not.toBeNull()
+  expect(activityLine!.textContent).toContain('1 issue read')
+  expect(activityLine!.textContent).toContain('rated 4.5')
+  expect(activityLine!.textContent).toContain('Die size d6')
+
+  const headlineIndex = listitem.children[1]!.children[0]!.compareDocumentPosition(dieLine)
   expect(headlineIndex & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+it('keeps the queue position and dice progression on a card without reading activity', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [{
+      id: 13,
+      started_at: '2024-10-05T13:10:00Z',
+      ended_at: null,
+      ladder_path: '20',
+      active_thread: {
+        title: 'Hulk',
+        format: 'Comic',
+        next_issue_number: '5',
+        issues_remaining: 3,
+        issues_read: 0,
+        last_rating: null,
+      },
+      last_rolled_result: 7,
+      current_die: 20,
+      snapshot_count: 1,
+    }],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+  })
+
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+
+  const listitem = screen.getByRole('listitem')
+  expect(screen.getByText('Hulk')).toBeInTheDocument()
+  expect(screen.getByText('3 left in queue')).toBeInTheDocument()
+  expect(screen.getByText('d20 · Rolled 7')).toBeInTheDocument()
+  expect(listitem).toContainElement(screen.getByText('d20 · Rolled 7'))
+  expect(screen.getAllByText(/^d\d/)).toHaveLength(1)
 })
 
 it('pluralizes issues read for multi-issue activity', () => {
@@ -171,7 +217,8 @@ it('renders session rows with metadata, duration, and footer links', () => {
   ], isPending: false })
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
   expect(screen.getByRole('list')).toBeInTheDocument()
-  expect(screen.getAllByText(/Die size/)).toHaveLength(3)
+  // One dice progression line per session that has a ladder path.
+  expect(screen.getAllByText(/^d\d/)).toHaveLength(3)
   expect(screen.getByText(/d6 → d8/)).toBeInTheDocument()
   expect(screen.getByText(/Rolled 4/)).toBeInTheDocument()
   expect(screen.queryByText(/Rolled 0/)).not.toBeInTheDocument()
