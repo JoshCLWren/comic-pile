@@ -161,6 +161,32 @@ it('renders the bounded bootstrap pool without Collections state', () => {
   expect(screen.queryByText(/collection/i)).not.toBeInTheDocument()
 })
 
+it('labels exclusion sections with bootstrap totals instead of preview lengths (#3330)', () => {
+  mockedUseRollBootstrap.mockReturnValue({
+    data: {
+      ...bootstrap,
+      blocked_count: 287,
+      blocked_threads: [
+        { id: 11, title: 'Blocked A', format: 'Comic' },
+        { id: 12, title: 'Blocked B', format: 'Comic' },
+      ],
+      inactive_count: 23,
+      inactive_threads: [{ id: 21, title: 'Inactive A', format: 'Comic' }],
+    },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+
+  renderRollPage()
+
+  expect(screen.getByText('287 series waiting for earlier issues')).toBeInTheDocument()
+  expect(screen.getByText('23 series out of the roll pool')).toBeInTheDocument()
+  expect(screen.queryByText('2 series waiting for earlier issues')).not.toBeInTheDocument()
+  expect(screen.queryByText('1 series out of the roll pool')).not.toBeInTheDocument()
+})
+
 it('opens the retained thread action sheet from a bootstrap pool item', async () => {
   const user = userEvent.setup()
   renderRollPage()

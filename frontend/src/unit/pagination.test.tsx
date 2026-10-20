@@ -186,4 +186,47 @@ describe('useInfiniteCollection', () => {
     expect(result.current.isLoading).toBe(false)
     expect(queryFn).not.toHaveBeenCalled()
   })
+
+  it('separates a failed next-page request from a failed first page', async () => {
+    const queryFn = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [1], nextToken: 't1' })
+      .mockRejectedValueOnce(new Error('Fetch failed'))
+
+    const { result } = renderHook(
+      () => useInfiniteCollection({
+        queryKey: ['next-page-error'],
+        queryFn,
+        initialPageParam: null,
+        getNextPageParam: (p: { items: number[]; nextToken: string }) => p.nextToken,
+        selectPage: (p: { items: number[]; nextToken: string }) => p.items,
+        retry: false,
+      }),
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => expect(result.current.items).toEqual([1]))
+
+    await result.current.fetchNextPage()
+    await waitFor(() => expect(result.current.isError).toBe(true))
+
+    // A next-page failure is resumable, so the paginator says so.
+    expect(result.current.isFetchNextPageError).toBe(true)
+
+    const failingFirstPage = vi.fn().mockRejectedValue(new Error('Fetch failed'))
+    const { result: firstPage } = renderHook(
+      () => useInfiniteCollection({
+        queryKey: ['first-page-error'],
+        queryFn: failingFirstPage,
+        initialPageParam: null,
+        getNextPageParam: (_p: { items: never[] }) => null,
+        selectPage: (_p: { items: never[] }) => [],
+        retry: false,
+      }),
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => expect(firstPage.current.isError).toBe(true))
+    expect(firstPage.current.isFetchNextPageError).toBe(false)
+  })
 })

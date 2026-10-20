@@ -64,6 +64,13 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
   fetchNextPage: () => Promise<void>
   /** Refetches the current pages (retry path for failed loads). */
   refetch: () => Promise<void>
+  /**
+   * True when the current error came from a next-page request rather than from
+   * the first page or a background refresh. A retry must resume the request
+   * that actually failed: the missing next page for a next-page error, and a
+   * refetch for every other error.
+   */
+  isFetchNextPageError: boolean
   isError: boolean
   error: unknown
 }
@@ -133,6 +140,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     nextPageToken,
     fetchNextPage,
     refetch,
+    isFetchNextPageError: query.isFetchNextPageError,
     isError: query.isError,
     error: query.error,
   }

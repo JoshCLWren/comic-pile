@@ -5,6 +5,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.continuity_blocking import ContinuityBlocker
+from app.schemas.dependency import BlockingDependency
 from app.schemas.session import ActiveThreadInfo, BandwidthSource, IntentSource, SessionBandwidthState, SessionMode
 from app.schemas.tags import TagResponse
 from comic_pile.recommendation_selection import Bandwidth, Intent
@@ -164,13 +165,41 @@ class RollRecoveryInfo(BaseModel):
 
 
 class ThreadExclusionReason(BaseModel):
-    """One series excluded from the roll pool, with the reason the user can understand."""
+    """One series excluded from the roll pool, with the reason the user can understand.
+
+    ``blocking_reasons`` and ``blocking_dependencies`` carry the live eligibility
+    explanation for blocked series so a paginated exclusion page (issue #3330)
+    can explain the wait without a second per-thread lookup.
+    """
 
     thread_id: int
     title: str
     format: str
     reason: Literal["blocked", "snoozed", "skipped", "completed", "not_in_queue"]
     detail: str | None = None
+    blocking_reasons: list[str] = Field(default_factory=list)
+    blocking_dependencies: list[BlockingDependency] = Field(default_factory=list)
+    last_activity_at: str | None = None
+
+
+class RollExclusionPageResponse(BaseModel):
+    """One deterministic page of the Roll exclusion drill-down (issue #3330).
+
+    The initial Roll bootstrap deliberately carries only bounded previews. This
+    page is the authoritative drill-down for a single exclusion category, and
+    its ``total`` is computed with the same predicate that produced the
+    bootstrap category count, so the two can never disagree.
+    """
+
+    category: Literal["blocked", "inactive"]
+    items: list[ThreadExclusionReason] = Field(default_factory=list)
+    total: int = Field(..., ge=0, description="Every series in this category, not just this page.")
+    limit: int = Field(..., ge=1, description="Echoed page size.")
+    offset: int = Field(..., ge=0, description="Echoed page offset.")
+    next_cursor: str | None = Field(
+        default=None,
+        description="Offset cursor for the next page, null when this page is the last.",
+    )
 
 
 class RollBootstrapResponse(BaseModel):
