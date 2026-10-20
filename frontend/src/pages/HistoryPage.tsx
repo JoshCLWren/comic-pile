@@ -227,7 +227,7 @@ export default function HistoryPage() {
                   </>
                 ) : null}
 
-                {session.ladder_path && (
+                {session.ladder_path && !activityLine && (
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
                     {formatDiceProgression(session.ladder_path, session.last_rolled_result)}
                   </p>
