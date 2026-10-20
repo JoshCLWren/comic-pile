@@ -108,7 +108,7 @@ function IssueInsightCard({ insight }: { insight: CreatorIssueInsight }) {
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
       <Link
-        to={`/thread/${insight.thread_id}`}
+        to={`/thread/${insight.thread_id}?issue=${insight.issue_id}#issue-${insight.issue_id}`}
         className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
       >
         <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
