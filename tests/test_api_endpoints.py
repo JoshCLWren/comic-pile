@@ -40,12 +40,40 @@ async def test_create_thread(auth_client: AsyncClient, async_db: AsyncSession) -
 @pytest.mark.asyncio
 async def test_create_thread_validation(auth_client: AsyncClient) -> None:
     """Test POST /api/v1/threads/ validates input."""
+    # Empty title
     invalid_data = {
         "title": "",
         "format": "Comic",
         "issues_remaining": 12,
     }
     response = await auth_client.post("/api/v1/threads/", json=invalid_data)
+    assert response.status_code == 422
+
+    # Whitespace-only title
+    whitespace_data = {
+        "title": "  ",
+        "format": "Comic",
+        "issues_remaining": 12,
+    }
+    response = await auth_client.post("/api/v1/threads/", json=whitespace_data)
+    assert response.status_code == 422
+
+    # Tab-only title
+    tab_data = {
+        "title": "\t\t",
+        "format": "Comic",
+        "issues_remaining": 12,
+    }
+    response = await auth_client.post("/api/v1/threads/", json=tab_data)
+    assert response.status_code == 422
+
+    # Newline-only title
+    newline_data = {
+        "title": "\n\n",
+        "format": "Comic",
+        "issues_remaining": 12,
+    }
+    response = await auth_client.post("/api/v1/threads/", json=newline_data)
     assert response.status_code == 422
 
 
@@ -276,6 +304,33 @@ async def test_update_thread_partial(auth_client: AsyncClient, sample_data: dict
     assert thread["title"] == "Batman Updated"
     assert thread["format"] == "Comic"
     assert thread["issues_remaining"] == 5
+
+
+@pytest.mark.asyncio
+async def test_update_thread_validation(auth_client: AsyncClient, sample_data: dict) -> None:
+    """Test PUT /api/v1/threads/{id} validates input."""
+    _ = sample_data
+
+    # Whitespace-only title
+    whitespace_data = {
+        "title": "  ",
+    }
+    response = await auth_client.put("/api/v1/threads/1", json=whitespace_data)
+    assert response.status_code == 422
+
+    # Tab-only title
+    tab_data = {
+        "title": "\t\t",
+    }
+    response = await auth_client.put("/api/v1/threads/1", json=tab_data)
+    assert response.status_code == 422
+
+    # Newline-only title
+    newline_data = {
+        "title": "\n\n",
+    }
+    response = await auth_client.put("/api/v1/threads/1", json=newline_data)
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio

@@ -315,6 +315,11 @@ export function QueueModals({
     await onEditSubmit(event)
   }
 
+  // Validate that title is not empty or whitespace-only
+  const isTitleValid = (title: string) => title.trim().length > 0
+  const createTitleError = !isTitleValid(createForm.title)
+  const editTitleError = !isTitleValid(editForm.title)
+
   return (
     <>
       <Modal isOpen={openModal === 'create'} title="Add Series" onClose={onCloseCreate}>
@@ -330,9 +335,16 @@ export function QueueModals({
               id="create-thread-title"
               value={createForm.title}
               onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
-              className="w-full rounded-xl px-3 py-2 text-sm form-control"
+              className={`w-full rounded-xl px-3 py-2 text-sm form-control ${createTitleError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
               required
+              aria-invalid={createTitleError}
+              aria-describedby={createTitleError ? 'create-title-error' : undefined}
             />
+            {createTitleError && (
+              <p id="create-title-error" className="text-xs text-red-400" role="alert">
+                Title cannot be empty or whitespace only
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <label
@@ -476,7 +488,7 @@ export function QueueModals({
           />
           <button
             type="submit"
-            disabled={isPendingCreate || issueParseError !== null}
+            disabled={isPendingCreate || issueParseError !== null || createTitleError}
             className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {isPendingCreate ? 'Adding...' : 'Create Series'}
@@ -503,9 +515,16 @@ export function QueueModals({
                 id="edit-thread-title"
                 value={editForm.title}
                 onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-                className="w-full rounded-xl px-3 py-2 text-sm form-control"
+                className={`w-full rounded-xl px-3 py-2 text-sm form-control ${editTitleError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
                 required
+                aria-invalid={editTitleError}
+                aria-describedby={editTitleError ? 'edit-title-error' : undefined}
               />
+              {editTitleError && (
+                <p id="edit-title-error" className="text-xs text-red-400" role="alert">
+                  Title cannot be empty or whitespace only
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -599,7 +618,7 @@ export function QueueModals({
           <button
             type="submit"
             form="edit-thread-form"
-            disabled={isPendingEdit || isIssuesLoading}
+            disabled={isPendingEdit || isIssuesLoading || editTitleError}
             className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {isIssuesLoading ? 'Loading issues...' : isPendingEdit ? 'Saving...' : 'Save Changes'}

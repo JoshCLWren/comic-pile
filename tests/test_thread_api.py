@@ -408,6 +408,78 @@ async def test_thread_create_schema_accepts_total_issues() -> None:
 
 
 @pytest.mark.asyncio
+async def test_thread_create_schema_rejects_whitespace_title() -> None:
+    """ThreadCreate schema rejects whitespace-only titles."""
+    from app.schemas import ThreadCreate
+    from pydantic import ValidationError
+
+    # Whitespace-only title
+    with pytest.raises(ValidationError) as exc_info:
+        ThreadCreate(
+            title="  ",
+            format="Comic",
+            issues_remaining=10,
+        )
+    assert "whitespace" in str(exc_info.value).lower()
+
+    # Tab-only title
+    with pytest.raises(ValidationError) as exc_info:
+        ThreadCreate(
+            title="\t\t",
+            format="Comic",
+            issues_remaining=10,
+        )
+    assert "whitespace" in str(exc_info.value).lower()
+
+    # Newline-only title
+    with pytest.raises(ValidationError) as exc_info:
+        ThreadCreate(
+            title="\n\n",
+            format="Comic",
+            issues_remaining=10,
+        )
+    assert "whitespace" in str(exc_info.value).lower()
+
+    # Empty title (already covered by min_length=1, but verify)
+    with pytest.raises(ValidationError):
+        ThreadCreate(
+            title="",
+            format="Comic",
+            issues_remaining=10,
+        )
+
+
+@pytest.mark.asyncio
+async def test_thread_update_schema_rejects_whitespace_title() -> None:
+    """ThreadUpdate schema rejects whitespace-only titles."""
+    from app.schemas import ThreadUpdate
+    from pydantic import ValidationError
+
+    # Whitespace-only title
+    with pytest.raises(ValidationError) as exc_info:
+        ThreadUpdate(title="  ")
+    assert "whitespace" in str(exc_info.value).lower()
+
+    # Tab-only title
+    with pytest.raises(ValidationError) as exc_info:
+        ThreadUpdate(title="\t\t")
+    assert "whitespace" in str(exc_info.value).lower()
+
+    # Newline-only title
+    with pytest.raises(ValidationError) as exc_info:
+        ThreadUpdate(title="\n\n")
+    assert "whitespace" in str(exc_info.value).lower()
+
+    # Empty title should be rejected
+    with pytest.raises(ValidationError):
+        ThreadUpdate(title="")
+
+    # None title should be allowed (not updating)
+    schema = ThreadUpdate(title=None)
+    assert schema.title is None
+
+
+@pytest.mark.asyncio
 async def test_migration_enables_issue_tracking(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:

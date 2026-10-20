@@ -90,6 +90,24 @@ class ThreadCreate(BaseModel):
     manual_creator_credits: list[ManualCreatorCredit] = Field(default_factory=list)
     is_test: bool = False
 
+    @field_validator("title")
+    @classmethod
+    def _reject_whitespace_only_title(cls, value: str) -> str:
+        """Reject titles that are only whitespace.
+
+        Args:
+            value: The title string to validate.
+
+        Returns:
+            The validated title string.
+
+        Raises:
+            ValueError: If the title is empty or whitespace-only.
+        """
+        if not value or not value.strip():
+            raise ValueError("Title cannot be empty or whitespace only")
+        return value
+
     @field_validator("manual_creator_credits")
     @classmethod
     def _bounded_manual_credits(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -113,6 +131,24 @@ class ThreadUpdate(BaseModel):
     notes: str | None = None
     manual_creator_credits: list[ManualCreatorCredit] | None = None
     is_test: bool | None = None
+
+    @field_validator("title")
+    @classmethod
+    def _reject_whitespace_only_title(cls, value: str | None) -> str | None:
+        """Reject titles that are only whitespace.
+
+        Args:
+            value: The title string to validate, or None if not being updated.
+
+        Returns:
+            The validated title string or None.
+
+        Raises:
+            ValueError: If the title is empty or whitespace only.
+        """
+        if value is not None and (not value or not value.strip()):
+            raise ValueError("Title cannot be empty or whitespace only")
+        return value
 
     @field_validator("manual_creator_credits")
     @classmethod
