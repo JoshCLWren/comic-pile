@@ -97,6 +97,26 @@ export default function HistoryPage() {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 
+  /**
+   * Unique accessible name for a session-detail link (#3687).
+   *
+   * Every card shows the same concise "View full session" text while the
+   * arrow stays aria-hidden, so without a distinct aria-label a screen reader
+   * announces dozens of identical links and cannot tell the cards apart. The
+   * stable session id keeps each name unique even when the start time is
+   * missing or unparseable, and the start date/time adds spoken context. The
+   * visible label is unchanged.
+   */
+  const buildSessionLinkLabel = (session: SessionSummary): string => {
+    const base = `View full session for session ${session.id}`
+    const date = formatDate(session.started_at)
+    const time = formatTime(session.started_at)
+    if (date && time) {
+      return `${base}, started ${date} at ${time}`
+    }
+    return base
+  }
+
   const formatDuration = (startedAt: string | null | undefined, endedAt: string | null | undefined) => {
     if (!startedAt || !endedAt) return null
     const start = new Date(startedAt)
@@ -248,6 +268,7 @@ export default function HistoryPage() {
                   )}
                   <Link
                     to={`/sessions/${session.id}`}
+                    aria-label={buildSessionLinkLabel(session)}
                     className="inline-flex items-center gap-1 text-stone-400 hover:text-stone-200 underline decoration-dotted underline-offset-4"
                   >
                     View full session <span aria-hidden>→</span>
