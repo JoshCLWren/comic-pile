@@ -234,10 +234,10 @@ def evaluate(snapshot: ReadingSnapshot) -> dict[int, ThreadEligibility]:
         if thread.status != "active":
             continue
         frontier = frontiers.get(thread.thread_id)
-        issue_id = frontier.issue_id if frontier is not None else None
+        next_issue_id: int | None = frontier.issue_id if frontier is not None else None
         result[thread.thread_id] = ThreadEligibility(
-            thread.thread_id, issue_id,
-            tuple(sorted(restrictions.get(issue_id, ()), key=_blocker_key))
-            if issue_id is not None else (),
+            thread.thread_id, next_issue_id,
+            tuple(sorted(restrictions.get(next_issue_id, ()), key=_blocker_key))
+            if next_issue_id is not None else (),
         )
     return result

@@ -600,7 +600,7 @@ def build_manifest(
     proposals: list[ListProposal] = []
     receipts: list[ReceiptRow] = []
     for decision in intent.lists:
-        reading_list = lists_by_id.get(decision.list_id)
+        reading_list: ReadingList | None = lists_by_id.get(decision.list_id)
         if reading_list is None:
             refusals.append(
                 ManifestRefusal("unknown_reference", f"list:{decision.list_id}", "List not found")
