@@ -61,6 +61,10 @@ _ARTIFACT_CLAUSE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _SENTENCE_PATTERN = re.compile(r"(?<=[.!?])\s+")
+_DANGLING_HEAD_PATTERN = re.compile(
+    r"^(?:of|for|to|with|and|or|in|on|at|by|from|that|which|whose|where|when"
+    r"|while|as)\b",
+)
 _ENGINEERING_ONLY_PATTERN = re.compile(
     r"\b(?:api|backend|frontend|schema|repository|service|migration|endpoint|hook"
     r"|component|module|refactor|implementation)\b",
@@ -122,6 +126,10 @@ CURATED_COPY_REPAIRS: dict[tuple[str, int], CuratedCopyRepair] = {
     ("JoshCLWren/comic-pile", 1881): CuratedCopyRepair(
         original_title="time on what’s new",
         title="Show relative and absolute timestamps on What's New",
+        summary=(
+            "The What's New page now shows when each release was published, "
+            "using your local time zone."
+        ),
         evidence=(
             "PR #1881 added relative and absolute publish times to the What's New "
             "cards for issue #1678."
@@ -277,6 +285,11 @@ def repair_summary(summary: str, *, title: str) -> str:
     for sentence in _SENTENCE_PATTERN.split(text):
         cleaned = _clean_punctuation(_LEADING_SEPARATOR_PATTERN.sub("", sentence.strip()))
         if not cleaned:
+            continue
+        # A lower-case connector at the start means the original head was
+        # stripped from the stored copy. Dropping the fragment avoids serving
+        # a sentence that begins mid-thought.
+        if _DANGLING_HEAD_PATTERN.match(cleaned):
             continue
         if _contains_artifact(cleaned):
             if not _only_reference_artifacts(cleaned):

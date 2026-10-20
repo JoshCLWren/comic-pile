@@ -21,6 +21,7 @@ from app.services.release_ledger import (
     find_release_minimal_by_source,
     get_published_release,
     list_published_releases,
+    public_release_payload,
     upsert_release,
 )
 
@@ -126,7 +127,10 @@ async def list_releases(
     """
     releases, total = await list_published_releases(db, limit=limit, offset=offset)
     return ReleaseListResponse(
-        releases=[PublicReleaseResponse.model_validate(release) for release in releases],
+        releases=[
+            PublicReleaseResponse.model_validate(public_release_payload(release))
+            for release in releases
+        ],
         total=total,
         limit=limit,
         offset=offset,
@@ -157,7 +161,7 @@ async def get_release(
     release = await get_published_release(db, release_id)
     if release is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
-    return PublicReleaseResponse.model_validate(release)
+    return PublicReleaseResponse.model_validate(public_release_payload(release))
 
 
 @router.put(

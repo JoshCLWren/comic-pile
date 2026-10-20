@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.release import Release
 from app.schemas.release import ReleaseUpsertRequest
+from comic_pile.release_copy import repair_release_copy
 
 
 class ReleaseSourceConflictError(ValueError):
@@ -65,6 +66,39 @@ async def get_published_release(db: AsyncSession, release_id: int) -> Release | 
         )
     )
     return result.scalar_one_or_none()
+
+
+def public_release_payload(release: Release) -> dict[str, object]:
+    """Return the reader-facing projection of one public release.
+
+    Historical rows may still contain copy artifacts that predate the public
+    publication gate. The durable row is never mutated; repairs are applied
+    only to the projection served by the public What's New endpoints.
+
+    Args:
+        release: Published public release row.
+
+    Returns:
+        Field mapping for ``PublicReleaseResponse`` with repaired title and
+        summary copy.
+    """
+    title, summary = repair_release_copy(
+        source_repository=release.source_repository,
+        source_pr_number=release.source_pr_number,
+        title=release.title,
+        summary=release.summary,
+    )
+    return {
+        "id": release.id,
+        "released_at": release.released_at,
+        "category": release.category,
+        "title": title,
+        "summary": summary,
+        "body": release.body,
+        "sort_order": release.sort_order,
+        "created_at": release.created_at,
+        "updated_at": release.updated_at,
+    }
 
 
 async def find_release_by_source(
