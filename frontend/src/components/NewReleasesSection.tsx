@@ -41,7 +41,7 @@ function formatLastSync(lastSyncedAt: string | null): string {
 }
 
 function volumeLabel(source: ReadingPlanReleaseSourceStatus): string {
-  const title = source.provider_title?.trim() || source.provider_volume_id
+  const title = source.provider_title?.trim() || `ComicVine volume ${source.provider_volume_id}`
   const issueCount = source.provider_issue_count
   const issuePart = issueCount != null
     ? `${issueCount}${issueCount === 1 ? ' issue' : ' issues'}`
@@ -58,9 +58,9 @@ function candidateTitle(candidate: ReadingPlanReleaseCandidate): string {
   const trimmedTitle = candidate.provider_title?.trim()
   if (trimmedTitle) return trimmedTitle
   if (candidate.provider_volume_id?.trim()) {
-    // If we have a volume ID but no title, fall back to the thread title
-    // so we don't show a bare numeric ID.
-    return `${candidate.thread_title} · ComicVine volume`
+    // If we have a volume ID but no title, include the volume ID so that
+    // multiple volumes on the same thread remain distinguishable.
+    return `${candidate.thread_title} · ComicVine volume ${candidate.provider_volume_id}`
   }
   return 'Unnamed volume'
 }
@@ -141,8 +141,8 @@ export function NewReleasesSection({
       {sources.length > 0 && (
         <ul className="mt-3 space-y-2">
           {sources.map((source) => {
-            const title = source.provider_title?.trim() || source.provider_volume_id
             const action = source.enabled ? 'Stop following' : 'Follow'
+            const label = volumeLabel(source)
             return (
               <li
                 key={source.source_id}
@@ -163,7 +163,7 @@ export function NewReleasesSection({
                 <button
                   type="button"
                   aria-pressed={source.enabled}
-                  aria-label={`${action} ${title}`}
+                  aria-label={`${action} ${label}`}
                   disabled={enable.isPending}
                   onClick={() =>
                     enable.mutate({

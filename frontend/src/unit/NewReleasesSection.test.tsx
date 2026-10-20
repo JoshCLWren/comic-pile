@@ -151,6 +151,71 @@ const unmappedCandidate = {
   followed: false,
 }
 
+// Candidate without provider_title but with provider_volume_id (for missing-title tests)
+const candidateWithoutTitle = {
+  ...confirmedCandidate,
+  thread_id: 20,
+  thread_title: 'Same Thread',
+  external_identity_id: 601,
+  provider_volume_id: '7000-100',
+  provider_title: '',
+  provider_publisher: null,
+  provider_start_year: null,
+  provider_issue_count: null,
+}
+
+// Second candidate on same thread, different volume ID (for distinct volumes test)
+const candidateWithoutTitleSecond = {
+  ...confirmedCandidate,
+  thread_id: 20,
+  thread_title: 'Same Thread',
+  external_identity_id: 602,
+  provider_volume_id: '7000-101',
+  provider_title: '',
+  provider_publisher: null,
+  provider_start_year: null,
+  provider_issue_count: null,
+}
+
+// Candidate with zero issue count
+const candidateZeroIssues = {
+  ...confirmedCandidate,
+  thread_id: 21,
+  thread_title: 'Zero Issues Thread',
+  external_identity_id: 603,
+  provider_volume_id: '8000-200',
+  provider_title: 'Zero Issues Title',
+  provider_publisher: 'Test Publisher',
+  provider_start_year: 2024,
+  provider_issue_count: 0,
+}
+
+// Candidate with one issue
+const candidateOneIssue = {
+  ...confirmedCandidate,
+  thread_id: 22,
+  thread_title: 'One Issue Thread',
+  external_identity_id: 604,
+  provider_volume_id: '8000-201',
+  provider_title: 'One Issue Title',
+  provider_publisher: 'Test Publisher',
+  provider_start_year: 2024,
+  provider_issue_count: 1,
+}
+
+// Candidate with multiple issues
+const candidateManyIssues = {
+  ...confirmedCandidate,
+  thread_id: 23,
+  thread_title: 'Many Issues Thread',
+  external_identity_id: 605,
+  provider_volume_id: '8000-202',
+  provider_title: 'Many Issues Title',
+  provider_publisher: 'Test Publisher',
+  provider_start_year: 2024,
+  provider_issue_count: 5,
+}
+
 describe('NewReleasesSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -209,7 +274,7 @@ describe('NewReleasesSection', () => {
     render(<NewReleasesSection planId={12} sources={[enabledSource]} candidates={[]} />, {
       wrapper: createWrapper(),
     })
-    const toggle = screen.getByRole('button', { name: 'Stop following X-Men' })
+    const toggle = screen.getByRole('button', { name: 'Stop following X-Men · Marvel · 1963 · 12 issues' })
     toggle.click()
     await waitFor(() =>
       expect(mockUpdate).toHaveBeenCalledWith({ sourceId: 901, enabled: false }),
@@ -221,7 +286,7 @@ describe('NewReleasesSection', () => {
     render(<NewReleasesSection planId={12} sources={[disabledSource]} candidates={[]} />, {
       wrapper: createWrapper(),
     })
-    const toggle = screen.getByRole('button', { name: 'Follow Incredible Hulk' })
+    const toggle = screen.getByRole('button', { name: 'Follow Incredible Hulk · Marvel · 1963 · 12 issues' })
     toggle.click()
     await waitFor(() =>
       expect(mockUpdate).toHaveBeenCalledWith({ sourceId: 902, enabled: true }),
@@ -319,12 +384,12 @@ describe('NewReleasesSection', () => {
     expect(alert).toHaveTextContent('Could not update this volume.')
   })
 
-  it('falls back to provider_volume_id when provider_title is empty', () => {
+  it('falls back to readable label when provider_title is empty', () => {
     render(
       <NewReleasesSection planId={12} sources={[sourceWithoutTitle]} candidates={[]} />,
       { wrapper: createWrapper() },
     )
-    expect(screen.getByText('4000-77')).toBeInTheDocument()
+    expect(screen.getByText('ComicVine volume 4000-77')).toBeInTheDocument()
     expect(screen.queryByText(/X-Men/)).not.toBeInTheDocument()
   })
 
@@ -351,5 +416,85 @@ describe('NewReleasesSection', () => {
     )
     expect(screen.getByText('Minimal Title')).toBeInTheDocument()
     expect(screen.queryByText(/·/)).not.toBeInTheDocument()
+  })
+
+  it('shows readable fallback with volume ID for candidate missing provider_title', () => {
+    render(
+      <NewReleasesSection planId={12} sources={[]} candidates={[candidateWithoutTitle]} />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('Same Thread · ComicVine volume 7000-100')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Follow Same Thread · ComicVine volume 7000-100' })).toBeInTheDocument()
+  })
+
+  it('distinguishes multiple candidates on same thread when both lack provider_title', () => {
+    render(
+      <NewReleasesSection
+        planId={12}
+        sources={[]}
+        candidates={[candidateWithoutTitle, candidateWithoutTitleSecond]}
+      />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('Same Thread · ComicVine volume 7000-100')).toBeInTheDocument()
+    expect(screen.getByText('Same Thread · ComicVine volume 7000-101')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Follow Same Thread · ComicVine volume 7000-100' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Follow Same Thread · ComicVine volume 7000-101' })).toBeInTheDocument()
+  })
+
+  it('renders zero issues correctly in candidate label', () => {
+    render(
+      <NewReleasesSection planId={12} sources={[]} candidates={[candidateZeroIssues]} />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('Zero Issues Title · Test Publisher · 2024 · 0 issues')).toBeInTheDocument()
+  })
+
+  it('renders one issue correctly in candidate label (singular)', () => {
+    render(
+      <NewReleasesSection planId={12} sources={[]} candidates={[candidateOneIssue]} />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('One Issue Title · Test Publisher · 2024 · 1 issue')).toBeInTheDocument()
+  })
+
+  it('renders multiple issues correctly in candidate label (plural)', () => {
+    render(
+      <NewReleasesSection planId={12} sources={[]} candidates={[candidateManyIssues]} />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('Many Issues Title · Test Publisher · 2024 · 5 issues')).toBeInTheDocument()
+  })
+
+  it('renders zero issues correctly in followed source label', () => {
+    const zeroIssueSource = {
+      ...enabledSource,
+      source_id: 906,
+      provider_title: 'Zero Issue Source',
+      provider_publisher: 'Test Publisher',
+      provider_start_year: 2024,
+      provider_issue_count: 0,
+    }
+    render(
+      <NewReleasesSection planId={12} sources={[zeroIssueSource]} candidates={[]} />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('Zero Issue Source · Test Publisher · 2024 · 0 issues')).toBeInTheDocument()
+  })
+
+  it('renders one issue correctly in followed source label (singular)', () => {
+    const oneIssueSource = {
+      ...enabledSource,
+      source_id: 907,
+      provider_title: 'One Issue Source',
+      provider_publisher: 'Test Publisher',
+      provider_start_year: 2024,
+      provider_issue_count: 1,
+    }
+    render(
+      <NewReleasesSection planId={12} sources={[oneIssueSource]} candidates={[]} />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('One Issue Source · Test Publisher · 2024 · 1 issue')).toBeInTheDocument()
   })
 })
