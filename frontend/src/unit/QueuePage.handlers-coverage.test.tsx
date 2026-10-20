@@ -484,4 +484,31 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0]!)
     expect(screen.getByRole('button', { name: 'Adding to queue...' })).toBeDisabled()
   })
+
+  it('persists a cleared Notes field instead of dropping the empty value (#3629)', async () => {
+    const user = userEvent.setup()
+    // SAFETY: as never is used for type narrowing in mock data
+    // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
+    vi.mocked(useQueueThreads).mockReturnValue({
+      data: [{ ...thread, notes: 'QA test series notes' }] as never,
+      isPending: false,
+      refetch: mocks.refetch,
+    } as never)
+    mocks.mutate.mockResolvedValue({ ...thread, notes: null })
+    renderPage()
+
+    await user.click(screen.getByText('edit modal callback'))
+    const notesField = screen.getByLabelText('Notes')
+    expect(notesField).toHaveValue('QA test series notes')
+    await user.clear(notesField)
+    expect(notesField).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: /save changes/i }))
+
+    await waitFor(() =>
+      expect(mocks.mutate).toHaveBeenCalledWith({
+        id: 1,
+        data: expect.objectContaining({ notes: '' }),
+      }),
+    )
+  })
 })

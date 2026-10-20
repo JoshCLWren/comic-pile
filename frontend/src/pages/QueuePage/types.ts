@@ -31,7 +31,12 @@ export type QueueFormState = {
 export interface EditThreadData {
   title: string
   format: string
-  notes: string | null
+  /**
+   * Notes as typed by the reader. Always sent, including an empty string when
+   * the field was cleared, so clearing a note persists (issue #3629). The API
+   * treats an omitted field as "leave unchanged".
+   */
+  notes: string
   issues_remaining?: number
   manual_creator_credits?: ManualCreatorCredit[]
 }

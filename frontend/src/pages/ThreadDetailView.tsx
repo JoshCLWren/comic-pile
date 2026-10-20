@@ -209,7 +209,10 @@ export default function ThreadDetailView() {
       const updateData: EditThreadData = {
         title: editForm.title,
         format: editForm.format,
-        notes: editForm.notes || null,
+        // Send the field verbatim so an emptied Notes field is sent as an
+        // explicit clear. Only omitting `notes` leaves the saved value
+        // unchanged (issue #3629).
+        notes: editForm.notes,
         manual_creator_credits: editForm.manualCreatorCredits,
       }
 

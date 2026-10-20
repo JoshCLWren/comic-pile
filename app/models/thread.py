@@ -59,6 +59,29 @@ def normalize_format_value(format_value: str) -> str:
     stripped = format_value.strip()
     return _FORMAT_NORMALIZATION.get(stripped.lower(), stripped)
 
+
+def normalize_notes_value(notes: str | None) -> str | None:
+    """Normalize a raw notes value into the stored representation.
+
+    A series' notes are free text. An emptied or whitespace-only value means
+    "no notes" and is stored as ``NULL`` so that clearing the field on an edit
+    reads back as empty everywhere instead of lingering as a blank string
+    (issue #3629). Non-empty values are preserved verbatim, including leading
+    and trailing whitespace inside a multi-line note.
+
+    Args:
+        notes: Raw client-supplied notes value, or ``None``.
+
+    Returns:
+        The stored notes value, or ``None`` when the note is empty.
+    """
+    if notes is None:
+        return None
+    if not notes.strip():
+        return None
+    return notes
+
+
 if TYPE_CHECKING:
     from app.models.event import Event
     from app.models.user import User
