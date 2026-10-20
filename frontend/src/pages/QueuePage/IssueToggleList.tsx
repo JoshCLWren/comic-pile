@@ -1,4 +1,13 @@
-import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useId,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+} from 'react'
 import type { DragEvent } from 'react'
 import type { Issue, IssueDependenciesResponse, IssueListResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
@@ -6,6 +15,7 @@ import type { IssueListParams } from '../../services/api-issues'
 import { issueDependenciesApi } from '../../services/api-dependencies'
 import type { ThreadIssueDependenciesResponse } from '../../services/api-dependencies'
 import { getApiErrorDetail } from '../../utils/apiError'
+import { validateIssueRangeForStaging } from '../../utils/issueParser'
 import { isWindowDefined, isFunction } from '../../utils/runtimeChecks'
 import Tooltip from '../../components/Tooltip'
 import Modal from '../../components/Modal'
@@ -98,6 +108,26 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const isProcessingMutationsRef = useRef(false)
   const nextMutationIdRef = useRef(1)
   const loadGenerationRef = useRef(0)
+  const addInputId = useId()
+  const addValidationErrorId = useId()
+  const addServerErrorId = useId()
+
+  /**
+   * Client-side guard for the Add box (#3586). The backend parser accepts any
+   * literal identifier, so without this guard arbitrary text ("abc"), a
+   * negative number ("-3"), or a zero-width character becomes a pending issue
+   * chip that is one Save away from becoming a phantom record.
+   */
+  const addRangeValidation = useMemo(
+    () => validateIssueRangeForStaging(addRange),
+    [addRange],
+  )
+  const addValidationError = addRangeValidation.error
+  const isAddRangeValid = addRangeValidation.valid
+  const addErrorDescription = [
+    addValidationError ? addValidationErrorId : null,
+    addError ? addServerErrorId : null,
+  ].filter((id): id is string => id !== null).join(' ') || undefined
 
   const getNextUnreadIssueId = useCallback(() => {
     return issues.find((issue) => issue.status === 'unread')?.id ?? null
@@ -375,6 +405,13 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   async function handleAddIssues() {
     const range = addRange.trim()
     if (!range) {
+      return
+    }
+    // Reject input that is not an issue before it can become a pending chip
+    // or reach the server (#3586). The same guard also drives the inline
+    // error and the disabled state of the Add button.
+    const validation = validateIssueRangeForStaging(range)
+    if (!validation.valid) {
       return
     }
     setAddError(null)
@@ -716,10 +753,17 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       </div>
       )}
       <div className="flex gap-2">
+        <label htmlFor={addInputId} className="sr-only">
+          Add issues
+        </label>
         <input
+          id={addInputId}
           type="text"
           value={addRange}
-          onChange={(e) => setAddRange(e.target.value)}
+          onChange={(e) => {
+            setAddRange(e.target.value)
+            setAddError(null)
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
@@ -728,21 +772,35 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             }
           }}
           placeholder="Add: 19-24 or 0, Annual 1"
+          aria-invalid={addValidationError || addError ? true : undefined}
+          aria-describedby={addErrorDescription}
           className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-3 md:py-4 text-xs text-stone-300"
           data-testid="issue-add-input"
         />
         <button
           type="button"
           onClick={() => handleAddIssues()}
-          disabled={isAdding || !addRange.trim()}
+          disabled={isAdding || !addRange.trim() || !isAddRangeValid}
           className="px-3 py-3 md:py-4 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
           data-testid="issue-add-button"
         >
           {isAdding ? '…' : 'Add'}
         </button>
       </div>
+      {addValidationError && (
+        <p
+          id={addValidationErrorId}
+          className="text-xs text-[var(--theme-danger)]"
+          role="alert"
+          data-testid="issue-add-validation-error"
+        >
+          {addValidationError}
+        </p>
+      )}
       {addError && (
-        <p className="text-xs text-red-400">{addError}</p>
+        <p id={addServerErrorId} className="text-xs text-[var(--theme-danger)]" data-testid="issue-add-error">
+          {addError}
+        </p>
       )}
       {deferred && pendingCreates.length > 0 && (
         <div className="flex flex-wrap gap-1.5" data-testid="pending-creates">
@@ -759,7 +817,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         </div>
       )}
       {actionError && (
-        <p className="text-xs text-red-400">{actionError}</p>
+        <p className="text-xs text-[var(--theme-danger)]">{actionError}</p>
       )}
       {selectedDepsIssue && (
         <Modal
