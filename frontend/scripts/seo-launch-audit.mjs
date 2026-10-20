@@ -659,31 +659,33 @@ export function validateBaselineRecord(record) {
       `At least ${MINIMUM_OFFSITE_OPPORTUNITIES} realistic off-site discovery opportunities must be identified.`,
     )
   }
-  
-  for (const opportunity of opportunities) {
-    if (opportunity === null || opportunity === undefined) {
-      problems.push('Every off-site opportunity must be an object with name, url, and relevance fields.')
-      continue
-    }
-    const name = String(opportunity.name ?? '')
-    const url = String(opportunity.url ?? '')
-    const relevance = String(opportunity.relevance ?? '')
-    if (name.length === 0) {
-      problems.push('Every off-site opportunity needs a name.')
-    }
-    if (!/^https?:\/\/[^\s]+$/.test(url)) {
-      problems.push(`The off-site opportunity "${name}" needs an absolute URL.`)
-    }
-    if (relevance.length === 0) {
-      problems.push(`The off-site opportunity "${name}" needs a relevance reason.`)
-    }
-    if (opportunity.paid === true) {
-      problems.push(`The off-site opportunity "${name}" is marked as a paid link.`)
-    }
-    if (!OFFSITE_OUTREACH_STATES.includes(String(opportunity.outreach ?? ''))) {
-      problems.push(
-        `The off-site opportunity "${name}" needs an outreach state of ${OFFSITE_OUTREACH_STATES.join(', ')}.`,
-      )
+
+  if (Array.isArray(opportunities)) {
+    for (const opportunity of opportunities) {
+      if (opportunity === null || opportunity === undefined) {
+        problems.push('Every off-site opportunity must be an object with name, url, and relevance fields.')
+        continue
+      }
+      const name = String(opportunity.name ?? '')
+      const url = String(opportunity.url ?? '')
+      const relevance = String(opportunity.relevance ?? '')
+      if (name.length === 0) {
+        problems.push('Every off-site opportunity needs a name.')
+      }
+      if (!/^https?:\/\/[^\s]+$/.test(url)) {
+        problems.push(`The off-site opportunity "${name}" needs an absolute URL.`)
+      }
+      if (relevance.length === 0) {
+        problems.push(`The off-site opportunity "${name}" needs a relevance reason.`)
+      }
+      if (opportunity.paid === true) {
+        problems.push(`The off-site opportunity "${name}" is marked as a paid link.`)
+      }
+      if (!OFFSITE_OUTREACH_STATES.includes(String(opportunity.outreach ?? ''))) {
+        problems.push(
+          `The off-site opportunity "${name}" needs an outreach state of ${OFFSITE_OUTREACH_STATES.join(', ')}.`,
+        )
+      }
     }
   }
   return problems

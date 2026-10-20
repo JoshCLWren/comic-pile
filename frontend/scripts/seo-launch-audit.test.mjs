@@ -524,6 +524,70 @@ test('a baseline record with null opportunities reports useful errors instead of
   assert.ok(joined.includes('At least 3 realistic off-site discovery opportunities'))
 })
 
+test('a missing offsiteOpportunities key reports missing opportunities instead of crashing', () => {
+  const record = {
+    issue: 3072,
+    origin: PRODUCTION_ORIGIN,
+    recordedAt: '2026-10-19',
+    searchConsole: {
+      ownershipVerified: true,
+      sitemapSubmitted: true,
+      indexedPageCount: 1,
+      impressions: 0,
+      clicks: 0,
+    },
+    linkPolicy: 'earned-only',
+  }
+
+  assert.doesNotThrow(() => validateBaselineRecord(record))
+  const problems = validateBaselineRecord(record)
+  const joined = problems.join('\n')
+  assert.ok(joined.includes('At least 3 realistic off-site discovery opportunities'))
+})
+
+test('a null offsiteOpportunities reports missing opportunities instead of crashing', () => {
+  const problems = validateBaselineRecord({
+    issue: 3072,
+    origin: PRODUCTION_ORIGIN,
+    recordedAt: '2026-10-19',
+    searchConsole: {
+      ownershipVerified: true,
+      sitemapSubmitted: true,
+      indexedPageCount: 1,
+      impressions: 0,
+      clicks: 0,
+    },
+    offsiteOpportunities: null,
+    linkPolicy: 'earned-only',
+  })
+
+  const joined = problems.join('\n')
+  assert.ok(joined.includes('At least 3 realistic off-site discovery opportunities'))
+  assert.equal(joined.includes('Every off-site opportunity must be an object'), false)
+})
+
+test('a non-array offsiteOpportunities reports missing opportunities instead of crashing', () => {
+  const problems = validateBaselineRecord({
+    issue: 3072,
+    origin: PRODUCTION_ORIGIN,
+    recordedAt: '2026-10-19',
+    searchConsole: {
+      ownershipVerified: true,
+      sitemapSubmitted: true,
+      indexedPageCount: 1,
+      impressions: 0,
+      clicks: 0,
+    },
+    offsiteOpportunities: { name: 'A', url: 'https://example.com/a', relevance: 'tools', outreach: 'not-started' },
+    linkPolicy: 'earned-only',
+  })
+
+  const joined = problems.join('\n')
+  assert.ok(joined.includes('At least 3 realistic off-site discovery opportunities'))
+  assert.equal(joined.includes('Every off-site opportunity must be an object'), false)
+})
+
+
 test('the CLI parses its arguments', () => {
   const options = parseArguments([
     '--base-url',
