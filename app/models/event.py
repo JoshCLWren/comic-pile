@@ -40,6 +40,9 @@ class Event(Base):
           for the die after stepping up.
         - "unsnooze": User unsnoozed a thread. Uses `thread_id` to record which
           thread was removed from the snoozed list.
+        - "session_mode": User changed the session's reading bandwidth and/or
+          intent. Stores the changed dimensions and new values in `context`;
+          it references no thread.
 
     Thread ID Fields:
         This model has two thread reference fields with different purposes:

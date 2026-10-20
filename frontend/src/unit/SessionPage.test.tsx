@@ -301,6 +301,37 @@ it('uses human labels and explicit fallback text for sparse events', () => {
   expect(screen.getAllByText('No additional event details recorded.')).toHaveLength(2)
 })
 
+// #3574: session-level events have no thread reference, so they must describe
+// the state change directly instead of borrowing the broken-thread placeholder.
+it('describes session mode changes without a missing-thread placeholder', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 25, started_at: '2024-01-01', ended_at: null, start_die: 6, current_die: 6,
+    ladder_path: 'd6', narrative_summary: {},
+    events: [
+      {
+        id: 50,
+        timestamp: '2024-01-01T10:00:00Z',
+        type: 'session_mode',
+        description: 'Bandwidth set to Deep · Intent set to Explore',
+      },
+      {
+        id: 51,
+        timestamp: '2024-01-01T10:01:00Z',
+        type: 'session_mode',
+        description: null,
+      },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(screen.getAllByText('Session mode')).toHaveLength(2)
+  expect(screen.getByText('Bandwidth set to Deep · Intent set to Explore')).toBeInTheDocument()
+  expect(screen.getByText('Session mode changed')).toBeInTheDocument()
+  expect(screen.queryByText('Thread unavailable')).not.toBeInTheDocument()
+  expect(screen.queryByText('No additional event details recorded.')).not.toBeInTheDocument()
+})
+
 it('describes a roll that never drew a face instead of showing "Rolled 0"', () => {
   mockedUseSessionDetails.mockReturnValue({ data: {
     session_id: 20, started_at: '2024-01-01', ended_at: null, start_die: 6, current_die: 6,
