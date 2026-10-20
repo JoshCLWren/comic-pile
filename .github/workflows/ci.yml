@@ -492,7 +492,7 @@ jobs:
         uses: ./.github/actions/fork-ci-toolchain
 
       - name: Download shard coverage data
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: backend-coverage-*
           merge-multiple: true
