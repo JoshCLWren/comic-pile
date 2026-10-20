@@ -311,6 +311,9 @@ def _register_core_routers(app: FastAPI) -> None:
     dependency.mount_subrouters()
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
+    # New client resources (e.g. the paginated blocked/inactive Roll sections
+    # for issue #3330) are versioned-only: no bare /api/* twin.
+    app.include_router(roll.v1_router, prefix="/api/v1/roll", tags=["roll"])
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
     # Roll v2: versioned-only, no unversioned alias per #2716
     app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])

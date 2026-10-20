@@ -71,6 +71,12 @@ from comic_pile.reading_session import get_current_die_for_session, get_or_creat
 from app.services.dependency_service import get_blocking_details
 
 router = APIRouter(tags=["roll"])
+
+#: Versioned-only router for new client resources. Mounted solely under
+#: ``/api/v1/roll`` so new endpoints never introduce bare ``/api/*`` routes
+#: (see ``tests/test_route_versioning.py`` and docs/API.md).
+v1_router = APIRouter(tags=["roll"])
+
 v2_router = APIRouter(tags=["roll"])
 logger = logging.getLogger(__name__)
 
@@ -1017,7 +1023,7 @@ async def roll_bootstrap(
     )
 
 
-@router.get("/blocked-threads", response_model=RollBlockedThreadsPage)
+@v1_router.get("/blocked-threads", response_model=RollBlockedThreadsPage)
 async def roll_blocked_threads(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -1055,7 +1061,7 @@ async def roll_blocked_threads(
     )
 
 
-@router.get("/inactive-threads", response_model=RollInactiveThreadsPage)
+@v1_router.get("/inactive-threads", response_model=RollInactiveThreadsPage)
 async def roll_inactive_threads(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
