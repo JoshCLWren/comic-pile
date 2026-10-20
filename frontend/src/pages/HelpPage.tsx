@@ -110,7 +110,7 @@ export default function HelpPage() {
           <div
             key={d.id}
             id={d.id}
-            className={`p-4 border rounded-lg bg-white/80 shadow-sm transition-all duration-300 ${
+            className={`p-4 border rounded-lg bg-white/80 shadow-sm transition-all duration-300 motion-reduce:transition-none ${
               isHighlighted(d)
                 ? 'ring-2 ring-[var(--theme-focus-ring)] border-[var(--theme-focus-ring)]'
                 : ''
