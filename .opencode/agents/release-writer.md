@@ -113,6 +113,9 @@ language for ComicPile readers:
 - Never include implementation phase terminology such as `Phase 2 and 3`.
 - Never publish unfinished-work commentary such as `incomplete fix`, `WIP`, or `TODO`; classify
   non-user-visible or unfinished work as internal instead.
+- Never publish engineering artifacts: endpoint paths such as `POST /api/v1/threads`, diff
+  fragments, factory automation wording, or internal infrastructure names. The helper classifies
+  copy that contains them as internal, so the note never reaches readers.
 - Rewrite low-information fragments such as `loading states` into the concrete reader benefit, or
   skip the release.
 - Spell-check every title, category, and summary before publishing.
