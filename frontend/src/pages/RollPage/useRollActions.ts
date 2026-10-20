@@ -208,7 +208,7 @@ export function useRollActions({
           if (isSkipped) {
             await unskipMutation.mutate(selectedThread!.id)
           } else {
-            await skipMutation.mutate()
+            await skipMutation.mutate(bootstrap?.pending_thread_id ?? undefined)
           }
           await refetchBootstrap()
           break

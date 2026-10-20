@@ -479,6 +479,16 @@ async def skip_roll(
     current_session.pending_thread_id = artifacts.selected_thread.id
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
+    # Record the skipped thread as a SKIPPED event so the session timeline and
+    # narrative summary reflect the skip (issue #3706).
+    db.add(
+        Event(
+            type="rolled_but_skipped",
+            session_id=current_session.id,
+            thread_id=skipped_thread_id,
+        )
+    )
+
     await db.commit()
 
     return await RollService(db).build_roll_response(

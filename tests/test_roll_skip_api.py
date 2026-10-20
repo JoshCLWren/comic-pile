@@ -164,3 +164,26 @@ async def test_skip_respects_blocked_governance(auth_client: AsyncClient, async_
         await auth_client.post("/api/v1/roll/dismiss-pending")
         roll_response = await auth_client.post("/api/v1/roll/")
         assert roll_response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_skip_records_skipped_event(auth_client: AsyncClient, sample_data: dict) -> None:
+    """Skip records a rolled_but_skipped event for the skipped thread (issue #3706)."""
+    _ = sample_data
+    roll_response = await auth_client.post("/api/v1/roll/")
+    assert roll_response.status_code == 200
+    _ = roll_response.json()["thread_id"]
+
+    skip_response = await auth_client.post("/api/v1/roll/skip")
+    assert skip_response.status_code == 200
+
+    session_response = await auth_client.get("/api/v1/sessions/current/")
+    session_id = session_response.json()["id"]
+    details_response = await auth_client.get(f"/api/v1/sessions/{session_id}/details")
+    assert details_response.status_code == 200
+    events = details_response.json()["events"]
+    skipped_events = [e for e in events if e["type"] == "rolled_but_skipped"]
+    assert len(skipped_events) == 1
+    assert skipped_events[0]["thread_title"] is not None
+    summary = details_response.json()["narrative_summary"]
+    assert len(summary["skipped"]) == 1
