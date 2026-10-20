@@ -6,9 +6,11 @@ canonical Dependencies so the denormalized column matches
 ``_get_blocked_thread_ids_uncached``. Historical ``cbl-order:%`` rows stay
 inert. ContinuityRule and DependencyGroup ordering are not Roll authorities.
 
-The Alembic revision ``c35120000001`` is a thin wrapper around
-:func:`refresh_all_users_blocked_status` so the SQL can be unit-tested
-without an Alembic context.
+The Alembic revisions ``c35120000001`` and ``c36800000001`` are thin
+wrappers around :func:`refresh_all_users_blocked_status` so the SQL can be
+unit-tested without an Alembic context. A revision that already ran on a
+deployed database does not re-run when this predicate widens, so a predicate
+change needs a new revision that refreshes again (#3590).
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ WITH canonically_blocked AS (
     WHERE source_thread.user_id = target_thread.user_id
       AND source_issue.status <> 'read'
       AND target_thread.next_unread_issue_id IS NOT NULL
+      AND next_unread_issue.status <> 'read'
       AND (
           dependencies.note IS NULL
           OR dependencies.note NOT LIKE 'cbl-order:%'
