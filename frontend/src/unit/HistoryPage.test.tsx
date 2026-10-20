@@ -367,3 +367,64 @@ it('keeps the bounded loading state visible during a user-initiated retry (issue
   expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
 })
+
+it('gives each session-detail link a unique accessible name (issue #3687)', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [
+      { id: 21, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6', active_thread: { title: 'Saga', format: 'Comic' }, last_rolled_result: 4, current_die: 6, snapshot_count: 1 },
+      { id: 22, started_at: '2024-01-02T11:30:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: 0 },
+    ],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+
+  // Acceptance: two sessions rendered together, each reachable by its own
+  // accessible name, without depending on the aria-hidden arrow.
+  const first = screen.getByRole('link', { name: /^View full session for session 21,/ })
+  const second = screen.getByRole('link', { name: /^View full session for session 22,/ })
+  expect(first).toHaveAttribute('href', '/sessions/21')
+  expect(second).toHaveAttribute('href', '/sessions/22')
+
+  const firstName = first.getAttribute('aria-label') ?? ''
+  const secondName = second.getAttribute('aria-label') ?? ''
+  expect(firstName).not.toBe(secondName)
+  expect(firstName).not.toContain('→')
+  expect(secondName).not.toContain('→')
+
+  // The name carries the session start date and time alongside the id.
+  const expectedDate = new Date('2024-01-01T10:00:00Z').toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
+  expect(firstName).toContain(`started ${expectedDate}`)
+  expect(firstName).toMatch(/ at \d{1,2}:\d{2} (AM|PM)/)
+
+  // The visible concise link label stays unchanged.
+  expect(first).toHaveTextContent('View full session')
+  expect(second).toHaveTextContent('View full session')
+})
+
+it('keeps detail-link names unique by session id when the start time is unusable (issue #3687)', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [
+      { id: 4, started_at: 'bad', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: 0 },
+      { id: 8, started_at: null, ended_at: 'bad', ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: null },
+    ],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+
+  const first = screen.getByRole('link', { name: 'View full session for session 4' })
+  const second = screen.getByRole('link', { name: 'View full session for session 8' })
+  expect(first).toHaveAttribute('href', '/sessions/4')
+  expect(second).toHaveAttribute('href', '/sessions/8')
+  expect(first.getAttribute('aria-label')).not.toBe(second.getAttribute('aria-label'))
+})
