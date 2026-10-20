@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent } from 'react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Modal from '../../../components/Modal'
 import MigrationDialog from '../../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../../components/SimpleMigrationDialog'
@@ -13,6 +13,7 @@ import {
 import type { Thread, ThreadListItem } from '../../../types'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 import type { RatingThread } from '../types'
+import { buildManualPickerOptions } from '../manualPickerOptions'
 
 interface SetCurrentIssueModalProps {
   onSubmit: (issueNumber: string) => Promise<void>
@@ -184,6 +185,16 @@ export function RollModals({
       isSnoozed: actionSheetThreadIsSnoozed,
       pendingThreadId,
     })
+  // Issue #3704: same-named series need disambiguating progress detail in the
+  // manual pick, and each eligible unique thread renders exactly once.
+  const pickerOptions = useMemo(
+    () =>
+      buildManualPickerOptions({
+        activeThreads: overrideThreads ?? [],
+        snoozedThreads,
+      }),
+    [overrideThreads, snoozedThreads],
+  )
   return (
     <>
       {showMigrationDialog && threadToMigrate && (
@@ -226,24 +237,20 @@ export function RollModals({
             >
               <option value="">Select a series...</option>
               <optgroup label="Active series">
-                {(overrideThreads ?? []).map((thread) => {
-                  const tagNames = (thread.tags ?? []).map(t => t.name).join(', ')
-                  const label = `${thread.title} (${thread.format})${tagNames ? ' · ' + tagNames : ''}`
+                {pickerOptions.activeOptions.map((option) => {
                   return (
-                    <option key={thread.id} value={thread.id}>
-                      {label}
+                    <option key={option.id} value={option.id}>
+                      {option.label}
                     </option>
                   )
                 })}
               </optgroup>
-              {snoozedThreads.length > 0 && (
+              {pickerOptions.snoozedOptions.length > 0 && (
                 <optgroup label="Snoozed series">
-                  {snoozedThreads.map((thread) => {
-                    const tagNames = (thread.tags ?? []).map(t => t.name).join(', ')
-                    const label = `${thread.title} (${thread.format})${tagNames ? ' · ' + tagNames : ''}`
+                  {pickerOptions.snoozedOptions.map((option) => {
                     return (
-                      <option key={thread.id} value={thread.id}>
-                        {label}
+                      <option key={option.id} value={option.id}>
+                        {option.label}
                       </option>
                     )
                   })}
