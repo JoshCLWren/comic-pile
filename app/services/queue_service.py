@@ -133,6 +133,7 @@ class QueueService:
                     await self._db.refresh(thread)
                 return await thread_to_response(thread, self._db)
 
+        was_manual = thread.queue_position_is_manual
         before_positions = await queue_repository.active_queue_positions(self._db, user_id)
 
         try:
@@ -158,6 +159,14 @@ class QueueService:
 
         if after_positions != before_positions:
             await queue_repository.add_reorder_event(self._db, thread_id)
+            await self._db.commit()
+            await self._db.refresh(thread)
+        elif thread.queue_position_is_manual and not was_manual:
+            # Moving an already-front/back series does not reorder the queue,
+            # but the mutation still recorded the reader's explicit placement
+            # claim. Commit it here; otherwise the claim is rolled back when
+            # the request session closes and a later below-threshold rating
+            # demotes a series the reader placed explicitly (#3638).
             await self._db.commit()
             await self._db.refresh(thread)
 

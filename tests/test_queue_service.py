@@ -220,6 +220,61 @@ async def test_move_to_back_uses_back_mutation(
 
 
 @pytest.mark.asyncio
+async def test_move_to_front_noop_still_commits_manual_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Moving the front series to the front still commits the manual claim."""
+    thread = _make_thread(queue_position=1)
+    _mutation, add_reorder_event, _to_response = await _patch_service_boundaries(
+        monkeypatch,
+        thread=thread,
+        before={7: 1, 10: 2},
+        after={7: 1, 10: 2},
+    )
+
+    async def _mark_manual(*_args, **_kwargs):
+        thread.queue_position_is_manual = True
+        return {}
+
+    front_mutation = AsyncMock(side_effect=_mark_manual)
+    monkeypatch.setattr(queue_service, "_move_to_front", front_mutation)
+
+    db = _fake_db()
+    service = queue_service.QueueService(db)
+    await service.move_to_front(1, 7)
+
+    front_mutation.assert_awaited_once_with(7, 1, db, manual=True)
+    add_reorder_event.assert_not_awaited()
+    db.commit.assert_awaited_once()
+    assert thread.queue_position_is_manual is True
+
+
+@pytest.mark.asyncio
+async def test_move_to_back_noop_skips_recommit_when_already_manual(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A no-reorder move adds no commit when the claim is already committed."""
+    thread = _make_thread(queue_position=2)
+    thread.queue_position_is_manual = True
+    _mutation, add_reorder_event, _to_response = await _patch_service_boundaries(
+        monkeypatch,
+        thread=thread,
+        before={7: 2, 10: 1},
+        after={7: 2, 10: 1},
+    )
+    back_mutation = AsyncMock(return_value={})
+    monkeypatch.setattr(queue_service, "_move_to_back", back_mutation)
+
+    db = _fake_db()
+    service = queue_service.QueueService(db)
+    await service.move_to_back(1, 7)
+
+    back_mutation.assert_awaited_once_with(7, 1, db, manual=True)
+    add_reorder_event.assert_not_awaited()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_shuffle_delegates_to_shuffle_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
