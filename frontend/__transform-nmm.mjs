@@ -170,6 +170,7 @@ for (const call of findMockCalls()) {
   const alias = namespaceAlias(spec)
   const lines = []
   let needsNamespace = false
+  const manualLen = manual.length
 
   for (const prop of obj.properties) {
     if (!ts.isPropertyAssignment(prop)) {
@@ -253,7 +254,9 @@ for (const call of findMockCalls()) {
     }
   }
 
-  edits.push({ start: call.getStart(sf), end: call.getEnd(), text: lines.join('\n') })
+  if (manual.length === manualLen && lines.length > 0) {
+    edits.push({ start: call.getStart(sf), end: call.getEnd(), text: lines.join('\n') })
+  }
 }
 
 if (manual.length > 0) {
@@ -277,7 +280,13 @@ out = out.replace(/vi\.mocked\(\s*([A-Za-z_$][\w$]*)\s*\)/g, (m, name) => {
   if (!binding) return m
   const alias = namespaceAliases.get(binding.module)
   if (!alias) return m
-  return `vi.spyOn(${alias}, '${name}')`
+  const abs = resolveModule(binding.module, testFile)
+  if (!abs) return m
+  const exports = moduleExports(abs)
+  if (exports.__error) return m
+  const kind = exports[binding.imported]
+  if (kind !== 'function') return m
+  return `vi.spyOn(${alias}, '${binding.imported}')`
 })
 
 // ---- add namespace imports (only those actually used) ----
