@@ -236,6 +236,14 @@ export default function CreatorDetailPage() {
   const ratingsPartial = !coverage.ratings_complete
   const upcomingPartial = !coverage.upcoming_complete
   const readUnratedPartial = !coverage.read_unrated_complete
+  // An issue is never shown as both the highest and the lowest one (issue
+  // #3946), so the lowest list drops anything the highest list already shows.
+  const highestRatedIssues = insights?.highest_rated_issues ?? []
+  const highestRatedIssueIds = new Set(highestRatedIssues.map((insight) => insight.issue_id))
+  const lowestRatedIssues = (insights?.lowest_rated_issues ?? []).filter(
+    (insight) => !highestRatedIssueIds.has(insight.issue_id),
+  )
+  const individualIssueCount = highestRatedIssues.length + lowestRatedIssues.length
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
@@ -315,7 +323,7 @@ export default function CreatorDetailPage() {
             </ul>
           ) : (
             <p className="mt-2 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-              {insights.series_message ?? 'Not enough rated issues in a single series yet.'}
+              {insights.series_message ?? 'Series comparisons are not available yet.'}
             </p>
           )}
 
@@ -327,40 +335,60 @@ export default function CreatorDetailPage() {
             </p>
           )}
 
-          {(insights.highest_rated_issues.length > 0 || insights.lowest_rated_issues.length > 0) && (
+          {(highestRatedIssues.length > 0 || lowestRatedIssues.length > 0) && (
             <>
               <h3 className="mt-4 text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
                 Individual issues
               </h3>
               <p className="mt-0.5 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+                {insights.individual_issues_combined && (
+                  <>
+                    Only {individualIssueCount} rated{' '}
+                    {individualIssueCount === 1 ? 'issue' : 'issues'}, so there is no separate
+                    highest and lowest.{' '}
+                  </>
+                )}
                 Single ratings only, not an overall best or worst verdict on the creator.
               </p>
-              <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {insights.highest_rated_issues.length > 0 && (
-                  <div className="min-w-0">
-                    <h4 className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
-                      Highest-rated issues
-                    </h4>
-                    <ul className="mt-1 space-y-2">
-                      {insights.highest_rated_issues.map((insight) => (
-                        <IssueInsightCard key={insight.issue_id} insight={insight} />
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {insights.lowest_rated_issues.length > 0 && (
-                  <div className="min-w-0">
-                    <h4 className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
-                      Lowest-rated issues
-                    </h4>
-                    <ul className="mt-1 space-y-2">
-                      {insights.lowest_rated_issues.map((insight) => (
-                        <IssueInsightCard key={insight.issue_id} insight={insight} />
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
+              {insights.individual_issues_combined ? (
+                <div className="mt-2 min-w-0">
+                  <h4 className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
+                    Rated issues
+                  </h4>
+                  <ul className="mt-1 space-y-2">
+                    {[...highestRatedIssues, ...lowestRatedIssues].map((insight) => (
+                      <IssueInsightCard key={insight.issue_id} insight={insight} />
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {highestRatedIssues.length > 0 && (
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
+                        Highest-rated issues
+                      </h4>
+                      <ul className="mt-1 space-y-2">
+                        {highestRatedIssues.map((insight) => (
+                          <IssueInsightCard key={insight.issue_id} insight={insight} />
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {lowestRatedIssues.length > 0 && (
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
+                        Lowest-rated issues
+                      </h4>
+                      <ul className="mt-1 space-y-2">
+                        {lowestRatedIssues.map((insight) => (
+                          <IssueInsightCard key={insight.issue_id} insight={insight} />
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </section>

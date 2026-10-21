@@ -109,6 +109,12 @@ export interface CreatorInsights {
   series_message: string | null
   excluded_incomplete_series_count: number
   individual_issue_limit: number
+  /**
+   * True when the rated set is too small to separate into distinct highest and
+   * lowest lists (issue #3946). The UI then lists every rated issue once
+   * instead of repeating the same issue as both the best and the worst work.
+   */
+  individual_issues_combined: boolean
   strongest_series: CreatorSeriesInsight | null
   weakest_series: CreatorSeriesInsight | null
   most_rated_series: CreatorSeriesInsight | null

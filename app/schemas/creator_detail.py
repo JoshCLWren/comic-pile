@@ -290,6 +290,10 @@ class CreatorInsights(BaseModel):
     never has to trust an unexplained summary. Series conclusions require a
     minimum rated-issue sample and complete creator metadata; individual issue
     extremes are labeled separately from the aggregate series conclusions.
+
+    The explanation for a missing series comparison names the real reason
+    (issue #3946), and an individual issue never appears in both the highest
+    and the lowest list.
     """
 
     min_series_sample: int = Field(
@@ -303,7 +307,9 @@ class CreatorInsights(BaseModel):
     )
     series_message: str | None = Field(
         default=None,
-        description="Plain-language explanation when no series comparison is available.",
+        description="Plain-language explanation when no series comparison is available. "
+        "It names the real reason: incomplete creator metadata, credits that do not "
+        "count toward the average, or a genuinely thin rated-issue sample.",
     )
     excluded_incomplete_series_count: int = Field(
         default=0,
@@ -315,6 +321,12 @@ class CreatorInsights(BaseModel):
         ...,
         ge=0,
         description="Maximum number of individual issue extremes listed per direction.",
+    )
+    individual_issues_combined: bool = Field(
+        default=False,
+        description="True when the rated set is too small to separate into distinct highest "
+        "and lowest lists. The UI then shows every rated issue once in a single list "
+        "instead of repeating the same issues as both the best and the worst work.",
     )
     strongest_series: CreatorSeriesInsight | None = Field(
         default=None,
@@ -330,11 +342,13 @@ class CreatorInsights(BaseModel):
     )
     highest_rated_issues: list[CreatorIssueInsight] = Field(
         default_factory=list,
-        description="Top individual rated issues, distinct from aggregate series conclusions.",
+        description="Top individual rated issues, distinct from aggregate series conclusions. "
+        "Never overlaps with lowest_rated_issues.",
     )
     lowest_rated_issues: list[CreatorIssueInsight] = Field(
         default_factory=list,
-        description="Bottom individual rated issues, distinct from aggregate series conclusions.",
+        description="Bottom individual rated issues, distinct from aggregate series conclusions. "
+        "Never overlaps with highest_rated_issues.",
     )
 
 
