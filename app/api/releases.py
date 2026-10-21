@@ -23,6 +23,9 @@ from app.services.release_ledger import (
     list_published_releases,
     public_release_payload,
     upsert_release,
+    # Kept as a trailing entry so adding the retraction helper only appends to
+    # this import group instead of rewriting the shared lines above it.
+    retract_published_release,
 )
 
 router = APIRouter(tags=["releases"])
@@ -236,11 +239,8 @@ async def retract_release(
             detail="Invalid release writer credential",
         )
 
-    release = await get_published_release(db, release_id)
+    release = await retract_published_release(db, release_id)
     if release is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
 
-    release.status = "retracted"
-    await db.commit()
-    await db.refresh(release)
     return ReleaseResponse.model_validate(release)

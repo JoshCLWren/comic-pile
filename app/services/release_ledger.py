@@ -1,13 +1,18 @@
-"""Service layer for the durable What's New release ledger."""
+"""Service layer for the durable What's New release ledger.
+
+Query construction and persistence live in
+:mod:`app.repositories.release_repository`; this module owns the ledger's
+business rules and transaction boundaries.
+"""
 
 from datetime import datetime
 
-from sqlalchemy import func, or_, select
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.release import Release
+from app.repositories import release_repository
 from app.schemas.release import ReleaseUpsertRequest
 from comic_pile.release_copy import repair_release_copy
 
@@ -32,20 +37,7 @@ async def list_published_releases(
     Returns:
         The page of releases and total matching release count.
     """
-    filters = (Release.status == "published", Release.visibility == "public")
-    total = await db.scalar(select(func.count(Release.id)).where(*filters))
-    result = await db.execute(
-        select(Release)
-        .where(*filters)
-        .order_by(
-            Release.released_at.desc(),
-            Release.sort_order.desc(),
-            Release.id.desc(),
-        )
-        .offset(offset)
-        .limit(limit)
-    )
-    return list(result.scalars().all()), int(total or 0)
+    return await release_repository.list_published_releases(db, limit=limit, offset=offset)
 
 
 async def get_published_release(db: AsyncSession, release_id: int) -> Release | None:
@@ -58,14 +50,32 @@ async def get_published_release(db: AsyncSession, release_id: int) -> Release | 
     Returns:
         The published public release, or None when unavailable.
     """
-    result = await db.execute(
-        select(Release).where(
-            Release.id == release_id,
-            Release.status == "published",
-            Release.visibility == "public",
-        )
-    )
-    return result.scalar_one_or_none()
+    return await release_repository.get_published_release(db, release_id)
+
+
+async def retract_published_release(db: AsyncSession, release_id: int) -> Release | None:
+    """Retract one published release so it leaves the public What's New list.
+
+    The retraction lookup deliberately reaches every published row, including
+    malformed backfill rows whose title repeats their summary and rows that
+    are not publicly visible. Those rows never appear in What's New, so the
+    writer-only retraction path is the only way they can leave the ledger.
+
+    Args:
+        db: Async database session.
+        release_id: Release primary key.
+
+    Returns:
+        The retracted release, or None when no published release matched.
+    """
+    release = await release_repository.get_release_for_retraction(db, release_id)
+    if release is None:
+        return None
+
+    release.status = "retracted"
+    await db.commit()
+    await db.refresh(release)
+    return release
 
 
 def public_release_payload(release: Release) -> dict[str, object]:
@@ -122,21 +132,12 @@ async def find_release_by_source(
     Raises:
         ReleaseSourceConflictError: If the PR and merge SHA point to different rows.
     """
-    predicates = []
-    if source_pr_number is not None:
-        predicates.append(Release.source_pr_number == source_pr_number)
-    if source_merge_sha is not None:
-        predicates.append(Release.source_merge_sha == source_merge_sha)
-    if not predicates:
-        return None
-
-    result = await db.execute(
-        select(Release).where(
-            Release.source_repository == source_repository,
-            or_(*predicates),
-        )
+    matches = await release_repository.find_releases_by_source(
+        db,
+        source_repository=source_repository,
+        source_pr_number=source_pr_number,
+        source_merge_sha=source_merge_sha,
     )
-    matches = list(result.scalars().all())
     if len(matches) > 1:
         raise ReleaseSourceConflictError(
             "source PR and merge SHA already identify different release records"
@@ -170,38 +171,12 @@ async def find_release_minimal_by_source(
     Raises:
         ReleaseSourceConflictError: If the PR and merge SHA point to different rows.
     """
-    predicates = []
-    if source_pr_number is not None:
-        predicates.append(Release.source_pr_number == source_pr_number)
-    if source_merge_sha is not None:
-        predicates.append(Release.source_merge_sha == source_merge_sha)
-    if not predicates:
-        return None
-
-    # Only retrieve the columns needed for reconciliation; the large body stays unfetched.
-    result = await db.execute(
-        select(
-            Release.id,
-            Release.source_repository,
-            Release.source_pr_number,
-            Release.source_merge_sha,
-            Release.merged_at,
-            Release.released_at,
-            Release.category,
-            Release.title,
-            Release.summary,
-            Release.visibility,
-            Release.status,
-            Release.sort_order,
-            Release.provenance_json,
-            Release.created_at,
-            Release.updated_at,
-        ).where(
-            Release.source_repository == source_repository,
-            or_(*predicates),
-        )
+    matches = await release_repository.find_release_rows_by_source(
+        db,
+        source_repository=source_repository,
+        source_pr_number=source_pr_number,
+        source_merge_sha=source_merge_sha,
     )
-    matches = list(result.mappings().all())
     if len(matches) > 1:
         raise ReleaseSourceConflictError(
             "source PR and merge SHA already identify different release records"
@@ -222,14 +197,11 @@ async def find_historical_release(
     identity is therefore the source path plus original entry order, while the exact
     source checksum protects that identity from silent rewrites.
     """
-    result = await db.execute(
-        select(Release).where(
-            Release.source_repository == source_repository,
-            Release.source_pr_number.is_(None),
-            Release.source_merge_sha.is_(None),
-        )
+    candidates = await release_repository.find_historical_release_candidates(
+        db,
+        source_repository=source_repository,
     )
-    for release in result.scalars().all():
+    for release in candidates:
         provenance = release.provenance_json or {}
         if (
             provenance.get("source_path") == source_path
@@ -291,7 +263,7 @@ async def upsert_release(db: AsyncSession, payload: ReleaseUpsertRequest) -> Rel
 
     if existing is None:
         release = Release(**payload.model_dump())
-        db.add(release)
+        await release_repository.add_release(db, release)
     else:
         release = existing
         _apply_payload(release, payload)
@@ -371,7 +343,7 @@ async def create_historical_release(
         sort_order=sort_order,
         provenance_json=provenance_json,
     )
-    db.add(release)
+    await release_repository.add_release(db, release)
     await db.commit()
     await db.refresh(release)
     return release

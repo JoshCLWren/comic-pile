@@ -88,6 +88,7 @@
   "app/repositories/reading_plan_repository.py",
   "app/repositories/reading_session_repository.py",
   "app/repositories/reading_shadow_repository.py",
+  "app/repositories/release_repository.py",
   "app/repositories/revoked_token_repository.py",
   "app/repositories/roll_repository.py",
   "app/repositories/roll_v2_projection.py",

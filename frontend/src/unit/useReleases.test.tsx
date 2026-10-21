@@ -42,7 +42,7 @@ function renderWithClient<T>(hook: () => T) {
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     ),
   })
-  return { result: rendered.result, client }
+  return { result: rendered.result, client, rerender: rendered.rerender }
 }
 
 beforeEach(() => {
@@ -73,6 +73,17 @@ describe('releasesQueryOptions', () => {
     expect(
       options.getNextPageParam(pageOf([release({ id: 1 })], 1, 0), [
         pageOf([release({ id: 1 })], 1, 0),
+      ]),
+    ).toBeUndefined()
+  })
+
+  it('stops paging when the ledger returns an empty page for the next offset', () => {
+    const options = releasesQueryOptions()
+
+    expect(
+      options.getNextPageParam(pageOf([], 5, 1), [
+        pageOf([release({ id: 1 })], 5, 0),
+        pageOf([], 5, 1),
       ]),
     ).toBeUndefined()
   })
@@ -165,5 +176,20 @@ describe('useReleases', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.error?.message).toBe('Release notes could not be loaded.')
+  })
+
+  it('keeps the loadMore callback identity stable across re-renders', async () => {
+    mockedList.mockResolvedValue(pageOf([release({ id: 1 })], 2, 0))
+
+    const { result, rerender } = renderWithClient(() => useReleases())
+
+    await waitFor(() => expect(result.current.releases).toHaveLength(1))
+    const loadMore = result.current.loadMore
+
+    rerender()
+
+    // A stable identity lets the What's New auto-paging effect depend on
+    // `loadMore` without re-running after every unrelated render.
+    expect(result.current.loadMore).toBe(loadMore)
   })
 })

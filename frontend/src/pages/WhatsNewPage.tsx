@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { Release } from '../services/api-releases'
 import { RELEASES_PAGE_SIZE, useReleases } from '../hooks/useReleases'
 
@@ -69,6 +69,15 @@ function displayWordCount(release: Release): number {
 export function isDisplayableRelease(release: Release): boolean {
   if (hasUnfinishedWorkMarkers(release)) return false
   if (releaseDisplayText(release.title).length <= 1) return false
+
+  // Hide broken backfill cards whose title exactly equals their summary,
+  // mirroring the backend public-read filter for malformed backfill rows.
+  // The backend hides all such rows, so hiding them here cannot drop a
+  // release the backend would still serve.
+  if (releaseDisplayText(release.title) === releaseDisplayText(release.summary)) {
+    return false
+  }
+
   return displayWordCount(release) >= MIN_DISPLAY_WORDS
 }
 
@@ -175,8 +184,21 @@ export default function WhatsNewPage() {
     loadMore,
     retry,
   } = useReleases()
-  const days = useMemo(() => groupReleasesByDay(releases), [releases])
+  const visibleReleases = useMemo(() => releases.filter(isDisplayableRelease), [releases])
+  const days = useMemo(() => groupReleasesByDay(visibleReleases), [visibleReleases])
   const error = isError ? (queryError?.message ?? 'Release notes could not be loaded.') : null
+
+  // Auto-fetch the next page when an entire fetched page is filtered out, so a
+  // server page holding only non-displayable records never leaves readers with
+  // a blank list or a stale "Load older updates" button. A failed page request
+  // stops the automatic traversal: the reader retries that exact page with
+  // "Try again" instead of the page loop re-requesting it forever.
+  useEffect(() => {
+    if (loading || loadingMore || isError || visibleReleases.length > 0 || !hasMore) {
+      return
+    }
+    void loadMore()
+  }, [loading, loadingMore, isError, visibleReleases.length, hasMore, loadMore])
 
   return (
     <section aria-labelledby="whats-new-title" className="mx-auto max-w-3xl pb-8">
@@ -198,7 +220,7 @@ export default function WhatsNewPage() {
         </div>
       )}
 
-      {!loading && releases.length === 0 && !error && (
+      {!loading && visibleReleases.length === 0 && !error && !hasMore && (
         <div className="rounded-xl border border-stone-800 bg-stone-950/60 p-6 text-stone-400">
           No release notes have been published yet.
         </div>
@@ -218,33 +240,29 @@ export default function WhatsNewPage() {
         </div>
       )}
 
-      {!loading && releases.length > 0 && (
+      {!loading && visibleReleases.length > 0 && (
         <div className="space-y-6">
-          {days.map(day => {
-            const visibleReleases = day.releases.filter(isDisplayableRelease)
-            if (visibleReleases.length === 0) return null
-            return (
-              <section
-                key={day.key}
-                aria-labelledby={`release-day-${day.key}`}
-                className="rounded-2xl border border-stone-800 bg-stone-950/60 p-5"
-              >
-                <div className="mb-4 border-b border-stone-800 pb-3">
-                  <h2 id={`release-day-${day.key}`} className="text-2xl font-black text-stone-100">
-                    {day.label}
-                  </h2>
-                  <p className="mt-1 text-sm text-stone-400">
-                    {visibleReleases.length} {visibleReleases.length === 1 ? 'update' : 'updates'} published this day.
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  {visibleReleases.map(release => (
-                    <ReleaseCard key={release.id} release={release} />
-                  ))}
-                </div>
-              </section>
-            )
-          })}
+          {days.map(day => (
+            <section
+              key={day.key}
+              aria-labelledby={`release-day-${day.key}`}
+              className="rounded-2xl border border-stone-800 bg-stone-950/60 p-5"
+            >
+              <div className="mb-4 border-b border-stone-800 pb-3">
+                <h2 id={`release-day-${day.key}`} className="text-2xl font-black text-stone-100">
+                  {day.label}
+                </h2>
+                <p className="mt-1 text-sm text-stone-400">
+                  {day.releases.length} {day.releases.length === 1 ? 'update' : 'updates'} published this day.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {day.releases.map(release => (
+                  <ReleaseCard key={release.id} release={release} />
+                ))}
+              </div>
+            </section>
+          ))}
 
           {hasMore && (
             <div className="flex justify-center">

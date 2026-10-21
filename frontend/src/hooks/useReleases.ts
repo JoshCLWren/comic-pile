@@ -34,6 +34,12 @@ export function releasesQueryOptions(
     queryFn: ({ pageParam }: { pageParam: number }) => listApi.list(limit, pageParam),
     initialPageParam: 0,
     getNextPageParam: (lastPage: ReleaseListResponse, allPages: ReleaseListResponse[]) => {
+      // An empty page means the ledger has nothing more at this offset. Stop
+      // instead of re-requesting the same offset, so the page traversal always
+      // terminates even when the server's total count is stale.
+      if (lastPage.releases.length === 0) {
+        return undefined
+      }
       const loaded = allPages.reduce((sum, page) => sum + page.releases.length, 0)
       return loaded < lastPage.total ? loaded : undefined
     },
@@ -79,12 +85,18 @@ export function useReleases(
   const releases = pages.flatMap(page => page.releases)
   const total = pages[0]?.total ?? 0
 
+  // `loadMore` depends on the stable members of the query result instead of
+  // the whole result object, which React Query recreates on every render.
+  // A stable identity keeps the callback usable as an effect dependency, so
+  // an auto-paging effect re-runs when the paging state actually changes
+  // rather than after every unrelated render.
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query
   const loadMore = useCallback((): Promise<void> => {
-    if (!query.hasNextPage || query.isFetchingNextPage) {
+    if (!hasNextPage || isFetchingNextPage) {
       return Promise.resolve()
     }
-    return query.fetchNextPage().then(() => undefined)
-  }, [query])
+    return fetchNextPage().then(() => undefined)
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
   const retry = useCallback((): Promise<void> => {
     if (pages.length === 0) {
