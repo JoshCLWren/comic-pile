@@ -438,6 +438,7 @@ class UndoSnapshotRepository:
             issues_remaining=state.get("issues_remaining", 0),
             last_rating=state.get("last_rating"),
             queue_position=state.get("queue_position", 1),
+            queue_position_is_manual=state.get("queue_position_is_manual", False),
             status=state.get("status", "active"),
             notes=state.get("notes"),
             is_test=state.get("is_test", False),
@@ -469,6 +470,8 @@ class UndoSnapshotRepository:
             thread.last_rating = state["last_rating"]
         if "queue_position" in state:
             thread.queue_position = state["queue_position"]
+        if "queue_position_is_manual" in state:
+            thread.queue_position_is_manual = state["queue_position_is_manual"]
         if "status" in state:
             thread.status = state["status"]
         if "notes" in state:

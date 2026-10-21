@@ -100,7 +100,10 @@ _MOVE_POSITION_SQL = text("""
         ELSE
             CASE WHEN ranked.seq >= :new_pos AND ranked.seq < target.seq
                  THEN ranked.seq + 1 ELSE ranked.seq END
-    END
+    END,
+    queue_position_is_manual = (
+        t.queue_position_is_manual OR (t.id = :tid AND CAST(:manual AS BOOLEAN))
+    )
     FROM ranked, target
     WHERE t.id = ranked.id
     RETURNING t.id, t.queue_position, ranked.old_position
@@ -128,7 +131,10 @@ _MOVE_TO_BACK_SQL = text("""
         WHEN t.id = :tid THEN bounds.total
         WHEN ranked.seq > target.seq THEN ranked.seq - 1
         ELSE ranked.seq
-    END
+    END,
+    queue_position_is_manual = (
+        t.queue_position_is_manual OR (t.id = :tid AND CAST(:manual AS BOOLEAN))
+    )
     FROM ranked, target, bounds
     WHERE t.id = ranked.id
     RETURNING t.id, t.queue_position, ranked.old_position
@@ -143,7 +149,8 @@ _SHUFFLE_SQL = text("""
         ) AS shuffled(thread_id, new_position)
     )
     UPDATE threads AS t
-    SET queue_position = shuffled.new_position
+    SET queue_position = shuffled.new_position,
+        queue_position_is_manual = FALSE
     FROM shuffled
     WHERE t.id = shuffled.thread_id
       AND t.user_id = :uid
@@ -158,6 +165,7 @@ async def move_to_front(
     user_id: int,
     db: AsyncSession,
     commit: bool = True,
+    manual: bool = False,
 ) -> QueuePositionChanges:
     """Move an active thread to the normalized queue front.
 
@@ -166,11 +174,16 @@ async def move_to_front(
         user_id: Thread owner.
         db: Async database session.
         commit: Whether to commit inside this helper.
+        manual: Whether the reader explicitly chose this placement. Explicit
+            placements are remembered so a later automatic rating demotion does
+            not discard them (#3638).
 
     Returns:
         Mapping of changed thread IDs to their previous positions.
     """
-    return await move_to_position(thread_id, user_id, 1, db, do_commit=commit)
+    return await move_to_position(
+        thread_id, user_id, 1, db, do_commit=commit, manual=manual
+    )
 
 
 async def move_to_back(
@@ -178,6 +191,7 @@ async def move_to_back(
     user_id: int,
     db: AsyncSession,
     commit: bool = True,
+    manual: bool = False,
 ) -> QueuePositionChanges:
     """Move a thread behind the active queue and return its delta.
 
@@ -188,6 +202,9 @@ async def move_to_back(
         user_id: Thread owner.
         db: Async database session.
         commit: Whether to commit inside this helper.
+        manual: Whether the reader explicitly chose this placement. Explicit
+            placements are remembered so a later automatic rating demotion does
+            not discard them (#3638).
 
     Returns:
         Mapping of changed thread IDs to their previous positions.
@@ -196,7 +213,7 @@ async def move_to_back(
 
     result = await db.execute(
         _MOVE_TO_BACK_SQL,
-        {"uid": user_id, "tid": thread_id},
+        {"uid": user_id, "tid": thread_id, "manual": manual},
     )
     positions, changes = _split_position_rows(result.fetchall())
     _sync_cached_queue_positions(db, positions)
@@ -212,6 +229,7 @@ async def move_to_position(
     new_position: int,
     db: AsyncSession,
     do_commit: bool = True,
+    manual: bool = False,
 ) -> QueuePositionChanges:
     """Move an active thread to a normalized sequential position.
 
@@ -221,6 +239,9 @@ async def move_to_position(
         new_position: Target sequential position (1-indexed).
         db: Async database session.
         do_commit: Whether to commit inside this helper.
+        manual: Whether the reader explicitly chose this placement. Explicit
+            placements are remembered so a later automatic rating demotion does
+            not discard them (#3638).
 
     Returns:
         Mapping of changed thread IDs to their previous positions.
@@ -309,7 +330,12 @@ async def move_to_position(
 
     move_result = await db.execute(
         _MOVE_POSITION_SQL,
-        {"uid": user_id, "tid": thread_id, "new_pos": new_position},
+        {
+            "uid": user_id,
+            "tid": thread_id,
+            "new_pos": new_position,
+            "manual": manual,
+        },
     )
     positions, changes = _split_position_rows(move_result.fetchall())
     _sync_cached_queue_positions(db, positions)

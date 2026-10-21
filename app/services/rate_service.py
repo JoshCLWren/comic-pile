@@ -112,6 +112,7 @@ async def _capture_thread_pre_state(
         if thread.last_activity_at
         else None,
         "queue_position": thread.queue_position,
+        "queue_position_is_manual": thread.queue_position_is_manual,
         "status": thread.status,
         "notes": thread.notes,
         "is_test": thread.is_test,
@@ -152,7 +153,9 @@ def _build_compact_thread_state(thread: Thread, uses_issue_tracking: bool) -> di
     Only fields a rating action can change are captured, so the payload stays
     constant-size regardless of the thread's issue count. Queue position and
     blocked flags live in their own change maps; title, format, notes, and
-    other identity fields are unchanged by rating and need no preimage.
+    other identity fields are unchanged by rating and need no preimage. The
+    manual-placement flag is included because completing a series clears it
+    (#3638), so undo must be able to restore it.
 
     Args:
         thread: Thread whose changed fields are captured.
@@ -170,6 +173,7 @@ def _build_compact_thread_state(thread: Thread, uses_issue_tracking: bool) -> di
         "total_issues": thread.total_issues,
         "next_unread_issue_id": thread.next_unread_issue_id,
         "reading_progress": thread.reading_progress,
+        "queue_position_is_manual": thread.queue_position_is_manual,
         "status": thread.status,
         USES_ISSUE_TRACKING_KEY: uses_issue_tracking,
     }
@@ -718,6 +722,13 @@ async def rate_thread(
             db,
             commit=False,
         )
+    elif thread.queue_position_is_manual:
+        # The reader explicitly placed this series (move to front/back/position)
+        # and that placement is still the authority for its queue location. A
+        # below-threshold read must not silently demote a manual placement
+        # (#3638). Shuffle, completion, exclusion, and reactivation clear the
+        # flag, so those transitions resume automatic placement.
+        queue_position_changes = {}
     else:
         # Issue #3696: safe placement must count exactly the threads the next
         # roll cannot select, so a low-rated thread never lands back inside the

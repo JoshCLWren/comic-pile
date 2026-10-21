@@ -124,17 +124,27 @@ class QueueService:
             if new_position is None:
                 raise InvalidRequestError("new_position is required")
             if thread.queue_position == new_position:
+                # The reader still made an explicit placement choice even when
+                # the ordinal did not change; keep the manual claim so a later
+                # below-threshold rating cannot demote the series (#3638).
+                if not thread.queue_position_is_manual:
+                    thread.queue_position_is_manual = True
+                    await self._db.commit()
+                    await self._db.refresh(thread)
                 return await thread_to_response(thread, self._db)
 
+        was_manual = thread.queue_position_is_manual
         before_positions = await queue_repository.active_queue_positions(self._db, user_id)
 
         try:
             if action == "position":
-                await _move_to_position(thread_id, user_id, new_position, self._db)
+                await _move_to_position(
+                    thread_id, user_id, new_position, self._db, manual=True
+                )
             elif action == "front":
-                await _move_to_front(thread_id, user_id, self._db)
+                await _move_to_front(thread_id, user_id, self._db, manual=True)
             else:
-                await _move_to_back(thread_id, user_id, self._db)
+                await _move_to_back(thread_id, user_id, self._db, manual=True)
         except ValueError as exc:
             logger.error(
                 "Invalid position %s for thread %s: %s",
@@ -149,6 +159,14 @@ class QueueService:
 
         if after_positions != before_positions:
             await queue_repository.add_reorder_event(self._db, thread_id)
+            await self._db.commit()
+            await self._db.refresh(thread)
+        elif thread.queue_position_is_manual and not was_manual:
+            # Moving an already-front/back series does not reorder the queue,
+            # but the mutation still recorded the reader's explicit placement
+            # claim. Commit it here; otherwise the claim is rolled back when
+            # the request session closes and a later below-threshold rating
+            # demotes a series the reader placed explicitly (#3638).
             await self._db.commit()
             await self._db.refresh(thread)
 

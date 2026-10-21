@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from alembic.config import Config
-from alembic.script import ScriptDirectory
+from alembic.script import Script, ScriptDirectory
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,11 +38,44 @@ def _is_ancestor(script: ScriptDirectory, candidate: str, start: str) -> bool:
     return False
 
 
+def _down_revisions(revision: Script) -> tuple[str, ...]:
+    """Return the parent revision ids declared by ``revision``."""
+    down = revision.down_revision
+    if isinstance(down, str):
+        return (down,)
+    return tuple(down or ())
+
+
+def _children(script: ScriptDirectory, parent: str) -> list[str]:
+    """Return the revisions that declare ``parent`` as a down revision."""
+    return [
+        revision.revision
+        for revision in script.walk_revisions()
+        if parent in _down_revisions(revision)
+    ]
+
+
 def test_migration_history_has_a_single_head() -> None:
     """The migration history must end at exactly one Alembic head."""
     heads = _script_directory().get_heads()
 
     assert len(heads) == 1, f"Expected one Alembic head, found {heads}"
+
+
+def test_queue_position_is_manual_migration_extends_the_head() -> None:
+    """The #3638 column migration must extend the head, never fork off one.
+
+    ``q4m500000001`` pointed at the interior revision ``n6e300000001``,
+    which already had a child (``e913be4e091d``). That fork left the
+    repository with two Alembic heads, so ``alembic upgrade head`` failed on
+    deployment. The parent must stay a leaf of the older graph.
+    """
+    script = _script_directory()
+    revision = script.get_revision("q4m500000001")
+
+    assert revision is not None
+    assert revision.down_revision == "c36800000001"
+    assert _children(script, "c36800000001") == ["q4m500000001"]
 
 
 def test_merge_revisions_list_only_independent_heads() -> None:
