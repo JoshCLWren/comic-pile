@@ -115,6 +115,9 @@ describe('IssueToggleList partial issue load (#3764)', () => {
     fireEvent.click(screen.getByTestId('issue-load-retry'))
 
     expect(await screen.findByTestId('issue-pill-3')).toBeInTheDocument()
+    // The refused-save message from the blocked flush is gone now that the
+    // list is complete.
+    expect(screen.queryByTestId('issue-action-error')).not.toBeInTheDocument()
     await act(async () => {
       await ref.current?.flush()
     })
@@ -166,6 +169,56 @@ describe('IssueToggleList partial issue load (#3764)', () => {
     expect(screen.getByTestId('issue-pill-2')).toBeInTheDocument()
     expect(screen.getByTestId('issue-pill-3')).toBeInTheDocument()
     expect(screen.getByText(/save aborted/i)).toBeInTheDocument()
+    expect(mockedIssuesApi.reorder).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
+  })
+
+  it('refuses a load that is shorter than the largest total the server reported', async () => {
+    // The first page under-reports the total (three) while the count grows
+    // during the fetch. The largest count any page reported is five, so the
+    // three loaded issues are not the whole series and must not be published.
+    mockedIssuesApi.list.mockResolvedValueOnce(
+      buildListResponse(FULL_ISSUES.slice(0, 2), 3, 'page-2'),
+    )
+    mockedIssuesApi.list.mockResolvedValueOnce(
+      buildListResponse(FULL_ISSUES.slice(2, 3), 5),
+    )
+
+    const ref = renderDeferredToggleList()
+
+    expect(await screen.findByText(/could not load all issues/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('issue-pill-1')).not.toBeInTheDocument()
+    expect(screen.getByTestId('issue-load-retry')).toBeInTheDocument()
+
+    await expect(ref.current?.flush()).rejects.toThrow(/not fully loaded/i)
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+    expect(mockedIssuesApi.reorder).not.toHaveBeenCalled()
+  })
+
+  it('reports the failed mutation when the follow-up resync also fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockedIssuesApi.list.mockResolvedValueOnce(
+      buildListResponse(FULL_ISSUES, FULL_ISSUES.length),
+    )
+
+    const ref = renderDeferredToggleList()
+    expect(await screen.findByTestId('issue-pill-3')).toBeInTheDocument()
+
+    // The create fails, and the resync that follows fails as well.
+    mockedIssuesApi.create.mockRejectedValue(new Error('Issue number already exists'))
+    mockedIssuesApi.list.mockRejectedValue(new Error('list failed'))
+
+    fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '4' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    await act(async () => {
+      await expect(ref.current?.flush()).rejects.toThrow(/issue number already exists/i)
+    })
+
+    // The root cause reaches the reader instead of the secondary resync
+    // failure, and no write is sent for the aborted save.
+    expect(screen.getByTestId('issue-action-error')).toHaveTextContent('Issue number already exists')
+    expect(mockedIssuesApi.create).toHaveBeenCalledTimes(1)
     expect(mockedIssuesApi.reorder).not.toHaveBeenCalled()
     errorSpy.mockRestore()
   })

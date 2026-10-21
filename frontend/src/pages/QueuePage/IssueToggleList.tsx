@@ -181,7 +181,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         params.page_token = nextPageToken
       }
       const data = await issuesService.list(threadId, params)
-      if (totalCount === 0) {
+      // The server's `total_count` is the authority for the completeness
+      // check (#3764). Keep the largest count any page reported: a count that
+      // grows while the pages are being fetched would otherwise let a
+      // truncated list pass the check against a stale, smaller total.
+      if (data.total_count > totalCount) {
         totalCount = data.total_count
       }
       allIssues.push(...data.issues)
@@ -302,9 +306,18 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             }
             baseIssuesRef.current = refreshed
           } catch (refreshErr) {
-            console.error('[IssueToggleList] Error refetching issues after mutation failure:', refreshErr)
-            setActionError(getApiErrorDetail(refreshErr))
-            throw refreshErr
+            // The failed mutation is the root cause; the failed resync is a
+            // secondary failure. Report the root cause to the reader and keep
+            // both failures in the log, so the reason the save stopped is
+            // never lost behind the resync error (#3764).
+            console.error(
+              '[IssueToggleList] Mutation failed and the follow-up resync also failed:',
+              { mutationError: err, resyncError: refreshErr },
+            )
+            setActionError(getApiErrorDetail(err))
+            throw new Error(
+              `${getApiErrorDetail(err)} (issue list resync failed: ${getApiErrorDetail(refreshErr)})`,
+            )
           }
           setActionError(getApiErrorDetail(err))
           throw err
@@ -345,7 +358,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   useImperativeHandle(ref, () => ({
     flush: async () => {
       if (!fullyLoadedRef.current) {
-        throw new Error('Issues are not fully loaded; save aborted.')
+        // Report why the save is refused instead of failing silently, so the
+        // reader can see that the issue list must load completely first
+        // (#3764).
+        const message = 'Issues are not fully loaded; save aborted.'
+        setActionError(message)
+        throw new Error(message)
       }
       await processIssueMutations()
     },
@@ -413,6 +431,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       fullyLoadedRef.current = true
       baseIssuesRef.current = nextIssues
       syncOptimisticIssues(nextIssues, pendingMutationsRef.current)
+      // A complete load supersedes an earlier "not fully loaded" refusal, so
+      // the reader is not left with a stale aborted-save message (#3764).
+      setActionError(null)
 
       const nextDependencies = await fetchDependencies()
       if (loadGeneration !== loadGenerationRef.current) {
@@ -581,6 +602,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       <div className="space-y-2">
         <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
         <p className="text-xs text-red-400">Could not load issues: {loadError}</p>
+        {actionError && (
+          <p
+            className="text-xs text-[var(--theme-danger)]"
+            data-testid="issue-action-error"
+          >
+            {actionError}
+          </p>
+        )}
         <button
           type="button"
           onClick={() => {
@@ -873,7 +902,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         </div>
       )}
       {actionError && (
-        <p className="text-xs text-[var(--theme-danger)]">{actionError}</p>
+        <p className="text-xs text-[var(--theme-danger)]" data-testid="issue-action-error">{actionError}</p>
       )}
       {selectedDepsIssue && (
         <Modal
