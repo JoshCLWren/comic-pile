@@ -1,63 +1,59 @@
 name: Release writer
 
-# INCIDENT 2026-10-20: Release Writer stopped for production Fluid Compute overage.
-# No automatic merge or scheduled triggers until the incident is resolved.
+# INCIDENT 2026-10-20: The writer remains intentionally DISABLED.
+# Neither generating nor persisting may run until explicitly reauthorized.
+# Reenable only with exact PR triggers, never an unbounded historical scan.
 on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: Optional merged pull request number to reconcile
-        required: false
-        type: string
-      backfill_since:
-        description: Optional ISO-8601 lower bound for merged-PR reconciliation
-        required: false
+        description: Exact merged pull request to process
+        required: true
         type: string
 
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: release-writer
+  cancel-in-progress: false
+
 jobs:
-  publish-release:
-    # Incident safety gate: manual and rerun executions must skip.
+  generate:
+    # INC-2026-10-20: KEEP THIS DISABLED until separately authorized.
     if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    permissions:
-      contents: read
-      pull-requests: read
-      issues: read
+    timeout-minutes: 45
     env:
-      RELEASE_API_URL: https://comic-pile.vercel.app/api/v1/releases
-      RELEASE_WRITER_TOKEN: ${{ secrets.RELEASE_WRITER_TOKEN }}
+      # Untrusted model process gets no Neon credential.
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-      RELEASE_BACKFILL_BASELINE: '2026-09-22T20:35:40Z'
+      RELEASE_WRITER_STAGE_FILE: ${{ runner.temp }}/release-writer/candidate.json
     steps:
-      - name: Checkout merged main
+      - name: Checkout trusted main
         uses: actions/checkout@v7
         with:
           ref: main
           persist-credentials: false
 
-      - name: Validate release-writer credentials
-        shell: bash
+      - name: Validate exact scope and model credential
+        env:
+          INPUT_PR: ${{ inputs.pr_number }}
         run: |
           set -Eeuo pipefail
-          if [[ -z "$RELEASE_WRITER_TOKEN" ]]; then
-            echo '::error::RELEASE_WRITER_TOKEN is not configured in GitHub Actions secrets.'
-            exit 1
-          fi
-          if [[ -z "$NVIDIA_API_KEY" ]]; then
-            echo '::error::NVIDIA_API_KEY is not configured in GitHub Actions secrets.'
-            exit 1
-          fi
+          [[ "$INPUT_PR" =~ ^[1-9][0-9]*$ ]] || { echo 'Exact PR number required' >&2; exit 1; }
+          [[ -n "$NVIDIA_API_KEY" ]] || { echo 'NVIDIA_API_KEY is required' >&2; exit 1; }
+          mkdir -p "$(dirname "$RELEASE_WRITER_STAGE_FILE")"
 
       - name: Install OpenCode CLI
-        shell: bash
         run: |
           set -Eeuo pipefail
           curl -fsSL https://opencode.ai/install | bash
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
           "$HOME/.opencode/bin/opencode" --version
 
-      - name: Install pinned FCM discovery CLI
+      - name: Install pinned model discovery
         run: npm install --global --ignore-scripts free-coding-models@0.5.69
 
       - name: Select healthy NVIDIA models
@@ -65,72 +61,92 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          fcm_output="$(
-            free-coding-models \
-              --json \
-              --origin nvidia \
-              --hide-unconfigured \
-              --best \
-              --no-telemetry
-          )"
-          candidates="$(
-            printf '%s\n' "$fcm_output" \
-              | python scripts/select_fcm_nvidia_model.py
-          )"
-          if [[ -z "$candidates" ]]; then
-            echo 'No configured NVIDIA release-writer model is available' >&2
-            exit 1
-          fi
+          fcm_output="$(free-coding-models --json --origin nvidia --hide-unconfigured --best --no-telemetry)"
+          candidates="$(printf '%s\n' "$fcm_output" | python scripts/select_fcm_nvidia_model.py)"
+          [[ -n "$candidates" ]] || { echo 'No configured NVIDIA writer model available' >&2; exit 1; }
           {
             echo 'models<<EOF'
             printf '%s\n' "$candidates"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Determine reconciliation scope
-        id: scope
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_PR: ${{ inputs.pr_number }}
-          INPUT_SINCE: ${{ inputs.backfill_since }}
-        run: |
-          set -Eeuo pipefail
-          args=(--repository "$GITHUB_REPOSITORY")
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            # The deterministic repair landed after a known gap. Rechecking this
-            # baseline is idempotent and guarantees deployment performs backfill.
-            args+=(--since "$RELEASE_BACKFILL_BASELINE")
-          elif [[ -n "$INPUT_PR" ]]; then
-            args+=(--pr "$INPUT_PR")
-          elif [[ -n "$INPUT_SINCE" ]]; then
-            args+=(--since "$INPUT_SINCE")
-          else
-            args+=(--limit 100)
-          fi
-          printf '%q ' "${args[@]}" > "$RUNNER_TEMP/release-reconcile-args"
-
-      - name: Run deterministic release reconciliation
+      - name: Generate one staged candidate (no DB credentials)
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_PR: ${{ inputs.pr_number }}
           RELEASE_WRITER_MODELS: ${{ steps.model.outputs.models }}
-        shell: bash
         run: |
           set -Eeuo pipefail
-          read -r -a args <<< "$(cat "$RUNNER_TEMP/release-reconcile-args")"
           python scripts/release_reconcile.py \
-            "${args[@]}" \
-            --summary-json "$RUNNER_TEMP/release-reconcile.json" \
-            --summary-markdown "$RUNNER_TEMP/release-reconcile.md"
+            --repository "$GITHUB_REPOSITORY" \
+            --pr "$INPUT_PR" \
+            --summary-json "$RUNNER_TEMP/release-summary.json" \
+            --summary-markdown "$RUNNER_TEMP/release-summary.md"
+          test -s "$RELEASE_WRITER_STAGE_FILE"
 
-      - name: Publish reconciliation summary
+      - name: Upload candidate (no secrets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-writer-candidate
+          path: ${{ runner.temp }}/release-writer/candidate.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Write preparation summary
         if: always()
-        shell: bash
         run: |
-          if [[ -f "$RUNNER_TEMP/release-reconcile.md" ]]; then
-            cat "$RUNNER_TEMP/release-reconcile.md" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo '## Release reconciliation' >> "$GITHUB_STEP_SUMMARY"
-            echo '' >> "$GITHUB_STEP_SUMMARY"
-            echo 'Controller exited before producing a summary.' >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f "$RUNNER_TEMP/release-summary.md" ]]; then
+            cat "$RUNNER_TEMP/release-summary.md" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  persist:
+    # INC-2026-10-20: KEEP THIS DISABLED until separately authorized.
+    if: ${{ false }}
+    needs: generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up isolated Python publisher
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install Neon client
+        run: python -m pip install 'psycopg[binary]>=3.2,<4'
+
+      - name: Download staged candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: release-writer-candidate
+          path: ${{ runner.temp }}/release-candidate
+
+      - name: Validate and publish directly to Neon
+        shell: bash
+        env:
+          INPUT_PR: ${{ inputs.pr_number }}
+          GH_TOKEN: ${{ github.token }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "$NEON_API_KEY" && -n "$NEON_PROJECT_ID" ]] || {
+            echo 'Production Neon credentials are required in the trusted publisher' >&2
+            exit 1
+          }
+          # Fetch the same production Neon DSN as deploy-production, never Vercel.
+          uri="$(curl --fail --silent --show-error \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?database_name=neondb&role_name=neondb_owner" \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}" | jq -r '.uri')"
+          [[ -n "$uri" && "$uri" != "null" ]] || exit 1
+          echo "::add-mask::$uri"
+          RELEASE_NEON_DATABASE_URL="$uri" python -m scripts.release_neon_publish \
+            --candidate "$RUNNER_TEMP/release-candidate/candidate.json" \
+            --repository "$GITHUB_REPOSITORY" \
+            --pr "$INPUT_PR"
