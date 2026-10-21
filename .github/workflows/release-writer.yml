@@ -1,9 +1,8 @@
 name: Release writer
 
+# INCIDENT 2026-10-20: Release Writer stopped for production Fluid Compute overage.
+# No automatic merge or scheduled triggers until the incident is resolved.
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -14,12 +13,11 @@ on:
         description: Optional ISO-8601 lower bound for merged-PR reconciliation
         required: false
         type: string
-  schedule:
-    - cron: '23 * * * *'
 
 jobs:
   publish-release:
-    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    # Incident safety gate: manual and rerun executions must skip.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
