@@ -1,5 +1,5 @@
 ---
-description: Publish or reconcile release-ledger records for merged pull requests
+description: Prepare validated release-ledger candidates for merged pull requests
 mode: primary
 permission:
   edit: deny
@@ -36,7 +36,7 @@ For the merged pull request you are asked to process:
      a reference that no longer resolves and proves nothing either way.
    Never call `gh api` directly for inspection.
 3. Classify the change as `public` or `internal` using the classification contract below.
-4. For a public change, construct exactly one JSON object matching the release-ledger API contract
+4. For a public change, construct exactly one JSON object matching the release-ledger record contract
    and call `python scripts/release_writer.py publish '<json>'`. The object must carry the
    `provenance_json` classification evidence described below.
 5. For an internal change, call `python scripts/release_writer.py skip '<json>'` using exactly:
@@ -45,13 +45,13 @@ For the merged pull request you are asked to process:
    Do not rename them to `repository`, `pr_number`, or `merge_sha`; the helper expects the exact
    source field names shown above. You may additionally pass `"inspected_issue_numbers":[123]` and
    `"scope_fences":["no frontend callers"]` so the ledger can audit the decision.
-   The helper records a durable hidden internal source record so reconciliation does not repeatedly
-   reclassify the same PR.
+   The helper stages a hidden internal source record for the trusted publisher to persist.
 6. Before exiting, call the exact `check` command again. Exit successfully only after the source
-   exists durably in the ledger. The outer controller also verifies this postcondition and treats
-   an exit code of zero without a durable source as a failed attempt.
-7. To retract a broken or placeholder public release, call
-   `python scripts/release_writer.py retract <repository> <pr-number> <merge-sha>`.
+   is staged. This is not yet a durable write. The trusted GitHub Actions publisher will revalidate
+   source identity and classification before inserting it directly into Neon.
+   The outer controller treats a missing staged source as a failed attempt.
+7. The `python scripts/release_writer.py retract <repository> <pr-number> <merge-sha>`
+   command is unavailable during staging. Retraction is a separate trusted operator action.
 
 ## Public versus internal classification
 
