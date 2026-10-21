@@ -121,12 +121,14 @@ export default function RollPage() {
     // leaving because a roll does not rewrite it — returning inside the query's
     // stale window would otherwise replay a snapshot captured before the roll,
     // whose `pending_thread_id: null` hides the selection that was preserved.
-    void refetchBootstrap().catch(() => {
+    void refetchBootstrap().then(() => {
+      navigate('/queue')
+    }).catch(() => {
       // The pending read is durable server-side, so a failed refresh here must
       // not block the queue exit; the selection remains available on reload and
       // once the cached bootstrap goes stale.
+      navigate('/queue')
     })
-    navigate('/queue')
   }, [navigate, refetchBootstrap])
 
   const handleCorrectionSubmit = useCallback(
