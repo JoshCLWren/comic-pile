@@ -694,7 +694,7 @@ describe('TagEditor (issue #3032)', () => {
     await user.click(within(manage).getByRole('button', { name: 'Delete…' }))
     const confirm = await screen.findByRole('region', { name: 'Manage tag Private 1' })
     expect(within(confirm).getByText(/assigned to/)).toHaveTextContent(
-      'It is assigned to 0 places',
+      /It is assigned to 0 places/,
     )
     await user.click(within(confirm).getByRole('button', { name: 'Delete tag' }))
     expect(await screen.findByRole('status')).toHaveTextContent('Deleted “Private 1” (0 assignments).')
@@ -723,7 +723,7 @@ describe('TagEditor (issue #3032)', () => {
     await user.click(within(manage).getByRole('button', { name: 'Delete…' }))
     const confirm = await screen.findByRole('region', { name: 'Manage tag Private 1' })
     expect(within(confirm).getByText(/assigned to/)).toHaveTextContent(
-      'It is assigned to 1 place',
+      /It is assigned to 1 place/,
     )
     await user.click(within(confirm).getByRole('button', { name: 'Delete tag' }))
     expect(await screen.findByRole('status')).toHaveTextContent('Deleted “Private 1” (1 assignments).')
