@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import Annotated, TypedDict
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
@@ -15,6 +15,7 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, ReadingSession, Snapshot, Thread, User
 from app.models.thread import normalize_format_value
+from app.repositories import rate_repository
 from app.schemas import (
     ActiveThreadInfo,
     CorrectionSheetExamplesResponse,
@@ -41,6 +42,7 @@ from app.services.session_response import (
 from app.services.summary_service import build_narrative_summary
 from app.services.reading_session_service import get_reading_session_service, ReadingSessionService
 from app.services.session_history_projection import project_session_history_events
+from app.services.session_rate_stats import aggregate_session_rate_stats
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.thread_issue_stats import load_issue_stats
 from app.services.correction_examples import generate_correction_examples
@@ -53,13 +55,6 @@ router = APIRouter(tags=["sessions"])
 #: is never mounted under bare ``/api/*`` (see docs/API.md and the convention
 #: comment in app/main.py).
 v1_router = APIRouter(tags=["sessions"])
-
-
-class _RateAggregate(TypedDict):
-    """Aggregated rating-event state for one session history row."""
-
-    issues_read: int
-    last_rating: float | None
 
 
 def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
@@ -276,44 +271,22 @@ async def list_sessions(
     )
     history_events = history_events_result.scalars().all()
 
-    rate_agg: dict[int, _RateAggregate] = {}
-    undone_rate_ids: set[int] = set()
-    # Historical issue captured at rating time — immutable per session.
     rate_issue_by_session: dict[int, tuple[int | None, str | None]] = {}
-    open_rate_ids_by_session: dict[int, list[int]] = {}
     for ev in history_events:
         event_session_id = ev.session_id
         if event_session_id is None:
             continue
-        if ev.type == "rate":
-            if event_session_id not in open_rate_ids_by_session:
-                open_rate_ids_by_session[event_session_id] = []
-            open_rate_ids_by_session[event_session_id].append(ev.id)
-            if event_session_id not in rate_agg:
-                rate_agg[event_session_id] = {"issues_read": 0, "last_rating": None}
-            if ev.issues_read is not None:
-                rate_agg[event_session_id]["issues_read"] += ev.issues_read
-            if ev.rating is not None:
-                rate_agg[event_session_id]["last_rating"] = ev.rating
-            if ev.issue_id is not None or ev.issue_number is not None:
-                rate_issue_by_session[event_session_id] = (ev.issue_id, ev.issue_number)
-        elif ev.type == "undo" and event_session_id in open_rate_ids_by_session and open_rate_ids_by_session[event_session_id]:
-            undone_id = open_rate_ids_by_session[event_session_id].pop()
-            undone_rate_ids.add(undone_id)
-    # Subtract undone rates from aggregates
-    for ev in history_events:
-        if ev.type == "rate" and ev.id in undone_rate_ids:
-            sid = ev.session_id
-            if sid in rate_agg and ev.issues_read is not None:
-                rate_agg[sid]["issues_read"] = max(0, rate_agg[sid]["issues_read"] - ev.issues_read)
-            if sid in rate_agg and ev.rating is not None:
-                # Recompute last_rating from remaining open rates
-                remaining = [
-                    e for e in history_events
-                    if e.type == "rate" and e.session_id == sid and e.id not in undone_rate_ids
-                ]
-                last_remaining = remaining[-1] if remaining else None
-                rate_agg[sid]["last_rating"] = last_remaining.rating if last_remaining else None
+        if ev.type == "rate" and (ev.issue_id is not None or ev.issue_number is not None):
+            rate_issue_by_session[event_session_id] = (ev.issue_id, ev.issue_number)
+
+    # Undo-aware reading totals computed with the same canonical replay as the
+    # session card (``load_session_rate_stats`` ->
+    # ``aggregate_session_rate_stats``) so the History card cannot drift apart
+    # from the session card (#3708).
+    rate_events = await rate_repository.fetch_rate_and_undo_events(db, session_ids)
+    rate_stats: dict[int, tuple[int, float | None]] = aggregate_session_rate_stats(
+        rate_events, session_ids
+    )
 
     projection = project_session_history_events(session_ids, history_events)
 
@@ -388,11 +361,8 @@ async def list_sessions(
                             if resolved_number is not None:
                                 issue_id = thread.next_unread_issue_id
                                 issue_number = resolved_number
-                    agg: _RateAggregate = rate_agg.get(
-                        sid, {"issues_read": 0, "last_rating": None}
-                    )
-                    issues_read = agg["issues_read"] or None
-                    last_rating = agg["last_rating"]
+                    total_issues_read, last_rating = rate_stats.get(sid, (0, None))
+                    issues_read = total_issues_read or None
                     raw_result = roll_event.result
                     safe_result = raw_result if raw_result and raw_result > 0 else None
                     active_threads_dict[sid] = ActiveThreadInfo(
@@ -433,11 +403,8 @@ async def list_sessions(
                             if resolved_number is not None:
                                 issue_id_pending = thread.next_unread_issue_id
                                 issue_number_pending = resolved_number
-                    agg: _RateAggregate = rate_agg.get(
-                        sid, {"issues_read": 0, "last_rating": None}
-                    )
-                    issues_read = agg["issues_read"] or None
-                    last_rating = agg["last_rating"]
+                    total_issues_read, last_rating = rate_stats.get(sid, (0, None))
+                    issues_read = total_issues_read or None
                     raw_result = roll_event.result if roll_event else None
                     safe_result = raw_result if raw_result and raw_result > 0 else None
                     active_threads_dict[sid] = ActiveThreadInfo(

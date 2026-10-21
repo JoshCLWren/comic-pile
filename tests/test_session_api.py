@@ -1339,3 +1339,147 @@ async def test_undo_rating_excluded_from_session_stats(
         if event.get("issue_number") is not None:
             timeline_issue_numbers.add(event["issue_number"])
     assert history_thread["issue_number"] in timeline_issue_numbers
+
+
+@pytest.mark.asyncio
+async def test_history_card_keeps_earlier_rating_after_read_without_rating(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A read-without-rating must not erase an earlier standing rating.
+
+    The History card must use the same undo-aware rate replay as the session
+    card (#3708): the newest open reading that recorded no rating falls back to
+    the newest open reading that did, instead of reporting ``None``.
+    """
+    from tests.conftest import get_or_create_user_async
+    from app.services.session_rate_stats import load_session_rate_stats
+
+    user = await get_or_create_user_async(async_db)
+
+    session = ReadingSession(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=5,
+        reading_progress="in_progress",
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    issues: dict[str, Issue] = {}
+    for i in range(1, 6):
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number=str(i),
+            status="read" if i < 3 else "unread",
+            position=i,
+        )
+        async_db.add(issue)
+        issues[str(i)] = issue
+    await async_db.commit()
+    thread.next_unread_issue_id = issues["3"].id
+    await async_db.commit()
+
+    # Roll to establish the active thread shown by both cards.
+    async_db.add(
+        Event(
+            type="roll",
+            die=10,
+            result=1,
+            selected_thread_id=thread.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=thread.id,
+            issue_id=issues["1"].id,
+            issue_number="1",
+        )
+    )
+    await async_db.commit()
+
+    # Rate issue #1 at 4.0 stars, then read issue #2 without rating it.
+    rate_event1 = Event(
+        type="rate",
+        session_id=session.id,
+        thread_id=thread.id,
+        rating=4.0,
+        issues_read=2,
+        die=10,
+        die_after=8,
+        issue_id=issues["2"].id,
+        issue_number="2",
+    )
+    async_db.add(rate_event1)
+    await async_db.commit()
+
+    rate_event2 = Event(
+        type="rate",
+        session_id=session.id,
+        thread_id=thread.id,
+        rating=None,
+        issues_read=1,
+        die=8,
+        die_after=6,
+        issue_id=issues["3"].id,
+        issue_number="3",
+    )
+    async_db.add(rate_event2)
+    await async_db.commit()
+
+    # Roll again after the reads to establish the active thread shown by both
+    # cards; the latest action must be a roll for an active thread to surface.
+    async_db.add(
+        Event(
+            type="roll",
+            die=4,
+            result=1,
+            selected_thread_id=thread.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=thread.id,
+            issue_id=issues["3"].id,
+            issue_number="3",
+        )
+    )
+    await async_db.commit()
+
+    # Canonical replay: 3 issues read, last_rating stays 4.0 because the
+    # newest open reading recorded no rating.
+    total_issues_read, last_rating = await load_session_rate_stats(async_db, session.id)
+    assert total_issues_read == 3
+    assert last_rating == 4.0
+
+    # Session card shows the same undo-aware totals.
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}")
+    assert response.status_code == 200
+    active_thread = response.json()["active_thread"]
+    assert active_thread is not None
+    assert active_thread["issues_read"] == 3
+    assert active_thread["last_rating"] == 4.0
+
+    # History card matches the session card instead of reporting None.
+    history_response = await auth_client.get("/api/v1/sessions/")
+    assert history_response.status_code == 200
+    session_entry = next(
+        s for s in history_response.json()["sessions"] if s["id"] == session.id
+    )
+    history_thread = session_entry["active_thread"]
+    assert history_thread is not None
+    assert history_thread["issues_read"] == 3
+    assert history_thread["last_rating"] == 4.0
+
+    timeline_issue_numbers: set[str] = set()
+    detail_response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert detail_response.status_code == 200
+    for event in detail_response.json()["events"]:
+        if event.get("issue_number") is not None:
+            timeline_issue_numbers.add(event["issue_number"])
+    assert history_thread["issue_number"] in timeline_issue_numbers

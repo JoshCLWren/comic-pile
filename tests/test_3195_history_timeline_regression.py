@@ -22,7 +22,12 @@ def test_summary_separates_snoozed_from_skipped():
 
 
 def test_rate_aggregation_respects_undo():
-    """Undone ratings must not inflate aggregates (issue #3195)."""
+    """Undone ratings must not inflate aggregates (issue #3195).
+
+    The History endpoint delegates to the same canonical undo-aware replay
+    (``fetch_rate_and_undo_events`` + ``aggregate_session_rate_stats``) as the
+    session card instead of reimplementing rate accounting inline.
+    """
     src = open("app/api/session.py").read()
-    assert "undone_rate_ids" in src
-    assert "open_rate_ids_by_session" in src
+    assert "aggregate_session_rate_stats" in src
+    assert "fetch_rate_and_undo_events" in src
