@@ -1,52 +1,65 @@
-# Release writer operations
+# Release Writer: direct Neon publication
 
-ComicPile publishes release-ledger records after pull requests merge. Implementation branches do not need to publish database records themselves.
+## Incident status
 
-## Credentials
+**DISABLED since October 20, 2026.** Previously the writer repeatedly queried the
+ComicPile release-source endpoint through Vercel, including unnecessary scans
+back to September 22. The emergency stop in PR #3989 remains in force.
+This refactor does not restart release-writing automation.
 
-Configure `RELEASE_WRITER_TOKEN` in both places with the same strong random value:
+## Workflow
 
-- GitHub repository Actions secrets, for `.github/workflows/release-writer.yml`.
-- The production Vercel environment, where the release API validates `X-Release-Writer-Token`.
+Release writing is internal GitHub Actions automation, not a user-facing API client.
+When separately reauthorized, it must process one exact merged PR per run.
 
-Also keep the existing `NVIDIA_API_KEY` Actions secret configured for OpenCode model access. Never commit either value. The OpenCode release-writer agent is not permitted to inspect credentials directly; it can only invoke `scripts/release_writer.py`, which reads the release token from its environment when making the authenticated API call.
+1. An unprivileged generate job invokes the restricted OpenCode agent. The
+   release_writer.py helper validates content and classification and writes
+   one local JSON candidate. No Neon credential or Vercel release token is
+   supplied to the agent.
+2. The candidate is transferred between jobs as a short-lived GitHub Actions
+   artifact containing release content and public merge metadata only.
+3. A separate trusted persist job rechecks the PR number and merge SHA against
+   GitHub, validates public/internal provenance and reader-facing content
+   again, and connects directly to production Neon PostgreSQL using a DSN
+   obtained through the Neon management API.
+4. Parameterized SQL inserts a record only when both stable source identities
+   are unused. Exact retries are no-ops; conflicting PR or SHA identities
+   fail without overwriting records (even retracted ones).
 
-## Triggering
+No Vercel invocation or ComicPile HTTP API is needed to check/write releases.
+The public What's New read API continues to read the releases table.
 
-The workflow runs after a pull request is actually merged to `main`. Closing an unmerged pull request does not run release publication. It can also be dispatched manually for one merged PR and runs hourly reconciliation for recent merged PRs that do not yet have ledger records.
+## Secrets and scope
 
-Release publication is deliberately asynchronous. A release-writer failure records a failed workflow run but does not change, revert, or block the already-merged product pull request.
+The existing production migration configuration NEON_API_KEY (repository secret)
+and NEON_PROJECT_ID (repository variable) is available only in the trusted
+persistence job. The DSN is masked and never added to agent prompts, artifacts,
+logs or the generate job. NVIDIA_API_KEY remains in the generation job.
 
-## Reconciliation and provenance
+The current integration uses the existing production neondb_owner connection.
+Before reactivating, prefer replacing it with a dedicated release-table-only
+Postgres role; the new code requires SELECT and INSERT on releases plus sequence
+usage. No Neon branch, clone, migration or database mutation is involved here.
 
-Before retrying a source, the release writer checks `/api/v1/releases/source` with repository, PR number, and merge SHA. Existing matching records are left alone. A 409 source-identity conflict is treated as an error and is never silently overwritten.
+Legacy RELEASE_API_URL and RELEASE_WRITER_TOKEN are not configured in the new
+production writer workflow. Their helper fallback remains only for older
+unit tests and backwards compatibility, not the GitHub Actions path.
 
-The release-writer agent gathers merged-PR context through `scripts/release_writer.py` read-only subcommands (`pr`, `files`, `issues`) rather than raw `gh api` calls, so the GitHub read surface stays inside the credential-holding helper and the agent stays structurally read-only.
+## Reactivation conditions
 
-Public changes are validated by `scripts/release_writer.py` before being sent to the release API. Strictly internal changes are emitted as an explicit machine-readable `internal`/`skipped` classification in the workflow log instead of forcing a public What's New entry.
+Both workflow jobs still have unconditional if: ${{ false }} guards.
+Do not remove them without fresh, explicit authorization and passing CI.
 
-## Public classification grounding
+Verify the exact-PR source check, content validation, conflict handling,
+no-op retry behavior, model credential isolation, and direct PostgreSQL
+insert in a controlled test before any production write.
 
-`issues` returns full linked-issue context (number, title, state, labels, bounded body, detected `scope_fences`, and parent/dependency `references`) so classification is grounded in issue prose rather than issue numbers.
+Manual workflows must receive a specific merged PR number. Do not restore
+the old September 22 backfill or any unbounded reconciliation loop.
+The separate factory dispatcher must also remain stopped while the
+incident is open.
 
-A public publication must carry `provenance_json` classification evidence: `classification`, `classification_reason`, `user_visible_evidence`, `reader_reachable`, `inspected_issue_numbers`, `scope_fences`, and `contradicting_evidence`. The helper and the release API both reject a public payload that:
-
-- omits classification evidence, or sets `reader_reachable` to anything but `true`;
-- records a non-empty `scope_fences` list without `contradicting_evidence` naming the shipped reader path;
-- promises a reader capability in reader-facing copy without `reader_reachable_path`;
-- claims a reader capability in copy while the merged diff changes no reader-facing product surface and a scope fence or undocumented reader path contradicts it.
-
-Grounding only blocks on positive evidence, so an unavailable GitHub read never blocks an otherwise valid publication. Internal skips record `reader_reachable: false` with an empty `user_visible_evidence` and accept `inspected_issue_numbers` and `scope_fences` for audit.
-
-## Deterministic internal classification
-
-`scripts/release_writer.py` classifies a release as `internal` when the reader-facing copy carries engineering artifacts, so a dev-internal note never reaches the public feed:
-
-- **Decisive artifacts** always classify the record as internal. They are engineering artifacts that reader-facing copy cannot contain: diff fragments (`diff --git`, `+++ b/`), endpoint literals (`POST /api/v1/threads`, `/api/roll`), factory automation wording (`factory session`, `factory review`), `style-drift`, `fixed-model`, `OmniRoute`, and phrases such as `internal refactor` or `implementation detail`.
-- **Suggestive terms** are ordinary words that are also engineering jargon (`factory`, `controller`, `evidence`, `inspection`, `proof`, `reliability`, `audit`, `endpoint`, `literal`, `jargon`). They classify the record as internal only when the payload records no reader-facing evidence. Recorded reader-facing evidence therefore keeps a note public.
-
-Ordinary product words never classify a note on their own. Reading sessions, proofs, audits, reliability, endpoints, and inspections are ordinary language for a reader of a comic tracker, so a note such as "Restore your reading session" stays public.
-
-The copy fields (title, summary, body) are scanned field-by-field, joined with newlines so a diff frame at the start of the summary or body is still a line-start match.
-
-Scope fences are a separate statement scan of the pull-request and linked-issue text: only phrases that say the reader-visible portion is not in the change (`no frontend callers`, `internal refactor: behavior preserved`, `out of scope`) block an uncontradicted public note. The decisive artifact table above is deliberately not applied to descriptions, so quoting an artifact such as `POST /api/roll` or a diff frame in a pull-request or issue body never blocks a reader-facing note whose served copy is clean. Worker attribution boilerplate (`Produced by fixed-model Factory 46 (...)`, `Worker: opencode-free-model-factory-46`) is removed before the fence scan, because it describes how the change was produced rather than what the change is. A real internal statement, such as `internal refactor: behavior preserved`, still fences normally.
+Public releases must have reader-visible classification evidence and
+honor linked-issue scope fences. Internal-only changes are recorded with
+internal visibility. A staged candidate does not count as published:
+only a successful trusted Neon transaction establishes durability.

@@ -261,13 +261,25 @@ def test_summary_reports_required_backfill_counters():
     assert summary["still_missing"] == 1
 
 
-def test_release_workflow_uses_controller_and_backfill_baseline():
-    """Merged PR events run deterministic backfill, not an opaque agent loop."""
+def test_release_workflow_uses_exact_source_direct_neon_and_keeps_incident_gate():
+    """No public API, no unbounded scan, no DB secrets in the model job."""
     workflow = Path(".github/workflows/release-writer.yml").read_text()
-
     assert "scripts/release_reconcile.py" in workflow
-    assert "2026-09-22T20:35:40Z" in workflow
-    assert 'opencode run -m "$model"' not in workflow
+    assert '--pr "$INPUT_PR"' in workflow
+    assert "--since" not in workflow
+    assert "cron:" not in workflow
+    assert "pull_request:" not in workflow
+    assert "RELEASE_API_URL" not in workflow
+    assert "RELEASE_WRITER_TOKEN" not in workflow
+    assert "scripts.release_neon_publish" in workflow
+    assert workflow.count("if: ${{ false }}") == 2
+    model_job = workflow.split("\n  generate:", 1)[1].split("\n  persist:", 1)[0]
+    publisher_job = workflow.split("\n  persist:", 1)[1]
+    assert "NEON_API_KEY" not in model_job
+    assert "RELEASE_NEON_DATABASE_URL" not in model_job
+    assert "RELEASE_WRITER_STAGE_FILE" in model_job
+    assert "NEON_API_KEY" in publisher_job
+    assert "RELEASE_NEON_DATABASE_URL" in publisher_job
 
 
 def test_factory_workflow_completion_dispatches_release_reconciliation():
@@ -278,4 +290,6 @@ def test_factory_workflow_completion_dispatches_release_reconciliation():
     assert "Factory Ready Merge Drain" in workflow
     assert "Fixed Model Factory Dispatcher" in workflow
     assert "gh workflow run release-writer.yml" in workflow
-    assert "backfill_since" in workflow
+    assert "backfill_since" not in workflow
+    assert "if: ${{ false }}" in workflow
+    assert ' -f "pr_number=$INPUT_PR"' in workflow
