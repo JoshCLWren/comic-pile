@@ -1235,6 +1235,82 @@
         "title": "CBLReconciliationResponse",
         "type": "object"
       },
+      "CBLSourceEntryDetail": {
+        "description": "One ordered source occurrence in a CBL list.",
+        "properties": {
+          "comicvine_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Comic Vine issue ID when the source entry has one",
+            "title": "Comicvine Issue Id"
+          },
+          "comicvine_volume_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Comic Vine volume ID when the source entry has one",
+            "title": "Comicvine Volume Id"
+          },
+          "issue_number": {
+            "description": "Issue number recorded in the CBL source",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "description": "Source position in original CBL order",
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "publication_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Publication year recorded in the CBL source",
+            "title": "Publication Year"
+          },
+          "series_name": {
+            "description": "Series name recorded in the CBL source",
+            "title": "Series Name",
+            "type": "string"
+          },
+          "volume_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Volume year recorded in the CBL source",
+            "title": "Volume Year"
+          }
+        },
+        "required": [
+          "position",
+          "series_name",
+          "issue_number"
+        ],
+        "title": "CBLSourceEntryDetail",
+        "type": "object"
+      },
       "CBLSourceFingerprintResponse": {
         "description": "Immutable source evidence needed to review and later accept a plan.",
         "properties": {
@@ -1269,10 +1345,11 @@
         "title": "CBLSourceFingerprintResponse",
         "type": "object"
       },
-      "CBLSourceListDiscoveryItem": {
-        "description": "One active persisted source list that may be previewed by Add material.",
+      "CBLSourceListDetail": {
+        "description": "Read-only detail for one CBL source list.",
         "properties": {
           "content_hash": {
+            "description": "Content hash of the imported source list",
             "title": "Content Hash",
             "type": "string"
           },
@@ -1285,25 +1362,62 @@
                 "type": "null"
               }
             ],
+            "description": "Issue count declared by the source list",
             "title": "Declared Issue Count"
           },
+          "entries": {
+            "description": "Ordered source occurrences in this page",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceEntryDetail"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "entries_limit": {
+            "description": "Maximum source occurrences per page",
+            "minimum": 1.0,
+            "title": "Entries Limit",
+            "type": "integer"
+          },
+          "entries_offset": {
+            "description": "Zero-based offset of the returned page",
+            "minimum": 0.0,
+            "title": "Entries Offset",
+            "type": "integer"
+          },
+          "entries_total": {
+            "description": "Total source occurrences in the list",
+            "minimum": 0.0,
+            "title": "Entries Total",
+            "type": "integer"
+          },
           "id": {
+            "description": "CBL source list ID",
             "title": "Id",
             "type": "integer"
           },
           "name": {
+            "description": "Display name of the CBL source list",
             "title": "Name",
             "type": "string"
           },
           "revision_sha": {
+            "description": "Source revision the list was imported from",
             "title": "Revision Sha",
             "type": "string"
           },
           "source_path": {
+            "description": "Reader-safe path of the CBL source file",
             "title": "Source Path",
             "type": "string"
           },
+          "source_ref": {
+            "description": "Reader-safe ``repository:path`` source identity",
+            "title": "Source Ref",
+            "type": "string"
+          },
           "source_repository": {
+            "description": "Reader-safe source repository identity",
             "title": "Source Repository",
             "type": "string"
           }
@@ -1313,7 +1427,67 @@
           "name",
           "source_path",
           "source_repository",
-          "declared_issue_count",
+          "source_ref",
+          "content_hash",
+          "revision_sha",
+          "entries_total",
+          "entries_offset",
+          "entries_limit"
+        ],
+        "title": "CBLSourceListDetail",
+        "type": "object"
+      },
+      "CBLSourceListDiscoveryItem": {
+        "description": "One active persisted source list that may be previewed by Add material.",
+        "properties": {
+          "content_hash": {
+            "description": "Content hash of the imported source list",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "declared_issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Issue count declared by the source list",
+            "title": "Declared Issue Count"
+          },
+          "id": {
+            "description": "CBL source list ID",
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Display name of the CBL source list",
+            "title": "Name",
+            "type": "string"
+          },
+          "revision_sha": {
+            "description": "Source revision the list was imported from",
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "source_path": {
+            "description": "Stored path of the CBL source file",
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_repository": {
+            "description": "Reader-safe source repository identity",
+            "title": "Source Repository",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_path",
+          "source_repository",
           "content_hash",
           "revision_sha"
         ],
@@ -25310,7 +25484,7 @@
     },
     "/api/v1/issue-identity/cbl-sources": {
       "get": {
-        "description": "Return bounded active CBL lists for the Reading Plan Add-material flow.",
+        "description": "Return bounded active CBL lists for the Reading Plan Add-material flow.\n\nArgs:\n    current_user: Authenticated reader.\n    db: Async database session.\n    q: Optional case-insensitive match against list name or source path.\n    limit: Maximum number of lists to return.\n\nReturns:\n    Bounded summaries of the matching active CBL source lists.",
         "operationId": "discover_cbl_source_lists_api_v1_issue_identity_cbl_sources_get",
         "parameters": [
           {
@@ -25375,6 +25549,79 @@
           }
         ],
         "summary": "Discover Cbl Source Lists",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "issue-identity"
+        ]
+      }
+    },
+    "/api/v1/issue-identity/cbl-sources/{list_id}": {
+      "get": {
+        "description": "Return every ordered source occurrence for one CBL list (read-only).\n\nSource occurrences keep their original position, including repeated\npositions for duplicated issues. Large lists are returned as a bounded page\nso no list is silently truncated; ``entries_total`` reports the full count\nso callers can page through every occurrence.\n\nArgs:\n    list_id: CBL source list identifier.\n    current_user: Authenticated reader.\n    db: Async database session.\n    offset: Zero-based index of the first returned source occurrence.\n    limit: Maximum number of source occurrences to return.\n\nReturns:\n    One CBL source list with its ordered source occurrences.\n\nRaises:\n    HTTPException: 404 when the list does not exist or is inactive.",
+        "operationId": "get_cbl_source_list_api_v1_issue_identity_cbl_sources__list_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "title": "List Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLSourceListDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Cbl Source List",
         "tags": [
           "dependencies",
           "dependencies",
