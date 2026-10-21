@@ -2660,6 +2660,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find Cbl Sources By Comicvine Issue
+         * @description Return every CBL source position that holds one exact Comic Vine issue.
+         *
+         *     The match is exact on the Comic Vine issue identity, so a shared series
+         *     title, a shared volume, or the same issue number in another volume never
+         *     produces a false positive. Repeated occurrences inside one source list
+         *     stay separate rows, and the same identity in several source lists is
+         *     reported once per list. The answer is shared catalog data: it never
+         *     depends on the calling reader's owned Issues.
+         *
+         *     Args:
+         *         comicvine_issue_id: Exact Comic Vine issue external ID.
+         *         current_user: Authenticated reader. Unused: the shared catalog answer
+         *             must not vary by reader.
+         *         db: Async database session.
+         *         offset: Zero-based index of the first returned source occurrence.
+         *         limit: Maximum number of source occurrences to return.
+         *
+         *     Returns:
+         *         The matching source occurrences with the total occurrence count and
+         *         the number of distinct source lists containing the identity.
+         *
+         *     Raises:
+         *         HTTPException: 422 when the supplied Comic Vine issue ID is blank.
+         */
+        get: operations["find_cbl_sources_by_comicvine_issue_api_v1_issue_identity_cbl_sources_by_comicvine_issue__comicvine_issue_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issue-identity/cbl-sources/{list_id}": {
         parameters: {
             query?: never;
@@ -6625,6 +6667,113 @@ export interface components {
             unresolved_count: number;
             /** Unresolved Positions */
             unresolved_positions: number[];
+        };
+        /**
+         * CBLComicvineOccurrenceDetail
+         * @description One source position that contains an exact Comic Vine issue identity.
+         */
+        CBLComicvineOccurrenceDetail: {
+            /**
+             * Comicvine Issue Id
+             * @description Exact Comic Vine issue ID that matched
+             */
+            comicvine_issue_id: string;
+            /**
+             * Comicvine Volume Id
+             * @description Comic Vine volume identity of the occurrence when the source has one
+             */
+            comicvine_volume_id?: string | null;
+            /**
+             * Issue Number
+             * @description Issue number recorded in the CBL source
+             */
+            issue_number: string;
+            /**
+             * List Id
+             * @description CBL source list ID
+             */
+            list_id: number;
+            /**
+             * List Name
+             * @description Display name of the CBL source list
+             */
+            list_name: string;
+            /**
+             * Position
+             * @description Source position in original CBL order
+             */
+            position: number;
+            /**
+             * Publication Year
+             * @description Publication year recorded in the CBL source
+             */
+            publication_year?: number | null;
+            /**
+             * Revision Sha
+             * @description Source revision the list was imported from
+             */
+            revision_sha: string;
+            /**
+             * Series Name
+             * @description Series name recorded in the CBL source
+             */
+            series_name: string;
+            /**
+             * Source Path
+             * @description Reader-safe path of the CBL source file
+             */
+            source_path: string;
+            /**
+             * Source Ref
+             * @description Reader-safe ``repository:path`` source identity
+             */
+            source_ref: string;
+            /**
+             * Source Repository
+             * @description Reader-safe source repository identity
+             */
+            source_repository: string;
+            /**
+             * Volume Year
+             * @description Volume year recorded in the CBL source
+             */
+            volume_year?: number | null;
+        };
+        /**
+         * CBLComicvineOccurrencePage
+         * @description One page of CBL source occurrences for an exact Comic Vine issue identity.
+         */
+        CBLComicvineOccurrencePage: {
+            /**
+             * Comicvine Issue Id
+             * @description Exact Comic Vine issue ID queried
+             */
+            comicvine_issue_id: string;
+            /**
+             * Lists Total
+             * @description Number of distinct source lists containing the identity
+             */
+            lists_total: number;
+            /**
+             * Occurrences
+             * @description Matching source occurrences in this page
+             */
+            occurrences?: components["schemas"]["CBLComicvineOccurrenceDetail"][];
+            /**
+             * Occurrences Limit
+             * @description Maximum source occurrences per page
+             */
+            occurrences_limit: number;
+            /**
+             * Occurrences Offset
+             * @description Zero-based offset of the returned page
+             */
+            occurrences_offset: number;
+            /**
+             * Occurrences Total
+             * @description Total matching source occurrences in the shared catalog
+             */
+            occurrences_total: number;
         };
         /**
          * CBLPlacement
@@ -18628,6 +18777,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CBLSourceListDiscoveryItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_cbl_sources_by_comicvine_issue_api_v1_issue_identity_cbl_sources_by_comicvine_issue__comicvine_issue_id__get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                comicvine_issue_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLComicvineOccurrencePage"];
                 };
             };
             /** @description Validation Error */
