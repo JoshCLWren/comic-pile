@@ -453,7 +453,7 @@ describe('TagEditor (issue #3032)', () => {
     ).toBe(true)
   })
 
-  it('creates the private tag anyway after a near match', async () => {
+  it('adds the already-created private tag after a near match', async () => {
     const user = userEvent.setup()
     mockedTagsApi.create.mockResolvedValue({
       tag: makeTag(10),
@@ -470,11 +470,14 @@ describe('TagEditor (issue #3032)', () => {
     await user.click(screen.getByRole('button', { name: 'Create and add' }))
     await user.click(await screen.findByRole('button', { name: 'Create private anyway' }))
 
+    // The first pass already persisted the private tag, so continuing must
+    // assign that row instead of re-creating it (the API rejects a second
+    // private tag with the same normalized name).
+    expect(mockedTagsApi.create).toHaveBeenCalledTimes(1)
     await waitFor(() =>
-      expect(mockedTagsApi.create).toHaveBeenLastCalledWith({
-        name: 'horrer',
-        color: 'red',
-        include_near_matches: false,
+      expect(mockedTagsApi.assign).toHaveBeenCalledWith(10, {
+        target_type: 'Issue',
+        target_id: 11,
       }),
     )
     expect(await screen.findByRole('status')).toHaveTextContent('Created and added “Private 10”.')

@@ -86,14 +86,22 @@ export function TagEditor({
   const nameLookup = useTags(debouncedNewName.trim() ? debouncedNewName : undefined)
   const normalizedTypedName = newName.trim().toLowerCase()
   const debouncedNormalizedName = debouncedNewName.trim().toLowerCase()
+  const [newColor, setNewColor] = useState<string>(DEFAULT_TAG_COLOR_NAME)
+  const [pendingNearMatches, setPendingNearMatches] = useState<NearMatch[] | null>(null)
+  // The private tag the first creation pass already persisted while it paused
+  // on similar global names. Creating a tag is not a preview: the row exists,
+  // so it must be excluded from exact-duplicate detection (otherwise the
+  // refreshed lookup hides the guidance) and reused when the viewer continues
+  // with the private tag instead of re-creating it.
+  const [pendingCreatedTag, setPendingCreatedTag] = useState<Tag | null>(null)
   const exactDuplicate =
     debouncedNormalizedName && debouncedNormalizedName === normalizedTypedName
       ? ((nameLookup.data?.tags ?? []).find(
-          (tag) => tag.normalized_name === debouncedNormalizedName,
+          (tag) =>
+            tag.normalized_name === debouncedNormalizedName &&
+            tag.id !== pendingCreatedTag?.id,
         ) ?? null)
       : null
-  const [newColor, setNewColor] = useState<string>(DEFAULT_TAG_COLOR_NAME)
-  const [pendingNearMatches, setPendingNearMatches] = useState<NearMatch[] | null>(null)
   const [managingTag, setManagingTag] = useState<Tag | null>(null)
   const [manageName, setManageName] = useState('')
   const [manageColor, setManageColor] = useState('')
@@ -174,6 +182,7 @@ export function TagEditor({
       setNotice(`Used existing tag “${tag.name}”.`)
       setNewName('')
       setPendingNearMatches(null)
+      setPendingCreatedTag(null)
     } catch (error) {
       if (tag.scope === 'global') {
         setFailure(
@@ -197,6 +206,7 @@ export function TagEditor({
       setNotice(`Used global tag “${match.name}”.`)
       setNewName('')
       setPendingNearMatches(null)
+      setPendingCreatedTag(null)
     } catch {
       setFailure(
         `“${match.name}” is a global tag, which only admins can assign. Create your private tag instead, or ask an admin.`,
@@ -223,7 +233,7 @@ export function TagEditor({
    * the API to the global tag (reused, never duplicated). A merely similar
    * global name pauses for an explicit choice: use the global match (admins
    * assign it directly; other users are told why they cannot) or continue
-   * and create the private tag anyway.
+   * with the private tag the first pass already created (issue #3766).
    */
   async function handleCreate(forcePrivate: boolean) {
     clearFeedback()
@@ -232,6 +242,25 @@ export function TagEditor({
       setFailure('Enter a tag name first.')
       return
     }
+    // Continuing after the near-match pause must not call creation again: the
+    // first pass already persisted this tag, and the API refuses a second
+    // private tag with the same normalized name.
+    if (forcePrivate && pendingCreatedTag) {
+      try {
+        await assign.mutateAsync({ id: pendingCreatedTag.id, data: payload })
+        setNotice(`Created and added “${pendingCreatedTag.name}”.`)
+        setNewName('')
+        setNewColor(DEFAULT_TAG_COLOR_NAME)
+        setPendingNearMatches(null)
+        setPendingCreatedTag(null)
+      } catch (error) {
+        setFailure(
+          tagErrorMessage(error, `Could not add “${pendingCreatedTag.name}”.`),
+        )
+      }
+      return
+    }
+    setPendingCreatedTag(null)
     try {
       const result = await create.mutateAsync({
         name,
@@ -247,6 +276,7 @@ export function TagEditor({
           )
           setNewName('')
           setPendingNearMatches(null)
+          setPendingCreatedTag(null)
           return
         }
         try {
@@ -254,6 +284,7 @@ export function TagEditor({
           setNotice(`“${name}” matches global tag “${result.tag.name}” — used it.`)
           setNewName('')
           setPendingNearMatches(null)
+          setPendingCreatedTag(null)
         } catch {
           setFailure(
             `“${name}” matches global tag “${result.tag.name}”, which only admins can assign.`,
@@ -262,6 +293,7 @@ export function TagEditor({
         return
       }
       if (!forcePrivate && result.near_matches.length > 0) {
+        setPendingCreatedTag(result.tag)
         setPendingNearMatches(result.near_matches)
         return
       }
@@ -270,6 +302,7 @@ export function TagEditor({
       setNewName('')
       setNewColor(DEFAULT_TAG_COLOR_NAME)
       setPendingNearMatches(null)
+      setPendingCreatedTag(null)
     } catch (error) {
       const message = tagErrorMessage(error, `Could not create “${name}”.`)
       // A duplicate conflict means an exact usable tag already exists (the
@@ -475,6 +508,7 @@ export function TagEditor({
               onChange={(event) => {
                 setNewName(event.target.value)
                 setPendingNearMatches(null)
+                setPendingCreatedTag(null)
               }}
               placeholder="New tag name…"
               aria-label="New tag name"
