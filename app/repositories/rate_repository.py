@@ -315,11 +315,14 @@ async def fetch_session_rate_stats_bulk(
         session_events = events_by_session.get(session_id, [])
         total_issues_read = 0
         last_rating = None
-        active_rate_ids: list[int] = []
+        active_rate_ids: set[int] = set()
+        # Map rate event IDs to their events for O(1) lookup during undo
+        rate_events_by_id: dict[int, Event] = {}
 
         for event in session_events:
             if event.type == "rate":
-                active_rate_ids.append(event.id)
+                active_rate_ids.add(event.id)
+                rate_events_by_id[event.id] = event
                 if event.issues_read is not None:
                     total_issues_read += event.issues_read
                 if event.rating is not None:
@@ -327,12 +330,17 @@ async def fetch_session_rate_stats_bulk(
             elif event.type == "undo":
                 if active_rate_ids:
                     undone_id = active_rate_ids.pop()
-                    undone_event = next((e for e in session_events if e.id == undone_id and e.type == "rate"), None)
+                    undone_event = rate_events_by_id.get(undone_id)
                     if undone_event and undone_event.issues_read is not None:
                         total_issues_read = max(0, total_issues_read - undone_event.issues_read)
-                    remaining_rates = [e for e in session_events if e.id in active_rate_ids and e.type == "rate"]
-                    if remaining_rates:
-                        last_rating = remaining_rates[-1].rating
+                    # Get the last active rate event directly from the set
+                    if active_rate_ids:
+                        last_event_id = max(active_rate_ids)
+                        last_event = rate_events_by_id.get(last_event_id)
+                        if last_event and last_event.rating is not None:
+                            last_rating = last_event.rating
+                        else:
+                            last_rating = None
                     else:
                         last_rating = None
 
