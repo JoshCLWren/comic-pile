@@ -663,6 +663,32 @@ describe('TagEditor (issue #3032)', () => {
     )
   })
 
+  it('shows 0 places when total_assignments is missing (regression for ?? 0 fallback)', async () => {
+    const user = userEvent.setup()
+    mockedTagsApi.list.mockResolvedValue({ tags: [makeTag(1)] })
+    mockedTagsApi.usage.mockResolvedValue({
+      tag_id: 1,
+      // total_assignments intentionally omitted
+      assignments_by_target_type: {},
+      references_removed_by_consumers: {},
+    } as any)
+    mockedTagsApi.delete.mockResolvedValue({
+      tag_id: 1,
+      assignments_removed: 0,
+      references_removed_by_consumers: {},
+    })
+
+    renderEditor()
+    await user.click(await screen.findByRole('button', { name: 'Manage tag Private 1' }))
+    const manage = screen.getByRole('region', { name: 'Manage tag Private 1' })
+    await user.click(within(manage).getByRole('button', { name: 'Delete…' }))
+    const confirm = await screen.findByRole('region', { name: 'Manage tag Private 1' })
+    expect(within(confirm).getByText(/assigned to/)).toBeInTheDocument()
+    expect(within(confirm).getByText(/0 places/)).toBeInTheDocument()
+    await user.click(within(confirm).getByRole('button', { name: 'Delete tag' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Deleted “Private 1” (0 assignments).')
+  })
+
   it('omits the consumer clause when nothing references the tag', async () => {
     const user = userEvent.setup()
     mockedTagsApi.list.mockResolvedValue({ tags: [makeTag(1)] })

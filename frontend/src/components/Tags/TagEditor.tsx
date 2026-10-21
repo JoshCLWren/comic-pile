@@ -594,8 +594,8 @@ export function TagEditor({
                   <>
                     <p className="text-sm text-[var(--theme-text-primary)]">
                       Delete "{managingTag.name}"? It is assigned to{' '}
-                      <strong>{usage.data?.total_assignments ?? 0}</strong>{' '}
-                      {usage.data?.total_assignments === 1 ? 'place' : 'places'}
+                      <strong>{(usage.data?.total_assignments ?? 0)}</strong>{' '}
+                      {(usage.data?.total_assignments ?? 0) === 1 ? 'place' : 'places'}
                       {consumerEntries.length > 0 && (
                         <>
                           {' '}and referenced by{' '}
