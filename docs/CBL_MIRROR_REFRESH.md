@@ -20,7 +20,7 @@ MIRROR_ROOT="$(pwd)"
 Run the database-free inventory:
 
 ```bash
-uv run python scripts/sync_cbl_mirror.py "$MIRROR_ROOT" \
+uv run python -m scripts.sync_cbl_mirror "$MIRROR_ROOT" \
   --revision-sha "$MIRROR_SHA" \
   --inventory-only
 ```
@@ -44,7 +44,7 @@ it against the same checked-out revision produces byte-identical JSON. No databa
 Use the same pinned SHA and local mirror for a database dry-run:
 
 ```bash
-uv run python scripts/sync_cbl_mirror.py "$MIRROR_ROOT" \
+uv run python -m scripts.sync_cbl_mirror "$MIRROR_ROOT" \
   --revision-sha "$MIRROR_SHA" \
   --dry-run
 ```
@@ -57,7 +57,7 @@ If production still uses a legacy machine-path source identity, pass it as an al
 the database by hand:
 
 ```bash
-uv run python scripts/sync_cbl_mirror.py "$MIRROR_ROOT" \
+uv run python -m scripts.sync_cbl_mirror "$MIRROR_ROOT" \
   --revision-sha "$MIRROR_SHA" \
   --repository JoshCLWren/CBL-ReadingLists \
   --reconcile-repository /mnt/bigdata/CBL-ReadingLists \
@@ -74,7 +74,7 @@ alias is ignored. More than one matching alias is rejected before any write.
 Remove `--dry-run` after reviewing the counts:
 
 ```bash
-uv run python scripts/sync_cbl_mirror.py "$MIRROR_ROOT" \
+uv run python -m scripts.sync_cbl_mirror "$MIRROR_ROOT" \
   --revision-sha "$MIRROR_SHA" \
   --repository JoshCLWren/CBL-ReadingLists \
   --reconcile-repository /mnt/bigdata/CBL-ReadingLists

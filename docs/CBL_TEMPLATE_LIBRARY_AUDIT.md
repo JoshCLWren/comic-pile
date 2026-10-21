@@ -35,7 +35,7 @@ database session, fetches nothing from GitHub, and prints deterministic JSON cou
 content hash, publisher folder, and Comic Vine identity:
 
 ```bash
-uv run python scripts/sync_cbl_mirror.py /path/to/CBL-ReadingLists \
+uv run python -m scripts.sync_cbl_mirror /path/to/CBL-ReadingLists \
   --revision-sha "$(git -C /path/to/CBL-ReadingLists rev-parse HEAD)" \
   --inventory-only
 ```
