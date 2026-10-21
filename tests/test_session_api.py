@@ -1243,20 +1243,22 @@ async def test_undo_rating_excluded_from_session_stats(
     async_db.add(event)
     await async_db.commit()
 
-    # Rate issue #1 with 4.0 stars
+    # Rate issue #1 with 4.0 stars. Distinct issues_read values make the
+    # ordered-undo contract observable: canceling the newer reading must leave
+    # the older reading's count and rating behind.
     rate_event1 = Event(
         type="rate",
         session_id=session.id,
         thread_id=thread.id,
         rating=4.0,
-        issues_read=1,
+        issues_read=2,
         die=10,
         die_after=8,
     )
     async_db.add(rate_event1)
     await async_db.commit()
 
-    # Rate issue #2 with 5.0 stars
+    # Rate issue #2 with 5.0 stars (the newest reading).
     rate_event2 = Event(
         type="rate",
         session_id=session.id,
@@ -1293,9 +1295,10 @@ async def test_undo_rating_excluded_from_session_stats(
     async_db.add(roll_after_undo)
     await async_db.commit()
 
-    # Test repository function directly
+    # Test repository function directly. Undo must remove the newest reading
+    # (5.0 / 1 issue) and keep the older one (4.0 / 2 issues).
     total_issues_read, last_rating = await rate_repository.fetch_session_rate_stats(async_db, session.id)
-    assert total_issues_read == 1, f"Expected 1 issue read (undo should cancel second rating), got {total_issues_read}"
+    assert total_issues_read == 2, f"Expected 2 issues read (undo should cancel newest rating only), got {total_issues_read}"
     assert last_rating == 4.0, f"Expected last rating 4.0 (undo should remove second rating), got {last_rating}"
 
     # Test session API response
@@ -1305,7 +1308,7 @@ async def test_undo_rating_excluded_from_session_stats(
     data = response.json()
     assert data["active_thread"] is not None
     active_thread = data["active_thread"]
-    assert active_thread["issues_read"] == 1, f"Expected 1 issue read, got {active_thread['issues_read']}"
+    assert active_thread["issues_read"] == 2, f"Expected 2 issues read, got {active_thread['issues_read']}"
     assert active_thread["last_rating"] == 4.0, f"Expected last rating 4.0, got {active_thread['last_rating']}"
 
     # Test history endpoint
@@ -1318,6 +1321,6 @@ async def test_undo_rating_excluded_from_session_stats(
     session_entry = next(s for s in sessions if s["id"] == session.id)
     assert session_entry["active_thread"] is not None
     active_thread_history = session_entry["active_thread"]
-    assert active_thread_history["issues_read"] == 1, f"Expected 1 issue read in history, got {active_thread_history['issues_read']}"
+    assert active_thread_history["issues_read"] == 2, f"Expected 2 issues read in history, got {active_thread_history['issues_read']}"
     assert active_thread_history["last_rating"] == 4.0, f"Expected last rating 4.0 in history, got {active_thread_history['last_rating']}"
 

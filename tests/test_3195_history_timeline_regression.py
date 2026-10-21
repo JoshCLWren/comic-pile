@@ -29,4 +29,8 @@ def test_rate_aggregation_respects_undo():
     # Verify the repository function exists
     repo_src = open("app/repositories/rate_repository.py").read()
     assert "fetch_session_rate_stats_bulk" in repo_src
-    assert "active_rate_ids" in repo_src
+    # Undo must cancel the most recent reading, so active rates are kept in an
+    # ordered stack and ``pop()`` removes the newest entry rather than an
+    # arbitrary set member.
+    assert "active_rate_events" in repo_src
+    assert "active_rate_events.pop()" in repo_src
