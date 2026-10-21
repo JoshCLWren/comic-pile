@@ -369,6 +369,65 @@ describe('TagEditor (issue #3032)', () => {
     expect(screen.getByRole('button', { name: 'Use global “Horror”' })).toBeInTheDocument()
   })
 
+  it('keeps the similar-name guidance visible once the created tag is listed (issue #3766)', async () => {
+    const user = userEvent.setup()
+    const created: Tag = {
+      ...makeTag(10),
+      name: 'PlanTagger',
+      normalized_name: 'plantagger',
+    }
+    let createdInBackend = false
+    mockedTagsApi.list.mockImplementation(async (search?: string) => {
+      if (!search) return { tags: [] }
+      // The private tag the first pass created becomes listable, so the
+      // exact-name lookup finds it as soon as the tag list is refreshed.
+      if (createdInBackend && search.toLowerCase().includes('plantagger')) {
+        return { tags: [created] }
+      }
+      return { tags: [] }
+    })
+    mockedTagsApi.create.mockImplementation(async () => {
+      createdInBackend = true
+      return {
+        tag: created,
+        redirected_to_global: false,
+        near_matches: [
+          {
+            id: 9,
+            name: 'PlanTag',
+            color: '#7F1D1D',
+            normalized_name: 'plantag',
+            scope: 'global',
+          },
+        ],
+      }
+    })
+
+    renderEditor()
+
+    await user.type(screen.getByLabelText('New tag name'), 'PlanTagger')
+    // Let the debounced exact-name lookup settle before creating, so the
+    // refresh below is a real refetch of the active lookup.
+    await waitFor(() => {
+      const lookups = mockedTagsApi.list.mock.calls.filter(
+        ([search]) => search === 'PlanTagger',
+      )
+      expect(lookups.length).toBe(1)
+    })
+    await user.click(screen.getByRole('button', { name: 'Create and add' }))
+
+    // The refreshed tag list is what exposes the created private tag to the
+    // exact-name lookup, so the guidance has to survive that refresh.
+    await waitFor(() => {
+      const lookups = mockedTagsApi.list.mock.calls.filter(
+        ([search]) => search === 'PlanTagger',
+      )
+      expect(lookups.length).toBeGreaterThan(1)
+    })
+    expect(screen.getByText(/Similar global tag exists/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Use global “PlanTag”' })).toBeInTheDocument()
+  })
+
   it('adopts the global near-match when the viewer picks it', async () => {
     const user = userEvent.setup()
     mockedTagsApi.create.mockResolvedValue({

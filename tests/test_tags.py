@@ -444,6 +444,48 @@ class TestDuplicatePrevention:
         assert len(data["near_matches"]) > 0
         assert any(match["name"] == "PlanTag" for match in data["near_matches"])
 
+    async def test_explicit_opt_out_suppresses_near_match_suggestions(
+        self,
+        admin_auth_client: AsyncClient,
+        user_auth_client: AsyncClient,
+        admin_user: User,
+        non_admin_user: User,
+        async_db: AsyncSession,
+    ) -> None:
+        """An explicit ``include_near_matches=False`` suppresses the suggestions.
+
+        The request schema now opts in by default, so the opt-out is the only
+        way to create a similar private tag without the near-match list. The
+        same name is used on both requests so the flag is the only difference.
+        """
+        service = TagService(async_db)
+        await service.create_tag(admin_user, "PlanTag", color="red", scope="global")
+
+        result = await service.create_tag(
+            non_admin_user,
+            "PlanTagset",
+            color="blue",
+            include_near_matches=False,
+        )
+        assert result.redirected_to_global is False
+        assert result.near_matches == []
+
+        default_resp = await admin_auth_client.post(
+            "/api/v1/tags/", json={"name": "PlanTagging", "color": "blue"}
+        )
+        assert default_resp.status_code == 200
+        default_data = default_resp.json()
+        assert any(match["name"] == "PlanTag" for match in default_data["near_matches"])
+
+        opt_out_resp = await user_auth_client.post(
+            "/api/v1/tags/",
+            json={"name": "PlanTagging", "color": "blue", "include_near_matches": False},
+        )
+        assert opt_out_resp.status_code == 200
+        opt_out_data = opt_out_resp.json()
+        assert opt_out_data["redirected_to_global"] is False
+        assert opt_out_data["near_matches"] == []
+
     async def test_same_private_name_allowed_for_different_users(
         self, admin_user: User, non_admin_user: User, async_db: AsyncSession
     ) -> None:
