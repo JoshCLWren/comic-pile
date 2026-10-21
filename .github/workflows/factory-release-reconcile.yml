@@ -10,11 +10,7 @@ on:
     inputs:
       pr_number:
         description: Optional exact merged pull request to reconcile
-        required: false
-        type: string
-      backfill_since:
-        description: Optional ISO-8601 lower bound
-        required: false
+        required: true
         type: string
 
 permissions:
@@ -39,26 +35,15 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           WORKFLOW_STARTED: ${{ github.event.workflow_run.created_at }}
           INPUT_PR: ${{ inputs.pr_number }}
-          INPUT_SINCE: ${{ inputs.backfill_since }}
         run: |
           set -Eeuo pipefail
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            if [[ -n "$INPUT_PR" ]]; then
-              gh workflow run release-writer.yml \
-                --repo "$GITHUB_REPOSITORY" \
-                --ref main \
-                -f "pr_number=$INPUT_PR"
-            elif [[ -n "$INPUT_SINCE" ]]; then
-              gh workflow run release-writer.yml \
-                --repo "$GITHUB_REPOSITORY" \
-                --ref main \
-                -f "backfill_since=$INPUT_SINCE"
-            else
-              gh workflow run release-writer.yml \
-                --repo "$GITHUB_REPOSITORY" \
-                --ref main
-            fi
+            [[ "$INPUT_PR" =~ ^[1-9][0-9]*$ ]] || { echo 'Exact merged PR is required' >&2; exit 1; }
+            gh workflow run release-writer.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f "pr_number=$INPUT_PR"
             exit 0
           fi
 
