@@ -80,9 +80,9 @@ describe('Vercel routing layer stays aligned with the canonical route table', ()
 
   test('no deployment mapping targets a document the build never writes', () => {
     const generated = new Set(prerenderedPatterns().map(generatedRouteFile))
-    const dead = [...spaPageMappings().entries()]
-      .filter(([, destination]) => !generated.has(destination.replace(/^\//, '')))
-      .map(([source, destination]) => `${source} -> ${destination}`)
+    const dead = [...spaPageMappings()].flatMap(([source, destination]) =>
+      generated.has(destination.replace(/^\//, '')) ? [] : [`${source} -> ${destination}`],
+    )
 
     expect(
       dead,
