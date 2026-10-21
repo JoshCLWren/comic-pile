@@ -119,6 +119,8 @@ def _load_validated(path: Path, repository: str, pr_number: int) -> dict[str, ob
     candidate_time = datetime.fromisoformat(str(payload["merged_at"]).replace("Z", "+00:00"))
     if candidate_time != original_time:
         raise ReleaseIdentityConflict("candidate merged_at differs from GitHub")
+    if payload["visibility"] == "internal":
+        release_writer._validate_internal_evidence(payload["provenance_json"])
     release_writer._validate_publish_grounding(payload)
     return payload
 
