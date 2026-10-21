@@ -285,9 +285,15 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           }
           hadSuccess = true
         } catch (err: unknown) {
-          // When a mutation fails, we attempt to synchronize the base list with
-          // the server. If this synchronization is incomplete, we must stop
-          // processing further mutations to avoid corrupting the list.
+          // A failed mutation stops the queue and is reported to the caller:
+          // the mutations that were not applied stay queued so the reader can
+          // retry them, and the rejected flush keeps the Edit Series dialog
+          // open instead of closing it over a lost create.
+          //
+          // The base list is resynchronized with the server first. When that
+          // resynchronization is itself incomplete, later mutations would be
+          // derived from a truncated issue list, so the queue must stop
+          // (#3764).
           try {
             const refreshed = await fetchAllIssues()
             const expectedTotal = totalCountRef.current
@@ -297,6 +303,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             baseIssuesRef.current = refreshed
           } catch (refreshErr) {
             console.error('[IssueToggleList] Error refetching issues after mutation failure:', refreshErr)
+            setActionError(getApiErrorDetail(refreshErr))
             throw refreshErr
           }
           setActionError(getApiErrorDetail(err))
@@ -326,7 +333,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     pendingMutationsRef.current = [...pendingMutationsRef.current, queuedMutation]
     syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
     if (!deferred) {
-      void processIssueMutations()
+      // Immediate mode has no caller awaiting the queue, so a failed flush
+      // must not escape as an unhandled rejection. The inline action error
+      // already reports the failure, and the mutations that were not applied
+      // stay queued for the next attempt.
+      void processIssueMutations().catch(() => undefined)
     }
   }, [processIssueMutations, syncOptimisticIssues, deferred])
 

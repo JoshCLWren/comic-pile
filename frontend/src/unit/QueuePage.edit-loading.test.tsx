@@ -364,6 +364,88 @@ describe('Edit Series loading gate (#3443)', () => {
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
   })
 
+  it('keeps Save blocked when the issue list loads partially, then saves after a complete retry', async () => {
+    // The server reports three issues, but the pagination ends after two, so
+    // the dialog never holds the whole series (#3764).
+    mockedIssuesApi.list.mockResolvedValueOnce({
+      issues: [
+        {
+          id: 11,
+          issue_number: '1',
+          status: 'unread',
+          thread_id: 1,
+          read_at: null,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+        {
+          id: 12,
+          issue_number: '2',
+          status: 'read',
+          thread_id: 1,
+          read_at: '2026-01-02T00:00:00Z',
+          created_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      total_count: 3,
+      page_size: 100,
+      next_page_token: null,
+    })
+    mockedIssuesApi.list.mockResolvedValue({
+      issues: [
+        {
+          id: 11,
+          issue_number: '1',
+          status: 'unread',
+          thread_id: 1,
+          read_at: null,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+        {
+          id: 12,
+          issue_number: '2',
+          status: 'read',
+          thread_id: 1,
+          read_at: '2026-01-02T00:00:00Z',
+          created_at: '2026-01-01T00:00:00Z',
+        },
+        {
+          id: 13,
+          issue_number: '3',
+          status: 'unread',
+          thread_id: 1,
+          read_at: null,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      total_count: 3,
+      page_size: 100,
+      next_page_token: null,
+    })
+    const update = vi.fn().mockResolvedValue({})
+    mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
+
+    const user = userEvent.setup()
+    renderQueue()
+    await openEditSeries(user)
+
+    // The truncated list is refused, so Save stays blocked and nothing is
+    // written from a partial load.
+    expect(await screen.findByText(/could not load all issues/i)).toBeInTheDocument()
+    const blockedSaveButton = screen.getByRole('button', { name: /loading issues/i })
+    expect(blockedSaveButton).toBeDisabled()
+    expect(update).not.toHaveBeenCalled()
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+
+    // A complete retry restores the list and saving.
+    await user.click(screen.getByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(screen.getByTestId('issue-pill-13')).toBeInTheDocument())
+
+    const saveButton = await screen.findByRole('button', { name: /save changes/i })
+    await waitFor(() => expect(saveButton).toBeEnabled())
+    await user.click(saveButton)
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+  })
+
   it('shows an explicit empty state when a migrated thread has no issues', async () => {
     mockedIssuesApi.list.mockResolvedValue({
       issues: [],
