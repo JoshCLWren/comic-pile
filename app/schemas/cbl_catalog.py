@@ -12,8 +12,14 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-class CBLSourceListDiscoveryItem(BaseModel):
-    """One active persisted source list that may be previewed by Add material."""
+class CBLCatalogListItem(BaseModel):
+    """One active persisted source list shown in a catalog folder or search page.
+
+    The shape mirrors the Add-material discovery item, but it is a distinct
+    model so the catalog browsing surface never shares a schema title with the
+    discovery surface: two same-named models would collapse into one entry in
+    the generated OpenAPI components.
+    """
 
     id: int
     name: str
@@ -64,7 +70,7 @@ class CBLCatalogBrowseResponse(BaseModel):
     query: str | None = None
     breadcrumbs: list[CBLBreadcrumb]
     folders: list[CBLSourceFolder]
-    items: list[CBLSourceListDiscoveryItem]
+    items: list[CBLCatalogListItem]
     page: int = Field(..., ge=1)
     page_size: int = Field(..., ge=1)
     total: int = Field(..., ge=0)

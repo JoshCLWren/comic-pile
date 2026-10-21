@@ -119,6 +119,36 @@ async def _second_account_client(client: AsyncClient, db: AsyncSession) -> User:
     return user
 
 
+def _effective_route_paths(app: object) -> list[str]:
+    """Collect effective route paths in registration order.
+
+    FastAPI 0.137+ keeps included routers as inclusion-tree nodes instead of
+    flat route entries, so recurse through each node's original router while
+    accumulating its mount prefix.
+
+    Args:
+        app: FastAPI application instance.
+
+    Returns:
+        Effective paths of every reachable route, in registration order.
+    """
+    paths: list[str] = []
+    stack: list[tuple[object, str]] = [(route, "") for route in getattr(app, "routes", [])]
+    while stack:
+        route, prefix = stack.pop(0)
+        route_path = getattr(route, "path", None)
+        original_router = getattr(route, "original_router", None)
+        include_context = getattr(route, "include_context", None)
+        nested_routes = getattr(original_router, "routes", None)
+        if nested_routes is None or include_context is None:
+            if isinstance(route_path, str):
+                paths.append(f"{prefix}{route_path}")
+            continue
+        nested_prefix = f"{prefix}{getattr(include_context, 'prefix', '')}"
+        stack[0:0] = [(nested, nested_prefix) for nested in nested_routes]
+    return paths
+
+
 @pytest.mark.asyncio
 async def test_folder_browse_navigates_nested_and_unsorted_folders(
     auth_client: AsyncClient,
@@ -572,12 +602,41 @@ async def test_catalog_database_outage_returns_stable_503(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A database failure maps to a machine-readable unavailable response."""
-    from app.api import cbl_sources
+    from app.api import cbl_catalog
 
     async def _fail(*args: object, **kwargs: object) -> None:
         raise OperationalError("SELECT 1", {}, Exception("database is down"))
 
-    monkeypatch.setattr(cbl_sources, "browse_cbl_catalog", _fail)
+    monkeypatch.setattr(cbl_catalog, "browse_cbl_catalog", _fail)
     response = await auth_client.get(f"{CATALOG_URL}/browse")
     assert response.status_code == 503, response.text
     assert response.json()["detail"]["code"] == "cbl_catalog_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_catalog_paths_are_not_shadowed_by_the_source_list_detail_route() -> None:
+    """The literal folder/browse paths win over the integer detail route.
+
+    ``/cbl-sources/{list_id}`` takes an integer path parameter. FastAPI
+    resolves the first matching path route, so if that route were registered
+    first it would answer ``/cbl-sources/folders`` with a 422 instead of the
+    folder listing.
+    """
+    from app.main import create_app
+
+    paths = _effective_route_paths(create_app(serve_frontend=False))
+    catalog_indexes = [
+        index
+        for index, path in enumerate(paths)
+        if path.endswith("/issue-identity/cbl-sources/folders")
+        or path.endswith("/issue-identity/cbl-sources/browse")
+    ]
+    assert catalog_indexes, "catalog folder and browse routes are not registered"
+
+    detail_indexes = [
+        index
+        for index, path in enumerate(paths)
+        if path.endswith("/issue-identity/cbl-sources/{list_id}")
+    ]
+    assert all(index > max(catalog_indexes) for index in detail_indexes)
+

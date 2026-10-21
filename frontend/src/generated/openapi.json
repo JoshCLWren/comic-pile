@@ -962,38 +962,6 @@
         "title": "CBLBreadcrumb",
         "type": "object"
       },
-      "CBLErrorDetail": {
-        "description": "Machine-readable error code and message for a catalog failure.",
-        "properties": {
-          "code": {
-            "title": "Code",
-            "type": "string"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "message"
-        ],
-        "title": "CBLErrorDetail",
-        "type": "object"
-      },
-      "CBLErrorResponse": {
-        "description": "Envelope for catalog error responses: {\"detail\": {\"code\": ..., \"message\": ...}}.",
-        "properties": {
-          "detail": {
-            "$ref": "#/components/schemas/CBLErrorDetail"
-          }
-        },
-        "required": [
-          "detail"
-        ],
-        "title": "CBLErrorResponse",
-        "type": "object"
-      },
       "CBLCatalogBrowseResponse": {
         "description": "Paginated CBL results for one folder or one catalog-wide search.",
         "properties": {
@@ -1025,7 +993,7 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/CBLSourceListDiscoveryItem"
+              "$ref": "#/components/schemas/CBLCatalogListItem"
             },
             "title": "Items",
             "type": "array"
@@ -1084,6 +1052,91 @@
           "has_previous"
         ],
         "title": "CBLCatalogBrowseResponse",
+        "type": "object"
+      },
+      "CBLCatalogListItem": {
+        "description": "One active persisted source list shown in a catalog folder or search page.\n\nThe shape mirrors the Add-material discovery item, but it is a distinct\nmodel so the catalog browsing surface never shares a schema title with the\ndiscovery surface: two same-named models would collapse into one entry in\nthe generated OpenAPI components.",
+        "properties": {
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "declared_issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Issue Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revision_sha": {
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_repository": {
+            "title": "Source Repository",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_path",
+          "source_repository",
+          "declared_issue_count",
+          "content_hash",
+          "revision_sha"
+        ],
+        "title": "CBLCatalogListItem",
+        "type": "object"
+      },
+      "CBLErrorDetail": {
+        "description": "Machine-readable error code and message for a catalog failure.",
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable error code.",
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable error message.",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "CBLErrorDetail",
+        "type": "object"
+      },
+      "CBLErrorResponse": {
+        "description": "Envelope for catalog error responses: ``{\"detail\": {\"code\": ..., \"message\": ...}}``.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/CBLErrorDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "CBLErrorResponse",
         "type": "object"
       },
       "CBLFolderListingResponse": {

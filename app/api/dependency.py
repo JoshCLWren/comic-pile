@@ -292,6 +292,7 @@ def mount_subrouters() -> None:
         return
 
     from app.api import collection_exclusions
+    from app.api import cbl_catalog
     from app.api import cbl_sources
     from app.api import continuity_plan
     from app.api import continuity_rule
@@ -317,6 +318,12 @@ def mount_subrouters() -> None:
     router.include_router(reading_order_projection.router)
     router.include_router(reading_plan_release_source.router)
     router.include_router(collection_exclusions.router)
+    # The shared catalog router must be mounted before the source router: the
+    # sibling detail route is ``/cbl-sources/{list_id}`` with an integer path
+    # parameter, and FastAPI resolves the first matching path route, so the
+    # literal ``/cbl-sources/folders`` and ``/cbl-sources/browse`` paths would
+    # otherwise be answered with a 422 by the integer route.
+    router.include_router(cbl_catalog.router)
     router.include_router(cbl_sources.router)
     router.include_router(custom_cbl.router)
     router.include_router(roll_recovery_switch.router, prefix="/roll")

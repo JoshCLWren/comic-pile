@@ -12,17 +12,16 @@ from math import ceil
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSourceList
-from app.repositories.cbl_source_repository import (
+from app.repositories.cbl_catalog_repository import (
     browse_cbl_source_lists,
-    discover_cbl_source_lists,
     read_cbl_catalog_folder,
 )
 from app.schemas.cbl_catalog import (
     CBLBreadcrumb,
     CBLCatalogBrowseResponse,
+    CBLCatalogListItem,
     CBLFolderListingResponse,
     CBLSourceFolder,
-    CBLSourceListDiscoveryItem,
 )
 from app.services.cbl_source_public import public_cbl_repository
 
@@ -102,9 +101,9 @@ def _folder_schema(folder: str, row_name: str, direct: int, total: int) -> CBLSo
     )
 
 
-def _item_schema(source_list: CBLSourceList, repository: str) -> CBLSourceListDiscoveryItem:
-    """Map one repository row to the public discovery item contract."""
-    return CBLSourceListDiscoveryItem(
+def _item_schema(source_list: CBLSourceList, repository: str) -> CBLCatalogListItem:
+    """Map one repository row to the public catalog item contract."""
+    return CBLCatalogListItem(
         id=source_list.id,
         name=source_list.name,
         source_path=source_list.source_path,
@@ -227,23 +226,3 @@ async def browse_cbl_catalog(
         has_next=page < total_pages,
         has_previous=page > 1,
     )
-
-
-async def discover_source_lists(
-    db: AsyncSession,
-    *,
-    query_text: str | None,
-    limit: int,
-) -> list[CBLSourceListDiscoveryItem]:
-    """Return the bounded Add-material discovery list.
-
-    Args:
-        db: Database session.
-        query_text: Optional name/path search.
-        limit: Maximum rows, already bounded by the router.
-
-    Returns:
-        Active source lists in stable name/path order.
-    """
-    rows = await discover_cbl_source_lists(db, query_text=query_text, limit=limit)
-    return [_item_schema(source_list, repository) for source_list, repository in rows]
