@@ -14,9 +14,11 @@ from app.repositories.creator_summary import (
 )
 from app.schemas.creator_detail import CreatorInsights
 from app.services.creator_insights import (
+    INCOMPLETE_METADATA_SERIES_MESSAGE,
     INDIVIDUAL_ISSUE_LIMIT,
     INSUFFICIENT_SERIES_MESSAGE,
     MIN_SERIES_SAMPLE,
+    NON_HEADLINE_SERIES_MESSAGE,
     compute_creator_insights,
 )
 from app.services.creator_series import aggregate_creator_series_groups
@@ -206,7 +208,10 @@ def test_incomplete_metadata_series_is_excluded_and_flagged() -> None:
     assert insights.series_sample_met is False
     assert insights.excluded_incomplete_series_count == 1
     assert insights.strongest_series is None
-    assert insights.series_message == INSUFFICIENT_SERIES_MESSAGE
+    # The series shows three rated issues, so the missing comparison is never
+    # explained as a thin sample (issue #3946).
+    assert insights.series_message == INCOMPLETE_METADATA_SERIES_MESSAGE
+    assert insights.series_message != INSUFFICIENT_SERIES_MESSAGE
 
 
 def test_thin_series_sample_explains_instead_of_ranking() -> None:
@@ -219,8 +224,11 @@ def test_thin_series_sample_explains_instead_of_ranking() -> None:
     assert insights is not None
     assert insights.series_sample_met is False
     assert insights.series_message == INSUFFICIENT_SERIES_MESSAGE
-    assert insights.highest_rated_issues
-    assert insights.lowest_rated_issues
+    # Two rated issues cannot be separated into distinct extremes, so they are
+    # listed once instead of being repeated as both best and worst (issue #3946).
+    assert insights.individual_issues_combined is True
+    assert [row.issue_id for row in insights.highest_rated_issues] == [11, 12]
+    assert insights.lowest_rated_issues == []
 
 
 def test_individual_issue_extremes_are_sorted_capped_and_distinct() -> None:
@@ -233,7 +241,8 @@ def test_individual_issue_extremes_are_sorted_capped_and_distinct() -> None:
     assert insights is not None
     assert len(insights.highest_rated_issues) == INDIVIDUAL_ISSUE_LIMIT == 3
     assert [row.effective_rating for row in insights.highest_rated_issues] == [5.0, 4.0, 3.0]
-    assert [row.effective_rating for row in insights.lowest_rated_issues] == [1.0, 2.0, 3.0]
+    # The lowest list holds the issues that are not already shown as highest.
+    assert [row.effective_rating for row in insights.lowest_rated_issues] == [1.0, 2.0]
     assert insights.highest_rated_issues[0].thread_title == "Run"
     assert insights.highest_rated_issues[0].roles == ["writer"]
 
@@ -283,7 +292,10 @@ def test_mixed_role_series_ignores_cover_only_ratings() -> None:
     assert insights.strongest_series.roles == ["cover", "writer"]
     # The cover-only issue is not part of the individual issue evidence either.
     assert [row.issue_id for row in insights.highest_rated_issues] == [11, 12, 13]
-    assert [row.issue_id for row in insights.lowest_rated_issues] == [13, 12, 11]
+    # Three rated issues are too few to separate extremes, so they are listed
+    # once instead of repeating the same issues as best and worst (issue #3946).
+    assert insights.individual_issues_combined is True
+    assert insights.lowest_rated_issues == []
 
 
 def test_cover_only_ratings_cannot_reach_the_series_sample_gate() -> None:
@@ -312,9 +324,127 @@ def test_cover_only_ratings_cannot_reach_the_series_sample_gate() -> None:
 
     assert insights is not None
     assert insights.series_sample_met is False
-    assert insights.series_message == INSUFFICIENT_SERIES_MESSAGE
+    # The series shows four rated issues, so the missing comparison is never
+    # explained as a thin sample (issue #3946).
+    assert insights.series_message == NON_HEADLINE_SERIES_MESSAGE
+    assert insights.series_message != INSUFFICIENT_SERIES_MESSAGE
     assert insights.strongest_series is None
     assert insights.weakest_series is None
     assert insights.most_rated_series is None
     assert [row.issue_id for row in insights.highest_rated_issues] == [11, 12]
-    assert [row.issue_id for row in insights.lowest_rated_issues] == [12, 11]
+    # Two rated issues cannot be split into distinct extremes (issue #3946).
+    assert insights.individual_issues_combined is True
+    assert insights.lowest_rated_issues == []
+
+
+def test_thin_series_still_explains_the_thin_sample() -> None:
+    """Two thin series are described as a thin sample, not as a data problem."""
+    series = {
+        11: (1, "Thin A"),
+        12: (1, "Thin A"),
+        21: (2, "Thin B"),
+        22: (2, "Thin B"),
+    }
+    rated = {11: 5.0, 12: 4.0, 21: 3.0, 22: 2.0}
+
+    insights = _insights(creator_id=9, rated=rated, series=series)
+
+    assert insights is not None
+    assert insights.series_sample_met is False
+    assert insights.series_message == INSUFFICIENT_SERIES_MESSAGE
+    assert insights.excluded_incomplete_series_count == 0
+
+
+def test_incomplete_metadata_below_the_sample_still_explains_the_sample() -> None:
+    """A series below the sample is described as thin even without full metadata.
+
+    The incomplete-metadata reason only applies to a series that has enough
+    rated issues to be compared; a series that is short of the sample is
+    always described as short of the sample (issue #3946).
+    """
+    series = {11: (1, "Patchy"), 12: (1, "Patchy"), 13: (1, "Patchy")}
+    rated = {11: 5.0, 12: 4.0}
+
+    insights = _insights(
+        creator_id=9,
+        rated=rated,
+        series=series,
+        credited=frozenset({11, 12}),
+        complete=frozenset({11, 12}),
+    )
+
+    assert insights is not None
+    assert insights.series_sample_met is False
+    assert insights.series_message == INSUFFICIENT_SERIES_MESSAGE
+    assert insights.excluded_incomplete_series_count == 1
+
+
+def test_individual_issue_extremes_never_repeat_an_issue() -> None:
+    """The same issue is never listed as both the highest and the lowest."""
+    series = dict.fromkeys(range(11, 19), (1, "Run"))
+    rated = {
+        11: 5.0,
+        12: 5.0,
+        13: 4.0,
+        14: 4.0,
+        15: 3.0,
+        16: 3.0,
+        17: 2.0,
+        18: 2.0,
+    }
+
+    insights = _insights(creator_id=9, rated=rated, series=series)
+
+    assert insights is not None
+    highest_ids = {row.issue_id for row in insights.highest_rated_issues}
+    lowest_ids = {row.issue_id for row in insights.lowest_rated_issues}
+    assert highest_ids.isdisjoint(lowest_ids)
+    assert len(insights.highest_rated_issues) == INDIVIDUAL_ISSUE_LIMIT
+    assert len(insights.lowest_rated_issues) == INDIVIDUAL_ISSUE_LIMIT
+    # The real extremes survive the split.
+    assert insights.highest_rated_issues[0].effective_rating == 5.0
+    assert insights.lowest_rated_issues[0].effective_rating == 2.0
+
+
+def test_individual_issue_extremes_cover_a_small_rated_set_without_repeats() -> None:
+    """Four rated issues fill both lists without repeating an issue."""
+    series = {11: (1, "Run"), 12: (1, "Run"), 13: (1, "Run"), 14: (1, "Run")}
+    rated = {11: 5.0, 12: 4.0, 13: 3.0, 14: 2.0}
+
+    insights = _insights(creator_id=9, rated=rated, series=series)
+
+    assert insights is not None
+    assert insights.individual_issues_combined is False
+    assert [row.issue_id for row in insights.highest_rated_issues] == [11, 12, 13]
+    assert [row.issue_id for row in insights.lowest_rated_issues] == [14]
+
+
+def test_single_rated_issue_is_listed_once() -> None:
+    """One rated issue is never shown as both the highest and the lowest."""
+    series = {11: (1, "Solo")}
+    rated = {11: 4.5}
+
+    insights = _insights(creator_id=9, rated=rated, series=series)
+
+    assert insights is not None
+    assert insights.individual_issues_combined is True
+    assert [row.issue_id for row in insights.highest_rated_issues] == [11]
+    assert insights.lowest_rated_issues == []
+
+
+def test_individual_issue_extremes_are_deterministic() -> None:
+    """The same rated set always produces the same highest and lowest lists."""
+    series = dict.fromkeys(range(11, 18), (1, "Run"))
+    rated = {11: 4.0, 12: 4.0, 13: 4.0, 14: 3.0, 15: 3.0, 16: 2.0, 17: 1.0}
+
+    first = _insights(creator_id=9, rated=rated, series=series)
+    second = _insights(creator_id=9, rated=rated, series=series)
+
+    assert first is not None and second is not None
+    assert [row.issue_id for row in first.highest_rated_issues] == [
+        row.issue_id for row in second.highest_rated_issues
+    ]
+    assert [row.issue_id for row in first.lowest_rated_issues] == [
+        row.issue_id for row in second.lowest_rated_issues
+    ]
+    assert first.individual_issues_combined == second.individual_issues_combined

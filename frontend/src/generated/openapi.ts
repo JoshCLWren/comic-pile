@@ -8158,6 +8158,10 @@ export interface components {
          *     never has to trust an unexplained summary. Series conclusions require a
          *     minimum rated-issue sample and complete creator metadata; individual issue
          *     extremes are labeled separately from the aggregate series conclusions.
+         *
+         *     The explanation for a missing series comparison names the real reason
+         *     (issue #3946), and an individual issue never appears in both the highest
+         *     and the lowest list.
          */
         CreatorInsights: {
             /**
@@ -8168,7 +8172,7 @@ export interface components {
             excluded_incomplete_series_count: number;
             /**
              * Highest Rated Issues
-             * @description Top individual rated issues, distinct from aggregate series conclusions.
+             * @description Top individual rated issues, distinct from aggregate series conclusions. Never overlaps with lowest_rated_issues.
              */
             highest_rated_issues?: components["schemas"]["CreatorIssueInsight"][];
             /**
@@ -8177,8 +8181,14 @@ export interface components {
              */
             individual_issue_limit: number;
             /**
+             * Individual Issues Combined
+             * @description True when the rated set is too small to separate into distinct highest and lowest lists. The UI then shows every rated issue once in a single list instead of repeating the same issues as both the best and the worst work.
+             * @default false
+             */
+            individual_issues_combined: boolean;
+            /**
              * Lowest Rated Issues
-             * @description Bottom individual rated issues, distinct from aggregate series conclusions.
+             * @description Bottom individual rated issues, distinct from aggregate series conclusions. Never overlaps with highest_rated_issues.
              */
             lowest_rated_issues?: components["schemas"]["CreatorIssueInsight"][];
             /**
@@ -8190,7 +8200,7 @@ export interface components {
             most_rated_series?: components["schemas"]["CreatorSeriesInsight"] | null;
             /**
              * Series Message
-             * @description Plain-language explanation when no series comparison is available.
+             * @description Plain-language explanation when no series comparison is available. It names the real reason: incomplete creator metadata, credits that do not count toward the average, or a genuinely thin rated-issue sample.
              */
             series_message?: string | null;
             /**

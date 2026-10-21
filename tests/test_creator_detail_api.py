@@ -21,6 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.services.creator_insights import (
+    INCOMPLETE_METADATA_SERIES_MESSAGE,
+    INSUFFICIENT_SERIES_MESSAGE,
+    NON_HEADLINE_SERIES_MESSAGE,
+)
 
 D1 = datetime(2026, 3, 1, tzinfo=UTC)
 D2 = datetime(2026, 3, 2, tzinfo=UTC)
@@ -869,6 +874,11 @@ async def test_insights_rank_strongest_weakest_and_most_rated_series(
     assert [row["effective_rating"] for row in highest] == [5.0, 5.0, 5.0]
     assert [row["effective_rating"] for row in lowest] == [1.0, 1.0, 1.0]
     assert highest[0]["thread_id"] == strong_thread.id
+    # No issue is ever shown as both the highest and the lowest (issue #3946).
+    assert {row["issue_id"] for row in highest}.isdisjoint(
+        {row["issue_id"] for row in lowest}
+    )
+    assert insights["individual_issues_combined"] is False
 
 
 @pytest.mark.asyncio
@@ -929,7 +939,10 @@ async def test_insights_explain_thin_series_sample(
     assert insights["series_message"]
     # Individual issue extremes still surface even without a series conclusion.
     assert len(insights["highest_rated_issues"]) == 2
-    assert len(insights["lowest_rated_issues"]) == 2
+    # Two rated issues cannot be separated into distinct extremes, so they are
+    # listed once instead of repeating the same issues twice (issue #3946).
+    assert insights["individual_issues_combined"] is True
+    assert insights["lowest_rated_issues"] == []
 
 
 @pytest.mark.asyncio
@@ -956,6 +969,10 @@ async def test_insights_exclude_series_with_incomplete_metadata(
     assert insights["series_sample_met"] is False
     assert insights["excluded_incomplete_series_count"] == 1
     assert insights["strongest_series"] is None
+    # The series shows three rated issues, so the missing comparison is never
+    # explained as a thin rating sample (issue #3946).
+    assert insights["series_message"] == INCOMPLETE_METADATA_SERIES_MESSAGE
+    assert insights["series_message"] != INSUFFICIENT_SERIES_MESSAGE
 
 
 @pytest.mark.asyncio
@@ -1000,11 +1017,10 @@ async def test_insights_ignore_cover_only_ratings_in_a_mixed_role_series(
         issues[1].id,
         issues[2].id,
     ]
-    assert [row["issue_id"] for row in insights["lowest_rated_issues"]] == [
-        issues[2].id,
-        issues[1].id,
-        issues[0].id,
-    ]
+    # Three rated issues are too few to separate extremes, so they are listed
+    # once instead of repeating the same issues as best and worst (issue #3946).
+    assert insights["individual_issues_combined"] is True
+    assert insights["lowest_rated_issues"] == []
 
 
 @pytest.mark.asyncio
@@ -1042,16 +1058,18 @@ async def test_insights_cover_only_ratings_cannot_reach_the_series_sample_gate(
     assert insights["strongest_series"] is None
     assert insights["weakest_series"] is None
     assert insights["most_rated_series"] is None
-    assert insights["series_message"]
+    # The series shows four rated issues, so the missing comparison is never
+    # explained as a thin rating sample (issue #3946).
+    assert insights["series_message"] == NON_HEADLINE_SERIES_MESSAGE
+    assert insights["series_message"] != INSUFFICIENT_SERIES_MESSAGE
     # Individual issue extremes still surface, and only for headline-eligible issues.
     assert [row["issue_id"] for row in insights["highest_rated_issues"]] == [
         issues[0].id,
         issues[1].id,
     ]
-    assert [row["issue_id"] for row in insights["lowest_rated_issues"]] == [
-        issues[1].id,
-        issues[0].id,
-    ]
+    # Two rated issues cannot be separated into distinct extremes (issue #3946).
+    assert insights["individual_issues_combined"] is True
+    assert insights["lowest_rated_issues"] == []
 
 
 @pytest.mark.asyncio

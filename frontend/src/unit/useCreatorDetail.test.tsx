@@ -224,6 +224,7 @@ describe('useCreatorDetail (bounded incremental loader)', () => {
           series_message: null,
           excluded_incomplete_series_count: 0,
           individual_issue_limit: 3,
+          individual_issues_combined: false,
           strongest_series: {
             series_key: 'thread:1',
             thread_id: 1,

@@ -9,9 +9,17 @@ Product contract:
 - Series conclusions require a minimum rated-issue sample and complete creator
   metadata, so a single 5★ issue never outranks a long consistently loved run,
   and a series whose counts are lower bounds is never presented as exhaustive.
+- The explanation shown when no series can be compared names the real reason
+  (issue #3946). "Not enough rated issues" is only truthful when no series has
+  enough rated issues; a series that is held back by incomplete creator
+  metadata, or by credits that do not count toward the average, is never
+  described as a thin sample.
 - Individual issue extremes are a separate category from the aggregate series
   conclusions; a one-off rating is labeled as an individual issue, not "best
   work".
+- An individual issue never appears in both the highest and the lowest list on
+  the same page (issue #3946). When the rated set is too small to separate
+  extremes, every rated issue is listed once instead of being repeated.
 - Every ordering is deterministic: a total order over stable identities means
   tied highlights never arbitrarily disappear between requests.
 - Every highlight carries the stable ids needed to drill into the supporting
@@ -47,6 +55,28 @@ INDIVIDUAL_ISSUE_LIMIT: int = 3
 INSUFFICIENT_SERIES_MESSAGE: str = (
     "Not enough rated issues in a single series yet. A series needs at least "
     f"{MIN_SERIES_SAMPLE} rated issues before it is compared as strongest or weakest."
+)
+
+#: Plain-language explanation shown when a series has enough rated issues but
+#: is held back because its creator metadata is still incomplete (issue #3946).
+#:
+#: The series is not compared because its counts are still lower bounds, so
+#: describing it as a thin rating sample would contradict the issue count the
+#: reader sees on the same page.
+INCOMPLETE_METADATA_SERIES_MESSAGE: str = (
+    "Series with enough rated issues are not compared yet because creator "
+    "metadata is still incomplete."
+)
+
+#: Plain-language explanation shown when a series has enough rated issues but
+#: too few of them count toward the creator's average (issue #3946).
+#:
+#: Pure cover or editorial credits never feed the headline average, so a
+#: series whose ratings are mostly such credits cannot define a strongest or
+#: weakest series even though it shows a large rated-issue count.
+NON_HEADLINE_SERIES_MESSAGE: str = (
+    "Series with enough rated issues are not compared yet because some of those "
+    "ratings come from credits that do not count toward your average."
 )
 
 
@@ -145,6 +175,87 @@ def _filter_aggregate_to_headline(
     )
 
 
+def _series_comparison_message(
+    *,
+    qualifying: list[SeriesAggregate],
+    series_aggregates: list[SeriesAggregate],
+) -> str | None:
+    """Explain why no series can be compared, naming the real reason.
+
+    The explanation must never contradict the page it is rendered on: a series
+    that shows three rated issues cannot be described as missing rated issues
+    (issue #3946). The reason is therefore resolved in this order:
+
+    1. A series with enough rated issues is held back by incomplete creator
+       metadata, so the metadata is named.
+    2. A series with enough rated issues is complete but too few of its
+       ratings count toward the average, so the credit rule is named.
+    3. No series has enough rated issues at all, so the thin sample is named.
+
+    Args:
+        qualifying: Series that already clear the minimum rated-issue sample.
+        series_aggregates: Every series aggregate for the creator.
+
+    Returns:
+        The plain-language explanation, or ``None`` when a series qualifies.
+    """
+    if qualifying:
+        return None
+
+    sample_sized = [
+        aggregate
+        for aggregate in series_aggregates
+        if aggregate.rated_issue_count >= MIN_SERIES_SAMPLE
+    ]
+    if any(not aggregate.metadata_complete for aggregate in sample_sized):
+        return INCOMPLETE_METADATA_SERIES_MESSAGE
+    if sample_sized:
+        return NON_HEADLINE_SERIES_MESSAGE
+    return INSUFFICIENT_SERIES_MESSAGE
+
+
+def _split_issue_extremes(
+    issue_insights: list[CreatorIssueInsight],
+) -> tuple[list[CreatorIssueInsight], list[CreatorIssueInsight], bool]:
+    """Split the rated issues into disjoint highest and lowest lists.
+
+    The highest list holds the top rated issues and the lowest list the bottom
+    rated issues, but an issue never appears in both (issue #3946): repeating
+    the same issue as the creator's best and worst work told the reader
+    nothing. Issues already shown as highest are therefore skipped when the
+    lowest list is built.
+
+    When the rated set is too small to separate extremes (at most
+    :data:`INDIVIDUAL_ISSUE_LIMIT` rated issues), every rated issue is listed
+    once as the highest list and the lowest list stays empty, so the caller
+    can show a single list instead of repeating the same issues twice.
+
+    Args:
+        issue_insights: The creator's rated issues with their extremes.
+
+    Returns:
+        The highest list, the lowest list, and whether the rated set was too
+        small to separate extremes.
+    """
+    if not issue_insights:
+        return [], [], False
+
+    highest = sorted(
+        issue_insights,
+        key=lambda insight: (-insight.effective_rating, insight.thread_id, insight.issue_id),
+    )[:INDIVIDUAL_ISSUE_LIMIT]
+    highest_ids = {insight.issue_id for insight in highest}
+    lowest = [
+        insight
+        for insight in sorted(
+            issue_insights,
+            key=lambda insight: (insight.effective_rating, insight.thread_id, insight.issue_id),
+        )
+        if insight.issue_id not in highest_ids
+    ][:INDIVIDUAL_ISSUE_LIMIT]
+    return highest, lowest, not lowest
+
+
 def compute_creator_insights(
     inputs: CreatorSummaryInputs,
     *,
@@ -213,21 +324,18 @@ def compute_creator_insights(
         for issue_id in sorted(rated_issue_ids)
         if issue_id in inputs.owned_issue_series
     ]
-    highest_rated = sorted(
-        issue_insights,
-        key=lambda insight: (-insight.effective_rating, insight.thread_id, insight.issue_id),
-    )[:INDIVIDUAL_ISSUE_LIMIT]
-    lowest_rated = sorted(
-        issue_insights,
-        key=lambda insight: (insight.effective_rating, insight.thread_id, insight.issue_id),
-    )[:INDIVIDUAL_ISSUE_LIMIT]
+    highest_rated, lowest_rated, individual_issues_combined = _split_issue_extremes(issue_insights)
 
     return CreatorInsights(
         min_series_sample=MIN_SERIES_SAMPLE,
         series_sample_met=bool(qualifying),
-        series_message=None if qualifying else INSUFFICIENT_SERIES_MESSAGE,
+        series_message=_series_comparison_message(
+            qualifying=qualifying,
+            series_aggregates=series_aggregates,
+        ),
         excluded_incomplete_series_count=excluded_incomplete,
         individual_issue_limit=INDIVIDUAL_ISSUE_LIMIT,
+        individual_issues_combined=individual_issues_combined,
         strongest_series=build_series_insight(strongest) if strongest is not None else None,
         weakest_series=build_series_insight(weakest) if weakest is not None else None,
         most_rated_series=build_series_insight(most_rated) if most_rated is not None else None,
@@ -237,9 +345,11 @@ def compute_creator_insights(
 
 
 __all__ = [
+    "INCOMPLETE_METADATA_SERIES_MESSAGE",
     "INDIVIDUAL_ISSUE_LIMIT",
     "INSUFFICIENT_SERIES_MESSAGE",
     "MIN_SERIES_SAMPLE",
+    "NON_HEADLINE_SERIES_MESSAGE",
     "build_series_insight",
     "compute_creator_insights",
 ]

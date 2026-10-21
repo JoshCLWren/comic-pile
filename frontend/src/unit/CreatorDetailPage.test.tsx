@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorDetailPage from '../pages/CreatorDetailPage'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import type { CreatorDetailState } from '../hooks/useCreatorDetail'
+import type { CreatorIssueInsight } from '../services/api-creators'
 
 vi.mock('../hooks/useCreatorDetail', () => ({
   useCreatorDetail: vi.fn(),
@@ -378,6 +379,7 @@ describe('CreatorDetailPage highlights (#3092)', () => {
     series_message: null,
     excluded_incomplete_series_count: 0,
     individual_issue_limit: 3,
+    individual_issues_combined: false,
     strongest_series: {
       series_key: 'thread:9',
       thread_id: 9,
@@ -511,5 +513,132 @@ describe('CreatorDetailPage highlights (#3092)', () => {
     renderAt('creator:7')
 
     expect(screen.queryByRole('heading', { name: 'Highlights' })).not.toBeInTheDocument()
+  })
+})
+
+describe('CreatorDetailPage highlights reasons and issue lists (#3946)', () => {
+  const baseInsights = {
+    min_series_sample: 3,
+    series_sample_met: false,
+    series_message: null,
+    excluded_incomplete_series_count: 0,
+    individual_issue_limit: 3,
+    individual_issues_combined: false,
+    strongest_series: null,
+    weakest_series: null,
+    most_rated_series: null,
+    highest_rated_issues: [] as CreatorIssueInsight[],
+    lowest_rated_issues: [] as CreatorIssueInsight[],
+  }
+
+  const issueInsight = (
+    issueId: number,
+    issueNumber: string,
+    threadTitle: string,
+    rating: number,
+  ): CreatorIssueInsight => ({
+    issue_id: issueId,
+    issue_number: issueNumber,
+    thread_id: 9,
+    thread_title: threadTitle,
+    effective_rating: rating,
+    roles: ['writer'],
+    sort_key: String(issueId),
+  })
+
+  it('names incomplete metadata when a series with enough ratings is held back', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        insights: {
+          ...baseInsights,
+          series_message:
+            'Series with enough rated issues are not compared yet because creator metadata is still incomplete.',
+          excluded_incomplete_series_count: 1,
+        },
+      }),
+    )
+    renderAt('creator:7')
+
+    expect(
+      screen.getByText(
+        'Series with enough rated issues are not compared yet because creator metadata is still incomplete.',
+      ),
+    ).toBeInTheDocument()
+    // The thin-sample copy would contradict the three rated issues the page
+    // shows for that series.
+    expect(screen.queryByText(/Not enough rated issues/)).not.toBeInTheDocument()
+    expect(screen.getByRole('note')).toHaveTextContent(
+      '1 series with rated work is not compared because creator metadata is still incomplete',
+    )
+  })
+
+  it('names the thin sample only when no series has enough rated issues', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        insights: {
+          ...baseInsights,
+          series_message:
+            'Not enough rated issues in a single series yet. A series needs at least 3 rated issues before it is compared as strongest or weakest.',
+        },
+      }),
+    )
+    renderAt('creator:7')
+
+    expect(
+      screen.getByText(
+        'Not enough rated issues in a single series yet. A series needs at least 3 rated issues before it is compared as strongest or weakest.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/not compared yet because creator metadata is still incomplete/),
+    ).not.toBeInTheDocument()
+  })
+
+  it('never lists the same issue as both the highest and the lowest', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        insights: {
+          ...baseInsights,
+          highest_rated_issues: [issueInsight(91, '7', 'Best Run', 5)],
+          // A repeated issue would show the same comic as the best and the
+          // worst work of the creator.
+          lowest_rated_issues: [issueInsight(91, '7', 'Best Run', 5), issueInsight(92, '2', 'Weak Run', 1.5)],
+        },
+      }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getAllByRole('link', { name: /Best Run #7/ })).toHaveLength(1)
+    expect(screen.getAllByRole('link', { name: /Weak Run #2/ })).toHaveLength(1)
+    expect(screen.getByRole('heading', { name: 'Highest-rated issues' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Lowest-rated issues' })).toBeInTheDocument()
+  })
+
+  it('lists a small rated set once instead of repeating it', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        insights: {
+          ...baseInsights,
+          individual_issues_combined: true,
+          highest_rated_issues: [
+            issueInsight(91, '10', 'Promethea', 4),
+            issueInsight(92, '11', 'Promethea', 3.5),
+            issueInsight(93, '12', 'Promethea', 3),
+          ],
+          lowest_rated_issues: [],
+        },
+      }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getByRole('heading', { name: 'Rated issues' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Highest-rated issues' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Lowest-rated issues' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /Promethea #10/ })).toHaveLength(1)
+    expect(screen.getAllByRole('link', { name: /Promethea #11/ })).toHaveLength(1)
+    expect(screen.getAllByRole('link', { name: /Promethea #12/ })).toHaveLength(1)
+    expect(
+      screen.getByText(/Only 3 rated issues, so there is no separate highest and lowest/),
+    ).toBeInTheDocument()
   })
 })

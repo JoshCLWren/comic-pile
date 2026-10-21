@@ -4492,7 +4492,7 @@
         "type": "object"
       },
       "CreatorInsights": {
-        "description": "Evidence-backed strongest/weakest/most-read highlights (issue #3092).\n\nEvery highlight links back to its supporting series or issues so a reader\nnever has to trust an unexplained summary. Series conclusions require a\nminimum rated-issue sample and complete creator metadata; individual issue\nextremes are labeled separately from the aggregate series conclusions.",
+        "description": "Evidence-backed strongest/weakest/most-read highlights (issue #3092).\n\nEvery highlight links back to its supporting series or issues so a reader\nnever has to trust an unexplained summary. Series conclusions require a\nminimum rated-issue sample and complete creator metadata; individual issue\nextremes are labeled separately from the aggregate series conclusions.\n\nThe explanation for a missing series comparison names the real reason\n(issue #3946), and an individual issue never appears in both the highest\nand the lowest list.",
         "properties": {
           "excluded_incomplete_series_count": {
             "default": 0,
@@ -4502,7 +4502,7 @@
             "type": "integer"
           },
           "highest_rated_issues": {
-            "description": "Top individual rated issues, distinct from aggregate series conclusions.",
+            "description": "Top individual rated issues, distinct from aggregate series conclusions. Never overlaps with lowest_rated_issues.",
             "items": {
               "$ref": "#/components/schemas/CreatorIssueInsight"
             },
@@ -4515,8 +4515,14 @@
             "title": "Individual Issue Limit",
             "type": "integer"
           },
+          "individual_issues_combined": {
+            "default": false,
+            "description": "True when the rated set is too small to separate into distinct highest and lowest lists. The UI then shows every rated issue once in a single list instead of repeating the same issues as both the best and the worst work.",
+            "title": "Individual Issues Combined",
+            "type": "boolean"
+          },
           "lowest_rated_issues": {
-            "description": "Bottom individual rated issues, distinct from aggregate series conclusions.",
+            "description": "Bottom individual rated issues, distinct from aggregate series conclusions. Never overlaps with highest_rated_issues.",
             "items": {
               "$ref": "#/components/schemas/CreatorIssueInsight"
             },
@@ -4549,7 +4555,7 @@
                 "type": "null"
               }
             ],
-            "description": "Plain-language explanation when no series comparison is available.",
+            "description": "Plain-language explanation when no series comparison is available. It names the real reason: incomplete creator metadata, credits that do not count toward the average, or a genuinely thin rated-issue sample.",
             "title": "Series Message"
           },
           "series_sample_met": {
