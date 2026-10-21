@@ -2800,3 +2800,48 @@ def test_provenance_infrastructure_failure_blocks_unchanged_review_head(
     assert "trusted" in note
     assert "Do not re-review this unchanged head" in note
     assert "ghp_abcdefghijklmnopqrstuvwxyz" not in note
+
+
+@pytest.mark.parametrize("phase", ["attest_exact_head_author", "persist_cross_model_review_marker"])
+@pytest.mark.parametrize("fallback_error", [
+    OSError("GitHub API unreachable while writing the diagnostic comment"),
+    RuntimeError("gh: comment write failed after the provenance failure"),
+    ValueError("diagnostic comment payload was rejected"),
+])
+def test_provenance_failure_with_failed_fallback_comment_still_blocks(
+    monkeypatch: MonkeyPatch, phase: str, fallback_error: Exception,
+) -> None:
+    """A failed fallback diagnostic write must not prevent the blocked transition."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(
+        monkeypatch, module, [payload], comments=producer_contribution(),
+    )
+    monkeypatch.setattr(module, "attest_exact_head_author", lambda **_kwargs: None)
+    monkeypatch.setattr(module, "persist_cross_model_review_marker", lambda **_kwargs: None)
+
+    def fail(**_kwargs: object) -> None:
+        raise ModuleNotFoundError("No module named 'factory_roster'")
+
+    monkeypatch.setattr(module, phase, fail)
+
+    writes: list[int] = []
+
+    def failing_fallback_comment(**kwargs: object) -> None:
+        writes.append(1)
+        if len(writes) > 1:
+            raise fallback_error
+        posted.append(kwargs)
+
+    monkeypatch.setattr(module, "post_review_comment", failing_fallback_comment)
+
+    result = module.handle_review(
+        worker="17", pr_number=1390, verdict="approve",
+        reviewed_head=REVIEWED_HEAD, review_log="/tmp/model.log",
+    )
+    assert len(writes) == 2
+    assert len(posted) == 1
+    assert result["status"] == "provenance-infrastructure-blocked"
+    assert result["head"] == REVIEWED_HEAD
+    assert transitions[-1]["pr_stage"] == "factory:blocked"
+    assert all(item["pr_stage"] != "factory:ready" for item in transitions)
