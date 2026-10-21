@@ -296,3 +296,65 @@ async def test_restore_session_start_restores_manual_placement(
 
     await async_db.refresh(target)
     assert target.queue_position_is_manual is True
+
+
+@pytest.mark.asyncio
+async def test_below_threshold_rating_keeps_manual_middle_position(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A low rating must not demote a series the reader placed mid-queue."""
+    user = await get_or_create_user_async(async_db)
+    threads = await _add_active_threads(async_db, user, count=12)
+    target = threads[4]  # position 5 before the explicit move
+
+    move_response = await auth_client.put(
+        f"/api/v1/queue/threads/{target.id}/position/",
+        json={"new_position": 3},
+    )
+    assert move_response.status_code == 200
+
+    await async_db.refresh(target)
+    assert target.queue_position == 3
+    assert target.queue_position_is_manual is True
+
+    await _prepare_rating(async_db, user, target)
+
+    rate_response = await auth_client.post(
+        "/api/v1/rate/", json={"rating": 3.0, "issues_read": 1}
+    )
+    assert rate_response.status_code == 200
+
+    await async_db.refresh(target)
+    assert target.queue_position == 3
+    assert target.queue_position_is_manual is True
+
+
+@pytest.mark.asyncio
+async def test_same_position_move_keeps_manual_claim_after_low_rating(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Re-selecting the current position still records the manual claim."""
+    user = await get_or_create_user_async(async_db)
+    threads = await _add_active_threads(async_db, user, count=4)
+    target = threads[0]
+
+    move_response = await auth_client.put(
+        f"/api/v1/queue/threads/{target.id}/position/",
+        json={"new_position": 1},
+    )
+    assert move_response.status_code == 200
+
+    await async_db.refresh(target)
+    assert target.queue_position == 1
+    assert target.queue_position_is_manual is True
+
+    await _prepare_rating(async_db, user, target)
+
+    rate_response = await auth_client.post(
+        "/api/v1/rate/", json={"rating": 3.0, "issues_read": 1}
+    )
+    assert rate_response.status_code == 200
+
+    await async_db.refresh(target)
+    assert target.queue_position == 1
+    assert target.queue_position_is_manual is True
