@@ -12,8 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.services.queue_display import display_position, display_positions
-from app.repositories import reading_session_repository, thread_repository, rate_repository
+from app.repositories import reading_session_repository, thread_repository
 from app.schemas import ActiveThreadInfo, SessionResponse
+from app.services.session_rate_stats import load_session_rate_stats
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.schemas.session import (
     EventDetail,
@@ -235,8 +236,8 @@ async def get_session_with_thread_safe(
 
     last_rolled_result = event.result if event else None
 
-    # Aggregate all rate events to get issues_read and last_rating, accounting for undo
-    total_issues_read, last_rating = await rate_repository.fetch_session_rate_stats(db, session_id)
+    # Reading totals must ignore readings that undo canceled (#3195).
+    total_issues_read, last_rating = await load_session_rate_stats(db, session_id)
 
     # Prefer pending thread when present so UI and rate target stay consistent.
     if session.pending_thread_id is not None:
@@ -331,10 +332,10 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
 
     issues_remaining = await thread.get_issues_remaining(db)
     issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
-    
-    # Aggregate all rate events to get issues_read and last_rating, accounting for undo
-    total_issues_read, last_rating = await rate_repository.fetch_session_rate_stats(db, session_id)
-    
+
+    # Reading totals must ignore readings that undo canceled (#3195).
+    total_issues_read, last_rating = await load_session_rate_stats(db, session_id)
+
     tags = []
     if user_id:
         tags_map = await TagInheritanceService(db).get_threads_direct_tags(user_id, [thread.id])

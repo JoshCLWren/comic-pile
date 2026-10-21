@@ -1194,9 +1194,9 @@ async def test_simple_migration_creates_correct_issues(
 async def test_undo_rating_excluded_from_session_stats(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """Undo events properly exclude canceled ratings from session statistics."""
+    """Undone ratings leave both session cards' totals and issue identity honest."""
     from tests.conftest import get_or_create_user_async
-    from app.repositories import rate_repository
+    from app.services.session_rate_stats import load_session_rate_stats
 
     user = await get_or_create_user_async(async_db)
 
@@ -1219,7 +1219,7 @@ async def test_undo_rating_excluded_from_session_stats(
     await async_db.commit()
     await async_db.refresh(thread)
 
-    # Create issues
+    issues: dict[str, Issue] = {}
     for i in range(1, 6):
         issue = Issue(
             thread_id=thread.id,
@@ -1228,21 +1228,25 @@ async def test_undo_rating_excluded_from_session_stats(
             position=i,
         )
         async_db.add(issue)
+        issues[str(i)] = issue
+    await async_db.commit()
+    thread.next_unread_issue_id = issues["3"].id
     await async_db.commit()
 
-    # Roll the thread
-    event = Event(
-        type="roll",
-        die=10,
-        result=1,
-        selected_thread_id=thread.id,
-        selection_method="random",
-        session_id=session.id,
-        thread_id=thread.id,
+    # Roll issue #1.
+    async_db.add(
+        Event(
+            type="roll",
+            die=10,
+            result=1,
+            selected_thread_id=thread.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=thread.id,
+            issue_id=issues["1"].id,
+            issue_number="1",
+        )
     )
-    async_db.add(event)
-    await async_db.commit()
-
     # Rate issue #1 with 4.0 stars. Distinct issues_read values make the
     # ordered-undo contract observable: canceling the newer reading must leave
     # the older reading's count and rating behind.
@@ -1254,6 +1258,8 @@ async def test_undo_rating_excluded_from_session_stats(
         issues_read=2,
         die=10,
         die_after=8,
+        issue_id=issues["2"].id,
+        issue_number="2",
     )
     async_db.add(rate_event1)
     await async_db.commit()
@@ -1267,11 +1273,13 @@ async def test_undo_rating_excluded_from_session_stats(
         issues_read=1,
         die=8,
         die_after=6,
+        issue_id=issues["3"].id,
+        issue_number="3",
     )
     async_db.add(rate_event2)
     await async_db.commit()
 
-    # Undo the second rating
+    # Undo the second rating.
     undo_event = Event(
         type="undo",
         session_id=session.id,
@@ -1282,7 +1290,7 @@ async def test_undo_rating_excluded_from_session_stats(
     async_db.add(undo_event)
     await async_db.commit()
 
-    # Roll again after undo to establish an active thread
+    # Roll again after undo to establish an active thread.
     roll_after_undo = Event(
         type="roll",
         die=4,
@@ -1291,36 +1299,43 @@ async def test_undo_rating_excluded_from_session_stats(
         selection_method="random",
         session_id=session.id,
         thread_id=thread.id,
+        issue_id=issues["3"].id,
+        issue_number="3",
     )
     async_db.add(roll_after_undo)
     await async_db.commit()
 
-    # Test repository function directly. Undo must remove the newest reading
-    # (5.0 / 1 issue) and keep the older one (4.0 / 2 issues).
-    total_issues_read, last_rating = await rate_repository.fetch_session_rate_stats(async_db, session.id)
-    assert total_issues_read == 2, f"Expected 2 issues read (undo should cancel newest rating only), got {total_issues_read}"
-    assert last_rating == 4.0, f"Expected last rating 4.0 (undo should remove second rating), got {last_rating}"
+    # The service cancels the newest reading (5.0 / 1 issue) and keeps the
+    # older one (4.0 / 2 issues).
+    total_issues_read, last_rating = await load_session_rate_stats(async_db, session.id)
+    assert total_issues_read == 2
+    assert last_rating == 4.0
 
-    # Test session API response
+    # Session card shows the same undo-aware totals.
     response = await auth_client.get(f"/api/v1/sessions/{session.id}")
     assert response.status_code == 200
+    active_thread = response.json()["active_thread"]
+    assert active_thread is not None
+    assert active_thread["issues_read"] == 2
+    assert active_thread["last_rating"] == 4.0
 
-    data = response.json()
-    assert data["active_thread"] is not None
-    active_thread = data["active_thread"]
-    assert active_thread["issues_read"] == 2, f"Expected 2 issues read, got {active_thread['issues_read']}"
-    assert active_thread["last_rating"] == 4.0, f"Expected last rating 4.0, got {active_thread['last_rating']}"
-
-    # Test history endpoint
+    # History card shows the same totals and names an issue the session's own
+    # events recorded (#3708): a canceled reading must not reappear and the
+    # card must not invent an issue outside the timeline.
     history_response = await auth_client.get("/api/v1/sessions/")
     assert history_response.status_code == 200
+    session_entry = next(
+        s for s in history_response.json()["sessions"] if s["id"] == session.id
+    )
+    history_thread = session_entry["active_thread"]
+    assert history_thread is not None
+    assert history_thread["issues_read"] == 2
+    assert history_thread["last_rating"] == 4.0
 
-    history_data = history_response.json()
-    assert "sessions" in history_data
-    sessions = history_data["sessions"]
-    session_entry = next(s for s in sessions if s["id"] == session.id)
-    assert session_entry["active_thread"] is not None
-    active_thread_history = session_entry["active_thread"]
-    assert active_thread_history["issues_read"] == 2, f"Expected 2 issues read in history, got {active_thread_history['issues_read']}"
-    assert active_thread_history["last_rating"] == 4.0, f"Expected last rating 4.0 in history, got {active_thread_history['last_rating']}"
-
+    timeline_issue_numbers: set[str] = set()
+    detail_response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert detail_response.status_code == 200
+    for event in detail_response.json()["events"]:
+        if event.get("issue_number") is not None:
+            timeline_issue_numbers.add(event["issue_number"])
+    assert history_thread["issue_number"] in timeline_issue_numbers

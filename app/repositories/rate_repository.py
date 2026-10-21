@@ -260,87 +260,28 @@ async def fetch_owned_roll_issue(
     return (row[0], row[1]) if row is not None else None
 
 
-async def fetch_session_rate_stats(
-    db: AsyncSession, session_id: int
-) -> tuple[int, float | None]:
-    """Fetch total issues read and last rating for a session, accounting for undo events.
+async def fetch_rate_and_undo_events(
+    db: AsyncSession, session_ids: Sequence[int]
+) -> list[Event]:
+    """Fetch the rate and undo events for the given reading sessions.
+
+    Ordered by session, timestamp, and ID so callers can replay the stream and
+    cancel an undone reading against the reading it actually reversed.
 
     Args:
         db: Database session.
-        session_id: Session ID to fetch stats for.
+        session_ids: Reading sessions whose rate history is needed.
 
     Returns:
-        Tuple of (total_issues_read, last_rating).
-    """
-    result = await fetch_session_rate_stats_bulk(db, [session_id])
-    return result.get(session_id, (0, None))
-
-
-async def fetch_session_rate_stats_bulk(
-    db: AsyncSession, session_ids: list[int]
-) -> dict[int, tuple[int, float | None]]:
-    """Fetch total issues read and last rating for multiple sessions, accounting for undo events.
-
-    Single-query bulk version to avoid N+1 queries in history endpoints.
-
-    Args:
-        db: Database session.
-        session_ids: List of session IDs to fetch stats for.
-
-    Returns:
-        Mapping of session_id to (total_issues_read, last_rating).
+        The ordered rate and undo events, or an empty list when no session IDs
+        were supplied.
     """
     if not session_ids:
-        return {}
-
-    # Get all rate and undo events for all sessions in one query
+        return []
     result = await db.execute(
         select(Event)
         .where(Event.session_id.in_(session_ids))
         .where(Event.type.in_(("rate", "undo")))
         .order_by(Event.session_id, Event.timestamp, Event.id)
     )
-    events = result.scalars().all()
-
-    # Group events by session_id
-    events_by_session: dict[int, list[Event]] = {}
-    for event in events:
-        if event.session_id not in events_by_session:
-            events_by_session[event.session_id] = []
-        events_by_session[event.session_id].append(event)
-
-    # Process each session's events
-    result_map: dict[int, tuple[int, float | None]] = {}
-    for session_id in session_ids:
-        session_events = events_by_session.get(session_id, [])
-        total_issues_read = 0
-        last_rating = None
-        # Ordered stack of active rate events, oldest first. The most recent
-        # rating is the last entry, so an undo always cancels the newest
-        # reading and the remaining last rating is readable in O(1). A set
-        # would let ``pop()`` remove an arbitrary (possibly earlier) rating,
-        # leaving the wrong ``last_rating`` and ``issues_read`` behind.
-        active_rate_events: list[Event] = []
-
-        for event in session_events:
-            if event.type == "rate":
-                active_rate_events.append(event)
-                if event.issues_read is not None:
-                    total_issues_read += event.issues_read
-                if event.rating is not None:
-                    last_rating = event.rating
-            elif event.type == "undo":
-                if active_rate_events:
-                    undone_event = active_rate_events.pop()
-                    if undone_event.issues_read is not None:
-                        total_issues_read = max(0, total_issues_read - undone_event.issues_read)
-                    # Recompute the remaining last rating from the new stack top.
-                    if active_rate_events:
-                        last_event = active_rate_events[-1]
-                        last_rating = last_event.rating if last_event.rating is not None else None
-                    else:
-                        last_rating = None
-
-        result_map[session_id] = (total_issues_read, last_rating)
-
-    return result_map
+    return list(result.scalars().all())
