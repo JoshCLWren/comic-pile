@@ -38,6 +38,12 @@ The policy is expressed in one place per surface. None of them duplicates anothe
   without executing JavaScript.
 - `app/main.py` — serves the built artifacts and emits `X-Robots-Tag: noindex, nofollow`
   for every SPA path except `/`.
+- `vercel.json` — the production routing layer. It maps every prerendered route path to its
+  own generated `<route>.html` document before the catch-all SPA fallback, and it adds
+  `X-Robots-Tag: noindex, nofollow` to the API routes, to every prerendered page other than
+  `/`, and to the catch-all fallback. In production these paths are served by Vercel's
+  static output and never reach `app/main.py`, so this file — not the backend — is what
+  makes the noindex policy and the route-specific head real for the deployed origin.
 
 ## Automated regression coverage
 
@@ -50,6 +56,13 @@ The policy is enforced across artifacts, so drift fails CI rather than shipping:
 - `frontend/src/unit/sitemap.test.ts` and `frontend/scripts/generate-sitemap.test.mjs` — the
   sitemap lists exactly the indexable routes and nothing else.
 - `frontend/src/unit/seoHtmlGeneration.test.ts` — the prerendered metadata generator.
+- `frontend/src/unit/vercelRoutePolicy.test.ts` — cross-artifact guard for the deployment
+  routing layer: every prerendered route has a `vercel.json` mapping, every mapping serves
+  exactly the document the build generates, and no mapping targets a file the build never
+  writes (a dead route 404s instead of falling back to the SPA shell).
+- `tests/test_vercel_deployment.py` — the checked-in `vercel.json` routing boundary: the API
+  routes stay ahead of the SPA fallback, the landing page stays indexable, and every other
+  served page and the catch-all fallback carry `X-Robots-Tag: noindex, nofollow`.
 - `tests/test_seo_crawlability.py` — the served HTTP surface: `X-Robots-Tag` policy,
   `robots.txt` content and cache headers, the sitemap, and the no-JavaScript landing HTML.
 - `frontend/src/test/issue-3068-seo-route-cleanup.spec.ts` — browser-level crawlability and
@@ -61,7 +74,10 @@ The regression suites above cover the build output and the FastAPI surface. They
 cannot cover the deployed origin, because the production routing layer (Vercel's
 catch-all) can serve a different document than the backend would. Issue #3905
 is that class of defect: the per-route HTML was built correctly, but the
-deployment never served it.
+deployment never served it. The routing layer now serves the prerendered
+documents directly, `vercel.json` is guarded against the canonical table by
+`frontend/src/unit/vercelRoutePolicy.test.ts`, and
+`frontend/scripts/seo-launch-audit.mjs` checks the deployed origin itself.
 
 `frontend/scripts/seo-launch-audit.mjs` audits a live origin against the same
 canonical table and reports what the deployment actually serves:

@@ -65,7 +65,8 @@
         "X-ComicPile-Frontend": "vercel-static",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
-        "X-XSS-Protection": "1; mode=block"
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
       }
     },
     {
@@ -117,6 +118,22 @@
       }
     },
     {
+      "src": "/reset-password",
+      "dest": "/reset-password.html",
+      "headers": {
+        "Cache-Control": "public, max-age=0, must-revalidate",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; frame-src 'none';",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+        "X-ComicPile-Frontend": "vercel-static",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
+      }
+    },
+    {
       "src": "/roll",
       "dest": "/roll.html",
       "headers": {
@@ -133,8 +150,40 @@
       }
     },
     {
-      "src": "/settings",
-      "dest": "/settings.html",
+      "src": "/rate",
+      "dest": "/rate.html",
+      "headers": {
+        "Cache-Control": "public, max-age=0, must-revalidate",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; frame-src 'none';",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+        "X-ComicPile-Frontend": "vercel-static",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
+      }
+    },
+    {
+      "src": "/analytics",
+      "dest": "/analytics.html",
+      "headers": {
+        "Cache-Control": "public, max-age=0, must-revalidate",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; frame-src 'none';",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+        "X-ComicPile-Frontend": "vercel-static",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
+      }
+    },
+    {
+      "src": "/creators/compare",
+      "dest": "/creators/compare.html",
       "headers": {
         "Cache-Control": "public, max-age=0, must-revalidate",
         "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; frame-src 'none';",
@@ -160,7 +209,8 @@
         "X-ComicPile-Frontend": "vercel-static",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
-        "X-XSS-Protection": "1; mode=block"
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
       }
     },
     {
@@ -191,7 +241,8 @@
         "X-ComicPile-Frontend": "vercel-static",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
-        "X-XSS-Protection": "1; mode=block"
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
       }
     },
     {
@@ -206,7 +257,8 @@
         "X-ComicPile-Frontend": "vercel-static",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
-        "X-XSS-Protection": "1; mode=block"
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
       }
     },
     {
@@ -221,7 +273,8 @@
         "X-ComicPile-Frontend": "vercel-static",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
-        "X-XSS-Protection": "1; mode=block"
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
       }
     },
     {
@@ -236,7 +289,8 @@
         "X-ComicPile-Frontend": "vercel-static",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
-        "X-XSS-Protection": "1; mode=block"
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
       }
     },
     {
@@ -251,7 +305,8 @@
         "X-ComicPile-Frontend": "vercel-static",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
-        "X-XSS-Protection": "1; mode=block"
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
       }
     },
     {
@@ -266,7 +321,40 @@
         "X-ComicPile-Frontend": "vercel-static",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
-        "X-XSS-Protection": "1; mode=block"
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
+      }
+    },
+    {
+      "src": "/continuity-plans/new",
+      "dest": "/continuity-plans/new.html",
+      "headers": {
+        "Cache-Control": "public, max-age=0, must-revalidate",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; frame-src 'none';",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+        "X-ComicPile-Frontend": "vercel-static",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
+      }
+    },
+    {
+      "src": "/continuity-plans/events",
+      "dest": "/continuity-plans/events.html",
+      "headers": {
+        "Cache-Control": "public, max-age=0, must-revalidate",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; frame-src 'none';",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+        "X-ComicPile-Frontend": "vercel-static",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
       }
     },
     {
@@ -281,7 +369,8 @@
         "X-ComicPile-Frontend": "vercel-static",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
-        "X-XSS-Protection": "1; mode=block"
+        "X-XSS-Protection": "1; mode=block",
+        "X-Robots-Tag": "noindex, nofollow"
       }
     },
     {
