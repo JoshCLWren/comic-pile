@@ -29,7 +29,6 @@ jobs:
     env:
       # Untrusted model process gets no Neon credential.
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-      RELEASE_WRITER_STAGE_FILE: ${{ runner.temp }}/release-writer/candidate.json
     steps:
       - name: Checkout trusted main
         uses: actions/checkout@v7
@@ -44,7 +43,8 @@ jobs:
           set -Eeuo pipefail
           [[ "$INPUT_PR" =~ ^[1-9][0-9]*$ ]] || { echo 'Exact PR number required' >&2; exit 1; }
           [[ -n "$NVIDIA_API_KEY" ]] || { echo 'NVIDIA_API_KEY is required' >&2; exit 1; }
-          mkdir -p "$(dirname "$RELEASE_WRITER_STAGE_FILE")"
+          mkdir -p "$RUNNER_TEMP/release-writer"
+          echo "RELEASE_WRITER_STAGE_FILE=$RUNNER_TEMP/release-writer/candidate.json" >> "$GITHUB_ENV"
 
       - name: Install OpenCode CLI
         run: |
