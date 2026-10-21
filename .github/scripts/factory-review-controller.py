@@ -1380,7 +1380,7 @@ def return_to_review(
             excerpt=excerpt,
             note=note,
         )
-    except (OSError, RuntimeError, ValueError):
+    except Exception:
         # Best-effort diagnostic: a failed comment write must not prevent the
         # blocked transition below.
         pass
@@ -1707,10 +1707,10 @@ def handle_review(
         # enough redacted evidence to repair the trusted bundle/write path.
         exc_name = type(exc).__name__
         redacted = redact_review_text(str(exc))
-        budget = 500 - len(exc_name) - 2
-        if budget < 0:
-            budget = 0
-        detail = exc_name + ": " + (redacted[-budget:] if budget else "")
+        # Keep exception name and operation outside the limit; retain the
+        # tail of the message which has the specific failure details.
+        detail_suffix = redacted[-480:] if len(redacted) > 480 else redacted
+        detail = f"{exc_name} in {operation}: {detail_suffix}"
         return return_to_review(
             pr_number=pr_number,
             branch=branch,
