@@ -3,6 +3,7 @@
 
 from app.models.cbl_adoption_receipt import CblAdoptionReceipt
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
+from app.models.cbl_source_selection import CblSourceSelection
 from app.models.catalog import CatalogIssue, CatalogSeries
 from app.models.catalog_commit_receipt import CatalogCommitReceipt
 from app.models.collection_exclusion import CollectionExclusion
@@ -48,6 +49,7 @@ __all__ = [
     "CBLSource",
     "CBLSourceEntry",
     "CBLSourceList",
+    "CblSourceSelection",
     "CatalogCommitReceipt",
     "CatalogIssue",
     "CatalogSeries",
