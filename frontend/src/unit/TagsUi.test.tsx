@@ -9,7 +9,7 @@ import { TagSection } from '../components/Tags/TagSection'
 import { tagErrorMessage } from '../components/Tags/tagErrors'
 import { useAdminFlag } from '../components/Tags/useAdminFlag'
 import { tagsApi } from '../services/api-tags'
-import type { EffectiveTagsResponse, Tag } from '../services/api-tags'
+import type { EffectiveTagsResponse, Tag, TagUsage } from '../services/api-tags'
 import { renderHook } from '@testing-library/react'
 
 vi.mock('../services/api-tags', async (importOriginal) => {
@@ -54,6 +54,14 @@ function makeTag(id: number, scope: 'global' | 'private' = 'private'): Tag {
     updated_at: '',
   }
 }
+
+/**
+ * Tag usage payload without the total the API contract requires.
+ *
+ * Issue #3765 is a delete confirmation that rendered an empty count, so the
+ * regression coverage drops `total_assignments` on purpose.
+ */
+type UsageWithoutTotal = Omit<TagUsage, 'total_assignments'>
 
 function assignment(tagId: number) {
   return {
@@ -663,15 +671,17 @@ describe('TagEditor (issue #3032)', () => {
     )
   })
 
-  it('shows 0 places when total_assignments is missing (regression for ?? 0 fallback)', async () => {
+  it('shows 0 places when the usage payload omits every count', async () => {
     const user = userEvent.setup()
     mockedTagsApi.list.mockResolvedValue({ tags: [makeTag(1)] })
-    mockedTagsApi.usage.mockResolvedValue({
+    const usagePayload: UsageWithoutTotal = {
       tag_id: 1,
-      // total_assignments intentionally omitted
       assignments_by_target_type: {},
       references_removed_by_consumers: {},
-    } as any)
+    }
+    // SAFETY: the API contract requires `total_assignments`, but issue #3765 is
+    // a payload that omits it, so the mock drops the field on purpose.
+    mockedTagsApi.usage.mockResolvedValue(usagePayload as TagUsage)
     mockedTagsApi.delete.mockResolvedValue({
       tag_id: 1,
       assignments_removed: 0,
@@ -683,10 +693,40 @@ describe('TagEditor (issue #3032)', () => {
     const manage = screen.getByRole('region', { name: 'Manage tag Private 1' })
     await user.click(within(manage).getByRole('button', { name: 'Delete…' }))
     const confirm = await screen.findByRole('region', { name: 'Manage tag Private 1' })
-    expect(within(confirm).getByText(/assigned to/)).toBeInTheDocument()
-    expect(within(confirm).getByText(/0 places/)).toBeInTheDocument()
+    expect(within(confirm).getByText(/assigned to/)).toHaveTextContent(
+      'It is assigned to 0 places',
+    )
     await user.click(within(confirm).getByRole('button', { name: 'Delete tag' }))
     expect(await screen.findByRole('status')).toHaveTextContent('Deleted “Private 1” (0 assignments).')
+  })
+
+  it('shows the derived count when the usage payload omits total_assignments', async () => {
+    const user = userEvent.setup()
+    mockedTagsApi.list.mockResolvedValue({ tags: [makeTag(1)] })
+    const usagePayload: UsageWithoutTotal = {
+      tag_id: 1,
+      assignments_by_target_type: { Issue: 1 },
+      references_removed_by_consumers: {},
+    }
+    // SAFETY: the API contract requires `total_assignments`, but issue #3765 is
+    // a payload that omits it, so the mock drops the field on purpose.
+    mockedTagsApi.usage.mockResolvedValue(usagePayload as TagUsage)
+    mockedTagsApi.delete.mockResolvedValue({
+      tag_id: 1,
+      assignments_removed: 1,
+      references_removed_by_consumers: {},
+    })
+
+    renderEditor()
+    await user.click(await screen.findByRole('button', { name: 'Manage tag Private 1' }))
+    const manage = screen.getByRole('region', { name: 'Manage tag Private 1' })
+    await user.click(within(manage).getByRole('button', { name: 'Delete…' }))
+    const confirm = await screen.findByRole('region', { name: 'Manage tag Private 1' })
+    expect(within(confirm).getByText(/assigned to/)).toHaveTextContent(
+      'It is assigned to 1 place',
+    )
+    await user.click(within(confirm).getByRole('button', { name: 'Delete tag' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Deleted “Private 1” (1 assignments).')
   })
 
   it('omits the consumer clause when nothing references the tag', async () => {
