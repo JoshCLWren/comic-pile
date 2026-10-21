@@ -42,7 +42,7 @@ const EVENT_LABELS: EventLabelMap = {
   move: 'Moved',
   shuffle: 'Shuffled',
   dismiss: 'Dismissed',
-  session_mode: 'Session Mode',
+  session_mode: 'Session mode',
 }
 
 function eventLabel(type: string): string {

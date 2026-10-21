@@ -709,7 +709,9 @@ class RollService:
             selection_method = selection_method_override
         elif resolved_mode is SelectionMode.FORCED_LEGACY:
             selection_method = FORCED_LEGACY_SELECTION_METHOD
-        elif resolved_mode is SelectionMode.LEGACY_UNIFORM or resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
+        elif resolved_mode is SelectionMode.LEGACY_UNIFORM and weights_applied:
+            selection_method = "bandwidth" if selection_bandwidth in ("light", "deep") else "momentum"
+        elif resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
             selection_method = "random"
         elif resolved_mode is not SelectionMode.CONTEXTUAL_WEIGHTED and weights_applied:
             selection_method = "bandwidth" if selection_bandwidth in ("light", "deep") else "momentum"
