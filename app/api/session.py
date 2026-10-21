@@ -38,6 +38,7 @@ from app.services.session_response import (
     get_session_with_thread_safe,
     load_queue_position_map,
 )
+from app.repositories import rate_repository
 from app.services.summary_service import build_narrative_summary
 from app.services.reading_session_service import get_reading_session_service, ReadingSessionService
 from app.services.session_history_projection import project_session_history_events
@@ -276,44 +277,20 @@ async def list_sessions(
     )
     history_events = history_events_result.scalars().all()
 
+    # Use repository function to get rate stats accounting for undo events
     rate_agg: dict[int, _RateAggregate] = {}
-    undone_rate_ids: set[int] = set()
+    for sid in session_ids:
+        total_issues_read, last_rating = await rate_repository.fetch_session_rate_stats(db, sid)
+        rate_agg[sid] = {"issues_read": total_issues_read, "last_rating": last_rating}
+    
     # Historical issue captured at rating time — immutable per session.
     rate_issue_by_session: dict[int, tuple[int | None, str | None]] = {}
-    open_rate_ids_by_session: dict[int, list[int]] = {}
     for ev in history_events:
         event_session_id = ev.session_id
         if event_session_id is None:
             continue
-        if ev.type == "rate":
-            if event_session_id not in open_rate_ids_by_session:
-                open_rate_ids_by_session[event_session_id] = []
-            open_rate_ids_by_session[event_session_id].append(ev.id)
-            if event_session_id not in rate_agg:
-                rate_agg[event_session_id] = {"issues_read": 0, "last_rating": None}
-            if ev.issues_read is not None:
-                rate_agg[event_session_id]["issues_read"] += ev.issues_read
-            if ev.rating is not None:
-                rate_agg[event_session_id]["last_rating"] = ev.rating
-            if ev.issue_id is not None or ev.issue_number is not None:
-                rate_issue_by_session[event_session_id] = (ev.issue_id, ev.issue_number)
-        elif ev.type == "undo" and event_session_id in open_rate_ids_by_session and open_rate_ids_by_session[event_session_id]:
-            undone_id = open_rate_ids_by_session[event_session_id].pop()
-            undone_rate_ids.add(undone_id)
-    # Subtract undone rates from aggregates
-    for ev in history_events:
-        if ev.type == "rate" and ev.id in undone_rate_ids:
-            sid = ev.session_id
-            if sid in rate_agg and ev.issues_read is not None:
-                rate_agg[sid]["issues_read"] = max(0, rate_agg[sid]["issues_read"] - ev.issues_read)
-            if sid in rate_agg and ev.rating is not None:
-                # Recompute last_rating from remaining open rates
-                remaining = [
-                    e for e in history_events
-                    if e.type == "rate" and e.session_id == sid and e.id not in undone_rate_ids
-                ]
-                last_remaining = remaining[-1] if remaining else None
-                rate_agg[sid]["last_rating"] = last_remaining.rating if last_remaining else None
+        if ev.type == "rate" and (ev.issue_id is not None or ev.issue_number is not None):
+            rate_issue_by_session[event_session_id] = (ev.issue_id, ev.issue_number)
 
     projection = project_session_history_events(session_ids, history_events)
 

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.services.queue_display import display_position, display_positions
-from app.repositories import reading_session_repository, thread_repository
+from app.repositories import reading_session_repository, thread_repository, rate_repository
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.schemas.session import (
@@ -235,20 +235,8 @@ async def get_session_with_thread_safe(
 
     last_rolled_result = event.result if event else None
 
-    # Aggregate all rate events to get issues_read and last_rating
-    rate_events_result = await db.execute(
-        select(Event)
-        .where(Event.session_id == session_id)
-        .where(Event.type == "rate")
-        .order_by(Event.timestamp, Event.id)
-    )
-    rate_events = rate_events_result.scalars().all()
-    
-    # Compute total issues read from all rate events
-    total_issues_read = sum(ev.issues_read or 0 for ev in rate_events)
-    
-    # Get the last rating from the most recent rate event
-    last_rating = rate_events[-1].rating if rate_events and rate_events[-1].rating else None
+    # Aggregate all rate events to get issues_read and last_rating, accounting for undo
+    total_issues_read, last_rating = await rate_repository.fetch_session_rate_stats(db, session_id)
 
     # Prefer pending thread when present so UI and rate target stay consistent.
     if session.pending_thread_id is not None:
@@ -344,20 +332,8 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
     issues_remaining = await thread.get_issues_remaining(db)
     issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
     
-    # Aggregate all rate events to get issues_read and last_rating
-    rate_events_result = await db.execute(
-        select(Event)
-        .where(Event.session_id == session_id)
-        .where(Event.type == "rate")
-        .order_by(Event.timestamp, Event.id)
-    )
-    rate_events = rate_events_result.scalars().all()
-    
-    # Compute total issues read from all rate events
-    total_issues_read = sum(ev.issues_read or 0 for ev in rate_events)
-    
-    # Get the last rating from the most recent rate event
-    last_rating = rate_events[-1].rating if rate_events and rate_events[-1].rating else None
+    # Aggregate all rate events to get issues_read and last_rating, accounting for undo
+    total_issues_read, last_rating = await rate_repository.fetch_session_rate_stats(db, session_id)
     
     tags = []
     if user_id:

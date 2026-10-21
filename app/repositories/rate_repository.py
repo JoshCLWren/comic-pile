@@ -258,3 +258,53 @@ async def fetch_owned_roll_issue(
     )
     row = result.one_or_none()
     return (row[0], row[1]) if row is not None else None
+
+
+async def fetch_session_rate_stats(
+    db: AsyncSession, session_id: int
+) -> tuple[int, float | None]:
+    """Fetch total issues read and last rating for a session, accounting for undo events.
+
+    Args:
+        db: Database session.
+        session_id: Session ID to fetch stats for.
+
+    Returns:
+        Tuple of (total_issues_read, last_rating).
+    """
+    # Get all rate and undo events in order
+    result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .where(Event.type.in_(("rate", "undo")))
+        .order_by(Event.timestamp, Event.id)
+    )
+    events = result.scalars().all()
+
+    total_issues_read = 0
+    last_rating = None
+    active_rate_ids = set()
+
+    # Process events to account for undo operations
+    for event in events:
+        if event.type == "rate":
+            # Add this rate event to active rates
+            active_rate_ids.add(event.id)
+            if event.issues_read is not None:
+                total_issues_read += event.issues_read
+            if event.rating is not None:
+                last_rating = event.rating
+        elif event.type == "undo":
+            # Remove the most recent rate event from active rates
+            if active_rate_ids:
+                undone_id = active_rate_ids.pop()
+                # Find the undone rate event and subtract its values
+                undone_event = next((e for e in events if e.id == undone_id and e.type == "rate"), None)
+                if undone_event and undone_event.issues_read is not None:
+                    total_issues_read = max(0, total_issues_read - undone_event.issues_read)
+                # Recompute last_rating from remaining active rates
+                remaining_rates = [e for e in events if e.id in active_rate_ids and e.type == "rate"]
+                if remaining_rates:
+                    last_rating = remaining_rates[-1].rating
+
+    return total_issues_read, last_rating

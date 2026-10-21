@@ -1189,3 +1189,122 @@ async def test_simple_migration_creates_correct_issues(
     assert unread_issues[0].issue_number == "1"
     assert unread_issues[-1].issue_number == "5"
 
+
+@pytest.mark.asyncio
+async def test_undo_rating_excluded_from_session_stats(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Undo events properly exclude canceled ratings from session statistics."""
+    from tests.conftest import get_or_create_user_async
+    from app.repositories import rate_repository
+
+    user = await get_or_create_user_async(async_db)
+
+    session = ReadingSession(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=5,
+        reading_progress="in_progress",
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    # Create issues
+    for i in range(1, 6):
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number=str(i),
+            status="read" if i < 3 else "unread",
+            position=i,
+        )
+        async_db.add(issue)
+    await async_db.commit()
+
+    # Roll the thread
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    # Rate issue #1 with 4.0 stars
+    rate_event1 = Event(
+        type="rate",
+        session_id=session.id,
+        thread_id=thread.id,
+        rating=4.0,
+        issues_read=1,
+        die=10,
+        die_after=8,
+    )
+    async_db.add(rate_event1)
+    await async_db.commit()
+
+    # Rate issue #2 with 5.0 stars
+    rate_event2 = Event(
+        type="rate",
+        session_id=session.id,
+        thread_id=thread.id,
+        rating=5.0,
+        issues_read=1,
+        die=8,
+        die_after=6,
+    )
+    async_db.add(rate_event2)
+    await async_db.commit()
+
+    # Undo the second rating
+    undo_event = Event(
+        type="undo",
+        session_id=session.id,
+        thread_id=thread.id,
+        die=6,
+        die_after=4,
+    )
+    async_db.add(undo_event)
+    await async_db.commit()
+
+    # Test repository function directly
+    total_issues_read, last_rating = await rate_repository.fetch_session_rate_stats(async_db, session.id)
+    assert total_issues_read == 1, f"Expected 1 issue read (undo should cancel second rating), got {total_issues_read}"
+    assert last_rating == 4.0, f"Expected last rating 4.0 (undo should remove second rating), got {last_rating}"
+
+    # Test session API response
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["active_thread"] is not None
+    active_thread = data["active_thread"]
+    assert active_thread["issues_read"] == 1, f"Expected 1 issue read, got {active_thread['issues_read']}"
+    assert active_thread["last_rating"] == 4.0, f"Expected last rating 4.0, got {active_thread['last_rating']}"
+
+    # Test history endpoint
+    history_response = await auth_client.get("/api/v1/sessions/")
+    assert history_response.status_code == 200
+
+    history_data = history_response.json()
+    assert "sessions" in history_data
+    sessions = history_data["sessions"]
+    session_entry = next(s for s in sessions if s["id"] == session.id)
+    assert session_entry["active_thread"] is not None
+    active_thread_history = session_entry["active_thread"]
+    assert active_thread_history["issues_read"] == 1, f"Expected 1 issue read in history, got {active_thread_history['issues_read']}"
+    assert active_thread_history["last_rating"] == 4.0, f"Expected last rating 4.0 in history, got {active_thread_history['last_rating']}"
+
