@@ -10,8 +10,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from contextlib import AbstractContextManager
 from datetime import datetime
 from pathlib import Path
+from typing import Protocol, Self
 
 from psycopg import connect
 from psycopg.types.json import Json
@@ -19,11 +21,39 @@ from psycopg.types.json import Json
 from scripts import release_reconcile, release_writer
 
 
+class _ReleaseCursor(Protocol):
+    """Minimal row-oriented cursor contract for direct publication."""
+
+    def execute(self, statement: str, parameters: tuple[object, ...]) -> Self:
+        """Execute one parameterized statement."""
+        ...
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        """Return rows from a source identity lookup."""
+        ...
+
+    def fetchone(self) -> tuple[object, ...] | None:
+        """Return an inserted release ID, if any."""
+        ...
+
+
+class _ReleaseConnection(Protocol):
+    """Transactional connection contract shared by psycopg and test fakes."""
+
+    def transaction(self) -> AbstractContextManager[object]:
+        """Open an atomic transaction."""
+        ...
+
+    def cursor(self) -> AbstractContextManager[_ReleaseCursor]:
+        """Open a cursor."""
+        ...
+
+
 class ReleaseIdentityConflictError(ValueError):
     """An existing ledger row belongs to a different PR or merge SHA."""
 
 
-def _matches_source(rows: list[tuple], pr_number: int, merge_sha: str) -> bool:
+def _matches_source(rows: list[tuple[object, ...]], pr_number: int, merge_sha: str) -> bool:
     """Require a unique, exact, two-key match; never overwrite a different source."""
     if len(rows) > 1:
         raise ReleaseIdentityConflictError("PR and merge SHA identify different releases")
@@ -35,7 +65,9 @@ def _matches_source(rows: list[tuple], pr_number: int, merge_sha: str) -> bool:
     return True
 
 
-def _source_rows(cursor, payload: dict[str, object]) -> list[tuple]:
+def _source_rows(
+    cursor: _ReleaseCursor, payload: dict[str, object]
+) -> list[tuple[object, ...]]:
     return cursor.execute(
         """
         SELECT id, source_pr_number, source_merge_sha
@@ -52,7 +84,7 @@ def _source_rows(cursor, payload: dict[str, object]) -> list[tuple]:
     ).fetchall()
 
 
-def publish_payload(connection, payload: dict[str, object]) -> str:
+def publish_payload(connection: _ReleaseConnection, payload: dict[str, object]) -> str:
     """Insert at most one release, treating matching retries as no-ops.
 
     The two source-identity unique constraints enforce idempotence even across
