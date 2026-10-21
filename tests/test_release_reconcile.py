@@ -290,4 +290,6 @@ def test_factory_workflow_completion_dispatches_release_reconciliation():
     assert "Factory Ready Merge Drain" in workflow
     assert "Fixed Model Factory Dispatcher" in workflow
     assert "gh workflow run release-writer.yml" in workflow
-    assert "backfill_since" in workflow
+    assert "backfill_since" not in workflow
+    assert "if: ${{ false }}" in workflow
+    assert ' -f "pr_number=$INPUT_PR"' in workflow
