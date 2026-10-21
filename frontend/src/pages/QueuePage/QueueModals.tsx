@@ -311,7 +311,14 @@ export function QueueModals({
     event.preventDefault()
     // Flush deferred issue mutations first so the dialog's Save commits
     // everything atomically from the user's perspective.
-    await editIssueListRef.current?.flush()
+    try {
+      await editIssueListRef.current?.flush()
+    } catch (error) {
+      // A failed issue mutation keeps the dialog open so the reader can read
+      // the inline error and retry. The thread edit is not applied yet.
+      console.error('Failed to flush issue mutations:', error)
+      return
+    }
     await onEditSubmit(event)
   }
 

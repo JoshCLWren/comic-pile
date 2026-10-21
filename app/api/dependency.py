@@ -293,6 +293,7 @@ def mount_subrouters() -> None:
 
     from app.api import collection_exclusions
     from app.api import cbl_catalog
+    from app.api import cbl_comicvine_lookup
     from app.api import cbl_sources
     from app.api import continuity_plan
     from app.api import continuity_rule
@@ -325,6 +326,7 @@ def mount_subrouters() -> None:
     # otherwise be answered with a 422 by the integer route.
     router.include_router(cbl_catalog.router)
     router.include_router(cbl_sources.router)
+    router.include_router(cbl_comicvine_lookup.router)
     router.include_router(custom_cbl.router)
     router.include_router(roll_recovery_switch.router, prefix="/roll")
     router.include_router(prerequisite.router)

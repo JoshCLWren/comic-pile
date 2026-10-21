@@ -109,7 +109,9 @@ async function renderIssueToggleList() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  // `resetAllMocks` also clears queued one-shot implementations, so a test
+  // that leaves a request unsent cannot leak it into the next test.
+  vi.resetAllMocks()
   vi.stubGlobal('confirm', vi.fn())
 
   mockedIssuesApi.list.mockResolvedValue(buildListResponse())
@@ -309,6 +311,13 @@ describe('IssueToggleList', () => {
     })
     expect(screen.getByText('Issue reorder failed')).toBeInTheDocument()
     expect(mockedIssuesApi.list).toHaveBeenCalledTimes(2)
+    // The failed reorder stops the queue, so the pending delete is not sent
+    // yet. It stays queued instead of being dropped.
+    expect(mockedIssuesApi.delete).not.toHaveBeenCalled()
+
+    // The next interaction retries the queued delete.
+    fireEvent.click(screen.getByTestId('issue-toggle-1'))
+    await waitFor(() => expect(mockedIssuesApi.delete).toHaveBeenCalledWith(2))
 
     await act(async () => {
       deleteRequest.resolve()
@@ -1084,15 +1093,20 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     fireEvent.change(input, { target: { value: '10-12' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
 
+    // The failed create is reported to the caller, so the Edit Series dialog
+    // stays open instead of closing over a lost create.
     await act(async () => {
-      await ref.current?.flush()
+      await expect(ref.current?.flush()).rejects.toThrow('Issue number already exists')
     })
 
-    // All three create calls should be attempted
-    expect(mockedIssuesApi.create).toHaveBeenCalledTimes(3)
-    // Error should be surfaced for the failed ones
+    // The queue stops at the failed create; the create after it stays queued
+    // so the reader can retry it.
+    expect(mockedIssuesApi.create).toHaveBeenCalledTimes(2)
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7')
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2')
+    // Error should be surfaced for the failed one
     expect(screen.getByText('Issue number already exists')).toBeInTheDocument()
-    expect(ref.current?.hasPendingMutations()).toBe(false)
+    expect(ref.current?.hasPendingMutations()).toBe(true)
   })
 
   it('re-reads server order after a create so the base list is not appended blindly', async () => {

@@ -1,4 +1,13 @@
-"""Pure global cycle validation for Option E execution constraints."""
+"""Pure global cycle validation for Option E execution constraints.
+
+Shares the same ordering rules (natural series order, strict/loose list
+order, after_previous, hold, prerequisites) as the canonical Option E
+evaluator, with the same edge semantics for those shared rules. It
+differs intentionally: read and excluded issues stay in the graph so
+stored constraints cannot be hidden by exclusions; skipped placements are
+omitted. See `validate_reading_constraints` docstring for the full
+distinction from `evaluate`.
+"""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -40,8 +49,18 @@ def validate_reading_constraints(
 ) -> tuple[int, ...]:
     """Validate stored constraints, including read and excluded Issues.
 
-    Global exclusions change eligibility, but do not erase stored ordering
-    constraints during write validation. Local skipped placements are omitted.
+    Derives ordering constraints from the same rules as the canonical Option E
+    evaluator (natural series order, strict/loose list order, after_previous,
+    hold, and prerequisites), with the same edge semantics for those shared
+    rules. It intentionally differs from `evaluate` in two ways:
+    (1) read and globally excluded issues remain in the graph so that stored
+    ordering constraints cannot be hidden by exclusions; (2) skipped list
+    placements are omitted. Because exclusions suppress eligibility but do
+    not erase stored constraints, `after_previous` here can point to an
+    excluded issue, whereas `evaluate` filters exclusions and points to the
+    preceding non-excluded issue. Global exclusions change eligibility, but
+    do not erase stored ordering constraints during write validation.
+    Local skipped placements are omitted.
     Returns a stable topological order when the combined graph is acyclic.
 
     Args:

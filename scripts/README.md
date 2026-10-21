@@ -11,6 +11,8 @@ These are tools that remain safe and useful to rerun:
 
 - Backup/restore: `backup_postgres.sh`, `restore_postgres.sh`
 - Database export/import: `export_db.py`, `import_db.py`, `clone_prod_to_local.py`
+- CBL mirror inventory and refresh: `sync_cbl_mirror.py` (see
+  [`docs/CBL_MIRROR_REFRESH.md`](../docs/CBL_MIRROR_REFRESH.md))
 - OpenAPI tooling: `export_openapi_schema.py`, `generate_openapi_types.py`
 - Seed and dev utilities: `seed_data.py`, `seed_dev_db.py`, `dev-all.sh`
 - Factory/CI automation, lint/test helpers, and monitoring tooling

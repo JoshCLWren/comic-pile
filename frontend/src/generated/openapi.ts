@@ -2641,6 +2641,15 @@ export interface paths {
         /**
          * Discover Cbl Source Lists
          * @description Return bounded active CBL lists for the Reading Plan Add-material flow.
+         *
+         *     Args:
+         *         current_user: Authenticated reader.
+         *         db: Async database session.
+         *         q: Optional case-insensitive match against list name or source path.
+         *         limit: Maximum number of lists to return.
+         *
+         *     Returns:
+         *         Bounded summaries of the matching active CBL source lists.
          */
         get: operations["discover_cbl_source_lists_api_v1_issue_identity_cbl_sources_get"];
         put?: never;
@@ -2676,6 +2685,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find Cbl Sources By Comicvine Issue
+         * @description Return every CBL source position that holds one exact Comic Vine issue.
+         *
+         *     The match is exact on the Comic Vine issue identity, so a shared series
+         *     title, a shared volume, or the same issue number in another volume never
+         *     produces a false positive. Repeated occurrences inside one source list
+         *     stay separate rows, and the same identity in several source lists is
+         *     reported once per list. The answer is shared catalog data: it never
+         *     depends on the calling reader's owned Issues.
+         *
+         *     Args:
+         *         comicvine_issue_id: Exact Comic Vine issue external ID.
+         *         current_user: Authenticated reader. Unused: the shared catalog answer
+         *             must not vary by reader.
+         *         db: Async database session.
+         *         offset: Zero-based index of the first returned source occurrence.
+         *         limit: Maximum number of source occurrences to return.
+         *
+         *     Returns:
+         *         The matching source occurrences with the total occurrence count and
+         *         the number of distinct source lists containing the identity.
+         *
+         *     Raises:
+         *         HTTPException: 422 when the supplied Comic Vine issue ID is blank.
+         */
+        get: operations["find_cbl_sources_by_comicvine_issue_api_v1_issue_identity_cbl_sources_by_comicvine_issue__comicvine_issue_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issue-identity/cbl-sources/folders": {
         parameters: {
             query?: never;
@@ -2692,6 +2743,44 @@ export interface paths {
          *     malformed path returns 400.
          */
         get: operations["list_cbl_source_folders_api_v1_issue_identity_cbl_sources_folders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/issue-identity/cbl-sources/{list_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cbl Source List
+         * @description Return every ordered source occurrence for one CBL list (read-only).
+         *
+         *     Source occurrences keep their original position, including repeated
+         *     positions for duplicated issues. Large lists are returned as a bounded page
+         *     so no list is silently truncated; ``entries_total`` reports the full count
+         *     so callers can page through every occurrence.
+         *
+         *     Args:
+         *         list_id: CBL source list identifier.
+         *         current_user: Authenticated reader.
+         *         db: Async database session.
+         *         offset: Zero-based index of the first returned source occurrence.
+         *         limit: Maximum number of source occurrences to return.
+         *
+         *     Returns:
+         *         One CBL source list with its ordered source occurrences.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the list does not exist or is inactive.
+         */
+        get: operations["get_cbl_source_list_api_v1_issue_identity_cbl_sources__list_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6639,24 +6728,6 @@ export interface components {
             path: string;
         };
         /**
-         * CBLErrorDetail
-         * @description Machine-readable error code and message for a catalog failure.
-         */
-        CBLErrorDetail: {
-            /** Code */
-            code: string;
-            /** Message */
-            message: string;
-        };
-        /**
-         * CBLErrorResponse
-         * @description Envelope for catalog error responses: {"detail": {"code": ..., "message": ...}}.
-         */
-        CBLErrorResponse: {
-            /** Detail */
-            detail: components["schemas"]["CBLErrorDetail"];
-        };
-        /**
          * CBLCatalogBrowseResponse
          * @description Paginated CBL results for one folder or one catalog-wide search.
          */
@@ -6672,7 +6743,7 @@ export interface components {
             /** Has Previous */
             has_previous: boolean;
             /** Items */
-            items: components["schemas"]["CBLSourceListDiscoveryItem"][];
+            items: components["schemas"]["CBLCatalogListItem"][];
             /** Page */
             page: number;
             /** Page Size */
@@ -6688,6 +6759,161 @@ export interface components {
             total: number;
             /** Total Pages */
             total_pages: number;
+        };
+        /**
+         * CBLCatalogListItem
+         * @description One active persisted source list shown in a catalog folder or search page.
+         *
+         *     The shape mirrors the Add-material discovery item, but it is a distinct
+         *     model so the catalog browsing surface never shares a schema title with the
+         *     discovery surface: two same-named models would collapse into one entry in
+         *     the generated OpenAPI components.
+         */
+        CBLCatalogListItem: {
+            /** Content Hash */
+            content_hash: string;
+            /** Declared Issue Count */
+            declared_issue_count: number | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Revision Sha */
+            revision_sha: string;
+            /** Source Path */
+            source_path: string;
+            /** Source Repository */
+            source_repository: string;
+        };
+        /**
+         * CBLComicvineOccurrenceDetail
+         * @description One source position that contains an exact Comic Vine issue identity.
+         */
+        CBLComicvineOccurrenceDetail: {
+            /**
+             * Comicvine Issue Id
+             * @description Exact Comic Vine issue ID that matched
+             */
+            comicvine_issue_id: string;
+            /**
+             * Comicvine Volume Id
+             * @description Comic Vine volume identity of the occurrence when the source has one
+             */
+            comicvine_volume_id?: string | null;
+            /**
+             * Issue Number
+             * @description Issue number recorded in the CBL source
+             */
+            issue_number: string;
+            /**
+             * List Id
+             * @description CBL source list ID
+             */
+            list_id: number;
+            /**
+             * List Name
+             * @description Display name of the CBL source list
+             */
+            list_name: string;
+            /**
+             * Position
+             * @description Source position in original CBL order
+             */
+            position: number;
+            /**
+             * Publication Year
+             * @description Publication year recorded in the CBL source
+             */
+            publication_year?: number | null;
+            /**
+             * Revision Sha
+             * @description Source revision the list was imported from
+             */
+            revision_sha: string;
+            /**
+             * Series Name
+             * @description Series name recorded in the CBL source
+             */
+            series_name: string;
+            /**
+             * Source Path
+             * @description Reader-safe path of the CBL source file
+             */
+            source_path: string;
+            /**
+             * Source Ref
+             * @description Reader-safe ``repository:path`` source identity
+             */
+            source_ref: string;
+            /**
+             * Source Repository
+             * @description Reader-safe source repository identity
+             */
+            source_repository: string;
+            /**
+             * Volume Year
+             * @description Volume year recorded in the CBL source
+             */
+            volume_year?: number | null;
+        };
+        /**
+         * CBLComicvineOccurrencePage
+         * @description One page of CBL source occurrences for an exact Comic Vine issue identity.
+         */
+        CBLComicvineOccurrencePage: {
+            /**
+             * Comicvine Issue Id
+             * @description Exact Comic Vine issue ID queried
+             */
+            comicvine_issue_id: string;
+            /**
+             * Lists Total
+             * @description Number of distinct source lists containing the identity
+             */
+            lists_total: number;
+            /**
+             * Occurrences
+             * @description Matching source occurrences in this page
+             */
+            occurrences?: components["schemas"]["CBLComicvineOccurrenceDetail"][];
+            /**
+             * Occurrences Limit
+             * @description Maximum source occurrences per page
+             */
+            occurrences_limit: number;
+            /**
+             * Occurrences Offset
+             * @description Zero-based offset of the returned page
+             */
+            occurrences_offset: number;
+            /**
+             * Occurrences Total
+             * @description Total matching source occurrences in the shared catalog
+             */
+            occurrences_total: number;
+        };
+        /**
+         * CBLErrorDetail
+         * @description Machine-readable error code and message for a catalog failure.
+         */
+        CBLErrorDetail: {
+            /**
+             * Code
+             * @description Stable machine-readable error code.
+             */
+            code: string;
+            /**
+             * Message
+             * @description Human-readable error message.
+             */
+            message: string;
+        };
+        /**
+         * CBLErrorResponse
+         * @description Envelope for catalog error responses: ``{"detail": {"code": ..., "message": ...}}``.
+         */
+        CBLErrorResponse: {
+            detail: components["schemas"]["CBLErrorDetail"];
         };
         /**
          * CBLFolderListingResponse
@@ -6800,6 +7026,47 @@ export interface components {
             unresolved_count: number;
         };
         /**
+         * CBLSourceEntryDetail
+         * @description One ordered source occurrence in a CBL list.
+         */
+        CBLSourceEntryDetail: {
+            /**
+             * Comicvine Issue Id
+             * @description Comic Vine issue ID when the source entry has one
+             */
+            comicvine_issue_id?: string | null;
+            /**
+             * Comicvine Volume Id
+             * @description Comic Vine volume ID when the source entry has one
+             */
+            comicvine_volume_id?: string | null;
+            /**
+             * Issue Number
+             * @description Issue number recorded in the CBL source
+             */
+            issue_number: string;
+            /**
+             * Position
+             * @description Source position in original CBL order
+             */
+            position: number;
+            /**
+             * Publication Year
+             * @description Publication year recorded in the CBL source
+             */
+            publication_year?: number | null;
+            /**
+             * Series Name
+             * @description Series name recorded in the CBL source
+             */
+            series_name: string;
+            /**
+             * Volume Year
+             * @description Volume year recorded in the CBL source
+             */
+            volume_year?: number | null;
+        };
+        /**
          * CBLSourceFingerprintResponse
          * @description Immutable source evidence needed to review and later accept a plan.
          */
@@ -6842,23 +7109,110 @@ export interface components {
             total_list_count: number;
         };
         /**
+         * CBLSourceListDetail
+         * @description Read-only detail for one CBL source list.
+         */
+        CBLSourceListDetail: {
+            /**
+             * Content Hash
+             * @description Content hash of the imported source list
+             */
+            content_hash: string;
+            /**
+             * Declared Issue Count
+             * @description Issue count declared by the source list
+             */
+            declared_issue_count?: number | null;
+            /**
+             * Entries
+             * @description Ordered source occurrences in this page
+             */
+            entries?: components["schemas"]["CBLSourceEntryDetail"][];
+            /**
+             * Entries Limit
+             * @description Maximum source occurrences per page
+             */
+            entries_limit: number;
+            /**
+             * Entries Offset
+             * @description Zero-based offset of the returned page
+             */
+            entries_offset: number;
+            /**
+             * Entries Total
+             * @description Total source occurrences in the list
+             */
+            entries_total: number;
+            /**
+             * Id
+             * @description CBL source list ID
+             */
+            id: number;
+            /**
+             * Name
+             * @description Display name of the CBL source list
+             */
+            name: string;
+            /**
+             * Revision Sha
+             * @description Source revision the list was imported from
+             */
+            revision_sha: string;
+            /**
+             * Source Path
+             * @description Reader-safe path of the CBL source file
+             */
+            source_path: string;
+            /**
+             * Source Ref
+             * @description Reader-safe ``repository:path`` source identity
+             */
+            source_ref: string;
+            /**
+             * Source Repository
+             * @description Reader-safe source repository identity
+             */
+            source_repository: string;
+        };
+        /**
          * CBLSourceListDiscoveryItem
          * @description One active persisted source list that may be previewed by Add material.
          */
         CBLSourceListDiscoveryItem: {
-            /** Content Hash */
+            /**
+             * Content Hash
+             * @description Content hash of the imported source list
+             */
             content_hash: string;
-            /** Declared Issue Count */
-            declared_issue_count: number | null;
-            /** Id */
+            /**
+             * Declared Issue Count
+             * @description Issue count declared by the source list
+             */
+            declared_issue_count?: number | null;
+            /**
+             * Id
+             * @description CBL source list ID
+             */
             id: number;
-            /** Name */
+            /**
+             * Name
+             * @description Display name of the CBL source list
+             */
             name: string;
-            /** Revision Sha */
+            /**
+             * Revision Sha
+             * @description Source revision the list was imported from
+             */
             revision_sha: string;
-            /** Source Path */
+            /**
+             * Source Path
+             * @description Stored path of the CBL source file
+             */
             source_path: string;
-            /** Source Repository */
+            /**
+             * Source Repository
+             * @description Reader-safe source repository identity
+             */
             source_repository: string;
         };
         /**
@@ -18685,6 +19039,40 @@ export interface operations {
             };
         };
     };
+    find_cbl_sources_by_comicvine_issue_api_v1_issue_identity_cbl_sources_by_comicvine_issue__comicvine_issue_id__get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                comicvine_issue_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLComicvineOccurrencePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_cbl_source_folders_api_v1_issue_identity_cbl_sources_folders_get: {
         parameters: {
             query?: {
@@ -18739,6 +19127,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+        };
+    };
+    get_cbl_source_list_api_v1_issue_identity_cbl_sources__list_id__get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLSourceListDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
