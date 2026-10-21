@@ -943,6 +943,163 @@
         "title": "CBLAdoptionSummaryResponse",
         "type": "object"
       },
+      "CBLComicvineOccurrenceDetail": {
+        "description": "One source position that contains an exact Comic Vine issue identity.",
+        "properties": {
+          "comicvine_issue_id": {
+            "description": "Exact Comic Vine issue ID that matched",
+            "title": "Comicvine Issue Id",
+            "type": "string"
+          },
+          "comicvine_volume_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Comic Vine volume identity of the occurrence when the source has one",
+            "title": "Comicvine Volume Id"
+          },
+          "issue_number": {
+            "description": "Issue number recorded in the CBL source",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "list_id": {
+            "description": "CBL source list ID",
+            "title": "List Id",
+            "type": "integer"
+          },
+          "list_name": {
+            "description": "Display name of the CBL source list",
+            "title": "List Name",
+            "type": "string"
+          },
+          "position": {
+            "description": "Source position in original CBL order",
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "publication_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Publication year recorded in the CBL source",
+            "title": "Publication Year"
+          },
+          "revision_sha": {
+            "description": "Source revision the list was imported from",
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "series_name": {
+            "description": "Series name recorded in the CBL source",
+            "title": "Series Name",
+            "type": "string"
+          },
+          "source_path": {
+            "description": "Reader-safe path of the CBL source file",
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_ref": {
+            "description": "Reader-safe ``repository:path`` source identity",
+            "title": "Source Ref",
+            "type": "string"
+          },
+          "source_repository": {
+            "description": "Reader-safe source repository identity",
+            "title": "Source Repository",
+            "type": "string"
+          },
+          "volume_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Volume year recorded in the CBL source",
+            "title": "Volume Year"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "revision_sha",
+          "position",
+          "series_name",
+          "issue_number",
+          "comicvine_issue_id"
+        ],
+        "title": "CBLComicvineOccurrenceDetail",
+        "type": "object"
+      },
+      "CBLComicvineOccurrencePage": {
+        "description": "One page of CBL source occurrences for an exact Comic Vine issue identity.",
+        "properties": {
+          "comicvine_issue_id": {
+            "description": "Exact Comic Vine issue ID queried",
+            "title": "Comicvine Issue Id",
+            "type": "string"
+          },
+          "lists_total": {
+            "description": "Number of distinct source lists containing the identity",
+            "minimum": 0.0,
+            "title": "Lists Total",
+            "type": "integer"
+          },
+          "occurrences": {
+            "description": "Matching source occurrences in this page",
+            "items": {
+              "$ref": "#/components/schemas/CBLComicvineOccurrenceDetail"
+            },
+            "title": "Occurrences",
+            "type": "array"
+          },
+          "occurrences_limit": {
+            "description": "Maximum source occurrences per page",
+            "minimum": 1.0,
+            "title": "Occurrences Limit",
+            "type": "integer"
+          },
+          "occurrences_offset": {
+            "description": "Zero-based offset of the returned page",
+            "minimum": 0.0,
+            "title": "Occurrences Offset",
+            "type": "integer"
+          },
+          "occurrences_total": {
+            "description": "Total matching source occurrences in the shared catalog",
+            "minimum": 0.0,
+            "title": "Occurrences Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "comicvine_issue_id",
+          "occurrences_total",
+          "lists_total",
+          "occurrences_offset",
+          "occurrences_limit"
+        ],
+        "title": "CBLComicvineOccurrencePage",
+        "type": "object"
+      },
       "CBLPlacement": {
         "description": "One ordered CBL observation with inseparable provenance.",
         "properties": {
@@ -25549,6 +25706,81 @@
           }
         ],
         "summary": "Discover Cbl Source Lists",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "issue-identity"
+        ]
+      }
+    },
+    "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}": {
+      "get": {
+        "description": "Return every CBL source position that holds one exact Comic Vine issue.\n\nThe match is exact on the Comic Vine issue identity, so a shared series\ntitle, a shared volume, or the same issue number in another volume never\nproduces a false positive. Repeated occurrences inside one source list\nstay separate rows, and the same identity in several source lists is\nreported once per list. The answer is shared catalog data: it never\ndepends on the calling reader's owned Issues.\n\nArgs:\n    comicvine_issue_id: Exact Comic Vine issue external ID.\n    current_user: Authenticated reader. Unused: the shared catalog answer\n        must not vary by reader.\n    db: Async database session.\n    offset: Zero-based index of the first returned source occurrence.\n    limit: Maximum number of source occurrences to return.\n\nReturns:\n    The matching source occurrences with the total occurrence count and\n    the number of distinct source lists containing the identity.\n\nRaises:\n    HTTPException: 422 when the supplied Comic Vine issue ID is blank.",
+        "operationId": "find_cbl_sources_by_comicvine_issue_api_v1_issue_identity_cbl_sources_by_comicvine_issue__comicvine_issue_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comicvine_issue_id",
+            "required": true,
+            "schema": {
+              "maxLength": 100,
+              "minLength": 1,
+              "title": "Comicvine Issue Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLComicvineOccurrencePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Find Cbl Sources By Comicvine Issue",
         "tags": [
           "dependencies",
           "dependencies",
