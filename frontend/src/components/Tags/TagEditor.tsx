@@ -327,6 +327,23 @@ export function TagEditor({
     ? Object.entries(usage.data.references_removed_by_consumers)
     : []
 
+  /**
+   * Assignment count shown in the delete confirmation.
+   *
+   * The API reports `total_assignments`, but a payload that omits it must still
+   * render a count instead of an empty gap (issue #3765). The per-target-type
+   * breakdown is the fallback source so a used tag never claims "0 places",
+   * and zero is the last resort when the payload carries no counts at all.
+   */
+  const usageTotal =
+    usage.data?.total_assignments ??
+    (usage.data?.assignments_by_target_type
+      ? Object.values(usage.data.assignments_by_target_type).reduce(
+          (sum, count) => sum + count,
+          0,
+        )
+      : 0)
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Tags · ${targetLabel}`} size="large">
       <div className="flex flex-col gap-4 p-3 md:p-4">
@@ -594,8 +611,8 @@ export function TagEditor({
                   <>
                     <p className="text-sm text-[var(--theme-text-primary)]">
                       Delete “{managingTag.name}”? It is assigned to{' '}
-                      <strong>{usage.data.total_assignments}</strong>{' '}
-                      {usage.data.total_assignments === 1 ? 'place' : 'places'}
+                      <strong>{usageTotal}</strong>{' '}
+                      {usageTotal === 1 ? 'place' : 'places'}
                       {consumerEntries.length > 0 && (
                         <>
                           {' '}and referenced by{' '}
