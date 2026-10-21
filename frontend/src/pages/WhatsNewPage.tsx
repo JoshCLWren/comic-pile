@@ -69,7 +69,19 @@ function displayWordCount(release: Release): number {
 export function isDisplayableRelease(release: Release): boolean {
   if (hasUnfinishedWorkMarkers(release)) return false
   if (releaseDisplayText(release.title).length <= 1) return false
-  if (releaseDisplayText(release.title) === releaseDisplayText(release.summary)) return false
+  
+  // Hide releases where title exactly equals summary (broken backfill cards)
+  // But allow valid releases that happen to have similar content
+  const title = releaseDisplayText(release.title)
+  const summary = releaseDisplayText(release.summary)
+  if (title === summary) {
+    // Additional check: these are likely broken backfill cards if they're short
+    // and contain PR-fragment-like patterns
+    if (title.length < 50 && /makes|persists|clarifies|synchronizes|adds/i.test(title)) {
+      return false
+    }
+  }
+  
   return displayWordCount(release) >= MIN_DISPLAY_WORDS
 }
 
