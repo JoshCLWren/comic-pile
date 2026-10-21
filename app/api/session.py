@@ -363,17 +363,16 @@ async def list_sessions(
                     # Prefer the historically rated issue for this specific thread
                     # over the thread's current next_unread_issue_id so History rows
                     # are immutable and never show an issue from a different thread.
+                    # When the rate/undo stack is empty (all readings undone), don't show
+                    # the thread's current next issue — that would be misleading.
                     historical = rate_issue_by_session_thread.get((sid, thread.id))
                     if historical is not None:
                         issue_id, issue_number = historical
                     else:
+                        # No historical issue (all readings undone) — don't show
+                        # the thread's current next issue, as that would be misleading.
                         issue_id = None
                         issue_number = None
-                        if thread.uses_issue_tracking() and thread.next_unread_issue_id is not None:
-                            resolved_number = issue_numbers.get(thread.next_unread_issue_id)
-                            if resolved_number is not None:
-                                issue_id = thread.next_unread_issue_id
-                                issue_number = resolved_number
                     total_issues_read, last_rating = rate_stats.get(sid, (0, None))
                     issues_read = total_issues_read or None
                     raw_result = roll_event.result
