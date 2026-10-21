@@ -271,17 +271,25 @@ async def list_sessions(
     )
     history_events = history_events_result.scalars().all()
 
-    # Map the last *open* rate event per (session, thread) so the History card
-    # shows an issue number that belongs to the displayed thread and stays
-    # immutable against later undos.
-    rate_issue_by_session_thread: dict[tuple[int, int], tuple[int | None, str | None]] = {}
+    # Map the last *open* (not undone) rate event per (session, thread) so the
+    # History card names an issue the session's own events recorded and never
+    # resurrects a reading canceled by undo (#3708). A stack per (session,
+    # thread) replays the ordered rate/undo stream: a rate pushes its issue,
+    # and an undo pops the most recent reading's issue.
+    rate_issue_stack: dict[tuple[int, int], list[tuple[int | None, str | None]]] = {}
     for ev in history_events:
         if ev.session_id is None or ev.thread_id is None:
             continue
+        key = (ev.session_id, ev.thread_id)
         if ev.type == "rate" and (ev.issue_id is not None or ev.issue_number is not None):
-            key = (ev.session_id, ev.thread_id)
-            # Overwrite with later events; undo handling will be applied later
-            rate_issue_by_session_thread[key] = (ev.issue_id, ev.issue_number)
+            rate_issue_stack.setdefault(key, []).append((ev.issue_id, ev.issue_number))
+        elif ev.type == "undo":
+            stack = rate_issue_stack.get(key)
+            if stack:
+                stack.pop()
+    rate_issue_by_session_thread: dict[tuple[int, int], tuple[int | None, str | None]] = {
+        key: stack[-1] for key, stack in rate_issue_stack.items() if stack
+    }
 
     # Undo-aware reading totals computed with the same canonical replay as the
     # session card (``load_session_rate_stats`` ->

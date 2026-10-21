@@ -1332,6 +1332,11 @@ async def test_undo_rating_excluded_from_session_stats(
     assert history_thread["issues_read"] == 2
     assert history_thread["last_rating"] == 4.0
 
+    # A canceled reading must not reappear: the History card names the surviving
+    # rate's issue (#2), checked against the session's own events, not the undone
+    # one (#3), and never invents an issue outside the timeline.
+    assert history_thread["issue_number"] == "2"
+    assert history_thread["issue_number"] != "3"
     timeline_issue_numbers: set[str] = set()
     detail_response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
     assert detail_response.status_code == 200
