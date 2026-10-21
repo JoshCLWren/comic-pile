@@ -101,7 +101,7 @@ describe('release ordering helpers', () => {
       expect(days[1].releases.map(item => item.id)).toEqual([1])
     })
 
-    it('resolves Markdown formatting without re-implementing backend repair', () => {
+    it('strips markdown, bare GitHub links, and internal ticket references from visible card copy', () => {
       expect(releaseDisplayText(
         '[Fix queue](https://github.com/JoshCLWren/comic-pile/pull/1058) persists reading lists',
       )).toBe('Fix queue persists reading lists')
@@ -109,13 +109,9 @@ describe('release ordering helpers', () => {
         'https://github.com/JoshCLWren/comic-pile/pull/1058 persists reading lists',
       )).toBe('persists reading lists')
       expect(releaseDisplayText('`queue` search')).toBe('queue search')
-    })
-
-    it('renders copy the public API already repaired without changing it', () => {
-      expect(releaseDisplayText('Queue cards open details')).toBe('Queue cards open details')
-      expect(releaseDisplayText(
-        'Your saved filter now survives a page reload.',
-      )).toBe('Your saved filter now survives a page reload.')
+      expect(releaseDisplayText('incomplete #1551 fix for the roll screen')).toBe(
+        'incomplete fix for the roll screen',
+      )
     })
 
     it('decodes escaped apostrophes without corrupting legitimate backslashes', () => {
@@ -136,6 +132,33 @@ describe('release ordering helpers', () => {
       )
       expect(releaseDisplayText('Match \\d+ rows in your reading log')).toBe(
         'Match \\d+ rows in your reading log',
+      )
+    })
+
+    it('strips internal issue references so ticket numbers never reach readers', () => {
+      expect(releaseDisplayText('Roll recovery now resumes interrupted sessions (#1886)')).toBe(
+        'Roll recovery now resumes interrupted sessions',
+      )
+      expect(releaseDisplayText('Fixed dice history #1551 and #1705 rendering')).toBe(
+        'Fixed dice history and rendering',
+      )
+    })
+
+    it('strips database and schema identifiers from visible copy', () => {
+      expect(releaseDisplayText('Added `source_roll_event_id` instrumentation detail')).toBe(
+        'Added instrumentation detail',
+      )
+      expect(releaseDisplayText('roll_event rows now expire automatically')).toBe(
+        'rows now expire automatically',
+      )
+    })
+
+    it('strips implementation phase terminology from visible copy', () => {
+      expect(releaseDisplayText('Ships the Phase 2 and 3 reading-order upgrades')).toBe(
+        'Ships the reading-order upgrades',
+      )
+      expect(releaseDisplayText('Completes phase two of the library redesign')).toBe(
+        'Completes of the library redesign',
       )
     })
 
@@ -421,12 +444,12 @@ describe('WhatsNewPage', () => {
       expect(screen.getByText('1 update published this day.')).toBeInTheDocument()
     })
 
-    it('renders server-repaired historical copy without re-sanitizing it', async () => {
+    it('renders sanitized copy when a historical entry carries strippable internal fragments', async () => {
       api.list.mockResolvedValue({
         releases: [
           release({
             id: 4,
-            title: 'Roll recovery resumes interrupted sessions',
+            title: 'Roll recovery resumes interrupted sessions (#1886)',
             summary: 'Interrupted rolls now continue where you left off instead of restarting.',
           }),
         ],

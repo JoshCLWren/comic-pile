@@ -132,6 +132,85 @@ def test_repair_summary_keeps_complete_sentences_after_removing_paths() -> None:
     assert repaired == "Reopening a comic resumes on the page you left."
 
 
+def test_repair_summary_omits_punctuation_left_by_artifact_removal() -> None:
+    """A summary that reduces to punctuation is omitted instead of shown.
+
+    Dropping an artifact parenthetical can leave only the sentence's final
+    period behind. A lone period is not reader-facing copy, so the summary is
+    omitted and the reader sees the title once.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    repaired = repair_summary(
+        "Roll recovery now resumes interrupted sessions (#1886).",
+        title="Roll recovery now resumes interrupted sessions",
+    )
+
+    assert repaired == ""
+
+
+def test_repair_summary_omits_a_sentence_that_ends_with_phase_terminology() -> None:
+    """A sentence whose tail is implementation-phase wording is omitted.
+
+    Removing trailing phase wording would leave a fragment such as "The
+    rollout reached", so the whole sentence is omitted instead.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    repaired = repair_summary(
+        "The rollout reached phase 2.",
+        title="Rollout status",
+    )
+
+    assert repaired == ""
+
+
+def test_repair_release_copy_removes_internal_paths_from_titles() -> None:
+    """Internal file paths never reach readers through a stored title.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    title, _ = repair_release_copy(
+        source_repository="JoshCLWren/comic-pile",
+        source_pr_number=9103,
+        title="A new service in app/services/queue.py",
+        summary="A complete reader-facing summary for this release.",
+    )
+
+    assert title == "A new service"
+
+
+def test_repair_release_copy_hides_a_title_without_reader_facing_words() -> None:
+    """A title with no reader-facing word is emptied so the card is hidden.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    title, _ = repair_release_copy(
+        source_repository="JoshCLWren/comic-pile",
+        source_pr_number=9104,
+        title="...",
+        summary="A complete reader-facing summary for this release.",
+    )
+
+    assert title == ""
+
+
 @pytest.mark.parametrize(
     "summary",
     [
@@ -350,11 +429,27 @@ async def test_public_release_read_serves_repaired_copy(
         sort_order=0,
         provenance_json={},
     )
-    db.add_all([dangling, curated, schema_named])
+    path_named = Release(
+        source_repository="JoshCLWren/comic-pile",
+        source_pr_number=9203,
+        source_merge_sha=None,
+        merged_at=None,
+        released_at=now - timedelta(minutes=3),
+        category="What's New",
+        title="A new service in app/services/queue.py",
+        summary="Reopening a comic resumes on the page you left.",
+        body=None,
+        visibility="public",
+        status="published",
+        sort_order=0,
+        provenance_json={},
+    )
+    db.add_all([dangling, curated, schema_named, path_named])
     await db.flush()
     dangling_id = dangling.id
     curated_id = curated.id
     schema_named_id = schema_named.id
+    path_named_id = path_named.id
     await db.commit()
 
     listed = await auth_client.get("/api/v1/releases/", params={"limit": 100, "offset": 0})
@@ -368,6 +463,8 @@ async def test_public_release_read_serves_repaired_copy(
     assert "closing . Incl" not in by_id[curated_id]["summary"]
     assert by_id[schema_named_id]["title"] == "Fix tracking"
     assert "source_roll_event_id" not in by_id[schema_named_id]["title"]
+    assert by_id[path_named_id]["title"] == "A new service"
+    assert "app/services" not in by_id[path_named_id]["title"]
 
     fetched = await auth_client.get(f"/api/v1/releases/{schema_named_id}")
     assert fetched.status_code == 200

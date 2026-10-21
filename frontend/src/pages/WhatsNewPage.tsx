@@ -4,6 +4,8 @@ import { RELEASES_PAGE_SIZE, useReleases } from '../hooks/useReleases'
 
 export const RELEASE_PAGE_SIZE = RELEASES_PAGE_SIZE
 
+const TICKET_REFERENCE_PATTERN = /(?<![\w&])#\d{1,7}\b/g
+const SCHEMA_IDENTIFIER_PATTERN = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g
 const ESCAPED_SINGLE_QUOTE_PATTERN = /\\+u(0027|2018|2019)/gi
 const ESCAPED_APOSTROPHE_PATTERN = /\\+'/g
 const SINGLE_QUOTE_ESCAPES = new Map([
@@ -11,6 +13,8 @@ const SINGLE_QUOTE_ESCAPES = new Map([
   ['2018', '\u2018'],
   ['2019', '\u2019'],
 ])
+const PHASE_TERMINOLOGY_PATTERN =
+  /\bphases?\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)(?:(?:\s+(?:and|or)\s+(?:\d+(?:\.\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)))?\b/gi
 
 export const UNFINISHED_WORK_PATTERN =
   /\b(?:incomplete|unfinished|todo|wip|not yet implemented)\b/i
@@ -28,14 +32,6 @@ function releasedAtTimestamp(release: Release) {
   return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
 }
 
-/**
- * Decode escaped apostrophes that older stored release copy contains.
- *
- * Release copy is written by the publishing API, which the backend gate now
- * validates, but historical rows can still carry JSON escape artifacts such as
- * `\u0027` or `\'`. Decoding them here keeps the reader-facing text correct
- * without touching stored rows.
- */
 export function decodeReleaseEscapes(text: string) {
   return text
     .replace(ESCAPED_SINGLE_QUOTE_PATTERN, (_match, code: string) =>
@@ -44,19 +40,15 @@ export function decodeReleaseEscapes(text: string) {
     .replace(ESCAPED_APOSTROPHE_PATTERN, "'")
 }
 
-/**
- * Render release copy supplied by the public API.
- *
- * Reader-facing artifact repair (ticket references, schema identifiers,
- * implementation phases, dangling separators, and internal paths) belongs to
- * the public read path. The page only resolves Markdown formatting so older
- * entries that still contain link syntax stay readable.
- */
 export function releaseDisplayText(text: string) {
   return decodeReleaseEscapes(text)
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '$1')
     .replace(/https?:\/\/github\.com\/[^\s)}\u2019"]+/g, '')
     .replace(/`([^`]+)`/g, '$1')
+    .replace(SCHEMA_IDENTIFIER_PATTERN, '')
+    .replace(TICKET_REFERENCE_PATTERN, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(PHASE_TERMINOLOGY_PATTERN, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
 }

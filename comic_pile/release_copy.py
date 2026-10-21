@@ -30,8 +30,10 @@ _PHASE_PREFIX_PATTERN = re.compile(
     rf"^\s*phases?\s+{_PHASE_NUMBER}(?:\s+(?:and|or)\s+{_PHASE_NUMBER})?\s*[:\-–—]\s*",
     re.IGNORECASE,
 )
+# Implementation-phase wording is removed wherever it appears, including at the
+# end of a sentence, so no reader-visible copy keeps a dangling phase reference.
 _PHASE_INLINE_PATTERN = re.compile(
-    rf"\bphases?\s+{_PHASE_NUMBER}(?:\s+(?:and|or)\s+{_PHASE_NUMBER})?\s+(?:of\s+)?",
+    rf"\bphases?\s+{_PHASE_NUMBER}(?:\s+(?:and|or)\s+{_PHASE_NUMBER})?\s*(?:of\s+)?",
     re.IGNORECASE,
 )
 _UNFINISHED_WORK_PATTERN = re.compile(
@@ -43,6 +45,16 @@ _INTERNAL_PATH_PATTERN = re.compile(
     r"(?<![\w/])(?:app|comic_pile|frontend|static|scripts|tests|alembic)(?:/[\w.-]+)+"
     r"|\b[\w-]+(?:/[\w-]+)*\.(?:py|ts|tsx|js|jsx|json|toml|ya?ml|css|md|sh|sql)\b"
 )
+# A title that carries an internal path is repaired by dropping the path, then
+# the connective word it left dangling at the end, so the remaining words still
+# read as a sentence instead of a fragment such as "A new service in".
+_DANGLING_TRAILING_CONNECTIVE_PATTERN = re.compile(
+    r"\s+\b(?:and|but|or|in|inside|within|from|under|to|of|for|via|using|with)\s*$",
+    re.IGNORECASE,
+)
+# Reader-facing copy must contain at least one word character. Punctuation left
+# behind by artifact removal is not reader-facing text.
+_WORD_CHARACTER_PATTERN = re.compile(r"[0-9A-Za-z]")
 _TEST_NARRATIVE_PATTERN = re.compile(
     r"\b\d[\d,]*\s+(?:new\s+)?assertions?\b"
     r"|\b(?:unit|integration|regression|playwright|vitest|pytest)\s+(?:tests?|specs?|coverage|suite)\b"
@@ -246,9 +258,9 @@ def normalize_title(title: str) -> str:
     """Return a reader-facing title with historical prefixes and artifacts removed.
 
     Historical titles may carry internal ticket references, schema/database
-    identifiers, implementation-phase prefixes, or dangling separators left
-    behind by the writer's prefix stripping. Each is removed so internal
-    engineering names never reach readers.
+    identifiers, implementation-phase prefixes, internal file paths, or dangling
+    separators left behind by the writer's prefix stripping. Each is removed so
+    internal engineering names never reach readers.
 
     Args:
         title: Stored release title.
@@ -263,10 +275,16 @@ def normalize_title(title: str) -> str:
     text = _remove_artifact_parentheticals(text)
     text = _TICKET_REFERENCE_PATTERN.sub("", text)
     text = _SCHEMA_IDENTIFIER_PATTERN.sub("", text)
-    text = _PHASE_INLINE_PATTERN.sub("", text)
-    text = _clean_punctuation(text).strip(" \t,;:-–—")
+    without_artifacts = _PHASE_INLINE_PATTERN.sub("", _INTERNAL_PATH_PATTERN.sub("", text))
+    if without_artifacts != text:
+        # Removing an artifact can leave a dangling connective at the end, such
+        # as "A new service in" after an internal path is dropped.
+        without_artifacts = _DANGLING_TRAILING_CONNECTIVE_PATTERN.sub("", without_artifacts)
+    text = _clean_punctuation(without_artifacts).strip(" \t,;:-–—")
     if text and text[0].islower():
         text = f"{text[0].upper()}{text[1:]}"
+    if not _WORD_CHARACTER_PATTERN.search(text):
+        return ""
     return text
 
 
@@ -297,6 +315,11 @@ def repair_summary(summary: str, *, title: str) -> str:
         cleaned = _clean_punctuation(_LEADING_SEPARATOR_PATTERN.sub("", sentence.strip()))
         if not cleaned:
             continue
+        # Removing an artifact can leave only punctuation behind, such as the
+        # "." that survives when a trailing parenthetical is dropped. Punctuation
+        # alone is not reader-facing text, so it is omitted instead of shown.
+        if not _WORD_CHARACTER_PATTERN.search(cleaned):
+            continue
         # A lower-case connector at the start means the original head was
         # stripped from the stored copy. Dropping the fragment avoids serving
         # a sentence that begins mid-thought.
@@ -305,6 +328,11 @@ def repair_summary(summary: str, *, title: str) -> str:
         if _contains_artifact(cleaned):
             if not _only_reference_artifacts(cleaned):
                 continue
+            if _ends_with_phase_terminology(cleaned):
+                # The phase wording was the whole tail of the sentence, so
+                # removing it would leave a fragment such as "The rollout
+                # reached". The fragment is omitted instead of served.
+                continue
             cleaned = _clean_punctuation(
                 _PHASE_INLINE_PATTERN.sub(
                     "",
@@ -312,6 +340,8 @@ def repair_summary(summary: str, *, title: str) -> str:
                 )
             )
             if not cleaned:
+                continue
+            if not _WORD_CHARACTER_PATTERN.search(cleaned):
                 continue
         if _is_engineering_only(cleaned):
             continue
@@ -334,7 +364,8 @@ def repair_release_copy(
 
     PR-backed releases receive deterministic repair plus any reviewed canonical
     override. PR-less historical imports are returned unchanged because they are
-    covered by the separate backfill cleanup tracked in #3646.
+    covered by the separate backfill cleanup tracked in #3646; the What's New
+    page keeps a conservative render-time fallback for those rows.
 
     Args:
         source_repository: Repository that owns the merged source pull request.
@@ -423,6 +454,20 @@ def _contains_artifact(text: str) -> bool:
             _TEST_NARRATIVE_PATTERN,
         )
     )
+
+
+def _ends_with_phase_terminology(text: str) -> bool:
+    """Return whether implementation-phase wording closes the sentence.
+
+    Args:
+        text: Sentence that may end with implementation-phase wording.
+
+    Returns:
+        True when the phase wording is the final content of the sentence.
+    """
+    trimmed = text.rstrip(" \t.,;:!?")
+    match = _PHASE_TERMINOLOGY_PATTERN.search(trimmed)
+    return match is not None and match.end() == len(trimmed)
 
 
 def _only_reference_artifacts(text: str) -> bool:
