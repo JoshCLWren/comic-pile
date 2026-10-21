@@ -285,12 +285,22 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           }
           hadSuccess = true
         } catch (err: unknown) {
+          // When a mutation fails, we attempt to synchronize the base list with
+          // the server. If this synchronization is incomplete, we must stop
+          // processing further mutations to avoid corrupting the list.
           try {
-            baseIssuesRef.current = await fetchAllIssues()
+            const refreshed = await fetchAllIssues()
+            const expectedTotal = totalCountRef.current
+            if (expectedTotal > 0 && refreshed.length < expectedTotal) {
+              throw new Error('Synchronization incomplete; save aborted.')
+            }
+            baseIssuesRef.current = refreshed
           } catch (refreshErr) {
             console.error('[IssueToggleList] Error refetching issues after mutation failure:', refreshErr)
+            throw refreshErr
           }
           setActionError(getApiErrorDetail(err))
+          throw err
         } finally {
           pendingMutationsRef.current = pendingMutationsRef.current.filter(
             (mutation) => mutation.id !== currentMutation.id
@@ -408,6 +418,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     } finally {
       if (loadGeneration === loadGenerationRef.current) {
         setIsLoading(false)
+        // Only notify the caller if we actually reached a fully loaded state.
+        // If we are in a partial-load error state, the caller's Save button
+        // stays disabled (showing "Loading issues..."), preventing a partial save.
         if (fullyLoadedRef.current) {
           onLoadRef.current?.()
         }

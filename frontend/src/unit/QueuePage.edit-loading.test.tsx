@@ -343,20 +343,24 @@ describe('Edit Series loading gate (#3443)', () => {
     expect(update).not.toHaveBeenCalled()
 
     // Fail the load; the Issues area names the failure and offers recovery
-    // instead of going blank, and the dialog is never stuck.
     await act(async () => {
       failingRequest.reject(new Error('load failed'))
     })
 
     expect(await screen.findByText(/could not load issues/i)).toBeInTheDocument()
     const retryButton = screen.getByRole('button', { name: /retry/i })
-    const saveButton = await screen.findByRole('button', { name: /save changes/i })
-    await waitFor(() => expect(saveButton).toBeEnabled())
+    
+    // FIX: Save should STAY disabled while in a load error state, 
+    // because it cannot be safe to save until a full load succeeds.
+    const saveButton = await screen.findByRole('button', { name: /loading issues/i })
+    expect(saveButton).toBeDisabled()
 
     await user.click(retryButton)
     await waitFor(() => expect(screen.getByTestId('issue-pill-11')).toBeInTheDocument())
 
-    await user.click(saveButton)
+    const finalSaveButton = await screen.findByRole('button', { name: /save changes/i })
+    expect(finalSaveButton).toBeEnabled()
+    await user.click(finalSaveButton)
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
   })
 
