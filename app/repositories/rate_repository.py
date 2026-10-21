@@ -272,39 +272,70 @@ async def fetch_session_rate_stats(
     Returns:
         Tuple of (total_issues_read, last_rating).
     """
-    # Get all rate and undo events in order
+    result = await fetch_session_rate_stats_bulk(db, [session_id])
+    return result.get(session_id, (0, None))
+
+
+async def fetch_session_rate_stats_bulk(
+    db: AsyncSession, session_ids: list[int]
+) -> dict[int, tuple[int, float | None]]:
+    """Fetch total issues read and last rating for multiple sessions, accounting for undo events.
+
+    Single-query bulk version to avoid N+1 queries in history endpoints.
+
+    Args:
+        db: Database session.
+        session_ids: List of session IDs to fetch stats for.
+
+    Returns:
+        Mapping of session_id to (total_issues_read, last_rating).
+    """
+    if not session_ids:
+        return {}
+
+    # Get all rate and undo events for all sessions in one query
     result = await db.execute(
         select(Event)
-        .where(Event.session_id == session_id)
+        .where(Event.session_id.in_(session_ids))
         .where(Event.type.in_(("rate", "undo")))
-        .order_by(Event.timestamp, Event.id)
+        .order_by(Event.session_id, Event.timestamp, Event.id)
     )
     events = result.scalars().all()
 
-    total_issues_read = 0
-    last_rating = None
-    active_rate_ids = set()
-
-    # Process events to account for undo operations
+    # Group events by session_id
+    events_by_session: dict[int, list[Event]] = {}
     for event in events:
-        if event.type == "rate":
-            # Add this rate event to active rates
-            active_rate_ids.add(event.id)
-            if event.issues_read is not None:
-                total_issues_read += event.issues_read
-            if event.rating is not None:
-                last_rating = event.rating
-        elif event.type == "undo":
-            # Remove the most recent rate event from active rates
-            if active_rate_ids:
-                undone_id = active_rate_ids.pop()
-                # Find the undone rate event and subtract its values
-                undone_event = next((e for e in events if e.id == undone_id and e.type == "rate"), None)
-                if undone_event and undone_event.issues_read is not None:
-                    total_issues_read = max(0, total_issues_read - undone_event.issues_read)
-                # Recompute last_rating from remaining active rates
-                remaining_rates = [e for e in events if e.id in active_rate_ids and e.type == "rate"]
-                if remaining_rates:
-                    last_rating = remaining_rates[-1].rating
+        if event.session_id not in events_by_session:
+            events_by_session[event.session_id] = []
+        events_by_session[event.session_id].append(event)
 
-    return total_issues_read, last_rating
+    # Process each session's events
+    result_map: dict[int, tuple[int, float | None]] = {}
+    for session_id in session_ids:
+        session_events = events_by_session.get(session_id, [])
+        total_issues_read = 0
+        last_rating = None
+        active_rate_ids: list[int] = []
+
+        for event in session_events:
+            if event.type == "rate":
+                active_rate_ids.append(event.id)
+                if event.issues_read is not None:
+                    total_issues_read += event.issues_read
+                if event.rating is not None:
+                    last_rating = event.rating
+            elif event.type == "undo":
+                if active_rate_ids:
+                    undone_id = active_rate_ids.pop()
+                    undone_event = next((e for e in session_events if e.id == undone_id and e.type == "rate"), None)
+                    if undone_event and undone_event.issues_read is not None:
+                        total_issues_read = max(0, total_issues_read - undone_event.issues_read)
+                    remaining_rates = [e for e in session_events if e.id in active_rate_ids and e.type == "rate"]
+                    if remaining_rates:
+                        last_rating = remaining_rates[-1].rating
+                    else:
+                        last_rating = None
+
+        result_map[session_id] = (total_issues_read, last_rating)
+
+    return result_map

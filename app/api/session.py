@@ -277,11 +277,12 @@ async def list_sessions(
     )
     history_events = history_events_result.scalars().all()
 
-    # Use repository function to get rate stats accounting for undo events
-    rate_agg: dict[int, _RateAggregate] = {}
-    for sid in session_ids:
-        total_issues_read, last_rating = await rate_repository.fetch_session_rate_stats(db, sid)
-        rate_agg[sid] = {"issues_read": total_issues_read, "last_rating": last_rating}
+    # Use repository function to get rate stats accounting for undo events (bulk query)
+    rate_agg_raw = await rate_repository.fetch_session_rate_stats_bulk(db, session_ids)
+    rate_agg: dict[int, _RateAggregate] = {
+        sid: {"issues_read": total_issues_read, "last_rating": last_rating}
+        for sid, (total_issues_read, last_rating) in rate_agg_raw.items()
+    }
     
     # Historical issue captured at rating time — immutable per session.
     rate_issue_by_session: dict[int, tuple[int | None, str | None]] = {}

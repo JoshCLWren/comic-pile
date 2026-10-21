@@ -1280,6 +1280,19 @@ async def test_undo_rating_excluded_from_session_stats(
     async_db.add(undo_event)
     await async_db.commit()
 
+    # Roll again after undo to establish an active thread
+    roll_after_undo = Event(
+        type="roll",
+        die=4,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(roll_after_undo)
+    await async_db.commit()
+
     # Test repository function directly
     total_issues_read, last_rating = await rate_repository.fetch_session_rate_stats(async_db, session.id)
     assert total_issues_read == 1, f"Expected 1 issue read (undo should cancel second rating), got {total_issues_read}"

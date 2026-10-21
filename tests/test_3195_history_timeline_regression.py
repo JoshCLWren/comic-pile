@@ -24,5 +24,9 @@ def test_summary_separates_snoozed_from_skipped():
 def test_rate_aggregation_respects_undo():
     """Undone ratings must not inflate aggregates (issue #3195)."""
     src = open("app/api/session.py").read()
-    assert "undone_rate_ids" in src
-    assert "open_rate_ids_by_session" in src
+    # Verify the session API uses the repository function for undo-aware rate aggregation
+    assert "fetch_session_rate_stats_bulk" in src
+    # Verify the repository function exists
+    repo_src = open("app/repositories/rate_repository.py").read()
+    assert "fetch_session_rate_stats_bulk" in repo_src
+    assert "active_rate_ids" in repo_src
