@@ -366,9 +366,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         throw new Error(message)
       }
       await processIssueMutations()
-    },
+    } ,
     hasPendingMutations: () => pendingMutationsRef.current.length > 0,
-  }), [processIssueMutations])
+  }), [processIssueMutations, setActionError])
 
   const enqueueIssueReorder = useCallback((
     nextIssues: Issue[],
