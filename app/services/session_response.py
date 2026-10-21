@@ -38,6 +38,7 @@ EVENT_TYPE_DESCRIPTIONS: dict[str, str] = {
     "roll": "Rolled",
     "rate": "Rated",
     "unsnooze": "Unsnoozed",
+    "dismiss": "Dismissed",
 }
 
 

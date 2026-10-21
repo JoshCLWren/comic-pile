@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from app.models import Event
 from comic_pile.dice_ladder import automatic_die_after
 
-_DIE_EVENT_TYPES = frozenset({"rate", "snooze", "undo"})
+_DIE_EVENT_TYPES = frozenset({"rate", "snooze", "undo", "dismiss"})
 
 
 @dataclass(frozen=True, slots=True)

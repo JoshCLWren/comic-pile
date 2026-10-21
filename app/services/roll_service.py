@@ -936,6 +936,19 @@ class RollService:
         """Execute the dismiss_pending_roll flow."""
         current_session = await get_or_create(self._db, user_id=current_user_id, existing_user=None)
         now = datetime.now(UTC)
+        
+        # Record the dismiss action as an event for history tracking
+        pending_thread_id = current_session.pending_thread_id
+        if pending_thread_id is not None:
+            dismiss_event = Event(
+                type="dismiss",
+                session_id=current_session.id,
+                timestamp=now,
+                selected_thread_id=pending_thread_id,
+                selection_method="cancel",
+            )
+            self._db.add(dismiss_event)
+        
         from app.repositories.roll_repository import clear_session_pending
         await clear_session_pending(self._db, current_session.id, now)
         await self._db.commit()
