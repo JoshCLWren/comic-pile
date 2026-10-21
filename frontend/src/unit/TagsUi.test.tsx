@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,7 +9,12 @@ import { TagSection } from '../components/Tags/TagSection'
 import { tagErrorMessage } from '../components/Tags/tagErrors'
 import { useAdminFlag } from '../components/Tags/useAdminFlag'
 import { tagsApi } from '../services/api-tags'
-import type { EffectiveTagsResponse, Tag, TagUsage } from '../services/api-tags'
+import type {
+  CreateTagResponse,
+  EffectiveTagsResponse,
+  Tag,
+  TagUsage,
+} from '../services/api-tags'
 import { renderHook } from '@testing-library/react'
 
 vi.mock('../services/api-tags', async (importOriginal) => {
@@ -481,6 +486,87 @@ describe('TagEditor (issue #3032)', () => {
       }),
     )
     expect(await screen.findByRole('status')).toHaveTextContent('Created and added “Private 10”.')
+    // No color change was made while the guidance was open, so continuing must
+    // not issue a redundant update (PR #3996 review).
+    expect(mockedTagsApi.update).not.toHaveBeenCalled()
+  })
+
+  it('saves a color chosen after the similar-name guidance appears (PR #3996 review)', async () => {
+    const user = userEvent.setup()
+    mockedTagsApi.create.mockResolvedValue({
+      tag: makeTag(10),
+      redirected_to_global: false,
+      near_matches: [
+        { id: 9, name: 'Horror', color: '#7F1D1D', normalized_name: 'horror', scope: 'global' },
+      ],
+    })
+    mockedTagsApi.update.mockResolvedValue(makeTag(10))
+    mockedTagsApi.assign.mockResolvedValue(assignment(10))
+
+    renderEditor()
+
+    await user.type(screen.getByLabelText('New tag name'), 'horrer')
+    await user.click(screen.getByRole('button', { name: 'Create and add' }))
+    // The palette stays live while the guidance is open, so a color picked
+    // here must reach the already-created tag before it is assigned.
+    await user.click(await screen.findByRole('radio', { name: 'Color teal' }))
+    await user.click(screen.getByRole('button', { name: 'Create private anyway' }))
+
+    await waitFor(() =>
+      expect(mockedTagsApi.update).toHaveBeenCalledWith(10, { color: 'teal' }),
+    )
+    await waitFor(() =>
+      expect(mockedTagsApi.assign).toHaveBeenCalledWith(10, {
+        target_type: 'Issue',
+        target_id: 11,
+      }),
+    )
+    expect(mockedTagsApi.update.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedTagsApi.assign.mock.invocationCallOrder[0],
+    )
+    expect(await screen.findByRole('status')).toHaveTextContent('Created and added “Private 10”.')
+  })
+
+  it('ignores a creation result for a name the viewer replaced (PR #3996 review)', async () => {
+    const user = userEvent.setup()
+    let resolveCreate: (value: CreateTagResponse) => void = () => {}
+    mockedTagsApi.create.mockImplementation(
+      () =>
+        new Promise<CreateTagResponse>((resolve) => {
+          resolveCreate = resolve
+        }),
+    )
+    mockedTagsApi.assign.mockResolvedValue(assignment(10))
+
+    renderEditor()
+
+    await user.type(screen.getByLabelText('New tag name'), 'horrer')
+    await user.click(screen.getByRole('button', { name: 'Create and add' }))
+
+    // Rename the draft while the first creation pass is still in flight.
+    const nameInput = screen.getByLabelText('New tag name')
+    await user.clear(nameInput)
+    await user.type(nameInput, 'PlanTagger')
+
+    await act(async () => {
+      resolveCreate({
+        tag: { ...makeTag(10), name: 'horrer', normalized_name: 'horrer' },
+        redirected_to_global: false,
+        near_matches: [
+          { id: 9, name: 'Horror', color: '#7F1D1D', normalized_name: 'horror', scope: 'global' },
+        ],
+      })
+    })
+
+    // The late response belongs to the old name; it must not become the
+    // continuation target for the name now on screen, and nothing may be
+    // assigned from it.
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Add it from the tag list.',
+    )
+    expect(screen.queryByText(/Similar global tag exists/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Create private anyway' })).toBeNull()
+    expect(mockedTagsApi.assign).not.toHaveBeenCalled()
   })
 
   it('blocks creation and reuses an exact private-name duplicate (issue #3423)', async () => {
