@@ -271,13 +271,17 @@ async def list_sessions(
     )
     history_events = history_events_result.scalars().all()
 
-    rate_issue_by_session: dict[int, tuple[int | None, str | None]] = {}
+    # Map the last *open* rate event per (session, thread) so the History card
+    # shows an issue number that belongs to the displayed thread and stays
+    # immutable against later undos.
+    rate_issue_by_session_thread: dict[tuple[int, int], tuple[int | None, str | None]] = {}
     for ev in history_events:
-        event_session_id = ev.session_id
-        if event_session_id is None:
+        if ev.session_id is None or ev.thread_id is None:
             continue
         if ev.type == "rate" and (ev.issue_id is not None or ev.issue_number is not None):
-            rate_issue_by_session[event_session_id] = (ev.issue_id, ev.issue_number)
+            key = (ev.session_id, ev.thread_id)
+            # Overwrite with later events; undo handling will be applied later
+            rate_issue_by_session_thread[key] = (ev.issue_id, ev.issue_number)
 
     # Undo-aware reading totals computed with the same canonical replay as the
     # session card (``load_session_rate_stats`` ->
@@ -348,9 +352,10 @@ async def list_sessions(
                         issues_remaining = unread_counts.get(thread.id, 0)
                     else:
                         issues_remaining = thread.issues_remaining
-                    # Prefer the historically rated issue over the thread's
-                    # current next_unread_issue_id so History rows are immutable.
-                    historical = rate_issue_by_session.get(sid)
+                    # Prefer the historically rated issue for this specific thread
+                    # over the thread's current next_unread_issue_id so History rows
+                    # are immutable and never show an issue from a different thread.
+                    historical = rate_issue_by_session_thread.get((sid, thread.id))
                     if historical is not None:
                         issue_id, issue_number = historical
                     else:
@@ -392,7 +397,7 @@ async def list_sessions(
                         issues_remaining = unread_counts.get(thread.id, 0)
                     else:
                         issues_remaining = thread.issues_remaining
-                    historical_pending = rate_issue_by_session.get(sid)
+                    historical_pending = rate_issue_by_session_thread.get((sid, thread.id))
                     if historical_pending is not None:
                         issue_id_pending, issue_number_pending = historical_pending
                     else:
