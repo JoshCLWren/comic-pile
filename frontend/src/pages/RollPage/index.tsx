@@ -122,7 +122,10 @@ export default function RollPage() {
     // query's stale window would otherwise replay a snapshot captured before
     // the roll, whose `pending_thread_id: null` hides the selection that was
     // preserved.
-    void refetchBootstrap()
+    void refetchBootstrap().catch(() => {
+      // Background refresh failure is non-blocking: navigation is the
+      // primary action, and the bootstrap will refresh on the next visit.
+    })
     navigate('/queue')
   }, [navigate, refetchBootstrap])
 
