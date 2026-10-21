@@ -28,6 +28,8 @@ class CBLSyncSummary:
     entries_written: int
     identities_upserted: int
     dry_run: bool
+    changed: bool = False
+    repository_reconciled: bool = False
 
 
 class _IdentityCache:
@@ -86,6 +88,7 @@ async def sync_cbl_lists(
     revision_sha: str,
     parsed_lists: tuple[CBLList, ...],
     protected_paths: frozenset[str] = frozenset(),
+    repository_aliases: tuple[str, ...] = (),
     dry_run: bool = False,
     synced_at: datetime | None = None,
 ) -> CBLSyncSummary:
@@ -96,7 +99,9 @@ async def sync_cbl_lists(
     hash are left untouched. Lists missing from the new mirror revision are
     retained and marked inactive rather than deleted. Paths that were present
     but failed parsing are protected from deactivation so malformed source data
-    cannot erase the last known-good imported state.
+    cannot erase the last known-good imported state. When the recorded revision
+    and every incoming content hash already match, the sync performs no
+    persistence writes and does not restamp the source timestamp.
 
     Args:
         db: Async database session participating in the sync transaction.
@@ -106,6 +111,9 @@ async def sync_cbl_lists(
         parsed_lists: Successfully parsed CBL files for this revision.
         protected_paths: Source paths known to be present but unavailable for
             persistence, such as files that failed parsing.
+        repository_aliases: Existing source repository identities that may be
+            renamed in place to ``repository``. This reconciles a legacy
+            machine-path identity without changing source or list IDs.
         dry_run: Report intended changes without mutating persistence.
         synced_at: Optional deterministic synchronization timestamp for tests.
 
@@ -131,23 +139,37 @@ async def sync_cbl_lists(
         raise ValueError("CBL content hashes must be non-empty")
     if any(not path.strip() for path in protected_paths):
         raise ValueError("protected CBL source paths must be non-empty")
+    normalized_aliases = tuple(
+        dict.fromkeys(alias.strip() for alias in repository_aliases if alias.strip())
+    )
+    if normalized_repository in normalized_aliases:
+        raise ValueError("repository must not also be listed as an alias")
 
-    source = await db.scalar(select(CBLSource).where(CBLSource.repository == normalized_repository))
+    source_query = select(CBLSource).where(CBLSource.repository == normalized_repository)
+    if not dry_run:
+        source_query = source_query.with_for_update()
+    source = await db.scalar(source_query)
+    repository_reconciled = False
+    if source is None and normalized_aliases:
+        alias_query = select(CBLSource).where(CBLSource.repository.in_(normalized_aliases))
+        if not dry_run:
+            alias_query = alias_query.with_for_update()
+        alias_sources = list((await db.execute(alias_query)).scalars().all())
+        if len(alias_sources) > 1:
+            raise ValueError("multiple repository aliases match existing CBL sources")
+        if alias_sources:
+            source = alias_sources[0]
+            repository_reconciled = True
+            if not dry_run:
+                source.repository = normalized_repository
     source_created = source is None
 
     existing_lists: list[CBLSourceList] = []
     if source is not None:
-        existing_lists = list(
-            (
-                await db.execute(
-                    select(CBLSourceList)
-                    .where(CBLSourceList.source_id == source.id)
-                    .with_for_update()
-                )
-            )
-            .scalars()
-            .all()
-        )
+        list_query = select(CBLSourceList).where(CBLSourceList.source_id == source.id)
+        if not dry_run:
+            list_query = list_query.with_for_update()
+        existing_lists = list((await db.execute(list_query)).scalars().all())
     existing_by_path = {item.source_path: item for item in existing_lists}
     incoming_paths = set(paths)
 
@@ -177,6 +199,13 @@ async def sync_cbl_lists(
         ):
             deactivated += 1
 
+    source_changed = (
+        source is None
+        or source.revision_sha != normalized_revision
+        or repository_reconciled
+    )
+    changed = bool(inserted or updated or deactivated or source_changed)
+
     if dry_run:
         return CBLSyncSummary(
             source_created=source_created,
@@ -187,6 +216,22 @@ async def sync_cbl_lists(
             entries_written=entries_written,
             identities_upserted=0,
             dry_run=True,
+            changed=changed,
+            repository_reconciled=repository_reconciled,
+        )
+
+    if not changed:
+        return CBLSyncSummary(
+            source_created=False,
+            inserted_lists=0,
+            updated_lists=0,
+            deactivated_lists=0,
+            unchanged_lists=unchanged,
+            entries_written=0,
+            identities_upserted=0,
+            dry_run=False,
+            changed=False,
+            repository_reconciled=False,
         )
 
     now = synced_at or datetime.now(UTC)
@@ -266,6 +311,8 @@ async def sync_cbl_lists(
         entries_written=entries_written,
         identities_upserted=identity_cache.upserted_count,
         dry_run=False,
+        changed=True,
+        repository_reconciled=repository_reconciled,
     )
 
 
