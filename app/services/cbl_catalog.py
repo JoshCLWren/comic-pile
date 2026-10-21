@@ -51,7 +51,8 @@ def normalize_cbl_folder_path(raw: str | None) -> str:
 
     Returns:
         The canonical folder path without leading, trailing, or duplicate
-        separators.
+        separators. Inner spaces are preserved so folder names containing
+        spaces (including a trailing space) round-trip through lookups.
 
     Raises:
         InvalidCBLFolderPathError: If the path is too long, contains control
@@ -59,8 +60,8 @@ def normalize_cbl_folder_path(raw: str | None) -> str:
     """
     if raw is None:
         return ""
-    folder = raw.strip()
-    if not folder:
+    folder = raw
+    if not folder.strip():
         return ""
     if len(folder) > MAX_FOLDER_LENGTH:
         raise InvalidCBLFolderPathError(f"folder must be at most {MAX_FOLDER_LENGTH} characters")

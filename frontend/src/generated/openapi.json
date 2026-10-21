@@ -962,6 +962,38 @@
         "title": "CBLBreadcrumb",
         "type": "object"
       },
+      "CBLErrorDetail": {
+        "description": "Machine-readable error code and message for a catalog failure.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "CBLErrorDetail",
+        "type": "object"
+      },
+      "CBLErrorResponse": {
+        "description": "Envelope for catalog error responses: {\"detail\": {\"code\": ..., \"message\": ...}}.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/CBLErrorDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "CBLErrorResponse",
+        "type": "object"
+      },
       "CBLCatalogBrowseResponse": {
         "description": "Paginated CBL results for one folder or one catalog-wide search.",
         "properties": {
@@ -25640,6 +25672,26 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid folder path or search query."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            },
+            "description": "Folder not found."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -25649,6 +25701,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            },
+            "description": "The shared CBL catalog is temporarily unavailable."
           }
         },
         "security": [
@@ -25692,6 +25754,26 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid folder path."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            },
+            "description": "Folder not found."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -25701,6 +25783,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            },
+            "description": "The shared CBL catalog is temporarily unavailable."
           }
         },
         "security": [

@@ -71,3 +71,16 @@ class CBLCatalogBrowseResponse(BaseModel):
     total_pages: int = Field(..., ge=0)
     has_next: bool
     has_previous: bool
+
+
+class CBLErrorDetail(BaseModel):
+    """Machine-readable error code and message for a catalog failure."""
+
+    code: str = Field(..., description="Stable machine-readable error code.")
+    message: str = Field(..., description="Human-readable error message.")
+
+
+class CBLErrorResponse(BaseModel):
+    """Envelope for catalog error responses: ``{"detail": {"code": ..., "message": ...}}``."""
+
+    detail: CBLErrorDetail

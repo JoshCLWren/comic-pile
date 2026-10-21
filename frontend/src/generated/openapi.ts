@@ -6639,6 +6639,24 @@ export interface components {
             path: string;
         };
         /**
+         * CBLErrorDetail
+         * @description Machine-readable error code and message for a catalog failure.
+         */
+        CBLErrorDetail: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * CBLErrorResponse
+         * @description Envelope for catalog error responses: {"detail": {"code": ..., "message": ...}}.
+         */
+        CBLErrorResponse: {
+            /** Detail */
+            detail: components["schemas"]["CBLErrorDetail"];
+        };
+        /**
          * CBLCatalogBrowseResponse
          * @description Paginated CBL results for one folder or one catalog-wide search.
          */
@@ -18629,6 +18647,24 @@ export interface operations {
                     "application/json": components["schemas"]["CBLCatalogBrowseResponse"];
                 };
             };
+            /** @description Invalid folder path or search query. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+            /** @description Folder not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -18636,6 +18672,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The shared CBL catalog is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
                 };
             };
         };
@@ -18660,6 +18705,24 @@ export interface operations {
                     "application/json": components["schemas"]["CBLFolderListingResponse"];
                 };
             };
+            /** @description Invalid folder path. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+            /** @description Folder not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -18667,6 +18730,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The shared CBL catalog is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
                 };
             };
         };

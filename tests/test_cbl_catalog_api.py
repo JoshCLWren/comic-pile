@@ -200,6 +200,41 @@ async def test_folder_browse_navigates_nested_and_unsorted_folders(
 
 
 @pytest.mark.asyncio
+async def test_folder_with_trailing_space_round_trips(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A folder path returned with trailing spaces can be followed to its contents."""
+    source = await _seed_source(async_db)
+    await _seed_list(
+        db=async_db,
+        source=source,
+        name="One",
+        path="DC/Events /One.cbl",
+    )
+    await async_db.commit()
+
+    root = await auth_client.get(f"{CATALOG_URL}/folders")
+    assert root.status_code == 200, root.text
+    dc = next(folder for folder in root.json()["folders"] if folder["name"] == "DC")
+
+    publisher = await auth_client.get(
+        f"{CATALOG_URL}/folders", params={"folder": dc["path"]}
+    )
+    assert publisher.status_code == 200, publisher.text
+    events = next(
+        folder for folder in publisher.json()["folders"] if folder["name"] == "Events "
+    )
+    assert events["path"] == "DC/Events "
+
+    followed = await auth_client.get(
+        f"{CATALOG_URL}/browse", params={"folder": events["path"]}
+    )
+    assert followed.status_code == 200, followed.text
+    assert [item["name"] for item in followed.json()["items"]] == ["One"]
+
+
+@pytest.mark.asyncio
 async def test_two_empty_reader_accounts_see_identical_shared_catalog(
     auth_client: AsyncClient,
     client: AsyncClient,

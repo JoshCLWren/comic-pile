@@ -21,6 +21,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.cbl_catalog import (
     CBLCatalogBrowseResponse,
+    CBLErrorResponse,
     CBLFolderListingResponse,
     CBLSourceListDiscoveryItem,
 )
@@ -67,7 +68,18 @@ async def discover_cbl_source_lists(
         ) from error
 
 
-@router.get("/cbl-sources/folders", response_model=CBLFolderListingResponse)
+@router.get(
+    "/cbl-sources/folders",
+    response_model=CBLFolderListingResponse,
+    responses={
+        400: {"model": CBLErrorResponse, "description": "Invalid folder path."},
+        404: {"model": CBLErrorResponse, "description": "Folder not found."},
+        503: {
+            "model": CBLErrorResponse,
+            "description": "The shared CBL catalog is temporarily unavailable.",
+        },
+    },
+)
 async def list_cbl_source_folders(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -100,7 +112,21 @@ async def list_cbl_source_folders(
         ) from error
 
 
-@router.get("/cbl-sources/browse", response_model=CBLCatalogBrowseResponse)
+@router.get(
+    "/cbl-sources/browse",
+    response_model=CBLCatalogBrowseResponse,
+    responses={
+        400: {
+            "model": CBLErrorResponse,
+            "description": "Invalid folder path or search query.",
+        },
+        404: {"model": CBLErrorResponse, "description": "Folder not found."},
+        503: {
+            "model": CBLErrorResponse,
+            "description": "The shared CBL catalog is temporarily unavailable.",
+        },
+    },
+)
 async def browse_cbl_source_catalog(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
