@@ -14,6 +14,7 @@ from app.performance_diagnostics import get_request_diagnostics
 from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY, classify_snapshot
 from comic_pile.bandwidth import clear_ephemeral_bandwidth, initialize_session_bandwidth
 from comic_pile.intent import clear_ephemeral_intent
+from comic_pile.dice_ladder import automatic_die_after
 
 logger = logging.getLogger(__name__)
 _session_creation_lock = asyncio.Lock()
@@ -447,12 +448,14 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
     )
     last_die_event = result.scalars().first()
     if last_die_event and last_die_event.die_after is not None:
-        return last_die_event.die_after
+        return automatic_die_after(last_die_event.die_after, last_die_event.context)
 
     return session.start_die if session else start_die
 
 
-async def get_current_die_for_session(session: ReadingSession, db: AsyncSession) -> int:
+async def get_current_die_for_session(
+    session: ReadingSession, db: AsyncSession, *, automatic: bool = False,
+) -> int:
     """Get the current die using an already-loaded session object.
 
     Callers that hold the authoritative session in the transaction avoid the
@@ -462,12 +465,13 @@ async def get_current_die_for_session(session: ReadingSession, db: AsyncSession)
     Args:
         session: Already-loaded authoritative session object.
         db: Async database session used for the die-event lookup.
+        automatic: Ignore the manual override to resolve its suspended ladder.
 
     Returns:
         The manual die, the latest die-changing event's die, or the session
         start die.
     """
-    if session.manual_die:
+    if session.manual_die and not automatic:
         return session.manual_die
 
     result = await db.execute(
@@ -480,6 +484,6 @@ async def get_current_die_for_session(session: ReadingSession, db: AsyncSession)
     )
     last_die_event = result.scalars().first()
     if last_die_event and last_die_event.die_after is not None:
-        return last_die_event.die_after
+        return automatic_die_after(last_die_event.die_after, last_die_event.context)
 
     return session.start_die

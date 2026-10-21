@@ -321,6 +321,19 @@ Manually select a thread instead of rolling.
 
 ---
 
+### Manual die mode
+
+`POST /api/v1/roll/set-die?die=20` pins the visible die. Ratings and snoozes
+keep that die fixed; their timeline records carry the actual die in `die` and
+the unchanged visible die in `die_after`. New manual outcome events preserve
+the suspended automatic ladder in `context.automatic_die_after`.
+
+`POST /api/v1/roll/clear-manual-die` resumes that automatic value, rather than
+stepping from the manual die. Session details, History, and roll selection use
+the same automatic baseline. Undo of a new rating preserves both values.
+Events without this metadata retain their historical interpretation; this
+change does not rewrite previously recorded ladder steps.
+
 ## Rate
 
 Rate the current reading session.

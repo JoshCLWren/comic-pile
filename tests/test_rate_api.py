@@ -700,7 +700,7 @@ async def test_rate_targets_pending_thread_not_last_roll(
 
 @pytest.mark.asyncio
 async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Rating creates rate event with die_after value."""
+    """Rating records the pinned die without advancing the automatic ladder."""
     from tests.conftest import get_or_create_user_async
     from comic_pile.reading_session import get_current_die
 
@@ -751,7 +751,7 @@ async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: Async
     rate_event = result.scalars().first()
     assert rate_event is not None
     assert rate_event.die == 20
-    assert rate_event.die_after == 12
+    assert rate_event.die_after == 20
 
     current_die = await get_current_die(session.id, async_db)
     assert current_die == 20
@@ -761,7 +761,7 @@ async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: Async
 async def test_rate_low_rating_updates_manual_die(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """Low rating steps die up and records die_after in rate event."""
+    """Low ratings keep the visible die pinned while manual mode is active."""
     from tests.conftest import get_or_create_user_async
     from comic_pile.reading_session import get_current_die
 
@@ -812,7 +812,7 @@ async def test_rate_low_rating_updates_manual_die(
     rate_event = result.scalars().first()
     assert rate_event is not None
     assert rate_event.die == 6
-    assert rate_event.die_after == 8
+    assert rate_event.die_after == 6
 
     current_die = await get_current_die(session.id, async_db)
     assert current_die == 6

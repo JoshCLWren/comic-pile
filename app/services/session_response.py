@@ -511,6 +511,7 @@ async def build_session_event_details(
             else:
                 event_data.description = f"Selected {thread_title or 'a thread'}"
         elif event.type == "rate":
+            event_data.die = event.die
             event_data.rating = event.rating
             event_data.issues_read = event.issues_read
             event_data.queue_move = event.queue_move

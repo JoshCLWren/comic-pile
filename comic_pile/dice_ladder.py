@@ -36,7 +36,25 @@ Example Flow:
 4. Continue rating poorly -> step up to d8, d10, etc.
 """
 
+from collections.abc import Mapping
+
 DICE_LADDER = [4, 6, 8, 10, 12, 20, 30, 50, 100]
+
+
+def automatic_die_after(die_after: int, context: Mapping[str, object] | None) -> int:
+    """Resolve the suspended automatic ladder independently of a pinned die.
+
+    Args:
+        die_after: Recorded visible die after the action.
+        context: Event metadata; manual actions preserve the automatic die here.
+
+    Returns:
+        Preserved automatic die, or the recorded die for legacy/automatic actions.
+    """
+    preserved = context.get("automatic_die_after") if context else None
+    if type(preserved) is int and preserved in DICE_LADDER:
+        return preserved
+    return die_after
 
 
 def step_down(die_size: int) -> int:
