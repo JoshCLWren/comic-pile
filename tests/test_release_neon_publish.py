@@ -39,19 +39,25 @@ def _payload() -> dict[str, object]:
 
 
 class FakeCursor:
+    """Record the SQL operations executed by the release publisher."""
+
     def __init__(self, *, selections: list[list[tuple]], inserted: tuple | None = None):
+        """Prepare the predefined SELECT and INSERT outcomes."""
         self.selections = list(selections)
         self.inserted = inserted
         self.current: object = None
         self.inserts = 0
 
     def __enter__(self):
+        """Enter the in-memory cursor context."""
         return self
 
     def __exit__(self, *_args):
+        """Exit the in-memory cursor context without suppressing errors."""
         return False
 
     def execute(self, statement, _parameters):
+        """Simulate SELECT and INSERT statements."""
         if "SELECT id" in statement:
             self.current = self.selections.pop(0)
         elif "INSERT INTO releases" in statement:
@@ -62,25 +68,33 @@ class FakeCursor:
         return self
 
     def fetchall(self):
+        """Return the rows from the most recent SELECT."""
         assert isinstance(self.current, list)
         return self.current
 
     def fetchone(self):
+        """Return the row from the most recent INSERT."""
         return self.current
 
 
 class FakeConnection:
+    """Provide a transaction and cursor for in-memory tests."""
+
     def __init__(self, cursor: FakeCursor):
+        """Attach the fake cursor to this connection."""
         self._cursor = cursor
 
     def transaction(self):
+        """Return a transaction context with no external effects."""
         return nullcontext()
 
     def cursor(self):
+        """Return the test cursor."""
         return self._cursor
 
 
 def test_exact_existing_source_is_idempotent():
+    """Avoid rewriting releases with an identical source identity."""
     payload = _payload()
     cursor = FakeCursor(selections=[[(1, 123, "a" * 40)]])
     assert direct.publish_payload(FakeConnection(cursor), payload) == "already_present"
@@ -88,28 +102,32 @@ def test_exact_existing_source_is_idempotent():
 
 
 def test_conflicting_merge_sha_cannot_be_overwritten():
+    """Reject an existing release with a different merge SHA."""
     cursor = FakeCursor(selections=[[(1, 123, "b" * 40)]])
-    with pytest.raises(direct.ReleaseIdentityConflict):
+    with pytest.raises(direct.ReleaseIdentityConflictError):
         direct.publish_payload(FakeConnection(cursor), _payload())
     assert cursor.inserts == 0
 
 
 def test_new_release_is_inserted_once():
+    """Insert a previously unknown merged PR exactly once."""
     cursor = FakeCursor(selections=[[]], inserted=(7,))
     assert direct.publish_payload(FakeConnection(cursor), _payload()) == "inserted"
     assert cursor.inserts == 1
 
 
 def test_conflict_after_concurrent_insert_is_checked():
+    """Recheck identity after a competing writer wins an insert."""
     cursor = FakeCursor(
         selections=[[], [(9, 555, "a" * 40)]],
         inserted=None,
     )
-    with pytest.raises(direct.ReleaseIdentityConflict):
+    with pytest.raises(direct.ReleaseIdentityConflictError):
         direct.publish_payload(FakeConnection(cursor), _payload())
 
 
 def test_staging_never_contacts_vercel_or_neon(monkeypatch, tmp_path: Path):
+    """Ensure staging never performs HTTP publication or database writes."""
     candidate = tmp_path / "candidate.json"
     monkeypatch.setenv("RELEASE_WRITER_STAGE_FILE", str(candidate))
     monkeypatch.delenv("RELEASE_API_URL", raising=False)
@@ -133,6 +151,7 @@ def test_staging_never_contacts_vercel_or_neon(monkeypatch, tmp_path: Path):
 
 
 def test_publisher_validates_real_merge_before_database_credentials(monkeypatch, tmp_path: Path):
+    """Reject a candidate whose merge SHA differs from verified GitHub data."""
     candidate = tmp_path / "candidate.json"
     candidate.write_text(json.dumps(_payload()), encoding="utf-8")
     monkeypatch.setattr(
@@ -150,11 +169,12 @@ def test_publisher_validates_real_merge_before_database_credentials(monkeypatch,
     bad = _payload()
     bad["source_merge_sha"] = "b" * 40
     candidate.write_text(json.dumps(bad), encoding="utf-8")
-    with pytest.raises(direct.ReleaseIdentityConflict):
+    with pytest.raises(direct.ReleaseIdentityConflictError):
         direct._load_validated(candidate, "JoshCLWren/comic-pile", 123)
 
 
 def test_stage_summary_does_not_claim_publication(monkeypatch):
+    """Distinguish staged candidates from successfully published releases."""
     monkeypatch.setenv("RELEASE_WRITER_STAGE_FILE", "/tmp/stage.json")
     assert release_reconcile._outcome_from_release({"visibility": "public"}) == "staged_public"
     assert release_reconcile._outcome_from_release({"visibility": "internal"}) == "staged_internal"
