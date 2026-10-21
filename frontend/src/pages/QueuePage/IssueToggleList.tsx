@@ -108,6 +108,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const isProcessingMutationsRef = useRef(false)
   const nextMutationIdRef = useRef(1)
   const loadGenerationRef = useRef(0)
+  const totalCountRef = useRef(0)
+  const fullyLoadedRef = useRef(false)
   const addInputId = useId()
   const addValidationErrorId = useId()
   const addServerErrorId = useId()
@@ -171,6 +173,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     const allIssues: Issue[] = []
     const seenPageTokens = new Set<string>()
     let nextPageToken: string | null = null
+    let totalCount = 0
 
     while (true) {
       const params: IssueListParams = { page_size: 100 }
@@ -178,9 +181,13 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         params.page_token = nextPageToken
       }
       const data = await issuesService.list(threadId, params)
+      if (totalCount === 0) {
+        totalCount = data.total_count
+      }
       allIssues.push(...data.issues)
 
       if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
+        totalCountRef.current = totalCount
         return allIssues
       }
 
@@ -264,7 +271,15 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             // issues at their natural position rather than appending them.
             // Re-read the thread so the base list matches server order before
             // any later queued mutation (notably reorder) is derived from it.
-            baseIssuesRef.current = await fetchAllIssues()
+            if (!fullyLoadedRef.current) {
+              throw new Error('Issues are not fully loaded; save aborted.')
+            }
+            const refreshed = await fetchAllIssues()
+            const expectedTotal = totalCountRef.current
+            if (expectedTotal > 0 && refreshed.length < expectedTotal) {
+              throw new Error('Could not load all issues; save aborted.')
+            }
+            baseIssuesRef.current = refreshed
           } else {
             baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
           }
@@ -308,6 +323,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   // Imperative handle for deferred mode: flush on save, discard on unmount.
   useImperativeHandle(ref, () => ({
     flush: async () => {
+      if (!fullyLoadedRef.current) {
+        throw new Error('Issues are not fully loaded; save aborted.')
+      }
       await processIssueMutations()
     },
     hasPendingMutations: () => pendingMutationsRef.current.length > 0,
@@ -361,6 +379,17 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         return
       }
 
+      // Refuse to publish a partial issue set: if the server reports more
+      // issues than we actually loaded, keep the dialog in the loading/error
+      // state instead of silently operating on a truncated list (#3764).
+      const expectedTotal = totalCountRef.current
+      if (expectedTotal > 0 && nextIssues.length < expectedTotal) {
+        fullyLoadedRef.current = false
+        setLoadError('Could not load all issues. Please retry.')
+        return
+      }
+
+      fullyLoadedRef.current = true
       baseIssuesRef.current = nextIssues
       syncOptimisticIssues(nextIssues, pendingMutationsRef.current)
 
@@ -374,11 +403,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       if (loadGeneration !== loadGenerationRef.current) {
         return
       }
+      fullyLoadedRef.current = false
       setLoadError(getApiErrorDetail(err))
     } finally {
       if (loadGeneration === loadGenerationRef.current) {
         setIsLoading(false)
-        onLoadRef.current?.()
+        if (fullyLoadedRef.current) {
+          onLoadRef.current?.()
+        }
       }
     }
   }, [fetchAllIssues, fetchDependencies, syncOptimisticIssues])
