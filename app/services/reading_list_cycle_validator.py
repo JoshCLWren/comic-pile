@@ -1,4 +1,8 @@
-"""Pure global cycle validation for Option E execution constraints."""
+"""Pure global cycle validation for Option E execution constraints.
+
+Matches the canonical Option E evaluator including natural series order,
+intentional prerequisites, and per-volume overlap decisions.
+"""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -40,7 +44,9 @@ def validate_reading_constraints(
 ) -> tuple[int, ...]:
     """Validate stored constraints, including read and excluded Issues.
 
-    Global exclusions change eligibility, but do not erase stored ordering
+    Derives exactly the same effective edges/holds as the canonical Option E evaluator
+    including natural series order, intentional prerequisites, and per-volume overlap
+    decisions. Global exclusions change eligibility, but do not erase stored ordering
     constraints during write validation. Local skipped placements are omitted.
     Returns a stable topological order when the combined graph is acyclic.
 
