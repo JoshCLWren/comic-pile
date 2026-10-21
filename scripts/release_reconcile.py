@@ -232,6 +232,17 @@ def _outcome_from_release(release: dict[str, object] | None) -> str:
 
 
 def _prompt(repository: str, source: Source) -> str:
+    if os.getenv("RELEASE_WRITER_STAGE_FILE"):
+        return (
+            f"Prepare exactly one merged PR in {repository}: #{source.number} "
+            f"({source.title}), merge_sha={source.merge_commit_sha}, "
+            f"merged_at={source.merged_at}. Check its exact staged source, "
+            "inspect PR/files/issues through release_writer.py, then stage "
+            "exactly one validated public release or internal skip using "
+            "that helper. Check the staged source again before exiting. "
+            "Staging is NOT durable publication: the separate trusted job "
+            "validates and writes it directly to Neon. Do not process other PRs."
+        )
     return (
         f"Process exactly one merged pull request in {repository}: "
         f"#{source.number} ({source.title}). Exact source identity: "
