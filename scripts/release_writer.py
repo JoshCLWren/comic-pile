@@ -403,7 +403,46 @@ def _fail(message: str) -> NoReturn:
     raise SystemExit(2)
 
 
+def _staged_request(method: str, url: str, payload: dict[str, object] | None) -> dict[str, object]:
+    """Stage the model's candidate locally, without any database or HTTP access.
+
+    The separate trusted publisher revalidates every field and the exact merged
+    source before committing. A staged record is NOT a durable DB write.
+    """
+    from pathlib import Path
+
+    raw_path = os.environ["RELEASE_WRITER_STAGE_FILE"]
+    candidate = Path(raw_path)
+    if not candidate.is_absolute() or not candidate.parent.is_dir() or candidate.is_symlink():
+        _fail("RELEASE_WRITER_STAGE_FILE must be an absolute, non-symlink file path")
+    parsed = urllib.parse.urlparse(url)
+    if method == "GET" and parsed.path.endswith("/source"):
+        if not candidate.exists():
+            return {"exists": False, "release": None}
+        release = json.loads(candidate.read_text(encoding="utf-8"))
+        params = urllib.parse.parse_qs(parsed.query)
+        if (
+            release.get("source_repository") != params.get("source_repository", [""])[0]
+            or str(release.get("source_pr_number")) != params.get("source_pr_number", [""])[0]
+            or release.get("source_merge_sha") != params.get("source_merge_sha", [""])[0]
+        ):
+            _fail("staged source identity conflict")
+        return {"exists": True, "release": {"id": 0, **release}}
+    if method == "PUT" and payload is not None:
+        if candidate.exists():
+            previous = json.loads(candidate.read_text(encoding="utf-8"))
+            if previous != payload:
+                _fail("a different release candidate was already staged")
+        else:
+            with candidate.open("x", encoding="utf-8") as output:
+                json.dump(payload, output, separators=(",", ":"))
+        return {"id": 0, **payload}
+    _fail("only source checks and candidate staging are supported during preparation")
+
+
 def _api_base() -> str:
+    if os.getenv("RELEASE_WRITER_STAGE_FILE"):
+        return "https://staged.invalid/api/v1/releases"
     value = os.getenv("RELEASE_API_URL", "").strip().rstrip("/")
     if not value:
         _fail("RELEASE_API_URL is required")
@@ -418,6 +457,8 @@ def _token() -> str:
 
 
 def _request(method: str, url: str, payload: dict[str, object] | None = None) -> dict[str, object]:
+    if os.getenv("RELEASE_WRITER_STAGE_FILE"):
+        return _staged_request(method, url, payload)
     body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode()
     request = urllib.request.Request(
         url,
@@ -1393,7 +1434,7 @@ def _skip(raw: str) -> None:
     result = _request("PUT", _api_base() + "/", internal_release)
     print(
         json.dumps(
-            {"classification": "internal", "skipped": True, "recorded": True, "release": result},
+            {"classification": "internal", "skipped": True, "recorded": not bool(os.getenv("RELEASE_WRITER_STAGE_FILE")), "staged": bool(os.getenv("RELEASE_WRITER_STAGE_FILE")), "release": result},
             separators=(",", ":"),
         )
     )
@@ -1454,7 +1495,7 @@ def main() -> None:
         payload = _validate_release(sys.argv[2])
         _validate_publish_grounding(payload)
         result = _request("PUT", _api_base() + "/", payload)
-        print(json.dumps({"published": True, "release": result}, separators=(",", ":")))
+        print(json.dumps({"published": not bool(os.getenv("RELEASE_WRITER_STAGE_FILE")), "staged": bool(os.getenv("RELEASE_WRITER_STAGE_FILE")), "release": result}, separators=(",", ":")))
         return
     if command == "skip" and len(sys.argv) == 3:
         _skip(sys.argv[2])
