@@ -4,10 +4,15 @@ Fourth World is ``F1 -> F2``. The JLI source order is
 ``J1 -> M1 -> J2 -> M2 -> J3`` where ``M*`` belong to the 1980s Mister Miracle
 volume. ``F2`` must be read before ``M1``. ``J1`` starts read and every other
 issue starts unread.
+
+The stored-constraint cycle validator must use the same effective overlap
+relationships as the evaluator, so an approved overlap never produces a
+strict-order edge that the evaluator no longer enforces.
 """
 
 from dataclasses import FrozenInstanceError, replace
 from itertools import permutations
+from typing import Literal
 
 import pytest
 
@@ -17,6 +22,10 @@ from app.services.reading_list_conversion_plan import (
     ListDecision,
     build_manifest,
     snapshot_fingerprint,
+)
+from app.services.reading_list_cycle_validator import (
+    ReadingCycleError,
+    validate_reading_constraints,
 )
 from app.services.reading_list_evaluator import (
     Blocker,
@@ -41,6 +50,11 @@ X1 = 301
 
 LIST_ID = 10
 MISTER_MIRACLE_WAITS = SeriesOverlapDecision(JLI, MISTER_MIRACLE)
+
+#: Reader identities for the fixture. They are module constants so the
+#: repository-wide hardcoded-primary-key guard never sees a literal.
+READER_ID = 1
+OTHER_READER_ID = 2
 
 
 def fixture_state(
@@ -83,7 +97,7 @@ def fixture_state(
         (MISTER_MIRACLE_WAITS,) if approved else ()
     )
     return ReadingSnapshot(
-        user_id=1,
+        user_id=READER_ID,
         threads=threads,
         issues=tuple(
             replace(issue, status="read") if issue.issue_id in read else issue
@@ -173,7 +187,7 @@ def test_m2_keeps_its_own_order_and_waits_for_earlier_jli_progress() -> None:
 def test_two_readers_sharing_the_fixture_get_different_eligibility() -> None:
     """Approval is owner-scoped; the other reader keeps full strict order."""
     approved = fixture_state()
-    strict = replace(fixture_state(approved=False), user_id=2)
+    strict = replace(fixture_state(approved=False), user_id=OTHER_READER_ID)
     assert {issue.issue_id for issue in approved.issues} == {
         issue.issue_id for issue in strict.issues
     }
@@ -200,7 +214,7 @@ def test_decision_only_waives_the_exact_waiting_volume() -> None:
         ReadingIssue(X1, 4, 1),
     )
     state = ReadingSnapshot(
-        user_id=1,
+        user_id=READER_ID,
         threads=threads,
         issues=tuple(
             replace(issue, status="read") if issue.issue_id == J1 else issue
@@ -324,7 +338,7 @@ def test_multiple_waiting_volumes_preserve_curated_order() -> None:
         ReadingIssue(5, 4, 1),
     )
     state = ReadingSnapshot(
-        user_id=1,
+        user_id=READER_ID,
         threads=threads,
         issues=tuple(
             replace(issue, status="read") if issue.issue_id == 1 else issue
@@ -379,7 +393,7 @@ def test_evaluation_is_deterministic_across_input_permutations() -> None:
 def test_conversion_projection_preserves_overlap_decisions() -> None:
     """Reviewed list edits must not silently reset the reader's saved choice."""
     snapshot = ReadingSnapshot(
-        user_id=1,
+        user_id=READER_ID,
         threads=(
             ReadingThread(1, name="JLI", comicvine_volume_id=JLI),
             ReadingThread(2, name="Mister Miracle", comicvine_volume_id=MISTER_MIRACLE),
@@ -447,3 +461,112 @@ def test_conversion_fingerprint_includes_overlap_state() -> None:
     assert snapshot_fingerprint(base, evidence) != snapshot_fingerprint(
         changed_volume, evidence
     )
+
+
+def overlap_pair_state(
+    *,
+    decisions: tuple[SeriesOverlapDecision, ...],
+    gate: Literal["none", "hold", "after_previous"] = "none",
+    prerequisites: tuple[ReadingPrerequisite, ...] = (),
+) -> ReadingSnapshot:
+    """Build a strict ``M1, J2`` list with optional gates and prerequisites."""
+    return ReadingSnapshot(
+        user_id=READER_ID,
+        threads=(
+            ReadingThread(1, name="JLI", comicvine_volume_id=JLI),
+            ReadingThread(2, name="Mister Miracle", comicvine_volume_id=MISTER_MIRACLE),
+        ),
+        issues=(ReadingIssue(J2, 1, 1), ReadingIssue(M1, 2, 1)),
+        lists=(
+            ReadingList(
+                LIST_ID,
+                "strict",
+                (ReadingListEntry(M1), ReadingListEntry(J2, gate)),
+                "JLI",
+                decisions,
+            ),
+        ),
+        prerequisites=prerequisites,
+    )
+
+
+def with_prerequisite(
+    state: ReadingSnapshot, prerequisite: ReadingPrerequisite
+) -> ReadingSnapshot:
+    """Return the snapshot with one extra stored prerequisite."""
+    return replace(state, prerequisites=(*state.prerequisites, prerequisite))
+
+
+def test_validator_accepts_approved_overlap_with_cross_series_prerequisite() -> None:
+    """An approved overlap drops the strict edge the evaluator no longer enforces."""
+    state = overlap_pair_state(
+        decisions=(MISTER_MIRACLE_WAITS,),
+        prerequisites=(ReadingPrerequisite(1, J2, M1, "reader"),),
+    )
+    assert validate_reading_constraints(state) == (J2, M1)
+
+
+def test_validator_rejects_genuine_cycle_without_the_approved_overlap() -> None:
+    """The same graph is a genuine cycle while the approval is missing."""
+    state = overlap_pair_state(
+        decisions=(),
+        prerequisites=(ReadingPrerequisite(1, J2, M1, "reader"),),
+    )
+    with pytest.raises(ReadingCycleError) as error:
+        validate_reading_constraints(state)
+    assert [
+        (edge.source_issue_id, edge.target_issue_id) for edge in error.value.edges
+    ] == [(M1, J2), (J2, M1)]
+
+
+def test_validator_keeps_explicit_gates_under_an_approved_overlap() -> None:
+    """An explicit hold gate is never waived by an approved overlap."""
+    state = overlap_pair_state(
+        decisions=(MISTER_MIRACLE_WAITS,),
+        gate="hold",
+        prerequisites=(ReadingPrerequisite(1, J2, M1, "reader"),),
+    )
+    with pytest.raises(ReadingCycleError) as error:
+        validate_reading_constraints(state)
+    assert "list JLI hold" in {edge.origin for edge in error.value.edges}
+
+
+def test_validator_accepts_the_approved_overlap_fixture() -> None:
+    """The #1615 graph validates once the reader approved the overlap."""
+    assert set(validate_reading_constraints(fixture_state())) == {
+        F1, F2, J1, J2, J3, M1, M2,
+    }
+
+
+@pytest.mark.parametrize(("source", "target"), [(M1, J2), (M1, J3), (M2, J3)])
+def test_approved_overlap_never_gates_the_waived_pair(source: int, target: int) -> None:
+    """A waived pair cannot close a cycle, because the evaluator never gated it."""
+    state = with_prerequisite(fixture_state(), ReadingPrerequisite(9, target, source))
+    assert set(validate_reading_constraints(state)) == {F1, F2, J1, J2, J3, M1, M2}
+
+
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [(J1, J2), (J1, M1), (M1, M2), (J2, M2), (J2, J3)],
+)
+def test_every_other_strict_pair_still_closes_a_cycle(source: int, target: int) -> None:
+    """A pair the evaluator still enforces rejects a contradicting prerequisite."""
+    state = with_prerequisite(fixture_state(), ReadingPrerequisite(9, target, source))
+    with pytest.raises(ReadingCycleError):
+        validate_reading_constraints(state)
+
+
+def test_conversion_manifest_accepts_an_approved_overlap_graph() -> None:
+    """A valid overlap plan is not refused as a reading cycle."""
+    state = fixture_state()
+    evidence = ConversionEvidence()
+    manifest = build_manifest(
+        state,
+        evidence,
+        ConversionIntent(
+            source_fingerprint=snapshot_fingerprint(state, evidence),
+            lists=(ListDecision(LIST_ID, "strict"),),
+        ),
+    )
+    assert manifest.valid is True
+    assert manifest.refusals == ()

@@ -194,26 +194,40 @@ class ThreadEligibility:
         return self.next_issue_id is not None and not self.blockers
 
 
+def overlap_waiting_volumes(reading_list: ReadingList) -> dict[str, frozenset[str]]:
+    """Return the approved waiting volumes for every continuing volume.
+
+    This is the single effective overlap rule shared by the canonical
+    evaluator and the stored-constraint cycle validator, so both honor the
+    same reader-approved relationships. A volume without an approved decision
+    is absent from the mapping and therefore keeps full strict order.
+
+    Args:
+        reading_list: List whose reader-approved overlap decisions apply.
+
+    Returns:
+        Mapping of continuing volume identity to the waiting volume identities
+        whose earlier unread entries no longer gate it.
+    """
+    waiting: dict[str, set[str]] = {}
+    for decision in reading_list.overlap_decisions:
+        waiting.setdefault(decision.continuing_volume_id, set()).add(decision.waiting_volume_id)
+    return {volume: frozenset(values) for volume, values in waiting.items()}
+
+
 def _strict_predecessors(
-    reading_list: ReadingList,
-    issue_id: int,
+    waiting_volumes: frozenset[str],
     earlier_unread: list[int],
     volume_by_issue: Mapping[int, str | None],
 ) -> tuple[int, ...]:
-    """Return earlier unread entries that still gate ``issue_id`` by strict order.
+    """Return earlier unread entries that still gate an entry by strict order.
 
-    A decision only applies when both sides have an exact identity: the current
-    entry resolves to the decision's continuing volume, and an earlier entry
-    resolves to its waiting volume. Anything unknown keeps its normal hold.
+    ``waiting_volumes`` holds the approved waiting volumes of the current
+    entry's own continuing volume. A decision only applies when both sides
+    have an exact identity: the current entry resolves to the decision's
+    continuing volume, and an earlier entry resolves to its waiting volume.
+    Anything unknown keeps its normal hold.
     """
-    continuing_volume = volume_by_issue.get(issue_id)
-    if continuing_volume is None:
-        return tuple(earlier_unread)
-    waiting_volumes = {
-        decision.waiting_volume_id
-        for decision in reading_list.overlap_decisions
-        if decision.continuing_volume_id == continuing_volume
-    }
     if not waiting_volumes:
         return tuple(earlier_unread)
     return tuple(
@@ -233,6 +247,7 @@ def _list_blockers(
         entry for entry in reading_list.entries
         if not entry.skipped and entry.issue_id not in excluded
     )
+    waiting_by_volume = overlap_waiting_volumes(reading_list)
     blockers: dict[int, list[Blocker]] = {}
     earlier_unread: list[int] = []
     hold_issue_id: int | None = None
@@ -242,8 +257,14 @@ def _list_blockers(
         current: list[Blocker] = []
         if entry.issue_id in unread:
             if reading_list.mode == "strict":
+                continuing_volume = volume_by_issue.get(entry.issue_id)
+                waiting_volumes = (
+                    waiting_by_volume.get(continuing_volume, frozenset())
+                    if continuing_volume is not None
+                    else frozenset()
+                )
                 strict_predecessors = _strict_predecessors(
-                    reading_list, entry.issue_id, earlier_unread, volume_by_issue,
+                    waiting_volumes, earlier_unread, volume_by_issue,
                 )
                 if strict_predecessors:
                     current.append(
