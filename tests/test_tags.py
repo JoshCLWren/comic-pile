@@ -387,35 +387,41 @@ class TestDuplicatePrevention:
         assert result.tag.scope == "private"
         assert result.tag.name == "Avengers Assemble"
 
-    async def test_api_suggests_near_matches_by_default(
+    async def test_service_suggests_near_matches_from_schema_default(
         self, admin_user: User, non_admin_user: User, async_db: AsyncSession
     ) -> None:
-        """Creating a private tag with similar name suggests global matches by default."""
+        """Schema default ``include_near_matches=True`` flows through to the service layer."""
         service = TagService(async_db)
         await service.create_tag(admin_user, "PlanTag", color="red", scope="global")
-        
-        # Test via API to ensure the default behavior
+
+        # This is a service-level test: it verifies the TagCreate schema default
+        # (True) that the endpoint threads through, not the HTTP layer itself.
         from app.schemas.tags import TagCreate
         request = TagCreate(name="PlanTagger", color="blue")
-        
+        assert request.include_near_matches is True
+
         result = await service.create_tag(
-            non_admin_user, 
-            name=request.name, 
+            non_admin_user,
+            name=request.name,
             color=request.color,
             scope=request.scope,
-            include_near_matches=request.include_near_matches  # Should be True by default
+            include_near_matches=request.include_near_matches,
         )
-        
-        # Should not redirect since it's not an exact match
+
+        # Not an exact match, so no redirect; similar global tags are suggested.
         assert result.redirected_to_global is False
         assert result.tag.scope == "private"
         assert result.tag.name == "PlanTagger"
-        # But should suggest similar global tags
         assert len(result.near_matches) > 0
         assert any(tag.name == "PlanTag" for tag in result.near_matches)
 
     async def test_api_suggests_near_matches_via_endpoint(
-        self, admin_auth_client: AsyncClient, user_auth_client: AsyncClient, admin_user: User, non_admin_user: User, async_db: AsyncSession
+        self,
+        admin_auth_client: AsyncClient,
+        user_auth_client: AsyncClient,
+        admin_user: User,
+        non_admin_user: User,
+        async_db: AsyncSession,
     ) -> None:
         """API endpoint suggests near matches by default when creating similar private tags."""
         # Create a global tag first
@@ -423,13 +429,13 @@ class TestDuplicatePrevention:
             "/api/v1/tags/", json={"name": "PlanTag", "color": "red", "scope": "global"}
         )
         assert global_resp.status_code == 200
-        
+
         # Create a private tag with similar name via API
         resp = await user_auth_client.post(
             "/api/v1/tags/", json={"name": "PlanTagger", "color": "blue"}
         )
         assert resp.status_code == 200
-        
+
         data = resp.json()
         assert data["tag"]["name"] == "PlanTagger"
         assert data["tag"]["scope"] == "private"
