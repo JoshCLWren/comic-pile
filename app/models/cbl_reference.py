@@ -58,6 +58,19 @@ class CBLSourceList(Base):
     __table_args__ = (
         UniqueConstraint("source_id", "source_path", name="uq_cbl_source_list_path"),
         Index("ix_cbl_source_list_source_active", "source_id", "active"),
+        # Folder browsing filters active rows by a path prefix and orders by
+        # path-derived segments; ``text_pattern_ops`` keeps the prefix range
+        # index-eligible under non-C collations.
+        #
+        # The name/source_path GIN trigram indexes from revision c40080000001
+        # are migration-managed instead of declared here: test schemas are
+        # built with ``create_all`` before the pg_trgm extension is installed.
+        Index(
+            "ix_cbl_source_list_active_path",
+            "active",
+            "source_path",
+            postgresql_ops={"source_path": "text_pattern_ops"},
+        ),
     )
 
 

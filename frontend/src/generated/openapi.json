@@ -943,6 +943,161 @@
         "title": "CBLAdoptionSummaryResponse",
         "type": "object"
       },
+      "CBLBreadcrumb": {
+        "description": "One step in the folder breadcrumb, from the catalog root to the folder.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "CBLBreadcrumb",
+        "type": "object"
+      },
+      "CBLCatalogBrowseResponse": {
+        "description": "Paginated CBL results for one folder or one catalog-wide search.",
+        "properties": {
+          "breadcrumbs": {
+            "items": {
+              "$ref": "#/components/schemas/CBLBreadcrumb"
+            },
+            "title": "Breadcrumbs",
+            "type": "array"
+          },
+          "folder": {
+            "title": "Folder",
+            "type": "string"
+          },
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceFolder"
+            },
+            "title": "Folders",
+            "type": "array"
+          },
+          "has_next": {
+            "title": "Has Next",
+            "type": "boolean"
+          },
+          "has_previous": {
+            "title": "Has Previous",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceListDiscoveryItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "scope": {
+            "enum": [
+              "folder",
+              "search"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "minimum": 0.0,
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scope",
+          "folder",
+          "breadcrumbs",
+          "folders",
+          "items",
+          "page",
+          "page_size",
+          "total",
+          "total_pages",
+          "has_next",
+          "has_previous"
+        ],
+        "title": "CBLCatalogBrowseResponse",
+        "type": "object"
+      },
+      "CBLFolderListingResponse": {
+        "description": "Response for browsing one catalog folder's immediate subfolders.",
+        "properties": {
+          "breadcrumbs": {
+            "items": {
+              "$ref": "#/components/schemas/CBLBreadcrumb"
+            },
+            "title": "Breadcrumbs",
+            "type": "array"
+          },
+          "direct_list_count": {
+            "description": "Active CBLs stored directly in the requested folder.",
+            "minimum": 0.0,
+            "title": "Direct List Count",
+            "type": "integer"
+          },
+          "folder": {
+            "title": "Folder",
+            "type": "string"
+          },
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceFolder"
+            },
+            "title": "Folders",
+            "type": "array"
+          },
+          "total_list_count": {
+            "description": "Active CBLs anywhere below the requested folder.",
+            "minimum": 0.0,
+            "title": "Total List Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "folder",
+          "breadcrumbs",
+          "folders",
+          "direct_list_count",
+          "total_list_count"
+        ],
+        "title": "CBLFolderListingResponse",
+        "type": "object"
+      },
       "CBLPlacement": {
         "description": "One ordered CBL observation with inseparable provenance.",
         "properties": {
@@ -1267,6 +1422,41 @@
           "revision_sha"
         ],
         "title": "CBLSourceFingerprintResponse",
+        "type": "object"
+      },
+      "CBLSourceFolder": {
+        "description": "One immediate child folder of the requested catalog folder.",
+        "properties": {
+          "direct_list_count": {
+            "description": "Active CBLs stored directly in this folder.",
+            "minimum": 0.0,
+            "title": "Direct List Count",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Folder name (one path segment).",
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "description": "Full source-relative folder path.",
+            "title": "Path",
+            "type": "string"
+          },
+          "total_list_count": {
+            "description": "Active CBLs anywhere below this folder.",
+            "minimum": 0.0,
+            "title": "Total List Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "direct_list_count",
+          "total_list_count"
+        ],
+        "title": "CBLSourceFolder",
         "type": "object"
       },
       "CBLSourceListDiscoveryItem": {
@@ -25375,6 +25565,150 @@
           }
         ],
         "summary": "Discover Cbl Source Lists",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "issue-identity"
+        ]
+      }
+    },
+    "/api/v1/issue-identity/cbl-sources/browse": {
+      "get": {
+        "description": "Browse one catalog folder or search all CBLs by name and source path.\n\nWith a blank ``q`` the response describes the immediate contents of\n``folder``. With a non-blank ``q`` the search spans the entire shared\ncatalog, regardless of ``folder``, and ``scope`` is ``\"search\"``. ``total``\nis the truthful number of matches, so callers can page past 100 results.",
+        "operationId": "browse_cbl_source_catalog_api_v1_issue_identity_cbl_sources_browse_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "folder",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 1000,
+              "title": "Folder",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLCatalogBrowseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Browse Cbl Source Catalog",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "issue-identity"
+        ]
+      }
+    },
+    "/api/v1/issue-identity/cbl-sources/folders": {
+      "get": {
+        "description": "List immediate subfolders of one shared CBL catalog folder.\n\nThe root folder is addressed with an empty ``folder`` value. A request for a\nfolder with no active CBLs or subfolders returns a stable 404 envelope; a\nmalformed path returns 400.",
+        "operationId": "list_cbl_source_folders_api_v1_issue_identity_cbl_sources_folders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "folder",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 1000,
+              "title": "Folder",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLFolderListingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Cbl Source Folders",
         "tags": [
           "dependencies",
           "dependencies",
