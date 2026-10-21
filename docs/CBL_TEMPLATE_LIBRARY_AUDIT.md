@@ -30,24 +30,25 @@ The previous revision of this document labelled its structure and counts "Inferr
 
 ### Reproducing the mirror inventory
 
-```bash
-# Total .cbl files
-find /mnt/bigdata/CBL-ReadingLists -type f -name '*.cbl' | wc -l
+Use the repository-owned inventory command. It parses the complete local mirror without opening a
+database session, fetches nothing from GitHub, and prints deterministic JSON counts for every file,
+content hash, publisher folder, and Comic Vine identity:
 
-# Parse the whole mirror with the application parser
-cd /mnt/extra/josh/code/comic-pile
-PYTHONPATH=. uv run python -c "
-from pathlib import Path
-from app.cbl_ingest import parse_cbl_mirror
-parsed, failures = parse_cbl_mirror(Path('/mnt/bigdata/CBL-ReadingLists'))
-print('total     ', len(parsed) + len(failures))
-print('parseable ', len(parsed))
-print('failures  ', len(failures))
-print('entries   ', sum(len(p.books) for p in parsed))
-for f in failures:
-    print('FAIL', f.source_path, '-', f.message)
-"
+```bash
+uv run python -m scripts.sync_cbl_mirror /path/to/CBL-ReadingLists \
+  --revision-sha "$(git -C /path/to/CBL-ReadingLists rev-parse HEAD)" \
+  --inventory-only
 ```
+
+The `inventory` object reports `total_files`, `parsed_files`, `failed_files`, `total_entries`,
+Comic Vine series/issue/pair counts, distinct identity counts, duplicate content-hash groups,
+declared-count mismatches, per-publisher file/parse/failure counts, and one `files` row per parsed
+path containing its source-relative path, SHA-256 content hash, publisher, entry count, and Comic
+Vine ID counts. Parse failures are listed separately by path. Repeat the command against the same
+mirror revision and the JSON is byte-identical.
+
+See [`CBL_MIRROR_REFRESH.md`](CBL_MIRROR_REFRESH.md) for the repeatable dry-run and idempotent sync
+procedure.
 
 ## Measured Mirror Inventory
 
@@ -264,7 +265,10 @@ source 3. It would create a second source row and insert all 1,701 lists fresh, 
 13 stranded on an orphaned source and duplicating every list. Whoever runs the first full sync must
 either pass `--repository /mnt/bigdata/CBL-ReadingLists` or migrate the existing row's identity
 first. This is also why the repository column should hold a stable remote identity, not a machine
-path.
+path. `scripts/sync_cbl_mirror.py` now supports
+`--reconcile-repository /mnt/bigdata/CBL-ReadingLists`, which renames that source row in place on an
+applying run (preserving its source and list IDs) instead of creating a second source. See
+[`CBL_MIRROR_REFRESH.md`](CBL_MIRROR_REFRESH.md).
 
 ### The real cost blocker for a full sync
 
