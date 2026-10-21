@@ -39,6 +39,20 @@ until the guarded adapter and production acceptance stages.
 - **`after_previous`:** the gated issue waits for the nearest prior remaining entry in that list to be read. Reordering can change the predecessor and requires a visible “now waits on” confirmation before saving.
 - **`hold`:** for the milestone entry at position `p`, require all remaining entries above it to be read. Every remaining entry **below** that milestone stays blocked until all preceding entries **including the milestone** are read. Formal rule: with `u` the earliest unread remaining position, the hold issue is blocked when `u < p`; for a later entry at `q`, with the latest preceding hold at `k < q`, it is blocked when `u <= k`. A hold applies only inside its list.
 
+### Reader-approved overlap decisions
+
+A strict list normally protects its complete included order. When a reader explicitly approves
+that one series may continue while another waits, the choice is stored per owned Reading List for
+an exact pair of Comic Vine series/volume identities. The continuing volume is no longer gated by
+earlier unread entries of the waiting volume through implicit strict order. It still waits for its
+own earlier unread entries. The waiting volume keeps its own internal order, and every explicit
+`hold`/`after_previous` gate and every prerequisite remains authoritative for both series.
+
+Only the exact pair is relaxed: a same-titled other volume, a third series, another Reading List,
+or a missing/ambiguous volume identity keeps full strict order. The choice changes eligibility
+only; it never marks a waiting issue read, skips it, or changes global read state. Preview and write
+validation must use the same effective relationships.
+
 A list containing the same Issue as another list shares the one global read state. Eligibility is **conjunctive**: any active list blocker or prerequisite blocks an issue. A loose list cannot cancel a strict list. Explain **every** active blocker by named unread issues and its provenance.
 
 ### No annual or crossover inference

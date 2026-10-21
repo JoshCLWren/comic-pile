@@ -404,7 +404,9 @@ def _canonical_snapshot(
     return {
         "user_id": snapshot.user_id,
         "unpaired_plan_ids": sorted(evidence.unpaired_plan_ids),
-        "threads": sorted([t.thread_id, t.status, t.name] for t in snapshot.threads),
+        "threads": sorted(
+            [t.thread_id, t.status, t.name, t.comicvine_volume_id] for t in snapshot.threads
+        ),
         "issues": sorted([i.issue_id, i.thread_id, i.position, i.status] for i in snapshot.issues),
         "lists": sorted(
             [
@@ -412,6 +414,10 @@ def _canonical_snapshot(
                 row.mode,
                 row.name,
                 [[e.issue_id, e.gate, e.skipped] for e in row.entries],
+                sorted(
+                    [decision.continuing_volume_id, decision.waiting_volume_id]
+                    for decision in row.overlap_decisions
+                ),
             ]
             for row in snapshot.lists
         ),
@@ -1112,7 +1118,13 @@ def _project_snapshot(
             )
             for entry in reading_list.entries
         )
-        lists.append(ReadingList(reading_list.list_id, decision.mode, entries, reading_list.name))
+        lists.append(ReadingList(
+            reading_list.list_id,
+            decision.mode,
+            entries,
+            reading_list.name,
+            reading_list.overlap_decisions,
+        ))
     prerequisites: list[ReadingPrerequisite] = []
     for row in snapshot.prerequisites:
         state = states.get(row.prerequisite_id)

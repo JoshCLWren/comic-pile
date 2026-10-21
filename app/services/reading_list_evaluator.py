@@ -5,8 +5,17 @@ The loader must supply all referenced issues (including prerequisite sources in
 inactive Threads), and resolved collection exclusions. Only active Threads are
 returned. Lists in the snapshot are applicable execution lists, not archival
 copies. No stored frontier, counter, title or generated edge chooses eligibility.
+
+A reader may approve a per-Reading-List, per-Comic-Vine-volume overlap decision
+(``SeriesOverlapDecision``). It relaxes only the implicit strict-order protection
+between that exact pair of volumes: the continuing volume keeps waiting for its
+own earlier unread entries, while earlier unread entries of the waiting volume no
+longer gate it. The waiting volume keeps its own internal order, its own explicit
+``hold``/``after_previous`` gates, and every prerequisite. Missing or ambiguous
+volume identity never qualifies for an exception (fail closed to strict order).
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
@@ -23,11 +32,17 @@ class ReadingIssue:
 
 @dataclass(frozen=True, slots=True)
 class ReadingThread:
-    """Thread identity and activity, independent of cached progress counters."""
+    """Thread identity, activity, and unambiguous Comic Vine volume identity.
+
+    ``comicvine_volume_id`` is supplied only when the Thread resolves to exactly
+    one confirmed Comic Vine series/volume. A missing or ambiguous identity stays
+    ``None`` so no overlap decision can be applied to the wrong run.
+    """
 
     thread_id: int
     status: str = "active"
     name: str = ""
+    comicvine_volume_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,23 +55,56 @@ class ReadingListEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class SeriesOverlapDecision:
+    """One reader-approved overlap exception inside one Reading List.
+
+    The reader allowed ``continuing_volume_id`` to keep progressing even while
+    earlier unread entries of ``waiting_volume_id`` remain. Both identities are
+    exact Comic Vine series/volume identities, so an approval for one pair of
+    series never silently relaxes a third series or a same-titled other volume.
+    """
+
+    continuing_volume_id: str
+    waiting_volume_id: str
+
+    def __post_init__(self) -> None:
+        """Reject decisions that cannot name two distinct exact volumes."""
+        if not self.continuing_volume_id or not self.waiting_volume_id:
+            raise ValueError("Overlap decision requires both volume identities")
+        if self.continuing_volume_id == self.waiting_volume_id:
+            raise ValueError("Overlap decision cannot exempt a volume from itself")
+
+
+@dataclass(frozen=True, slots=True)
 class ReadingList:
-    """An applicable list whose tuple order is its curated reading order."""
+    """An applicable list whose tuple order is its curated reading order.
+
+    ``overlap_decisions`` belong to this list only; another list with the same
+    entries keeps its own complete order.
+    """
 
     list_id: int
     mode: Literal["strict", "loose"]
     entries: tuple[ReadingListEntry, ...] = ()
     name: str = ""
+    overlap_decisions: tuple[SeriesOverlapDecision, ...] = ()
 
     def __post_init__(self) -> None:
-        """Detach entries from any mutable input container."""
+        """Detach entries and decisions from any mutable input container."""
         object.__setattr__(self, "entries", tuple(self.entries))
+        object.__setattr__(self, "overlap_decisions", tuple(self.overlap_decisions))
         if self.mode not in ("strict", "loose"):
             raise ValueError(f"Unknown list mode: {self.mode}")
         if len({entry.issue_id for entry in self.entries}) != len(self.entries):
             raise ValueError(f"Duplicate issue in list {self.list_id}")
         if any(entry.gate not in ("none", "hold", "after_previous") for entry in self.entries):
             raise ValueError(f"Unknown gate in list {self.list_id}")
+        decision_keys = {
+            (decision.continuing_volume_id, decision.waiting_volume_id)
+            for decision in self.overlap_decisions
+        }
+        if len(decision_keys) != len(self.overlap_decisions):
+            raise ValueError(f"Duplicate overlap decision in list {self.list_id}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,8 +194,40 @@ class ThreadEligibility:
         return self.next_issue_id is not None and not self.blockers
 
 
+def _strict_predecessors(
+    reading_list: ReadingList,
+    issue_id: int,
+    earlier_unread: list[int],
+    volume_by_issue: Mapping[int, str | None],
+) -> tuple[int, ...]:
+    """Return earlier unread entries that still gate ``issue_id`` by strict order.
+
+    A decision only applies when both sides have an exact identity: the current
+    entry resolves to the decision's continuing volume, and an earlier entry
+    resolves to its waiting volume. Anything unknown keeps its normal hold.
+    """
+    continuing_volume = volume_by_issue.get(issue_id)
+    if continuing_volume is None:
+        return tuple(earlier_unread)
+    waiting_volumes = {
+        decision.waiting_volume_id
+        for decision in reading_list.overlap_decisions
+        if decision.continuing_volume_id == continuing_volume
+    }
+    if not waiting_volumes:
+        return tuple(earlier_unread)
+    return tuple(
+        predecessor
+        for predecessor in earlier_unread
+        if volume_by_issue.get(predecessor) not in waiting_volumes
+    )
+
+
 def _list_blockers(
-    reading_list: ReadingList, unread: frozenset[int], excluded: frozenset[int],
+    reading_list: ReadingList,
+    unread: frozenset[int],
+    excluded: frozenset[int],
+    volume_by_issue: Mapping[int, str | None],
 ) -> dict[int, list[Blocker]]:
     entries = tuple(
         entry for entry in reading_list.entries
@@ -161,8 +241,14 @@ def _list_blockers(
     for entry in entries:
         current: list[Blocker] = []
         if entry.issue_id in unread:
-            if reading_list.mode == "strict" and earlier_unread:
-                current.append(Blocker("strict_order", reading_list.list_id, tuple(earlier_unread)))
+            if reading_list.mode == "strict":
+                strict_predecessors = _strict_predecessors(
+                    reading_list, entry.issue_id, earlier_unread, volume_by_issue,
+                )
+                if strict_predecessors:
+                    current.append(
+                        Blocker("strict_order", reading_list.list_id, strict_predecessors)
+                    )
             if hold_unread:
                 current.append(Blocker(
                     "hold", reading_list.list_id, hold_unread, gate_issue_id=hold_issue_id,
@@ -209,13 +295,22 @@ def evaluate(snapshot: ReadingSnapshot) -> dict[int, ThreadEligibility]:
         status ``read`` considered complete. Blockers sort by kind, list ID,
         gate Issue ID, prerequisite ID, and unread IDs. Within a list blocker,
         unread IDs follow curated list order. Local skips only remove that
-        list's restrictions and never suppress a Thread frontier.
+        list's restrictions and never suppress a Thread frontier. A
+        ``SeriesOverlapDecision`` removes only the selected waiting-volume
+        entries from implicit strict order; explicit gates and prerequisites
+        always remain.
     """
     unread = frozenset(issue.issue_id for issue in snapshot.issues if issue.status != "read")
+    volume_by_thread = {
+        thread.thread_id: thread.comicvine_volume_id for thread in snapshot.threads
+    }
+    volume_by_issue = {
+        issue.issue_id: volume_by_thread.get(issue.thread_id) for issue in snapshot.issues
+    }
     restrictions: dict[int, list[Blocker]] = {}
     for reading_list in snapshot.lists:
         for issue_id, blockers in _list_blockers(
-            reading_list, unread, snapshot.excluded_issue_ids,
+            reading_list, unread, snapshot.excluded_issue_ids, volume_by_issue,
         ).items():
             restrictions.setdefault(issue_id, []).extend(blockers)
     for prerequisite in snapshot.prerequisites:
