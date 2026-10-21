@@ -6,6 +6,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Event, Thread
 
 
+def _event_thread_id(event: Event) -> int | None:
+    """Return the series an event refers to.
+
+    A dismissal names the cancelled roll through ``selected_thread_id``: that
+    column carries no foreign key, so the dismissal stays readable after the
+    series is deleted (#3763).
+
+    Args:
+        event: Session event to inspect.
+
+    Returns:
+        The referenced thread ID, or None when the event names no series.
+    """
+    if event.type == "dismiss":
+        return event.selected_thread_id
+    return event.thread_id
+
+
 async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str, list[str]]:
     """Build narrative summary categorizing session events.
 
@@ -48,7 +66,7 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     snoozed_titles = set()
     completed_titles = set()
 
-    thread_ids = {event.thread_id for event in events if event.thread_id}
+    thread_ids = {thread_id for thread_id in (_event_thread_id(e) for e in events) if thread_id}
     threads_dict: dict[int, Thread] = {}
     if thread_ids:
         threads_result = await db.execute(
@@ -57,8 +75,9 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
         threads_dict = {thread.id: thread for thread in threads_result.scalars().all()}
 
     for event in events:
-        thread = threads_dict.get(event.thread_id) if event.thread_id else None
-        title = thread.title if thread else f"Thread #{event.thread_id}"
+        thread_id = _event_thread_id(event)
+        thread = threads_dict.get(thread_id) if thread_id else None
+        title = thread.title if thread else f"Thread #{thread_id}"
         issue_suffix = f" #{event.issue_number}" if event.issue_number else ""
 
         if event.type == "rate" and event.id not in undone_rate_ids:
@@ -66,6 +85,10 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
             if thread and thread.status == "completed":
                 completed_titles.add(f"{title}{issue_suffix}")
         elif event.type == "rolled_but_skipped":
+            skipped_titles.add(f"{title}{issue_suffix}")
+        elif event.type == "dismiss":
+            # A cancelled pending roll is an abandoned series, so it is
+            # classified with the skipped ones (#3763).
             skipped_titles.add(f"{title}{issue_suffix}")
         elif event.type == "snooze":
             snoozed_titles.add(f"{title}{issue_suffix}")

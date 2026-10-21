@@ -551,3 +551,22 @@ it('marks deleted threads instead of showing them as unavailable', () => {
   expect(screen.getByText('Flash')).toBeInTheDocument()
   expect(screen.queryByText('Thread unavailable')).not.toBeInTheDocument()
 })
+
+// #3763: a cancelled pending roll is a classified History entry, not a
+// silently absent one.
+it('classifies a dismissed roll instead of leaving it unlabelled', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 25, started_at: '2024-01-01', ended_at: null, start_die: 20, current_die: 20,
+    ladder_path: 'd20', narrative_summary: { skipped: ['Flash'] },
+    events: [
+      { id: 50, timestamp: '2024-01-01', type: 'dismiss', thread_title: 'Flash', description: 'Dismissed Flash' },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(screen.getByText('Dismissed')).toBeInTheDocument()
+  const timeline = screen.getByText('Event Timeline').parentElement
+  expect(within(timeline!).getByText('Flash')).toBeInTheDocument()
+  expect(within(timeline!).getByText('Dismissed Flash')).toBeInTheDocument()
+})
