@@ -21,8 +21,10 @@ from app.services.release_ledger import (
     find_release_minimal_by_source,
     get_published_release,
     list_published_releases,
-    retract_published_release,
     upsert_release,
+    # Kept as a trailing entry so adding the retraction helper only appends to
+    # this import group instead of rewriting the shared lines above it.
+    retract_published_release,
 )
 
 router = APIRouter(tags=["releases"])

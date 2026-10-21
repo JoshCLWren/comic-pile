@@ -42,7 +42,7 @@ function renderWithClient<T>(hook: () => T) {
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     ),
   })
-  return { result: rendered.result, client }
+  return { result: rendered.result, client, rerender: rendered.rerender }
 }
 
 beforeEach(() => {
@@ -176,5 +176,20 @@ describe('useReleases', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.error?.message).toBe('Release notes could not be loaded.')
+  })
+
+  it('keeps the loadMore callback identity stable across re-renders', async () => {
+    mockedList.mockResolvedValue(pageOf([release({ id: 1 })], 2, 0))
+
+    const { result, rerender } = renderWithClient(() => useReleases())
+
+    await waitFor(() => expect(result.current.releases).toHaveLength(1))
+    const loadMore = result.current.loadMore
+
+    rerender()
+
+    // A stable identity lets the What's New auto-paging effect depend on
+    // `loadMore` without re-running after every unrelated render.
+    expect(result.current.loadMore).toBe(loadMore)
   })
 })
