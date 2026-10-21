@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.schemas.continuity_plan import ContinuityPlanResponse
@@ -97,6 +99,28 @@ class EntryOverride(BaseModel):
     )
 
 
+class CBLIdentityChoiceRequest(BaseModel):
+    """One explicit reader decision about a source position's comic identity.
+
+    Issue #4015: a source position that could not be matched automatically is
+    never imported silently. The reader reuses one owned copy, asks for the
+    identified comic to be added as a new copy, or leaves the position out.
+    """
+
+    cbl_position: int = Field(..., ge=0, description="Source position in CBL order")
+    action: Literal["reuse", "new", "exclude"] = Field(
+        ...,
+        description=(
+            "Reuse one owned copy, add the identified comic as a new copy, or "
+            "leave the position out"
+        ),
+    )
+    issue_id: int | None = Field(
+        None,
+        description="Owned Issue to reuse; required when the action is reuse",
+    )
+
+
 class CBLAdoptionCommitRequest(BaseModel):
     """Reader decisions for committing CBL adoption to a Reading Plan.
 
@@ -118,6 +142,14 @@ class CBLAdoptionCommitRequest(BaseModel):
     series_overrides: list[EntryOverride] = Field(
         default_factory=list,
         description="Individual entry overrides of series decisions",
+    )
+
+    identity_choices: list[CBLIdentityChoiceRequest] = Field(
+        default_factory=list,
+        description=(
+            "Explicit reuse/new/exclude decisions for source positions whose "
+            "comic identity could not be matched automatically"
+        ),
     )
 
     content_hash: str = Field(

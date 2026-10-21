@@ -12,16 +12,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSourceEntry, CBLSourceList
 from app.models.continuity_plan import ContinuityPlan
+from app.schemas.cbl_adoption import CBLIdentityChoiceRequest
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_plan_adoption import (
     AdoptionCommitError,
     AdoptionCommitResult,
+    _identity_choices_by_position,
     _merge_adopted_nodes,
     _plan_ordering_mode,
     _to_node_models,
     _verify_preview_fingerprint,
+    apply_identity_choices,
+    validate_identity_choices,
 )
-from app.services.cbl_reconciliation import reconcile_cbl_source_list
+from app.services.cbl_reconciliation import (
+    annotate_cbl_identity_exceptions,
+    reconcile_cbl_source_list,
+)
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
 from comic_pile.dependencies import refresh_user_blocked_status
 from app.repositories.reading_list_authoring_repository import lock_reader
@@ -73,6 +80,7 @@ async def adopt_cbl_into_existing_reading_plan(
     entry_decisions: dict[int, SourceBackedDecision],
     series_decisions: dict[str, SourceBackedDecision],
     series_overrides: dict[int, SourceBackedDecision] | None = None,
+    identity_choices: list[CBLIdentityChoiceRequest] | None = None,
     client_content_hash: str | None = None,
     client_revision_sha: str | None = None,
 ) -> AdoptionCommitResult:
@@ -82,6 +90,7 @@ async def adopt_cbl_into_existing_reading_plan(
     never creates a Reading Plan and never searches for one by CBL provenance.
     """
     await lock_reader(db, user_id)
+    effective_identity_choices = _identity_choices_by_position(identity_choices)
     plan = (
         await db.execute(
             select(ContinuityPlan)
@@ -108,11 +117,20 @@ async def adopt_cbl_into_existing_reading_plan(
         )
 
     report = await reconcile_cbl_source_list(db, list_id=list_id, user_id=user_id)
+    report, exceptions = await annotate_cbl_identity_exceptions(
+        db, user_id=user_id, report=report
+    )
     facts_by_entry_id: dict[int, dict[str, object]] = {}
     for fact in report.entries:
         entry_id = fact.get("cbl_entry_id")
         if isinstance(entry_id, int):
             facts_by_entry_id[entry_id] = fact
+    validate_identity_choices(exceptions=exceptions, choices=effective_identity_choices)
+    facts_by_entry_id = apply_identity_choices(
+        facts_by_entry_id=facts_by_entry_id,
+        exceptions=exceptions,
+        choices=effective_identity_choices,
+    )
 
     entries_result = await db.execute(
         select(CBLSourceEntry)

@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import NamedTuple, cast
@@ -67,9 +68,14 @@ from app.models.issue import Issue
 from app.models.thread import Thread
 from app.repositories import cbl_adoption_receipt_repository, issue_repository, thread_repository
 from app.repositories.reading_list_authoring_repository import lock_reader
+from app.schemas.cbl_adoption import CBLIdentityChoiceRequest
 from app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode
 from app.schemas.shared_types import SourceBackedDecision
-from app.services.cbl_reconciliation import reconcile_cbl_source_list
+from app.services.cbl_identity_exceptions import CBLIdentityException
+from app.services.cbl_reconciliation import (
+    annotate_cbl_identity_exceptions,
+    reconcile_cbl_source_list,
+)
 from app.services.collection_exclusion_guard import (
     annotate_collection_exclusions,
     load_collection_guard,
@@ -158,6 +164,110 @@ class AdoptionCommitResult:
     created_positions: list[int] = field(default_factory=list)
     excluded_positions: list[int] = field(default_factory=list)
     unresolved_positions: list[int] = field(default_factory=list)
+
+
+def _identity_choices_by_position(
+    identity_choices: list[CBLIdentityChoiceRequest] | None,
+) -> dict[int, CBLIdentityChoiceRequest]:
+    """Return the reader's identity choices keyed by source position.
+
+    Args:
+        identity_choices: Raw identity choices from the adoption request.
+
+    Returns:
+        One choice per source position. A repeated position keeps its last
+        choice so a client cannot smuggle two answers for one comic.
+    """
+    return {choice.cbl_position: choice for choice in (identity_choices or [])}
+
+
+def validate_identity_choices(
+    *,
+    exceptions: Sequence[CBLIdentityException],
+    choices: Mapping[int, CBLIdentityChoiceRequest],
+) -> None:
+    """Fail closed when a reader's identity choice cannot be honored.
+
+    Issue #4015: an explicit choice is only accepted when the preview
+    actually offered it. A reuse must name one of the reported owned copies,
+    and a new copy is only allowed for an identified comic the reader does
+    not own yet.
+
+    Args:
+        exceptions: Identity records for the reviewed source list.
+        choices: The reader's identity choices keyed by source position.
+
+    Raises:
+        AdoptionCommitError: When a choice cannot be honored.
+    """
+    by_position = {exception.cbl_position: exception for exception in exceptions}
+    for position, choice in choices.items():
+        exception = by_position.get(position)
+        if exception is None:
+            raise AdoptionCommitError(
+                f"Source position {position} is not part of this reading order."
+            )
+        if choice.action == "exclude":
+            continue
+        if choice.action == "reuse":
+            candidate_ids = {candidate.issue_id for candidate in exception.candidates}
+            if choice.issue_id is None or choice.issue_id not in candidate_ids:
+                raise AdoptionCommitError(
+                    f"Source position {position} cannot reuse issue "
+                    f"{choice.issue_id}; it is not one of the owned copies offered "
+                    "for that comic."
+                )
+            continue
+        if not exception.can_create_new:
+            raise AdoptionCommitError(
+                f"Source position {position} cannot be added as a new comic "
+                "because you already own a copy of that identity."
+            )
+
+
+def apply_identity_choices(
+    *,
+    facts_by_entry_id: dict[int, dict[str, object]],
+    exceptions: Sequence[CBLIdentityException],
+    choices: Mapping[int, CBLIdentityChoiceRequest],
+) -> dict[int, dict[str, object]]:
+    """Apply the reader's explicit identity choices to the reconciled facts.
+
+    Args:
+        facts_by_entry_id: Reconciled facts keyed by source entry id.
+        exceptions: Identity records for the reviewed source list.
+        choices: The reader's identity choices keyed by source position.
+
+    Returns:
+        New facts carrying the reader's chosen identity.
+    """
+    exception_by_position = {exception.cbl_position: exception for exception in exceptions}
+    updated = {entry_id: dict(fact) for entry_id, fact in facts_by_entry_id.items()}
+    for position, choice in choices.items():
+        exception = exception_by_position.get(position)
+        if exception is None:
+            continue
+        fact = updated.get(exception.cbl_entry_id)
+        if fact is None:
+            continue
+        fact["identity_choice_action"] = choice.action
+        if choice.action != "reuse" or choice.issue_id is None:
+            continue
+        candidate = next(
+            (
+                item
+                for item in exception.candidates
+                if item.issue_id == choice.issue_id
+            ),
+            None,
+        )
+        if candidate is None:
+            continue
+        fact["resolved_issue_id"] = candidate.issue_id
+        fact["canonical_issue_id"] = candidate.issue_id
+        fact["thread_id"] = candidate.thread_id
+        fact["resolution_status"] = "resolved_via_reader_choice"
+    return updated
 
 
 async def _verify_preview_fingerprint(
@@ -250,6 +360,7 @@ def _request_fingerprint(
     entry_decisions: dict[int, SourceBackedDecision],
     series_overrides: dict[int, SourceBackedDecision],
     series_decisions: dict[str, SourceBackedDecision],
+    identity_choices: Mapping[int, CBLIdentityChoiceRequest] | None = None,
     collection_constraints: list[dict[str, object]] | None = None,
 ) -> str:
     """Return a stable SHA-256 of the source identity plus reviewed decisions.
@@ -265,6 +376,7 @@ def _request_fingerprint(
         entry_decisions: Per-entry include/exclude map.
         series_overrides: Per-position overrides of series decisions.
         series_decisions: Per-series include/exclude map.
+        identity_choices: Per-position reuse/new/exclude identity decisions.
         collection_constraints: Current blocked positions and explicit decision IDs.
 
     Returns:
@@ -284,6 +396,10 @@ def _request_fingerprint(
         "series_decisions": [
             [name, decision.value]
             for name, decision in sorted(series_decisions.items())
+        ],
+        "identity_choices": [
+            [position, choice.action, choice.issue_id]
+            for position, choice in sorted((identity_choices or {}).items())
         ],
     }
     if collection_constraints:
@@ -915,6 +1031,12 @@ async def _merge_adopted_nodes(
     for entry in entries:
         fact = facts_by_entry_id.get(entry.id)
 
+        # An explicit identity choice is the reader's own answer for this
+        # position, so it outranks the automatic include/exclude decision.
+        identity_action = ""
+        if fact is not None:
+            identity_action = str(fact.get("identity_choice_action") or "")
+
         # An explicit exclusion is honored and reported as excluded even for
         # unresolvable entries: the reader's skip decision stands and the
         # commit report must reflect it, matching the preview.
@@ -924,6 +1046,8 @@ async def _merge_adopted_nodes(
             series_overrides,
             series_decisions,
         )
+        if identity_action == "exclude":
+            early_decision = SourceBackedDecision.EXCLUDE
         if fact is not None and fact.get("collection_excluded"):
             if (
                 fact.get("collection_exclusion_reason") == "collection_identity_requires_review"
@@ -953,6 +1077,12 @@ async def _merge_adopted_nodes(
             int(resolved_issue_id) if isinstance(resolved_issue_id, int) else None
         )
         importable = resolution_status == "no_owned_issue_for_comicvine_id"
+        if identity_action == "new":
+            # The reader explicitly asked for this identified comic to be
+            # added as a new copy, so it is materialized even when the
+            # automatic plan would have left the position alone.
+            existing_issue_id = None
+            importable = True
 
         if existing_issue_id is None and not importable:
             unresolved_positions.append(entry.position)
@@ -1076,6 +1206,7 @@ async def adopt_cbl_material_into_reading_plan(
     series_decisions: dict[str, SourceBackedDecision],
     *,
     series_overrides: dict[int, SourceBackedDecision] | None = None,
+    identity_choices: list[CBLIdentityChoiceRequest] | None = None,
     client_content_hash: str | None = None,
     client_revision_sha: str | None = None,
 ) -> AdoptionCommitResult:
@@ -1092,6 +1223,8 @@ async def adopt_cbl_material_into_reading_plan(
         entry_decisions: Per-CBL-position decisions.
         series_decisions: Per-series-name decisions.
         series_overrides: Per-CBL-position overrides of series decisions.
+        identity_choices: Explicit reuse/new/exclude decisions for source
+            positions whose comic identity needs the reader's decision.
         client_content_hash: Content hash from the client's preview request.
         client_revision_sha: Revision SHA from the client's preview request.
 
@@ -1105,6 +1238,7 @@ async def adopt_cbl_material_into_reading_plan(
     """
     await lock_reader(db, user_id)
     effective_overrides: dict[int, SourceBackedDecision] = series_overrides or {}
+    effective_identity_choices = _identity_choices_by_position(identity_choices)
     result = await db.execute(
         select(CBLSourceList).where(CBLSourceList.id == list_id)
     )
@@ -1125,11 +1259,20 @@ async def adopt_cbl_material_into_reading_plan(
         )
 
     report = await reconcile_cbl_source_list(db, list_id=list_id, user_id=user_id)
+    report, exceptions = await annotate_cbl_identity_exceptions(
+        db, user_id=user_id, report=report
+    )
     facts_by_entry_id: dict[int, dict[str, object]] = {}
     for entry in report.entries:
         entry_id = entry.get("cbl_entry_id")
         if isinstance(entry_id, int):
             facts_by_entry_id[entry_id] = entry
+    validate_identity_choices(exceptions=exceptions, choices=effective_identity_choices)
+    facts_by_entry_id = apply_identity_choices(
+        facts_by_entry_id=facts_by_entry_id,
+        exceptions=exceptions,
+        choices=effective_identity_choices,
+    )
 
     entries_result = await db.execute(
         select(CBLSourceEntry)
@@ -1144,6 +1287,7 @@ async def adopt_cbl_material_into_reading_plan(
         entry_decisions=entry_decisions,
         series_overrides=effective_overrides,
         series_decisions=series_decisions,
+        identity_choices=effective_identity_choices,
         collection_constraints=[
             {
                 "entry_id": fact.get("cbl_entry_id"),

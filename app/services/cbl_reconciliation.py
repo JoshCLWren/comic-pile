@@ -16,7 +16,8 @@ discarded.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from datetime import datetime
 import hashlib
 import re
@@ -26,6 +27,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
+from app.schemas.cbl_adoption import CBLIdentityChoiceRequest
+from app.services.cbl_identity_exceptions import (
+    CBLIdentityException,
+    apply_identity_exceptions,
+    build_cbl_identity_exceptions,
+)
 from app.services.issue_identity_reconciliation import resolve_cbl_entries_to_canonical
 from app.services.collection_exclusion_guard import annotate_collection_exclusions
 
@@ -223,16 +230,124 @@ async def preview_cbl_adoption(
     list_id: int,
     series_decisions: dict[str, bool] | None = None,
     entry_decisions: dict[str, bool] | None = None,
+    identity_choices: Mapping[int, CBLIdentityChoiceRequest] | None = None,
 ) -> tuple[CBLReconciliationReport, CBLAdoptionPlan]:
     """Return reconciliation and a dry-run adoption plan without mutating rows."""
     report = await reconcile_cbl_source_list(db, user_id=user_id, list_id=list_id)
+    report, _ = await annotate_cbl_identity_exceptions(db, user_id=user_id, report=report)
     entries = tuple(
         {**entry, "series_group_id": cbl_series_group_id(entry)} for entry in report.entries
     )
+    effective_entry_choices = dict(entry_decisions or {})
+    entries = _apply_identity_choices(entries, identity_choices, effective_entry_choices)
     return report, calculate_cbl_adoption_plan(
         entries,
         series_decisions=series_decisions,
-        entry_decisions=entry_decisions,
+        entry_decisions=effective_entry_choices,
+    )
+
+
+def _apply_identity_choices(
+    entries: tuple[dict[str, object], ...],
+    identity_choices: Mapping[int, CBLIdentityChoiceRequest] | None,
+    entry_choices: dict[str, bool],
+) -> tuple[dict[str, object], ...]:
+    """Reflect the reader's explicit identity choices in a dry-run plan.
+
+    Args:
+        entries: Reconciled source positions with their series group id.
+        identity_choices: The reader's identity choices keyed by source position.
+        entry_choices: Effective per-entry include map, updated in place for
+            positions the reader deliberately left out.
+
+    Returns:
+        The entries with the reader's chosen identity applied.
+    """
+    if not identity_choices:
+        return entries
+    updated: list[dict[str, object]] = []
+    for entry in entries:
+        position = entry.get("cbl_position")
+        choice = (
+            identity_choices.get(position) if isinstance(position, int) else None
+        )
+        if choice is None:
+            updated.append(entry)
+            continue
+        current = dict(entry)
+        entry_key = str(current.get("cbl_entry_id") or current.get("cbl_position"))
+        if choice.action == "exclude":
+            entry_choices[entry_key] = False
+        elif choice.action == "reuse" and choice.issue_id is not None:
+            current["resolved_issue_id"] = choice.issue_id
+            current["canonical_issue_id"] = choice.issue_id
+            current["resolution_status"] = "resolved_via_reader_choice"
+        elif choice.action == "new":
+            current["resolved_issue_id"] = None
+            current["canonical_issue_id"] = None
+            current["resolution_status"] = "no_owned_issue_for_comicvine_id"
+        updated.append(current)
+    return tuple(updated)
+
+
+async def annotate_cbl_identity_exceptions(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    report: CBLReconciliationReport,
+) -> tuple[CBLReconciliationReport, list[CBLIdentityException]]:
+    """Attach the read-only identity exceptions of every source position.
+
+    Issue #4015: the adoption review must show the source issue and volume
+    identity, the owned comics that could satisfy the position, and the reason
+    a position could not be matched. A position whose only owned copies belong
+    to a different volume, or whose exact identity is held by several owned
+    copies, stays unresolved until the reader chooses.
+
+    Args:
+        db: Async database session.
+        user_id: Issue owner whose comics are eligible candidates.
+        report: Reconciliation report for one source list.
+
+    Returns:
+        The same report with identity facts attached to every entry, plus the
+        identity records the report was built from.
+    """
+    if report.source_list_id is None:
+        return report, []
+    resolved_issue_ids: dict[int, int | None] = {}
+    for entry in report.entries:
+        entry_id = entry.get("cbl_entry_id")
+        if not isinstance(entry_id, int):
+            continue
+        resolved_issue_id = entry.get("resolved_issue_id")
+        resolved_issue_ids[entry_id] = (
+            resolved_issue_id if isinstance(resolved_issue_id, int) else None
+        )
+    exceptions = await build_cbl_identity_exceptions(
+        db,
+        user_id=user_id,
+        list_id=report.source_list_id,
+        resolved_issue_ids=resolved_issue_ids,
+    )
+    annotated = apply_identity_exceptions(report.entries, exceptions)
+    resolved_count = sum(
+        1 for entry in annotated if entry.get("resolved_issue_id") is not None
+    )
+    ambiguous_count = sum(
+        1
+        for entry in annotated
+        if entry.get("identity_state") in {"wrong_volume", "ambiguous", "unidentified"}
+    )
+    return (
+        replace(
+            report,
+            entries=tuple(annotated),
+            resolved_count=resolved_count,
+            unresolved_count=len(annotated) - resolved_count,
+            ambiguous_count=ambiguous_count,
+        ),
+        exceptions,
     )
 
 

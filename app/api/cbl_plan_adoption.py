@@ -127,6 +127,7 @@ async def api_targeted_cbl_adoption_commit(
             entry_decisions=request.entry_decisions,
             series_decisions=series_decisions,
             series_overrides=series_overrides,
+            identity_choices=request.identity_choices,
             client_content_hash=request.content_hash,
             client_revision_sha=request.revision_sha,
         )
@@ -187,6 +188,7 @@ async def api_cbl_adoption_commit(
             entry_decisions=request.entry_decisions,
             series_decisions=series_decisions,
             series_overrides=series_overrides,
+            identity_choices=request.identity_choices,
             client_content_hash=request.content_hash,
             client_revision_sha=request.revision_sha,
         )

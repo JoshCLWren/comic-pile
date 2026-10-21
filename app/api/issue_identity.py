@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
+from app.schemas.cbl_adoption import CBLIdentityChoiceRequest
 from app.services.cbl_reconciliation import (
     CBLAdoptionPlan,
     CBLReconciliationReport,
@@ -132,10 +133,11 @@ class ConsolidationRequest(BaseModel):
 
 
 class CBLAdoptionPlanRequest(BaseModel):
-    """Optional per-series and per-entry choices for a read-only CBL plan."""
+    """Optional per-series, per-entry, and identity choices for a read-only CBL plan."""
 
     series_decisions: dict[str, bool] = Field(default_factory=dict)
     entry_decisions: dict[str, bool] = Field(default_factory=dict)
+    identity_choices: list[CBLIdentityChoiceRequest] = Field(default_factory=list)
 
 
 class CBLSourceFingerprintResponse(BaseModel):
@@ -146,6 +148,42 @@ class CBLSourceFingerprintResponse(BaseModel):
     source_path: str
     content_hash: str
     revision_sha: str
+
+
+class CBLSourceIdentityResponse(BaseModel):
+    """Provider identity metadata for one CBL source position."""
+
+    comicvine_issue_id: str | None = None
+    comicvine_series_id: str | None = None
+    series_provider: str | None = None
+    series_external_id: str | None = None
+    cover_date: str | None = None
+    volume_year: int | None = None
+    publication_year: int | None = None
+
+
+class CBLIdentityCandidateResponse(BaseModel):
+    """One owned comic that could satisfy a CBL source position."""
+
+    issue_id: int
+    thread_id: int
+    thread_title: str
+    issue_number: str
+    series_external_id: str | None = None
+    series_identity_matches_cbl: bool = False
+    series_identity_conflicts: bool = False
+    read_status: str | None = None
+    cover_date: str | None = None
+    volume_id: str | None = None
+
+
+class CBLIdentityOptionsResponse(BaseModel):
+    """Explicit reader choices available for one CBL source position."""
+
+    can_reuse: bool = False
+    can_create_new: bool = False
+    can_exclude: bool = True
+    requires_choice: bool = False
 
 
 class CBLAdoptionEntryResponse(BaseModel):
@@ -179,6 +217,19 @@ class CBLAdoptionEntryResponse(BaseModel):
     read_at: datetime | None
     resolution_status: str
     is_duplicate_identity: bool
+    source_identity: CBLSourceIdentityResponse = Field(default_factory=CBLSourceIdentityResponse)
+    identity_state: Literal[
+        "resolved",
+        "wrong_volume",
+        "ambiguous",
+        "missing",
+        "unidentified",
+    ] = "resolved"
+    identity_reason: str | None = None
+    identity_candidates: list[CBLIdentityCandidateResponse] = Field(default_factory=list)
+    identity_options: CBLIdentityOptionsResponse = Field(
+        default_factory=CBLIdentityOptionsResponse
+    )
 
 
 class CBLAdoptionSummaryResponse(BaseModel):
@@ -673,5 +724,8 @@ async def api_cbl_adoption_plan(
         list_id=list_id,
         series_decisions=request.series_decisions,
         entry_decisions=request.entry_decisions,
+        identity_choices={
+            choice.cbl_position: choice for choice in request.identity_choices
+        },
     )
     return _adoption_payload(report, plan)

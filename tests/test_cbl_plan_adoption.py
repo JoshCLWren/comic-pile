@@ -205,6 +205,11 @@ async def _adopt(
             return_value=report,
         ),
         patch(
+            "app.services.cbl_plan_adoption.annotate_cbl_identity_exceptions",
+            new_callable=AsyncMock,
+            return_value=(report, []),
+        ),
+        patch(
             "app.services.cbl_plan_adoption._find_existing_adopted_plan",
             new_callable=AsyncMock,
             return_value=existing_plan,
@@ -1104,6 +1109,10 @@ async def test_transaction_rollback_leaves_no_partial_materialization() -> None:
         new_callable=AsyncMock,
         return_value=MagicMock(entries=(fact,)),
     ), patch(
+        "app.services.cbl_plan_adoption.annotate_cbl_identity_exceptions",
+        new_callable=AsyncMock,
+        return_value=(MagicMock(entries=(fact,)), []),
+    ), patch(
         "app.services.cbl_plan_adoption._find_existing_adopted_plan",
         new_callable=AsyncMock,
         return_value=None,
@@ -1169,6 +1178,10 @@ async def test_already_read_entries_preserve_factual_state() -> None:
         new_callable=AsyncMock,
         return_value=MagicMock(entries=(fact,)),
     ), patch(
+        "app.services.cbl_plan_adoption.annotate_cbl_identity_exceptions",
+        new_callable=AsyncMock,
+        return_value=(MagicMock(entries=(fact,)), []),
+    ), patch(
         "app.services.cbl_plan_adoption._find_existing_adopted_plan",
         new_callable=AsyncMock,
         return_value=existing,
@@ -1233,6 +1246,10 @@ async def test_cbl_source_provenance_survives_without_dependency_group_sequence_
         "app.services.cbl_plan_adoption.reconcile_cbl_source_list",
         new_callable=AsyncMock,
         return_value=MagicMock(entries=(fact,)),
+    ), patch(
+        "app.services.cbl_plan_adoption.annotate_cbl_identity_exceptions",
+        new_callable=AsyncMock,
+        return_value=(MagicMock(entries=(fact,)), []),
     ), patch(
         "app.services.cbl_plan_adoption._find_existing_adopted_plan",
         new_callable=AsyncMock,
@@ -1316,6 +1333,10 @@ async def test_strict_plan_hard_constraints_use_canonical_dependency_semantics()
         "app.services.cbl_plan_adoption.reconcile_cbl_source_list",
         new_callable=AsyncMock,
         return_value=MagicMock(entries=(fact,)),
+    ), patch(
+        "app.services.cbl_plan_adoption.annotate_cbl_identity_exceptions",
+        new_callable=AsyncMock,
+        return_value=(MagicMock(entries=(fact,)), []),
     ), patch(
         "app.services.cbl_plan_adoption._find_existing_adopted_plan",
         new_callable=AsyncMock,

@@ -87,6 +87,11 @@ async def test_adoption_mutates_exact_owned_plan() -> None:
             return_value=report,
         ),
         patch(
+            "app.services.cbl_targeted_plan_adoption.annotate_cbl_identity_exceptions",
+            new_callable=AsyncMock,
+            return_value=(report, []),
+        ),
+        patch(
             "app.services.cbl_targeted_plan_adoption._merge_adopted_nodes",
             new_callable=AsyncMock,
             return_value=merge_report,
