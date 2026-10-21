@@ -310,6 +310,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             // secondary failure. Report the root cause to the reader and keep
             // both failures in the log, so the reason the save stopped is
             // never lost behind the resync error (#3764).
+            // Clear the loaded flag so a retried Save requires a complete reload.
+            fullyLoadedRef.current = false
             console.error(
               '[IssueToggleList] Mutation failed and the follow-up resync also failed:',
               { mutationError: err, resyncError: refreshErr },
@@ -319,6 +321,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               `${getApiErrorDetail(err)} (issue list resync failed: ${getApiErrorDetail(refreshErr)})`,
             )
           }
+          // Clear the loaded flag on any mutation failure so a retried Save
+          // requires a complete reload instead of operating on stale data.
+          fullyLoadedRef.current = false
           setActionError(getApiErrorDetail(err))
           throw err
         } finally {
