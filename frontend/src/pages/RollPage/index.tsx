@@ -114,6 +114,21 @@ export default function RollPage() {
     setIsCorrectionOpen(true)
   }, [])
 
+  const handleBackToQueue = useCallback(() => {
+    // Leaving for the queue is navigation, not resolution (issue #3761): the
+    // pending read stays server-side, so the unresolved selection is still
+    // there when the reader comes back. Refresh the bootstrap cache in the
+    // background because a roll does not rewrite it — returning inside the
+    // query's stale window would otherwise replay a snapshot captured before
+    // the roll, whose `pending_thread_id: null` hides the selection that was
+    // preserved.
+    void refetchBootstrap().catch(() => {
+      // Background refresh failure is non-blocking: navigation is the
+      // primary action, and the bootstrap will refresh on the next visit.
+    })
+    navigate('/queue')
+  }, [navigate, refetchBootstrap])
+
   const handleCorrectionSubmit = useCallback(
     async (_choiceId: CorrectionChoiceId, patch: SessionModeUpdateRequest) => {
       await sessionModeMutation.mutate(patch)
@@ -474,10 +489,7 @@ export default function RollPage() {
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
         onOpenModeSelector={() => setIsModeSelectorOpen(true)}
-        onBackToQueue={async () => {
-          await rating.handleCancelRating()
-          navigate('/queue')
-        }}
+        onBackToQueue={handleBackToQueue}
       />
 
       <ReadingModeLauncher />

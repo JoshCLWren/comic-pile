@@ -294,10 +294,11 @@ describe('RollPage parent handlers', () => {
 
     // Submitting an override enters the rating view, where the header offers the
     // queue action instead of the die-view controls (issue #2712). The remaining
-    // picker and migration coverage still belongs to the die view, so the flow
-    // returns there through the new header action.
+    // picker and migration coverage still belongs to the die view. "Back to
+    // queue" now only navigates and preserves the pending read (issue #3761), so
+    // returning here goes through the rating view's explicit cancel action.
     await waitFor(() => expect(screen.getByTestId('roll-back-to-queue')).toBeInTheDocument())
-    await user.click(screen.getByTestId('roll-back-to-queue'))
+    await user.click(screen.getByRole('button', { name: 'cancel rating' }))
     await waitFor(() => expect(screen.queryByTestId('roll-back-to-queue')).not.toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
@@ -311,7 +312,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'skip migration' }))
   })
 
-  it('leaves the rating view from the header chrome by dismissing the pending read and navigating to the queue', async () => {
+  it('leaves for the queue from the header chrome without dropping the pending read', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
@@ -320,37 +321,51 @@ describe('RollPage parent handlers', () => {
 
     await user.click(screen.getByTestId('roll-back-to-queue'))
 
-    // Leaving the rating view has to retire the server-side pending read, not
-    // just local state: `useRollPendingSession` rehydrates the rating view from
-    // `bootstrap.pending_thread_id`, so a local-only exit is undone on the very
-    // next render and the header action reads as a dead button. The header
-    // action is the queue exit, so it must also land the reader on /queue
-    // (issue #3107) instead of stranding them on the Roll page.
-    await waitFor(() => expect(spies.dismissPending).toHaveBeenCalled())
-    expect(spies.refetch).toHaveBeenCalled()
+    // "Back to queue" is navigation, not resolution (issue #3761): the pending
+    // read must survive, so the header action never dismisses it. It refreshes
+    // bootstrap instead, which is what lets the return visit rehydrate the
+    // selection, and still lands the reader on /queue (issue #3107).
+    expect(spies.dismissPending).not.toHaveBeenCalled()
+    await waitFor(() => expect(spies.refetch).toHaveBeenCalled())
     await waitFor(() => expect(spies.navigate).toHaveBeenCalledWith('/queue'))
-    await waitFor(() => expect(screen.queryByTestId('roll-back-to-queue')).not.toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /^Pick manually$/ })).toBeInTheDocument()
+
+    // navigate is mocked here, so the page is still mounted. The preserved
+    // pending read keeps the rating controls available rather than leaving the
+    // header with an action that silently drops the selection.
+    expect(screen.getByTestId('roll-back-to-queue')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument()
   })
 
-  it('navigates to the queue from the header chrome even when the pending dismiss fails', async () => {
+  it('resumes the same pending read when the reader returns to Roll from the queue', async () => {
     const user = userEvent.setup()
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    render(<RollPage />)
+    const { unmount } = render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
 
-    spies.dismissPending.mockRejectedValueOnce(new Error('dismiss failed'))
     await user.click(screen.getByTestId('roll-back-to-queue'))
-
-    // The button's promise is navigation (issue #3107): a failed pending
-    // dismiss must not strand the reader on the Roll page. The pending read
-    // stays server-side and rehydrates on the next Roll visit, which is the
-    // existing recovery path.
-    await waitFor(() => expect(spies.dismissPending).toHaveBeenCalled())
+    expect(spies.dismissPending).not.toHaveBeenCalled()
     await waitFor(() => expect(spies.navigate).toHaveBeenCalledWith('/queue'))
-    errorSpy.mockRestore()
+
+    // Returning to Roll remounts the page and hydrates from bootstrap. Because
+    // "Back to queue" never dismissed the read, the server still reports the
+    // same pending thread and the rating view comes back for that series
+    // (issue #3761) instead of falling through to the empty die view.
+    bootstrapData.pending_thread_id = 1
+    bootstrapData.active_thread = {
+      id: 1,
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 2,
+      queue_position: 1,
+      total_issues: 10,
+      last_rolled_result: 3,
+    }
+    unmount()
+    render(<RollPage />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    expect(screen.getByTestId('rating-thread-metadata')).toHaveTextContent('Saga')
   })
 
   it('keeps the rating workspace out of a generic full-workspace panel', async () => {
