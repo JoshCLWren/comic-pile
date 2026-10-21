@@ -1,9 +1,12 @@
 name: Release writer
 
-# INCIDENT 2026-10-20: The writer remains intentionally DISABLED.
-# Neither generating nor persisting may run until explicitly reauthorized.
-# Reenable only with exact PR triggers, never an unbounded historical scan.
+# Reactivated after the 2026-10-20 Fluid Compute incident.
+# One event = one merged PR. No Vercel API, schedule, or historical rescan.
+# pull_request_target runs only trusted main code, including for external contributors.
 on:
+  pull_request_target:
+    types: [closed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -22,8 +25,8 @@ concurrency:
 
 jobs:
   generate:
-    # INC-2026-10-20: KEEP THIS DISABLED until separately authorized.
-    if: ${{ false }}
+    # Closed, unmerged PRs are ignored. Only merged PRs or manual exact PRs run.
+    if: ${{ github.event_name != 'pull_request_target' || github.event.pull_request.merged == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -38,7 +41,7 @@ jobs:
 
       - name: Validate exact scope and model credential
         env:
-          INPUT_PR: ${{ inputs.pr_number }}
+          INPUT_PR: ${{ github.event.pull_request.number || inputs.pr_number }}
         run: |
           set -Eeuo pipefail
           [[ "$INPUT_PR" =~ ^[1-9][0-9]*$ ]] || { echo 'Exact PR number required' >&2; exit 1; }
@@ -73,7 +76,7 @@ jobs:
       - name: Generate one staged candidate (no DB credentials)
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_PR: ${{ inputs.pr_number }}
+          INPUT_PR: ${{ github.event.pull_request.number || inputs.pr_number }}
           RELEASE_WRITER_MODELS: ${{ steps.model.outputs.models }}
         run: |
           set -Eeuo pipefail
@@ -100,8 +103,6 @@ jobs:
           fi
 
   persist:
-    # INC-2026-10-20: KEEP THIS DISABLED until separately authorized.
-    if: ${{ false }}
     needs: generate
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -129,7 +130,7 @@ jobs:
       - name: Validate and publish directly to Neon
         shell: bash
         env:
-          INPUT_PR: ${{ inputs.pr_number }}
+          INPUT_PR: ${{ github.event.pull_request.number || inputs.pr_number }}
           GH_TOKEN: ${{ github.token }}
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
