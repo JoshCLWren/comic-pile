@@ -212,6 +212,31 @@ async def test_balanced_intent_records_one_method_across_pools(
 
 
 @pytest.mark.asyncio
+async def test_default_roll_records_momentum_method(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A roll without reading-mode context records the momentum control path.
+
+    A plain roll resolves to the balanced control path, whose only active
+    weighting factor is reading momentum. The recorded label names that
+    control path, so it stays "momentum" even when one draw happens to carry
+    no momentum signal (#3762).
+    """
+    await _add_thread(async_db, default_user, "Fantastic Four", queue_position=1)
+    await _add_thread(async_db, default_user, "Alpha Flight", queue_position=2)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/roll/")
+    assert response.status_code == 200
+
+    event = await _latest_roll_event(async_db)
+    assert event.selection_method == "momentum"
+    assert event.recommendation_reason_codes == ["momentum_weighted"]
+
+
+@pytest.mark.asyncio
 async def test_random_intent_records_random_method(
     auth_client: AsyncClient,
     async_db: AsyncSession,

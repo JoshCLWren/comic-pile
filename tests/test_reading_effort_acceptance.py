@@ -380,7 +380,11 @@ async def test_override_roll_records_decision_time_recommendation_context(
 
 
 async def test_legacy_random_roll_selection_behavior_unchanged(auth_client, async_db):
-    """Random rolls keep their legacy contract while context recording is added."""
+    """Random rolls keep their legacy contract while context recording is added.
+
+    The recorded selection method follows the active control path, so the
+    plain legacy roll records the balanced momentum path (#3762).
+    """
     me_response = await auth_client.get("/api/auth/me")
     assert me_response.status_code == 200
     user_result = await async_db.execute(select(User).where(User.id == me_response.json()["id"]))
@@ -426,12 +430,16 @@ async def test_legacy_random_roll_selection_behavior_unchanged(auth_client, asyn
         event_result = await async_db.execute(
             select(Event)
             .where(Event.type == "roll")
-            .where(Event.selection_method == "random")
             .order_by(Event.id.desc())
             .limit(1)
         )
-        latest_random = event_result.scalar_one()
-        assert latest_random.selected_thread_id == body["thread_id"]
+        latest_roll = event_result.scalar_one()
+        assert latest_roll.selected_thread_id == body["thread_id"]
+        # The plain legacy roll runs the balanced control path, whose only
+        # active weighting factor is reading momentum. The recorded method
+        # names that control path; "random" now names only the documented
+        # random-intent bypass (#3762).
+        assert latest_roll.selection_method == "momentum"
 
         dismiss_response = await auth_client.post("/api/roll/dismiss-pending")
         assert dismiss_response.status_code == 204
