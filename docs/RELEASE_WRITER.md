@@ -1,16 +1,19 @@
 # Release Writer: direct Neon publication
 
-## Incident status
+## Post-incident status
 
-**DISABLED since October 20, 2026.** Previously the writer repeatedly queried the
-ComicPile release-source endpoint through Vercel, including unnecessary scans
-back to September 22. The emergency stop in PR #3989 remains in force.
-This refactor does not restart release-writing automation.
+**Reactivated after the October 20, 2026 incident**, with automatic execution
+limited to exactly one merged pull request per event. The previous unbounded
+historical reconciliation and hourly scans remain removed. The writer publishes
+straight to Neon without invoking the ComicPile Vercel API. PR #3989 stopped
+the original workflow; PR #3991 installed the isolated direct-Neon publisher.
 
 ## Workflow
 
 Release writing is internal GitHub Actions automation, not a user-facing API client.
-When separately reauthorized, it must process one exact merged PR per run.
+A trusted `pull_request_target` closed event processes only merged PRs using
+`main` code. Manual dispatch requires an exact merged PR number. Each run is
+serialized through the `release-writer` concurrency group.
 
 1. An unprivileged generate job invokes the restricted OpenCode agent. The
    release_writer.py helper validates content and classification and writes
@@ -45,19 +48,17 @@ Legacy RELEASE_API_URL and RELEASE_WRITER_TOKEN are not configured in the new
 production writer workflow. Their helper fallback remains only for older
 unit tests and backwards compatibility, not the GitHub Actions path.
 
-## Reactivation conditions
+## Operating constraints
 
-Both workflow jobs still have unconditional if: ${{ false }} guards.
-Do not remove them without fresh, explicit authorization and passing CI.
+Do not restore the September 22 backfill, an hourly schedule, or broad source
+reconciliation. Generation and trusted persistence are separate jobs; the
+latter runs only after generation succeeds. The factory completion dispatcher
+remains disabled to prevent duplicate releases from the same merged PR.
 
-Verify the exact-PR source check, content validation, conflict handling,
-no-op retry behavior, model credential isolation, and direct PostgreSQL
-insert in a controlled test before any production write.
-
-Manual workflows must receive a specific merged PR number. Do not restore
-the old September 22 backfill or any unbounded reconciliation loop.
-The separate factory dispatcher must also remain stopped while the
-incident is open.
+Exact source checks, content validation, conflict handling, idempotent retries,
+and isolation of model and database credentials are required. A production
+publish run must be inspected separately after activation to confirm runtime
+health and the published source record.
 
 Public releases must have reader-visible classification evidence and
 honor linked-issue scope fences. Internal-only changes are recorded with

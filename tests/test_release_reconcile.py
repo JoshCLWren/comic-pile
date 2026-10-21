@@ -261,18 +261,23 @@ def test_summary_reports_required_backfill_counters():
     assert summary["still_missing"] == 1
 
 
-def test_release_workflow_uses_exact_source_direct_neon_and_keeps_incident_gate():
+def test_release_workflow_reactivates_only_for_exact_merged_source_via_neon():
     """No public API, no unbounded scan, no DB secrets in the model job."""
     workflow = Path(".github/workflows/release-writer.yml").read_text()
     assert "scripts/release_reconcile.py" in workflow
     assert '--pr "$INPUT_PR"' in workflow
     assert "--since" not in workflow
     assert "cron:" not in workflow
-    assert "pull_request:" not in workflow
+    assert "pull_request_target:" in workflow
+    assert "types: [closed]" in workflow
+    assert "branches: [main]" in workflow
+    assert "github.event.pull_request.merged == true" in workflow
+    assert "github.event.pull_request.number || inputs.pr_number" in workflow
     assert "RELEASE_API_URL" not in workflow
     assert "RELEASE_WRITER_TOKEN" not in workflow
     assert "scripts.release_neon_publish" in workflow
-    assert workflow.count("if: ${{ false }}") == 2
+    assert "if: ${{ false }}" not in workflow
+    assert "ref: main" in workflow
     model_job = workflow.split("\n  generate:", 1)[1].split("\n  persist:", 1)[0]
     publisher_job = workflow.split("\n  persist:", 1)[1]
     assert "NEON_API_KEY" not in model_job
