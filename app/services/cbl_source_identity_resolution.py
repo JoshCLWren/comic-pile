@@ -225,29 +225,52 @@ async def _resolve_entry(
         base.classification = "a"
         base.evidence = f"single owned confirmed mapping to ComicVine issue {comicvine_issue_id}"
         return base
-    volume_hits = [cand for cand in candidates if cand.series_identity_matches_cbl]
-    if len(volume_hits) == 1:
-        chosen = volume_hits[0]
-        base.status = "resolved_comicvine_volume"
-        base.chosen_issue_id = chosen.issue_id
-        base.classification = "a"
+    
+    # Strengthened resolution: exact Comic Vine issue and volume/series identities are authoritative
+    # Provider identity must be consistent, same-name/number across volumes is not sufficient
+    
+    # Separate candidates by exact volume match
+    exact_volume_matches = [cand for cand in candidates if cand.series_identity_matches_cbl]
+    cross_volume_matches = [cand for cand in candidates if not cand.series_identity_matches_cbl]
+    
+    # If we have exact volume matches, only consider those - reject cross-volume matches
+    if exact_volume_matches:
+        if len(exact_volume_matches) == 1:
+            # Single exact volume match - authoritative resolution
+            chosen = exact_volume_matches[0]
+            base.status = "resolved_comicvine_volume"
+            base.chosen_issue_id = chosen.issue_id
+            base.classification = "a"
+            base.evidence = (
+                "exactly one candidate Thread maps to CBL ComicVine volume "
+                f"{comicvine_series_id}; rejected cross-volume matches: "
+                + ", ".join(
+                    f"{cand.thread_title} #{cand.issue_number}"
+                    for cand in cross_volume_matches
+                )
+            )
+            return base
+        else:
+            # Multiple exact volume matches - explicit ambiguity
+            base.status = "ambiguous_duplicate_copies"
+            base.evidence = (
+                f"several owned Issues share exact ComicVine issue {comicvine_issue_id} "
+                f"and volume {comicvine_series_id}; "
+                "explicit choice required, no fallback to lowest ID"
+            )
+            return base
+    else:
+        # No exact volume matches - all are cross-volume, reject all
+        base.status = "unmatched"
         base.evidence = (
-            "exactly one candidate Thread maps to CBL ComicVine volume "
-            f"{comicvine_series_id}; rejected "
+            f"no owned Issues match CBL ComicVine volume {comicvine_series_id}; "
+            f"cross-volume matches found for {comicvine_issue_id} but rejected: "
             + ", ".join(
-                f"{cand.thread_title} #{cand.issue_number}"
+                f"{cand.thread_title} #{cand.issue_number} (volume {cand.volume_id})"
                 for cand in candidates
-                if cand.issue_id != chosen.issue_id
             )
         )
         return base
-    base.status = "ambiguous_duplicate_copies"
-    base.evidence = (
-        "several owned Issues share ComicVine issue "
-        f"{comicvine_issue_id} on the same volume; "
-        "not selecting the lowest issue id"
-    )
-    return base
 
 
 async def _candidates_for_entry(
