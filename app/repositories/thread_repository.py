@@ -305,7 +305,7 @@ async def fetch_queue_page(
         .where(Thread.user_id == user_id, Thread.status == "active")
         .subquery()
     )
-    query = select(Thread, ranks.c.position).join(ranks, ranks.c.thread_id == Thread.id).where(
+    query = select(Thread, func.coalesce(ranks.c.position, 0)).outerjoin(ranks, ranks.c.thread_id == Thread.id).where(
         Thread.user_id == user_id,
         Thread.status == "active",
     )
