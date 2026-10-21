@@ -280,6 +280,13 @@ Rules:
   effect as `github-actions[bot]`; the command releases the head to
   `factory:review`. `--head` optionally pins the exact SHA and fails closed on a
   moved head.
+- If an approved review cannot record trusted author/reviewer provenance because
+  its staged roster is missing or invalid, or a provenance write fails, the
+  controller preserves the approval and parks the PR and linked issue at
+  `factory:blocked` with no active owner. Its redacted diagnostic identifies the
+  infrastructure failure. Repair the trusted bundle or write access before
+  reconciling the exact head; do not assign another semantic review of unchanged
+  code to work around a controller failure.
 - `factory:local` remains an active local-work lease, not an opt-out from
   enrollment. A local session MUST release that lease to `factory:unowned`
   when it opens a ready-for-review PR or finishes a repair; the fleet never

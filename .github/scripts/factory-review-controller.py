@@ -1371,14 +1371,19 @@ def return_to_review(
     stage: str = "factory:review",
 ) -> dict[str, Any]:
     """Record a non-authoritative result and safely release its lease."""
-    post_review_comment(
-        pr_number=pr_number,
-        marker=marker,
-        reviewer=reviewer,
-        verdict=verdict,
-        excerpt=excerpt,
-        note=note,
-    )
+    try:
+        post_review_comment(
+            pr_number=pr_number,
+            marker=marker,
+            reviewer=reviewer,
+            verdict=verdict,
+            excerpt=excerpt,
+            note=note,
+        )
+    except Exception:
+        # Best-effort diagnostic: a failed comment write must not prevent the
+        # blocked transition below.
+        pass
     transition_pr_and_linked_issue(
         pr_number=pr_number,
         branch=branch,
@@ -1686,12 +1691,46 @@ def handle_review(
     # contribution record, so establish its exact-head author attestation here
     # from trusted evidence instead of stranding it. This is what makes such a
     # head reviewable exactly like a wrapper-pushed one.
-    attest_exact_head_author(pr_number=pr_number, head=reviewed_head, pr=pr)
-    persist_cross_model_review_marker(
-        pr_number=pr_number,
-        head=reviewed_head,
-        reviewer=worker,
-    )
+    operation = "attest_exact_head_author"
+    try:
+        attest_exact_head_author(pr_number=pr_number, head=reviewed_head, pr=pr)
+        operation = "persist_cross_model_review_marker"
+        persist_cross_model_review_marker(
+            pr_number=pr_number,
+            head=reviewed_head,
+            reviewer=worker,
+        )
+    except (ImportError, OSError, ValueError, RuntimeError) as exc:
+        # A staged dependency or provenance-write failure is controller
+        # infrastructure work, not a reason to run another model against the
+        # same approved head. Preserve the approval, fail closed, and leave
+        # enough redacted evidence to repair the trusted bundle/write path.
+        exc_name = type(exc).__name__
+        redacted = redact_review_text(str(exc))
+        # Keep exception name and operation outside the limit; retain the
+        # tail of the message which has the specific failure details.
+        detail_suffix = redacted[-480:] if len(redacted) > 480 else redacted
+        detail = f"{exc_name} in {operation}: {detail_suffix}"
+        return return_to_review(
+            pr_number=pr_number,
+            branch=branch,
+            worker=worker,
+            reviewer=worker,
+            verdict=verdict,
+            excerpt="",
+            note=(
+                "Blocked: trusted controller provenance could not be recorded. "
+                f"operation={operation}. {detail}. Repair the trusted "
+                "controller/roster bundle or GitHub provenance-write access, "
+                "then reconcile this exact head. "
+                "Do not re-review this unchanged head while the infrastructure "
+                "failure remains."
+            ),
+            status="provenance-infrastructure-blocked",
+            head=reviewed_head,
+            producer=producer,
+            stage="factory:blocked",
+        )
 
     # A semantic approval alone cannot make this head mergeable. If an agent
     # bypassed the wrapper's trusted contribution record, the cross-model
