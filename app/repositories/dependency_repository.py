@@ -12,6 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
 
+#: Provenance recorded for edges a reader authors through the Dependency Builder.
+READER_AUTHORED_PROVENANCE = "Reader-authored through the Dependency Builder"
+
 
 @dataclass(frozen=True)
 class ReaderDependencyGraph:
@@ -243,7 +246,11 @@ async def get_dependency_by_ids(
 async def create_dependency(
     db: AsyncSession, source_issue_id: int, target_issue_id: int
 ) -> Dependency:
-    """Create a new dependency.
+    """Create an explicit reader-authored dependency.
+
+    The edge is stored with the reviewed reader-intent classification and an
+    explicit provenance record, so every consumer can name the authoring
+    surface instead of rendering an unknown classification.
 
     Args:
         db: Database session.
@@ -256,6 +263,9 @@ async def create_dependency(
     dependency = Dependency(
         source_issue_id=source_issue_id,
         target_issue_id=target_issue_id,
+        origin="reader",
+        classification="A",
+        provenance=READER_AUTHORED_PROVENANCE,
     )
     db.add(dependency)
     return dependency

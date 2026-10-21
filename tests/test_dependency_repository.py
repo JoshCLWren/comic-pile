@@ -147,6 +147,9 @@ async def test_create_dependency(async_db: AsyncSession, default_user: User) -> 
     assert dependency is not None
     assert dependency.source_issue_id == issue1.id
     assert dependency.target_issue_id == issue2.id
+    assert dependency.origin == "reader"
+    assert dependency.classification == "A"
+    assert dependency.provenance == "Reader-authored through the Dependency Builder"
 
 
 @pytest.mark.asyncio
