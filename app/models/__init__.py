@@ -9,6 +9,7 @@ from app.models.collection_exclusion import CollectionExclusion
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
+from app.models.custom_cbl_source_link import CustomCBLSourceLink
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.delivery import DeliveryRecord
@@ -57,6 +58,7 @@ __all__ = [
     "ContinuityRuleSelectedMember",
     "CustomCBLEntry",
     "CustomCBLList",
+    "CustomCBLSourceLink",
     "Dependency",
     "DependencyGroup",
     "DependencyGroupMembership",
