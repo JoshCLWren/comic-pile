@@ -271,7 +271,8 @@ async def test_3470_multiple_candidates_without_exact_volume_unmatched(
     """Multiple confirmed matches without an exact volume match stay unmatched.
 
     Each rejected candidate is reported with its own series identity (or
-    "unknown"), never the CBL issue's volume_id repeated for every candidate.
+    "unknown"), never the CBL issue's volume_id repeated for every candidate,
+    and a missing CBL volume identity never renders as the literal "None".
     """
     from datetime import UTC, datetime
 
@@ -391,3 +392,6 @@ async def test_3470_multiple_candidates_without_exact_volume_unmatched(
     # Each candidate reports its own known series.
     assert "series 12987" in rows[0].evidence
     assert "series 15797" in rows[0].evidence
+    # A missing CBL volume identity must never render as the literal "None".
+    assert "volume None" not in rows[0].evidence
+    assert "volume unknown" in rows[0].evidence

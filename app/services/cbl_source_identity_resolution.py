@@ -7,7 +7,13 @@ owned comics share an external identity. It does not insert ContinuityPlans.
 
 # Issue #3470: ComicVine external series + issue identity takes precedence.
 # Do not resolve 1988 Forever People to 1971 The Forever People by near-equal
-title/issue number; distinct external_series_identity_id must stay distinct.
+# title/issue number; distinct external_series_identity_id must stay distinct.
+#
+# Issue #4013: the exact ComicVine issue and volume identities are
+# authoritative. Several owned candidates resolve only when exactly one of
+# them carries the CBL series identity. Duplicate copies of that same volume
+# stay an explicit ambiguity, and candidates without an exact volume match
+# stay unmatched with every rejected candidate reported.
 """
 
 from __future__ import annotations
@@ -100,8 +106,9 @@ async def report_cbl_source_identity_resolution(
     Unique confirmed mappings are accepted. When several owned Issues share
     the identity, the ComicVine volume on the Thread wins only if exactly one
     candidate matches the CBL series identity. Duplicate copies of that same
-    volume stay ambiguous. Unmatched entries are reported with empty
-    candidates.
+    volume stay ambiguous. Candidates that share no exact CBL series identity
+    leave the entry unmatched, and every rejected candidate is reported with
+    its own series identity instead of an empty candidate list.
 
     Args:
         db: Async database session. Caller must not commit plan writes.
@@ -263,7 +270,7 @@ async def _resolve_entry(
         # No exact volume matches - all candidates are rejected
         base.status = "unmatched"
         base.evidence = (
-            f"no owned Issues match CBL ComicVine volume {comicvine_series_id}; "
+            f"no owned Issues match CBL ComicVine volume {comicvine_series_id or 'unknown'}; "
             f"rejected candidates for {comicvine_issue_id}: "
             + ", ".join(
                 f"{cand.thread_title} #{cand.issue_number} "
