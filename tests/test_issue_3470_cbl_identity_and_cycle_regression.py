@@ -260,5 +260,134 @@ async def test_3470_missing_volume_thread_identity_unresolved_not_guessed(
         async_db, user_id=user.id, source_list_id=source_list.id
     )
     assert len(rows) == 1
-    assert rows[0].status == "ambiguous_duplicate_copies"
+    assert rows[0].status == "unmatched"
     assert rows[0].chosen_issue_id is None
+
+
+@pytest.mark.asyncio
+async def test_3470_multiple_candidates_without_exact_volume_unmatched(
+    async_db: AsyncSession,
+) -> None:
+    """Multiple confirmed matches without an exact volume match stay unmatched.
+
+    Each rejected candidate is reported with its own series identity (or
+    "unknown"), never the CBL issue's volume_id repeated for every candidate.
+    """
+    from datetime import UTC, datetime
+
+    from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
+    from app.models.external_identity import (
+        ExternalIdentity,
+        ThreadExternalSeriesMapping,
+    )
+    from tests.conftest import get_or_create_user_async
+    from tests.test_series_thread_reattach import _thread_with_numbers
+
+    user = await get_or_create_user_async(async_db)
+    thread_a, issues_a = await _thread_with_numbers(
+        async_db,
+        user_id=user.id,
+        title="The Forever People (1971)",
+        numbers=["1"],
+        queue_position=1,
+    )
+    thread_b, issues_b = await _thread_with_numbers(
+        async_db,
+        user_id=user.id,
+        title="Forever People (1988)",
+        numbers=["1"],
+        queue_position=2,
+    )
+
+    shared_issue_identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="fp-multi-no-volume",
+        metadata_json={"cover_date": "1988-01-01", "volume_id": "15796"},
+    )
+    series_a = ExternalIdentity(
+        provider="comicvine",
+        entity_type="series",
+        external_id="12987",
+        metadata_json={},
+    )
+    series_b = ExternalIdentity(
+        provider="comicvine",
+        entity_type="series",
+        external_id="15797",
+        metadata_json={},
+    )
+    async_db.add_all([shared_issue_identity, series_a, series_b])
+    await async_db.flush()
+
+    from tests.test_cbl_source_identity_resolution import _map_issue
+    await _map_issue(async_db, issue=issues_a[0], identity=shared_issue_identity)
+    await _map_issue(async_db, issue=issues_b[0], identity=shared_issue_identity)
+
+    async_db.add(
+        ThreadExternalSeriesMapping(
+            thread_id=thread_a.id,
+            external_identity_id=series_a.id,
+            status="confirmed",
+            evidence_source="test",
+            confidence=1.0,
+        )
+    )
+    async_db.add(
+        ThreadExternalSeriesMapping(
+            thread_id=thread_b.id,
+            external_identity_id=series_b.id,
+            status="confirmed",
+            evidence_source="test",
+            confidence=1.0,
+        )
+    )
+    await async_db.flush()
+
+    source = CBLSource(
+        repository="test/cbl-3470-multi-no-volume",
+        revision_sha="b" * 40,
+        synced_at=datetime.now(UTC),
+    )
+    async_db.add(source)
+    await async_db.flush()
+    source_list = CBLSourceList(
+        source_id=source.id,
+        source_path="DC/Characters/unsorted/New Gods/The New Gods 001.cbl",
+        name="Fourth World",
+        declared_issue_count=1,
+        content_hash="a" * 64,
+        revision_sha="b" * 40,
+        active=True,
+    )
+    async_db.add(source_list)
+    await async_db.flush()
+    async_db.add(
+        CBLSourceEntry(
+            list_id=source_list.id,
+            position=1,
+            series_name="Forever People",
+            issue_number="1",
+            external_issue_identity_id=shared_issue_identity.id,
+            external_series_identity_id=None,
+        )
+    )
+    await async_db.flush()
+
+    from app.services.cbl_source_identity_resolution import (
+        report_cbl_source_identity_resolution,
+    )
+    rows = await report_cbl_source_identity_resolution(
+        async_db, user_id=user.id, source_list_id=source_list.id
+    )
+    assert len(rows) == 1
+    assert rows[0].status == "unmatched"
+    assert rows[0].chosen_issue_id is None
+    candidate_series = {candidate.series_external_id for candidate in rows[0].candidates}
+    assert candidate_series == {"12987", "15797"}
+    assert len(rows[0].candidates) == 2
+    # The CBL issue's volume_id must not be repeated as each candidate's volume.
+    assert "15796" not in rows[0].evidence
+    # Each candidate reports its own known series.
+    assert "series 12987" in rows[0].evidence
+    assert "series 15797" in rows[0].evidence

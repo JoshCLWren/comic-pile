@@ -260,13 +260,14 @@ async def _resolve_entry(
             )
             return base
     else:
-        # No exact volume matches - all are cross-volume, reject all
+        # No exact volume matches - all candidates are rejected
         base.status = "unmatched"
         base.evidence = (
             f"no owned Issues match CBL ComicVine volume {comicvine_series_id}; "
-            f"cross-volume matches found for {comicvine_issue_id} but rejected: "
+            f"rejected candidates for {comicvine_issue_id}: "
             + ", ".join(
-                f"{cand.thread_title} #{cand.issue_number} (volume {cand.volume_id})"
+                f"{cand.thread_title} #{cand.issue_number} "
+                f"(series {cand.series_external_id or 'unknown'})"
                 for cand in candidates
             )
         )
