@@ -226,9 +226,11 @@ def _check_source(repository: str, source: Source) -> CheckResult:
 
 
 def _outcome_from_release(release: dict[str, object] | None) -> str:
-    if release is not None and release.get("visibility") == "internal":
-        return "newly_skipped_internal"
-    return "newly_published"
+    staged = bool(os.getenv("RELEASE_WRITER_STAGE_FILE"))
+    internal = release is not None and release.get("visibility") == "internal"
+    if staged:
+        return "staged_internal" if internal else "staged_public"
+    return "newly_skipped_internal" if internal else "newly_published"
 
 
 def _prompt(repository: str, source: Source) -> str:
@@ -385,6 +387,8 @@ def _summary(
         "already_present": statuses.count("already_present"),
         "newly_published": statuses.count("newly_published"),
         "newly_skipped_internal": statuses.count("newly_skipped_internal"),
+        "staged_public": statuses.count("staged_public"),
+        "staged_internal": statuses.count("staged_internal"),
         "conflicts": conflicts,
         "failures": failures,
         "still_missing": failures,
@@ -411,6 +415,8 @@ def _write_summary(
             f"- Already present: {summary['already_present']}",
             f"- Newly published: {summary['newly_published']}",
             f"- Newly skipped/internal: {summary['newly_skipped_internal']}",
+            f"- Staged public (not yet durable): {summary['staged_public']}",
+            f"- Staged internal (not yet durable): {summary['staged_internal']}",
             f"- Conflicts: {summary['conflicts']}",
             f"- Failures: {summary['failures']}",
             f"- Still missing: {summary['still_missing']}",
