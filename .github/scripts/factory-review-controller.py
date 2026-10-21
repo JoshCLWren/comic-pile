@@ -1371,14 +1371,19 @@ def return_to_review(
     stage: str = "factory:review",
 ) -> dict[str, Any]:
     """Record a non-authoritative result and safely release its lease."""
-    post_review_comment(
-        pr_number=pr_number,
-        marker=marker,
-        reviewer=reviewer,
-        verdict=verdict,
-        excerpt=excerpt,
-        note=note,
-    )
+    try:
+        post_review_comment(
+            pr_number=pr_number,
+            marker=marker,
+            reviewer=reviewer,
+            verdict=verdict,
+            excerpt=excerpt,
+            note=note,
+        )
+    except (OSError, RuntimeError, ValueError):
+        # Best-effort diagnostic: a failed comment write must not prevent the
+        # blocked transition below.
+        pass
     transition_pr_and_linked_issue(
         pr_number=pr_number,
         branch=branch,
@@ -1686,8 +1691,10 @@ def handle_review(
     # contribution record, so establish its exact-head author attestation here
     # from trusted evidence instead of stranding it. This is what makes such a
     # head reviewable exactly like a wrapper-pushed one.
+    operation = "attest_exact_head_author"
     try:
         attest_exact_head_author(pr_number=pr_number, head=reviewed_head, pr=pr)
+        operation = "persist_cross_model_review_marker"
         persist_cross_model_review_marker(
             pr_number=pr_number,
             head=reviewed_head,
@@ -1698,7 +1705,12 @@ def handle_review(
         # infrastructure work, not a reason to run another model against the
         # same approved head. Preserve the approval, fail closed, and leave
         # enough redacted evidence to repair the trusted bundle/write path.
-        detail = redact_review_text(f"{type(exc).__name__}: {exc}")[-500:]
+        exc_name = type(exc).__name__
+        redacted = redact_review_text(str(exc))
+        budget = 500 - len(exc_name) - 2
+        if budget < 0:
+            budget = 0
+        detail = exc_name + ": " + (redacted[-budget:] if budget else "")
         return return_to_review(
             pr_number=pr_number,
             branch=branch,
@@ -1708,8 +1720,9 @@ def handle_review(
             excerpt="",
             note=(
                 "Blocked: trusted controller provenance could not be recorded. "
-                f"{detail}. Repair the trusted controller/roster bundle or GitHub "
-                "provenance-write access, then reconcile this exact head. "
+                f"operation={operation}. {detail}. Repair the trusted "
+                "controller/roster bundle or GitHub provenance-write access, "
+                "then reconcile this exact head. "
                 "Do not re-review this unchanged head while the infrastructure "
                 "failure remains."
             ),
