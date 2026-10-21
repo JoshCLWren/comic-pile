@@ -41,6 +41,7 @@ const EVENT_LABELS: EventLabelMap = {
   restore: 'Restored',
   move: 'Moved',
   shuffle: 'Shuffled',
+  dismiss: 'Dismissed',
 }
 
 function eventLabel(type: string): string {

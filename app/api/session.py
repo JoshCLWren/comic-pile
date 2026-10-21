@@ -40,7 +40,10 @@ from app.services.session_response import (
 )
 from app.services.summary_service import build_narrative_summary
 from app.services.reading_session_service import get_reading_session_service, ReadingSessionService
-from app.services.session_history_projection import project_session_history_events
+from app.services.session_history_projection import (
+    project_session_history_events,
+    resolve_history_issue_identity,
+)
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.thread_issue_stats import load_issue_stats
 from app.services.correction_examples import generate_correction_examples
@@ -269,7 +272,7 @@ async def list_sessions(
                 (Event.type == "roll") & (Event.selected_thread_id.is_not(None)),
                 Event.type == "rate",
                 Event.type == "rolled_but_skipped",
-                (Event.type.in_(("snooze", "unsnooze", "undo", "restore", "dismiss"))) & (Event.die_after.is_not(None)),
+                (Event.type.in_(("snooze", "unsnooze", "undo", "restore"))) & (Event.die_after.is_not(None)),
             )
         )
         .order_by(Event.session_id, Event.timestamp, Event.id)
@@ -278,8 +281,6 @@ async def list_sessions(
 
     rate_agg: dict[int, _RateAggregate] = {}
     undone_rate_ids: set[int] = set()
-    # Historical issue captured at rating time — immutable per session.
-    rate_issue_by_session: dict[int, tuple[int | None, str | None]] = {}
     open_rate_ids_by_session: dict[int, list[int]] = {}
     for ev in history_events:
         event_session_id = ev.session_id
@@ -295,8 +296,6 @@ async def list_sessions(
                 rate_agg[event_session_id]["issues_read"] += ev.issues_read
             if ev.rating is not None:
                 rate_agg[event_session_id]["last_rating"] = ev.rating
-            if ev.issue_id is not None or ev.issue_number is not None:
-                rate_issue_by_session[event_session_id] = (ev.issue_id, ev.issue_number)
         elif ev.type == "undo" and event_session_id in open_rate_ids_by_session and open_rate_ids_by_session[event_session_id]:
             undone_id = open_rate_ids_by_session[event_session_id].pop()
             undone_rate_ids.add(undone_id)
@@ -375,9 +374,11 @@ async def list_sessions(
                         issues_remaining = unread_counts.get(thread.id, 0)
                     else:
                         issues_remaining = thread.issues_remaining
-                    # Prefer the historically rated issue over the thread's
-                    # current next_unread_issue_id so History rows are immutable.
-                    historical = rate_issue_by_session.get(sid)
+                    # Prefer the issue this session recorded for the rolled
+                    # thread over the thread's current next_unread_issue_id so
+                    # History rows are immutable and never borrow another
+                    # series' issue number (#3763).
+                    historical = resolve_history_issue_identity(projection, sid, thread.id)
                     if historical is not None:
                         issue_id, issue_number = historical
                     else:
@@ -422,7 +423,9 @@ async def list_sessions(
                         issues_remaining = unread_counts.get(thread.id, 0)
                     else:
                         issues_remaining = thread.issues_remaining
-                    historical_pending = rate_issue_by_session.get(sid)
+                    historical_pending = resolve_history_issue_identity(
+                        projection, sid, thread.id
+                    )
                     if historical_pending is not None:
                         issue_id_pending, issue_number_pending = historical_pending
                     else:

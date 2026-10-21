@@ -22,6 +22,7 @@ from app.models import Event, ReadingSession, Thread, User
 from app.models.thread import normalize_format_value
 from app.models.recommendation_context import RecommendationContext as RecContextModel
 from app.repositories.roll_repository import (
+    clear_session_pending,
     count_blocked_exclusion_rows,
     count_inactive_exclusion_rows,
     fetch_blocked_exclusion_page,
@@ -933,23 +934,32 @@ class RollService:
         )
 
     async def execute_dismiss_pending(self, current_user_id: int) -> None:
-        """Execute the dismiss_pending_roll flow."""
+        """Execute the dismiss_pending_roll flow.
+
+        Cancelling a pending roll is reading activity, so it is persisted as a
+        ``dismiss`` event. Without that event the dismissal was silently
+        absent from the session timeline (#3763). The dismissed series is
+        referenced through ``selected_thread_id`` so the record survives a
+        later deletion of the series.
+
+        Args:
+            current_user_id: Authenticated user cancelling the pending roll.
+        """
         current_session = await get_or_create(self._db, user_id=current_user_id, existing_user=None)
         now = datetime.now(UTC)
-        
-        # Record the dismiss action as an event for history tracking
+
         pending_thread_id = current_session.pending_thread_id
         if pending_thread_id is not None:
-            dismiss_event = Event(
-                type="dismiss",
-                session_id=current_session.id,
-                timestamp=now,
-                selected_thread_id=pending_thread_id,
-                selection_method="cancel",
+            await insert_event(
+                self._db,
+                Event(
+                    type="dismiss",
+                    session_id=current_session.id,
+                    timestamp=now,
+                    selected_thread_id=pending_thread_id,
+                ),
             )
-            self._db.add(dismiss_event)
-        
-        from app.repositories.roll_repository import clear_session_pending
+
         await clear_session_pending(self._db, current_session.id, now)
         await self._db.commit()
 

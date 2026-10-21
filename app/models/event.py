@@ -40,6 +40,9 @@ class Event(Base):
           for the die after stepping up.
         - "unsnooze": User unsnoozed a thread. Uses `thread_id` to record which
           thread was removed from the snoozed list.
+        - "dismiss": User cancelled a pending roll. Uses `selected_thread_id` to
+          record which pending thread was dismissed (#3763). The dismissal
+          changes no die, so it carries no `die_after`.
         - "session_mode": User changed the session's reading bandwidth and/or
           intent. Stores the changed dimensions and new values in `context`;
           it references no thread.
@@ -47,9 +50,10 @@ class Event(Base):
     Thread ID Fields:
         This model has two thread reference fields with different purposes:
 
-        - `selected_thread_id`: Stores the ID of a thread selected during a roll.
-          Has NO foreign key constraint, allowing historical records to persist
-          even if the thread is later deleted. Used only by "roll" events.
+        - `selected_thread_id`: Stores the ID of a thread selected during a roll
+          and of the pending thread a user dismissed. Has NO foreign key
+          constraint, allowing historical records to persist even if the thread
+          is later deleted. Used by "roll" and "dismiss" events.
 
         - `thread_id`: A proper foreign key to the threads table. Used by "rate"
           and "rolled_but_skipped" events where we need referential integrity

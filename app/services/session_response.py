@@ -542,6 +542,12 @@ async def build_session_event_details(
                 event_data.description = f"Unsnoozed {_deleted_title(thread_title)}"
             else:
                 event_data.description = f"Unsnoozed {thread_title or 'thread'}"
+        elif event.type == "dismiss":
+            word = _event_word(event.type)
+            if thread_deleted:
+                event_data.description = f"{word} {_deleted_title(thread_title)}"
+            else:
+                event_data.description = f"{word} {thread_title or 'thread'}"
         elif event.type == "skip" or event.type == "rolled_but_skipped":
             event_data.die = event.die
             event_data.die_after = event.die_after
