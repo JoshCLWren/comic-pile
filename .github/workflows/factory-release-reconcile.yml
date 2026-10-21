@@ -28,6 +28,8 @@ concurrency:
 
 jobs:
   dispatch:
+    # INC-2026-10-20: stop dispatching no-op Release Writer runs during incident.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Request release reconciliation
