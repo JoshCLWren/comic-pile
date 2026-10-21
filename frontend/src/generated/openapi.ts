@@ -2641,8 +2641,55 @@ export interface paths {
         /**
          * Discover Cbl Source Lists
          * @description Return bounded active CBL lists for the Reading Plan Add-material flow.
+         *
+         *     Args:
+         *         current_user: Authenticated reader.
+         *         db: Async database session.
+         *         q: Optional case-insensitive match against list name or source path.
+         *         limit: Maximum number of lists to return.
+         *
+         *     Returns:
+         *         Bounded summaries of the matching active CBL source lists.
          */
         get: operations["discover_cbl_source_lists_api_v1_issue_identity_cbl_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/issue-identity/cbl-sources/{list_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cbl Source List
+         * @description Return every ordered source occurrence for one CBL list (read-only).
+         *
+         *     Source occurrences keep their original position, including repeated
+         *     positions for duplicated issues. Large lists are returned as a bounded page
+         *     so no list is silently truncated; ``entries_total`` reports the full count
+         *     so callers can page through every occurrence.
+         *
+         *     Args:
+         *         list_id: CBL source list identifier.
+         *         current_user: Authenticated reader.
+         *         db: Async database session.
+         *         offset: Zero-based index of the first returned source occurrence.
+         *         limit: Maximum number of source occurrences to return.
+         *
+         *     Returns:
+         *         One CBL source list with its ordered source occurrences.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the list does not exist or is inactive.
+         */
+        get: operations["get_cbl_source_list_api_v1_issue_identity_cbl_sources__list_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6668,6 +6715,47 @@ export interface components {
             unresolved_count: number;
         };
         /**
+         * CBLSourceEntryDetail
+         * @description One ordered source occurrence in a CBL list.
+         */
+        CBLSourceEntryDetail: {
+            /**
+             * Comicvine Issue Id
+             * @description Comic Vine issue ID when the source entry has one
+             */
+            comicvine_issue_id?: string | null;
+            /**
+             * Comicvine Volume Id
+             * @description Comic Vine volume ID when the source entry has one
+             */
+            comicvine_volume_id?: string | null;
+            /**
+             * Issue Number
+             * @description Issue number recorded in the CBL source
+             */
+            issue_number: string;
+            /**
+             * Position
+             * @description Source position in original CBL order
+             */
+            position: number;
+            /**
+             * Publication Year
+             * @description Publication year recorded in the CBL source
+             */
+            publication_year?: number | null;
+            /**
+             * Series Name
+             * @description Series name recorded in the CBL source
+             */
+            series_name: string;
+            /**
+             * Volume Year
+             * @description Volume year recorded in the CBL source
+             */
+            volume_year?: number | null;
+        };
+        /**
          * CBLSourceFingerprintResponse
          * @description Immutable source evidence needed to review and later accept a plan.
          */
@@ -6684,23 +6772,110 @@ export interface components {
             source_repository: string;
         };
         /**
+         * CBLSourceListDetail
+         * @description Read-only detail for one CBL source list.
+         */
+        CBLSourceListDetail: {
+            /**
+             * Content Hash
+             * @description Content hash of the imported source list
+             */
+            content_hash: string;
+            /**
+             * Declared Issue Count
+             * @description Issue count declared by the source list
+             */
+            declared_issue_count?: number | null;
+            /**
+             * Entries
+             * @description Ordered source occurrences in this page
+             */
+            entries?: components["schemas"]["CBLSourceEntryDetail"][];
+            /**
+             * Entries Limit
+             * @description Maximum source occurrences per page
+             */
+            entries_limit: number;
+            /**
+             * Entries Offset
+             * @description Zero-based offset of the returned page
+             */
+            entries_offset: number;
+            /**
+             * Entries Total
+             * @description Total source occurrences in the list
+             */
+            entries_total: number;
+            /**
+             * Id
+             * @description CBL source list ID
+             */
+            id: number;
+            /**
+             * Name
+             * @description Display name of the CBL source list
+             */
+            name: string;
+            /**
+             * Revision Sha
+             * @description Source revision the list was imported from
+             */
+            revision_sha: string;
+            /**
+             * Source Path
+             * @description Reader-safe path of the CBL source file
+             */
+            source_path: string;
+            /**
+             * Source Ref
+             * @description Reader-safe ``repository:path`` source identity
+             */
+            source_ref: string;
+            /**
+             * Source Repository
+             * @description Reader-safe source repository identity
+             */
+            source_repository: string;
+        };
+        /**
          * CBLSourceListDiscoveryItem
          * @description One active persisted source list that may be previewed by Add material.
          */
         CBLSourceListDiscoveryItem: {
-            /** Content Hash */
+            /**
+             * Content Hash
+             * @description Content hash of the imported source list
+             */
             content_hash: string;
-            /** Declared Issue Count */
-            declared_issue_count: number | null;
-            /** Id */
+            /**
+             * Declared Issue Count
+             * @description Issue count declared by the source list
+             */
+            declared_issue_count?: number | null;
+            /**
+             * Id
+             * @description CBL source list ID
+             */
             id: number;
-            /** Name */
+            /**
+             * Name
+             * @description Display name of the CBL source list
+             */
             name: string;
-            /** Revision Sha */
+            /**
+             * Revision Sha
+             * @description Source revision the list was imported from
+             */
             revision_sha: string;
-            /** Source Path */
+            /**
+             * Source Path
+             * @description Stored path of the CBL source file
+             */
             source_path: string;
-            /** Source Repository */
+            /**
+             * Source Repository
+             * @description Reader-safe source repository identity
+             */
             source_repository: string;
         };
         /**
@@ -18453,6 +18628,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CBLSourceListDiscoveryItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cbl_source_list_api_v1_issue_identity_cbl_sources__list_id__get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLSourceListDetail"];
                 };
             };
             /** @description Validation Error */
