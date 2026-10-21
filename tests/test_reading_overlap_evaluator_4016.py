@@ -393,7 +393,7 @@ def test_conversion_projection_preserves_overlap_decisions() -> None:
             ReadingList(
                 5,
                 "strict",
-                (ReadingListEntry(1001), ReadingListEntry(2000)),
+                (ReadingListEntry(2000), ReadingListEntry(1001)),
                 "JLI",
                 (MISTER_MIRACLE_WAITS,),
             ),
