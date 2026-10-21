@@ -474,8 +474,7 @@ export default function RollPage() {
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
         onOpenModeSelector={() => setIsModeSelectorOpen(true)}
-        onBackToQueue={async () => {
-          await rating.handleCancelRating()
+        onBackToQueue={() => {
           navigate('/queue')
         }}
       />
