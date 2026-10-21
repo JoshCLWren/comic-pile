@@ -19,19 +19,19 @@ from psycopg.types.json import Json
 from scripts import release_reconcile, release_writer
 
 
-class ReleaseIdentityConflict(ValueError):
+class ReleaseIdentityConflictError(ValueError):
     """An existing ledger row belongs to a different PR or merge SHA."""
 
 
 def _matches_source(rows: list[tuple], pr_number: int, merge_sha: str) -> bool:
     """Require a unique, exact, two-key match; never overwrite a different source."""
     if len(rows) > 1:
-        raise ReleaseIdentityConflict("PR and merge SHA identify different releases")
+        raise ReleaseIdentityConflictError("PR and merge SHA identify different releases")
     if not rows:
         return False
     _, stored_pr, stored_sha = rows[0]
     if stored_pr != pr_number or stored_sha != merge_sha:
-        raise ReleaseIdentityConflict("source PR or merge SHA is already bound elsewhere")
+        raise ReleaseIdentityConflictError("source PR or merge SHA is already bound elsewhere")
     return True
 
 
@@ -98,7 +98,7 @@ def publish_payload(connection, payload: dict[str, object]) -> str:
                 return "inserted"
             if _matches_source(_source_rows(cursor, payload), pr, sha):
                 return "already_present"
-            raise ReleaseIdentityConflict(
+            raise ReleaseIdentityConflictError(
                 "insert conflicted with an unexpected unique key; no changes committed"
             )
 
@@ -110,15 +110,15 @@ def _load_validated(path: Path, repository: str, pr_number: int) -> dict[str, ob
     raw = json.loads(path.read_text(encoding="utf-8"))
     payload = release_writer._validate_release(json.dumps(raw))
     if payload["source_repository"] != repository or payload["source_pr_number"] != pr_number:
-        raise ReleaseIdentityConflict("candidate does not match requested source")
+        raise ReleaseIdentityConflictError("candidate does not match requested source")
 
     source = release_reconcile._fetch_one(repository, pr_number)
     if payload["source_merge_sha"] != source.merge_commit_sha:
-        raise ReleaseIdentityConflict("candidate SHA is not the merged PR commit")
+        raise ReleaseIdentityConflictError("candidate SHA is not the merged PR commit")
     original_time = datetime.fromisoformat(source.merged_at.replace("Z", "+00:00"))
     candidate_time = datetime.fromisoformat(str(payload["merged_at"]).replace("Z", "+00:00"))
     if candidate_time != original_time:
-        raise ReleaseIdentityConflict("candidate merged_at differs from GitHub")
+        raise ReleaseIdentityConflictError("candidate merged_at differs from GitHub")
     if payload["visibility"] == "internal":
         release_writer._validate_internal_evidence(payload["provenance_json"])
     release_writer._validate_publish_grounding(payload)
@@ -126,6 +126,7 @@ def _load_validated(path: Path, repository: str, pr_number: int) -> dict[str, ob
 
 
 def main() -> int:
+    """Validate and publish the trusted release candidate to Neon."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--candidate", required=True, type=Path)
     parser.add_argument("--repository", required=True)
