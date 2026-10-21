@@ -527,7 +527,9 @@ describe('CreatorDetailPage highlights reasons and issue lists (#3946)', () => {
     strongest_series: null,
     weakest_series: null,
     most_rated_series: null,
+    // SAFETY: empty array is a valid CreatorIssueInsight[]
     highest_rated_issues: [] as CreatorIssueInsight[],
+    // SAFETY: empty array is a valid CreatorIssueInsight[]
     lowest_rated_issues: [] as CreatorIssueInsight[],
   }
 
