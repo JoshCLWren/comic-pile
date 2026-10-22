@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import factory_issue_acceptance as issue_acceptance
 import importlib
 import json
 import os
@@ -814,11 +815,14 @@ def post_review_comment(
     verdict: str,
     excerpt: str,
     note: str,
+    acceptance_marker: str | None = None,
 ) -> None:
     """Persist semantic findings and controller audit metadata."""
     parts: list[str] = []
     if marker:
         parts.append(marker)
+    if acceptance_marker:
+        parts.append(acceptance_marker)
     parts.append(f"### Factory semantic review · Factory {reviewer} · {verdict.upper()}")
     if note:
         parts.append(note)
@@ -1283,6 +1287,24 @@ def poll_mergeable_gate(
     return gate_result("retry", "mergeability remained UNKNOWN after bounded polling")
 
 
+
+def issue_acceptance_gate(pr_number: int, expected_head: str) -> GateResult:
+    """Require controller-bot attestation for the current issue body and head."""
+    pr = pr_json(pr_number)
+    issue_number = linked_issue_for_pr(pr_number, str(pr.get("headRefName") or ""))
+    if issue_number is None:
+        return gate_result("deny", "factory PR has no linked issue acceptance contract")
+    issue = target_json(issue_number)
+    body = issue.get("body")
+    if not isinstance(body, str):
+        return gate_result("retry", "linked issue body could not be read")
+    if not issue_acceptance.attested(
+        model_comment_bodies(pr_number), issue_number, expected_head, body
+    ):
+        return gate_result("deny", "no valid current-head, current-issue acceptance attestation")
+    return gate_result("pass", "all issue acceptance criteria attested")
+
+
 def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
     """Single authoritative exact-head mechanical gate for controller and workflows."""
     mergeable = poll_mergeable_gate(pr_number, expected_head)
@@ -1294,6 +1316,10 @@ def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
     reviews = current_head_review_gate(pr_number, expected_head)
     if reviews["decision"] != "pass":
         return reviews
+    if "factory" in labels_of(pr_json(pr_number)):
+        acceptance = issue_acceptance_gate(pr_number, expected_head)
+        if acceptance["decision"] != "pass":
+            return acceptance
     return gate_result("pass", "all exact-head mechanical gates passed")
 
 
@@ -1502,6 +1528,45 @@ def handle_review(
                 producer=producer,
             )
 
+    # A semantic APPROVE must independently account for every issue criterion.
+    # The review log is untrusted; only this controller may attest it, and
+    # only for the exact issue revision + PR head it verified.
+    accepted_contract_marker: str | None = None
+    if verdict == "approve":
+        issue_number = linked_issue_for_pr(pr_number, branch)
+        if issue_number is None:
+            return return_to_review(
+                pr_number=pr_number, branch=branch, worker=worker,
+                reviewer=worker, verdict="not-ready", excerpt=excerpt,
+                note="Approval rejected: no authoritative linked issue could be found.",
+                status="acceptance-issue-missing", head=reviewed_head, producer=producer,
+            )
+        issue_object = target_json(issue_number)
+        if issue_object.get("state") not in {"open", "closed"}:
+            raise RuntimeError("linked issue state unavailable")
+        body = issue_object.get("body")
+        if not isinstance(body, str):
+            raise RuntimeError("linked issue body unavailable")
+        changed = run_gh(
+            ["pr", "diff", str(pr_number), "--repo", REPO, "--name-only"]
+        ).stdout.splitlines()
+        failures = issue_acceptance.validate(
+            issue_acceptance.report_from_text(excerpt),
+            issue_number, reviewed_head, body, changed,
+        )
+        if failures:
+            return return_to_review(
+                pr_number=pr_number, branch=branch, worker=worker,
+                reviewer=worker, verdict="not-ready", excerpt=excerpt,
+                note="Approval rejected: issue acceptance evidence incomplete: "
+                     + "; ".join(failures[:8]),
+                status="acceptance-evidence-required", head=reviewed_head,
+                producer=producer,
+            )
+        accepted_contract_marker = issue_acceptance.marker(
+            issue_number, reviewed_head, body
+        )
+
     if verdict in {"repair", "reject"} and not has_actionable_review_findings(excerpt):
         return return_to_review(
             pr_number=pr_number,
@@ -1685,7 +1750,8 @@ def handle_review(
         reviewer=worker,
         verdict=verdict,
         excerpt=excerpt,
-        note="Semantic approval is scoped to this exact reviewed PR head.",
+        note="Semantic approval is scoped to this exact reviewed PR head and linked issue revision.",
+        acceptance_marker=accepted_contract_marker,
     )
     # A head created by hand or by a local agent has no numbered wrapper
     # contribution record, so establish its exact-head author attestation here
@@ -2006,6 +2072,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
             provenance_complete=provenance_complete,
         )
         and cross_model
+        and issue_acceptance_gate(pr_number, head)["decision"] == "pass"
     )
     if authorized:
         return {
