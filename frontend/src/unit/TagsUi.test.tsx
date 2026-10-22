@@ -606,6 +606,14 @@ describe('TagEditor (issue #3032)', () => {
     const nameInput = screen.getByLabelText('New tag name')
     await user.clear(nameInput)
     await user.type(nameInput, 'PlanTagger')
+    // Let the debounced exact-name lookup settle before creating, so the
+    // refresh below is a real refetch of the active lookup.
+    await waitFor(() => {
+      const lookups = mockedTagsApi.list.mock.calls.filter(
+        ([search]) => search === 'PlanTagger',
+      )
+      expect(lookups.length).toBe(1)
+    })
     mockedTagsApi.create.mockImplementation(async () => {
       createdInBackend = true
       return {
