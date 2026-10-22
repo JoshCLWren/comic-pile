@@ -92,6 +92,8 @@ def wire_controller(
 
     monkeypatch.setattr(module, "pr_json", lambda _pr: next(payload_iter))
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
+    monkeypatch.setattr(module, "target_json", lambda _number: {"state": "open", "body": "## Scope\n- sample"})
+    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args: [])
     excerpt_text = "git diff HEAD~1\nsemantic findings" if include_diff_inspection else "semantic findings"
     monkeypatch.setattr(
         module,
