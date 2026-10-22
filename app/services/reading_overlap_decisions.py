@@ -355,6 +355,20 @@ async def remove_overlap_decision(
     await authoring_repository.lock_reader(db, user_id)
     row = await _owned_list(db, user_id, list_id)
     _guard_version(row, expected_updated_at)
+    if (
+        await overlap_repository.load_overlap_decision(db, user_id, list_id, decision_id)
+        is None
+    ):
+        raise HTTPException(
+            status_code=404, detail=f"Overlap decision {decision_id} not found"
+        )
+    # Validate the graph the removal would create before deleting anything, so
+    # a rejected write leaves the stored choice and its version token untouched.
+    records = await overlap_repository.load_overlap_decisions(db, user_id)
+    projected = overlap_repository.group_decisions_by_list(
+        record for record in records if record.id != decision_id
+    )
+    await _validate_projection(db, user_id, projected)
     removed = await overlap_repository.delete_overlap_decision(
         db, user_id=user_id, list_id=list_id, decision_id=decision_id
     )
@@ -362,9 +376,6 @@ async def remove_overlap_decision(
         raise HTTPException(
             status_code=404, detail=f"Overlap decision {decision_id} not found"
         )
-    records = await overlap_repository.load_overlap_decisions(db, user_id)
-    grouped = overlap_repository.group_decisions_by_list(records)
-    await _validate_projection(db, user_id, dict(grouped))
     updated_at = datetime.now(UTC)
     # The repository owns the token write. It preserves the list's own
     # updated_at so a decision change never rewrites the list revision.

@@ -143,6 +143,33 @@ async def _list_row(db: AsyncSession, list_id: int) -> CustomCBLList:
     ).scalar_one()
 
 
+async def _thread_blockers(
+    db: AsyncSession, user_id: int, thread_id: int
+) -> list[object]:
+    """Return one Thread's canonical blockers from the shadow eligibility report.
+
+    Args:
+        db: Current transaction.
+        user_id: Reader whose shadow inputs are evaluated.
+        thread_id: Thread whose blockers are reported.
+
+    Returns:
+        The Thread's blocker rows; an empty list means the Thread is eligible.
+    """
+    from app.repositories.reading_shadow_repository import load_shadow_inputs
+    from app.services.reading_shadow_service import compare_reading_eligibility
+
+    result = compare_reading_eligibility(await load_shadow_inputs(db, user_id))
+    rows = result["threads"]
+    assert isinstance(rows, list)
+    for row in rows:
+        if row["thread_id"] == thread_id:
+            blockers = row["blockers"]
+            assert isinstance(blockers, list)
+            return blockers
+    raise AssertionError(f"Thread {thread_id} is missing from the shadow report")
+
+
 @pytest.mark.asyncio
 async def test_reader_saves_and_reloads_one_overlap_decision(
     auth_client: AsyncClient,
@@ -773,6 +800,207 @@ async def test_one_reader_never_sees_or_changes_another_readers_choice(
 
     owner_set = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/overlap-decisions")
     assert len(owner_set.json()["decisions"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_two_readers_sharing_sources_save_different_choices(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Readers sharing the same Comic Vine sources reach different eligible Issues.
+
+    Both readers map their own Threads onto the same confirmed Comic Vine
+    volumes. Each saves the opposite overlap choice, so the eligible Issue of
+    one reader stays blocked for the other, and neither write disturbs the
+    other reader's stored decision or eligibility.
+    """
+    from app.auth import create_access_token
+    from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
+    from app.main import app
+    from httpx import ASGITransport
+
+    first = await get_or_create_user_async(async_db)
+    _first_waiting, first_waiting_issue = await _volume_thread(
+        async_db,
+        user_id=first.id,
+        title="Mister Miracle",
+        queue_position=1,
+        volume_external_id="202",
+    )
+    _first_continuing, first_continuing_issue = await _volume_thread(
+        async_db,
+        user_id=first.id,
+        title="JLI",
+        queue_position=2,
+        volume_external_id="101",
+    )
+    second = await get_or_create_user_async(async_db, username="sharing_reader")
+    _second_waiting, second_waiting_issue = await _volume_thread(
+        async_db,
+        user_id=second.id,
+        title="Mister Miracle",
+        queue_position=1,
+        volume_external_id="202",
+    )
+    _second_continuing, second_continuing_issue = await _volume_thread(
+        async_db,
+        user_id=second.id,
+        title="JLI",
+        queue_position=2,
+        volume_external_id="101",
+    )
+    await async_db.commit()
+
+    first_list_id = await _strict_list(
+        auth_client, [first_waiting_issue.id, first_continuing_issue.id], name="First"
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as second_client:
+        csrf_token = generate_csrf_token()
+        second_client.cookies.set(CSRF_COOKIE_NAME, csrf_token)
+        second_client.headers.update({CSRF_HEADER_NAME: csrf_token})
+        second_token = create_access_token(data={"sub": second.username, "jti": "second"})
+        second_client.headers.update({"Authorization": f"Bearer {second_token}"})
+        created = await second_client.post(
+            "/api/v1/custom-cbls",
+            json={
+                "name": "Second",
+                "issue_ids": [second_waiting_issue.id, second_continuing_issue.id],
+                "mode": "strict",
+            },
+        )
+        assert created.status_code == 201, created.text
+        second_list_id = int(created.json()["id"])
+
+        first_saved = await auth_client.put(
+            f"/api/v1/custom-cbls/{first_list_id}/overlap-decisions",
+            json={
+                "continuing_volume_id": CONTINUING_VOLUME,
+                "waiting_volume_id": WAITING_VOLUME,
+            },
+        )
+        assert first_saved.status_code == 200, first_saved.text
+        second_saved = await second_client.put(
+            f"/api/v1/custom-cbls/{second_list_id}/overlap-decisions",
+            json={
+                "continuing_volume_id": WAITING_VOLUME,
+                "waiting_volume_id": CONTINUING_VOLUME,
+            },
+        )
+        assert second_saved.status_code == 200, second_saved.text
+
+        first_reloaded = await auth_client.get(
+            f"/api/v1/custom-cbls/{first_list_id}/overlap-decisions"
+        )
+        assert first_reloaded.status_code == 200, first_reloaded.text
+        assert [
+            (row["continuing_volume_id"], row["waiting_volume_id"])
+            for row in first_reloaded.json()["decisions"]
+        ] == [(CONTINUING_VOLUME, WAITING_VOLUME)]
+        second_reloaded = await second_client.get(
+            f"/api/v1/custom-cbls/{second_list_id}/overlap-decisions"
+        )
+        assert second_reloaded.status_code == 200, second_reloaded.text
+        assert [
+            (row["continuing_volume_id"], row["waiting_volume_id"])
+            for row in second_reloaded.json()["decisions"]
+        ] == [(WAITING_VOLUME, CONTINUING_VOLUME)]
+
+    first_continuing_blockers = await _thread_blockers(
+        async_db, first.id, first_continuing_issue.thread_id
+    )
+    first_waiting_blockers = await _thread_blockers(
+        async_db, first.id, first_waiting_issue.thread_id
+    )
+    second_continuing_blockers = await _thread_blockers(
+        async_db, second.id, second_continuing_issue.thread_id
+    )
+    second_waiting_blockers = await _thread_blockers(
+        async_db, second.id, second_waiting_issue.thread_id
+    )
+    assert first_continuing_blockers == [], (
+        "the reader who approved the overlap must reach the continuing volume"
+    )
+    assert first_waiting_blockers == []
+    assert second_continuing_blockers, (
+        "the other reader's opposite choice must keep the same volume blocked"
+    )
+    assert second_waiting_blockers == []
+
+
+@pytest.mark.asyncio
+async def test_a_removal_that_would_create_a_cycle_is_rejected(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Cycle checks reject the write and leave the stored choice untouched.
+
+    The saved overlap waives the strict-order edge between the two volumes, so
+    a reverse prerequisite is legal while the choice exists. Removing the
+    choice would restore the waived edge and close a cycle: the delete must be
+    rejected with the decision and its version token intact.
+    """
+    user = await get_or_create_user_async(async_db)
+    _waiting_thread, waiting_issue = await _volume_thread(
+        async_db,
+        user_id=user.id,
+        title="Mister Miracle",
+        queue_position=1,
+        volume_external_id="202",
+    )
+    _continuing_thread, continuing_issue = await _volume_thread(
+        async_db,
+        user_id=user.id,
+        title="JLI",
+        queue_position=2,
+        volume_external_id="101",
+    )
+    await async_db.commit()
+    list_id = await _strict_list(
+        auth_client, [waiting_issue.id, continuing_issue.id]
+    )
+    saved = await auth_client.put(
+        f"/api/v1/custom-cbls/{list_id}/overlap-decisions",
+        json={
+            "continuing_volume_id": CONTINUING_VOLUME,
+            "waiting_volume_id": WAITING_VOLUME,
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    decision_id = saved.json()["decisions"][0]["id"]
+    token = saved.json()["updated_at"]
+
+    prerequisite = await auth_client.post(
+        "/api/v1/prerequisites/",
+        json={
+            "source_issue_id": continuing_issue.id,
+            "target_issue_id": waiting_issue.id,
+        },
+    )
+    assert prerequisite.status_code == 201, prerequisite.text
+
+    rejected = await auth_client.delete(
+        f"/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+        params={"expected_updated_at": token},
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["detail"]["code"] == "reading_list_cycle"
+
+    reloaded = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/overlap-decisions")
+    assert reloaded.status_code == 200, reloaded.text
+    assert [row["id"] for row in reloaded.json()["decisions"]] == [decision_id]
+    assert reloaded.json()["updated_at"] == token
+
+    removed_prerequisite = await auth_client.delete(
+        f"/api/v1/prerequisites/{prerequisite.json()['id']}"
+    )
+    assert removed_prerequisite.status_code == 204, removed_prerequisite.text
+
+    removed = await auth_client.delete(
+        f"/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}"
+    )
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["decisions"] == []
 
 
 @pytest.mark.asyncio
