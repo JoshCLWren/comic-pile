@@ -38,6 +38,11 @@ interface SeedSource {
   name: string
 }
 
+/** The saved overlap answer the fake server must remember between page loads. */
+interface SavedOverlapAnswer {
+  saved: ReadingGraphOverlapChoiceId | null
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -130,9 +135,11 @@ test.describe('#4020 reading-graph overlap decisions', () => {
       },
     ])
 
-    // The server remembers the reader's answer after the preview echoes it, and
-    // returns that saved decision the next time the source is opened.
-    const state: { saved: ReadingGraphOverlapChoiceId | null } = { saved: null }
+    // The server remembers the reader's answer only once the commit succeeds,
+    // and returns that saved decision the next time the source is opened. The
+    // preview mock stays read-only so a commit that drops `overlap_decisions`
+    // cannot still pass this test.
+    const state: SavedOverlapAnswer = { saved: null }
     await page.route('**/v1/issue-identity/cbl/*/reading-graph-preview', async (route) => {
       // SAFETY: the page always posts the typed preview request.
       const request = (route.request().postDataJSON() ?? {}) as {
@@ -140,13 +147,31 @@ test.describe('#4020 reading-graph overlap decisions', () => {
       }
       const answered =
         request.overlap_choices?.some((entry) => entry.choice === 'continue_series') ?? false
-      if (answered) state.saved = 'continue_series'
       const payload = answered
         ? afterContinuingChoice()
         : state.saved
           ? withSavedChoice(state.saved)
           : readingGraphPreview()
       await route.fulfill({ json: { ...payload, source_list_id: source.id } })
+    })
+    await page.route('**/v1/cbl/*/adoption-commit', async (route) => {
+      // SAFETY: the page always posts the typed commit payload.
+      const request = (route.request().postDataJSON() ?? {}) as {
+        overlap_decisions?: Array<{
+          overlap_id: string
+          choice: ReadingGraphOverlapChoiceId
+        }>
+      }
+      const response = await route.fetch()
+      const committed =
+        response.ok() &&
+        (request.overlap_decisions ?? []).some(
+          (decision) =>
+            decision.overlap_id === MISTER_MIRACLE_OVERLAP.overlap_id &&
+            decision.choice === 'continue_series',
+        )
+      if (committed) state.saved = 'continue_series'
+      await route.fulfill({ response })
     })
 
     await searchAndSelect(page, sourceName)
