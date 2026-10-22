@@ -581,3 +581,64 @@ def test_shell_substitution_values_and_literal_spaces_remain_behavioral(old: str
     assert delivery.pr_delivers_implementation(
         "Fix shell behavior", [path], patch(path, old.splitlines(), new.splitlines())
     )[0]
+
+
+@pytest.mark.parametrize("template", [
+    'cat <<EOF\n{text}\nEOF\n',
+    'cat <<\'EOF\'\n{text}\nEOF\n',
+    'echo "$(cat <<EOF\n{text}\nEOF\n)"',
+    'echo "`cat <<EOF\n{text}\nEOF\n`"',
+    'echo "$(cat <<\'EOF\'\n{text}\nEOF\n)"',
+    'cat <<-EOF\n\t{text}\n\tEOF\n',
+])
+def test_heredoc_input_spaces_are_behavioral(template: str) -> None:
+    """Heredoc stdin, including quoted command substitutions, is literal input."""
+    path = '.github/scripts/worker.sh'
+    old = template.format(text='one  two')
+    new = template.format(text='one two')
+    assert delivery.pr_delivers_implementation(
+        "Repair heredoc text", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+def test_heredoc_hash_line_is_data_not_comment() -> None:
+    """Comment syntax in heredoc input must not be stripped by the shell lexer."""
+    path = '.github/scripts/worker.sh'
+    assert delivery.pr_delivers_implementation(
+        "Repair input text", [path], patch(
+            path, ['cat <<EOF', '# old text', 'EOF'], ['cat <<EOF', '# new text', 'EOF']
+        )
+    )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ('cat <<EOF\nvalue\nEOF\n', 'cat <<OTHER\nvalue\nOTHER\n'),
+    ('cat <<EOF\nvalue\nEOF\n', 'cat <<-EOF\n\tvalue\n\tEOF\n'),
+    ('cat <<EOF\n$(printf foo)\nEOF\n', 'cat <<EOF\n$(printf   foo)\nEOF\n'),
+    ('cat <<EOF\none\\\ntwo\nEOF\n', 'cat <<EOF\nonetwo\nEOF\n'),
+])
+def test_equivalent_heredoc_formatting_is_not_delivery(old: str, new: str) -> None:
+    """Delimiter names, stripped tabs and actual continuations do not alter stdin."""
+    path = '.github/scripts/worker.sh'
+    assert not delivery.pr_delivers_implementation(
+        "Fix shell behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+def test_quoted_heredoc_substitution_text_remains_literal() -> None:
+    """A quoted delimiter disables substitutions, so their internal spaces are data."""
+    path = '.github/scripts/worker.sh'
+    assert delivery.pr_delivers_implementation(
+        "Repair literal input", [path], patch(
+            path, ["cat <<'EOF'", '$(printf foo)', 'EOF'],
+            ["cat <<'EOF'", '$(printf   foo)', 'EOF'],
+        )
+    )[0]
+
+
+def test_quoted_shift_text_is_not_a_heredoc() -> None:
+    """A redirect-looking string literal cannot start heredoc extraction."""
+    path = '.github/scripts/worker.sh'
+    assert delivery.pr_delivers_implementation(
+        "Repair shell literal", [path], patch(path, ['echo "<<EOF"'], ['echo "<<OTHER"'])
+    )[0]

@@ -230,11 +230,128 @@ def _shell_value(value: str, path: str) -> str:
         return repr(("double-quoted", _shell_parts(value[1:-1], path)))
     return value
 
+
+HEREDOC_START = re.compile(
+    r"(?<!<)<<(?!<)(?P<strip>-)?[ \t]*"
+    r"(?P<word>(?:'[^']*'|\"(?:\\.|[^\"\\])*\"|\\.|[^\s;|&()<>'\"\\])+)",
+)
+
+
+def _heredoc_data(value: str, quoted: bool, path: str) -> str:
+    """Preserve input bytes, normalizing substitutions only in unquoted heredocs."""
+    if quoted:
+        return value
+    # Quotes in a heredoc body are data, not shell quoting. Only an
+    # unescaped backslash-newline is a continuation before substitution.
+    parts: list[str] = []
+    index = 0
+    while index < len(value):
+        if value[index] == "\\" and index + 1 < len(value):
+            if value[index + 1] != "\n":
+                parts.extend((value[index], value[index + 1]))
+            index += 2
+        else:
+            parts.append(value[index])
+            index += 1
+    return _shell_parts("".join(parts), path)
+
+
+def _shell_heredocs(source: str, path: str) -> tuple[str, list[tuple[bool, str]]]:
+    """Extract heredoc input before command/comment lexing, including inside $()."""
+    lines = source.splitlines(keepends=True)
+    output: list[str] = []
+    bodies: list[tuple[bool, str]] = []
+    marker = "\ue002"
+    while marker in source:
+        marker += "\ue002"
+    quote = ""
+    contexts: list[tuple[str, int, str]] = []
+    line_index = 0
+    while line_index < len(lines):
+        line = lines[line_index]
+        pending: list[tuple[str, bool, bool]] = []
+        rebuilt: list[str] = []
+        index = 0
+        while index < len(line):
+            char = line[index]
+            if char == "\\" and quote != "'" and index + 1 < len(line):
+                rebuilt.append(line[index:index + 2])
+                index += 2
+                continue
+            if quote not in {"'", "ansi"} and line.startswith("$(", index):
+                contexts.append((quote, 1, ")"))
+                quote = ""
+                rebuilt.append("$(")
+                index += 2
+                continue
+            if char == "`" and quote not in {"'", "ansi"}:
+                if contexts and contexts[-1][2] == "`" and not quote:
+                    quote, _depth, _closing = contexts.pop()
+                else:
+                    contexts.append((quote, 1, "`"))
+                    quote = ""
+                rebuilt.append(char)
+                index += 1
+                continue
+            if not quote and contexts and contexts[-1][2] == ")" and char in {"(", ")"}:
+                outer, depth, closing = contexts[-1]
+                depth += 1 if char == "(" else -1
+                if depth:
+                    contexts[-1] = (outer, depth, closing)
+                else:
+                    contexts.pop()
+                    quote = outer
+            if not quote and line.startswith("$'", index):
+                quote = "ansi"
+                rebuilt.append("$'")
+                index += 2
+                continue
+            comment_boundary = (index == 0 or line[index - 1].isspace()
+                                or line[index - 1] in ";|&()")
+            if not quote and char == "#" and comment_boundary:
+                rebuilt.append(line[index:])
+                break
+            match = HEREDOC_START.match(line, index) if not quote else None
+            if match:
+                word = match["word"]
+                delimiter = "".join(shlex.split(word, posix=True))
+                quoted = any(char in word for char in ("'", '\"', "\\"))
+                pending.append((delimiter, quoted, bool(match["strip"])))
+                rebuilt.append(f" {marker}{len(bodies) + len(pending) - 1}")
+                index = match.end()
+                continue
+            if char in {"'", '\"'}:
+                if not quote:
+                    quote = char
+                elif quote == char or quote == "ansi" and char == "'":
+                    quote = ""
+            rebuilt.append(char)
+            index += 1
+        output.append("".join(rebuilt))
+        line_index += 1
+        for delimiter, quoted, strip_tabs in pending:
+            data: list[str] = []
+            while line_index < len(lines):
+                body_line = lines[line_index]
+                line_index += 1
+                if strip_tabs:
+                    body_line = body_line.lstrip("\t")
+                if body_line.rstrip("\n") == delimiter:
+                    break
+                data.append(body_line)
+            else:
+                raise ValueError("incomplete shell heredoc")
+            bodies.append((quoted, _heredoc_data("".join(data), quoted, path)))
+    return "".join(output), bodies
+
 def _code_tokens(source: str, path: str) -> str:
     """Compare complete source, preserving literals and ignoring comments."""
     if path.lower().endswith(".py"):
         tree = _WithoutDocstrings().visit(ast.parse(source))
         return ast.dump(tree, include_attributes=False)
+    heredocs: list[tuple[bool, str]] = []
+    if path.lower().endswith(".sh"):
+        source, heredocs = _shell_heredocs(source, path)
     name = path.lower().rsplit("/", 1)[-1]
     hash_comments = path.lower().endswith((".sh", ".yml", ".yaml", ".toml", ".ini", ".cfg"))
     hash_comments = hash_comments or name in BEHAVIORAL_FILENAMES
@@ -298,7 +415,7 @@ def _code_tokens(source: str, path: str) -> str:
                 commands.append(token)
         if commands and commands[-1] == ";":
             commands.pop()
-        return repr(commands)
+        return repr((commands, heredocs))
     tokens: list[str] = []
     significant = [index for index, match in enumerate(matches) if match.lastgroup != "space"]
     values = [matches[index].group() for index in significant]
