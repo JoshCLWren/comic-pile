@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from fastapi import HTTPException
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.custom_cbl import CustomCBLList
@@ -80,13 +81,17 @@ def _guard_version(
         )
 
 
-async def _owned_list(db: AsyncSession, user_id: int, list_id: int) -> CustomCBLList:
+async def _owned_list(
+    db: AsyncSession, user_id: int, list_id: int, *, for_update: bool = False
+) -> CustomCBLList:
     """Load one owned Reading List or reject a missing or foreign list.
 
     Args:
         db: Current transaction.
         user_id: Reader whose ownership is checked.
         list_id: Reading List identifier.
+        for_update: When true, acquire a shared lock (SELECT FOR SHARE) to
+            prevent concurrent writes while reading the token and decisions.
 
     Returns:
         The owned Reading List row.
@@ -94,7 +99,7 @@ async def _owned_list(db: AsyncSession, user_id: int, list_id: int) -> CustomCBL
     Raises:
         HTTPException: With status 404 when the reader does not own the list.
     """
-    row = await overlap_repository.load_owned_list(db, user_id, list_id)
+    row = await overlap_repository.load_owned_list(db, user_id, list_id, for_update=for_update)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Reading List {list_id} not found")
     return row
@@ -214,7 +219,7 @@ async def get_overlap_decision_set(
     Raises:
         HTTPException: With status 404 when the reader does not own the list.
     """
-    row = await _owned_list(db, user_id, list_id)
+    row = await _owned_list(db, user_id, list_id, for_update=True)
     return await _decision_set(
         db,
         user_id=user_id,
@@ -250,69 +255,72 @@ async def save_overlap_decision(
         HTTPException: With status 404 for a foreign list, 409 for a stale
             version token, and 422 for an unusable or cyclic choice.
     """
-    try:
-        await authoring_repository.lock_reader(db, user_id)
-        row = await _owned_list(db, user_id, list_id)
-        _guard_version(row, expected_updated_at)
-        continuing_key = normalized_volume_key(continuing_volume_id)
-        waiting_key = normalized_volume_key(waiting_volume_id)
-        if continuing_key is None or waiting_key is None:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "code": "reading_overlap_invalid_volume",
-                    "message": "An overlap decision must name two exact Comic Vine volumes",
-                },
-            )
-        if continuing_key == waiting_key:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "code": "reading_overlap_same_volume",
-                    "message": "An overlap decision must name two distinct volumes",
-                },
-            )
-        resolved = await overlap_repository.resolve_volume_identity_ids(
-            db, [continuing_key, waiting_key]
+    await authoring_repository.lock_reader(db, user_id)
+    row = await _owned_list(db, user_id, list_id)
+    _guard_version(row, expected_updated_at)
+    continuing_key = normalized_volume_key(continuing_volume_id)
+    waiting_key = normalized_volume_key(waiting_volume_id)
+    if continuing_key is None or waiting_key is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "reading_overlap_invalid_volume",
+                "message": "An overlap decision must name two exact Comic Vine volumes",
+            },
         )
-        continuing_identity_id = resolved.get(continuing_key)
-        waiting_identity_id = resolved.get(waiting_key)
-        if continuing_identity_id is None or waiting_identity_id is None:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "code": "reading_overlap_unknown_volume",
-                    "message": "An overlap decision must name two known Comic Vine volumes",
-                },
-            )
-        records = await overlap_repository.load_overlap_decisions(db, user_id)
-        grouped = overlap_repository.group_decisions_by_list(records)
-        projected = _projected_decisions(
-            grouped,
-            list_id,
-            (continuing_key, waiting_key),
-            SeriesOverlapDecision(continuing_key, waiting_key),
+    if continuing_key == waiting_key:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "reading_overlap_same_volume",
+                "message": "An overlap decision must name two distinct volumes",
+            },
         )
-        await _validate_projection(db, user_id, projected)
-        await overlap_repository.upsert_overlap_decision(
-            db,
-            user_id=user_id,
-            list_id=list_id,
-            continuing_identity_id=continuing_identity_id,
-            waiting_identity_id=waiting_identity_id,
-            continuing_volume_id=continuing_key,
-            waiting_volume_id=waiting_key,
+    resolved = await overlap_repository.resolve_volume_identity_ids(
+        db, [continuing_key, waiting_key]
+    )
+    continuing_identity_id = resolved.get(continuing_key)
+    waiting_identity_id = resolved.get(waiting_key)
+    if continuing_identity_id is None or waiting_identity_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "reading_overlap_unknown_volume",
+                "message": "An overlap decision must name two known Comic Vine volumes",
+            },
         )
-        updated_at = datetime.now(UTC)
-        row.overlap_decisions_updated_at = updated_at
-        await db.flush()
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise
-    return await _decision_set(
+    records = await overlap_repository.load_overlap_decisions(db, user_id)
+    grouped = overlap_repository.group_decisions_by_list(records)
+    projected = _projected_decisions(
+        grouped,
+        list_id,
+        (continuing_key, waiting_key),
+        SeriesOverlapDecision(continuing_key, waiting_key),
+    )
+    await _validate_projection(db, user_id, projected)
+    await overlap_repository.upsert_overlap_decision(
+        db,
+        user_id=user_id,
+        list_id=list_id,
+        continuing_identity_id=continuing_identity_id,
+        waiting_identity_id=waiting_identity_id,
+        continuing_volume_id=continuing_key,
+        waiting_volume_id=waiting_key,
+    )
+    updated_at = datetime.now(UTC)
+    # Update only overlap_decisions_updated_at without triggering updated_at's onupdate
+    await db.execute(
+        update(CustomCBLList)
+        .where(CustomCBLList.id == list_id, CustomCBLList.user_id == user_id)
+        .values(overlap_decisions_updated_at=updated_at)
+    )
+    await db.flush()
+    # Build the response while still holding the lock, before committing
+    response = await _decision_set(
         db, user_id=user_id, list_id=list_id, updated_at=updated_at
     )
+    await db.commit()
+    return response
 
 
 async def remove_overlap_decision(
@@ -341,27 +349,30 @@ async def remove_overlap_decision(
             409 for a stale version token, and 422 when removing the choice
             would make the reader's constraint graph cyclic.
     """
-    try:
-        await authoring_repository.lock_reader(db, user_id)
-        row = await _owned_list(db, user_id, list_id)
-        _guard_version(row, expected_updated_at)
-        removed = await overlap_repository.delete_overlap_decision(
-            db, user_id=user_id, list_id=list_id, decision_id=decision_id
+    await authoring_repository.lock_reader(db, user_id)
+    row = await _owned_list(db, user_id, list_id)
+    _guard_version(row, expected_updated_at)
+    removed = await overlap_repository.delete_overlap_decision(
+        db, user_id=user_id, list_id=list_id, decision_id=decision_id
+    )
+    if not removed:
+        raise HTTPException(
+            status_code=404, detail=f"Overlap decision {decision_id} not found"
         )
-        if not removed:
-            raise HTTPException(
-                status_code=404, detail=f"Overlap decision {decision_id} not found"
-            )
-        records = await overlap_repository.load_overlap_decisions(db, user_id)
-        grouped = overlap_repository.group_decisions_by_list(records)
-        await _validate_projection(db, user_id, dict(grouped))
-        updated_at = datetime.now(UTC)
-        row.overlap_decisions_updated_at = updated_at
-        await db.flush()
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise
-    return await _decision_set(
+    records = await overlap_repository.load_overlap_decisions(db, user_id)
+    grouped = overlap_repository.group_decisions_by_list(records)
+    await _validate_projection(db, user_id, dict(grouped))
+    updated_at = datetime.now(UTC)
+    # Update only overlap_decisions_updated_at without triggering updated_at's onupdate
+    await db.execute(
+        update(CustomCBLList)
+        .where(CustomCBLList.id == list_id, CustomCBLList.user_id == user_id)
+        .values(overlap_decisions_updated_at=updated_at)
+    )
+    await db.flush()
+    # Build the response while still holding the lock, before committing
+    response = await _decision_set(
         db, user_id=user_id, list_id=list_id, updated_at=updated_at
     )
+    await db.commit()
+    return response

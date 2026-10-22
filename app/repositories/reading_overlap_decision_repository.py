@@ -49,7 +49,7 @@ class OverlapDecisionRecord:
 
 
 async def load_owned_list(
-    db: AsyncSession, user_id: int, list_id: int
+    db: AsyncSession, user_id: int, list_id: int, *, for_update: bool = False
 ) -> CustomCBLList | None:
     """Load one owned Reading List row, or None when it is missing or foreign.
 
@@ -57,18 +57,19 @@ async def load_owned_list(
         db: Current transaction.
         user_id: Reader whose ownership is checked.
         list_id: Reading List identifier.
+        for_update: When true, acquire a shared lock (SELECT FOR SHARE) to
+            prevent concurrent writes while reading the token and decisions.
 
     Returns:
         The owned list row, or None when the reader does not own it.
     """
-    return (
-        await db.execute(
-            select(CustomCBLList).where(
-                CustomCBLList.id == list_id,
-                CustomCBLList.user_id == user_id,
-            )
-        )
-    ).scalar_one_or_none()
+    stmt = select(CustomCBLList).where(
+        CustomCBLList.id == list_id,
+        CustomCBLList.user_id == user_id,
+    )
+    if for_update:
+        stmt = stmt.with_for_update(read=True)
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
 def _to_record(

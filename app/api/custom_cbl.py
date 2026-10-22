@@ -197,7 +197,20 @@ async def read_custom_cbl_overlap_decisions(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OverlapDecisionSetResponse:
-    """Return one owned Reading List's overlap decisions and version token."""
+    """Return one owned Reading List's overlap decisions and version token.
+
+    Args:
+        list_id: Identifier of the Reading List to read.
+        current_user: Authenticated reader making the request.
+        db: Database session for the request.
+
+    Returns:
+        The list's saved overlap decisions, the current version token, and
+        the reader's selectable volume candidates for new decisions.
+
+    Raises:
+        HTTPException: With status 404 when the reader does not own the list.
+    """
     return await get_overlap_decision_set(db, user_id=current_user.id, list_id=list_id)
 
 
@@ -208,7 +221,21 @@ async def save_custom_cbl_overlap_decision(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OverlapDecisionSetResponse:
-    """Save one reader-approved overlap choice inside an owned Reading List."""
+    """Save one reader-approved overlap choice inside an owned Reading List.
+
+    Args:
+        list_id: Identifier of the Reading List to update.
+        payload: The overlap choice to save, naming two exact Comic Vine volumes.
+        current_user: Authenticated reader making the request.
+        db: Database session for the request.
+
+    Returns:
+        The list's updated decision set and version token.
+
+    Raises:
+        HTTPException: With status 404 for a foreign list, 409 for a stale
+            version token, and 422 for an unusable or cyclic choice.
+    """
     return await save_overlap_decision(
         db,
         user_id=current_user.id,
@@ -230,7 +257,24 @@ async def delete_custom_cbl_overlap_decision(
     db: Annotated[AsyncSession, Depends(get_db)],
     expected_updated_at: Annotated[datetime | None, Query()] = None,
 ) -> OverlapDecisionSetResponse:
-    """Remove one reader-approved overlap choice from an owned Reading List."""
+    """Remove one reader-approved overlap choice from an owned Reading List.
+
+    Args:
+        list_id: Identifier of the Reading List to update.
+        decision_id: Identifier of the overlap decision to remove.
+        current_user: Authenticated reader making the request.
+        db: Database session for the request.
+        expected_updated_at: Decision version token the client last read. None
+            skips the concurrency check.
+
+    Returns:
+        The list's updated decision set and version token.
+
+    Raises:
+        HTTPException: With status 404 for a foreign list or unknown decision,
+            409 for a stale version token, and 422 when removing the choice
+            would make the reader's constraint graph cyclic.
+    """
     return await remove_overlap_decision(
         db,
         user_id=current_user.id,
