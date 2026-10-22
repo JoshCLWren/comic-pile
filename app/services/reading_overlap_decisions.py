@@ -255,7 +255,7 @@ async def save_overlap_decision(
             version token, and 422 for an unusable or cyclic choice.
     """
     await authoring_repository.lock_reader(db, user_id)
-    row = await _owned_list(db, user_id, list_id)
+    row = await _owned_list(db, user_id, list_id, for_update=True)
     _guard_version(row, expected_updated_at)
     continuing_key = normalized_volume_key(continuing_volume_id)
     waiting_key = normalized_volume_key(waiting_volume_id)
@@ -353,7 +353,7 @@ async def remove_overlap_decision(
             would make the reader's constraint graph cyclic.
     """
     await authoring_repository.lock_reader(db, user_id)
-    row = await _owned_list(db, user_id, list_id)
+    row = await _owned_list(db, user_id, list_id, for_update=True)
     _guard_version(row, expected_updated_at)
     if (
         await overlap_repository.load_overlap_decision(db, user_id, list_id, decision_id)
