@@ -186,6 +186,13 @@ Post-merge closure runs the same delivery policy, leaves non-delivered issues op
 known non-deliveries prematurely closed by GitHub keywords. It never infers completion from a
 source filename alone.
 
+Bash comparison uses shfmt's typed syntax tree; CSS and JavaScript/TypeScript use
+Tree-sitter syntax trees, and Python uses its native AST. Parser positions and comments
+are excluded while literal/heredoc input remains data. The pinned `factory-syntax`
+dependency group is included in local development installs; control-plane workflows
+install the same pins through `.github/actions/factory-syntax`. No parser downloads occur
+while inspecting PR content, and a missing parser fails closed with an actionable retry.
+
 ## Gated autonomous merges
 
 Workers may merge a PR without asking again only after all of these gates are satisfied for the exact current head SHA:

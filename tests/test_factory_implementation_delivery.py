@@ -661,3 +661,169 @@ def test_arithmetic_shift_spacing_remains_formatting() -> None:
         "Repair shell arithmetic", [path],
         patch(path, ['(( value = 1<<2 ))'], ['(( value = 1 << 2 ))']),
     )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ('printf one && printf two', 'printf one &&\nprintf two'),
+    ('printf one || printf two', 'printf one ||\nprintf two'),
+    ('printf one | cat', 'printf one |\ncat'),
+])
+def test_shell_operator_wrapping_is_formatting(old: str, new: str) -> None:
+    """The Bash grammar identifies optional operator line breaks."""
+    path = '.github/scripts/worker.sh'
+    assert not delivery.pr_delivers_implementation(
+        "Fix shell behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+def test_css_selector_function_wrapping_is_formatting() -> None:
+    """Whitespace inside selector-function arguments is not a descendant combinator."""
+    path = 'frontend/src/styles.css'
+    assert not delivery.pr_delivers_implementation(
+        "Fix CSS behavior", [path], patch(
+            path, ['.a:hover:not(:disabled) {}'], ['.a:hover:not(', ' :disabled', ') {}'],
+        )
+    )[0]
+
+
+def test_return_semicolon_wrapping_is_formatting() -> None:
+    """A bare return with its semicolon on another line has the same syntax tree."""
+    path = 'frontend/src/client.ts'
+    assert not delivery.pr_delivers_implementation(
+        "Fix JS behavior", [path], patch(path, ['return;'], ['return', ';'])
+    )[0]
+
+
+def test_continued_heredoc_delimiter_does_not_block_input_repair() -> None:
+    """The Bash parser joins delimiter-word continuations before reading input."""
+    path = '.github/scripts/worker.sh'
+    assert delivery.pr_delivers_implementation(
+        "Fix heredoc input", [path], patch(
+            path, ['cat <<E\\', 'OF', 'old input', 'EOF'],
+            ['cat <<E\\', 'OF', 'new input', 'EOF'],
+        )
+    )[0]
+
+
+def test_arithmetic_shift_inside_substring_remains_behavioral() -> None:
+    """A substring's arithmetic shift cannot be confused with a redirect."""
+    path = '.github/scripts/worker.sh'
+    assert delivery.pr_delivers_implementation(
+        "Fix substring offset", [path], patch(
+            path, ['echo ${value:1<<1:1}'], ['echo ${value:1<<2:1}'],
+        )
+    )[0]
+
+
+def test_missing_parser_returns_actionable_retry(monkeypatch: MonkeyPatch) -> None:
+    """Missing runtime dependencies never authorize a source delivery."""
+    module = load_controller()
+    path = '.github/scripts/worker.sh'
+    monkeypatch.setattr(module, 'pr_json', lambda _pr: {'headRefOid': HEAD})
+    monkeypatch.setattr(delivery, 'complete_pr_diff', lambda *_args: (
+        [path], patch(path, ['echo old'], ['echo new']),
+    ))
+
+    def unavailable(_source: str) -> str:
+        raise RuntimeError('install factory syntax dependencies')
+
+    monkeypatch.setattr(delivery, '_shell_syntax', unavailable)
+    result = module.implementation_delivery_gate(4046, HEAD, 'Implement behavior')
+    assert result['decision'] == 'retry'
+    assert 'install factory syntax dependencies' in result['reason']
+
+
+def test_factory_runtime_pins_match_development_group() -> None:
+    """Review and development must install identical parser versions."""
+    import tomllib
+
+    root = Path(__file__).resolve().parents[1]
+    config = tomllib.loads((root / 'pyproject.toml').read_text())
+    expected = config['dependency-groups']['factory-syntax']
+    actual = (root / '.github/actions/factory-syntax/requirements.txt').read_text().splitlines()
+    assert sorted(expected) == sorted(line for line in actual if line and not line.startswith('#'))
+
+
+@pytest.mark.parametrize('workflow', [
+    'free-model-factory-run.yml', 'fixed-model-factory-dispatch.yml',
+    'factory-ready-merge-drain.yml', 'factory-incident-bot-promote.yml',
+    'factory-provenance-reconcile.yml', 'factory-fork-execution.yml',
+    'factory-fork-persistence.yml',
+])
+def test_factory_control_plane_installs_parser_runtime(workflow: str) -> None:
+    """Standalone control-plane jobs must provision the gate's real dependencies."""
+    import yaml
+
+    root = Path(__file__).resolve().parents[1]
+    config = yaml.safe_load((root / '.github/workflows' / workflow).read_text())
+    for job in config['jobs'].values():
+        steps = job.get('steps', [])
+        assert any(step.get('uses') == './.github/actions/factory-syntax' for step in steps)
+
+
+def test_async_comment_cannot_hide_restricted_newline() -> None:
+    """Comments between async and its parameters cannot erase the restricted gap."""
+    path = 'frontend/src/client.ts'
+    assert delivery.pr_delivers_implementation(
+        "Repair typed async arrow", [path], patch(
+            path, ['const f = async /* note */ (x: number) => x;'],
+            ['const f = async /* note */', '(x: number) => x;'],
+        )
+    )[0]
+
+
+def test_unparsed_source_cannot_borrow_comment_evidence() -> None:
+    """Recovery trees with unknown syntax do not turn prose edits into delivery."""
+    path = 'frontend/src/client.ts'
+    assert not delivery.pr_delivers_implementation(
+        "Implement behavior", [path], patch(path, ['const = ; // old'], ['const = ; // new'])
+    )[0]
+
+
+@pytest.mark.parametrize('path,old,new', [
+    ('frontend/src/client.ts', 'const text = "plain";', "const text = 'plain';"),
+    ('frontend/src/styles.css', '.a { content: "plain"; }', ".a { content: 'plain'; }"),
+    ('.github/scripts/worker.sh', 'printf "%s" "plain"', "printf '%s' 'plain'"),
+])
+def test_plain_quote_delimiter_formatting_is_not_delivery(path: str, old: str, new: str) -> None:
+    """Equivalent quote choices around plain literals are formatting."""
+    assert not delivery.pr_delivers_implementation(
+        'Implement behavior', [path], patch(path, [old], [new])
+    )[0]
+
+
+def test_shell_shebang_is_executable_configuration() -> None:
+    """A shebang chooses the interpreter; it is not an ordinary comment."""
+    path = '.github/scripts/worker.sh'
+    assert delivery.pr_delivers_implementation(
+        'Repair interpreter selection', [path], patch(
+            path, ['#!/bin/sh', 'echo ready'], ['#!/bin/bash', 'echo ready'],
+        )
+    )[0]
+
+
+@pytest.mark.parametrize('path,broken,fixed', [
+    ('.github/scripts/worker.sh', 'printf ready &&', 'printf ready'),
+    ('app/feature.py', 'def broken(:', 'def fixed():\n    return True'),
+])
+def test_syntax_repair_to_parsed_source_is_delivery(path: str, broken: str, fixed: str) -> None:
+    """A parser must allow a repair even when the original source did not parse."""
+    assert delivery.pr_delivers_implementation(
+        'Repair invalid syntax', [path], patch(path, broken.splitlines(), fixed.splitlines())
+    )[0]
+    assert not delivery.pr_delivers_implementation(
+        'Implement behavior', [path], patch(path, fixed.splitlines(), broken.splitlines())
+    )[0]
+
+
+def test_factory_parser_runtime_uses_application_python() -> None:
+    """Python AST inspection must understand the application's Python version."""
+    import yaml
+
+    root = Path(__file__).resolve().parents[1]
+    action = yaml.safe_load((root / '.github/actions/factory-syntax/action.yml').read_text())
+    assert any(
+        step.get('uses') == 'actions/setup-python@v7'
+        and step.get('with', {}).get('python-version') == '3.14'
+        for step in action['runs']['steps']
+    )

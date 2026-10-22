@@ -1328,9 +1328,12 @@ def implementation_delivery_gate(
     current_head = str(pr_json(pr_number).get("headRefOid") or "")
     if current_head != expected_head:
         return gate_result("retry", "PR head changed during implementation inspection")
-    delivered, reason = implementation_delivery.pr_delivers_implementation(
-        issue_body, files, patch
-    )
+    try:
+        delivered, reason = implementation_delivery.pr_delivers_implementation(
+            issue_body, files, patch
+        )
+    except RuntimeError as exc:
+        return gate_result("retry", f"implementation parser unavailable: {exc}")
     return gate_result("pass" if delivered else "deny", reason)
 
 

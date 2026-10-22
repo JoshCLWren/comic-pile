@@ -104,6 +104,9 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.PR_REBASE_TOKEN }}
 
+      - name: Install factory syntax parsers
+        uses: ./.github/actions/factory-syntax
+
       - name: Configure trusted git remote
         shell: bash
         run: |

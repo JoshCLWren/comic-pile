@@ -10,9 +10,15 @@ import ast
 import difflib
 import json
 import re
-import shlex
+import subprocess
+import sys
 from collections.abc import Callable, Iterable
+from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import quote
+
+if TYPE_CHECKING:
+    from tree_sitter import Node
 
 DOC_SUFFIXES = (".md", ".rst", ".txt", ".adoc")
 BEHAVIORAL_FILENAMES = frozenset({"dockerfile", "containerfile", "makefile", "gnumakefile"})
@@ -27,6 +33,7 @@ TYPE_LINE = re.compile(
     r"(docs-only|documentation-only|documentation|investigation|"
     r"planning|prd|acceptance-only|test-only)(?:\*\*)?\s*$"
 )
+UNPARSED = "__UNPARSED_SOURCE__"
 PATCH_HEADER = re.compile(r"^diff --git a/(.+) b/(.+)$")
 
 
@@ -103,375 +110,170 @@ class _WithoutDocstrings(ast.NodeTransformer):
 
 
 
-def _shell_continuations(source: str) -> str:
-    """Remove Bash continuations outside literal single quotes only."""
-    result: list[str] = []
-    quote = ""
-    index = 0
-    while index < len(source):
-        char = source[index]
-        if not quote and source.startswith("$'", index):
-            result.append("$'")
-            quote = "ansi"
-            index += 2
-            continue
-        if quote == "ansi":
-            if char == "\\" and index + 1 < len(source):
-                result.extend((char, source[index + 1]))
-                index += 2
-                continue
-            if char == "'":
-                quote = ""
-            result.append(char)
-            index += 1
-            continue
-        if char == "\\" and quote != "'" and index + 1 < len(source):
-            following = source[index + 1]
-            if following != "\n":
-                result.extend((char, following))
-            index += 2
-            continue
-        if char in {"'", '\"'}:
-            if not quote:
-                quote = char
-            elif quote == char:
-                quote = ""
-        result.append(char)
-        index += 1
-    return "".join(result)
 
-
-def _skip_group(values: list[str], position: int, opening: str, closing: str) -> int:
-    """Return the token after a balanced group, or -1 for incomplete syntax."""
-    depth = 0
-    for index in range(position, len(values)):
-        depth += (values[index] == opening) - (values[index] == closing)
-        if depth == 0:
-            return index + 1
-    return -1
-
-
-def _async_production(values: list[str], position: int) -> bool:
-    """Recognize JavaScript/TypeScript async functions and typed/generic arrows."""
-    token = values[position]
-    if token == "function":
-        return True
-    if token == "<":
-        position = _skip_group(values, position, "<", ">")
-        if position < 0 or position >= len(values):
-            return False
-        token = values[position]
-    if token != "(":
-        return position + 1 < len(values) and values[position + 1] == "=>"
-    after = _skip_group(values, position, "(", ")")
-    if after < 0 or after >= len(values):
-        return False
-    if values[after] == "=>":
-        return True
-    if values[after] != ":":
-        return False
-    # A TypeScript return annotation may contain generics, object types,
-    # tuples and nested function types. Only its outer arrow ends the type.
-    stack: list[str] = []
-    pairs = {"(": ")", "[": "]", "{": "}", "<": ">"}
-    for value in values[after + 1:]:
-        if value == "=>" and not stack:
-            return True
-        if value in pairs:
-            stack.append(pairs[value])
-        elif stack and value == stack[-1]:
-            stack.pop()
-        elif not stack and value in {";", "=", ")", "}"}:
-            return False
-    return False
-
-
-
-SHELL_DYNAMIC = re.compile(
-    r"\$\{(?:[^{}]|\{[^{}]*\})*\}|`(?:\\.|[^`\\])*`"
-    r"|\$\((?:[^()]|\([^()]*\))*\)", re.DOTALL,
-)
-ARITHMETIC_TOKEN = re.compile(
-    r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\""
-    r"|[\w$]+|\+\+|--|<<|>>|&&|\|\||==|!=|<=|>=|[^\s]", re.DOTALL,
-)
-
-
-def _shell_parts(value: str, path: str) -> str:
-    """Normalize embedded executable substitutions without erasing literal spaces."""
-    def normalize(match: re.Match[str]) -> str:
-        """Leave escaped dollar signs/backticks literal."""
-        prefix = value[:match.start()]
-        backslashes = len(prefix) - len(prefix.rstrip("\\"))
-        if backslashes % 2:
-            return match.group()
-        return _shell_value(match.group(), path)
-
-    return SHELL_DYNAMIC.sub(normalize, value)
-
-
-def _shell_value(value: str, path: str) -> str:
-    """Distinguish literal data from arithmetic and command substitution syntax."""
-    if value.startswith("${"):
-        substring = re.fullmatch(
-            r"\$\{(!?(?:[A-Za-z_]\w*|[0-9]+|[@*])(?:\[[^]]*\])?):(?![-+=?])(.*)\}",
-            value, re.DOTALL
-        )
-        if substring:
-            return repr(("substring", substring[1], ARITHMETIC_TOKEN.findall(substring[2])))
-        return repr(("parameter", _shell_parts(value[2:-1], path)))
-    if value.startswith("$((") and value.endswith("))"):
-        return repr(("arithmetic", ARITHMETIC_TOKEN.findall(value[3:-2])))
-    if value.startswith("$("):
-        return repr(("command", _code_tokens(value[2:-1], path)))
-    if value.startswith("`"):
-        return repr(("command", _code_tokens(value[1:-1], path)))
-    if value.startswith('\"'):
-        return repr(("double-quoted", _shell_parts(value[1:-1], path)))
-    return value
-
-
-HEREDOC_START = re.compile(
-    r"(?<!<)<<(?!<)(?P<strip>-)?[ \t]*"
-    r"(?P<word>(?:'[^']*'|\"(?:\\.|[^\"\\])*\"|\\.|[^\s;|&()<>'\"\\])+)",
-)
-
-
-def _heredoc_data(value: str, quoted: bool, path: str) -> str:
-    """Preserve input bytes, normalizing substitutions only in unquoted heredocs."""
-    if quoted:
-        return value
-    # Quotes in a heredoc body are data, not shell quoting. Only an
-    # unescaped backslash-newline is a continuation before substitution.
-    parts: list[str] = []
-    index = 0
-    while index < len(value):
-        if value[index] == "\\" and index + 1 < len(value):
-            if value[index + 1] != "\n":
-                parts.extend((value[index], value[index + 1]))
-            index += 2
-        else:
-            parts.append(value[index])
-            index += 1
-    return _shell_parts("".join(parts), path)
-
-
-def _shell_heredocs(source: str, path: str) -> tuple[str, list[tuple[bool, str]]]:
-    """Extract heredoc input before command/comment lexing, including inside $()."""
-    lines = source.splitlines(keepends=True)
-    output: list[str] = []
-    bodies: list[tuple[bool, str]] = []
-    marker = "\ue002"
-    while marker in source:
-        marker += "\ue002"
-    quote = ""
-    contexts: list[tuple[str, int, str]] = []
-    line_index = 0
-    while line_index < len(lines):
-        line = lines[line_index]
-        pending: list[tuple[str, bool, bool]] = []
-        rebuilt: list[str] = []
-        index = 0
-        while index < len(line):
-            char = line[index]
-            if char == "\\" and quote != "'" and index + 1 < len(line):
-                rebuilt.append(line[index:index + 2])
-                index += 2
-                continue
-            arithmetic = (quote not in {"'", "ansi"} and line.startswith("$((", index))
-            arithmetic |= not quote and line.startswith("((", index)
-            if arithmetic:
-                opening = "$((" if line.startswith("$((", index) else "(("
-                contexts.append((quote, 2, "arith)"))
-                quote = ""
-                rebuilt.append(opening)
-                index += len(opening)
-                continue
-            if quote not in {"'", "ansi"} and line.startswith("$(", index):
-                contexts.append((quote, 1, ")"))
-                quote = ""
-                rebuilt.append("$(")
-                index += 2
-                continue
-            if char == "`" and quote not in {"'", "ansi"}:
-                if contexts and contexts[-1][2] == "`" and not quote:
-                    quote, _depth, _closing = contexts.pop()
-                else:
-                    contexts.append((quote, 1, "`"))
-                    quote = ""
-                rebuilt.append(char)
-                index += 1
-                continue
-            if (not quote and contexts and contexts[-1][2] in {")", "arith)"}
-                    and char in {"(", ")"}):
-                outer, depth, closing = contexts[-1]
-                depth += 1 if char == "(" else -1
-                if depth:
-                    contexts[-1] = (outer, depth, closing)
-                else:
-                    contexts.pop()
-                    quote = outer
-            if not quote and line.startswith("$'", index):
-                quote = "ansi"
-                rebuilt.append("$'")
-                index += 2
-                continue
-            comment_boundary = (index == 0 or line[index - 1].isspace()
-                                or line[index - 1] in ";|&()")
-            if not quote and char == "#" and comment_boundary:
-                rebuilt.append(line[index:])
-                break
-            redirect_allowed = not quote and (not contexts or contexts[-1][2] != "arith)")
-            match = HEREDOC_START.match(line, index) if redirect_allowed else None
-            if match:
-                word = match["word"]
-                delimiter = "".join(shlex.split(word, posix=True))
-                quoted = any(char in word for char in ("'", '\"', "\\"))
-                pending.append((delimiter, quoted, bool(match["strip"])))
-                rebuilt.append(f" {marker}{len(bodies) + len(pending) - 1}")
-                index = match.end()
-                continue
-            if char in {"'", '\"'}:
-                if not quote:
-                    quote = char
-                elif quote == char or quote == "ansi" and char == "'":
-                    quote = ""
-            rebuilt.append(char)
-            index += 1
-        output.append("".join(rebuilt))
-        line_index += 1
-        for delimiter, quoted, strip_tabs in pending:
-            data: list[str] = []
-            while line_index < len(lines):
-                body_line = lines[line_index]
-                line_index += 1
-                if strip_tabs:
-                    body_line = body_line.lstrip("\t")
-                if body_line.rstrip("\n") == delimiter:
-                    break
-                data.append(body_line)
+def _shell_tree(value: object) -> object:
+    """Remove AST positions/comments while retaining literal and executable nodes."""
+    if isinstance(value, list):
+        cleaned = [_shell_tree(item) for item in value]
+        merged: list[object] = []
+        for item in cleaned:
+            if (isinstance(item, dict) and item.get("Type") == "Lit" and merged
+                    and isinstance(merged[-1], dict) and merged[-1].get("Type") == "Lit"):
+                previous = merged[-1]
+                previous["Value"] = str(previous.get("Value", "")) + str(item.get("Value", ""))
             else:
-                raise ValueError("incomplete shell heredoc")
-            bodies.append((quoted, _heredoc_data("".join(data), quoted, path)))
-    return "".join(output), bodies
+                merged.append(item)
+        return merged
+    if not isinstance(value, dict):
+        return value
+    result: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str) or key in {"Comments", "Last"}:
+            continue
+        if (isinstance(item, dict) and set(item) <= {"Offset", "Line", "Col"}
+                and isinstance(item.get("Offset"), int)):
+            continue
+        result[key] = _shell_tree(item)
+    if result.get("Type") == "SglQuoted" and not result.get("Dollar"):
+        text = result.get("Value")
+        if isinstance(text, str) and not any(char in text for char in "\\$`"):
+            return {"Type": "QuotedLiteral", "Value": text}
+    if result.get("Type") == "DblQuoted" and not result.get("Dollar"):
+        parts = result.get("Parts")
+        if isinstance(parts, list) and len(parts) == 1 and isinstance(parts[0], dict):
+            part = parts[0]
+            text = part.get("Value")
+            if part.get("Type") == "Lit" and isinstance(text, str):
+                if not any(char in text for char in "\\$`"):
+                    return {"Type": "QuotedLiteral", "Value": text}
+    if "Hdoc" in value:
+        # Delimiter spelling is formatting; quotedness controls expansion.
+        word = value.get("Word")
+        quoted = isinstance(word, dict) and any(
+            part.get("Type") != "Lit" for part in word.get("Parts", [])
+            if isinstance(part, dict)
+        )
+        result["Word"] = {"quoted": quoted}
+        if value.get("Op") == "<<-":
+            result["Op"] = "<<"
+            hdoc = value.get("Hdoc")
+            if isinstance(hdoc, dict):
+                stripped = dict(hdoc)
+                parts: list[object] = []
+                for part in hdoc.get("Parts", []):
+                    if isinstance(part, dict) and part.get("Type") == "Lit":
+                        part = dict(part)
+                        text = str(part.get("Value", ""))
+                        pos = part.get("Pos")
+                        if isinstance(pos, dict) and pos.get("Col") == 1:
+                            text = text.lstrip("\t")
+                        part["Value"] = re.sub(r"\n\t+", "\n", text)
+                    parts.append(part)
+                stripped["Parts"] = parts
+                result["Hdoc"] = _shell_tree(stripped)
+    return result
+
+
+def _shell_syntax(source: str) -> str:
+    """Parse Bash without execution, using the pinned formatter's typed AST."""
+    binary = Path(sys.executable).parent / "shfmt"
+    try:
+        completed = subprocess.run(
+            [str(binary), "-ln", "bash", "--to-json"], input=source,
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("Bash parser unavailable; install factory syntax dependencies") from exc
+    if completed.returncode:
+        return UNPARSED
+    lines = source.splitlines()
+    shebang = lines[0] if lines and lines[0].startswith("#!") else None
+    return json.dumps((shebang, _shell_tree(json.loads(completed.stdout))), sort_keys=True)
+
+
+def _syntax_node(node: Node, source: bytes) -> object:
+    """Compare grammar nodes without comments, positions, or optional separators."""
+    if node.type == "comment" or not node.is_named and node.type in {";", "'", '\"'}:
+        return None
+    if not node.children:
+        return (node.type, source[node.start_byte:node.end_byte].decode())
+    children: list[object] = []
+    for index, child in enumerate(node.children):
+        signature = _syntax_node(child, source)
+        if signature is not None:
+            children.append((node.field_name_for_child(index), signature))
+    if node.type == "arrow_function":
+        # TypeScript's recovery grammar accepts an invalid newline after async.
+        # Native node boundaries still identify the exact restricted gap,
+        # including generic parameters and nested return annotations.
+        for index, child in enumerate(node.children[:-1]):
+            if child.type == "async":
+                following = next(
+                    child for child in node.children[index + 1:] if child.type != "comment"
+                )
+                gap = source[child.end_byte:following.start_byte].decode()
+                children.append(("async_line_terminator", any(
+                    char in gap for char in "\n\r\u2028\u2029"
+                )))
+                break
+    return (node.type, children)
+
 
 def _code_tokens(source: str, path: str) -> str:
-    """Compare complete source, preserving literals and ignoring comments."""
-    if path.lower().endswith(".py"):
-        tree = _WithoutDocstrings().visit(ast.parse(source))
+    """Compare parsed language structure while preserving literal input data."""
+    suffix = Path(path.lower()).suffix
+    if suffix == ".py":
+        try:
+            tree = _WithoutDocstrings().visit(ast.parse(source))
+        except SyntaxError:
+            return UNPARSED
         return ast.dump(tree, include_attributes=False)
-    heredocs: list[tuple[bool, str]] = []
-    if path.lower().endswith(".sh"):
-        source, heredocs = _shell_heredocs(source, path)
-    name = path.lower().rsplit("/", 1)[-1]
-    hash_comments = path.lower().endswith((".sh", ".yml", ".yaml", ".toml", ".ini", ".cfg"))
-    hash_comments = hash_comments or name in BEHAVIORAL_FILENAMES
-    # Match literals before comment delimiters so URLs, SQL strings, and
-    # whitespace within values remain behavioral. Full source provides the
-    # lexical context even when a changed line is deep inside a block comment.
+    if suffix == ".sh":
+        return _shell_syntax(source)
+    if suffix in {".css", ".scss", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}:
+        try:
+            from tree_sitter import Language, Parser
+            import tree_sitter_css
+            import tree_sitter_javascript
+            import tree_sitter_typescript
+        except ImportError as exc:
+            raise RuntimeError(
+                "Syntax parsers unavailable; run uv sync or the factory-syntax action"
+            ) from exc
+        grammars = {
+            ".css": tree_sitter_css.language, ".scss": tree_sitter_css.language,
+            ".js": tree_sitter_javascript.language, ".jsx": tree_sitter_javascript.language,
+            ".mjs": tree_sitter_javascript.language, ".cjs": tree_sitter_javascript.language,
+            ".ts": tree_sitter_typescript.language_typescript,
+            ".tsx": tree_sitter_typescript.language_tsx,
+        }
+        parser = Parser(Language(grammars[suffix]()))
+        encoded = source.encode()
+        root = parser.parse(encoded).root_node
+        if root.has_error:
+            # A broken/unsupported tree is not enough evidence to distinguish
+            # two edits. A repair to a fully parsed tree still has a delta.
+            return UNPARSED
+        return repr(_syntax_node(root, encoded))
+    name = Path(path).name.lower()
+    hash_comments = suffix in {".yml", ".yaml", ".toml", ".ini", ".cfg"}
+    hash_comments |= name in BEHAVIORAL_FILENAMES
     comments = r"\#[^\n]*" if hash_comments else r"/\*.*?\*/|//[^\n]*"
-    if path.lower().endswith(".sh"):
-        # Bash starts comments at word boundaries, not inside ${#array[@]},
-        # ${value#prefix}, $# or unquoted words containing a literal #.
-        comments = r"(?<![^\s;|&()])\#[^\n]*"
-    if path.lower().endswith(".sql"):
+    if suffix == ".sql":
         comments = r"/\*.*?\*/|--[^\n]*"
-    if path.lower().endswith((".html", ".vue", ".svelte")):
+    if suffix in {".html", ".vue", ".svelte"}:
         comments += r"|<!--.*?-->"
-    expansion = r"(?P<expansion>\$\{(?:[^{}]|\{[^{}]*\})*\})|" if path.endswith(".sh") else ""
     pattern = re.compile(
-        expansion +
         r"(?P<string>'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`)"
-        + r"|(?P<comment>" + comments + r")|(?P<space>\s+)"
-        + r"|(?P<code>[\w$]+|\+\+|--|=>|===|!==|==|!=|&&|\|\||.)",
+        + r"|(?P<comment>" + comments + r")|(?P<space>\s+)|(?P<code>[\w$]+|.)",
         re.DOTALL,
     )
-    if path.lower().endswith((".yml", ".yaml")) or name in {"makefile", "gnumakefile"}:
-        # Indentation/newlines carry executable structure in these formats.
+    if suffix in {".yml", ".yaml"} or name in {"makefile", "gnumakefile"}:
         code = "".join(match.group() for match in pattern.finditer(source)
                        if match.lastgroup != "comment")
         return repr([line.rstrip() for line in code.splitlines() if line.strip()])
-    matches = [match for match in pattern.finditer(source) if match.lastgroup != "comment"]
-    if path.lower().endswith(".sh"):
-        code = _shell_continuations("".join(match.group() for match in matches))
-        # shlex does not understand Bash $'...' quoting. Mask complete
-        # literals/expansions so their spaces and escapes remain atomic, even
-        # when quoted/unquoted word segments are concatenated.
-        marker = "\ue000"
-        while marker in code:
-            marker += "\ue000"
-        literals: dict[str, str] = {}
-
-        def protect(match: re.Match[str]) -> str:
-            """Keep language literals out of shlex's word splitting."""
-            if match.lastgroup not in {"string", "expansion"}:
-                return match.group()
-            key = f"{marker}{len(literals)}{marker}"
-            literals[key] = _shell_value(match.group(), path)
-            return key
-
-        masked = pattern.sub(protect, code)
-        lexer = shlex.shlex(masked, posix=False, punctuation_chars="();<>|&\n")
-        lexer.whitespace = " \t\r"
-        lexer.whitespace_split = True
-        lexer.commenters = ""
-        commands: list[str] = []
-        for token in lexer:
-            if token.strip(";\n") == "":
-                if commands and commands[-1] != ";":
-                    commands.append(";")
-            else:
-                for key, value in literals.items():
-                    token = token.replace(key, value)
-                commands.append(token)
-        if commands and commands[-1] == ";":
-            commands.pop()
-        return repr((commands, heredocs))
-    tokens: list[str] = []
-    significant = [index for index, match in enumerate(matches) if match.lastgroup != "space"]
-    values = [matches[index].group() for index in significant]
-    previous = ""
-    previous_end = 0
-    braces = 0
-    statement: list[str] = []
-    css = path.lower().endswith((".css", ".scss"))
-    javascript = path.lower().endswith((".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"))
-    for position, index in enumerate(significant):
-        match = matches[index]
-        token = match.group()
-        gap = "".join(part.group() for part in matches[previous_end:index])
-        # CSS descendant selectors differ from adjoining simple selectors.
-        property_value = (braces > 0 and len(statement) > 1 and statement[1] == ":"
-                          and bool(re.fullmatch(r"[\w-]+", statement[0])))
-        if css and gap and previous and not property_value and token in {".", "#", "[", ":", "*"}:
-            property_colon = (token == ":" and braces > 0 and len(statement) == 1
-                              and bool(re.fullmatch(r"[\w-]+", statement[0])))
-            if not property_colon and previous not in {"{", "}", ";", ":", ",", ">", "+", "~"}:
-                tokens.append("DESCENDANT")
-        # JavaScript's restricted productions and postfix operators give
-        # line terminators meaning; ordinary indentation/reflow remains ignored.
-        operand_end = bool(re.fullmatch(r"[\w$]+", previous)) or previous in {
-            ")", "]", "}",
-        } or previous.startswith(("'", '\"', "`"))
-        operand_end = operand_end and previous not in {
-            "await", "new", "typeof", "void", "delete", "instanceof", "in", "of",
-            "throw", "return", "yield", "case", "else", "do",
-        }
-        restricted_newline = previous in {"return", "throw", "break", "continue", "yield"}
-        restricted_newline |= previous == "async" and _async_production(values, position)
-        restricted_newline |= token in {"++", "--"} and operand_end
-        if javascript and "\n" in gap and restricted_newline:
-            tokens.append("LINE_TERMINATOR")
-        tokens.append(token)
-        if token in {"{", "}", ";"}:
-            statement = []
-            braces += (token == "{") - (token == "}")
-        else:
-            statement.append(token)
-        previous = token
-        previous_end = index + 1
-    return repr(tokens)
-
+    return repr([match.group() for match in pattern.finditer(source)
+                 if match.lastgroup not in {"comment", "space"}])
 
 def _has_code_delta(patch: str, path: str) -> bool:
     """Compare old/new complete sources, failing closed on incomplete Python."""
@@ -495,7 +297,9 @@ def _has_code_delta(patch: str, path: str) -> bool:
     if not in_hunk:
         return False
     try:
-        return _code_tokens("\n".join(old), path) != _code_tokens("\n".join(new), path)
+        old_syntax = _code_tokens("\n".join(old), path)
+        new_syntax = _code_tokens("\n".join(new), path)
+        return new_syntax != UNPARSED and old_syntax != new_syntax
     except (SyntaxError, ValueError):
         return False
 
