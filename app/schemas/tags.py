@@ -83,12 +83,14 @@ class TagCreate(BaseModel):
             ``"private"``. Non-admin requests for ``"global"`` are refused.
         include_near_matches: When ``True``, the response populates
             ``near_matches`` with global tags whose names are near matches.
+            Defaults to ``True`` to suggest similar global tags when creating
+            private tags.
     """
 
     name: str = Field(..., min_length=1, max_length=100)
     color: str = DEFAULT_TAG_COLOR_NAME
     scope: TagScope = TagScope.PRIVATE
-    include_near_matches: bool = False
+    include_near_matches: bool = True
 
 
 class TagCreateResponse(BaseModel):

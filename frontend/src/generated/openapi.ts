@@ -14530,6 +14530,8 @@ export interface components {
          *             ``"private"``. Non-admin requests for ``"global"`` are refused.
          *         include_near_matches: When ``True``, the response populates
          *             ``near_matches`` with global tags whose names are near matches.
+         *             Defaults to ``True`` to suggest similar global tags when creating
+         *             private tags.
          */
         TagCreate: {
             /**
@@ -14539,7 +14541,7 @@ export interface components {
             color: string;
             /**
              * Include Near Matches
-             * @default false
+             * @default true
              */
             include_near_matches: boolean;
             /** Name */

@@ -18086,7 +18086,7 @@
         "type": "object"
       },
       "TagCreate": {
-        "description": "Request to create a tag.\n\nAttributes:\n    name: Raw display name (1-100 characters). Casing is preserved on\n        storage and display; the name is lowercased for matching.\n    color: Palette name (e.g. ``\"red\"``) or a hex value matching a palette\n        entry. Defaults to ``\"red\"``.\n    scope: ``\"global\"`` (administrators only) or ``\"private\"``. Defaults to\n        ``\"private\"``. Non-admin requests for ``\"global\"`` are refused.\n    include_near_matches: When ``True``, the response populates\n        ``near_matches`` with global tags whose names are near matches.",
+        "description": "Request to create a tag.\n\nAttributes:\n    name: Raw display name (1-100 characters). Casing is preserved on\n        storage and display; the name is lowercased for matching.\n    color: Palette name (e.g. ``\"red\"``) or a hex value matching a palette\n        entry. Defaults to ``\"red\"``.\n    scope: ``\"global\"`` (administrators only) or ``\"private\"``. Defaults to\n        ``\"private\"``. Non-admin requests for ``\"global\"`` are refused.\n    include_near_matches: When ``True``, the response populates\n        ``near_matches`` with global tags whose names are near matches.\n        Defaults to ``True`` to suggest similar global tags when creating\n        private tags.",
         "properties": {
           "color": {
             "default": "red",
@@ -18094,7 +18094,7 @@
             "type": "string"
           },
           "include_near_matches": {
-            "default": false,
+            "default": true,
             "title": "Include Near Matches",
             "type": "boolean"
           },
