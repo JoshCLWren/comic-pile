@@ -551,26 +551,21 @@ ${content}
 # Supply the actual linked issue, not merely the PR author's description, for
 # every independent semantic review. The controller independently re-fetches it.
 factory_issue_acceptance_mission() {
-  local pr="$1" head="$2" source issue body rubric
-  source="$(gh pr view "$pr" --json headRefName,body --jq '.headRefName + "\n" + (.body // "")' 2>/dev/null)" || source=''
-  issue="$(printf '%s\n' "$source" | sed -nE '1s#^factory/[0-9]+-([0-9]+)-.*#\1#p')"
+  local pr="$1" head="$2" pr_json issue issue_json repo="$GITHUB_REPOSITORY"
+  [[ -n "$repo" ]] || repo="JoshCLWren/comic-pile"
+  pr_json="$(gh pr view "$pr" --json headRefName,body 2>/dev/null)" || pr_json=''
+  issue="$(printf '%s' "$pr_json" | python3 .github/scripts/factory_issue_acceptance.py resolve 2>/dev/null)" || issue=''
   if [[ -z "$issue" ]]; then
-    issue="$(printf '%s\n' "$source" | sed -nE 's/.*[Cc]loses? #([0-9]+).*/\1/p' | head -n 1)"
-  fi
-  if [[ -z "$issue" ]]; then
-    printf '\nISSUE ACCEPTANCE: UNKNOWN linked issue. Do not approve without an authoritative issue.\n'
+    printf '\nISSUE ACCEPTANCE UNAVAILABLE: no linked issue; do not approve.\n'
     return 0
   fi
-  body="$(gh issue view "$issue" --json body --jq .body 2>/dev/null)" || {
-    printf '\nISSUE ACCEPTANCE: issue #%s unavailable. Do not approve.\n' "$issue"
+  issue_json="$(gh api "repos/$repo/issues/$issue" 2>/dev/null)" || issue_json=''
+  if [[ -z "$issue_json" ]]; then
+    printf '\nISSUE ACCEPTANCE UNAVAILABLE: issue #%s fetch failed; do not approve.\n' "$issue"
     return 0
-  }
-  rubric="$(printf '%s' "$body" | python3 .github/scripts/factory_issue_acceptance.py rubric 2>/dev/null)" || {
-    printf '\nISSUE ACCEPTANCE: rubric tool unavailable. Do not approve.\n'
-    return 0
-  }
-  printf '\nISSUE ACCEPTANCE for #%s at head %s: verify EACH requirement from the actual issue, not just the PR body. If even one is missing, verdict must be REPAIR, never READY. For approval, end your semantic review with ONE single-line JSON record, before FACTORY_GATE_READY, of this exact format (with real paths, observed evidence, and executable test details):\n' "$issue" "$head"
-  printf 'FACTORY_ACCEPTANCE_V1={"issue":%s,"head":"%s","items":[{"id":"A1","status":"pass","file":"path/changed/in/PR.py","evidence":"Detailed observed implementation behavior and why it meets the requirement","test":"pytest tests/test_feature.py::test_behavior passed"}]}\n' "$issue" "$head"
-  printf 'Each item must cover its matching A-number below, with a changed file, detailed specific evidence, and a named test/check plus its result. Every item must be PASS. Missing, unverified, or FAIL means REPAIR. Number of items must match the rubric exactly:\n%s\n' "$rubric"
+  fi
+  if ! printf '%s' "$issue_json" | python3 .github/scripts/factory_issue_acceptance.py mission "$issue" "$head"; then
+    printf '\nISSUE ACCEPTANCE UNAVAILABLE: rubric failed; do not approve.\n'
+  fi
   return 0
 }
