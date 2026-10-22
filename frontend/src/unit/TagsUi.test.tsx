@@ -13,6 +13,7 @@ import type {
   CreateTagResponse,
   EffectiveTagsResponse,
   Tag,
+  TagAssignment,
   TagUsage,
 } from '../services/api-tags'
 import { renderHook } from '@testing-library/react'
@@ -567,6 +568,116 @@ describe('TagEditor (issue #3032)', () => {
     expect(screen.queryByText(/Similar global tag exists/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Create private anyway' })).toBeNull()
     expect(mockedTagsApi.assign).not.toHaveBeenCalled()
+  })
+
+  it('keeps the newer similar-name guidance when an older reuse settles (PR #3996 review)', async () => {
+    const user = userEvent.setup()
+    const older = { ...makeTag(9, 'global'), name: 'Horror', normalized_name: 'horror' }
+    const newer: Tag = { ...makeTag(11), name: 'PlanTagger', normalized_name: 'plantagger' }
+    let createdInBackend = false
+    mockedTagsApi.list.mockImplementation(async (search?: string) => {
+      if (!search) return { tags: [] }
+      if (search.toLowerCase() === 'horror') return { tags: [older] }
+      // After the newer creation lands, useCreateTag refreshes the lookup, so
+      // the created private tag becomes listable for its own name.
+      if (createdInBackend && search.toLowerCase().includes('plantagger')) {
+        return { tags: [newer] }
+      }
+      return { tags: [] }
+    })
+    let failInitialAssign: (error: unknown) => void = () => {}
+    mockedTagsApi.assign.mockImplementation(
+      () =>
+        new Promise<TagAssignment>((_, reject) => {
+          failInitialAssign = reject
+        }),
+    )
+
+    renderEditor()
+
+    // 1. The typed name has an exact (global) duplicate; reuse it but let the
+    //    assignment hang.
+    await user.type(screen.getByLabelText('New tag name'), 'horror')
+    await user.click(await screen.findByRole('button', { name: 'Use “Horror”' }))
+
+    // 2. While that reuse waits, rename the draft and create a tag whose
+    //    creation pauses on a similar global name. The create button does not
+    //    wait on assign.isPending, so both requests are in flight.
+    const nameInput = screen.getByLabelText('New tag name')
+    await user.clear(nameInput)
+    await user.type(nameInput, 'PlanTagger')
+    mockedTagsApi.create.mockImplementation(async () => {
+      createdInBackend = true
+      return {
+        tag: newer,
+        redirected_to_global: false,
+        near_matches: [
+          { id: 12, name: 'PlanTag', color: '#7F1D1D', normalized_name: 'plantag', scope: 'global' },
+        ],
+      }
+    })
+    await user.click(screen.getByRole('button', { name: 'Create and add' }))
+    expect(await screen.findByText(/Similar global tag exists/)).toBeInTheDocument()
+    // Give the post-creation lookup refresh time to land, so the assertion
+    // below proves the guidance survives the refreshed lookup, not just that
+    // the refresh has not arrived yet.
+    await waitFor(() => {
+      const lookups = mockedTagsApi.list.mock.calls.filter(
+        ([search]) => search === 'PlanTagger',
+      )
+      expect(lookups.length).toBeGreaterThan(1)
+    })
+
+    // 3. The older reuse now fails. Its reset must not clear the newer
+    //    creation's pendingCreatedTag, otherwise the refreshed lookup would
+    //    hide the similar-name guidance behind the existing-tag prompt.
+    await act(async () => {
+      failInitialAssign(new Error('forbidden'))
+    })
+
+    expect(
+      (await screen.findAllByRole('alert')).some((node) =>
+        node.textContent?.includes('is a global tag, which only admins can assign'),
+      ),
+    ).toBe(true)
+    expect(screen.getByText(/Similar global tag exists/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Use global “PlanTag”' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Use “PlanTagger”' })).toBeNull()
+    expect(mockedTagsApi.assign).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a newer draft when an older reuse succeeds after a rename (PR #3996 review)', async () => {
+    const user = userEvent.setup()
+    const older = { ...makeTag(9, 'global'), name: 'Horror', normalized_name: 'horror' }
+    mockedTagsApi.list.mockImplementation(async (search?: string) => {
+      if (search?.toLowerCase() === 'horror') return { tags: [older] }
+      return { tags: [] }
+    })
+    let resolveInitialAssign: (value: TagAssignment) => void = () => {}
+    mockedTagsApi.assign.mockImplementation(
+      () =>
+        new Promise<TagAssignment>((resolve) => {
+          resolveInitialAssign = resolve
+        }),
+    )
+
+    renderEditor()
+
+    // Reuse hangs; the viewer renames the draft while it waits. The settled
+    // success must not clear the newer draft the viewer is now typing.
+    await user.type(screen.getByLabelText('New tag name'), 'horror')
+    await user.click(await screen.findByRole('button', { name: 'Use “Horror”' }))
+
+    const nameInput = screen.getByLabelText('New tag name')
+    await user.clear(nameInput)
+    await user.type(nameInput, 'PlanTagger')
+
+    await act(async () => {
+      resolveInitialAssign(assignment(9))
+    })
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Used existing tag “Horror”.')
+    expect(screen.getByLabelText('New tag name')).toHaveValue('PlanTagger')
   })
 
   it('blocks creation and reuses an exact private-name duplicate (issue #3423)', async () => {

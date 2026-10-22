@@ -161,6 +161,20 @@ export function TagEditor({
 
   const clearDraftName = () => setDraftName('')
 
+  /**
+   * True while the on-screen draft still names the request that just
+   * finished. Name edits rewrite `typedNameRef` through `setDraftName`, so a
+   * mismatch means the viewer renamed the draft while that request waited.
+   * The name input and create button stay interactive during an assignment
+   * (the create button does not wait on `assign.isPending`), so a newer
+   * creation can reach the similar-name prompt before an earlier reuse or
+   * global-pick assignment resolves or fails; a later reset may only touch
+   * continuation state that still belongs to the name it was started with
+   * (PR #3996 review).
+   */
+  const draftStillNames = (nameAtStart: string) =>
+    typedNameRef.current.trim().toLowerCase() === nameAtStart.trim().toLowerCase()
+
   async function handleAssign(tag: Tag) {
     clearFeedback()
     const inherited = explainIfInherited(tag)
@@ -189,12 +203,15 @@ export function TagEditor({
       setNotice(inherited)
       return
     }
+    const typedNameAtStart = typedNameRef.current
     try {
       await assign.mutateAsync({ id: tag.id, data: payload })
       setNotice(`Used existing tag “${tag.name}”.`)
-      clearDraftName()
-      setPendingNearMatches(null)
-      setPendingCreatedTag(null)
+      if (draftStillNames(typedNameAtStart)) {
+        clearDraftName()
+        setPendingNearMatches(null)
+        setPendingCreatedTag(null)
+      }
     } catch (error) {
       if (tag.scope === 'global') {
         setFailure(
@@ -204,10 +221,14 @@ export function TagEditor({
         setFailure(tagErrorMessage(error, `Could not add “${tag.name}”.`))
       }
     }
-    // Clear any stale pendingCreatedTag even on error — the reuse path
-    // (success or admin-blocked) means we are not continuing with the
-    // privately-created tag, so its continuation state must not linger.
-    setPendingCreatedTag(null)
+    // The reuse path means we are not continuing with the privately-created
+    // tag, so its continuation state must not linger — but only while the
+    // draft still names the reuse that finished. After a rename the pending
+    // tag may belong to a newer creation whose similar-name guidance has to
+    // survive this settled assignment (PR #3996 review).
+    if (draftStillNames(typedNameAtStart)) {
+      setPendingCreatedTag(null)
+    }
   }
 
   async function handleAssignGlobal(match: NearMatch) {
@@ -217,12 +238,18 @@ export function TagEditor({
       setNotice(inherited)
       return
     }
+    const typedNameAtStart = typedNameRef.current
     try {
       await assign.mutateAsync({ id: match.id, data: payload })
       setNotice(`Used global tag “${match.name}”.`)
-      clearDraftName()
-      setPendingNearMatches(null)
-      setPendingCreatedTag(null)
+      // Same draft-identity guard as handleUseExisting: a rename while this
+      // assignment waits may hand the continuation state to a newer creation
+      // that this settling global pick must not discard (PR #3996 review).
+      if (draftStillNames(typedNameAtStart)) {
+        clearDraftName()
+        setPendingNearMatches(null)
+        setPendingCreatedTag(null)
+      }
     } catch {
       setFailure(
         `“${match.name}” is a global tag, which only admins can assign. Create your private tag instead, or ask an admin.`,
