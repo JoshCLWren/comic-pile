@@ -1030,7 +1030,8 @@ This issue is a product contract and acceptance parent.
                     },
                 ):
                     with patch.object(mod, "_native_open_blockers", return_value=[]):
-                        result = close_merged_pr_issue(2140, dry_run=True)
+                        with patch.object(mod.eligibility, "parse_declared_dependencies", return_value=set()):
+                            result = close_merged_pr_issue(2140, dry_run=True)
 
         self.assertEqual(result, "acceptance-parent-incomplete")
         # The guard must halt before the successor check: the parent stays open
@@ -1117,7 +1118,8 @@ This issue is a product contract and acceptance parent.
             ):
                 with patch.object(mod, "_issue_has_open_successor_pr", return_value=False):
                     with patch.object(mod, "_native_open_blockers", return_value=[]):
-                        result = close_merged_pr_issue(2150, dry_run=True)
+                        with patch.object(mod.eligibility, "parse_declared_dependencies", return_value=set()):
+                            result = close_merged_pr_issue(2150, dry_run=True)
         self.assertTrue(result.startswith("dry-run:"), result)
 
     def test_unmet_parent_criterion_blocks_despite_closed_children(self) -> None:
@@ -1273,7 +1275,8 @@ This issue is a product contract and acceptance parent.
                 },
             ):
                     with patch.object(mod, "_native_open_blockers", return_value=[]):
-                        result = close_merged_pr_issue(2141, dry_run=True)
+                        with patch.object(mod.eligibility, "parse_declared_dependencies", return_value=set()):
+                            result = close_merged_pr_issue(2141, dry_run=True)
         self.assertEqual(result, "acceptance-parent-requires-verdict")
 
     def test_merge_closure_blocks_parent_with_unmet_criterion(self) -> None:
@@ -1305,7 +1308,8 @@ This issue is a product contract and acceptance parent.
                 },
             ):
                     with patch.object(mod, "_native_open_blockers", return_value=[]):
-                        result = close_merged_pr_issue(2142, dry_run=True)
+                        with patch.object(mod.eligibility, "parse_declared_dependencies", return_value=set()):
+                            result = close_merged_pr_issue(2142, dry_run=True)
         self.assertEqual(result, "acceptance-parent-incomplete")
 
     def test_merge_closure_refuses_manual_only_acceptance_parent(self) -> None:
@@ -1339,7 +1343,8 @@ This issue is a product contract and acceptance parent.
             ):
                 with patch.object(mod, "_issue_has_open_successor_pr") as mock_successor:
                     with patch.object(mod, "_native_open_blockers", return_value=[]):
-                        result = close_merged_pr_issue(2143, dry_run=True)
+                        with patch.object(mod.eligibility, "parse_declared_dependencies", return_value=set()):
+                            result = close_merged_pr_issue(2143, dry_run=True)
         self.assertEqual(result, "manual-only-issue")
         mock_successor.assert_not_called()
 
