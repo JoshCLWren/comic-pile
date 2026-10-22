@@ -554,7 +554,7 @@ factory_issue_acceptance_mission() {
   local pr="$1" head="$2" pr_json issue issue_json repo="$GITHUB_REPOSITORY"
   [[ -n "$repo" ]] || repo="JoshCLWren/comic-pile"
   local acceptance_script=""
-  if [[ -n "$TRUSTED_REVIEW_CONTROLLER" ]]; then
+  if [[ -n "${TRUSTED_REVIEW_CONTROLLER:-}" ]]; then
     acceptance_script="$(dirname "$TRUSTED_REVIEW_CONTROLLER")/factory_issue_acceptance.py"
   fi
   if [[ -z "$acceptance_script" || ! -f "$acceptance_script" ]]; then
