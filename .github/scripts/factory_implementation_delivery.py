@@ -110,6 +110,21 @@ def _shell_continuations(source: str) -> str:
     index = 0
     while index < len(source):
         char = source[index]
+        if not quote and source.startswith("$'", index):
+            result.append("$'")
+            quote = "ansi"
+            index += 2
+            continue
+        if quote == "ansi":
+            if char == "\\" and index + 1 < len(source):
+                result.extend((char, source[index + 1]))
+                index += 2
+                continue
+            if char == "'":
+                quote = ""
+            result.append(char)
+            index += 1
+            continue
         if char == "\\" and quote != "'" and index + 1 < len(source):
             following = source[index + 1]
             if following != "\n":
@@ -126,19 +141,50 @@ def _shell_continuations(source: str) -> str:
     return "".join(result)
 
 
+def _skip_group(values: list[str], position: int, opening: str, closing: str) -> int:
+    """Return the token after a balanced group, or -1 for incomplete syntax."""
+    depth = 0
+    for index in range(position, len(values)):
+        depth += (values[index] == opening) - (values[index] == closing)
+        if depth == 0:
+            return index + 1
+    return -1
+
+
 def _async_production(values: list[str], position: int) -> bool:
-    """Identify async function/arrow starts rather than ordinary async identifiers."""
+    """Recognize JavaScript/TypeScript async functions and typed/generic arrows."""
     token = values[position]
     if token == "function":
         return True
+    if token == "<":
+        position = _skip_group(values, position, "<", ">")
+        if position < 0 or position >= len(values):
+            return False
+        token = values[position]
     if token != "(":
         return position + 1 < len(values) and values[position + 1] == "=>"
-    depth = 0
-    for index in range(position, len(values)):
-        depth += (values[index] == "(") - (values[index] == ")")
-        if depth == 0:
-            return index + 1 < len(values) and values[index + 1] == "=>"
+    after = _skip_group(values, position, "(", ")")
+    if after < 0 or after >= len(values):
+        return False
+    if values[after] == "=>":
+        return True
+    if values[after] != ":":
+        return False
+    # A TypeScript return annotation may contain generics, object types,
+    # tuples and nested function types. Only its outer arrow ends the type.
+    stack: list[str] = []
+    pairs = {"(": ")", "[": "]", "{": "}", "<": ">"}
+    for value in values[after + 1:]:
+        if value == "=>" and not stack:
+            return True
+        if value in pairs:
+            stack.append(pairs[value])
+        elif stack and value == stack[-1]:
+            stack.pop()
+        elif not stack and value in {";", "=", ")", "}"}:
+            return False
     return False
+
 
 def _code_tokens(source: str, path: str) -> str:
     """Compare complete source, preserving literals and ignoring comments."""
@@ -176,7 +222,24 @@ def _code_tokens(source: str, path: str) -> str:
     matches = [match for match in pattern.finditer(source) if match.lastgroup != "comment"]
     if path.lower().endswith(".sh"):
         code = _shell_continuations("".join(match.group() for match in matches))
-        lexer = shlex.shlex(code, posix=False, punctuation_chars="();<>|&\n")
+        # shlex does not understand Bash $'...' quoting. Mask complete
+        # literals/expansions so their spaces and escapes remain atomic, even
+        # when quoted/unquoted word segments are concatenated.
+        marker = "\ue000"
+        while marker in code:
+            marker += "\ue000"
+        literals: dict[str, str] = {}
+
+        def protect(match: re.Match[str]) -> str:
+            """Keep language literals out of shlex's word splitting."""
+            if match.lastgroup not in {"string", "expansion"}:
+                return match.group()
+            key = f"{marker}{len(literals)}{marker}"
+            literals[key] = match.group()
+            return key
+
+        masked = pattern.sub(protect, code)
+        lexer = shlex.shlex(masked, posix=False, punctuation_chars="();<>|&\n")
         lexer.whitespace = " \t\r"
         lexer.whitespace_split = True
         lexer.commenters = ""
@@ -186,6 +249,8 @@ def _code_tokens(source: str, path: str) -> str:
                 if commands and commands[-1] != ";":
                     commands.append(";")
             else:
+                for key, value in literals.items():
+                    token = token.replace(key, value)
                 commands.append(token)
         if commands and commands[-1] == ";":
             commands.pop()

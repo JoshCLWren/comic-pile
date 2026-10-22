@@ -497,3 +497,52 @@ def test_restricted_javascript_newlines_still_change_behavior(old: str, new: str
     assert delivery.pr_delivers_implementation(
         "Fix JS behavior", [path], patch(path, old.splitlines(), new.splitlines())
     )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ("printf '%s' $'it\\'s' foo", "printf '%s' $'it\\'s' \\\nfoo"),
+    ("printf '%s' $'it\\'s' foo", "printf '%s' $'it\\'s' \\\n  foo"),
+])
+def test_ansi_c_escaped_quote_does_not_hide_real_continuation(old: str, new: str) -> None:
+    """An escaped apostrophe in ANSI-C quotes does not reopen single quoting."""
+    path = '.github/scripts/worker.sh'
+    assert not delivery.pr_delivers_implementation(
+        "Fix shell behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ("printf '%s' $'first\\\nsecond'", "printf '%s' $'firstsecond'"),
+    ("printf '%s' $'it\\'s one'", "printf '%s' $'it\\'s  one'"),
+    ("printf '%s' foo'one two'", "printf '%s' foo'one  two'"),
+])
+def test_ansi_c_and_concatenated_literal_contents_are_behavioral(old: str, new: str) -> None:
+    """Quote masking retains literal bytes instead of splitting on their spaces."""
+    path = '.github/scripts/worker.sh'
+    assert delivery.pr_delivers_implementation(
+        "Fix shell output", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+@pytest.mark.parametrize("arrow", [
+    '(x: number): Promise<number> => x',
+    '<T>(x: T) => x',
+    '<T extends Record<string, unknown>>(x: T): Promise<T> => x',
+    '(x: number): (() => number) => () => x',
+    '(x: number): { value: number } => ({ value: x })',
+])
+def test_typed_and_generic_async_arrow_newlines_are_behavioral(arrow: str) -> None:
+    """Async-arrow restrictions also apply to TypeScript annotations and generics."""
+    path = 'frontend/src/client.ts'
+    assert delivery.pr_delivers_implementation(
+        "Repair typed async arrow", [path],
+        patch(path, [f'const f = async {arrow};'], ['const f = async', f'{arrow};']),
+    )[0]
+
+
+def test_generic_async_named_call_wrapping_remains_formatting() -> None:
+    """A generic function called async is still an ordinary call, not an arrow."""
+    path = 'frontend/src/client.ts'
+    assert not delivery.pr_delivers_implementation(
+        "Fix TS behavior", [path], patch(path, ['async<T>(value);'], ['async', '<T>(value);'])
+    )[0]
