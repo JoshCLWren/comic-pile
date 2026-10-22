@@ -852,15 +852,6 @@ def close_merged_pr_issue(
 
     labels = list(issue["labels"])
     issue_body = str(issue.get("body") or "")
-    open_deps, dependency_state_known = _declared_dependency_blockers(
-        issue_number, issue_body
-    )
-    if not dependency_state_known:
-        return "open-dependency"
-    if open_deps:
-        if not dry_run:
-            _record_dependency_block(pr_number, issue_number, open_deps)
-        return "open-dependency: " + ", ".join(f"#{number}" for number in open_deps)
     if MANUAL_ONLY_MARKER in issue_body:
         # Issue #1620: an issue that declares itself human/interactive
         # controlled — including an operator production-acceptance or cutover
@@ -897,6 +888,18 @@ def close_merged_pr_issue(
             delivered, reason = True, "explicit non-implementation contract"
     except (RuntimeError, ValueError, KeyError, TypeError) as exc:
         return f"delivery-unverified:{exc}"
+    # Validate delivery before dependency-based early returns, so a non-delivering
+    # PR can still repair an issue GitHub closed through its closing keyword.
+    if delivered:
+        open_deps, dependency_state_known = _declared_dependency_blockers(
+            issue_number, issue_body
+        )
+        if not dependency_state_known:
+            return "open-dependency"
+        if open_deps:
+            if not dry_run:
+                _record_dependency_block(pr_number, issue_number, open_deps)
+            return "open-dependency: " + ", ".join(f"#{number}" for number in open_deps)
     if not delivered:
         if str(issue["state"]) == "CLOSED" and not dry_run and _closed_by_pr(issue_number, info):
             # Repair GitHub keyword auto-closure of known non-delivering PRs.
