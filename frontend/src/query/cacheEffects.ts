@@ -546,6 +546,10 @@ export async function applyUpdatedCustomCBL(
 ): Promise<void> {
   client.setQueryData(queryKeys.customCBLs.detail(saved.id), saved)
   await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+  await client.invalidateQueries({
+    queryKey: queryKeys.cblSources.readingListCandidates(saved.id),
+    exact: true,
+  })
   await invalidateReadingEligibility(client)
 }
 

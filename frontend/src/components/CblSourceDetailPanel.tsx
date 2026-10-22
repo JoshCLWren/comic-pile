@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
 import { cblSourcesApi } from '../services/api-cbl-sources'
 import { queryKeys } from '../query/queryKeys'
@@ -39,12 +38,17 @@ function backDestination(state: unknown): { path: string; label: string } {
  * @returns The source detail panel.
  */
 export function CblSourceDetailPanel({ listId }: CblSourceDetailPanelProps) {
-  const [limit, setLimit] = useState(PAGE_SIZE)
   const location = useLocation()
   const back = backDestination(location.state)
-  const detailQuery = useQuery({
-    queryKey: queryKeys.cblSources.detail(listId, limit),
-    queryFn: () => cblSourcesApi.detail(listId, { limit }),
+  const detailQuery = useInfiniteQuery({
+    queryKey: queryKeys.cblSources.detail(listId, PAGE_SIZE),
+    queryFn: ({ pageParam }) =>
+      cblSourcesApi.detail(listId, { offset: pageParam, limit: PAGE_SIZE }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      const nextOffset = lastPage.entries_offset + lastPage.entries.length
+      return nextOffset < lastPage.entries_total ? nextOffset : undefined
+    },
   })
 
   if (detailQuery.isPending) {
@@ -78,9 +82,10 @@ export function CblSourceDetailPanel({ listId }: CblSourceDetailPanelProps) {
     )
   }
 
-  const detail = detailQuery.data
+  const pages = detailQuery.data?.pages ?? []
+  const detail = pages[0] ?? null
   const title = displayCblSourceTitle(detail?.name, detail?.source_path ?? '') ?? 'CBL source'
-  const entries = detail?.entries ?? []
+  const entries = pages.flatMap((page) => page.entries)
   const shown = entries.length
 
   return (
@@ -138,8 +143,9 @@ export function CblSourceDetailPanel({ listId }: CblSourceDetailPanelProps) {
       {shown < (detail?.entries_total ?? 0) && (
         <button
           type="button"
-          onClick={() => setLimit((current) => current + PAGE_SIZE)}
-          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+          onClick={() => void detailQuery.fetchNextPage()}
+          disabled={detailQuery.isFetchingNextPage}
+          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
         >
           Show more positions ({shown} of {detail?.entries_total ?? 0})
         </button>
