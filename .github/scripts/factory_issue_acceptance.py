@@ -9,28 +9,54 @@ import sys
 
 PREFIX = "FACTORY_ACCEPTANCE_V1="
 HEADINGS = ("scope", "implementation required", "requirements", "acceptance", "verification before", "required evidence", "completion evidence", "expected behavior", "outcome")
-HEADING = re.compile(r"^#{2,4}\s+(.+?)\s*$")
-BULLET = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+(.*\S)\s*$")
+HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$")
+BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$")
 
 
-def requirements(body):
-    active, found = False, []
-    for line in body.splitlines():
-        heading = HEADING.match(line)
+def requirements(body: str) -> list[str]:
+    """Preserve every issue requirement, including unrecognized headings and prose.
+
+    Args:
+        body: Complete authoritative issue body.
+
+    Returns:
+        Ordered paragraphs and bullets with their heading context.
+
+    Raises:
+        ValueError: If the issue provides no reviewable requirement text.
+    """
+    section = "Issue"
+    entries: list[str] = []
+    current: list[str] = []
+
+    def flush() -> None:
+        """Finish an entry without losing continuation lines."""
+        if current:
+            entries.append(f"{section}: {' '.join(current)}")
+            current.clear()
+
+    for source in body.splitlines():
+        line = source.strip()
+        if line.startswith("<!--") and line.endswith("-->"):
+            continue
+        heading = HEADING.match(source)
         if heading:
-            active = heading.group(1).lower().strip().startswith(HEADINGS)
+            flush()
+            section = heading.group(1).strip()
             continue
-        if not active:
+        if not line:
+            flush()
             continue
-        item = BULLET.match(line)
-        if not item:
-            continue
-        value = re.sub(r"^\[[ xX]\]\s*", "", item.group(1)).strip()
-        if value and not re.match(r"^(?:#\d+|Depends on #)", value, re.I) and value not in found:
-            found.append(value)
-    if found:
-        return found
-    return ["Complete the issue's requested behavior and acceptance criteria"]
+        item = BULLET.match(source)
+        if item:
+            flush()
+            line = re.sub(r"^\[[ xX]\]\s*", "", item.group(1)).strip()
+        if line:
+            current.append(line)
+    flush()
+    if not entries:
+        raise ValueError("Issue has no reviewable criteria, clarification required")
+    return entries
 
 
 def digest(body: str) -> str:
