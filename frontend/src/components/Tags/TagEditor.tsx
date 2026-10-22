@@ -204,6 +204,10 @@ export function TagEditor({
         setFailure(tagErrorMessage(error, `Could not add “${tag.name}”.`))
       }
     }
+    // Clear any stale pendingCreatedTag even on error — the reuse path
+    // (success or admin-blocked) means we are not continuing with the
+    // privately-created tag, so its continuation state must not linger.
+    setPendingCreatedTag(null)
   }
 
   async function handleAssignGlobal(match: NearMatch) {
