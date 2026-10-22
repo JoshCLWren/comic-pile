@@ -442,7 +442,7 @@ export default function CblBrowserPage() {
   }
 
   const confirmCommit = () => {
-    if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || graphUnavailable || pendingOverlaps.length > 0) return
+    if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || pendingOverlaps.length > 0) return
     setConfirmOpen(false)
     commitMutation.mutate({ source: selectedSource, preview })
   }

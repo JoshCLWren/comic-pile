@@ -1078,7 +1078,7 @@ describe('CblBrowserPage', () => {
 
     await screen.findByTestId('reading-graph-summary')
     await user.click(screen.getByRole('button', { name: 'Resolve 2 series overlaps' }))
-    expect(screen.getByRole('status')).toHaveTextContent('Overlap 1 of 2')
+    expect(screen.getByText('Overlap 1 of 2')).toBeInTheDocument()
     expect(
       screen.getByRole('heading', {
         name: 'Should Justice League International (1987) continue while Mister Miracle (1989) waits?',
@@ -1097,7 +1097,7 @@ describe('CblBrowserPage', () => {
       }),
     )
     await user.click(screen.getByRole('button', { name: 'Next series' }))
-    expect(screen.getByRole('status')).toHaveTextContent('Overlap 2 of 2')
+    expect(screen.getByText('Overlap 2 of 2')).toBeInTheDocument()
     expect(
       screen.getByRole('heading', {
         name: 'Should Justice League International (1987) continue while Mister Miracle (2019) waits?',
@@ -1107,6 +1107,9 @@ describe('CblBrowserPage', () => {
 
   it('keeps the one-decision flow when the reading graph is unavailable (#4020)', async () => {
     const user = userEvent.setup()
+    const committed = { id: 42, name: 'Ultimate Universe' }
+    mockCommitNew.mockResolvedValue(committed)
+    mockApplyCommitted.mockResolvedValue(undefined)
     mockGraphPreview.mockRejectedValue(new Error('Not Found'))
     renderPage()
     await searchFor(user)
@@ -1123,6 +1126,14 @@ describe('CblBrowserPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Add this reading order?' }),
     ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Add reading order' }))
+    await waitFor(() => {
+      expect(mockCommitNew).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(mockApplyCommitted).toHaveBeenCalled()
+      expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/42')
+    })
   })
 
   it('blocks adding when the proposed graph contains a cycle (#4020)', async () => {
