@@ -14,7 +14,11 @@ DOC_SUFFIXES = (".md", ".rst", ".txt", ".adoc")
 SOURCE_SUFFIXES = (
     ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
     ".sh", ".sql", ".html", ".css", ".scss", ".vue", ".svelte",
+    ".yml", ".yaml", ".toml", ".json",
 )
+BEHAVIORAL_FILENAMES = frozenset({
+    "dockerfile", "containerfile", "makefile", "gnumakefile",
+})
 TYPE_LINE = re.compile(
     r"(?im)^\s*(?:\*\*)?(?:issue\s+type|deliverable\s+type|"
     r"work\s+type)\s*:(?:\*\*)?\s*(?:\*\*)?"
@@ -68,7 +72,11 @@ def substantive_changed_files(changed_files: Iterable[str]) -> list[str]:
     return [
         path for path in changed_files
         if path.strip()
-        and path.lower().endswith(SOURCE_SUFFIXES)
+        and (
+            path.lower().endswith(SOURCE_SUFFIXES)
+            or path.rsplit("/", 1)[-1].lower() in BEHAVIORAL_FILENAMES
+            or path.lower().endswith((".dockerfile", ".containerfile"))
+        )
         and not _is_docs_path(path)
         and not _is_test_path(path)
     ]
@@ -79,61 +87,91 @@ class _LexState:
     """Comment/documentation state for one side of a patch hunk."""
 
     triple: str = ""
+    triple_is_code: bool = False
     block: bool = False
 
 
 def _executable_text(line: str, path: str, state: _LexState) -> str:
-    """Remove comments and docstrings while preserving behavioral syntax."""
+    """Strip non-executable comments without erasing string semantics.
+
+    A bare Python triple-quoted statement is documentation; an assigned or
+    returned triple-quoted string is executable data. String values are
+    preserved byte-for-byte so SQL/query/configuration fixes qualify.
+    """
+    filename = path.rsplit("/", 1)[-1].lower()
     python = path.lower().endswith(".py")
+    hash_comments = python or path.lower().endswith(
+        (".sh", ".yaml", ".yml", ".toml")
+    ) or filename in BEHAVIORAL_FILENAMES
+    whitespace_matters = path.lower().endswith(
+        (".yaml", ".yml", ".toml")
+    ) or filename in {"makefile", "gnumakefile"}
     result: list[str] = []
     pos = 0
     while pos < len(line):
         if state.triple:
             end = line.find(state.triple, pos)
             if end < 0:
-                return "".join(result).strip()
+                if state.triple_is_code:
+                    result.append(line[pos:])
+                break
+            if state.triple_is_code:
+                result.append(line[pos : end + 3])
             pos = end + 3
             state.triple = ""
+            state.triple_is_code = False
             continue
         if state.block:
             end = line.find("*/", pos)
             if end < 0:
-                return "".join(result).strip()
+                break
             pos = end + 2
             state.block = False
             continue
-        if python:
-            if line[pos] == "#":
+        if python and line.startswith(('"""', "'''"), pos):
+            delimiter = line[pos : pos + 3]
+            prefix = "".join(result).strip()
+            is_code = bool(prefix and prefix.lower() not in {"r", "u", "f", "b"})
+            end = line.find(delimiter, pos + 3)
+            if is_code:
+                result.append(line[pos:] if end < 0 else line[pos : end + 3])
+            if end < 0:
+                state.triple = delimiter
+                state.triple_is_code = is_code
                 break
-            if line.startswith(('"""', "'''"), pos):
-                delimiter = line[pos:pos + 3]
-                before = "".join(result).strip()
-                # A standalone literal after def/class/context is documentation.
-                # A literal returned or assigned by code remains behavioral.
-                code_literal = bool(re.search(r"(?:=|\breturn|\byield)\s*$", before))
-                end = line.find(delimiter, pos + 3)
-                if code_literal:
-                    result.append("LITERAL")
-                    pos = len(line) if end < 0 else end + 3
+            pos = end + 3
+            continue
+        if not python and line.startswith("//", pos):
+            break
+        if not python and line.startswith("/*", pos):
+            state.block = True
+            pos += 2
+            continue
+        if hash_comments and line[pos] == "#":
+            break
+        if line[pos] in {"'", '"'}:
+            # Do not interpret comment delimiters inside a string.
+            quote = line[pos]
+            end = pos + 1
+            while end < len(line):
+                if line[end] == "\\":
+                    end += 2
+                elif line[end] == quote:
+                    end += 1
+                    break
                 else:
-                    if end < 0:
-                        state.triple = delimiter
-                        break
-                    pos = end + 3
-                continue
-        else:
-            if line.startswith("//", pos):
-                break
-            if line.startswith("/*", pos):
-                state.block = True
-                pos += 2
-                continue
-        result.append(line[pos])
+                    end += 1
+            result.append(line[pos:end])
+            pos = end
+            continue
+        if whitespace_matters or not line[pos].isspace():
+            result.append(line[pos])
         pos += 1
-    code = "".join(result).strip()
-    if python and re.fullmatch(r"[rubfRUBF]*(['\"]).*\1", code):
+    code = "".join(result)
+    # Standalone quoted statements have no executable effect in Python.
+    if python and re.fullmatch(r"[rubfRUBF]*(['\"]).*\1", code.strip()):
         return ""
-    return re.sub(r"\s+", "", code)
+    return code if whitespace_matters else code.strip()
 
 
 def _has_code_delta(patch: str, path: str) -> bool:
