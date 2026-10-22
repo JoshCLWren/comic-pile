@@ -269,7 +269,7 @@ def _code_tokens(source: str, path: str) -> str:
     pattern = re.compile(
         r"(?P<string>'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`)"
         + r"|(?P<comment>" + comments + r")|(?P<space>\s+)"
-        + r"|(?P<code>[\w$]+|(?:(?!/\*|//|--)[+*/<>=~!@#%^&|?:-])+|.)",
+        + r"|(?P<code>[\w$]+|\|\||&&|<<=?|>>=?|[!<>=]=|[-+*/%]=|::|->>?|[+][+]|--|.)",
         re.DOTALL,
     )
     if suffix in {".yml", ".yaml"} or name in {"makefile", "gnumakefile"}:

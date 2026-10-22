@@ -853,3 +853,15 @@ def test_sql_operator_boundary_repair_is_delivery() -> None:
             ["SELECT left_value || right_value FROM records;"],
         )
     )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ("limit=-1", "limit = -1"),
+    ("limit=+1", "limit = +1"),
+])
+def test_assignment_sign_spacing_is_not_delivery(old: str, new: str) -> None:
+    """Assignment and a neighboring unary sign are separate operators."""
+    path = "app/settings.toml"
+    assert not delivery.pr_delivers_implementation(
+        "Implement configuration", [path], patch(path, [old], [new])
+    )[0]
