@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Any, Literal, TypedDict, cast
 
 sys.path.insert(0, os.path.dirname(__file__))
