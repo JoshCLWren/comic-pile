@@ -165,7 +165,9 @@ def _code_tokens(source: str, path: str) -> str:
         token = match.group()
         gap = "".join(part.group() for part in matches[previous_end:index])
         # CSS descendant selectors differ from adjoining simple selectors.
-        if css and gap and previous and token in {".", "#", "[", ":"}:
+        property_value = (braces > 0 and len(statement) > 1 and statement[1] == ":"
+                          and bool(re.fullmatch(r"[\w-]+", statement[0])))
+        if css and gap and previous and not property_value and token in {".", "#", "[", ":", "*"}:
             property_colon = (token == ":" and braces > 0 and len(statement) == 1
                               and bool(re.fullmatch(r"[\w-]+", statement[0])))
             if not property_colon and previous not in {"{", "}", ";", ":", ",", ">", "+", "~"}:

@@ -417,6 +417,8 @@ def test_shell_comments_and_formatting_do_not_qualify(old: str, new: str) -> Non
 @pytest.mark.parametrize("path,old,new", [
     ('frontend/src/styles.css', '.nav-item.active.nav-label { color: red; }',
      '.nav-item.active .nav-label { color: red; }'),
+    ('frontend/src/styles.css', '.container* { color: red; }',
+     '.container * { color: red; }'),
     ('frontend/src/client.ts', 'function f() { return value; }',
      'function f() { return\nvalue; }'),
     ('frontend/src/client.ts', 'let value = other;', 'let value = otherValue;'),
@@ -431,6 +433,8 @@ def test_language_significant_spacing_changes_qualify(path: str, old: str, new: 
 @pytest.mark.parametrize("path,old,new", [
     ('frontend/src/styles.css', '.a { color: red; }', '.a{color:red;}'),
     ('frontend/src/styles.css', '.a { color : red; }', '.a{color:red;}'),
+    ('frontend/src/styles.css', '.a { width: calc(2 * 3); }',
+     '.a{width:calc(2*3);}'),
     ('frontend/src/client.ts', 'const value = 1;', 'const value=1;'),
     ('frontend/src/client.ts', 'function f() {\nreturn value;\n}',
      'function f(){return value;}'),
