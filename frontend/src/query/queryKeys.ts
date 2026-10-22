@@ -294,7 +294,8 @@ export const queryKeys = {
   cblSources: {
     all: ['cblSources'] as const,
     search: (query: string) => ['cblSources', 'search', normalizedSearch(query)] as const,
-    detail: (listId: number) => ['cblSources', 'detail', listId] as const,
+    detail: (listId: number, limit: number) =>
+      ['cblSources', 'detail', listId, limit] as const,
     comicvineIssue: (comicvineIssueId: string) =>
       ['cblSources', 'comicvineIssue', comicvineIssueId] as const,
     comparison: (comicvineIssueIds: string[]) =>

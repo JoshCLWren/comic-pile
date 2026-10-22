@@ -556,7 +556,7 @@ export default function CustomCBLBuilder({
               <p className="text-xs text-[var(--theme-text-muted)]">Skipping an issue here ignores it only in this list. It stays in your collection and other lists. Use your collection exclusions to remove a comic everywhere.</p>
 
               <button type="button" onClick={() => setReaderOpen((value) => !value)} aria-expanded={readerOpen} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-semibold text-[var(--theme-text-primary)]">{readerOpen ? 'Close list reader' : 'Read this list'}</button>
-              {readerOpen && selectedId && <ReadingListReader key={selectedId} listId={selectedId} />}
+              {readerOpen && selectedId && <ReadingListReader key={selectedId} listId={selectedId} backTo={`/continuity-plans/${planId}`} />}
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => saveMutation.mutate(null)} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
                 <button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>

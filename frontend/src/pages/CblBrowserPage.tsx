@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { FormEvent, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Modal from '../components/Modal'
 import TriStateCheckbox from '../components/TriStateCheckbox'
@@ -8,7 +8,7 @@ import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import { continuityPlansApi } from '../services/api-continuity-plans'
-import CblComparisonList from '../components/CblComparisonList'
+import { CblSourceDetailPanel } from '../components/CblSourceDetailPanel'
 import {
   cblSourcesApi,
   type CBLAdoptionPreviewEntry,
@@ -98,6 +98,7 @@ async function recoverAdoptedPlan(source: CBLSourceListDiscoveryItem) {
 export default function CblBrowserPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [submittedQuery, setSubmittedQuery] = useState('')
   const [hasSearched, setHasSearched] = useState(false)
@@ -110,17 +111,11 @@ export default function CblBrowserPage() {
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
 
-  // Connection of new comparison / Reading List lookup methods (Greptile G1)
-  const compareQuery = useQuery({
-    queryKey: queryKeys.cblSources.comparison(['49635', '49636']),
-    queryFn: () => cblSourcesApi.compare(['49635', '49636']),
-    staleTime: Infinity,
-  })
-  const listCandidatesQuery = useQuery({
-    queryKey: queryKeys.cblSources.readingListCandidates(1),
-    queryFn: () => cblSourcesApi.readingListCandidates(1),
-    staleTime: Infinity,
-  })
+  // A `list` query parameter opens one shared source list in place, so a
+  // comparison result can link straight to the source detail it names.
+  const requestedListId = searchParams.get('list')
+  const parsedListId = requestedListId ? Number.parseInt(requestedListId, 10) : Number.NaN
+  const deepLinkedListId = Number.isInteger(parsedListId) && parsedListId > 0 ? parsedListId : null
 
   const sourcesQuery = useQuery({
     queryKey: queryKeys.cblSources.search(submittedQuery),
@@ -219,6 +214,8 @@ export default function CblBrowserPage() {
     setStaleReview(false)
     setAmbiguousCommit(false)
     commitMutation.reset()
+    // A new search leaves the deep-linked source detail behind.
+    setSearchParams({}, { replace: true })
   }
 
   const loadPreview = (source: CBLSourceListDiscoveryItem) => {
@@ -328,6 +325,10 @@ export default function CblBrowserPage() {
           what it would do, then add it as a Reading Plan in one step.
         </p>
       </header>
+
+      {deepLinkedListId !== null && (
+        <CblSourceDetailPanel listId={deepLinkedListId} />
+      )}
 
       <form onSubmit={search} className="flex flex-col gap-2 sm:flex-row">
         <label className="sr-only" htmlFor="cbl-browser-search">
@@ -711,68 +712,6 @@ export default function CblBrowserPage() {
         </div>
       </Modal>
 
-      {/* Wired comparison / Reading List lookup flows (G1) */}
-      <div className="mt-6 space-y-4">
-        <h2 className="text-lg font-black text-[var(--theme-text-primary)]">Source comparisons</h2>
-        {compareQuery.isError ? (
-          <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4 space-y-2">
-            <p role="alert" className="text-sm text-[var(--theme-danger)]">
-              {errorMessage(compareQuery.error as Error, 'Comparison request failed.')}
-            </p>
-            <button
-              type="button"
-              onClick={() => compareQuery.refetch()}
-              className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
-            >
-              Retry
-            </button>
-          </div>
-        ) : (
-          <CblComparisonList
-            candidates={compareQuery.data?.candidates ?? []}
-            inputTotal={compareQuery.data?.input_total ?? 2}
-            emptyMessage={compareQuery.isPending ? 'Comparing…' : 'No comparison results (demo input used).'}
-            backTo="/cbl-sources"
-            backLabel="Sources"
-            testIdPrefix="compare-page"
-          />
-        )}
-        <h2 className="text-lg font-black text-[var(--theme-text-primary)]">Reading List candidates</h2>
-        {listCandidatesQuery.isError ? (
-          <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4 space-y-2">
-            <p role="alert" className="text-sm text-[var(--theme-danger)]">
-              {errorMessage(listCandidatesQuery.error as Error, 'Reading List candidates request failed.')}
-            </p>
-            <button
-              type="button"
-              onClick={() => listCandidatesQuery.refetch()}
-              className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
-            >
-              Retry
-            </button>
-          </div>
-        ) : listCandidatesQuery.isPending ? (
-          <p className="text-sm text-[var(--theme-text-muted)]">Loading Reading List candidates…</p>
-        ) : (listCandidatesQuery.data?.input_confirmed_total ?? 0) === 0 ? (
-          <p
-            className="text-sm text-[var(--theme-text-muted)]"
-            data-testid="reading-list-candidates-identity-gaps"
-          >
-            No confirmed Comic Vine IDs to compare:{' '}
-            {listCandidatesQuery.data?.input_missing_count ?? 0} missing and{' '}
-            {listCandidatesQuery.data?.input_conflict_count ?? 0} conflicting.
-          </p>
-        ) : (
-          <CblComparisonList
-            candidates={listCandidatesQuery.data?.candidates ?? []}
-            inputTotal={listCandidatesQuery.data?.input_confirmed_total ?? 0}
-            emptyMessage="No matching sources for this Reading List."
-            backTo="/cbl-sources"
-            backLabel="Sources"
-            testIdPrefix="reading-list-candidates"
-          />
-        )}
-      </div>
     </section>
   )
 }
