@@ -94,6 +94,10 @@ def wire_controller(
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
     monkeypatch.setattr(module, "target_json", lambda _number: {"state": "open", "body": "## Scope\n- sample"})
     monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args: [])
+    monkeypatch.setattr(
+        module, "implementation_delivery_gate",
+        lambda *_args: {"decision": "pass", "reason": "fixture"},
+    )
     excerpt_text = "git diff HEAD~1\nsemantic findings" if include_diff_inspection else "semantic findings"
     monkeypatch.setattr(
         module,
@@ -2396,6 +2400,10 @@ def test_handmade_head_is_promotable_by_one_independent_review(
         ],
     }
     monkeypatch.setattr(module, "pr_json", lambda _pr: payload)
+    monkeypatch.setattr(
+        module, "implementation_delivery_gate",
+        lambda *_args: {"decision": "pass", "reason": "fixture"},
+    )
     monkeypatch.setattr(module, "target_json", lambda _number: {"state": "open", "body": "## Scope\n- Implement target behavior"})
     monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args: [])
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
@@ -2850,3 +2858,27 @@ def test_provenance_failure_with_failed_fallback_comment_still_blocks(
     assert result["head"] == REVIEWED_HEAD
     assert transitions[-1]["pr_stage"] == "factory:blocked"
     assert all(item["pr_stage"] != "factory:ready" for item in transitions)
+
+
+@pytest.mark.parametrize("decision,stage", [
+    ("deny", "factory:changes-requested"), ("retry", "factory:review"),
+])
+def test_non_delivery_never_promotes_semantic_approval(
+    monkeypatch: MonkeyPatch, decision: str, stage: str,
+) -> None:
+    """Known non-delivery routes to repair; transient reads require fresh review."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(
+        monkeypatch, module, [payload], comments=producer_contribution(),
+    )
+    monkeypatch.setattr(module, "implementation_delivery_gate", lambda *_args: {
+        "decision": decision, "reason": "no executable delivery verified",
+    })
+    result = module.handle_review(
+        worker="17", pr_number=1390, verdict="approve",
+        reviewed_head=REVIEWED_HEAD, review_log="/tmp/model.log",
+    )
+    assert result["status"] == "implementation-evidence-required"
+    assert transitions[-1]["pr_stage"] == stage
+    assert "no executable delivery verified" in str(posted[-1]["note"])

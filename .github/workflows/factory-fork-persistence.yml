@@ -40,6 +40,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
+      - name: Install factory syntax parsers
+        uses: ./.github/actions/factory-syntax
+
       # No contributor checkout or artifact code execution is permitted here.
       - name: Validate receipt, lease, artifact ancestry, and persist exact fork head
         env:

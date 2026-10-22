@@ -9,6 +9,7 @@ moved tooling through the shared default groups.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -66,12 +67,18 @@ def _group_dependency_names(group: str) -> list[str]:
         group: Dependency group name (dev, migrate, or server).
 
     Returns:
-        Lowercased, extras-stripped names declared in the group.
+        Lowercased names, recursively resolving PEP 735 include-group entries.
     """
     names: list[str] = []
     for dependency in _pyproject()["dependency-groups"][group]:
-        name = dependency.split(">=", 1)[0].split("[", 1)[0].lower()
-        names.append(name)
+        if isinstance(dependency, dict):
+            assert set(dependency) == {"include-group"}
+            included = dependency["include-group"]
+            assert isinstance(included, str)
+            names.extend(_group_dependency_names(included))
+        else:
+            assert isinstance(dependency, str)
+            names.append(re.split(r"[<>=!~;\[\s]", dependency, maxsplit=1)[0].lower())
     return names
 
 
@@ -174,3 +181,14 @@ def test_lockfile_project_metadata_matches_the_slim_set() -> None:
     server_names = {item["name"] for item in dev_dependencies["server"]}
     assert {"alembic", "psycopg"} <= migrate_names
     assert "uvicorn" in server_names
+
+
+def test_factory_parsers_are_development_tooling_only() -> None:
+    """Native review parsers are installed for dev/control-plane, never app runtime."""
+    parsers = {
+        'shfmt-py', 'tree-sitter', 'tree-sitter-css',
+        'tree-sitter-javascript', 'tree-sitter-typescript',
+    }
+    assert parsers <= set(_group_dependency_names('factory-syntax'))
+    assert parsers <= set(_group_dependency_names('dev'))
+    assert parsers.isdisjoint(_project_dependency_names())
