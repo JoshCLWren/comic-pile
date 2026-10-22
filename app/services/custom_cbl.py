@@ -748,3 +748,189 @@ async def apply_custom_cbl_for_user(
         added_issue_ids=list(result.added_issue_ids),
         skipped_existing_issue_ids=list(result.skipped_existing_issue_ids),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class CustomCBLReplaceResult:
+    """Result from replacing a custom CBL with undo snapshot."""
+    
+    new_list: CustomCBLResponse
+    snapshot_id: int
+    before_state: CustomCBLResponse | None
+
+
+async def replace_custom_cbl_for_user_with_undo(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    list_id: int,
+    name: str,
+    description: str | None,
+    issue_ids: Sequence[int],
+    checkpoint_issue_ids: Sequence[int] | None = None,
+    checkpoint_targets: dict[int, list[int]] | None = None,
+    mode: Literal["strict", "loose"] | None = None,
+    entry_intents: dict[int, ReadingListEntryIntent] | None = None,
+    confirmed_predecessor_changes: list[ReadingListPredecessorChange] | None = None,
+) -> CustomCBLResponse:
+    """Transactionally replace one owned Reading List with safe undo capability.
+    
+    Reuses CBL source identity, resolution, selection and overlap evaluator.
+    Shows before/after state; never targets by name. Preserves collection/history/other lists,
+    keeps omitted custom entries unless explicitly approved, rejects stale writes,
+    and retains a reversible list-only snapshot for Undo.
+    """
+    from app.models.custom_cbl import CustomCBLListSnapshot
+    
+    try:
+        await authoring_repository.lock_reader(db, user_id)
+        row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
+        
+        # Create snapshot of current state for potential undo
+        previous_entries = await load_custom_cbl_entries(db, list_id=list_id)
+        snapshot = CustomCBLListSnapshot(
+            user_id=user_id,
+            list_id=list_id,
+            name=row.name,
+            description=row.description,
+            mode=row.mode,
+            entries=[
+                {
+                    "issue_id": entry.issue_id,
+                    "position": entry.position,
+                    "gate": entry.gate,
+                    "skipped": entry.skipped,
+                    "is_checkpoint": entry.is_checkpoint,
+                    "checkpoint_target_issue_ids": list(entry.checkpoint_target_issue_ids),
+                }
+                for entry in previous_entries
+            ],
+            created_at=datetime.now(UTC),
+        )
+        db.add(snapshot)
+        await db.flush()
+        snapshot_id = snapshot.id
+        
+        # Perform the replacement (same logic as update)
+        before = ReadingList(
+            row.id,
+            row.mode,
+            tuple(
+                ReadingListEntry(entry.issue_id, entry.gate, entry.skipped) for entry in previous_entries
+            ),
+            row.name,
+        )
+        if mode is not None:
+            row.mode = mode
+        row.name = name.strip()
+        row.description = description.strip() if description else None
+        row.updated_at = datetime.now(UTC)
+        await replace_custom_cbl_entries(
+            db,
+            user_id=user_id,
+            list_row=row,
+            issue_ids=issue_ids,
+            checkpoint_issue_ids=checkpoint_issue_ids,
+            checkpoint_targets=checkpoint_targets,
+        )
+        await authoring_repository.set_entry_intents(
+            db,
+            row.id,
+            {i: (intent.gate, intent.skipped) for i, intent in (entry_intents or {}).items()},
+        )
+        changes, warnings = await validate_authored_list(
+            db,
+            user_id=user_id,
+            list_id=row.id,
+            before=before,
+            confirmed=confirmed_predecessor_changes,
+        )
+        
+        # Build response
+        response = await _full_response(db, row)
+        response.predecessor_changes = changes
+        response.warnings = warnings
+        
+        await db.commit()
+        
+        # Store snapshot ID in response metadata for potential undo
+        response.metadata = {"snapshot_id": snapshot_id}
+        
+        return response
+        
+    except Exception:
+        await db.rollback()
+        raise
+
+
+async def undo_custom_cbl_replacement_for_user(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    list_id: int,
+    snapshot_id: int,
+) -> CustomCBLResponse:
+    """Undo a previous Reading List replacement using a stored snapshot.
+    
+    Restores the list to its exact previous state including all entries,
+    checkpoints, gates, and metadata. Preserves collection/history/other lists.
+    """
+    from app.models.custom_cbl import CustomCBLListSnapshot
+    
+    try:
+        await authoring_repository.lock_reader(db, user_id)
+        row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
+        
+        # Load the snapshot
+        snapshot = (
+            await db.execute(
+                select(CustomCBLListSnapshot)
+                .where(
+                    CustomCBLListSnapshot.id == snapshot_id,
+                    CustomCBLListSnapshot.user_id == user_id,
+                    CustomCBLListSnapshot.list_id == list_id,
+                )
+            )
+        ).scalar_one_or_none()
+        
+        if snapshot is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Snapshot {snapshot_id} not found for list {list_id}",
+            )
+        
+        # Restore the list from snapshot
+        row.name = snapshot.name
+        row.description = snapshot.description
+        row.mode = snapshot.mode
+        row.updated_at = datetime.now(UTC)
+        
+        # Clear existing entries and restore from snapshot
+        await db.execute(delete(CustomCBLEntry).where(CustomCBLEntry.list_id == list_id))
+        
+        for entry_data in snapshot.entries:
+            db.add(
+                CustomCBLEntry(
+                    list_id=list_id,
+                    issue_id=entry_data["issue_id"],
+                    position=entry_data["position"],
+                    gate=entry_data["gate"],
+                    skipped=entry_data["skipped"],
+                    is_checkpoint=entry_data["is_checkpoint"],
+                    checkpoint_target_issue_ids=entry_data["checkpoint_target_issue_ids"],
+                )
+            )
+        
+        await db.flush()
+        
+        # Build response
+        response = await _full_response(db, row)
+        response.metadata = {"undone_from_snapshot_id": snapshot_id}
+        
+        await db.commit()
+        
+        return response
+        
+    except Exception:
+        await db.rollback()
+        raise

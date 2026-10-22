@@ -113,6 +113,7 @@ class CustomCBLResponse(CustomCBLListItem):
     entries: list[CustomCBLEntryResponse]
     predecessor_changes: list[ReadingListPredecessorChange] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    metadata: dict | None = Field(default=None, description="Additional metadata including snapshot_id for undo operations")
 
 
 class CustomCBLIssueSearchResult(BaseModel):

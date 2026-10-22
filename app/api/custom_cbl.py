@@ -181,3 +181,56 @@ async def read_custom_cbl(
 ) -> ReadingListReaderResponse:
     """Explain the complete current list using the same authority as Roll."""
     return await get_reading_list_reader(db, user_id=current_user.id, list_id=list_id)
+
+
+@router.post("/{list_id}:replace", response_model=CustomCBLResponse)
+async def replace_custom_cbl(
+    list_id: int,
+    payload: CustomCBLWrite,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CustomCBLResponse:
+    """Transactionally replace one owned Reading List with safe undo capability.
+    
+    Reuses CBL source identity, resolution, selection and overlap evaluator.
+    Shows before/after state; never targets by name. Preserves collection/history/other lists,
+    keeps omitted custom entries unless explicitly approved, rejects stale writes,
+    and retains a reversible list-only snapshot for Undo.
+    """
+    from app.services.custom_cbl import replace_custom_cbl_for_user_with_undo
+    
+    return await replace_custom_cbl_for_user_with_undo(
+        db,
+        user_id=current_user.id,
+        list_id=list_id,
+        name=payload.name,
+        description=payload.description,
+        issue_ids=payload.issue_ids,
+        checkpoint_issue_ids=payload.checkpoint_issue_ids,
+        checkpoint_targets=payload.checkpoint_targets,
+        mode=payload.mode,
+        entry_intents=payload.entry_intents,
+        confirmed_predecessor_changes=payload.confirmed_predecessor_changes,
+    )
+
+
+@router.post("/{list_id}:undo", response_model=CustomCBLResponse)
+async def undo_custom_cbl_replacement(
+    list_id: int,
+    snapshot_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CustomCBLResponse:
+    """Undo a previous Reading List replacement using a stored snapshot.
+    
+    Restores the list to its exact previous state including all entries,
+    checkpoints, gates, and metadata. Preserves collection/history/other lists.
+    """
+    from app.services.custom_cbl import undo_custom_cbl_replacement_for_user
+    
+    return await undo_custom_cbl_replacement_for_user(
+        db,
+        user_id=current_user.id,
+        list_id=list_id,
+        snapshot_id=snapshot_id,
+    )

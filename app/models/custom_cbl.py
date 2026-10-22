@@ -91,3 +91,31 @@ class CustomCBLEntry(Base):
         Index("ix_custom_cbl_entries_list", "list_id"),
         Index("ix_custom_cbl_entries_issue", "issue_id"),
     )
+
+
+class CustomCBLListSnapshot(Base):
+    """Snapshot of a custom CBL list state for safe undo operations."""
+
+    __tablename__ = "custom_cbl_list_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    list_id: Mapped[int] = mapped_column(
+        ForeignKey("custom_cbl_lists.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mode: Mapped[Literal["strict", "loose"]] = mapped_column(
+        String(6), nullable=False, default="loose"
+    )
+    entries: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_custom_cbl_list_snapshots_user_list", "user_id", "list_id"),
+        Index("ix_custom_cbl_list_snapshots_created", "created_at"),
+    )
