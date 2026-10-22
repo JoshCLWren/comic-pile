@@ -42,21 +42,21 @@ interface OverlapChoiceButtonProps {
 /** One answer card: its label, explanation, and prospective comic effects. */
 const OverlapChoiceButton = forwardRef<HTMLButtonElement, OverlapChoiceButtonProps>(
   function OverlapChoiceButton({ effect, preview, checked, onSelect }, ref) {
-    const described = describeOverlapEffect(preview, effect)
-    return (
-      <button
-        ref={ref}
-        type="button"
-        role="radio"
-        aria-checked={checked}
-        tabIndex={checked ? 0 : -1}
-        onClick={onSelect}
-        className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
-          checked
-            ? 'border-[var(--theme-continuity-accent)] bg-[var(--theme-bg-panel)]'
-            : 'border-[var(--theme-border)] hover:bg-white/5'
-        }`}
-      >
+  const described = describeOverlapEffect(preview, effect)
+  return (
+    <button
+      ref={ref}
+      type="button"
+      role="radio"
+      aria-checked={checked}
+      tabIndex={0}
+      onClick={onSelect}
+      className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
+        checked
+          ? 'border-[var(--theme-continuity-accent)] bg-[var(--theme-bg-panel)]'
+          : 'border-[var(--theme-border)] hover:bg-white/5'
+      }`}
+    >
         <span className="block text-sm font-black text-[var(--theme-text-primary)]">
           {effect.label}
         </span>
@@ -64,12 +64,12 @@ const OverlapChoiceButton = forwardRef<HTMLButtonElement, OverlapChoiceButtonPro
           {effect.detail}
         </span>
         {described.rollable.length > 0 && (
-          <span className="mt-2 block text-xs text-emerald-300">
+          <span className="mt-2 block text-xs text-[var(--theme-success)]">
             Keeps rolling: {described.rollable.join(', ')}
           </span>
         )}
         {described.waiting.length > 0 && (
-          <span className="mt-1 block text-xs text-amber-200">
+          <span className="mt-1 block text-xs text-[var(--theme-warning)]">
             Still waits: {described.waiting.join(', ')}
           </span>
         )}
