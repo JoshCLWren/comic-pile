@@ -396,7 +396,7 @@ export default function CblBrowserPage() {
     const continuesAdd = graphDialogContinuesAdd
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
-    if (continuesAdd && unresolvedOverlaps(graph, overlapChoices).length === 0 && graphCycleErrors.length === 0) {
+    if (continuesAdd && unresolvedOverlaps(graph, overlapChoices).length === 0 && graphCycleErrors.length === 0 && !graphLoading) {
       setConfirmOpen(true)
     }
   }

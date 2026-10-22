@@ -36,12 +36,14 @@ interface OverlapChoiceButtonProps {
   effect: ReadingGraphChoiceEffect
   preview: ReadingGraphPreview
   checked: boolean
+  selected: ReadingGraphOverlapChoiceId | null
+  index: number
   onSelect: () => void
 }
 
 /** One answer card: its label, explanation, and prospective comic effects. */
 const OverlapChoiceButton = forwardRef<HTMLButtonElement, OverlapChoiceButtonProps>(
-  function OverlapChoiceButton({ effect, preview, checked, onSelect }, ref) {
+  function OverlapChoiceButton({ effect, preview, checked, selected, index, onSelect }, ref) {
   const described = describeOverlapEffect(preview, effect)
   return (
     <button
@@ -49,7 +51,7 @@ const OverlapChoiceButton = forwardRef<HTMLButtonElement, OverlapChoiceButtonPro
       type="button"
       role="radio"
       aria-checked={checked}
-      tabIndex={0}
+      tabIndex={checked ? 0 : selected === null && index === 0 ? 0 : -1}
       onClick={onSelect}
       className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
         checked
@@ -210,6 +212,8 @@ export default function ReadingGraphOverlapDialog({
                   ref={(element) => {
                     optionRefs.current[index] = element
                   }}
+                  selected={selected}
+                  index={index}
                   effect={effect}
                   preview={preview}
                   checked={selected === effect.choice}
