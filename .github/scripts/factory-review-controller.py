@@ -1311,6 +1311,14 @@ def implementation_delivery_gate(
 
     Final semantic review must still judge runnable test evidence and issue
     correctness. Read the full PR patch, not paths or isolated diff snippets.
+
+    Args:
+        pr_number: Current GitHub pull request number.
+        expected_head: Exact independently reviewed commit SHA.
+        issue_body: Fresh authoritative linked-issue text.
+
+    Returns:
+        Fail-closed gate result with actionable reasons.
     """
     if not HEAD_RE.fullmatch(expected_head):
         return gate_result("deny", "reviewed commit SHA is missing or invalid")
