@@ -7,14 +7,24 @@ differs intentionally: read and excluded issues stay in the graph so
 stored constraints cannot be hidden by exclusions; skipped placements are
 omitted. See `validate_reading_constraints` docstring for the full
 distinction from `evaluate`.
+
+Reader-approved overlap decisions apply here exactly as they do in the
+evaluator: an approved pair no longer produces the implicit strict-order
+edge between the continuing volume and the waiting volume, while explicit
+gates and prerequisites keep their own edges.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from heapq import heapify, heappop, heappush
 from typing import Literal
 
-from app.services.reading_list_evaluator import ReadingSnapshot
+from app.services.reading_list_evaluator import (
+    ReadingList,
+    ReadingListEntry,
+    ReadingSnapshot,
+    overlap_waiting_volumes,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +51,89 @@ class ReadingCycleError(ValueError):
         super().__init__(f"Reading constraint cycle: {path}")
 
 
+def _strict_order_covers(
+    index: int,
+    volumes: Sequence[str | None],
+    waiting: Mapping[str, frozenset[str]],
+) -> list[int]:
+    """Return the maximal non-exempt predecessors of one strict list position.
+
+    An earlier entry still gates the target unless the reader approved an
+    overlap for the target's volume, so an approved waiting volume is
+    skipped. A predecessor is a cover when no later non-exempt entry between
+    it and the target still precedes it.
+
+    Args:
+        index: Position of the target inside the list.
+        volumes: Volume identity of every list entry, in list order.
+        waiting: Approved waiting volumes keyed by continuing volume.
+
+    Returns:
+        Positions of the target's maximal non-exempt predecessors.
+    """
+    target_volume = volumes[index]
+    target_waiting = (
+        waiting.get(target_volume, frozenset()) if target_volume is not None else frozenset()
+    )
+    covers: list[int] = []
+    intersection: frozenset[str] | None = None
+    for position in range(index - 1, -1, -1):
+        volume = volumes[position]
+        if volume in target_waiting:
+            continue
+        if intersection is None or volume in intersection:
+            covers.append(position)
+        wait_for = waiting.get(volume, frozenset()) if volume is not None else frozenset()
+        intersection = wait_for if intersection is None else intersection & wait_for
+        # A smaller predecessor can only become a cover while this
+        # intersection still holds a volume outside the target's waiting set.
+        if not intersection or not (intersection - target_waiting):
+            break
+    return covers
+
+
+def _strict_order_edges(
+    reading_list: ReadingList,
+    entries: Sequence[ReadingListEntry],
+    volume_by_issue: Mapping[int, str | None],
+    origin: str,
+) -> list[ConstraintEdge]:
+    """Return the strict-order edges that survive approved overlap choices.
+
+    A strict list orders every included entry after every earlier one. An
+    approved overlap decision removes exactly the implicit strict-order link
+    between the continuing volume and the waiting volume, so the stored graph
+    must not keep an edge the canonical evaluator no longer enforces.
+
+    The surviving edges are a transitive reduction of the effective strict
+    order: every later entry keeps only the edges from its maximal
+    non-exempt predecessors. That preserves every enforced relation, drops
+    the removed ones, and keeps long lists linear.
+
+    Args:
+        reading_list: List whose mode and approved decisions apply.
+        entries: Non-skipped list entries in curated order.
+        volume_by_issue: Exact volume identity of every issue, when known.
+        origin: Reader-visible origin label of the produced edges.
+
+    Returns:
+        Strict-order edges of the effective list order.
+    """
+    waiting = overlap_waiting_volumes(reading_list)
+    ids = [entry.issue_id for entry in entries]
+    if not waiting:
+        return [
+            ConstraintEdge(a, b, origin)
+            for a, b in zip(ids, ids[1:], strict=False)
+        ]
+    volumes = [volume_by_issue.get(issue_id) for issue_id in ids]
+    edges: list[ConstraintEdge] = []
+    for index in range(1, len(entries)):
+        for cover in _strict_order_covers(index, volumes, waiting):
+            edges.append(ConstraintEdge(ids[cover], ids[index], origin))
+    return edges
+
+
 def validate_reading_constraints(
     snapshot: ReadingSnapshot,
     *,
@@ -61,6 +154,9 @@ def validate_reading_constraints(
     preceding non-excluded issue. Global exclusions change eligibility, but
     do not erase stored ordering constraints during write validation.
     Local skipped placements are omitted.
+    Reader-approved overlap decisions apply exactly as in the canonical
+    evaluator: the approved pair produces no implicit strict-order edge,
+    while explicit gates and prerequisites keep their own edges.
     Returns a stable topological order when the combined graph is acyclic.
 
     Args:
@@ -88,6 +184,12 @@ def validate_reading_constraints(
         for reading_list in snapshot.lists
     }
     edges: set[ConstraintEdge] = set()
+    volume_by_thread = {
+        thread.thread_id: thread.comicvine_volume_id for thread in snapshot.threads
+    }
+    volume_by_issue = {
+        issue.issue_id: volume_by_thread.get(issue.thread_id) for issue in snapshot.issues
+    }
     by_thread: dict[int, list[tuple[int, int]]] = {}
     for issue in snapshot.issues:
         # Validate stored order even for excluded Issues. Exclusions suppress
@@ -106,8 +208,9 @@ def validate_reading_constraints(
         ids = [entry.issue_id for entry in entries]
         if reading_list.mode == "strict":
             edges.update(
-                ConstraintEdge(a, b, f"list {name} strict order")
-                for a, b in zip(ids, ids[1:], strict=False)
+                _strict_order_edges(
+                    reading_list, entries, volume_by_issue, f"list {name} strict order",
+                )
             )
         # A chain implies that every earlier strict entry precedes each later
         # one. Store its transitive reduction to keep long lists linear.
