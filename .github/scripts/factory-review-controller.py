@@ -17,6 +17,9 @@ from typing import Any, Literal, TypedDict, cast
 
 sys.path.insert(0, os.path.dirname(__file__))
 issue_acceptance = importlib.import_module("factory_issue_acceptance")
+# Reuse the post-merge closure selector so the merge-side dependency check
+# always inspects the exact issue the merge will deliver and close.
+_post_merge_closure = importlib.import_module("factory_post_merge_closure")
 _eligibility_dir = Path(__file__).resolve().parent
 if not (_eligibility_dir / "factory_eligibility.py").is_file():
     _eligibility_dir = Path(__file__).resolve().parents[2] / "scripts"
@@ -1325,13 +1328,61 @@ def issue_acceptance_gate(pr_number: int, expected_head: str) -> GateResult:
     return gate_result("pass", "all issue acceptance criteria attested")
 
 
+def open_native_blockers(issue_number: int) -> list[int]:
+    """Return open issues GitHub records as blocking one issue natively.
+
+    Reads the native blocked-by dependency endpoint (the sub-issue blocker
+    graph), not the issue body, so blockers recorded through GitHub's own
+    relationship links are honored alongside declared text. Mirror of the
+    bounded ``?per_page=100`` read in ``factory-work-controller.py`` and
+    ``stale_pr_decay.py`` intake.
+
+    Args:
+        issue_number: The target issue whose blocked-by links are read.
+
+    Returns:
+        Issue numbers whose native blocked-by state is not closed.
+
+    Raises:
+        RuntimeError: When the blocked-by state cannot be read or a payload
+            item is malformed, so callers fail closed instead of treating
+            unknown state as permission.
+    """
+    payload = gh_json(
+        ["api", f"repos/{REPO}/issues/{issue_number}/dependencies/blocked_by?per_page=100"]
+    )
+    items = json_array(payload)
+    if items is None:
+        raise RuntimeError(f"native blocked-by payload for #{issue_number} was not an array")
+    open_numbers: list[int] = []
+    for item in items:
+        obj = json_object(item)
+        number = obj.get("number") if obj is not None else None
+        if not isinstance(number, int):
+            raise RuntimeError(f"native blocked-by item for #{issue_number} had no issue number")
+        if str(obj.get("state", "")).lower() != "closed":
+            open_numbers.append(number)
+    return open_numbers
+
+
 def declared_dependency_gate(pr_number: int) -> GateResult:
     """Block merge while any declared issue dependency is still open.
 
+    Resolves the delivered issue through the same post-merge closure rule
+    (explicit closing reference first, then the factory branch number), so the
+    check covers the issue the merge actually closes. Dependencies are read
+    through the shared ``## Dependencies``/``Depends on #N`` parser plus
+    GitHub's native blocked-by links, at their current open/closed states.
+
     Fails closed on API errors.
     """
-    pr = pr_json(pr_number)
-    issue_number = linked_issue_for_pr(pr_number, str(pr.get("headRefName") or ""))
+    try:
+        pr = pr_json(pr_number)
+    except RuntimeError:
+        return gate_result("retry", "pull request state could not be read for dependency check")
+    issue_number = _post_merge_closure.linked_issue(
+        str(pr.get("headRefName") or ""), str(pr.get("body") or "")
+    )
     if issue_number is None:
         return gate_result("pass", "no linked issue for dependency check")
     try:
@@ -1342,21 +1393,28 @@ def declared_dependency_gate(pr_number: int) -> GateResult:
     if not isinstance(body, str):
         return gate_result("retry", "linked issue body could not be read")
     try:
-        deps = eligibility.parse_declared_dependencies(body)
+        declared = eligibility.parse_declared_dependencies(body)
     except Exception:
         return gate_result("retry", "dependency parse failed")
     open_deps: list[int] = []
-    for dep in sorted(deps):
+    for dep in sorted(declared):
         try:
             dep_issue = target_json(dep)
         except RuntimeError:
             return gate_result("retry", f"dependency state unavailable for #{dep}")
         if str(dep_issue.get("state", "")).upper() != "CLOSED":
             open_deps.append(dep)
-    if open_deps:
+    try:
+        open_deps.extend(open_native_blockers(issue_number))
+    except RuntimeError:
+        return gate_result(
+            "retry", f"native blocked-by state unavailable for #{issue_number}"
+        )
+    blockers = sorted(set(open_deps))
+    if blockers:
         return gate_result(
             "retry",
-            "declared dependencies still open: " + ", ".join(f"#{n}" for n in open_deps),
+            "declared dependencies still open: " + ", ".join(f"#{n}" for n in blockers),
         )
     return gate_result("pass", "all declared dependencies closed")
 

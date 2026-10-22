@@ -645,6 +645,37 @@ def _close_issue(issue_number: int) -> None:
     )
 
 
+def _native_open_blockers(issue_number: int) -> list[int]:
+    """Return open issues GitHub records as blocking one issue natively.
+
+    Args:
+        issue_number: The target issue whose blocked-by links are read.
+
+    Returns:
+        Issue numbers whose native blocked-by state is not closed.
+
+    Raises:
+        RuntimeError: When the blocked-by state cannot be read or a payload
+            item is malformed, so callers fail closed instead of treating
+            unknown state as permission.
+    """
+    raw = _run_gh(
+        "api",
+        f"repos/{_repo_slug()}/issues/{issue_number}/dependencies/blocked_by?per_page=100",
+    )
+    payload = json.loads(raw)
+    if not isinstance(payload, list):
+        raise RuntimeError(f"native blocked-by payload for #{issue_number} was not an array")
+    open_numbers: list[int] = []
+    for item in payload:
+        if not isinstance(item, dict) or not isinstance(item.get("number"), int):
+            raise RuntimeError(f"native blocked-by item for #{issue_number} was malformed")
+        # Native issue payloads report ``open``/``closed`` in lowercase.
+        if str(item.get("state", "")).lower() != "closed":
+            open_numbers.append(item["number"])
+    return open_numbers
+
+
 def close_merged_pr_issue(
     pr_number: int,
     *,
@@ -666,7 +697,8 @@ def close_merged_pr_issue(
         One of ``closed``, ``already-closed``, ``no-linked-issue``,
         ``protected-issue``, ``successor-open``, ``active-work``,
         ``manual-only-issue``, ``acceptance-parent-incomplete``,
-        ``acceptance-parent-requires-verdict``, or ``dry-run:<action>``.
+        ``acceptance-parent-requires-verdict``, ``open-dependency``, or
+        ``dry-run:<action>``.
     """
     info = _pr_info(pr_number)
     issue_number = linked_issue(info["branch"], info["body"])
@@ -685,13 +717,18 @@ def close_merged_pr_issue(
         declared_deps = eligibility.parse_declared_dependencies(issue_body)
     except Exception:
         return "open-dependency"
-    for dep in declared_deps:
+    for dep in sorted(declared_deps):
         try:
             dep_issue = _issue_view(dep)
         except (RuntimeError, json.JSONDecodeError):
             return "open-dependency"
         if str(dep_issue.get("state")) != CLOSED_STATE:
             return "open-dependency"
+    try:
+        if _native_open_blockers(issue_number):
+            return "open-dependency"
+    except (RuntimeError, json.JSONDecodeError):
+        return "open-dependency"
     if MANUAL_ONLY_MARKER in issue_body:
         # Issue #1620: an issue that declares itself human/interactive
         # controlled — including an operator production-acceptance or cutover
@@ -1300,6 +1337,327 @@ This issue is a product contract and acceptance parent.
                     result = close_merged_pr_issue(2143, dry_run=True)
         self.assertEqual(result, "manual-only-issue")
         mock_successor.assert_not_called()
+
+    # Declared-dependency closure gate (issue #4041): a merged PR must never
+    # mark a dependent issue done while its prerequisite is still open.
+
+    def _closure_issue(
+        self,
+        number: int,
+        *,
+        body: str = "",
+        state: str = "OPEN",
+    ) -> dict[str, object]:
+        """Build a minimal issue view for closure dependency tests."""
+        return {
+            "state": state,
+            "body": body,
+            "labels": ["enhancement", "factory", "factory:ready", "factory:unowned"],
+        }
+
+    def test_open_declared_dependency_blocks_closure(self) -> None:
+        """CBL regression #4010/#4008: an open prerequisite refuses closure."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(
+                mod,
+                "_issue_view",
+                side_effect=[
+                    self._closure_issue(4010, body="Resolve the duplicate snapshot bug.\nDepends on #4008"),
+                    self._closure_issue(4008, state="OPEN"),
+                ],
+            ) as mock_view:
+                with patch.object(
+                    mod,
+                    "_pr_info",
+                    return_value={
+                        "branch": "factory/33-4010-kilo-auto",
+                        "body": "Closes #4010.",
+                        "state": "MERGED",
+                    },
+                ):
+                    with patch.object(mod, "_native_open_blockers", return_value=[]):
+                        result = close_merged_pr_issue(4024, dry_run=True)
+        self.assertEqual(result, "open-dependency")
+        numbers = [call.args[0] for call in mock_view.call_args_list]
+        self.assertEqual(numbers, [4010, 4008])
+        mock_close.assert_not_called()
+
+    def test_closed_declared_dependency_allows_closure(self) -> None:
+        """CBL regression #4017/#4016: a closed prerequisite does not block."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(
+            mod,
+            "_issue_view",
+            side_effect=[
+                self._closure_issue(4017, body="Tighten the docstring contract.\nDepends on #4016"),
+                self._closure_issue(4016, state="CLOSED"),
+            ],
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/41-4017-kilo-auto",
+                    "body": "Closes #4017.",
+                    "state": "MERGED",
+                },
+            ):
+                with patch.object(mod, "_native_open_blockers", return_value=[]):
+                    result = close_merged_pr_issue(4034, dry_run=True)
+        # The dependency check passes and the closure flow reaches its
+        # labeling/close decision instead of being refused outright.
+        self.assertTrue(result.startswith("dry-run:"), result)
+
+    def test_reopened_dependency_blocks_closure_again(self) -> None:
+        """A prerequisite reopened after delivery still refuses fresh closure."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(
+                mod,
+                "_issue_view",
+                side_effect=[
+                    self._closure_issue(4030, body="Depends on #4010"),
+                    self._closure_issue(4010, state="OPEN"),
+                ],
+            ):
+                with patch.object(
+                    mod,
+                    "_pr_info",
+                    return_value={
+                        "branch": "factory/33-4030-kilo-auto",
+                        "body": "Closes #4030.",
+                        "state": "MERGED",
+                    },
+                ):
+                    with patch.object(mod, "_native_open_blockers", return_value=[]):
+                        result = close_merged_pr_issue(4040, dry_run=True)
+        self.assertEqual(result, "open-dependency")
+        mock_close.assert_not_called()
+
+    def test_failed_dependency_lookup_fails_closed(self) -> None:
+        """An unreadable prerequisite state blocks closure instead of closing."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(
+            mod,
+            "_issue_view",
+            side_effect=[
+                self._closure_issue(4025, body="Depends on #4024"),
+                RuntimeError("gh failed"),
+            ],
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/33-4025-kilo-auto",
+                    "body": "Closes #4025.",
+                    "state": "MERGED",
+                },
+            ):
+                result = close_merged_pr_issue(4041, dry_run=True)
+        self.assertEqual(result, "open-dependency")
+
+    def test_open_native_blocked_by_blocks_closure(self) -> None:
+        """GitHub's native blocked-by links block like declared text."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(
+            mod,
+            "_issue_view",
+            side_effect=[
+                self._closure_issue(4050, body="No text dependencies declared."),
+            ],
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/33-4050-kilo-auto",
+                    "body": "Closes #4050.",
+                    "state": "MERGED",
+                },
+            ):
+                with patch.object(mod, "_native_open_blockers", return_value=[4049]):
+                    result = close_merged_pr_issue(4051, dry_run=True)
+        self.assertEqual(result, "open-dependency")
+
+    def test_closed_native_blocker_allows_closure(self) -> None:
+        """A natively recorded blocker already closed does not block."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(
+            mod,
+            "_issue_view",
+            side_effect=[
+                self._closure_issue(4050, body="No text dependencies declared."),
+            ],
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/33-4050-kilo-auto",
+                    "body": "Closes #4050.",
+                    "state": "MERGED",
+                },
+            ):
+                with patch.object(mod, "_native_open_blockers", return_value=[]):
+                    result = close_merged_pr_issue(4051, dry_run=True)
+        self.assertTrue(result.startswith("dry-run:"), result)
+
+    def test_failed_native_blocker_lookup_fails_closed(self) -> None:
+        """An unreadable native blocked-by graph refuses closure."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(
+            mod,
+            "_issue_view",
+            side_effect=[
+                self._closure_issue(4050, body="No text dependencies declared."),
+            ],
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/33-4050-kilo-auto",
+                    "body": "Closes #4050.",
+                    "state": "MERGED",
+                },
+            ):
+                with patch.object(
+                    mod, "_native_open_blockers", side_effect=RuntimeError("gh failed")
+                ):
+                    result = close_merged_pr_issue(4051, dry_run=True)
+        self.assertEqual(result, "open-dependency")
+
+    def test_conflicting_branch_and_closing_reference_checks_the_delivered_issue(self) -> None:
+        """A branch naming #1612 with ``Closes #1620`` checks #1620's state."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(
+            mod,
+            "_issue_view",
+            side_effect=[
+                self._closure_issue(1620, body="Delivered work.\nDepends on #4008"),
+                self._closure_issue(4008, state="OPEN"),
+            ],
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/47-1612-opencode-free",
+                    "body": "Closes #1620.",
+                    "state": "MERGED",
+                },
+            ):
+                with patch.object(mod, "_native_open_blockers", return_value=[]):
+                    result = close_merged_pr_issue(4050, dry_run=True)
+        self.assertEqual(result, "open-dependency")
+
+    def test_sweep_reports_open_dependency_and_never_closes(self) -> None:
+        """The stranded closure sweep honors the same prerequisite gate."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        merged_at = (
+            datetime.now(timezone.utc) - timedelta(minutes=10)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        listing = json.dumps(
+            [
+                {
+                    "number": 4024,
+                    "headRefName": "factory/33-4010-kilo-auto",
+                    "body": "Closes #4010.",
+                    "mergedAt": merged_at,
+                }
+            ]
+        )
+        with patch.object(mod, "_repo_slug", return_value="owner/repo"):
+            with patch.object(mod, "_run_gh", return_value=listing):
+                with patch.object(mod, "_pr_info", return_value={
+                    "branch": "factory/33-4010-kilo-auto",
+                    "body": "Closes #4010.",
+                    "state": "MERGED",
+                }):
+                    with patch.object(
+                        mod,
+                        "_issue_view",
+                        side_effect=[
+                            self._closure_issue(4010, body="Depends on #4008"),
+                            self._closure_issue(4008, state="OPEN"),
+                        ],
+                    ):
+                        with patch.object(
+                            mod, "_issue_has_open_successor_pr", return_value=False
+                        ):
+                            with patch.object(
+                                mod, "_native_open_blockers", return_value=[]
+                            ):
+                                with patch.object(mod, "_close_issue") as mock_close:
+                                    outcomes = sweep_stranded_closures(dry_run=True)
+        self.assertEqual(outcomes, ["PR 4024: open-dependency"])
+        mock_close.assert_not_called()
+
+    def test_sweep_closes_when_dependencies_complete(self) -> None:
+        """The sweep proceeds normally once every prerequisite closed."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        merged_at = (
+            datetime.now(timezone.utc) - timedelta(minutes=10)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        listing = json.dumps(
+            [
+                {
+                    "number": 4034,
+                    "headRefName": "factory/41-4017-kilo-auto",
+                    "body": "Closes #4017.",
+                    "mergedAt": merged_at,
+                }
+            ]
+        )
+        with patch.object(mod, "_repo_slug", return_value="owner/repo"):
+            with patch.object(mod, "_run_gh", return_value=listing):
+                with patch.object(mod, "_pr_info", return_value={
+                    "branch": "factory/41-4017-kilo-auto",
+                    "body": "Closes #4017.",
+                    "state": "MERGED",
+                }):
+                    with patch.object(
+                        mod,
+                        "_issue_view",
+                        side_effect=[
+                            self._closure_issue(4017, body="Depends on #4016"),
+                            self._closure_issue(4016, state="CLOSED"),
+                        ],
+                    ):
+                        with patch.object(
+                            mod, "_issue_has_open_successor_pr", return_value=False
+                        ):
+                            with patch.object(
+                                mod, "_native_open_blockers", return_value=[]
+                            ):
+                                outcomes = sweep_stranded_closures(dry_run=True)
+        self.assertEqual(
+            outcomes,
+            ["PR 4034: dry-run:replace-labels-with"
+             "['enhancement', 'factory', 'ralph-status:done']+close"],
+        )
 
 
 def main() -> int:
