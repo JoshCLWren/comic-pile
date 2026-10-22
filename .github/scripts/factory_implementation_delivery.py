@@ -17,7 +17,7 @@ SOURCE_SUFFIXES = (
 )
 TYPE_LINE = re.compile(
     r"(?im)^\s*(?:\*\*)?(?:issue\s+type|deliverable\s+type|"
-    r"work\s+type)(?:\*\*)?\s*:\s*(?:\*\*)?"
+    r"work\s+type)\s*:(?:\*\*)?\s*(?:\*\*)?"
     r"(docs-only|documentation-only|documentation|investigation|"
     r"planning|prd|acceptance-only|test-only)(?:\*\*)?\s*$"
 )
