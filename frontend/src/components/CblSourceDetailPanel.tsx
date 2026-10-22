@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { cblSourcesApi } from '../services/api-cbl-sources'
 import { queryKeys } from '../query/queryKeys'
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
-import { isString } from '../utils/runtimeChecks'
+import { isObject, isString, type JsonRecord } from '../utils/runtimeChecks'
 
 /** One bounded page of source occurrences. */
 const PAGE_SIZE = 200
@@ -13,16 +13,21 @@ interface CblSourceDetailPanelProps {
   listId: number
 }
 
+/** Return path and label for the surface that opened this source detail. */
+interface CblBackDestination {
+  path: string
+  label: string
+}
+
 /**
  * Read the reader's return destination from the router state.
  *
- * @param state - The router location state supplied by the comparison list.
+ * @param state - Parsed router location state supplied by the comparison list.
  * @returns The return path and its human label.
  */
-function backDestination(state: unknown): { path: string; label: string } {
-  const candidate = state as { from?: unknown; label?: unknown } | null
-  const path = isString(candidate?.from) && candidate.from ? candidate.from : '/continuity-plans'
-  const label = isString(candidate?.label) && candidate.label ? candidate.label : 'Reading Plans'
+function backDestination(state: JsonRecord | null): CblBackDestination {
+  const path = isString(state?.from) && state.from ? state.from : '/continuity-plans'
+  const label = isString(state?.label) && state.label ? state.label : 'Reading Plans'
   return { path, label }
 }
 
@@ -39,7 +44,7 @@ function backDestination(state: unknown): { path: string; label: string } {
  */
 export function CblSourceDetailPanel({ listId }: CblSourceDetailPanelProps) {
   const location = useLocation()
-  const back = backDestination(location.state)
+  const back = backDestination(isObject(location.state) ? location.state : null)
   const detailQuery = useInfiniteQuery({
     queryKey: queryKeys.cblSources.detail(listId, PAGE_SIZE),
     queryFn: ({ pageParam }) =>

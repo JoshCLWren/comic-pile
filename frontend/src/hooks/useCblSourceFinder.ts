@@ -35,6 +35,8 @@ export function distinctComicvineIssueIds(values: readonly string[]): string[] {
 export function useCblIssueIdentity(issueId: number | null, enabled = true) {
   return useQuery({
     queryKey: queryKeys.comicVine.issueIdentity(issueId ?? 0),
+    // SAFETY: the query is enabled only when issueId is non-null, so the
+    // callback never runs with a null issue.
     queryFn: () => comicVineApi.getIssueIdentity(issueId as number),
     enabled: enabled && issueId !== null,
   })
@@ -85,6 +87,8 @@ export function useCblComicvineIssueOccurrences(
 export function useCblReadingListCandidates(listId: number | null, enabled = true) {
   return useQuery({
     queryKey: queryKeys.cblSources.readingListCandidates(listId ?? 0),
+    // SAFETY: the query is enabled only when listId is non-null, so the
+    // callback never runs with a null list.
     queryFn: () => cblSourcesApi.readingListCandidates(listId as number),
     enabled: enabled && listId !== null,
   })

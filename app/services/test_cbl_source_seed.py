@@ -68,19 +68,32 @@ async def create_test_cbl_source(
         volume_year = raw.volume_year
         comicvine_id = raw.comicvine_issue_id or f"4000-fixture-{user_id}-{position}"
 
-        identity = ExternalIdentity(
-            provider="comicvine",
-            entity_type="issue",
-            external_id=comicvine_id,
-            metadata_json={
-                "volume": {
-                    "name": series_name,
-                    "start_year": volume_year,
-                }
-            },
-        )
-        db.add(identity)
-        await db.flush()
+        # Multiple comparison fixtures must be able to reference the same
+        # Comic Vine identity: one shared catalog issue appears in many CBL
+        # sources, and the identity row is unique per provider/external id.
+        identity = (
+            await db.execute(
+                select(ExternalIdentity).where(
+                    ExternalIdentity.provider == "comicvine",
+                    ExternalIdentity.entity_type == "issue",
+                    ExternalIdentity.external_id == comicvine_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if identity is None:
+            identity = ExternalIdentity(
+                provider="comicvine",
+                entity_type="issue",
+                external_id=comicvine_id,
+                metadata_json={
+                    "volume": {
+                        "name": series_name,
+                        "start_year": volume_year,
+                    }
+                },
+            )
+            db.add(identity)
+            await db.flush()
 
         if raw.issue_id is not None:
             issue = (
@@ -99,15 +112,23 @@ async def create_test_cbl_source(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Issue {raw.issue_id} not found",
                 )
-            db.add(
-                IssueExternalIdentityMapping(
-                    issue_id=issue.id,
-                    external_identity_id=identity.id,
-                    status="confirmed",
-                    evidence_source="e2e-fixture",
+            existing_mapping = (
+                await db.execute(
+                    select(IssueExternalIdentityMapping).where(
+                        IssueExternalIdentityMapping.issue_id == issue.id,
+                        IssueExternalIdentityMapping.external_identity_id == identity.id,
+                    )
                 )
-            )
-
+            ).scalar_one_or_none()
+            if existing_mapping is None:
+                db.add(
+                    IssueExternalIdentityMapping(
+                        issue_id=issue.id,
+                        external_identity_id=identity.id,
+                        status="confirmed",
+                        evidence_source="e2e-fixture",
+                    )
+                )
         db.add(
             CBLSourceEntry(
                 list_id=source_list.id,

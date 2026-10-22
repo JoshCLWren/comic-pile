@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.test_helpers import (
+    create_test_cbl_source,
     create_test_issue_identity,
     create_test_reading_order,
     expire_current_session,
@@ -212,6 +213,56 @@ def _effective_route_paths(app: object) -> set[str]:
         nested_prefix = f"{prefix}{getattr(include_context, 'prefix', '')}"
         stack[0:0] = [(nested, nested_prefix) for nested in nested_routes]
     return paths
+
+
+@pytest.mark.asyncio
+async def test_create_test_cbl_source_reuses_shared_comicvine_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Seeding many CBL sources must reuse one shared Comic Vine identity row."""
+    from app.schemas.test_fixtures import TestCblSourceCreate, TestCblSourceEntryCreate
+
+    monkeypatch.setenv("TEST_ENVIRONMENT", "true")
+    identity = SimpleNamespace(id=88)
+    issue = SimpleNamespace(id=12, thread_id=4)
+    owner = SimpleNamespace(id=4, user_id=99)
+    existing_mapping = SimpleNamespace(id=5)
+    db = AsyncMock(spec=AsyncSession)
+    db.execute.side_effect = [
+        _query_result(identity),
+        _query_result(issue),
+        _query_result(owner),
+        _query_result(existing_mapping),
+    ]
+    db.flush.return_value = None
+    db.commit.return_value = None
+    db.add.side_effect = lambda obj: setattr(obj, "id", 7)
+
+    response = await create_test_cbl_source(
+        db,
+        user_id=99,
+        payload=TestCblSourceCreate(
+            name="Fixture Compare A",
+            source_path="Fixtures/Compare A.cbl",
+            content_hash="hash-a",
+            revision_sha="rev-a",
+            repository="fixture-repo-a",
+            entries=[
+                TestCblSourceEntryCreate(
+                    position=1,
+                    series_name="Compare Series",
+                    issue_number="1",
+                    issue_id=12,
+                    comicvine_issue_id="4000-compare-a",
+                )
+            ],
+        ),
+    )
+
+    assert response.entries[0].comicvine_issue_id == "4000-compare-a"
+    added_types = [call.args[0].__class__.__name__ for call in db.add.call_args_list]
+    assert "ExternalIdentity" not in added_types
+    assert "IssueExternalIdentityMapping" not in added_types
 
 
 def test_test_helper_routes_are_mounted_only_in_test_environment(
