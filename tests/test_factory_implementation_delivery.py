@@ -379,3 +379,66 @@ def test_indented_build_files_ignore_comment_lines_but_keep_structure(path: str)
     assert delivery.pr_delivers_implementation(
         "Fix build indentation", [path], patch(path, new, ["build:", "    run: true"])
     )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ('if (( ${#prs[@]} > 1 )); then exit 1; fi',
+     'if (( ${#prs[@]} > 2 )); then exit 1; fi'),
+    ('echo ${value#prefix}', 'echo ${value#other}'),
+    ('echo ${value:- #old}', 'echo ${value:- #new}'),
+    ('echo ${value:-${other#old}}', 'echo ${value:-${other#new}}'),
+    ('echo $#', 'echo $1'),
+    ('echo foo#bar', 'echo foo#baz'),
+    ('printf foo -bar', 'printf foo-bar'),
+    ('echo first\necho second', 'echo first echo second'),
+])
+def test_shell_expansions_and_command_boundaries_are_behavioral(old: str, new: str) -> None:
+    """Bash expansion hashes and word/command boundaries must survive comparison."""
+    path = '.github/scripts/worker.sh'
+    assert delivery.pr_delivers_implementation(
+        "Fix shell behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ('# old comment\necho ok', '# new comment\necho ok'),
+    ('echo ok # old', 'echo ok # new'),
+    ('echo   ok', '  echo ok'),
+    ('echo one; echo two', 'echo one\necho two'),
+])
+def test_shell_comments_and_formatting_do_not_qualify(old: str, new: str) -> None:
+    """Comments and equivalent command formatting remain non-delivering."""
+    path = '.github/scripts/worker.sh'
+    assert not delivery.pr_delivers_implementation(
+        "Fix shell behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+@pytest.mark.parametrize("path,old,new", [
+    ('frontend/src/styles.css', '.nav-item.active.nav-label { color: red; }',
+     '.nav-item.active .nav-label { color: red; }'),
+    ('frontend/src/client.ts', 'function f() { return value; }',
+     'function f() { return\nvalue; }'),
+    ('frontend/src/client.ts', 'let value = other;', 'let value = otherValue;'),
+])
+def test_language_significant_spacing_changes_qualify(path: str, old: str, new: str) -> None:
+    """Selector descendants and JavaScript line terminators change behavior."""
+    assert delivery.pr_delivers_implementation(
+        "Fix behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+@pytest.mark.parametrize("path,old,new", [
+    ('frontend/src/styles.css', '.a { color: red; }', '.a{color:red;}'),
+    ('frontend/src/styles.css', '.a { color : red; }', '.a{color:red;}'),
+    ('frontend/src/client.ts', 'const value = 1;', 'const value=1;'),
+    ('frontend/src/client.ts', 'function f() {\nreturn value;\n}',
+     'function f(){return value;}'),
+])
+def test_ordinary_css_and_javascript_formatting_stays_non_delivery(
+    path: str, old: str, new: str,
+) -> None:
+    """Spacing around punctuation and indentation alone does not deliver behavior."""
+    assert not delivery.pr_delivers_implementation(
+        "Fix behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]

@@ -10,6 +10,7 @@ import ast
 import difflib
 import json
 import re
+import shlex
 from collections.abc import Callable, Iterable
 from urllib.parse import quote
 
@@ -113,13 +114,20 @@ def _code_tokens(source: str, path: str) -> str:
     # whitespace within values remain behavioral. Full source provides the
     # lexical context even when a changed line is deep inside a block comment.
     comments = r"\#[^\n]*" if hash_comments else r"/\*.*?\*/|//[^\n]*"
+    if path.lower().endswith(".sh"):
+        # Bash starts comments at word boundaries, not inside ${#array[@]},
+        # ${value#prefix}, $# or unquoted words containing a literal #.
+        comments = r"(?<![^\s;|&()])\#[^\n]*"
     if path.lower().endswith(".sql"):
         comments = r"/\*.*?\*/|--[^\n]*"
     if path.lower().endswith((".html", ".vue", ".svelte")):
         comments += r"|<!--.*?-->"
+    expansion = r"(?P<expansion>\$\{(?:[^{}]|\{[^{}]*\})*\})|" if path.endswith(".sh") else ""
     pattern = re.compile(
+        expansion +
         r"(?P<string>'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`)"
-        + r"|(?P<comment>" + comments + r")|(?P<space>\s+)|(?P<code>.)",
+        + r"|(?P<comment>" + comments + r")|(?P<space>\s+)"
+        + r"|(?P<code>[\w$]+|\+\+|--|=>|===|!==|==|!=|&&|\|\||.)",
         re.DOTALL,
     )
     if path.lower().endswith((".yml", ".yaml")) or name in {"makefile", "gnumakefile"}:
@@ -127,8 +135,56 @@ def _code_tokens(source: str, path: str) -> str:
         code = "".join(match.group() for match in pattern.finditer(source)
                        if match.lastgroup != "comment")
         return repr([line.rstrip() for line in code.splitlines() if line.strip()])
-    tokens = [match.group() for match in pattern.finditer(source)
-              if match.lastgroup not in {"comment", "space"}]
+    matches = [match for match in pattern.finditer(source) if match.lastgroup != "comment"]
+    if path.lower().endswith(".sh"):
+        code = "".join(match.group() for match in matches).replace("\\\n", "")
+        lexer = shlex.shlex(code, posix=False, punctuation_chars="();<>|&\n")
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        commands: list[str] = []
+        for token in lexer:
+            if token.strip(";\n") == "":
+                if commands and commands[-1] != ";":
+                    commands.append(";")
+            else:
+                commands.append(token)
+        if commands and commands[-1] == ";":
+            commands.pop()
+        return repr(commands)
+    tokens: list[str] = []
+    significant = [index for index, match in enumerate(matches) if match.lastgroup != "space"]
+    previous = ""
+    previous_end = 0
+    braces = 0
+    statement: list[str] = []
+    css = path.lower().endswith((".css", ".scss"))
+    javascript = path.lower().endswith((".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"))
+    for index in significant:
+        match = matches[index]
+        token = match.group()
+        gap = "".join(part.group() for part in matches[previous_end:index])
+        # CSS descendant selectors differ from adjoining simple selectors.
+        if css and gap and previous and token in {".", "#", "[", ":"}:
+            property_colon = (token == ":" and braces > 0 and len(statement) == 1
+                              and bool(re.fullmatch(r"[\w-]+", statement[0])))
+            if not property_colon and previous not in {"{", "}", ";", ":", ",", ">", "+", "~"}:
+                tokens.append("DESCENDANT")
+        # JavaScript's restricted productions and postfix operators give
+        # line terminators meaning; ordinary indentation/reflow remains ignored.
+        if javascript and "\n" in gap and (
+            previous in {"return", "throw", "break", "continue", "yield", "async", "++", "--"}
+            or token in {"++", "--"}
+        ):
+            tokens.append("LINE_TERMINATOR")
+        tokens.append(token)
+        if token in {"{", "}", ";"}:
+            statement = []
+            braces += (token == "{") - (token == "}")
+        else:
+            statement.append(token)
+        previous = token
+        previous_end = index + 1
     return repr(tokens)
 
 
