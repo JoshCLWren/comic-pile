@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import factory_issue_acceptance as issue_acceptance
 import importlib
 import json
 import os
@@ -16,6 +15,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
 sys.path.insert(0, os.path.dirname(__file__))
+issue_acceptance = importlib.import_module("factory_issue_acceptance")
 _review_policy = importlib.import_module("factory_review_policy")
 approval_can_promote = _review_policy.approval_can_promote
 current_head_approvers = _review_policy.current_head_approvers
