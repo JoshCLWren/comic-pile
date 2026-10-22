@@ -124,9 +124,9 @@ def _code_tokens(source: str, path: str) -> str:
     )
     if path.lower().endswith((".yml", ".yaml")) or name in {"makefile", "gnumakefile"}:
         # Indentation/newlines carry executable structure in these formats.
-        tokens = [match.group() for match in pattern.finditer(source)
-                  if match.lastgroup != "comment"]
-        return repr(tokens)
+        code = "".join(match.group() for match in pattern.finditer(source)
+                       if match.lastgroup != "comment")
+        return repr([line.rstrip() for line in code.splitlines() if line.strip()])
     tokens = [match.group() for match in pattern.finditer(source)
               if match.lastgroup not in {"comment", "space"}]
     return repr(tokens)

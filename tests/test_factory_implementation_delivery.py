@@ -366,3 +366,16 @@ def test_only_own_keyword_closure_may_be_reopened(
         {"event": "closed", "commit_id": HEAD}, {"event": event, "commit_id": commit},
     ]]))
     assert closure._closed_by_pr(4042, {"head": HEAD, "merge": "merge"}) is expected
+
+
+@pytest.mark.parametrize("path", [".github/workflows/ci.yml", "Makefile"])
+def test_indented_build_files_ignore_comment_lines_but_keep_structure(path: str) -> None:
+    """Comment-only edits are excluded without losing significant indentation."""
+    old = ["# old documentation", "build:", "  run: true"]
+    new = ["build:", "  run: true"]
+    assert not delivery.pr_delivers_implementation(
+        "Fix build behavior", [path], patch(path, old, new)
+    )[0]
+    assert delivery.pr_delivers_implementation(
+        "Fix build indentation", [path], patch(path, new, ["build:", "    run: true"])
+    )[0]
