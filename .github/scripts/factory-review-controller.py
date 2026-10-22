@@ -745,8 +745,8 @@ def semantic_review_excerpt(text: str) -> str:
     return excerpt
 
 
-def review_excerpt(path: str | None, *, worker: str) -> str:
-    """Read only an expected worker log and return bounded semantic findings."""
+def trusted_review_log(path: str | None, *, worker: str) -> str:
+    """Read only a validated worker log, retaining the full review evidence."""
     if not path:
         return ""
     expected = {
@@ -763,7 +763,17 @@ def review_excerpt(path: str | None, *, worker: str) -> str:
             text = stream.read()
     except OSError:
         return ""
-    return semantic_review_excerpt(text)
+    return text
+
+
+def review_excerpt(path: str | None, *, worker: str) -> str:
+    """Expose only the bounded, redacted prose excerpt in GitHub comments."""
+    return semantic_review_excerpt(trusted_review_log(path, worker=worker))
+
+
+def review_acceptance_report(path: str | None, *, worker: str) -> Mapping[str, Any] | None:
+    """Parse complete acceptance JSON before any 7K excerpt truncation."""
+    return issue_acceptance.report_from_text(trusted_review_log(path, worker=worker))
 
 
 def has_actionable_review_findings(excerpt: str) -> bool:
@@ -831,6 +841,10 @@ def post_review_comment(
             "<details><summary>Review output</summary>\n\n```text\n" + excerpt + "\n```\n</details>"
         )
     run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", "\n\n".join(parts)])
+    if acceptance_marker is not None:
+        # Controller-generated metadata is a separate whole-body comment. Never
+        # accept matching strings in review prose, quoted output, or PR bodies.
+        run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", acceptance_marker])
 
 
 def interpret_required_checks(
@@ -1551,7 +1565,7 @@ def handle_review(
             ["pr", "diff", str(pr_number), "--repo", REPO, "--name-only"]
         ).stdout.splitlines()
         failures = issue_acceptance.validate(
-            issue_acceptance.report_from_text(excerpt),
+            review_acceptance_report(review_log, worker=worker),
             issue_number, reviewed_head, body, changed,
         )
         if failures:
