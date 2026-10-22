@@ -81,6 +81,18 @@ export interface CBLAdoptionCommitResult extends ContinuityPlan {
 export interface CBLAdoptionPlanChoices {
   series_decisions: Record<string, boolean>
   entry_decisions: Record<string, boolean>
+  /**
+   * Series-level overlap answers, keyed by the server's stable overlap identity.
+   * Optional because a source with no genuine overlap never asks (#4020), and
+   * durable persistence for the answer belongs to the overlap-decision store.
+   */
+  overlap_decisions?: CBLOverlapDecision[]
+}
+
+/** One reader-approved series overlap decision carried into the commit. */
+export interface CBLOverlapDecision {
+  overlap_id: string
+  choice: 'protect_order' | 'continue_series'
 }
 
 /**
@@ -124,6 +136,7 @@ export function createCblSourcesApi(client: HttpClient) {
       entry_decisions: {},
       series_decisions: [],
       series_overrides: seriesOverrides,
+      overlap_decisions: choices.overlap_decisions ?? [],
       content_hash: preview.source.content_hash,
       revision_sha: preview.source.revision_sha,
     }
