@@ -642,3 +642,22 @@ def test_quoted_shift_text_is_not_a_heredoc() -> None:
     assert delivery.pr_delivers_implementation(
         "Repair shell literal", [path], patch(path, ['echo "<<EOF"'], ['echo "<<OTHER"'])
     )[0]
+
+
+@pytest.mark.parametrize("template", ['(( value = 1 << {shift} ))', 'echo "$((1 << {shift}))"'])
+def test_arithmetic_shift_is_not_a_heredoc(template: str) -> None:
+    """The << arithmetic operator cannot start heredoc input extraction."""
+    path = '.github/scripts/worker.sh'
+    assert delivery.pr_delivers_implementation(
+        "Repair shell arithmetic", [path],
+        patch(path, [template.format(shift=1)], [template.format(shift=2)]),
+    )[0]
+
+
+def test_arithmetic_shift_spacing_remains_formatting() -> None:
+    """Spacing a shift operator is equivalent without being a false heredoc."""
+    path = '.github/scripts/worker.sh'
+    assert not delivery.pr_delivers_implementation(
+        "Repair shell arithmetic", [path],
+        patch(path, ['(( value = 1<<2 ))'], ['(( value = 1 << 2 ))']),
+    )[0]

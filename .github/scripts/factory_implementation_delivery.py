@@ -278,6 +278,15 @@ def _shell_heredocs(source: str, path: str) -> tuple[str, list[tuple[bool, str]]
                 rebuilt.append(line[index:index + 2])
                 index += 2
                 continue
+            arithmetic = (quote not in {"'", "ansi"} and line.startswith("$((", index))
+            arithmetic |= not quote and line.startswith("((", index)
+            if arithmetic:
+                opening = "$((" if line.startswith("$((", index) else "(("
+                contexts.append((quote, 2, "arith)"))
+                quote = ""
+                rebuilt.append(opening)
+                index += len(opening)
+                continue
             if quote not in {"'", "ansi"} and line.startswith("$(", index):
                 contexts.append((quote, 1, ")"))
                 quote = ""
@@ -293,7 +302,8 @@ def _shell_heredocs(source: str, path: str) -> tuple[str, list[tuple[bool, str]]
                 rebuilt.append(char)
                 index += 1
                 continue
-            if not quote and contexts and contexts[-1][2] == ")" and char in {"(", ")"}:
+            if (not quote and contexts and contexts[-1][2] in {")", "arith)"}
+                    and char in {"(", ")"}):
                 outer, depth, closing = contexts[-1]
                 depth += 1 if char == "(" else -1
                 if depth:
@@ -311,7 +321,8 @@ def _shell_heredocs(source: str, path: str) -> tuple[str, list[tuple[bool, str]]
             if not quote and char == "#" and comment_boundary:
                 rebuilt.append(line[index:])
                 break
-            match = HEREDOC_START.match(line, index) if not quote else None
+            redirect_allowed = not quote and (not contexts or contexts[-1][2] != "arith)")
+            match = HEREDOC_START.match(line, index) if redirect_allowed else None
             if match:
                 word = match["word"]
                 delimiter = "".join(shlex.split(word, posix=True))
