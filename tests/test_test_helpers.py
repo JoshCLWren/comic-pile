@@ -234,13 +234,14 @@ async def test_create_test_cbl_source_reuses_shared_comicvine_identity(
     owner = SimpleNamespace(id=4, user_id=99)
     db = AsyncMock(spec=AsyncSession)
     # Statement order: identity upsert, identity re-select, issue select,
-    # owner select, mapping upsert.
+    # owner select, mapping upsert, mapping re-select.
     db.execute.side_effect = [
         Mock(),
         _query_result(identity),
         _query_result(issue),
         _query_result(owner),
         Mock(),
+        _query_result(Mock()),  # Mock for mapping re-select
     ]
     db.flush.return_value = None
     db.commit.return_value = None
@@ -273,8 +274,8 @@ async def test_create_test_cbl_source_reuses_shared_comicvine_identity(
     assert "IssueExternalIdentityMapping" not in added_types
     # The identity and mapping writes must be database-level upserts, not
     # check-then-create reads that can race under concurrent fixture calls:
-    # identity upsert, identity re-select, issue, owner, mapping upsert.
-    assert db.execute.await_count == 5
+    # identity upsert, identity re-select, issue, owner, mapping upsert, mapping re-select.
+    assert db.execute.await_count == 6
 
 
 @pytest.mark.asyncio

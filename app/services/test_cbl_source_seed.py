@@ -6,16 +6,15 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
-from app.models.external_identity import (
-    ExternalIdentity,
-    IssueExternalIdentityMapping,
-)
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.repositories.issue_identity_repository import (
+    upsert_comicvine_external_identity,
+    upsert_issue_external_identity_mapping,
+)
 from app.schemas.test_fixtures import (
     TestCblSourceCreate,
     TestCblSourceEntryResponse,
@@ -75,35 +74,12 @@ async def create_test_cbl_source(
         # A database-level upsert keeps two concurrent fixture calls from
         # both passing a check-then-create existence test and racing one
         # unique insert; the losing call's insert simply does nothing.
-        await db.execute(
-            pg_insert(ExternalIdentity)
-            .values(
-                provider="comicvine",
-                entity_type="issue",
-                external_id=comicvine_id,
-                metadata_json={
-                    "volume": {
-                        "name": series_name,
-                        "start_year": volume_year,
-                    }
-                },
-            )
-            .on_conflict_do_nothing(
-                index_elements=("provider", "entity_type", "external_id"),
-            )
+        identity = await upsert_comicvine_external_identity(
+            db,
+            external_id=comicvine_id,
+            series_name=series_name,
+            volume_year=volume_year,
         )
-        # A transaction whose conflict insert became a no-op then reads the
-        # committed winner under READ COMMITTED, so this select always finds
-        # exactly one row.
-        identity = (
-            await db.execute(
-                select(ExternalIdentity).where(
-                    ExternalIdentity.provider == "comicvine",
-                    ExternalIdentity.entity_type == "issue",
-                    ExternalIdentity.external_id == comicvine_id,
-                )
-            )
-        ).scalar_one()
 
         if raw.issue_id is not None:
             issue = (
@@ -126,17 +102,12 @@ async def create_test_cbl_source(
             # fixture calls can race this mapping's unique constraint
             # (issue_id, external_identity_id), so insert and let the loser
             # no-op instead of an existence check.
-            await db.execute(
-                pg_insert(IssueExternalIdentityMapping)
-                .values(
-                    issue_id=issue.id,
-                    external_identity_id=identity.id,
-                    status="confirmed",
-                    evidence_source="e2e-fixture",
-                )
-                .on_conflict_do_nothing(
-                    index_elements=("issue_id", "external_identity_id"),
-                )
+            await upsert_issue_external_identity_mapping(
+                db,
+                issue_id=issue.id,
+                external_identity_id=identity.id,
+                status="confirmed",
+                evidence_source="e2e-fixture",
             )
         db.add(
             CBLSourceEntry(
