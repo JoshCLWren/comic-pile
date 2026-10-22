@@ -13,7 +13,7 @@ from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -72,19 +72,30 @@ async def load_owned_list(
 
 
 def _to_record(
-    row: tuple[int, int, datetime, datetime, str, str, str, str]
+    decision_id: int,
+    list_id: int,
+    created_at: datetime,
+    updated_at: datetime,
+    continuing_provider: str,
+    continuing_external_id: str,
+    waiting_provider: str,
+    waiting_external_id: str,
 ) -> OverlapDecisionRecord | None:
-    """Map one joined decision row to a record, or None when it is unusable."""
-    (
-        decision_id,
-        list_id,
-        created_at,
-        updated_at,
-        continuing_provider,
-        continuing_external_id,
-        waiting_provider,
-        waiting_external_id,
-    ) = row
+    """Map one joined decision row to a record, or None when it is unusable.
+
+    Args:
+        decision_id: Stored decision identifier.
+        list_id: Reading List the decision belongs to.
+        created_at: Creation instant of the stored decision.
+        updated_at: Last change instant of the stored decision.
+        continuing_provider: Provider of the continuing volume identity.
+        continuing_external_id: External identifier of the continuing volume.
+        waiting_provider: Provider of the waiting volume identity.
+        waiting_external_id: External identifier of the waiting volume.
+
+    Returns:
+        The mapped record, or None when an identity is not a Comic Vine volume.
+    """
     continuing = canonical_volume_key(continuing_provider, continuing_external_id)
     waiting = canonical_volume_key(waiting_provider, waiting_external_id)
     if continuing is None or waiting is None:
@@ -132,8 +143,30 @@ async def load_overlap_decisions(
         .where(CustomCBLOverlapDecision.user_id == user_id)
         .order_by(CustomCBLOverlapDecision.id)
     )
-    records = (_to_record(tuple(row)) for row in rows.all())
-    return [record for record in records if record is not None]
+    records: list[OverlapDecisionRecord] = []
+    for (
+        decision_id,
+        list_id,
+        created_at,
+        updated_at,
+        continuing_provider,
+        continuing_external_id,
+        waiting_provider,
+        waiting_external_id,
+    ) in rows.all():
+        record = _to_record(
+            decision_id,
+            list_id,
+            created_at,
+            updated_at,
+            continuing_provider,
+            continuing_external_id,
+            waiting_provider,
+            waiting_external_id,
+        )
+        if record is not None:
+            records.append(record)
+    return records
 
 
 async def load_overlap_decision(
@@ -178,7 +211,89 @@ async def load_overlap_decision(
     ).one_or_none()
     if row is None:
         return None
-    return _to_record(tuple(row))
+    (
+        decision_id,
+        list_id,
+        created_at,
+        updated_at,
+        continuing_provider,
+        continuing_external_id,
+        waiting_provider,
+        waiting_external_id,
+    ) = row
+    return _to_record(
+        decision_id,
+        list_id,
+        created_at,
+        updated_at,
+        continuing_provider,
+        continuing_external_id,
+        waiting_provider,
+        waiting_external_id,
+    )
+
+
+async def load_list_overlap_decisions(
+    db: AsyncSession, user_id: int, list_id: int
+) -> list[OverlapDecisionRecord]:
+    """Load the overlap decisions of one owned Reading List.
+
+    Args:
+        db: Current transaction.
+        user_id: Reader whose decisions are loaded.
+        list_id: Reading List that must own the decisions.
+
+    Returns:
+        The list's decisions ordered by their stable identifier.
+    """
+    continuing = aliased(ExternalIdentity)
+    waiting = aliased(ExternalIdentity)
+    rows = await db.execute(
+        select(
+            CustomCBLOverlapDecision.id,
+            CustomCBLOverlapDecision.list_id,
+            CustomCBLOverlapDecision.created_at,
+            CustomCBLOverlapDecision.updated_at,
+            continuing.provider,
+            continuing.external_id,
+            waiting.provider,
+            waiting.external_id,
+        )
+        .join(
+            continuing,
+            continuing.id == CustomCBLOverlapDecision.continuing_external_identity_id,
+        )
+        .join(waiting, waiting.id == CustomCBLOverlapDecision.waiting_external_identity_id)
+        .where(
+            CustomCBLOverlapDecision.list_id == list_id,
+            CustomCBLOverlapDecision.user_id == user_id,
+        )
+        .order_by(CustomCBLOverlapDecision.id)
+    )
+    records: list[OverlapDecisionRecord] = []
+    for (
+        decision_id,
+        list_id,
+        created_at,
+        updated_at,
+        continuing_provider,
+        continuing_external_id,
+        waiting_provider,
+        waiting_external_id,
+    ) in rows.all():
+        record = _to_record(
+            decision_id,
+            list_id,
+            created_at,
+            updated_at,
+            continuing_provider,
+            continuing_external_id,
+            waiting_provider,
+            waiting_external_id,
+        )
+        if record is not None:
+            records.append(record)
+    return records
 
 
 def group_decisions_by_list(
@@ -236,20 +351,25 @@ async def resolve_volume_identity_ids(
     )
     resolved: dict[str, int] = {}
     for identity_id, external_id in rows.all():
-        key = canonical_volume_key(COMICVINE_PROVIDER, external_id)
-        if key is None:
+        canonical = canonical_volume_key(COMICVINE_PROVIDER, external_id)
+        if canonical is None:
             continue
-        resolved[key] = identity_id
+        resolved[canonical] = identity_id
     return {key: resolved[key] for key in wanted if key in resolved}
 
 
 async def _volume_candidates(
     db: AsyncSession, user_id: int, thread_ids: Collection[int]
 ) -> dict[int, set[str]]:
-    """Collect every exact Comic Vine volume claimed by each owned Thread."""
+    """Collect every exact Comic Vine volume claimed by each owned Thread.
+
+    Confirmed series evidence and the canonical catalog series are read in one
+    statement so the loader keeps a constant query count instead of one query
+    per evidence source.
+    """
     if not thread_ids:
         return {}
-    confirmed = await db.execute(
+    confirmed = (
         select(Thread.id, ExternalIdentity.provider, ExternalIdentity.external_id)
         .join(ThreadExternalSeriesMapping, ThreadExternalSeriesMapping.thread_id == Thread.id)
         .join(
@@ -263,7 +383,7 @@ async def _volume_candidates(
             ExternalIdentity.entity_type == VOLUME_ENTITY_TYPE,
         )
     )
-    catalog = await db.execute(
+    catalog = (
         select(Thread.id, ExternalIdentity.provider, ExternalIdentity.external_id)
         .join(CatalogSeries, CatalogSeries.id == Thread.catalog_series_id)
         .join(ExternalIdentity, ExternalIdentity.id == CatalogSeries.canonical_external_identity_id)
@@ -273,8 +393,9 @@ async def _volume_candidates(
             ExternalIdentity.entity_type == VOLUME_ENTITY_TYPE,
         )
     )
+    rows = await db.execute(union_all(confirmed, catalog))
     candidates: dict[int, set[str]] = {}
-    for thread_id, provider, external_id in [*confirmed.all(), *catalog.all()]:
+    for thread_id, provider, external_id in rows.all():
         key = canonical_volume_key(provider, external_id)
         if key is None:
             continue

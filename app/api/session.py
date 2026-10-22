@@ -436,7 +436,7 @@ async def list_sessions(
                             if resolved_number is not None:
                                 issue_id_pending = thread.next_unread_issue_id
                                 issue_number_pending = resolved_number
-                    agg: _RateAggregate = rate_agg.get(
+                    agg = rate_agg.get(
                         sid, {"issues_read": 0, "last_rating": None}
                     )
                     issues_read = agg["issues_read"] or None

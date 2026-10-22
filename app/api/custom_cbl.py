@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -17,9 +18,16 @@ from app.schemas.custom_cbl import (
     CustomCBLListItem,
     CustomCBLResponse,
     CustomCBLWrite,
+    OverlapDecisionSetResponse,
+    OverlapDecisionWrite,
 )
 from app.schemas.reading_list_reader import ReadingListReaderResponse
 from app.services.reading_list_reader import get_reading_list_reader
+from app.services.reading_overlap_decisions import (
+    get_overlap_decision_set,
+    remove_overlap_decision,
+    save_overlap_decision,
+)
 from app.services.custom_cbl import (
     apply_custom_cbl_for_user,
     create_custom_cbl_for_user,
@@ -181,3 +189,52 @@ async def read_custom_cbl(
 ) -> ReadingListReaderResponse:
     """Explain the complete current list using the same authority as Roll."""
     return await get_reading_list_reader(db, user_id=current_user.id, list_id=list_id)
+
+
+@router.get("/{list_id}/overlap-decisions", response_model=OverlapDecisionSetResponse)
+async def read_custom_cbl_overlap_decisions(
+    list_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OverlapDecisionSetResponse:
+    """Return one owned Reading List's overlap decisions and version token."""
+    return await get_overlap_decision_set(db, user_id=current_user.id, list_id=list_id)
+
+
+@router.put("/{list_id}/overlap-decisions", response_model=OverlapDecisionSetResponse)
+async def save_custom_cbl_overlap_decision(
+    list_id: int,
+    payload: OverlapDecisionWrite,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OverlapDecisionSetResponse:
+    """Save one reader-approved overlap choice inside an owned Reading List."""
+    return await save_overlap_decision(
+        db,
+        user_id=current_user.id,
+        list_id=list_id,
+        continuing_volume_id=payload.continuing_volume_id,
+        waiting_volume_id=payload.waiting_volume_id,
+        expected_updated_at=payload.expected_updated_at,
+    )
+
+
+@router.delete(
+    "/{list_id}/overlap-decisions/{decision_id}",
+    response_model=OverlapDecisionSetResponse,
+)
+async def delete_custom_cbl_overlap_decision(
+    list_id: int,
+    decision_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    expected_updated_at: Annotated[datetime | None, Query()] = None,
+) -> OverlapDecisionSetResponse:
+    """Remove one reader-approved overlap choice from an owned Reading List."""
+    return await remove_overlap_decision(
+        db,
+        user_id=current_user.id,
+        list_id=list_id,
+        decision_id=decision_id,
+        expected_updated_at=expected_updated_at,
+    )
