@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
@@ -71,17 +72,12 @@ async def create_test_cbl_source(
         # Multiple comparison fixtures must be able to reference the same
         # Comic Vine identity: one shared catalog issue appears in many CBL
         # sources, and the identity row is unique per provider/external id.
-        identity = (
-            await db.execute(
-                select(ExternalIdentity).where(
-                    ExternalIdentity.provider == "comicvine",
-                    ExternalIdentity.entity_type == "issue",
-                    ExternalIdentity.external_id == comicvine_id,
-                )
-            )
-        ).scalar_one_or_none()
-        if identity is None:
-            identity = ExternalIdentity(
+        # A database-level upsert keeps two concurrent fixture calls from
+        # both passing a check-then-create existence test and racing one
+        # unique insert; the losing call's insert simply does nothing.
+        await db.execute(
+            pg_insert(ExternalIdentity)
+            .values(
                 provider="comicvine",
                 entity_type="issue",
                 external_id=comicvine_id,
@@ -92,8 +88,22 @@ async def create_test_cbl_source(
                     }
                 },
             )
-            db.add(identity)
-            await db.flush()
+            .on_conflict_do_nothing(
+                index_elements=("provider", "entity_type", "external_id"),
+            )
+        )
+        # A transaction whose conflict insert became a no-op then reads the
+        # committed winner under READ COMMITTED, so this select always finds
+        # exactly one row.
+        identity = (
+            await db.execute(
+                select(ExternalIdentity).where(
+                    ExternalIdentity.provider == "comicvine",
+                    ExternalIdentity.entity_type == "issue",
+                    ExternalIdentity.external_id == comicvine_id,
+                )
+            )
+        ).scalar_one()
 
         if raw.issue_id is not None:
             issue = (
@@ -112,23 +122,22 @@ async def create_test_cbl_source(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Issue {raw.issue_id} not found",
                 )
-            existing_mapping = (
-                await db.execute(
-                    select(IssueExternalIdentityMapping).where(
-                        IssueExternalIdentityMapping.issue_id == issue.id,
-                        IssueExternalIdentityMapping.external_identity_id == identity.id,
-                    )
+            # Same database-level upsert as the identity row: two concurrent
+            # fixture calls can race this mapping's unique constraint
+            # (issue_id, external_identity_id), so insert and let the loser
+            # no-op instead of an existence check.
+            await db.execute(
+                pg_insert(IssueExternalIdentityMapping)
+                .values(
+                    issue_id=issue.id,
+                    external_identity_id=identity.id,
+                    status="confirmed",
+                    evidence_source="e2e-fixture",
                 )
-            ).scalar_one_or_none()
-            if existing_mapping is None:
-                db.add(
-                    IssueExternalIdentityMapping(
-                        issue_id=issue.id,
-                        external_identity_id=identity.id,
-                        status="confirmed",
-                        evidence_source="e2e-fixture",
-                    )
+                .on_conflict_do_nothing(
+                    index_elements=("issue_id", "external_identity_id"),
                 )
+            )
         db.add(
             CBLSourceEntry(
                 list_id=source_list.id,
