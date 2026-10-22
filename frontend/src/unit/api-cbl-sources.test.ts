@@ -105,9 +105,25 @@ describe('cblSourcesApi.commit', () => {
           { cbl_position: 3, decision: 'exclude' },
           { cbl_position: 4, decision: 'exclude' },
         ],
+        overlap_decisions: [],
         content_hash: 'hash-42',
         revision_sha: 'abcdef1234567890',
       },
+    )
+  })
+
+  it('carries the reader-approved series overlap decisions into the commit (#4020)', async () => {
+    await cblSourcesApi.commit(42, 77, reviewedPreview, {
+      series_decisions: {},
+      entry_decisions: {},
+      overlap_decisions: [{ overlap_id: 'mister-miracle|jli', choice: 'continue_series' }],
+    })
+
+    expect(client.post).toHaveBeenCalledWith(
+      '/v1/cbl/42/reading-plans/77/adoption-commit',
+      expect.objectContaining({
+        overlap_decisions: [{ overlap_id: 'mister-miracle|jli', choice: 'continue_series' }],
+      }),
     )
   })
 
@@ -187,6 +203,7 @@ describe('cblSourcesApi.commitNew', () => {
           { cbl_position: 3, decision: 'exclude' },
           { cbl_position: 4, decision: 'exclude' },
         ],
+        overlap_decisions: [],
         content_hash: 'hash-42',
         revision_sha: 'abcdef1234567890',
       },

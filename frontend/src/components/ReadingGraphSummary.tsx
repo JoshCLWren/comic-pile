@@ -19,6 +19,8 @@ interface ReadingGraphSummaryProps {
   onReview: () => void
   /** Disable interaction while a commit is in flight. */
   disabled?: boolean
+  /** A newer graph is loading, so the displayed totals may be stale. */
+  busy?: boolean
 }
 
 /**
@@ -37,6 +39,7 @@ export default function ReadingGraphSummary({
   choices,
   onReview,
   disabled = false,
+  busy = false,
 }: ReadingGraphSummaryProps) {
   const pending = unresolvedOverlaps(preview, choices)
   const decisionCount = preview.overlaps.length
@@ -58,7 +61,14 @@ export default function ReadingGraphSummary({
         >
           Reading graph
         </h3>
-        <p className="text-xs text-[var(--theme-text-muted)]">{readingGraphSummaryLine(preview)}</p>
+        <div className="flex flex-wrap items-baseline gap-2">
+          <p className="text-xs text-[var(--theme-text-muted)]">{readingGraphSummaryLine(preview)}</p>
+          {busy && (
+            <p role="status" className="text-xs text-[var(--theme-text-muted)]">
+              Updating the reading graph…
+            </p>
+          )}
+        </div>
       </div>
 
       {preview.cycle_errors.length > 0 && (

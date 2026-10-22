@@ -654,6 +654,7 @@ export default function CblBrowserPage() {
               choices={overlapChoices}
               onReview={reviewOverlaps}
               disabled={isCommitting}
+              busy={graphQuery.isFetching}
             />
           )}
 

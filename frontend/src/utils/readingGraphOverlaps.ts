@@ -128,7 +128,11 @@ export function overlapChoicePayload(
 /**
  * Build the read-only graph preview request for the current selection.
  *
- * @param includedPositions - Included CBL source positions, in source order.
+ * A CBL position is the entry's index in the source list, so ascending
+ * position order is the checklist's source order. The request therefore sorts
+ * a copy of the positions instead of mutating the caller's selection.
+ *
+ * @param includedPositions - Included CBL source positions.
  * @param preview - Server preview that names the conflicts.
  * @param choices - Answers already made.
  * @returns The request body for the graph preview endpoint.
@@ -145,10 +149,22 @@ export function buildReadingGraphRequest(
 }
 
 /**
- * Explain one prospective effect in reader language.
+ * Reader-facing description of one prospective choice effect.
  *
  * The labels come straight from the server's issue directory, so the dialog and
  * the committed graph describe the same comics.
+ */
+export interface ReadingGraphEffectDescription {
+  /** Comic labels that can keep rolling after the answer. */
+  rollable: string[]
+  /** Comic labels that still wait after the answer. */
+  waiting: string[]
+  /** Whether the answer changes anything at all. */
+  changesAnything: boolean
+}
+
+/**
+ * Explain one prospective effect in reader language.
  *
  * @param preview - The graph that owns the issue directory.
  * @param effect - Server-provided effect of one answer.
@@ -158,7 +174,7 @@ export function buildReadingGraphRequest(
 export function describeOverlapEffect(
   preview: ReadingGraphPreview,
   effect: ReadingGraphChoiceEffect,
-): { rollable: string[]; waiting: string[]; changesAnything: boolean } {
+): ReadingGraphEffectDescription {
   return {
     rollable: readingGraphIssueLabels(preview, effect.rollable_issue_ids),
     waiting: readingGraphIssueLabels(preview, effect.waiting_issue_ids),
