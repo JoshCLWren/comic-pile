@@ -13,7 +13,7 @@ from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select, union_all
+from sqlalchemy import select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -458,6 +458,44 @@ async def load_thread_volume_candidates(
             continue
         rows.append((thread_id, title, next(iter(keys))))
     return sorted(rows)
+
+
+async def advance_overlap_decisions_token(
+    db: AsyncSession, *, user_id: int, list_id: int, updated_at: datetime
+) -> CustomCBLList | None:
+    """Advance one owned Reading List's overlap decision version token.
+
+    The list's own ``updated_at`` is written back unchanged. A decision change
+    must not rewrite the list revision, and writing the column back explicitly
+    also keeps SQLAlchemy from applying the model's ``onupdate`` default to it,
+    which would otherwise move the list in a newest-first picker without a
+    membership edit.
+
+    Args:
+        db: Current transaction.
+        user_id: Reader who owns the list.
+        list_id: Reading List whose decision token advances.
+        updated_at: New decision version token.
+
+    Returns:
+        The refreshed Reading List row, or None when it is missing or foreign.
+    """
+    await db.execute(
+        update(CustomCBLList)
+        .where(CustomCBLList.id == list_id, CustomCBLList.user_id == user_id)
+        .values(
+            updated_at=CustomCBLList.updated_at,
+            overlap_decisions_updated_at=updated_at,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    return (
+        await db.execute(
+            select(CustomCBLList)
+            .where(CustomCBLList.id == list_id, CustomCBLList.user_id == user_id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
 
 
 async def upsert_overlap_decision(

@@ -6,6 +6,7 @@ later membership rewrite. The migration that introduces the storage is
 executed here so a deployed database can never miss the column or the table.
 """
 
+import ast
 import importlib.util
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +26,12 @@ from tests.conftest import get_or_create_user_async
 
 MIGRATION_PATH = (
     Path(__file__).parents[1] / "alembic/versions/r40180000001_add_custom_cbl_overlap_decisions.py"
+)
+
+#: The overlap decision service. Every statement it runs belongs to a
+#: repository, so a service that builds its own writes is a layering defect.
+OVERLAP_DECISION_SERVICE_PATH = (
+    Path(__file__).parents[1] / "app/services/reading_overlap_decisions.py"
 )
 
 #: Canonical keys of the two Comic Vine volumes used by the fixture.
@@ -115,6 +122,25 @@ async def _strict_list(
     )
     assert created.status_code == 201, created.text
     return int(created.json()["id"])
+
+
+async def _list_row(db: AsyncSession, list_id: int) -> CustomCBLList:
+    """Read one Reading List row straight from the database.
+
+    Args:
+        db: Current transaction.
+        list_id: Reading List identifier.
+
+    Returns:
+        The stored Reading List row with its persisted timestamps.
+    """
+    return (
+        await db.execute(
+            select(CustomCBLList)
+            .where(CustomCBLList.id == list_id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
 
 
 @pytest.mark.asyncio
@@ -390,6 +416,205 @@ async def test_deleting_a_decision_advances_the_version_token(
 
     reloaded = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/overlap-decisions")
     assert reloaded.json()["decisions"] == []
+
+
+@pytest.mark.asyncio
+async def test_saving_a_decision_leaves_the_list_revision_untouched(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A decision change advances only the decision token, never the list revision.
+
+    The list's own ``updated_at`` is its membership revision. A reader who only
+    approves an overlap choice has not edited the list, so the revision must not
+    move: the newest-first picker orders by that revision.
+    """
+    user = await get_or_create_user_async(async_db)
+    _waiting_thread, waiting_issue = await _volume_thread(
+        async_db,
+        user_id=user.id,
+        title="Mister Miracle",
+        queue_position=1,
+        volume_external_id="202",
+    )
+    _continuing_thread, continuing_issue = await _volume_thread(
+        async_db,
+        user_id=user.id,
+        title="JLI",
+        queue_position=2,
+        volume_external_id="101",
+    )
+    await async_db.commit()
+    list_id = await _strict_list(
+        auth_client, [waiting_issue.id, continuing_issue.id]
+    )
+    before = await _list_row(async_db, list_id)
+    before_revision = before.updated_at
+    before_token = before.overlap_decisions_updated_at
+
+    saved = await auth_client.put(
+        f"/api/v1/custom-cbls/{list_id}/overlap-decisions",
+        json={
+            "continuing_volume_id": CONTINUING_VOLUME,
+            "waiting_volume_id": WAITING_VOLUME,
+        },
+    )
+    assert saved.status_code == 200, saved.text
+
+    after = await _list_row(async_db, list_id)
+    assert after.updated_at == before_revision, (
+        "an approved overlap choice must not rewrite the list's own revision"
+    )
+    assert after.overlap_decisions_updated_at > before_token
+    assert after.overlap_decisions_updated_at == datetime.fromisoformat(
+        saved.json()["updated_at"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_decision_leaves_the_list_revision_untouched(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Removing an approval advances only the decision token, never the revision."""
+    user = await get_or_create_user_async(async_db)
+    _waiting_thread, waiting_issue = await _volume_thread(
+        async_db,
+        user_id=user.id,
+        title="Mister Miracle",
+        queue_position=1,
+        volume_external_id="202",
+    )
+    _continuing_thread, continuing_issue = await _volume_thread(
+        async_db,
+        user_id=user.id,
+        title="JLI",
+        queue_position=2,
+        volume_external_id="101",
+    )
+    await async_db.commit()
+    list_id = await _strict_list(
+        auth_client, [waiting_issue.id, continuing_issue.id]
+    )
+    saved = await auth_client.put(
+        f"/api/v1/custom-cbls/{list_id}/overlap-decisions",
+        json={
+            "continuing_volume_id": CONTINUING_VOLUME,
+            "waiting_volume_id": WAITING_VOLUME,
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    before = await _list_row(async_db, list_id)
+    before_revision = before.updated_at
+    before_token = before.overlap_decisions_updated_at
+
+    removed = await auth_client.delete(
+        f"/api/v1/custom-cbls/{list_id}/overlap-decisions/{saved.json()['decisions'][0]['id']}"
+    )
+    assert removed.status_code == 200, removed.text
+
+    after = await _list_row(async_db, list_id)
+    assert after.updated_at == before_revision, (
+        "removing an approved overlap choice must not rewrite the list's own revision"
+    )
+    assert after.overlap_decisions_updated_at > before_token
+
+
+@pytest.mark.asyncio
+async def test_a_decision_change_keeps_the_list_in_the_picker_order(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """An approved choice never moves its Reading List in the newest-first picker."""
+    user = await get_or_create_user_async(async_db)
+    _waiting_thread, waiting_issue = await _volume_thread(
+        async_db,
+        user_id=user.id,
+        title="Mister Miracle",
+        queue_position=1,
+        volume_external_id="202",
+    )
+    _continuing_thread, continuing_issue = await _volume_thread(
+        async_db,
+        user_id=user.id,
+        title="JLI",
+        queue_position=2,
+        volume_external_id="101",
+    )
+    await async_db.commit()
+    older_list_id = await _strict_list(
+        auth_client, [waiting_issue.id, continuing_issue.id], name="Older"
+    )
+    newer_list_id = await _strict_list(
+        auth_client, [waiting_issue.id, continuing_issue.id], name="Newer"
+    )
+
+    before = await auth_client.get("/api/v1/custom-cbls")
+    assert before.status_code == 200, before.text
+    before_order = [row["id"] for row in before.json()]
+    assert before_order.index(newer_list_id) < before_order.index(older_list_id)
+
+    saved = await auth_client.put(
+        f"/api/v1/custom-cbls/{older_list_id}/overlap-decisions",
+        json={
+            "continuing_volume_id": CONTINUING_VOLUME,
+            "waiting_volume_id": WAITING_VOLUME,
+        },
+    )
+    assert saved.status_code == 200, saved.text
+
+    after = await auth_client.get("/api/v1/custom-cbls")
+    assert after.status_code == 200, after.text
+    after_order = [row["id"] for row in after.json()]
+    assert after_order == before_order, (
+        "an approved overlap choice must not reorder the Reading List picker"
+    )
+
+
+def test_the_overlap_decision_service_delegates_its_writes_to_a_repository() -> None:
+    """The overlap write path must not build or run its own statements.
+
+    Repositories own all query construction and persistence for a model family.
+    A service that builds ``update(CustomCBLList)`` itself puts the list write
+    outside the repository boundary, so the token advance belongs to
+    ``app/repositories/reading_overlap_decision_repository.py``.
+    """
+    tree = ast.parse(OVERLAP_DECISION_SERVICE_PATH.read_text(encoding="utf-8"))
+    findings: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            module_name = node.module or ""
+            for alias in node.names:
+                if module_name.startswith("sqlalchemy") and alias.name in {
+                    "delete",
+                    "insert",
+                    "select",
+                    "update",
+                }:
+                    findings.append(
+                        f"{OVERLAP_DECISION_SERVICE_PATH}:{node.lineno}: imports "
+                        f"{module_name}.{alias.name}"
+                    )
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute):
+                if node.func.attr in {"execute", "add", "add_all", "delete", "merge"}:
+                    findings.append(
+                        f"{OVERLAP_DECISION_SERVICE_PATH}:{node.lineno}: calls "
+                        f"{node.func.attr}()"
+                    )
+            elif isinstance(node.func, ast.Name) and node.func.id in {
+                "delete",
+                "insert",
+                "select",
+                "update",
+            }:
+                findings.append(
+                    f"{OVERLAP_DECISION_SERVICE_PATH}:{node.lineno}: calls {node.func.id}()"
+                )
+    assert not findings, (
+        "the overlap decision service must delegate every statement to a repository:\n"
+        + "\n".join(findings)
+    )
 
 
 @pytest.mark.asyncio

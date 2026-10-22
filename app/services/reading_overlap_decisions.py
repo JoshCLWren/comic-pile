@@ -14,7 +14,6 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from fastapi import HTTPException
-from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.custom_cbl import CustomCBLList
@@ -308,16 +307,20 @@ async def save_overlap_decision(
         waiting_volume_id=waiting_key,
     )
     updated_at = datetime.now(UTC)
-    # Update only overlap_decisions_updated_at without triggering updated_at's onupdate
-    await db.execute(
-        update(CustomCBLList)
-        .where(CustomCBLList.id == list_id, CustomCBLList.user_id == user_id)
-        .values(overlap_decisions_updated_at=updated_at)
+    # The repository owns the token write. It preserves the list's own
+    # updated_at so a decision change never rewrites the list revision.
+    advanced = await overlap_repository.advance_overlap_decisions_token(
+        db, user_id=user_id, list_id=list_id, updated_at=updated_at
     )
+    if advanced is None:
+        raise HTTPException(status_code=404, detail=f"Reading List {list_id} not found")
     await db.flush()
     # Build the response while still holding the lock, before committing
     response = await _decision_set(
-        db, user_id=user_id, list_id=list_id, updated_at=updated_at
+        db,
+        user_id=user_id,
+        list_id=list_id,
+        updated_at=_as_utc(advanced.overlap_decisions_updated_at),
     )
     await db.commit()
     return response
@@ -363,16 +366,20 @@ async def remove_overlap_decision(
     grouped = overlap_repository.group_decisions_by_list(records)
     await _validate_projection(db, user_id, dict(grouped))
     updated_at = datetime.now(UTC)
-    # Update only overlap_decisions_updated_at without triggering updated_at's onupdate
-    await db.execute(
-        update(CustomCBLList)
-        .where(CustomCBLList.id == list_id, CustomCBLList.user_id == user_id)
-        .values(overlap_decisions_updated_at=updated_at)
+    # The repository owns the token write. It preserves the list's own
+    # updated_at so a decision change never rewrites the list revision.
+    advanced = await overlap_repository.advance_overlap_decisions_token(
+        db, user_id=user_id, list_id=list_id, updated_at=updated_at
     )
+    if advanced is None:
+        raise HTTPException(status_code=404, detail=f"Reading List {list_id} not found")
     await db.flush()
     # Build the response while still holding the lock, before committing
     response = await _decision_set(
-        db, user_id=user_id, list_id=list_id, updated_at=updated_at
+        db,
+        user_id=user_id,
+        list_id=list_id,
+        updated_at=_as_utc(advanced.overlap_decisions_updated_at),
     )
     await db.commit()
     return response

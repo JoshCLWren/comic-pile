@@ -18,7 +18,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Add the decision version token and the owner-scoped decision table."""
+    """Add the decision version token and the owner-scoped decision table.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     op.add_column(
         "custom_cbl_lists",
         sa.Column(
@@ -89,7 +96,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Drop the owner-scoped decision table and its list version token."""
+    """Drop the owner-scoped decision table and its list version token.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     op.drop_index("ix_custom_cbl_overlap_decisions_user", table_name="custom_cbl_overlap_decisions")
     op.drop_index("ix_custom_cbl_overlap_decisions_list", table_name="custom_cbl_overlap_decisions")
     op.drop_table("custom_cbl_overlap_decisions")

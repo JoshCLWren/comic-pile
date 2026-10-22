@@ -11048,6 +11048,140 @@
         "title": "NearMatchResponse",
         "type": "object"
       },
+      "OverlapDecisionItem": {
+        "description": "One stored reader-approved overlap choice inside one Reading List.",
+        "properties": {
+          "continuing_volume_id": {
+            "title": "Continuing Volume Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "waiting_volume_id": {
+            "title": "Waiting Volume Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "continuing_volume_id",
+          "waiting_volume_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "OverlapDecisionItem",
+        "type": "object"
+      },
+      "OverlapDecisionSetResponse": {
+        "description": "One owned Reading List's overlap decisions and their version token.\n\n``updated_at`` is the version of this list's decision set. It changes only\nwhen an approved choice changes, so an ordinary membership upsert never\ninvalidates a stored choice.",
+        "properties": {
+          "candidate_volumes": {
+            "items": {
+              "$ref": "#/components/schemas/OverlapVolumeCandidate"
+            },
+            "title": "Candidate Volumes",
+            "type": "array"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/OverlapDecisionItem"
+            },
+            "title": "Decisions",
+            "type": "array"
+          },
+          "list_id": {
+            "title": "List Id",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "updated_at"
+        ],
+        "title": "OverlapDecisionSetResponse",
+        "type": "object"
+      },
+      "OverlapDecisionWrite": {
+        "description": "One reader-approved overlap choice for one owned Reading List.",
+        "properties": {
+          "continuing_volume_id": {
+            "description": "Exact Comic Vine volume allowed to keep progressing.",
+            "maxLength": 110,
+            "minLength": 11,
+            "pattern": "^comicvine:[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
+            "title": "Continuing Volume Id",
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optimistic-concurrency token from GET ``updated_at``. When present, a mismatch returns 409 ``reading_overlap_version_conflict``.",
+            "title": "Expected Updated At"
+          },
+          "waiting_volume_id": {
+            "description": "Exact Comic Vine volume allowed to keep waiting.",
+            "maxLength": 110,
+            "minLength": 11,
+            "pattern": "^comicvine:[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
+            "title": "Waiting Volume Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "continuing_volume_id",
+          "waiting_volume_id"
+        ],
+        "title": "OverlapDecisionWrite",
+        "type": "object"
+      },
+      "OverlapVolumeCandidate": {
+        "description": "One owned Thread with the exact Comic Vine volume it resolves to.",
+        "properties": {
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "title": "Thread Title",
+            "type": "string"
+          },
+          "volume_id": {
+            "title": "Volume Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "volume_id"
+        ],
+        "title": "OverlapVolumeCandidate",
+        "type": "object"
+      },
       "OverrideRequest": {
         "description": "Schema for manual thread override.",
         "properties": {
@@ -24406,6 +24540,190 @@
           }
         ],
         "summary": "Export Custom Cbl",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "custom-cbls"
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/{list_id}/overlap-decisions": {
+      "get": {
+        "description": "Return one owned Reading List's overlap decisions and version token.\n\nArgs:\n    list_id: Identifier of the Reading List to read.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    The list's saved overlap decisions, the current version token, and\n    the reader's selectable volume candidates for new decisions.\n\nRaises:\n    HTTPException: With status 404 when the reader does not own the list.",
+        "operationId": "read_custom_cbl_overlap_decisions_api_v1_custom_cbls__list_id__overlap_decisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "title": "List Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Custom Cbl Overlap Decisions",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "custom-cbls"
+        ]
+      },
+      "put": {
+        "description": "Save one reader-approved overlap choice inside an owned Reading List.\n\nArgs:\n    list_id: Identifier of the Reading List to update.\n    payload: The overlap choice to save, naming two exact Comic Vine volumes.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    The list's updated decision set and version token.\n\nRaises:\n    HTTPException: With status 404 for a foreign list, 409 for a stale\n        version token, and 422 for an unusable or cyclic choice.",
+        "operationId": "save_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "title": "List Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverlapDecisionWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Custom Cbl Overlap Decision",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "custom-cbls"
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}": {
+      "delete": {
+        "description": "Remove one reader-approved overlap choice from an owned Reading List.\n\nArgs:\n    list_id: Identifier of the Reading List to update.\n    decision_id: Identifier of the overlap decision to remove.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n    expected_updated_at: Decision version token the client last read. None\n        skips the concurrency check.\n\nReturns:\n    The list's updated decision set and version token.\n\nRaises:\n    HTTPException: With status 404 for a foreign list or unknown decision,\n        409 for a stale version token, and 422 when removing the choice\n        would make the reader's constraint graph cyclic.",
+        "operationId": "delete_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions__decision_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "title": "List Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "decision_id",
+            "required": true,
+            "schema": {
+              "title": "Decision Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_updated_at",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Updated At"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Custom Cbl Overlap Decision",
         "tags": [
           "dependencies",
           "dependencies",
