@@ -127,12 +127,6 @@ export default function ReadingGraphOverlapDialog({
     wasOpen.current = isOpen
   }, [isOpen])
 
-  // Clear stale refs when the step changes so keyboard navigation only sees
-  // buttons for the current overlap.
-  useEffect(() => {
-    optionRefs.current = []
-  }, [clampedStep])
-
   const overlap = overlaps[clampedStep]
   const isLastStep = clampedStep >= overlaps.length - 1
   const selected = overlap ? effectiveOverlapChoice(overlap, choices) : null

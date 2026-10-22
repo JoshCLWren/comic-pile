@@ -168,6 +168,33 @@ describe('ReadingGraphOverlapDialog', () => {
     )
   })
 
+  it('keeps arrow-key navigation working after advancing to the next series', async () => {
+    const user = userEvent.setup()
+    const { onChoose, rerender } = renderDialog({
+      overlaps: [MISTER_MIRACLE_OVERLAP, SECOND_MISTER_MIRACLE_OVERLAP],
+    })
+
+    await user.click(
+      screen.getByRole('radio', { name: /Mister Miracle waits; JLI continues/ }),
+    )
+    rerender({ [MISTER_MIRACLE_OVERLAP.overlap_id]: 'continue_series' }, [
+      MISTER_MIRACLE_OVERLAP,
+      SECOND_MISTER_MIRACLE_OVERLAP,
+    ])
+    await user.click(screen.getByRole('button', { name: 'Next series' }))
+
+    expect(screen.getByRole('status')).toHaveTextContent('Overlap 2 of 2')
+    const secondFirst = screen.getByRole('radio', {
+      name: /Mister Miracle waits; JLI continues/,
+    })
+    secondFirst.focus()
+    await user.keyboard('{ArrowDown}')
+    expect(onChoose).toHaveBeenCalledWith(
+      SECOND_MISTER_MIRACLE_OVERLAP.overlap_id,
+      'protect_order',
+    )
+  })
+
   it('never shows a questionnaire for a source without a genuine overlap', () => {
     render(
       <ReadingGraphOverlapDialog
