@@ -112,12 +112,12 @@ export default function CblBrowserPage() {
 
   // Connection of new comparison / Reading List lookup methods (Greptile G1)
   const compareQuery = useQuery({
-    queryKey: ['cbl-compare-test'],
+    queryKey: queryKeys.cblSources.comparison(['49635', '49636']),
     queryFn: () => cblSourcesApi.compare(['49635', '49636']),
     staleTime: Infinity,
   })
   const listCandidatesQuery = useQuery({
-    queryKey: ['cbl-list-candidates-test'],
+    queryKey: queryKeys.cblSources.readingListCandidates(1),
     queryFn: () => cblSourcesApi.readingListCandidates(1),
     staleTime: Infinity,
   })
@@ -714,18 +714,55 @@ export default function CblBrowserPage() {
       {/* Wired comparison / Reading List lookup flows (G1) */}
       <div className="mt-6 space-y-4">
         <h2 className="text-lg font-black text-[var(--theme-text-primary)]">Source comparisons</h2>
-        <CblComparisonList
-          candidates={compareQuery.data?.candidates ?? []}
-          inputTotal={compareQuery.data?.input_total ?? 2}
-          emptyMessage={compareQuery.isPending ? 'Comparing…' : 'No comparison results (demo input used).'}
-          backTo="/cbl-sources"
-          backLabel="Sources"
-          testIdPrefix="compare-page"
-        />
+        {compareQuery.isError ? (
+          <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4 space-y-2">
+            <p role="alert" className="text-sm text-[var(--theme-danger)]">
+              {errorMessage(compareQuery.error as Error, 'Comparison request failed.')}
+            </p>
+            <button
+              type="button"
+              onClick={() => compareQuery.refetch()}
+              className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <CblComparisonList
+            candidates={compareQuery.data?.candidates ?? []}
+            inputTotal={compareQuery.data?.input_total ?? 2}
+            emptyMessage={compareQuery.isPending ? 'Comparing…' : 'No comparison results (demo input used).'}
+            backTo="/cbl-sources"
+            backLabel="Sources"
+            testIdPrefix="compare-page"
+          />
+        )}
         <h2 className="text-lg font-black text-[var(--theme-text-primary)]">Reading List candidates</h2>
-        <p className="text-xs text-[var(--theme-text-muted)]">
-          List 1 candidates: {listCandidatesQuery.data ? 'loaded' : 'loading'}
-        </p>
+        {listCandidatesQuery.isError ? (
+          <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4 space-y-2">
+            <p role="alert" className="text-sm text-[var(--theme-danger)]">
+              {errorMessage(listCandidatesQuery.error as Error, 'Reading List candidates request failed.')}
+            </p>
+            <button
+              type="button"
+              onClick={() => listCandidatesQuery.refetch()}
+              className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+            >
+              Retry
+            </button>
+          </div>
+        ) : listCandidatesQuery.isPending ? (
+          <p className="text-sm text-[var(--theme-text-muted)]">Loading Reading List candidates…</p>
+        ) : (
+          <CblComparisonList
+            candidates={listCandidatesQuery.data?.candidates ?? []}
+            inputTotal={listCandidatesQuery.data?.input_entry_count ?? 0}
+            emptyMessage="No matching sources for this Reading List."
+            backTo="/cbl-sources"
+            backLabel="Sources"
+            testIdPrefix="reading-list-candidates"
+          />
+        )}
       </div>
     </section>
   )
