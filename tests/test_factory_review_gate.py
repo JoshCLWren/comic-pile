@@ -92,6 +92,8 @@ def wire_controller(
 
     monkeypatch.setattr(module, "pr_json", lambda _pr: next(payload_iter))
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
+    monkeypatch.setattr(module, "target_json", lambda _number: {"state": "open", "body": "## Scope\n- sample"})
+    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args: [])
     excerpt_text = "git diff HEAD~1\nsemantic findings" if include_diff_inspection else "semantic findings"
     monkeypatch.setattr(
         module,
@@ -1878,6 +1880,7 @@ def test_authorize_ready_requires_cross_model_review(
 ) -> None:
     """The merge-drain authorization command refuses same-model or missing reviews."""
     module = load_review_controller()
+    monkeypatch.setattr(module, "issue_acceptance_gate", lambda _pr, _head: {"decision": "pass", "reason": "fixture"})
     writes: list[tuple[object, ...]] = []
     monkeypatch.setattr(
         module,
@@ -2393,6 +2396,8 @@ def test_handmade_head_is_promotable_by_one_independent_review(
         ],
     }
     monkeypatch.setattr(module, "pr_json", lambda _pr: payload)
+    monkeypatch.setattr(module, "target_json", lambda _number: {"state": "open", "body": "## Scope\n- Implement target behavior"})
+    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args: [])
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
     monkeypatch.setattr(module, "issue_comment_records", lambda _pr: store)
     monkeypatch.setattr(
