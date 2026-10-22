@@ -170,6 +170,7 @@ stage_trusted_review_controller() {
   cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
   cp .github/scripts/factory_issue_acceptance.py "$trusted_dir/factory_issue_acceptance.py"
   cp .github/scripts/factory_implementation_delivery.py "$trusted_dir/factory_implementation_delivery.py"
+  cp .github/scripts/factory_post_merge_closure.py "$trusted_dir/factory_post_merge_closure.py"
   # Bind model provenance to a trusted main checkout snapshot, not PR data.
   cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
   cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"

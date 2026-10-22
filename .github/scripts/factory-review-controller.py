@@ -18,6 +18,14 @@ from typing import Any, Literal, TypedDict, cast
 sys.path.insert(0, os.path.dirname(__file__))
 issue_acceptance = importlib.import_module("factory_issue_acceptance")
 implementation_delivery = importlib.import_module("factory_implementation_delivery")
+# Reuse the post-merge closure selector so the merge-side dependency check
+# always inspects the exact issue the merge will deliver and close.
+_post_merge_closure = importlib.import_module("factory_post_merge_closure")
+_eligibility_dir = Path(__file__).resolve().parent
+if not (_eligibility_dir / "factory_eligibility.py").is_file():
+    _eligibility_dir = Path(__file__).resolve().parents[2] / "scripts"
+sys.path.insert(0, str(_eligibility_dir))
+eligibility = importlib.import_module("factory_eligibility")
 _review_policy = importlib.import_module("factory_review_policy")
 approval_can_promote = _review_policy.approval_can_promote
 current_head_approvers = _review_policy.current_head_approvers
@@ -106,6 +114,7 @@ NO_REQUIRED_CHECKS_REASON = (
 )
 FACTORY_REPAIR_CYCLE_LIMIT = 3
 STRIKE_RESET_MARKER = "comic-pile-factory-strike-reset-v1"
+DEPENDENCY_BLOCK_MARKER_PREFIX = "comic-pile-factory-dependency-block-v1"
 
 GateDecision = Literal["pass", "retry", "deny"]
 
@@ -1357,6 +1366,157 @@ def issue_acceptance_gate(pr_number: int, expected_head: str) -> GateResult:
     return gate_result("pass", "all issue acceptance criteria attested")
 
 
+def open_native_blockers(issue_number: int) -> list[int]:
+    """Return open issues GitHub records as blocking one issue natively.
+
+    Reads the native blocked-by dependency endpoint (the sub-issue blocker
+    graph), not the issue body, so blockers recorded through GitHub's own
+    relationship links are honored alongside declared text. Mirror of the
+    bounded ``?per_page=100`` read in ``factory-work-controller.py`` and
+    ``stale_pr_decay.py`` intake.
+
+    Args:
+        issue_number: The target issue whose blocked-by links are read.
+
+    Returns:
+        Issue numbers whose native blocked-by state is not closed.
+
+    Raises:
+        RuntimeError: When the blocked-by state cannot be read or a payload
+            item is malformed, so callers fail closed instead of treating
+            unknown state as permission.
+    """
+    payload = gh_json(
+        ["api", f"repos/{REPO}/issues/{issue_number}/dependencies/blocked_by?per_page=100"]
+    )
+    items = json_array(payload)
+    if items is None:
+        raise RuntimeError(f"native blocked-by payload for #{issue_number} was not an array")
+    open_numbers: list[int] = []
+    for item in items:
+        obj = json_object(item)
+        if obj is None:
+            raise RuntimeError(f"native blocked-by item for #{issue_number} was not an object")
+        number = obj.get("number")
+        if not isinstance(number, int):
+            raise RuntimeError(f"native blocked-by item for #{issue_number} had no issue number")
+        if str(obj.get("state", "")).lower() != "closed":
+            open_numbers.append(number)
+    return open_numbers
+
+
+def dependency_block_marker(pr_number: int, issue_number: int, blockers: list[int]) -> str:
+    """Build the stable dedupe marker for one dependency-block reason.
+
+    Args:
+        pr_number: The pull request whose merge is blocked.
+        issue_number: The issue the merge would deliver.
+        blockers: The open prerequisite issue numbers.
+
+    Returns:
+        An HTML comment marker unique to this PR, issue, and blocker set.
+    """
+    deps = "-".join(str(number) for number in sorted(blockers))
+    return (
+        f"<!-- {DEPENDENCY_BLOCK_MARKER_PREFIX}:pr-{pr_number}:"
+        f"issue-{issue_number}:deps-{deps} -->"
+    )
+
+
+def record_dependency_block(
+    pr_number: int, issue_number: int, blockers: list[int]
+) -> None:
+    """Leave one durable, deduplicated dependency-block reason on the pull request.
+
+    The drain and every other auto-merge route evaluate this gate repeatedly,
+    so an exact marker keeps the reason visible to repair workers without
+    turning a long dependency wait into comment spam. A failed write is
+    swallowed: recording the reason must never decide whether a merge happens.
+
+    Args:
+        pr_number: The pull request whose merge is blocked.
+        issue_number: The issue the merge would deliver.
+        blockers: The open prerequisite issue numbers.
+    """
+    marker = dependency_block_marker(pr_number, issue_number, blockers)
+    try:
+        if any(marker in body for body in review_comment_bodies(pr_number)):
+            return
+    except (RuntimeError, ValueError):
+        return
+    listed = ", ".join(f"#{number}" for number in sorted(blockers))
+    body = "\n\n".join(
+        [
+            marker,
+            f"Blocked by declared dependencies: issue #{issue_number} declares open "
+            f"dependencies: {listed}. This pull request and its linked issue stay open "
+            "until every declared dependency is closed; the check runs again "
+            "automatically afterwards.",
+        ]
+    )
+    try:
+        run_gh(
+            ["issue", "comment", str(pr_number), "--repo", REPO, "--body", body]
+        )
+    except RuntimeError:
+        return
+
+
+def declared_dependency_gate(pr_number: int) -> GateResult:
+    """Block merge while any declared issue dependency is still open.
+
+    Resolves the delivered issue through the same post-merge closure rule
+    (explicit closing reference first, then the factory branch number), so the
+    check covers the issue the merge actually closes. Dependencies are read
+    through the shared ``## Dependencies``/``Depends on #N`` parser plus
+    GitHub's native blocked-by links, at their current open/closed states.
+
+    Fails closed on API errors.
+    """
+    try:
+        pr = pr_json(pr_number)
+    except RuntimeError:
+        return gate_result("retry", "pull request state could not be read for dependency check")
+    issue_number = _post_merge_closure.linked_issue(
+        str(pr.get("headRefName") or ""), str(pr.get("body") or "")
+    )
+    if issue_number is None:
+        return gate_result("pass", "no linked issue for dependency check")
+    try:
+        issue = target_json(issue_number)
+    except RuntimeError:
+        return gate_result("retry", "linked issue could not be read for dependency check")
+    body = issue.get("body")
+    if not isinstance(body, str):
+        return gate_result("retry", "linked issue body could not be read")
+    try:
+        declared = eligibility.parse_declared_dependencies(body)
+    except Exception:
+        return gate_result("retry", "dependency parse failed")
+    open_deps: list[int] = []
+    for dep in sorted(declared):
+        try:
+            dep_issue = target_json(dep)
+        except RuntimeError:
+            return gate_result("retry", f"dependency state unavailable for #{dep}")
+        if str(dep_issue.get("state", "")).upper() != "CLOSED":
+            open_deps.append(dep)
+    try:
+        open_deps.extend(open_native_blockers(issue_number))
+    except RuntimeError:
+        return gate_result(
+            "retry", f"native blocked-by state unavailable for #{issue_number}"
+        )
+    blockers = sorted(set(open_deps))
+    if blockers:
+        record_dependency_block(pr_number, issue_number, blockers)
+        return gate_result(
+            "retry",
+            "declared dependencies still open: " + ", ".join(f"#{n}" for n in blockers),
+        )
+    return gate_result("pass", "all declared dependencies closed")
+
+
 def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
     """Single authoritative exact-head mechanical gate for controller and workflows."""
     mergeable = poll_mergeable_gate(pr_number, expected_head)
@@ -1372,6 +1532,9 @@ def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
         acceptance = issue_acceptance_gate(pr_number, expected_head)
         if acceptance["decision"] != "pass":
             return acceptance
+    dependency = declared_dependency_gate(pr_number)
+    if dependency["decision"] != "pass":
+        return dependency
     return gate_result("pass", "all exact-head mechanical gates passed")
 
 

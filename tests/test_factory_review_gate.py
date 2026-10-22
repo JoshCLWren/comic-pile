@@ -1780,6 +1780,19 @@ def test_merge_drain_never_reads_native_review_state_for_merge() -> None:
     assert "pull_request_review" not in content
 
 
+def test_every_scheduled_auto_merge_route_runs_the_controller_gate_first() -> None:
+    """Each scheduled factory merge route checks gates before it can merge."""
+    for workflow in (
+        "factory-ready-merge-drain.yml",
+        "fixed-model-factory-dispatch.yml",
+    ):
+        content = (WORKFLOWS / workflow).read_text(encoding="utf-8")
+        gate_call = content.index('gates --pr')
+        merge_call = content.index('gh pr merge "$pr"')
+        assert gate_call < merge_call, f"{workflow} merges before the dependency gate"
+        assert '--match-head-commit' in content, f"{workflow} must merge one exact head"
+
+
 def _cross_model_comments(
     *,
     pr: int = 1390,
@@ -2882,3 +2895,453 @@ def test_non_delivery_never_promotes_semantic_approval(
     assert result["status"] == "implementation-evidence-required"
     assert transitions[-1]["pr_stage"] == stage
     assert "no executable delivery verified" in str(posted[-1]["note"])
+
+
+
+# Declared-dependency merge gate (issue #4041): merges are refused while the
+# delivered issue's prerequisites are still open.
+
+
+def _wire_dependency_gate(
+    monkeypatch: MonkeyPatch,
+    module: ModuleType,
+    *,
+    branch: str,
+    body: str,
+    issue_bodies: dict[int, str],
+    issue_states: dict[int, str] | None = None,
+    native_open: list[int] | None = None,
+    native_error: bool = False,
+    issue_fetch_error: bool = False,
+    comments: list[str] | None = None,
+    posted: list[str] | None = None,
+) -> tuple[list[int], list[str]]:
+    """Replace controller GitHub I/O with deterministic dependency fixtures.
+
+    Returns the list of issue numbers fetched through ``target_json`` and the
+    set of gh API paths hit for native blocked-by reads.
+    """
+    fetched: list[int] = []
+    native_paths: list[str] = []
+
+    monkeypatch.setattr(
+        module,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "isDraft": False,
+            "mergeable": "MERGEABLE",
+            "headRefOid": REVIEWED_HEAD,
+            "headRefName": branch,
+            "body": body,
+            "labels": [],
+        },
+    )
+
+    states = issue_states or {}
+
+    def fake_target_json(number: int) -> dict[str, Any]:
+        if issue_fetch_error:
+            raise RuntimeError("gh failed")
+        fetched.append(number)
+        return {"state": states.get(number, "open"), "body": issue_bodies.get(number, "")}
+
+    monkeypatch.setattr(module, "target_json", fake_target_json)
+
+    def fake_gh_json(args: list[str], **_kwargs: object) -> object:
+        del _kwargs
+        if args and args[0] == "api" and "dependencies/blocked_by" in args[1]:
+            native_paths.append(args[1])
+            if native_error:
+                raise RuntimeError("gh: blocked-by lookup failed")
+            return [
+                {"number": number, "state": "open"} for number in (native_open or [])
+            ]
+        if args and args[0] == "api" and "comments" in args[-1]:
+            bodies = comments or []
+            return [
+                [
+                    {
+                        "body": text,
+                        "user": {"login": "github-actions[bot]"},
+                        "author_association": "NONE",
+                    }
+                    for text in bodies
+                ]
+            ]
+        raise AssertionError(f"unexpected gh call: {args}")
+
+    monkeypatch.setattr(module, "gh_json", fake_gh_json)
+
+    def fake_run_gh(args: list[str], **_kwargs: object) -> object:
+        del _kwargs
+        if args[:2] == ["issue", "comment"]:
+            body = args[args.index("--body") + 1]
+            if posted is not None:
+                posted.append(body)
+            if comments is not None:
+                comments.append(body)
+            return None
+        raise AssertionError(f"unexpected gh write: {args}")
+
+    monkeypatch.setattr(module, "run_gh", fake_run_gh)
+    return fetched, native_paths
+
+
+def test_declared_dependency_gate_blocks_open_declared_dependency(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """CBL regression #4010/#4008: an open prerequisite refuses the merge."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4010-kilo-auto",
+        body="Closes #4010.",
+        issue_bodies={4010: "Resolve the duplicate snapshot bug.\nDepends on #4008"},
+        issue_states={4008: "open"},
+    )
+    result = module.declared_dependency_gate(4024)
+    assert result["decision"] == "retry"
+    assert "#4008" in result["reason"]
+    assert "declared dependencies still open" in result["reason"]
+
+
+def test_declared_dependency_gate_passes_when_dependencies_closed(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """CBL regression #4017/#4016: a closed prerequisite never blocks."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/41-4017-kilo-auto",
+        body="Closes #4017.",
+        issue_bodies={4017: "Tighten the docstring contract.\nDepends on #4016"},
+        issue_states={4016: "closed"},
+    )
+    result = module.declared_dependency_gate(4034)
+    assert result["decision"] == "pass"
+    assert result["reason"] == "all declared dependencies closed"
+
+
+def test_declared_dependency_gate_reevaluates_current_state_on_reopen(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The check reads live issue states, never an earlier claim snapshot."""
+    module = load_review_controller()
+    fetched, _paths = _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4021-kilo-auto",
+        body="Closes #4021.",
+        issue_bodies={4021: "Work.\nDepends on #4020"},
+        issue_states={4020: "closed"},
+    )
+    first = module.declared_dependency_gate(4044)
+    assert first["decision"] == "pass"
+    assert fetched == [4021, 4020]
+
+    module2 = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module2,
+        branch="factory/33-4021-kilo-auto",
+        body="Closes #4021.",
+        issue_bodies={4021: "Work.\nDepends on #4020"},
+        issue_states={4020: "open"},
+    )
+    reopened = module2.declared_dependency_gate(4044)
+    assert reopened["decision"] == "retry"
+    assert "#4020" in reopened["reason"]
+
+
+def test_declared_dependency_gate_ignores_casual_parent_mentions(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A body saying 'Part of #1615' without a declaration never blocks."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/58-3037-opencode-free",
+        body="Part of #1615.\nCloses #3037.",
+        issue_bodies={3037: "Child work. Part of #1615. No prerequisites."},
+    )
+    result = module.declared_dependency_gate(3050)
+    assert result["decision"] == "pass"
+    assert result["reason"] == "all declared dependencies closed"
+
+
+def test_declared_dependency_gate_follows_nested_chain_one_level(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A blocks while B open; B blocks while C open; B closed frees A."""
+    module = load_review_controller()
+
+    # A's PR: declared dependency on B, which is still open.
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4025-kilo-auto",
+        body="Closes #4025.",
+        issue_bodies={4025: "A work.\nDepends on #4026"},
+        issue_states={4026: "open"},
+    )
+    a_open = module.declared_dependency_gate(4060)
+    assert a_open["decision"] == "retry"
+    assert "#4026" in a_open["reason"]
+
+    # A's PR again after B closed: A passes even though C is still open,
+    # because B's own gate is what must hold C. No recursive chain walk.
+    module_a_after = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module_a_after,
+        branch="factory/33-4025-kilo-auto",
+        body="Closes #4025.",
+        issue_bodies={4025: "A work.\nDepends on #4026"},
+        issue_states={4026: "closed"},
+    )
+    a_after = module_a_after.declared_dependency_gate(4060)
+    assert a_after["decision"] == "pass"
+
+    # B's PR while C is open: the middle link blocks, so no merge bypasses C.
+    module_b = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module_b,
+        branch="factory/33-4026-kilo-auto",
+        body="Closes #4026.",
+        issue_bodies={4026: "B work.\nDepends on #4027"},
+        issue_states={4027: "open"},
+    )
+    b_open = module_b.declared_dependency_gate(4061)
+    assert b_open["decision"] == "retry"
+    assert "#4027" in b_open["reason"]
+
+
+def test_declared_dependency_gate_fails_closed_when_api_unavailable(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """GitHub API errors block the merge instead of permitting it."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4025-kilo-auto",
+        body="Closes #4025.",
+        issue_bodies={4025: "A work.\nDepends on #4026"},
+        issue_fetch_error=True,
+    )
+    assert module.declared_dependency_gate(4060)["decision"] == "retry"
+
+    module2 = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module2,
+        branch="factory/33-4025-kilo-auto",
+        body="Closes #4025.",
+        issue_bodies={4025: "A work.\nDepends on #4026"},
+        issue_states={4026: "closed"},
+        native_error=True,
+    )
+    result = module2.declared_dependency_gate(4060)
+    assert result["decision"] == "retry"
+    assert "native blocked-by state unavailable" in result["reason"]
+
+
+def test_declared_dependency_gate_uses_native_blocked_by_links(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Native GitHub blocked-by state is honored even without text declarations."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4050-kilo-auto",
+        body="Closes #4050.",
+        issue_bodies={4050: "No text dependencies declared."},
+        native_open=[4049],
+    )
+    result = module.declared_dependency_gate(4065)
+    assert result["decision"] == "retry"
+    assert "#4049" in result["reason"]
+
+    module2 = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module2,
+        branch="factory/33-4050-kilo-auto",
+        body="Closes #4050.",
+        issue_bodies={4050: "No text dependencies declared."},
+        native_open=[],
+    )
+    assert module2.declared_dependency_gate(4065)["decision"] == "pass"
+
+
+def test_declared_dependency_gate_uses_closing_reference_when_branch_conflicts(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The Greptile finding shape: branch 1612 with ``Closes #1620`` checks 1620."""
+    module = load_review_controller()
+    fetched, _paths = _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/47-1612-opencode-free",
+        body="Closes #1620.",
+        issue_bodies={1620: "Delivered work.\nDepends on #4008"},
+        issue_states={4008: "open"},
+    )
+    result = module.declared_dependency_gate(4050)
+    assert result["decision"] == "retry"
+    assert "#4008" in result["reason"]
+    assert fetched == [1620, 4008]
+
+
+def test_declared_dependency_gate_resolves_issue_like_post_merge_closure(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Before and after merge, one identical issue-selection rule applies."""
+    module = load_review_controller()
+    shapes = [
+        ("factory/47-1612-opencode-free", "Closes #1620."),
+        ("factory/46-4041-kilo-auto", "Closes #4041."),
+        ("phase/manual-work", "Fixes #7\nResolves #8"),
+        ("factory/39-1566-opencode-free", ""),
+    ]
+    for branch, body in shapes:
+        expected = module._post_merge_closure.linked_issue(branch, body)
+        assert expected is not None
+        module2 = load_review_controller()
+        fetched, _paths = _wire_dependency_gate(
+            monkeypatch,
+            module2,
+            branch=branch,
+            body=body,
+            issue_bodies={expected: "No prerequisites yet."},
+            issue_states={expected: "closed"},
+        )
+        result = module2.declared_dependency_gate(9100)
+        assert result["decision"] == "pass"
+        # The gate queried exactly the issue post-merge closure would deliver:
+        # never a competing branch number when a closing reference exists.
+        assert fetched == [expected]
+
+
+def test_declared_dependency_gate_blocks_open_4017_4016(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """CBL regression #4017/#4016: an open prerequisite refuses the merge."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/41-4017-kilo-auto",
+        body="Closes #4017.",
+        issue_bodies={4017: "Tighten the docstring contract.\nDepends on #4016"},
+        issue_states={4016: "open"},
+    )
+    result = module.declared_dependency_gate(4034)
+    assert result["decision"] == "retry"
+    assert "#4016" in result["reason"]
+    assert "declared dependencies still open" in result["reason"]
+
+
+def test_mechanical_merge_gate_refuses_open_dependency(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The full mechanical gate refuses the merge, not only the helper."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4010-kilo-auto",
+        body="Closes #4010.",
+        issue_bodies={4010: "Resolve the duplicate snapshot bug.\nDepends on #4008"},
+        issue_states={4008: "open"},
+    )
+    # Every earlier exact-head gate already passed: CI is green and the review
+    # is authorized. The dependency gate must still stop the merge.
+    monkeypatch.setattr(
+        module,
+        "poll_mergeable_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "pull request is mergeable"),
+    )
+    monkeypatch.setattr(
+        module,
+        "required_checks_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "required checks passed"),
+    )
+    monkeypatch.setattr(
+        module,
+        "current_head_review_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "review authorized"),
+    )
+    result = module.mechanical_merge_gate(4024, REVIEWED_HEAD)
+    assert result["decision"] == "retry"
+    assert "declared dependencies still open" in result["reason"]
+    assert "#4008" in result["reason"]
+
+
+def test_mechanical_merge_gate_allows_merge_after_dependency_closes(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The same PR proceeds normally once the prerequisite closes."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4010-kilo-auto",
+        body="Closes #4010.",
+        issue_bodies={4010: "Resolve the duplicate snapshot bug.\nDepends on #4008"},
+        issue_states={4008: "closed"},
+    )
+    monkeypatch.setattr(
+        module,
+        "poll_mergeable_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "pull request is mergeable"),
+    )
+    monkeypatch.setattr(
+        module,
+        "required_checks_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "required checks passed"),
+    )
+    monkeypatch.setattr(
+        module,
+        "current_head_review_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "review authorized"),
+    )
+    result = module.mechanical_merge_gate(4024, REVIEWED_HEAD)
+    assert result["decision"] == "pass"
+    assert result["reason"] == "all exact-head mechanical gates passed"
+
+
+def test_declared_dependency_gate_records_one_durable_block_reason(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Repair workers get one durable PR reason naming the open dependencies."""
+    module = load_review_controller()
+    comments: list[str] = []
+    posted: list[str] = []
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4010-kilo-auto",
+        body="Closes #4010.",
+        issue_bodies={4010: "Resolve the duplicate snapshot bug.\nDepends on #4008"},
+        issue_states={4008: "open"},
+        comments=comments,
+        posted=posted,
+    )
+    first = module.declared_dependency_gate(4024)
+    second = module.declared_dependency_gate(4024)
+    assert first == second
+    assert first["decision"] == "retry"
+    # One reason for the same blocker set, not one per drain tick.
+    assert len(posted) == 1
+    assert (
+        "comic-pile-factory-dependency-block-v1:pr-4024:issue-4010:deps-4008"
+        in posted[0]
+    )
+    assert "#4008" in posted[0]
