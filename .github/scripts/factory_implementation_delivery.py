@@ -102,6 +102,44 @@ class _WithoutDocstrings(ast.NodeTransformer):
         return super().visit(node)
 
 
+
+def _shell_continuations(source: str) -> str:
+    """Remove Bash continuations outside literal single quotes only."""
+    result: list[str] = []
+    quote = ""
+    index = 0
+    while index < len(source):
+        char = source[index]
+        if char == "\\" and quote != "'" and index + 1 < len(source):
+            following = source[index + 1]
+            if following != "\n":
+                result.extend((char, following))
+            index += 2
+            continue
+        if char in {"'", '\"'}:
+            if not quote:
+                quote = char
+            elif quote == char:
+                quote = ""
+        result.append(char)
+        index += 1
+    return "".join(result)
+
+
+def _async_production(values: list[str], position: int) -> bool:
+    """Identify async function/arrow starts rather than ordinary async identifiers."""
+    token = values[position]
+    if token == "function":
+        return True
+    if token != "(":
+        return position + 1 < len(values) and values[position + 1] == "=>"
+    depth = 0
+    for index in range(position, len(values)):
+        depth += (values[index] == "(") - (values[index] == ")")
+        if depth == 0:
+            return index + 1 < len(values) and values[index + 1] == "=>"
+    return False
+
 def _code_tokens(source: str, path: str) -> str:
     """Compare complete source, preserving literals and ignoring comments."""
     if path.lower().endswith(".py"):
@@ -137,7 +175,7 @@ def _code_tokens(source: str, path: str) -> str:
         return repr([line.rstrip() for line in code.splitlines() if line.strip()])
     matches = [match for match in pattern.finditer(source) if match.lastgroup != "comment"]
     if path.lower().endswith(".sh"):
-        code = "".join(match.group() for match in matches).replace("\\\n", "")
+        code = _shell_continuations("".join(match.group() for match in matches))
         lexer = shlex.shlex(code, posix=False, punctuation_chars="();<>|&\n")
         lexer.whitespace = " \t\r"
         lexer.whitespace_split = True
@@ -154,13 +192,14 @@ def _code_tokens(source: str, path: str) -> str:
         return repr(commands)
     tokens: list[str] = []
     significant = [index for index, match in enumerate(matches) if match.lastgroup != "space"]
+    values = [matches[index].group() for index in significant]
     previous = ""
     previous_end = 0
     braces = 0
     statement: list[str] = []
     css = path.lower().endswith((".css", ".scss"))
     javascript = path.lower().endswith((".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"))
-    for index in significant:
+    for position, index in enumerate(significant):
         match = matches[index]
         token = match.group()
         gap = "".join(part.group() for part in matches[previous_end:index])
@@ -174,10 +213,17 @@ def _code_tokens(source: str, path: str) -> str:
                 tokens.append("DESCENDANT")
         # JavaScript's restricted productions and postfix operators give
         # line terminators meaning; ordinary indentation/reflow remains ignored.
-        if javascript and "\n" in gap and (
-            previous in {"return", "throw", "break", "continue", "yield", "async", "++", "--"}
-            or token in {"++", "--"}
-        ):
+        operand_end = bool(re.fullmatch(r"[\w$]+", previous)) or previous in {
+            ")", "]", "}",
+        } or previous.startswith(("'", '\"', "`"))
+        operand_end = operand_end and previous not in {
+            "await", "new", "typeof", "void", "delete", "instanceof", "in", "of",
+            "throw", "return", "yield", "case", "else", "do",
+        }
+        restricted_newline = previous in {"return", "throw", "break", "continue", "yield"}
+        restricted_newline |= previous == "async" and _async_production(values, position)
+        restricted_newline |= token in {"++", "--"} and operand_end
+        if javascript and "\n" in gap and restricted_newline:
             tokens.append("LINE_TERMINATOR")
         tokens.append(token)
         if token in {"{", "}", ";"}:

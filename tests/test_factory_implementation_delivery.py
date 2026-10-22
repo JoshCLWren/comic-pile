@@ -446,3 +446,54 @@ def test_ordinary_css_and_javascript_formatting_stays_non_delivery(
     assert not delivery.pr_delivers_implementation(
         "Fix behavior", [path], patch(path, old.splitlines(), new.splitlines())
     )[0]
+
+
+def test_shell_single_quoted_backslash_newline_is_literal() -> None:
+    """Bash preserves both bytes inside a single-quoted argument."""
+    path = '.github/scripts/worker.sh'
+    old = "printf '%s' 'first\\\nsecond'"
+    new = "printf '%s' 'firstsecond'"
+    assert delivery.pr_delivers_implementation(
+        "Fix shell output", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ('printf foo \\\nbar', 'printf foo bar'),
+    ('printf "%s" "first\\\nsecond"', 'printf "%s" "firstsecond"'),
+])
+def test_real_shell_line_continuations_remain_formatting(old: str, new: str) -> None:
+    """Unquoted and double-quoted Bash continuations do not alter output."""
+    path = '.github/scripts/worker.sh'
+    assert not delivery.pr_delivers_implementation(
+        "Fix shell output", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ('let result = ++count;', 'let result =\n  ++count;'),
+    ('let result = ++count;', 'let result = ++\n  count;'),
+    ('let result = await ++count;', 'let result = await\n  ++count;'),
+    ('const obj = { async: 1 };', 'const obj = { async\n: 1 };'),
+    ('async(foo);', 'async\n(foo);'),
+])
+def test_prefix_increment_and_async_identifier_wrapping_is_formatting(old: str, new: str) -> None:
+    """Line breaks before prefix operators and ordinary identifiers do not qualify."""
+    path = 'frontend/src/client.ts'
+    assert not delivery.pr_delivers_implementation(
+        "Fix JS behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ('let result = count\n++other;', 'let result = count++\nother;'),
+    ('async function f() {}', 'async\nfunction f() {}'),
+    ('async x => x', 'async\nx => x'),
+    ('async (x) => x', 'async\n(x) => x'),
+])
+def test_restricted_javascript_newlines_still_change_behavior(old: str, new: str) -> None:
+    """Postfix and actual async productions retain line-terminator semantics."""
+    path = 'frontend/src/client.ts'
+    assert delivery.pr_delivers_implementation(
+        "Fix JS behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
