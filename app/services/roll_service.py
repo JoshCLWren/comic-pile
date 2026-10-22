@@ -277,6 +277,48 @@ def _classify_library(
     )
 
 
+# Bandwidth bands whose contextual weighting is driven by reading effort.
+_EFFORT_WEIGHTED_BANDWIDTHS = frozenset({"light", "deep"})
+
+
+def derive_recorded_selection_method(
+    *,
+    resolved_mode: SelectionMode,
+    selection_bandwidth: str,
+) -> tuple[str, list[str]]:
+    """Derive the selection method and reason codes recorded for one roll.
+
+    The recorded method names the control path that chose the thread, so it
+    follows the active mode. Deriving it from the weight values of a single
+    draw made one fixed reading intent record different labels for different
+    rolls: a pool whose candidates all carried a neutral weight recorded
+    ``random`` while a pool with any real signal recorded ``momentum`` for the
+    same Balanced intent (#3762). ``random`` now means only the documented
+    random bypass, which is also what the reader-facing explanation for that
+    value claims.
+
+    The reason codes name the same control path, so a recorded event can never
+    claim that a momentum selection was made at random. Whether one particular
+    draw actually carried a weighting signal stays recorded on its own, in the
+    recommendation context's ``random_bypass``/``balanced_neutrality`` flags
+    and in the per-candidate weights.
+
+    Args:
+        resolved_mode: The control path that produced the selection.
+        selection_bandwidth: The active reading bandwidth for the roll.
+
+    Returns:
+        A tuple of the recorded selection method and its reason codes.
+    """
+    if resolved_mode is SelectionMode.FORCED_LEGACY:
+        return FORCED_LEGACY_SELECTION_METHOD, [FORCED_LEGACY_REASON_CODE]
+    if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
+        return "random", ["pure_random"]
+    if selection_bandwidth in _EFFORT_WEIGHTED_BANDWIDTHS:
+        return "bandwidth", ["bandwidth_weighted"]
+    return "momentum", ["momentum_weighted"]
+
+
 class RollService:
     """Service for roll orchestration.
 
@@ -622,15 +664,10 @@ class RollService:
             candidate_weights = selected.weights
             weights_applied = selected.weights_applied
 
-        if resolved_mode is SelectionMode.FORCED_LEGACY:
-            recommendation_reason_codes = [FORCED_LEGACY_REASON_CODE]
-        elif resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
-            if selection_bandwidth in ("light", "deep"):
-                recommendation_reason_codes = ["bandwidth_weighted"]
-            else:
-                recommendation_reason_codes = ["momentum_weighted"]
-        else:
-            recommendation_reason_codes = ["pure_random"]
+        mode_selection_method, recommendation_reason_codes = derive_recorded_selection_method(
+            resolved_mode=resolved_mode,
+            selection_bandwidth=selection_bandwidth,
+        )
 
         selected_thread, unread_count, issue_number = bounded_rows[selected_index]
         bounded_candidate_ids = [
@@ -705,14 +742,13 @@ class RollService:
             control_mode=control_mode,
         )
 
-        if selection_method_override is not None:
-            selection_method = selection_method_override
-        elif resolved_mode is SelectionMode.FORCED_LEGACY:
-            selection_method = FORCED_LEGACY_SELECTION_METHOD
-        elif resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
-            selection_method = "bandwidth" if selection_bandwidth in ("light", "deep") else "momentum"
-        else:
-            selection_method = "random"
+        # The recorded method follows the active mode; only an explicit caller
+        # override (a manual pick, a skip, a quiz correction) replaces it.
+        selection_method = (
+            selection_method_override
+            if selection_method_override is not None
+            else mode_selection_method
+        )
 
         effort_estimate_str = (
             selected_effort_estimate.band

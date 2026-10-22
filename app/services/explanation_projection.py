@@ -13,6 +13,7 @@ from __future__ import annotations
 # fall back to a safe title-cased rendering of the code itself.
 EXPLANATION_MAP: dict[str, str] = {
     "momentum_weighted": "Weighted by your recent reading momentum",
+    "bandwidth_weighted": "Weighted by your preferred reading effort",
     "pure_random": "Pure random selection",
     "fallback_random": "Fallback to random selection",
 }

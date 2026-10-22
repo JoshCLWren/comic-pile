@@ -16,7 +16,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event
+from app.models import Event, RecommendationContext
 from comic_pile.recommendation_selection import (
     Bandwidth,
     Intent,
@@ -499,10 +499,16 @@ async def test_roll_balanced_body_stays_neutral(
 
 
 @pytest.mark.asyncio
-async def test_roll_light_body_records_unweighted_event(
+async def test_roll_light_body_records_bandwidth_event(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
-    """A light-bandwidth roll records an unweighted random roll event."""
+    """A light-bandwidth roll records the effort-weighted control path.
+
+    The recorded method names the active control path instead of the
+    weighting signal of one draw, so a light-bandwidth reader always sees
+    the same label. This draw carried no weighting signal at all and still
+    records the bandwidth path rather than flipping to "random" (#3762).
+    """
     _ = sample_data
     response = await auth_client.post("/api/roll/", json={"bandwidth": "light"})
     assert response.status_code == 200
@@ -511,7 +517,15 @@ async def test_roll_light_body_records_unweighted_event(
         select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1)
     )
     roll_event = event_result.scalar_one()
-    assert roll_event.selection_method == "random"
+    assert roll_event.selection_method == "bandwidth"
+    assert roll_event.recommendation_reason_codes == ["bandwidth_weighted"]
+
+    # The draw itself stayed unweighted; only the recorded label changed.
+    context_result = await async_db.execute(
+        select(RecommendationContext).where(RecommendationContext.event_id == roll_event.id)
+    )
+    roll_context = context_result.scalar_one()
+    assert roll_context.random_bypass is True
 
 
 @pytest.mark.asyncio
