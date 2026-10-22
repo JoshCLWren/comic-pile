@@ -827,3 +827,29 @@ def test_factory_parser_runtime_uses_application_python() -> None:
         and step.get('with', {}).get('python-version') == '3.14'
         for step in action['runs']['steps']
     )
+
+
+@pytest.mark.parametrize("suffix", ["js", "jsx", "ts", "tsx", "mjs", "cjs", "css", "scss"])
+def test_new_comment_only_source_is_not_delivery(suffix: str) -> None:
+    """A new file containing only ignored comments has no implementation."""
+    path = f"frontend/src/new_feature.{suffix}"
+    assert not delivery.pr_delivers_implementation(
+        "Implement new behavior", [path], patch(path, [], ["/* documentation only */"])
+    )[0]
+
+
+def test_sql_operator_boundary_repair_is_delivery() -> None:
+    """Joining separate operators repairs syntax rather than formatting it."""
+    path = "app/query.sql"
+    assert delivery.pr_delivers_implementation(
+        "Repair SQL concatenation", [path], patch(
+            path, ["SELECT left_value | | right_value FROM records;"],
+            ["SELECT left_value || right_value FROM records;"],
+        )
+    )[0]
+    assert not delivery.pr_delivers_implementation(
+        "Repair SQL concatenation", [path], patch(
+            path, ["SELECT left_value||right_value FROM records;"],
+            ["SELECT left_value || right_value FROM records;"],
+        )
+    )[0]

@@ -196,6 +196,9 @@ def _syntax_node(node: Node, source: bytes) -> object:
     if node.type == "comment" or not node.is_named and node.type in {";", "'", '\"'}:
         return None
     if not node.children:
+        # Empty grammar roots and roots whose comments are filtered are equal.
+        if node.parent is None:
+            return (node.type, [])
         return (node.type, source[node.start_byte:node.end_byte].decode())
     children: list[object] = []
     for index, child in enumerate(node.children):
@@ -265,7 +268,8 @@ def _code_tokens(source: str, path: str) -> str:
         comments += r"|<!--.*?-->"
     pattern = re.compile(
         r"(?P<string>'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`)"
-        + r"|(?P<comment>" + comments + r")|(?P<space>\s+)|(?P<code>[\w$]+|.)",
+        + r"|(?P<comment>" + comments + r")|(?P<space>\s+)"
+        + r"|(?P<code>[\w$]+|(?:(?!/\*|//|--)[+*/<>=~!@#%^&|?:-])+|.)",
         re.DOTALL,
     )
     if suffix in {".yml", ".yaml"} or name in {"makefile", "gnumakefile"}:
