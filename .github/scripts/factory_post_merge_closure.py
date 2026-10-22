@@ -42,6 +42,8 @@ import unittest
 from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 
+import factory_implementation_delivery as implementation_delivery
+
 _eligibility_dir = Path(__file__).resolve().parent
 if not (_eligibility_dir / 'factory_eligibility.py').is_file():
     _eligibility_dir = Path(__file__).resolve().parents[2] / 'scripts'
@@ -503,11 +505,13 @@ def _pr_info(pr_number: int) -> dict[str, str]:
         "--repo",
         _repo_slug(),
         "--json",
-        "headRefName,body,state",
+        "headRefName,headRefOid,mergeCommit,body,state",
     )
     payload = json.loads(raw)
     return {
         "branch": str(payload.get("headRefName") or ""),
+        "head": str(payload.get("headRefOid") or ""),
+        "merge": str((payload.get("mergeCommit") or {}).get("oid") or ""),
         "body": str(payload.get("body") or ""),
         "state": str(payload.get("state") or ""),
     }
@@ -644,6 +648,20 @@ def _close_issue(issue_number: int) -> None:
         check=True,
     )
 
+
+
+def _closed_by_pr(issue_number: int, info: Mapping[str, str]) -> bool:
+    """Only repair keyword closure caused by this PR, never later/manual closure."""
+    events = json.loads(_run_gh(
+        "api", "--paginate", "--slurp",
+        f"repos/{_repo_slug()}/issues/{issue_number}/events",
+    ))
+    transitions = [event for page in events for event in page
+                   if event.get("event") in {"closed", "reopened"}]
+    if not transitions or transitions[-1].get("event") != "closed":
+        return False
+    commits = {value for key in ("head", "merge") if (value := info.get(key))}
+    return transitions[-1].get("commit_id") in commits
 
 def _native_open_blockers(issue_number: int) -> list[int]:
     """Return open issues GitHub records as blocking one issue natively.
@@ -817,11 +835,9 @@ def close_merged_pr_issue(
         One of ``closed``, ``already-closed``, ``no-linked-issue``,
         ``protected-issue``, ``successor-open``, ``active-work``,
         ``manual-only-issue``, ``acceptance-parent-incomplete``,
-        ``acceptance-parent-requires-verdict``, ``open-dependency``, or
-        ``dry-run:<action>``. A blocked dependency that is readable appends
-        the exact open issue numbers, for example
-        ``open-dependency: #4008, #4016``; unreadable dependency state keeps
-        the bare ``open-dependency`` token.
+        ``acceptance-parent-requires-verdict``, ``not-merged``,
+        ``not-delivered:<reason>``, ``delivery-unverified:<reason>``,
+        ``open-dependency`` or ``open-dependency: #N``, or ``dry-run:<action>``.
     """
     info = _pr_info(pr_number)
     issue_number = linked_issue(info["branch"], info["body"])
@@ -830,9 +846,9 @@ def close_merged_pr_issue(
     if issue_number in PROTECTED_ISSUES:
         return "protected-issue"
 
+    if info["state"] != "MERGED":
+        return "not-merged"
     issue = _issue_view(issue_number)
-    if str(issue["state"]) != "OPEN":
-        return "already-closed"
 
     labels = list(issue["labels"])
     issue_body = str(issue.get("body") or "")
@@ -869,6 +885,33 @@ def close_merged_pr_issue(
     if _issue_has_open_successor_pr(issue_number, pr_number):
         return "successor-open"
 
+    try:
+        if implementation_delivery.is_implementation_issue(issue_body):
+            paths, patch = implementation_delivery.complete_pr_diff(
+                pr_number, info.get("head", ""), _repo_slug(), lambda args: _run_gh(*args)
+            )
+            delivered, reason = implementation_delivery.pr_delivers_implementation(
+                issue_body, paths, patch
+            )
+        else:
+            delivered, reason = True, "explicit non-implementation contract"
+    except (RuntimeError, ValueError, KeyError, TypeError) as exc:
+        return f"delivery-unverified:{exc}"
+    if not delivered:
+        if str(issue["state"]) == "CLOSED" and not dry_run and _closed_by_pr(issue_number, info):
+            # Repair GitHub keyword auto-closure of known non-delivering PRs.
+            pending = [label for label in labels
+                       if label not in STAGE_LABELS and not OWNER_RE.fullmatch(label)
+                       and not label.startswith("ralph-status:")]
+            pending.extend(["ralph-status:pending", "factory:unowned"])
+            _replace_labels(issue_number, pending)
+            _run_gh("issue", "reopen", str(issue_number), "--repo", _repo_slug())
+            _comment_issue(
+                issue_number, f"PR #{pr_number} did not deliver implementation: {reason}"
+            )
+        return f"not-delivered:{reason}"
+    if str(issue["state"]) != "OPEN":
+        return "already-closed"
     if dry_run:
         return f"dry-run:replace-labels-with{target_labels(labels)}+close"
     _replace_labels(issue_number, target_labels(labels))
@@ -1232,7 +1275,13 @@ This issue is a product contract and acceptance parent.
                     "state": "MERGED",
                 },
             ):
-                with patch.object(mod, "_issue_has_open_successor_pr", return_value=False):
+                with patch.object(
+                    mod, "_issue_has_open_successor_pr", return_value=False
+                ), patch.object(
+                    implementation_delivery, "complete_pr_diff",
+                    return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                  "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                ), patch.object(mod, "_repo_slug", return_value="owner/repo"):
                     with patch.object(mod, "_native_open_blockers", return_value=[]):
                         with patch.object(mod.eligibility, "parse_declared_dependencies", return_value=set()):
                             result = close_merged_pr_issue(2150, dry_run=True)
