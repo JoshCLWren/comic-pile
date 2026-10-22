@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRef } from 'react'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
@@ -220,6 +220,90 @@ describe('IssueToggleList partial issue load (#3764)', () => {
     expect(screen.getByTestId('issue-action-error')).toHaveTextContent('Issue number already exists')
     expect(mockedIssuesApi.create).toHaveBeenCalledTimes(1)
     expect(mockedIssuesApi.reorder).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
+  })
+
+  it('keeps saving enabled after a failed change when the resync is complete', async () => {
+    // Regression for #4030: a complete resync leaves the base list fresh, so
+    // clearing the loaded flag used to leave every later Save blocked with no
+    // reload path in the deferred editor.
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockedIssuesApi.list.mockResolvedValue(
+      buildListResponse(FULL_ISSUES, FULL_ISSUES.length),
+    )
+
+    const ref = renderDeferredToggleList()
+    expect(await screen.findByTestId('issue-pill-3')).toBeInTheDocument()
+
+    // The toggle fails, but the follow-up resync returns the whole list.
+    mockedIssuesApi.markRead.mockRejectedValueOnce(new Error('Issue update failed'))
+    fireEvent.click(screen.getByTestId('issue-toggle-1'))
+
+    await act(async () => {
+      await expect(ref.current?.flush()).rejects.toThrow(/issue update failed/i)
+    })
+
+    // The failure is reported and the list stays usable, with no reload
+    // demanded because the resync was complete.
+    expect(screen.getByTestId('issue-action-error')).toHaveTextContent('Issue update failed')
+    expect(screen.queryByTestId('issue-reload-required')).not.toBeInTheDocument()
+
+    // A later Save is not refused by the load guard.
+    mockedIssuesApi.create.mockResolvedValue(
+      buildListResponse([buildIssue(4)], FULL_ISSUES.length + 1),
+    )
+    mockedIssuesApi.list.mockResolvedValue(
+      buildListResponse([...FULL_ISSUES, buildIssue(4)], FULL_ISSUES.length + 1),
+    )
+    fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '4' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    await act(async () => {
+      await ref.current?.flush()
+    })
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4')
+    errorSpy.mockRestore()
+  })
+
+  it('shows a reload path when the post-failure resync fails', async () => {
+    // Regression for #4030: an untrustworthy base list must block saving, but
+    // the reader needs a visible way to reload instead of closing the dialog
+    // and losing every queued edit.
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockedIssuesApi.list.mockResolvedValueOnce(
+      buildListResponse(FULL_ISSUES, FULL_ISSUES.length),
+    )
+
+    const ref = renderDeferredToggleList()
+    expect(await screen.findByTestId('issue-pill-3')).toBeInTheDocument()
+
+    mockedIssuesApi.markRead.mockRejectedValueOnce(new Error('Issue update failed'))
+    mockedIssuesApi.list.mockRejectedValue(new Error('list failed'))
+    fireEvent.click(screen.getByTestId('issue-toggle-1'))
+
+    await act(async () => {
+      await expect(ref.current?.flush()).rejects.toThrow(/issue update failed/i)
+    })
+
+    // Saving is blocked, but the reload path is visible next to the list.
+    expect(screen.getByTestId('issue-reload-required')).toBeInTheDocument()
+    await act(async () => {
+      await expect(ref.current?.flush()).rejects.toThrow(/not fully loaded/i)
+    })
+
+    // A complete reload removes the notice and restores saving.
+    mockedIssuesApi.list.mockReset()
+    mockedIssuesApi.list.mockResolvedValue(
+      buildListResponse(FULL_ISSUES, FULL_ISSUES.length),
+    )
+    fireEvent.click(screen.getByTestId('issue-reload-button'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('issue-reload-required')).not.toBeInTheDocument()
+    })
+    await act(async () => {
+      await ref.current?.flush()
+    })
     errorSpy.mockRestore()
   })
 })

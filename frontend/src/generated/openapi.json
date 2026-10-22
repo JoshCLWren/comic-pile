@@ -25990,7 +25990,7 @@
     },
     "/api/v1/issue-identity/cbl-sources/browse": {
       "get": {
-        "description": "Browse one catalog folder or search all CBLs by name and source path.\n\nWith a blank ``q`` the response describes the immediate contents of\n``folder``. With a non-blank ``q`` the search spans the entire shared\ncatalog, regardless of ``folder``, and ``scope`` is ``\"search\"``. ``total``\nis the truthful number of matches, so callers can page past 100 results.",
+        "description": "Browse one catalog folder or search all CBLs by name and source path.\n\nWith a blank ``q`` the response describes the immediate contents of\n``folder``. With a non-blank ``q`` the search spans the entire shared\ncatalog, regardless of ``folder``, and ``scope`` is ``\"search\"``. ``total``\nis the truthful number of matches, so callers can page past 100 results.\n\nArgs:\n    current_user: The authenticated user (injected by dependency).\n    db: The async database session (injected by dependency).\n    folder: The catalog folder path to browse. Empty string for root.\n    q: Optional search query for CBL name and source path.\n    page: Page number (1-indexed).\n    page_size: Number of results per page (1-100).\n\nReturns:\n    CBLCatalogBrowseResponse: The browse response containing entries and pagination info.",
         "operationId": "browse_cbl_source_catalog_api_v1_issue_identity_cbl_sources_browse_get",
         "parameters": [
           {
@@ -26187,7 +26187,7 @@
     },
     "/api/v1/issue-identity/cbl-sources/folders": {
       "get": {
-        "description": "List immediate subfolders of one shared CBL catalog folder.\n\nThe root folder is addressed with an empty ``folder`` value. A request for a\nfolder with no active CBLs or subfolders returns a stable 404 envelope; a\nmalformed path returns 400.",
+        "description": "List immediate subfolders of one shared CBL catalog folder.\n\nThe root folder is addressed with an empty ``folder`` value. A request for a\nfolder with no active CBLs or subfolders returns a stable 404 envelope; a\nmalformed path returns 400.\n\nArgs:\n    current_user: The authenticated user (injected by dependency).\n    db: The async database session (injected by dependency).\n    folder: The catalog folder path to list. Empty string for root.\n\nReturns:\n    CBLFolderListingResponse: The folder listing containing subfolders.",
         "operationId": "list_cbl_source_folders_api_v1_issue_identity_cbl_sources_folders_get",
         "parameters": [
           {

@@ -93,6 +93,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [isAdding, setIsAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  // Set when a failed change could not be followed by a complete resync, so
+  // the reader gets a visible reload path instead of a Save that stays blocked
+  // with no explanation (#4030).
+  const [isReloadRequired, setIsReloadRequired] = useState(false)
   const [reorderAnnouncement, setReorderAnnouncement] = useState('')
   const [toggling, setToggling] = useState<Set<number>>(new Set())
   const [deleting, setDeleting] = useState<Set<number>>(new Set())
@@ -310,8 +314,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             // secondary failure. Report the root cause to the reader and keep
             // both failures in the log, so the reason the save stopped is
             // never lost behind the resync error (#3764).
-            // Clear the loaded flag so a retried Save requires a complete reload.
+            //
+            // The base list can no longer be trusted after an incomplete or
+            // failed resync, so later saves stay blocked until a complete
+            // reload. Surface that reload path instead of clearing the flag
+            // silently: without it the reader would have to close the dialog
+            // and lose every queued edit (#4030).
             fullyLoadedRef.current = false
+            setIsReloadRequired(true)
             console.error(
               '[IssueToggleList] Mutation failed and the follow-up resync also failed:',
               { mutationError: err, resyncError: refreshErr },
@@ -321,9 +331,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               `${getApiErrorDetail(err)} (issue list resync failed: ${getApiErrorDetail(refreshErr)})`,
             )
           }
-          // Clear the loaded flag on any mutation failure so a retried Save
-          // requires a complete reload instead of operating on stale data.
-          fullyLoadedRef.current = false
+          // The resync returned the complete issue list, so the base list is
+          // fresh and the loaded flag must stay true. Clearing it here used to
+          // leave every later Save failing the load guard with no reload path
+          // in the deferred editor (#4030).
+          fullyLoadedRef.current = true
+          setIsReloadRequired(false)
           setActionError(getApiErrorDetail(err))
           throw err
         } finally {
@@ -434,6 +447,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       }
 
       fullyLoadedRef.current = true
+      setIsReloadRequired(false)
       baseIssuesRef.current = nextIssues
       syncOptimisticIssues(nextIssues, pendingMutationsRef.current)
       // A complete load supersedes an earlier "not fully loaded" refusal, so
@@ -634,6 +648,24 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
 
   return (
     <div className="space-y-2">
+      {isReloadRequired && (
+        <div className="space-y-2" data-testid="issue-reload-required">
+          <p className="text-xs text-[var(--theme-warning)]">
+            The issue list could not be reloaded after a failed change. Reload it before
+            saving again.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void loadIssues()
+            }}
+            className="min-h-[36px] md:min-h-[44px] rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+            data-testid="issue-reload-button"
+          >
+            Reload issues
+          </button>
+        </div>
+      )}
       <div className="flex justify-between items-center gap-2">
         <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
         <div className="flex items-center gap-2">

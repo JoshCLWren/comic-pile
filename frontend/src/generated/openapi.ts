@@ -2675,6 +2675,17 @@ export interface paths {
          *     ``folder``. With a non-blank ``q`` the search spans the entire shared
          *     catalog, regardless of ``folder``, and ``scope`` is ``"search"``. ``total``
          *     is the truthful number of matches, so callers can page past 100 results.
+         *
+         *     Args:
+         *         current_user: The authenticated user (injected by dependency).
+         *         db: The async database session (injected by dependency).
+         *         folder: The catalog folder path to browse. Empty string for root.
+         *         q: Optional search query for CBL name and source path.
+         *         page: Page number (1-indexed).
+         *         page_size: Number of results per page (1-100).
+         *
+         *     Returns:
+         *         CBLCatalogBrowseResponse: The browse response containing entries and pagination info.
          */
         get: operations["browse_cbl_source_catalog_api_v1_issue_identity_cbl_sources_browse_get"];
         put?: never;
@@ -2741,6 +2752,14 @@ export interface paths {
          *     The root folder is addressed with an empty ``folder`` value. A request for a
          *     folder with no active CBLs or subfolders returns a stable 404 envelope; a
          *     malformed path returns 400.
+         *
+         *     Args:
+         *         current_user: The authenticated user (injected by dependency).
+         *         db: The async database session (injected by dependency).
+         *         folder: The catalog folder path to list. Empty string for root.
+         *
+         *     Returns:
+         *         CBLFolderListingResponse: The folder listing containing subfolders.
          */
         get: operations["list_cbl_source_folders_api_v1_issue_identity_cbl_sources_folders_get"];
         put?: never;
