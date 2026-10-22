@@ -60,12 +60,28 @@ def requirements(body: str) -> list[str]:
 
 
 def digest(body: str) -> str:
-    """Return SHA-256 of the full issue body, including all revisions."""
+    """Return SHA-256 of the exact issue body.
+
+    Args:
+        body: Unmodified issue body.
+
+    Returns:
+        Hexadecimal SHA-256 digest.
+    """
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
 def marker(issue: int, head: str, body: str) -> str:
-    """Return a dedicated, whole-comment exact-head issue-revision marker."""
+    """Create a controller-only acceptance attestation.
+
+    Args:
+        issue: Linked issue number.
+        head: Full reviewed PR head SHA.
+        body: Exact issue revision.
+
+    Returns:
+        Standalone machine-readable acceptance marker.
+    """
     return (
         "<!-- comic-pile-factory-acceptance-v1:"
         f"issue-{issue}:head-{head}:digest-{digest(body)} -->"
@@ -89,7 +105,14 @@ def attested(controller_comments: Iterable[str], issue: int, head: str, body: st
 
 
 def report_from_text(review_text: str) -> Mapping[str, Any] | None:
-    """Read one structured acceptance report from the full reviewer log."""
+    """Extract a unique structured acceptance report without truncation.
+
+    Args:
+        review_text: Complete worker review log.
+
+    Returns:
+        Parsed report, or None if ambiguous or invalid.
+    """
     lines = [line[len(PREFIX):] for line in review_text.splitlines()
              if line.startswith(PREFIX)]
     if len(lines) != 1 or len(lines[0]) > 2000000:
@@ -102,7 +125,18 @@ def report_from_text(review_text: str) -> Mapping[str, Any] | None:
 
 
 def validate(report: Mapping[str, Any] | None, issue: int, head: str, body: str, changed_paths: Iterable[str]) -> list[str]:
-    """Return specific errors; zero errors authorizes an acceptance marker."""
+    """Verify exact issue revision and evidence for each criterion.
+
+    Args:
+        report: Independent reviewer report, if present.
+        issue: Canonical linked issue number.
+        head: Reviewed PR head SHA.
+        body: Fresh authoritative issue body.
+        changed_paths: Paths in the current PR diff.
+
+    Returns:
+        Validation errors, empty only for a complete report.
+    """
     if report is None:
         return ["missing or malformed FACTORY_ACCEPTANCE_V1 report"]
     if report.get("issue") != issue or report.get("head") != head:
@@ -144,7 +178,14 @@ def validate(report: Mapping[str, Any] | None, issue: int, head: str, body: str,
 
 
 def rubric(body: str) -> str:
-    """Render numbered acceptance requirements without dropping prose."""
+    """Number every extracted requirement for the reviewer.
+
+    Args:
+        body: Complete GitHub issue body.
+
+    Returns:
+        Numbered rubric with contextual source headings.
+    """
     return "\n".join(f"A{i}: {item}" for i, item in enumerate(requirements(body), 1))
 
 
