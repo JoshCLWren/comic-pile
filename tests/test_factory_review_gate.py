@@ -3154,3 +3154,22 @@ def test_declared_dependency_gate_resolves_issue_like_post_merge_closure(
         # The gate queried exactly the issue post-merge closure would deliver:
         # never a competing branch number when a closing reference exists.
         assert fetched == [expected]
+
+
+def test_declared_dependency_gate_blocks_open_4017_4016(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """CBL regression #4017/#4016: an open prerequisite refuses the merge."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/41-4017-kilo-auto",
+        body="Closes #4017.",
+        issue_bodies={4017: "Tighten the docstring contract.\nDepends on #4016"},
+        issue_states={4016: "open"},
+    )
+    result = module.declared_dependency_gate(4034)
+    assert result["decision"] == "retry"
+    assert "#4016" in result["reason"]
+    assert "declared dependencies still open" in result["reason"]

@@ -1669,6 +1669,36 @@ This issue is a product contract and acceptance parent.
              "['enhancement', 'factory', 'ralph-status:done']+close"],
         )
 
+    def test_open_declared_dependency_blocks_closure_4017_4016(self) -> None:
+        """CBL regression #4017/#4016: an open prerequisite refuses closure."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(
+                mod,
+                "_issue_view",
+                side_effect=[
+                    self._closure_issue(4017, body="Tighten the docstring contract.\nDepends on #4016"),
+                    self._closure_issue(4016, state="OPEN"),
+                ],
+            ) as mock_view:
+                with patch.object(
+                    mod,
+                    "_pr_info",
+                    return_value={
+                        "branch": "factory/41-4017-kilo-auto",
+                        "body": "Closes #4017.",
+                        "state": "MERGED",
+                    },
+                ):
+                    with patch.object(mod, "_native_open_blockers", return_value=[]):
+                        result = close_merged_pr_issue(4034, dry_run=True)
+        self.assertEqual(result, "open-dependency")
+        numbers = [call.args[0] for call in mock_view.call_args_list]
+        self.assertEqual(numbers, [4017, 4016])
+        mock_close.assert_not_called()
+
 
 def main() -> int:
     """Parse arguments and run closure, sweep, or self-test.
