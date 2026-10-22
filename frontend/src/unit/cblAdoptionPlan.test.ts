@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
+import {
+  applyCblAdoptionChoices,
+  buildCblSeriesGroups,
+  cblEntryCheckboxLabel,
+  cblSeriesGroupLabel,
+} from '../utils/cblAdoptionPlan'
 import type { CBLAdoptionPreview, CBLAdoptionPreviewEntry } from '../services/api-cbl-sources'
 
 function entry(overrides: Partial<CBLAdoptionPreviewEntry>): CBLAdoptionPreviewEntry {
@@ -9,6 +14,8 @@ function entry(overrides: Partial<CBLAdoptionPreviewEntry>): CBLAdoptionPreviewE
     series_name: 'Ultimate Spider-Man',
     issue_number: '1',
     series_group_id: 'group-1',
+    volume_year: null,
+    publication_year: null,
     adoption_class: 'existing',
     adoption_decision: 'included_existing',
     adopted: true,
@@ -221,4 +228,101 @@ it('lets an entry choice override a series exclude for an unresolved entry', () 
   )
   expect(reconsidered.entries[0]?.adoption_decision).toBe('unresolved')
   expect(reconsidered.summary.unresolved_count).toBe(1)
+})
+
+describe('buildCblSeriesGroups', () => {
+  it('groups the source by Comic Vine volume and keeps source order', () => {
+    const groups = buildCblSeriesGroups({
+      ...preview,
+      entries: [
+        entry({ cbl_position: 1, cbl_entry_id: 101, series_group_id: 'volume-a' }),
+        entry({
+          cbl_position: 2,
+          cbl_entry_id: 102,
+          series_group_id: 'volume-b',
+          series_name: 'Ultimate Spider-Man',
+          volume_year: 2019,
+        }),
+        entry({
+          cbl_position: 3,
+          cbl_entry_id: 103,
+          series_group_id: 'volume-a',
+          issue_number: '3',
+        }),
+      ],
+    })
+
+    expect(groups.map((group) => group.id)).toEqual(['volume-a', 'volume-b'])
+    expect(groups[0]?.entries).toHaveLength(2)
+    expect(groups[1]?.entries).toHaveLength(1)
+    expect(groups[0]?.label).toBe('Ultimate Spider-Man')
+    expect(groups[1]?.label).toBe('Ultimate Spider-Man (2019)')
+  })
+
+  it('reports a fully selected volume as checked', () => {
+    const groups = buildCblSeriesGroups(preview)
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.state).toBe('checked')
+    expect(groups[0]?.selectedCount).toBe(2)
+    expect(groups[0]?.selectableEntries).toHaveLength(2)
+  })
+
+  it('reports a partly selected volume as indeterminate', () => {
+    const next = applyCblAdoptionChoices(preview, {}, { '102': false })
+    const groups = buildCblSeriesGroups(next)
+    expect(groups[0]?.state).toBe('indeterminate')
+    expect(groups[0]?.selectedCount).toBe(1)
+  })
+
+  it('reports a fully excluded volume as unchecked', () => {
+    const next = applyCblAdoptionChoices(preview, { 'group-1': false }, {})
+    const groups = buildCblSeriesGroups(next)
+    expect(groups[0]?.state).toBe('unchecked')
+    expect(groups[0]?.selectedCount).toBe(0)
+  })
+
+  it('keeps a volume whose issues all need resolution out of the counts', () => {
+    const unresolvedPreview: CBLAdoptionPreview = {
+      ...preview,
+      entries: [
+        entry({
+          adoption_class: 'ambiguous_unresolved',
+          adoption_decision: 'unresolved',
+          adopted: false,
+          resolved_issue_id: null,
+          canonical_issue_id: null,
+        }),
+      ],
+    }
+    const groups = buildCblSeriesGroups(unresolvedPreview)
+    expect(groups[0]?.selectableEntries).toHaveLength(0)
+    expect(groups[0]?.selectedCount).toBe(0)
+    expect(groups[0]?.state).toBe('checked')
+  })
+
+  it('labels issue checkboxes with the volume so same-named runs stay distinct', () => {
+    const groups = buildCblSeriesGroups({
+      ...preview,
+      entries: [
+        entry({ cbl_position: 1, cbl_entry_id: 101, series_group_id: 'volume-a', volume_year: 2012 }),
+        entry({
+          cbl_position: 2,
+          cbl_entry_id: 102,
+          series_group_id: 'volume-b',
+          volume_year: 2019,
+        }),
+      ],
+    })
+    expect(cblEntryCheckboxLabel(groups[0]!, groups[0]!.entries[0]!)).toBe(
+      'Include Ultimate Spider-Man (2012) #1',
+    )
+    expect(cblEntryCheckboxLabel(groups[1]!, groups[1]!.entries[0]!)).toBe(
+      'Include Ultimate Spider-Man (2019) #1',
+    )
+  })
+
+  it('falls back to the bare series name when no year is known', () => {
+    expect(cblSeriesGroupLabel('Saga', null)).toBe('Saga')
+    expect(cblSeriesGroupLabel('Saga', 2012)).toBe('Saga (2012)')
+  })
 })

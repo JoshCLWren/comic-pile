@@ -70,6 +70,7 @@ async def _seed_source_list(
     issues: list[Issue],
     issues_by_position: dict[int, str] | None = None,
     series_names: dict[int, str] | None = None,
+    volume_years: dict[int, int] | None = None,
     source_path: str = "Ultimate.cbl",
     omit_identity_at: set[int] | None = None,
 ) -> int:
@@ -117,6 +118,7 @@ async def _seed_source_list(
                 position=index,
                 series_name=(series_names or {}).get(index, "Series"),
                 issue_number=(issues_by_position or {}).get(index, issue.issue_number),
+                volume_year=(volume_years or {}).get(index),
                 external_issue_identity_id=identity.id,
             )
         )
@@ -139,6 +141,55 @@ async def _make_group(
         async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue_id))
     await async_db.flush()
     return group
+
+
+def test_cbl_series_group_id_separates_same_named_volumes() -> None:
+    """Two volumes that share a series name never collapse into one group.
+
+    The checkbox list groups by Comic Vine volume (#4014), so the fallback
+    key has to keep same-named runs apart and prefer the provider identity
+    when the source carries one.
+    """
+    first_run = cbl_series_group_id({"series_name": "Saga", "volume_year": 2012})
+    second_run = cbl_series_group_id({"series_name": "Saga", "volume_year": 2019})
+    assert first_run != second_run
+
+    comicvine_volume = cbl_series_group_id(
+        {
+            "series_name": "Saga",
+            "series_provider": "comicvine",
+            "series_external_id": "4050-9876",
+            "volume_year": 2012,
+        }
+    )
+    assert comicvine_volume == "provider-series:comicvine:4050-9876"
+    assert comicvine_volume != first_run
+
+
+@pytest.mark.asyncio
+async def test_reconcile_reports_volume_year_for_series_grouping(
+    async_db: AsyncSession,
+) -> None:
+    """The report carries the volume year the browser groups same-named runs by."""
+    user = await get_or_create_user_async(async_db)
+    issues = [
+        await _make_issue(async_db, user_id=user.id, issue_number="1", position=1),
+        await _make_issue(async_db, user_id=user.id, issue_number="2", position=1),
+    ]
+    source_list_id = await _seed_source_list(
+        async_db,
+        issues=issues,
+        series_names={1: "Saga", 2: "Saga"},
+        volume_years={1: 2012, 2: 2019},
+    )
+
+    report = await reconcile_cbl_source_list(async_db, user_id=user.id, list_id=source_list_id)
+
+    assert [entry["volume_year"] for entry in report.entries] == [2012, 2019]
+
+    _, plan = await preview_cbl_adoption(async_db, user_id=user.id, list_id=source_list_id)
+    group_ids = [entry["series_group_id"] for entry in plan.entries]
+    assert group_ids[0] != group_ids[1]
 
 
 @pytest.mark.asyncio

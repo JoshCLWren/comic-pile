@@ -3,6 +3,7 @@ import { FormEvent, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Modal from '../components/Modal'
+import TriStateCheckbox from '../components/TriStateCheckbox'
 import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
@@ -12,7 +13,12 @@ import {
   type CBLAdoptionPreviewEntry,
   type CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
-import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
+import {
+  applyCblAdoptionChoices,
+  buildCblSeriesGroups,
+  cblEntryCheckboxLabel,
+  type CblSeriesGroup,
+} from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
 import { isObject, isString } from '../utils/runtimeChecks'
@@ -35,7 +41,7 @@ function statusLabel(entry: CBLAdoptionPreviewEntry): string {
     case 'excluded':
       return entry.adoption_class === 'ambiguous_unresolved' ? 'Skipped' : 'Excluded'
     case 'unresolved':
-      return 'Needs identity resolution'
+      return 'Needs resolution before commit'
   }
 }
 
@@ -57,19 +63,15 @@ function errorMessage(error: Error, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
-function choiceButtonClass(selected: boolean, muted = false): string {
-  if (selected) {
-    return (
-      'min-h-9 rounded-lg border border-[var(--theme-continuity-accent)] ' +
-      'bg-[var(--theme-continuity-accent)]/15 px-2 text-xs font-bold ' +
-      'text-[var(--theme-text-primary)] disabled:opacity-50'
-    )
-  }
-  return (
-    `min-h-9 rounded-lg border border-[var(--theme-border)] px-2 text-xs ` +
-    `${muted ? 'text-[var(--theme-text-muted)]' : 'text-[var(--theme-text-primary)]'} ` +
-    'disabled:opacity-50'
-  )
+/**
+ * Describe how many of a volume's issues are currently included.
+ *
+ * @param group - The Comic Vine volume group shown in the checklist.
+ * @returns A short reader-facing count.
+ */
+function groupSelectionLabel(group: CblSeriesGroup): string {
+  if (group.selectableEntries.length === 0) return 'Needs resolution'
+  return `${group.selectedCount} of ${group.selectableEntries.length} selected`
 }
 
 async function recoverAdoptedPlan(source: CBLSourceListDiscoveryItem) {
@@ -103,6 +105,7 @@ export default function CblBrowserPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [seriesDecisions, setSeriesDecisions] = useState<Record<string, boolean>>({})
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
 
@@ -176,6 +179,7 @@ export default function CblBrowserPage() {
   const isSearching = sourcesQuery.isFetching
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
+  const seriesGroups = useMemo(() => (preview ? buildCblSeriesGroups(preview) : []), [preview])
   const listError = previewQuery.error ?? sourcesQuery.error
   const commitError = staleReview
     ? 'This source changed after you reviewed it. Refresh the preview before adding it.'
@@ -198,6 +202,7 @@ export default function CblBrowserPage() {
     setConfirmOpen(false)
     setSeriesDecisions({})
     setEntryDecisions({})
+    setExpandedGroups({})
     setStaleReview(false)
     setAmbiguousCommit(false)
     commitMutation.reset()
@@ -211,6 +216,7 @@ export default function CblBrowserPage() {
     setConfirmOpen(false)
     setSeriesDecisions({})
     setEntryDecisions({})
+    setExpandedGroups({})
     setStaleReview(false)
     setAmbiguousCommit(false)
     commitMutation.reset()
@@ -227,9 +233,23 @@ export default function CblBrowserPage() {
     setAmbiguousCommit(false)
   }
 
-  const chooseSeries = (seriesId: string, include: boolean) => {
+  /**
+   * Include or exclude every issue of one Comic Vine volume.
+   *
+   * The volume decision replaces the per-issue overrides of that volume, so
+   * re-checking a volume restores the issues the reader had unchecked and the
+   * volume checkbox returns to its tri-state semantics.
+   */
+  const chooseSeriesGroup = (group: CblSeriesGroup, include: boolean) => {
     if (isCommitting) return
-    setSeriesDecisions((current) => ({ ...current, [seriesId]: include }))
+    setSeriesDecisions((current) => ({ ...current, [group.id]: include }))
+    setEntryDecisions((current) => {
+      const next = { ...current }
+      for (const entry of group.entries) {
+        delete next[String(entry.cbl_entry_id)]
+      }
+      return next
+    })
     commitMutation.reset()
     setAmbiguousCommit(false)
   }
@@ -242,16 +262,10 @@ export default function CblBrowserPage() {
     setAmbiguousCommit(false)
   }
 
-  const seriesGroups = preview
-    ? Array.from(
-        new Map(
-          preview.entries.map((entry) => [
-            entry.series_group_id,
-            { id: entry.series_group_id, name: entry.series_name },
-          ]),
-        ).values(),
-      )
-    : []
+  const toggleGroup = (groupId: string) => {
+    if (isCommitting) return
+    setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }))
+  }
 
   const summary = preview?.summary
   const needsAttentionCount =
@@ -466,7 +480,7 @@ export default function CblBrowserPage() {
           {needsAttentionCount > 0 && (
             <p className="text-xs text-amber-300">
               {summary?.unresolved_count
-                ? 'Some entries need identity resolution before this source can be added. '
+                ? 'Some entries need resolution before this source can be added. '
                 : ''}
               {summary?.awaiting_opt_in_count
                 ? 'Choose whether to include each missing comic below before adding. '
@@ -518,13 +532,13 @@ export default function CblBrowserPage() {
 
           {customizing && preview && (
             <div className="space-y-3 border-t border-[var(--theme-border)] pt-4">
-              <section className="space-y-2" aria-labelledby="cbl-series-decisions-heading">
+              <section className="space-y-2" aria-labelledby="cbl-checklist-heading">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3
-                    id="cbl-series-decisions-heading"
-                    className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-primary)]"
+                    id="cbl-checklist-heading"
+                    className="text-sm font-bold text-[var(--theme-text-primary)]"
                   >
-                    Series choices
+                    Included issues
                   </h3>
                   <div className="flex gap-2">
                     <button
@@ -545,102 +559,109 @@ export default function CblBrowserPage() {
                     </button>
                   </div>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {seriesGroups.map((series) => {
-                    const included = seriesDecisions[series.id] !== false
+                <ul
+                  className="max-h-[28rem] space-y-2 overflow-y-auto pr-1"
+                  aria-label="Source checklist"
+                >
+                  {seriesGroups.map((group) => {
+                    const expanded = Boolean(expandedGroups[group.id])
                     return (
-                      <div
-                        key={series.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-[var(--theme-border)] p-2"
+                      <li
+                        key={group.id}
+                        className="rounded-lg border border-[var(--theme-border)]"
                       >
-                        <span className="min-w-0 truncate text-xs font-bold text-[var(--theme-text-primary)]">
-                          {series.name}
-                        </span>
-                        <div
-                          className="flex shrink-0 gap-1"
-                          role="group"
-                          aria-label={`${series.name} series choice`}
-                        >
+                        <div className="flex flex-wrap items-center gap-2 p-2">
+                          <TriStateCheckbox
+                            checked={group.state === 'checked'}
+                            indeterminate={group.state === 'indeterminate'}
+                            disabled={isCommitting}
+                            label={`Include ${group.label} series`}
+                            onChange={(include) => chooseSeriesGroup(group, include)}
+                          />
+                          <span className="min-w-0 flex-1 truncate text-sm font-bold text-[var(--theme-text-primary)]">
+                            {group.label}
+                          </span>
+                          <span className="shrink-0 text-xs text-[var(--theme-text-muted)]">
+                            {groupSelectionLabel(group)}
+                          </span>
                           <button
                             type="button"
                             disabled={isCommitting}
-                            aria-pressed={included}
-                            onClick={() => chooseSeries(series.id, true)}
-                            className={choiceButtonClass(included)}
+                            aria-expanded={expanded}
+                            aria-label={`${expanded ? 'Hide' : 'Show'} issues for ${group.label}`}
+                            onClick={() => toggleGroup(group.id)}
+                            className="min-h-9 shrink-0 rounded-lg border border-[var(--theme-border)] px-2 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50"
                           >
-                            Include
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isCommitting}
-                            aria-pressed={!included}
-                            onClick={() => chooseSeries(series.id, false)}
-                            className={choiceButtonClass(!included, true)}
-                          >
-                            Exclude
+                            {expanded ? 'Hide issues' : 'Show issues'}
                           </button>
                         </div>
-                      </div>
+                        {expanded && (
+                          <ul className="space-y-1 border-t border-[var(--theme-border)] p-2">
+                            {group.entries.map((entry) => {
+                              const comicName = `${entry.series_name} #${entry.issue_number}`
+                              const resolutionReason = identityResolutionReason(entry)
+                              return (
+                                <li
+                                  key={entry.cbl_entry_id}
+                                  className="flex gap-3 rounded-lg border border-[var(--theme-border)] px-3 py-2 text-sm"
+                                >
+                                  <span className="w-7 shrink-0 text-right font-mono text-xs text-[var(--theme-text-dim)]">
+                                    {entry.cbl_position}
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate font-bold text-[var(--theme-text-primary)]">
+                                      {comicName}
+                                    </span>
+                                    <span className={`block text-xs ${statusClass(entry)}`}>
+                                      {statusLabel(entry)}
+                                    </span>
+                                    {resolutionReason && (
+                                      <span className="mt-1 block text-xs text-amber-200">
+                                        {resolutionReason}
+                                      </span>
+                                    )}
+                                  </span>
+                                  {entry.adoption_class !== 'ambiguous_unresolved' && (
+                                    <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--theme-text-primary)]">
+                                      <input
+                                        type="checkbox"
+                                        checked={entry.adopted}
+                                        disabled={isCommitting}
+                                        aria-label={cblEntryCheckboxLabel(group, entry)}
+                                        onChange={(event) =>
+                                          chooseEntry(entry, event.target.checked)
+                                        }
+                                      />
+                                      Include
+                                    </label>
+                                  )}
+                                  {entry.adoption_class === 'ambiguous_unresolved' && (
+                                    <button
+                                      type="button"
+                                      disabled={isCommitting}
+                                      onClick={() =>
+                                        chooseEntry(entry, entry.adoption_decision === 'excluded')
+                                      }
+                                      className="min-h-9 shrink-0 rounded-lg border border-[var(--theme-border)] px-2 text-xs font-bold text-[var(--theme-text-muted)] disabled:opacity-50"
+                                    >
+                                      {entry.adoption_decision === 'excluded' ? 'Unskip' : 'Skip'}
+                                    </button>
+                                  )}
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
+                      </li>
                     )
                   })}
-                </div>
+                </ul>
                 <p className="text-xs text-[var(--theme-text-dim)]">
-                  Exclude a whole series, or uncheck Include on one owned issue, to leave it out of
-                  this Reading Plan. Comics stay in ComicPile.
+                  Every issue starts checked. Uncheck a volume to leave all of its issues out, or
+                  show its issues to change them one at a time; a partly selected volume shows the
+                  mixed state. Comics stay in ComicPile.
                 </p>
               </section>
-
-              <ol className="max-h-[28rem] space-y-1 overflow-y-auto pr-1" aria-label="Reconciled source order">
-                {preview.entries.map((entry) => {
-                  const comicName = `${entry.series_name} #${entry.issue_number}`
-                  const resolutionReason = identityResolutionReason(entry)
-                  return (
-                    <li
-                      key={entry.cbl_entry_id}
-                      className="flex gap-3 rounded-lg border border-[var(--theme-border)] px-3 py-2 text-sm"
-                    >
-                      <span className="w-7 shrink-0 text-right font-mono text-xs text-[var(--theme-text-dim)]">
-                        {entry.cbl_position}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-bold text-[var(--theme-text-primary)]">
-                          {comicName}
-                        </span>
-                        <span className={`block text-xs ${statusClass(entry)}`}>
-                          {statusLabel(entry)}
-                        </span>
-                        {resolutionReason && (
-                          <span className="mt-1 block text-xs text-amber-200">{resolutionReason}</span>
-                        )}
-                      </span>
-                      {entry.adoption_class !== 'ambiguous_unresolved' && (
-                        <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--theme-text-primary)]">
-                          <input
-                            type="checkbox"
-                            checked={entry.adopted}
-                            disabled={isCommitting}
-                            aria-label={`Include ${comicName}`}
-                            onChange={(event) => chooseEntry(entry, event.target.checked)}
-                          />
-                          Include
-                        </label>
-                      )}
-                      {entry.adoption_class === 'ambiguous_unresolved' && (
-                        <button
-                          type="button"
-                          disabled={isCommitting}
-                          onClick={() =>
-                            chooseEntry(entry, entry.adoption_decision === 'excluded')
-                          }
-                          className="min-h-9 shrink-0 rounded-lg border border-[var(--theme-border)] px-2 text-xs font-bold text-[var(--theme-text-muted)] disabled:opacity-50"
-                        >
-                          {entry.adoption_decision === 'excluded' ? 'Unskip' : 'Skip'}
-                        </button>
-                      )}
-                    </li>
-                  )
-                })}
-              </ol>
             </div>
           )}
         </section>

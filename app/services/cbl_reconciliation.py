@@ -96,9 +96,11 @@ class CBLAdoptionPlan:
 def cbl_series_group_id(entry: dict[str, object]) -> str:
     """Return a deterministic series/run grouping key for a CBL entry.
 
-    ComicVine series identity is preferred. Legacy CBL entries without that
-    identity use normalized source name and volume/publication year, so the
-    representation remains usable for user-provided CBL input.
+    ComicVine volume identity is preferred, so two volumes that share a series
+    name stay separate groups. Legacy CBL entries without that identity use
+    normalized source name and volume/publication year, so the representation
+    remains usable for user-provided CBL input and same-name volumes with
+    different years never collapse into one group.
     """
     external_series_id = entry.get("series_external_id") or entry.get("comicvine_series_id")
     if external_series_id is not None:
@@ -224,7 +226,12 @@ async def preview_cbl_adoption(
     series_decisions: dict[str, bool] | None = None,
     entry_decisions: dict[str, bool] | None = None,
 ) -> tuple[CBLReconciliationReport, CBLAdoptionPlan]:
-    """Return reconciliation and a dry-run adoption plan without mutating rows."""
+    """Return reconciliation and a dry-run adoption plan without mutating rows.
+
+    Every source series and issue starts selected, so a first add needs no
+    per-entry decision. Durable save/reopen of reader choices is owned by the
+    Option E upsert ticket (#4022), not by this read-only preview.
+    """
     report = await reconcile_cbl_source_list(db, user_id=user_id, list_id=list_id)
     entries = tuple(
         {**entry, "series_group_id": cbl_series_group_id(entry)} for entry in report.entries
@@ -412,6 +419,8 @@ async def reconcile_cbl_source_list(
                 "external_issue_identity_id": norm.get("external_issue_identity_id"),
                 "external_series_identity_id": norm.get("external_series_identity_id"),
                 "cbl_entry_id": norm.get("cbl_entry_id"),
+                "volume_year": norm.get("volume_year"),
+                "publication_year": norm.get("publication_year"),
                 "resolved_issue_id": canon.resolved_issue_id,
                 "canonical_issue_id": canon.canonical_issue_id,
                 "resolution_status": canon.resolution_status,
