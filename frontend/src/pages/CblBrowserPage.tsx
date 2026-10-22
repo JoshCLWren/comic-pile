@@ -162,7 +162,7 @@ export default function CblBrowserPage() {
       cblSourcesApi.commitNew(source.id, preview, {
         series_decisions: seriesDecisions,
         entry_decisions: entryDecisions,
-        overlap_decisions: overlapChoicePayload(graphPreviewRef.current, overlapChoices),
+        overlap_decisions: overlapChoicePayload(graphQuery.data ?? null, overlapChoices),
       }),
     onSuccess: async (committed) => {
       setAmbiguousCommit(false)
@@ -237,9 +237,10 @@ export default function CblBrowserPage() {
     retry: false,
   })
   const graphServerPreview = graphQuery.data ?? null
-  useEffect(() => {
-    graphPreviewRef.current = graphQuery.data ?? null
-  }, [graphQuery.data])
+  // Update the ref synchronously during render so the next queryFn sees the latest preview.
+  if (graphQuery.data) {
+    graphPreviewRef.current = graphQuery.data
+  }
 
   /**
    * Keep local answers aligned with the server graph: honour decisions the

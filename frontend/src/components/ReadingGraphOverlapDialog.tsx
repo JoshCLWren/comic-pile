@@ -116,6 +116,9 @@ export default function ReadingGraphOverlapDialog({
   const wasOpen = useRef(false)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
 
+  const overlaps = preview.overlaps
+  const clampedStep = Math.min(step, Math.max(overlaps.length - 1, 0))
+
   // Reset the questionnaire position each time the dialog opens. The conflict
   // list itself stays the live server preview so each answer shows the effects
   // computed from the reader's previous answers.
@@ -124,8 +127,12 @@ export default function ReadingGraphOverlapDialog({
     wasOpen.current = isOpen
   }, [isOpen])
 
-  const overlaps = preview.overlaps
-  const clampedStep = Math.min(step, Math.max(overlaps.length - 1, 0))
+  // Clear stale refs when the step changes so keyboard navigation only sees
+  // buttons for the current overlap.
+  useEffect(() => {
+    optionRefs.current = []
+  }, [clampedStep])
+
   const overlap = overlaps[clampedStep]
   const isLastStep = clampedStep >= overlaps.length - 1
   const selected = overlap ? effectiveOverlapChoice(overlap, choices) : null
