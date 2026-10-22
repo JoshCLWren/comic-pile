@@ -6,8 +6,7 @@ import importlib
 import importlib.util
 import sys
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any
+from types import ModuleType, SimpleNamespace
 
 import pytest
 from pytest import MonkeyPatch
@@ -143,7 +142,7 @@ def test_test_only_change_does_not_count_as_product_behavior() -> None:
     )[0]
 
 
-def load_controller() -> Any:
+def load_controller() -> ModuleType:
     """Load the hyphenated production review controller."""
     path = SCRIPTS / "factory-review-controller.py"
     spec = importlib.util.spec_from_file_location("factory_review_controller", path)
