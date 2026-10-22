@@ -1,6 +1,8 @@
 """Issue-level acceptance evidence for exact-head factory approvals."""
 
 import hashlib
+from collections.abc import Iterable, Mapping
+from typing import Any
 import json
 import re
 import sys
@@ -31,27 +33,40 @@ def requirements(body):
     return ["Complete the issue's requested behavior and acceptance criteria"]
 
 
-def digest(body):
+def digest(body: str) -> str:
+    """Return SHA-256 of the full issue body, including all revisions."""
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
-def marker(issue, head, body):
+def marker(issue: int, head: str, body: str) -> str:
+    """Return a dedicated, whole-comment exact-head issue-revision marker."""
     return (
         "<!-- comic-pile-factory-acceptance-v1:"
         f"issue-{issue}:head-{head}:digest-{digest(body)} -->"
     )
 
 
-def attested(controller_comments, issue, head, body):
+def attested(controller_comments: Iterable[str], issue: int, head: str, body: str) -> bool:
+    """Accept only an entire controller-bot comment matching the expected marker.
+
+    Args:
+        controller_comments: Complete comment bodies prefiltered to trusted controller bot.
+        issue: Linked issue number.
+        head: Exact reviewed head.
+        body: Unmodified authoritative issue body.
+
+    Returns:
+        Whether the controller emitted a standalone attestation comment.
+    """
     expected = marker(issue, head, body)
-    return any(expected in [line.strip() for line in comment.splitlines()]
-               for comment in controller_comments)
+    return any(comment.strip() == expected for comment in controller_comments)
 
 
-def report_from_text(review_text):
+def report_from_text(review_text: str) -> Mapping[str, Any] | None:
+    """Read one structured acceptance report from the full reviewer log."""
     lines = [line[len(PREFIX):] for line in review_text.splitlines()
              if line.startswith(PREFIX)]
-    if len(lines) != 1 or len(lines[0]) > 60000:
+    if len(lines) != 1 or len(lines[0]) > 2000000:
         return None
     try:
         data = json.loads(lines[0])
@@ -60,12 +75,14 @@ def report_from_text(review_text):
     return data if isinstance(data, dict) else None
 
 
-def validate(report, issue, head, body, changed_paths):
+def validate(report: Mapping[str, Any] | None, issue: int, head: str, body: str, changed_paths: Iterable[str]) -> list[str]:
     """Return specific errors; zero errors authorizes an acceptance marker."""
     if report is None:
         return ["missing or malformed FACTORY_ACCEPTANCE_V1 report"]
     if report.get("issue") != issue or report.get("head") != head:
         return ["report refers to a different issue or head"]
+    if report.get("issue_digest") != digest(body):
+        return ["issue requirements changed during review; require fresh review"]
     items = report.get("items")
     rubric = requirements(body)
     if not isinstance(items, list) or len(items) != len(rubric):
@@ -100,7 +117,8 @@ def validate(report, issue, head, body, changed_paths):
     return errors
 
 
-def rubric(body):
+def rubric(body: str) -> str:
+    """Render numbered acceptance requirements without dropping prose."""
     return "\n".join(f"A{i}: {item}" for i, item in enumerate(requirements(body), 1))
 
 
