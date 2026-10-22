@@ -1,11 +1,11 @@
 """Issue-level acceptance evidence for exact-head factory approvals."""
 
 import hashlib
-from collections.abc import Iterable, Mapping
-from typing import Any
 import json
 import re
 import sys
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 PREFIX = "FACTORY_ACCEPTANCE_V1="
 HEADINGS = ("scope", "implementation required", "requirements", "acceptance", "verification before", "required evidence", "completion evidence", "expected behavior", "outcome")
@@ -148,7 +148,77 @@ def rubric(body: str) -> str:
     return "\n".join(f"A{i}: {item}" for i, item in enumerate(requirements(body), 1))
 
 
+
+CLOSING_RE = re.compile(
+    r"(?i)\b(?:closes?|closed|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)"
+)
+BRANCH_RE = re.compile(r"^factory/\d+-(\d+)-")
+
+
+def linked_issue(branch: str, body: str) -> int | None:
+    """Resolve a linked issue using the same semantics as the controller.
+
+    Args:
+        branch: PR branch name.
+        body: PR description.
+
+    Returns:
+        Canonical linked issue number, if a supported link was found.
+    """
+    match = BRANCH_RE.match(branch)
+    if match:
+        return int(match.group(1))
+    match = CLOSING_RE.search(body)
+    return int(match.group(1)) if match else None
+
+
+def mission(issue: int, head: str, body: str) -> str:
+    """Provide all requirements and current revision to the reviewer.
+
+    Args:
+        issue: Linked issue number.
+        head: Reviewed PR commit SHA.
+        body: Exact authoritative issue body.
+
+    Returns:
+        Review instructions and required structured report schema.
+    """
+    revision = digest(body)
+    return (
+        f"\nISSUE ACCEPTANCE: #{issue}, head {head}, issue digest {revision}.\n"
+        "Review every numbered requirement below against the real diff and tests."
+        " Do not approve when any requirement is missing or unverified."
+        " Before FACTORY_GATE_READY output exactly one single-line JSON record"
+        " with every criterion represented:\n"
+        f'{PREFIX}{{"issue":{issue},"head":"{head}",'
+        f'"issue_digest":"{revision}","items":['
+        '{"id":"A1","status":"pass","file":"changed/path.py",'
+        '"evidence":"Concrete inspected implementation behavior",'
+        '"test":"Executable command and observed result"}]}\n'
+        "Use A1 through the last criterion. Missing/unverified means REPAIR.\n"
+        + rubric(body)
+    )
+
 if __name__ == "__main__":
-    if sys.argv[1:] != ["rubric"]:
-        raise SystemExit("Usage: factory_issue_acceptance.py rubric")
-    print(rubric(sys.stdin.read()))
+    try:
+        if sys.argv[1:] == ["rubric"]:
+            print(rubric(sys.stdin.read()))
+        elif sys.argv[1:] == ["resolve"]:
+            data = json.load(sys.stdin)
+            number = linked_issue(
+                str(data.get("headRefName") or ""),
+                str(data.get("body") or ""),
+            )
+            if number is None:
+                raise ValueError("PR has no supported linked issue")
+            print(number)
+        elif len(sys.argv) == 4 and sys.argv[1] == "mission":
+            data = json.load(sys.stdin)
+            if not isinstance(data.get("body"), str):
+                raise ValueError("issue body missing")
+            print(mission(int(sys.argv[2]), sys.argv[3], data["body"]))
+        else:
+            raise ValueError("usage: rubric | resolve | mission ISSUE HEAD")
+    except (ValueError, TypeError, KeyError) as exc:
+        print(f"acceptance input unavailable: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
