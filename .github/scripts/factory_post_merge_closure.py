@@ -1418,10 +1418,19 @@ This issue is a product contract and acceptance parent.
                 },
             ):
                 with patch.object(mod, "_native_open_blockers", return_value=[]):
-                    result = close_merged_pr_issue(4034, dry_run=True)
+                    with patch.object(
+                        mod, "_issue_has_open_successor_pr", return_value=False
+                    ):
+                        result = close_merged_pr_issue(4034, dry_run=True)
         # The dependency check passes and the closure flow reaches its
-        # labeling/close decision instead of being refused outright.
-        self.assertTrue(result.startswith("dry-run:"), result)
+        # labeling/close decision instead of being refused outright. The
+        # successor lookup is mocked so this self-test stays hermetic in the
+        # no-GH_TOKEN merge-drain self-test step.
+        self.assertEqual(
+            result,
+            "dry-run:replace-labels-with"
+            "['enhancement', 'factory', 'ralph-status:done']+close",
+        )
 
     def test_reopened_dependency_blocks_closure_again(self) -> None:
         """A prerequisite reopened after delivery still refuses fresh closure."""
@@ -1523,8 +1532,17 @@ This issue is a product contract and acceptance parent.
                 },
             ):
                 with patch.object(mod, "_native_open_blockers", return_value=[]):
-                    result = close_merged_pr_issue(4051, dry_run=True)
-        self.assertTrue(result.startswith("dry-run:"), result)
+                    with patch.object(
+                        mod, "_issue_has_open_successor_pr", return_value=False
+                    ):
+                        result = close_merged_pr_issue(4051, dry_run=True)
+        # The successor lookup is mocked so this self-test stays hermetic in
+        # the no-GH_TOKEN merge-drain self-test step.
+        self.assertEqual(
+            result,
+            "dry-run:replace-labels-with"
+            "['enhancement', 'factory', 'ralph-status:done']+close",
+        )
 
     def test_failed_native_blocker_lookup_fails_closed(self) -> None:
         """An unreadable native blocked-by graph refuses closure."""
