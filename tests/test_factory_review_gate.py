@@ -1776,6 +1776,19 @@ def test_merge_drain_never_reads_native_review_state_for_merge() -> None:
     assert "pull_request_review" not in content
 
 
+def test_every_scheduled_auto_merge_route_runs_the_controller_gate_first() -> None:
+    """Each scheduled factory merge route checks gates before it can merge."""
+    for workflow in (
+        "factory-ready-merge-drain.yml",
+        "fixed-model-factory-dispatch.yml",
+    ):
+        content = (WORKFLOWS / workflow).read_text(encoding="utf-8")
+        gate_call = content.index('gates --pr')
+        merge_call = content.index('gh pr merge "$pr"')
+        assert gate_call < merge_call, f"{workflow} merges before the dependency gate"
+        assert '--match-head-commit' in content, f"{workflow} must merge one exact head"
+
+
 def _cross_model_comments(
     *,
     pr: int = 1390,
@@ -2867,6 +2880,8 @@ def _wire_dependency_gate(
     native_open: list[int] | None = None,
     native_error: bool = False,
     issue_fetch_error: bool = False,
+    comments: list[str] | None = None,
+    posted: list[str] | None = None,
 ) -> tuple[list[int], list[str]]:
     """Replace controller GitHub I/O with deterministic dependency fixtures.
 
@@ -2909,9 +2924,34 @@ def _wire_dependency_gate(
             return [
                 {"number": number, "state": "open"} for number in (native_open or [])
             ]
+        if args and args[0] == "api" and "comments" in args[-1]:
+            bodies = comments or []
+            return [
+                [
+                    {
+                        "body": text,
+                        "user": {"login": "github-actions[bot]"},
+                        "author_association": "NONE",
+                    }
+                    for text in bodies
+                ]
+            ]
         raise AssertionError(f"unexpected gh call: {args}")
 
     monkeypatch.setattr(module, "gh_json", fake_gh_json)
+
+    def fake_run_gh(args: list[str], **_kwargs: object) -> object:
+        del _kwargs
+        if args[:2] == ["issue", "comment"]:
+            body = args[args.index("--body") + 1]
+            if posted is not None:
+                posted.append(body)
+            if comments is not None:
+                comments.append(body)
+            return None
+        raise AssertionError(f"unexpected gh write: {args}")
+
+    monkeypatch.setattr(module, "run_gh", fake_run_gh)
     return fetched, native_paths
 
 
@@ -3173,3 +3213,102 @@ def test_declared_dependency_gate_blocks_open_4017_4016(
     assert result["decision"] == "retry"
     assert "#4016" in result["reason"]
     assert "declared dependencies still open" in result["reason"]
+
+
+def test_mechanical_merge_gate_refuses_open_dependency(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The full mechanical gate refuses the merge, not only the helper."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4010-kilo-auto",
+        body="Closes #4010.",
+        issue_bodies={4010: "Resolve the duplicate snapshot bug.\nDepends on #4008"},
+        issue_states={4008: "open"},
+    )
+    # Every earlier exact-head gate already passed: CI is green and the review
+    # is authorized. The dependency gate must still stop the merge.
+    monkeypatch.setattr(
+        module,
+        "poll_mergeable_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "pull request is mergeable"),
+    )
+    monkeypatch.setattr(
+        module,
+        "required_checks_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "required checks passed"),
+    )
+    monkeypatch.setattr(
+        module,
+        "current_head_review_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "review authorized"),
+    )
+    result = module.mechanical_merge_gate(4024, REVIEWED_HEAD)
+    assert result["decision"] == "retry"
+    assert "declared dependencies still open" in result["reason"]
+    assert "#4008" in result["reason"]
+
+
+def test_mechanical_merge_gate_allows_merge_after_dependency_closes(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The same PR proceeds normally once the prerequisite closes."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4010-kilo-auto",
+        body="Closes #4010.",
+        issue_bodies={4010: "Resolve the duplicate snapshot bug.\nDepends on #4008"},
+        issue_states={4008: "closed"},
+    )
+    monkeypatch.setattr(
+        module,
+        "poll_mergeable_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "pull request is mergeable"),
+    )
+    monkeypatch.setattr(
+        module,
+        "required_checks_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "required checks passed"),
+    )
+    monkeypatch.setattr(
+        module,
+        "current_head_review_gate",
+        lambda *_args, **_kwargs: module.gate_result("pass", "review authorized"),
+    )
+    result = module.mechanical_merge_gate(4024, REVIEWED_HEAD)
+    assert result["decision"] == "pass"
+    assert result["reason"] == "all exact-head mechanical gates passed"
+
+
+def test_declared_dependency_gate_records_one_durable_block_reason(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Repair workers get one durable PR reason naming the open dependencies."""
+    module = load_review_controller()
+    comments: list[str] = []
+    posted: list[str] = []
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/33-4010-kilo-auto",
+        body="Closes #4010.",
+        issue_bodies={4010: "Resolve the duplicate snapshot bug.\nDepends on #4008"},
+        issue_states={4008: "open"},
+        comments=comments,
+        posted=posted,
+    )
+    first = module.declared_dependency_gate(4024)
+    second = module.declared_dependency_gate(4024)
+    assert first == second
+    assert first["decision"] == "retry"
+    # One reason for the same blocker set, not one per drain tick.
+    assert len(posted) == 1
+    assert (
+        "comic-pile-factory-dependency-block-v1:pr-4024:issue-4010:deps-4008"
+        in posted[0]
+    )
+    assert "#4008" in posted[0]

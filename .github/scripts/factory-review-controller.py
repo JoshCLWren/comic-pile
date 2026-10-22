@@ -113,6 +113,7 @@ NO_REQUIRED_CHECKS_REASON = (
 )
 FACTORY_REPAIR_CYCLE_LIMIT = 3
 STRIKE_RESET_MARKER = "comic-pile-factory-strike-reset-v1"
+DEPENDENCY_BLOCK_MARKER_PREFIX = "comic-pile-factory-dependency-block-v1"
 
 GateDecision = Literal["pass", "retry", "deny"]
 
@@ -1357,12 +1358,71 @@ def open_native_blockers(issue_number: int) -> list[int]:
     open_numbers: list[int] = []
     for item in items:
         obj = json_object(item)
-        number = obj.get("number") if obj is not None else None
+        if obj is None:
+            raise RuntimeError(f"native blocked-by item for #{issue_number} was not an object")
+        number = obj.get("number")
         if not isinstance(number, int):
             raise RuntimeError(f"native blocked-by item for #{issue_number} had no issue number")
         if str(obj.get("state", "")).lower() != "closed":
             open_numbers.append(number)
     return open_numbers
+
+
+def dependency_block_marker(pr_number: int, issue_number: int, blockers: list[int]) -> str:
+    """Build the stable dedupe marker for one dependency-block reason.
+
+    Args:
+        pr_number: The pull request whose merge is blocked.
+        issue_number: The issue the merge would deliver.
+        blockers: The open prerequisite issue numbers.
+
+    Returns:
+        An HTML comment marker unique to this PR, issue, and blocker set.
+    """
+    deps = "-".join(str(number) for number in sorted(blockers))
+    return (
+        f"<!-- {DEPENDENCY_BLOCK_MARKER_PREFIX}:pr-{pr_number}:"
+        f"issue-{issue_number}:deps-{deps} -->"
+    )
+
+
+def record_dependency_block(
+    pr_number: int, issue_number: int, blockers: list[int]
+) -> None:
+    """Leave one durable, deduplicated dependency-block reason on the pull request.
+
+    The drain and every other auto-merge route evaluate this gate repeatedly,
+    so an exact marker keeps the reason visible to repair workers without
+    turning a long dependency wait into comment spam. A failed write is
+    swallowed: recording the reason must never decide whether a merge happens.
+
+    Args:
+        pr_number: The pull request whose merge is blocked.
+        issue_number: The issue the merge would deliver.
+        blockers: The open prerequisite issue numbers.
+    """
+    marker = dependency_block_marker(pr_number, issue_number, blockers)
+    try:
+        if any(marker in body for body in review_comment_bodies(pr_number)):
+            return
+    except (RuntimeError, ValueError):
+        return
+    listed = ", ".join(f"#{number}" for number in sorted(blockers))
+    body = "\n\n".join(
+        [
+            marker,
+            f"Blocked by declared dependencies: issue #{issue_number} declares open "
+            f"dependencies: {listed}. This pull request and its linked issue stay open "
+            "until every declared dependency is closed; the check runs again "
+            "automatically afterwards.",
+        ]
+    )
+    try:
+        run_gh(
+            ["issue", "comment", str(pr_number), "--repo", REPO, "--body", body]
+        )
+    except RuntimeError:
+        return
 
 
 def declared_dependency_gate(pr_number: int) -> GateResult:
@@ -1412,6 +1472,7 @@ def declared_dependency_gate(pr_number: int) -> GateResult:
         )
     blockers = sorted(set(open_deps))
     if blockers:
+        record_dependency_block(pr_number, issue_number, blockers)
         return gate_result(
             "retry",
             "declared dependencies still open: " + ", ".join(f"#{n}" for n in blockers),
