@@ -190,8 +190,8 @@ def _expand_graph_threads(
 ) -> frozenset[int]:
     """Follow every active blocker until the graph names all relevant series."""
     thread_ids = set(seed_thread_ids)
+    eligibility = evaluate(snapshot)
     while True:
-        eligibility = evaluate(snapshot)
         discovered: set[int] = set()
         for thread_id in thread_ids:
             state = eligibility.get(thread_id)
@@ -253,13 +253,20 @@ def _series_nodes(
     active_thread_ids = {
         thread.thread_id for thread in context.snapshot.threads if thread.status == "active"
     }
+    blocker_thread_ids: set[int] = set()
+    for state in eligibility.values():
+        for blocker in state.blockers:
+            for issue_id in blocker.waiting_on_issue_ids:
+                meta = context.issue_meta.get(issue_id)
+                if meta is not None:
+                    blocker_thread_ids.add(meta.thread_id)
     excluded = context.snapshot.excluded_issue_ids
     volume_by_thread = {
         thread.thread_id: thread.comicvine_volume_id for thread in context.snapshot.threads
     }
     grouped: dict[str, _SeriesAggregate] = {}
     for thread_id in sorted(context.graph_thread_ids):
-        if thread_id not in active_thread_ids:
+        if thread_id not in active_thread_ids and thread_id not in blocker_thread_ids:
             continue
         volume_id = volume_by_thread.get(thread_id)
         node_key = volume_id or f"unidentified-thread:{thread_id}"
@@ -503,10 +510,10 @@ def _choice_effect(
     )
     eligibility = evaluate(snapshot)
     if choice == "continue_series":
-        label = f"{waiting.series_name} waits; {continuing.series_name} continues"
+        label = f"Let {continuing.series_name} continue; {waiting.series_name} waits"
         detail = (
-            f"{waiting.series_name} keeps its own order and requirements while "
-            f"{continuing.series_name} keeps rolling."
+            f"Removes the ordering restriction between {continuing.series_name} and "
+            f"{waiting.series_name}; other prerequisites and restrictions still apply."
         )
     else:
         label = "Keep the full chosen order"
