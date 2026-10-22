@@ -1141,6 +1141,151 @@
         "title": "CBLPlacement",
         "type": "object"
       },
+      "CBLReadingListCandidatesResponse": {
+        "description": "Confirmed-comic gaps plus ranked shared CBL sources for one Reading List.",
+        "properties": {
+          "candidates": {
+            "description": "Ranked source list comparisons in this page",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceComparisonMatch"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "candidates_total": {
+            "description": "Number of source lists containing at least one input comic",
+            "minimum": 0.0,
+            "title": "Candidates Total",
+            "type": "integer"
+          },
+          "entries": {
+            "description": "Every current list entry and its identity gap",
+            "items": {
+              "$ref": "#/components/schemas/CBLReadingListInputEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "input_confirmed_total": {
+            "description": "Distinct confirmed Comic Vine issue IDs compared",
+            "minimum": 0.0,
+            "title": "Input Confirmed Total",
+            "type": "integer"
+          },
+          "input_conflict_count": {
+            "description": "List entries with conflicting confirmed Comic Vine issue IDs",
+            "minimum": 0.0,
+            "title": "Input Conflict Count",
+            "type": "integer"
+          },
+          "input_entry_count": {
+            "description": "Every current list entry",
+            "minimum": 0.0,
+            "title": "Input Entry Count",
+            "type": "integer"
+          },
+          "input_ids": {
+            "description": "Distinct confirmed input IDs in list order",
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "input_missing_count": {
+            "description": "List entries without a confirmed Comic Vine issue ID",
+            "minimum": 0.0,
+            "title": "Input Missing Count",
+            "type": "integer"
+          },
+          "list_id": {
+            "description": "Owned Reading List ID",
+            "title": "List Id",
+            "type": "integer"
+          },
+          "list_name": {
+            "description": "Owned Reading List name",
+            "title": "List Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "input_entry_count",
+          "input_confirmed_total",
+          "input_missing_count",
+          "input_conflict_count",
+          "candidates_total"
+        ],
+        "title": "CBLReadingListCandidatesResponse",
+        "type": "object"
+      },
+      "CBLReadingListInputEntry": {
+        "description": "One current Reading List entry and its confirmed Comic Vine identity state.",
+        "properties": {
+          "comicvine_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confirmed Comic Vine issue ID when exactly one is confirmed",
+            "title": "Comicvine Issue Id"
+          },
+          "comicvine_issue_ids": {
+            "description": "Every confirmed Comic Vine issue ID, including conflicting IDs",
+            "items": {
+              "type": "string"
+            },
+            "title": "Comicvine Issue Ids",
+            "type": "array"
+          },
+          "identity_status": {
+            "description": "Whether this entry has one usable confirmed exact identity",
+            "enum": [
+              "confirmed",
+              "missing",
+              "conflict"
+            ],
+            "title": "Identity Status",
+            "type": "string"
+          },
+          "issue_id": {
+            "description": "ComicPile issue ID",
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "description": "Reader-facing issue number",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "description": "Current order position in the Reading List",
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "series_name": {
+            "description": "Reader-facing series name",
+            "title": "Series Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "issue_id",
+          "series_name",
+          "issue_number",
+          "identity_status"
+        ],
+        "title": "CBLReadingListInputEntry",
+        "type": "object"
+      },
       "CBLReconciliationEntryResponse": {
         "description": "Typed reconciliation and read-state data for one CBL source position.",
         "properties": {
@@ -1412,6 +1557,236 @@
           "has_prev"
         ],
         "title": "CBLReconciliationResponse",
+        "type": "object"
+      },
+      "CBLSourceComparisonMatch": {
+        "description": "Coverage and order comparison for one shared CBL source list.",
+        "properties": {
+          "declared_issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Issue count declared by the source list",
+            "title": "Declared Issue Count"
+          },
+          "distinct_source_issues": {
+            "description": "Distinct confirmed Comic Vine issues in the source list",
+            "minimum": 0.0,
+            "title": "Distinct Source Issues",
+            "type": "integer"
+          },
+          "duplicate_match_count": {
+            "description": "Matched positions beyond the first occurrence of each distinct input comic",
+            "minimum": 0.0,
+            "title": "Duplicate Match Count",
+            "type": "integer"
+          },
+          "entries_total": {
+            "description": "Every occurrence in the source list",
+            "minimum": 0.0,
+            "title": "Entries Total",
+            "type": "integer"
+          },
+          "input_coverage_percentage": {
+            "description": "Percentage of distinct input comics covered",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Input Coverage Percentage",
+            "type": "integer"
+          },
+          "input_total": {
+            "description": "Distinct input comics compared",
+            "minimum": 0.0,
+            "title": "Input Total",
+            "type": "integer"
+          },
+          "list_id": {
+            "description": "CBL source list ID",
+            "title": "List Id",
+            "type": "integer"
+          },
+          "list_name": {
+            "description": "Display name of the CBL source list",
+            "title": "List Name",
+            "type": "string"
+          },
+          "matched_input_count": {
+            "description": "Distinct input comics found in this source list",
+            "minimum": 0.0,
+            "title": "Matched Input Count",
+            "type": "integer"
+          },
+          "matched_input_ids": {
+            "description": "Matched distinct IDs in input order",
+            "items": {
+              "type": "string"
+            },
+            "title": "Matched Input Ids",
+            "type": "array"
+          },
+          "matched_occurrence_count": {
+            "description": "Source positions that hold a matching input comic",
+            "minimum": 0.0,
+            "title": "Matched Occurrence Count",
+            "type": "integer"
+          },
+          "missing_input_ids": {
+            "description": "Input IDs absent from this source list",
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Input Ids",
+            "type": "array"
+          },
+          "order_disagreement_count": {
+            "description": "Matched pairs whose relative order differs from the input order",
+            "minimum": 0.0,
+            "title": "Order Disagreement Count",
+            "type": "integer"
+          },
+          "order_pair_count": {
+            "description": "Comparable matched comic pairs",
+            "minimum": 0.0,
+            "title": "Order Pair Count",
+            "type": "integer"
+          },
+          "order_status": {
+            "description": "Relative order of matched distinct comics",
+            "enum": [
+              "same_order",
+              "reordered",
+              "not_comparable"
+            ],
+            "title": "Order Status",
+            "type": "string"
+          },
+          "revision_sha": {
+            "description": "Source revision the list was imported from",
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "score": {
+            "description": "Relevance score balancing coverage, precision, and order",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "integer"
+          },
+          "source_coverage_percentage": {
+            "description": "Percentage of this source's distinct comics that matched",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Source Coverage Percentage",
+            "type": "integer"
+          },
+          "source_only_issue_count": {
+            "description": "Distinct source comics whose exact ID is not in the input list",
+            "minimum": 0.0,
+            "title": "Source Only Issue Count",
+            "type": "integer"
+          },
+          "source_path": {
+            "description": "Reader-safe path of the CBL source file",
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_ref": {
+            "description": "Reader-safe ``repository:path`` source identity",
+            "title": "Source Ref",
+            "type": "string"
+          },
+          "source_repository": {
+            "description": "Reader-safe source repository identity",
+            "title": "Source Repository",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "revision_sha",
+          "entries_total",
+          "distinct_source_issues",
+          "matched_input_count",
+          "input_total",
+          "matched_occurrence_count",
+          "duplicate_match_count",
+          "source_only_issue_count",
+          "input_coverage_percentage",
+          "source_coverage_percentage",
+          "order_status",
+          "order_pair_count",
+          "order_disagreement_count",
+          "score"
+        ],
+        "title": "CBLSourceComparisonMatch",
+        "type": "object"
+      },
+      "CBLSourceComparisonRequest": {
+        "description": "Distinct confirmed Comic Vine issue IDs to compare against shared CBL sources.",
+        "properties": {
+          "comicvine_issue_ids": {
+            "description": "Confirmed Comic Vine issue IDs in the caller's intended order",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Comicvine Issue Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "comicvine_issue_ids"
+        ],
+        "title": "CBLSourceComparisonRequest",
+        "type": "object"
+      },
+      "CBLSourceComparisonResponse": {
+        "description": "Ranked shared CBL source lists for one confirmed input set.",
+        "properties": {
+          "candidates": {
+            "description": "Ranked source list comparisons in this page",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceComparisonMatch"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "candidates_total": {
+            "description": "Number of source lists containing at least one input comic",
+            "minimum": 0.0,
+            "title": "Candidates Total",
+            "type": "integer"
+          },
+          "comicvine_issue_ids": {
+            "description": "Distinct input IDs that were compared",
+            "items": {
+              "type": "string"
+            },
+            "title": "Comicvine Issue Ids",
+            "type": "array"
+          },
+          "input_total": {
+            "description": "Distinct input comics compared",
+            "minimum": 0.0,
+            "title": "Input Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "input_total",
+          "candidates_total"
+        ],
+        "title": "CBLSourceComparisonResponse",
         "type": "object"
       },
       "CBLSourceEntryDetail": {
@@ -25810,6 +26185,69 @@
         ]
       }
     },
+    "/api/v1/issue-identity/cbl-sources/compare": {
+      "post": {
+        "description": "Rank shared CBL sources by exact coverage and relative order.\n\nThe comparison receives confirmed Comic Vine issue IDs, never reader Issue\nIDs. It reads only the shared catalog, so one reader's owned collection\ncannot change the answer. Coverage counts distinct exact identities while\nrepeated source occurrences remain visible, and same-titled volumes never\nmatch by title or issue number.\n\nArgs:\n    payload: Distinct confirmed Comic Vine issue IDs in intended order.\n    current_user: Authenticated reader. Unused: the shared catalog answer\n        must not vary by reader.\n    db: Async database session.\n    limit: Maximum number of ranked source lists to return.\n\nReturns:\n    Ranked source comparisons with coverage, duplicate, and order evidence.",
+        "operationId": "compare_cbl_sources_api_v1_issue_identity_cbl_sources_compare_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CBLSourceComparisonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLSourceComparisonResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compare Cbl Sources",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "issue-identity"
+        ]
+      }
+    },
     "/api/v1/issue-identity/cbl-sources/{list_id}": {
       "get": {
         "description": "Return every ordered source occurrence for one CBL list (read-only).\n\nSource occurrences keep their original position, including repeated\npositions for duplicated issues. Large lists are returned as a bounded page\nso no list is silently truncated; ``entries_total`` reports the full count\nso callers can page through every occurrence.\n\nArgs:\n    list_id: CBL source list identifier.\n    current_user: Authenticated reader.\n    db: Async database session.\n    offset: Zero-based index of the first returned source occurrence.\n    limit: Maximum number of source occurrences to return.\n\nReturns:\n    One CBL source list with its ordered source occurrences.\n\nRaises:\n    HTTPException: 404 when the list does not exist or is inactive.",
@@ -26226,6 +26664,69 @@
         "summary": "Api Preview Consolidation",
         "tags": [
           "issue-identity",
+          "issue-identity"
+        ]
+      }
+    },
+    "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates": {
+      "get": {
+        "description": "Find shared CBL sources that cover one owned Reading List.\n\nOnly distinct confirmed Comic Vine issue IDs from the reader's Issues are\nused to query the shared catalog. Entries without a confirmed ID, and\nentries with conflicting confirmed IDs, are returned as explicit gaps so\nthe caller never substitutes a title/issue-number guess or claims that no\nCBL exists.\n\nArgs:\n    list_id: Owned Reading List identifier.\n    current_user: Authenticated owner of the Reading List.\n    db: Async database session.\n    limit: Maximum number of ranked source lists to return.\n\nReturns:\n    Every list entry's identity state plus ranked source comparisons.",
+        "operationId": "find_cbl_candidates_for_reading_list_api_v1_issue_identity_reading_lists__list_id__cbl_candidates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "List Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLReadingListCandidatesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Find Cbl Candidates For Reading List",
+        "tags": [
+          "dependencies",
+          "dependencies",
           "issue-identity"
         ]
       }

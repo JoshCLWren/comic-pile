@@ -2702,6 +2702,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issue-identity/cbl-sources/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare Cbl Sources
+         * @description Rank shared CBL sources by exact coverage and relative order.
+         *
+         *     The comparison receives confirmed Comic Vine issue IDs, never reader Issue
+         *     IDs. It reads only the shared catalog, so one reader's owned collection
+         *     cannot change the answer. Coverage counts distinct exact identities while
+         *     repeated source occurrences remain visible, and same-titled volumes never
+         *     match by title or issue number.
+         *
+         *     Args:
+         *         payload: Distinct confirmed Comic Vine issue IDs in intended order.
+         *         current_user: Authenticated reader. Unused: the shared catalog answer
+         *             must not vary by reader.
+         *         db: Async database session.
+         *         limit: Maximum number of ranked source lists to return.
+         *
+         *     Returns:
+         *         Ranked source comparisons with coverage, duplicate, and order evidence.
+         */
+        post: operations["compare_cbl_sources_api_v1_issue_identity_cbl_sources_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issue-identity/cbl-sources/{list_id}": {
         parameters: {
             query?: never;
@@ -2889,6 +2925,41 @@ export interface paths {
          *         db: Async database session.
          */
         post: operations["api_preview_consolidation_api_v1_issue_identity_preview_consolidation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find Cbl Candidates For Reading List
+         * @description Find shared CBL sources that cover one owned Reading List.
+         *
+         *     Only distinct confirmed Comic Vine issue IDs from the reader's Issues are
+         *     used to query the shared catalog. Entries without a confirmed ID, and
+         *     entries with conflicting confirmed IDs, are returned as explicit gaps so
+         *     the caller never substitutes a title/issue-number guess or claims that no
+         *     CBL exists.
+         *
+         *     Args:
+         *         list_id: Owned Reading List identifier.
+         *         current_user: Authenticated owner of the Reading List.
+         *         db: Async database session.
+         *         limit: Maximum number of ranked source lists to return.
+         *
+         *     Returns:
+         *         Every list entry's identity state plus ranked source comparisons.
+         */
+        get: operations["find_cbl_candidates_for_reading_list_api_v1_issue_identity_reading_lists__list_id__cbl_candidates_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6790,6 +6861,104 @@ export interface components {
             source_path: string;
         };
         /**
+         * CBLReadingListCandidatesResponse
+         * @description Confirmed-comic gaps plus ranked shared CBL sources for one Reading List.
+         */
+        CBLReadingListCandidatesResponse: {
+            /**
+             * Candidates
+             * @description Ranked source list comparisons in this page
+             */
+            candidates?: components["schemas"]["CBLSourceComparisonMatch"][];
+            /**
+             * Candidates Total
+             * @description Number of source lists containing at least one input comic
+             */
+            candidates_total: number;
+            /**
+             * Entries
+             * @description Every current list entry and its identity gap
+             */
+            entries?: components["schemas"]["CBLReadingListInputEntry"][];
+            /**
+             * Input Confirmed Total
+             * @description Distinct confirmed Comic Vine issue IDs compared
+             */
+            input_confirmed_total: number;
+            /**
+             * Input Conflict Count
+             * @description List entries with conflicting confirmed Comic Vine issue IDs
+             */
+            input_conflict_count: number;
+            /**
+             * Input Entry Count
+             * @description Every current list entry
+             */
+            input_entry_count: number;
+            /**
+             * Input Ids
+             * @description Distinct confirmed input IDs in list order
+             */
+            input_ids?: string[];
+            /**
+             * Input Missing Count
+             * @description List entries without a confirmed Comic Vine issue ID
+             */
+            input_missing_count: number;
+            /**
+             * List Id
+             * @description Owned Reading List ID
+             */
+            list_id: number;
+            /**
+             * List Name
+             * @description Owned Reading List name
+             */
+            list_name: string;
+        };
+        /**
+         * CBLReadingListInputEntry
+         * @description One current Reading List entry and its confirmed Comic Vine identity state.
+         */
+        CBLReadingListInputEntry: {
+            /**
+             * Comicvine Issue Id
+             * @description Confirmed Comic Vine issue ID when exactly one is confirmed
+             */
+            comicvine_issue_id?: string | null;
+            /**
+             * Comicvine Issue Ids
+             * @description Every confirmed Comic Vine issue ID, including conflicting IDs
+             */
+            comicvine_issue_ids?: string[];
+            /**
+             * Identity Status
+             * @description Whether this entry has one usable confirmed exact identity
+             * @enum {string}
+             */
+            identity_status: "confirmed" | "missing" | "conflict";
+            /**
+             * Issue Id
+             * @description ComicPile issue ID
+             */
+            issue_id: number;
+            /**
+             * Issue Number
+             * @description Reader-facing issue number
+             */
+            issue_number: string;
+            /**
+             * Position
+             * @description Current order position in the Reading List
+             */
+            position: number;
+            /**
+             * Series Name
+             * @description Reader-facing series name
+             */
+            series_name: string;
+        };
+        /**
          * CBLReconciliationEntryResponse
          * @description Typed reconciliation and read-state data for one CBL source position.
          */
@@ -6866,6 +7035,160 @@ export interface components {
             total_positions: number;
             /** Unresolved Count */
             unresolved_count: number;
+        };
+        /**
+         * CBLSourceComparisonMatch
+         * @description Coverage and order comparison for one shared CBL source list.
+         */
+        CBLSourceComparisonMatch: {
+            /**
+             * Declared Issue Count
+             * @description Issue count declared by the source list
+             */
+            declared_issue_count?: number | null;
+            /**
+             * Distinct Source Issues
+             * @description Distinct confirmed Comic Vine issues in the source list
+             */
+            distinct_source_issues: number;
+            /**
+             * Duplicate Match Count
+             * @description Matched positions beyond the first occurrence of each distinct input comic
+             */
+            duplicate_match_count: number;
+            /**
+             * Entries Total
+             * @description Every occurrence in the source list
+             */
+            entries_total: number;
+            /**
+             * Input Coverage Percentage
+             * @description Percentage of distinct input comics covered
+             */
+            input_coverage_percentage: number;
+            /**
+             * Input Total
+             * @description Distinct input comics compared
+             */
+            input_total: number;
+            /**
+             * List Id
+             * @description CBL source list ID
+             */
+            list_id: number;
+            /**
+             * List Name
+             * @description Display name of the CBL source list
+             */
+            list_name: string;
+            /**
+             * Matched Input Count
+             * @description Distinct input comics found in this source list
+             */
+            matched_input_count: number;
+            /**
+             * Matched Input Ids
+             * @description Matched distinct IDs in input order
+             */
+            matched_input_ids?: string[];
+            /**
+             * Matched Occurrence Count
+             * @description Source positions that hold a matching input comic
+             */
+            matched_occurrence_count: number;
+            /**
+             * Missing Input Ids
+             * @description Input IDs absent from this source list
+             */
+            missing_input_ids?: string[];
+            /**
+             * Order Disagreement Count
+             * @description Matched pairs whose relative order differs from the input order
+             */
+            order_disagreement_count: number;
+            /**
+             * Order Pair Count
+             * @description Comparable matched comic pairs
+             */
+            order_pair_count: number;
+            /**
+             * Order Status
+             * @description Relative order of matched distinct comics
+             * @enum {string}
+             */
+            order_status: "same_order" | "reordered" | "not_comparable";
+            /**
+             * Revision Sha
+             * @description Source revision the list was imported from
+             */
+            revision_sha: string;
+            /**
+             * Score
+             * @description Relevance score balancing coverage, precision, and order
+             */
+            score: number;
+            /**
+             * Source Coverage Percentage
+             * @description Percentage of this source's distinct comics that matched
+             */
+            source_coverage_percentage: number;
+            /**
+             * Source Only Issue Count
+             * @description Distinct source comics whose exact ID is not in the input list
+             */
+            source_only_issue_count: number;
+            /**
+             * Source Path
+             * @description Reader-safe path of the CBL source file
+             */
+            source_path: string;
+            /**
+             * Source Ref
+             * @description Reader-safe ``repository:path`` source identity
+             */
+            source_ref: string;
+            /**
+             * Source Repository
+             * @description Reader-safe source repository identity
+             */
+            source_repository: string;
+        };
+        /**
+         * CBLSourceComparisonRequest
+         * @description Distinct confirmed Comic Vine issue IDs to compare against shared CBL sources.
+         */
+        CBLSourceComparisonRequest: {
+            /**
+             * Comicvine Issue Ids
+             * @description Confirmed Comic Vine issue IDs in the caller's intended order
+             */
+            comicvine_issue_ids: string[];
+        };
+        /**
+         * CBLSourceComparisonResponse
+         * @description Ranked shared CBL source lists for one confirmed input set.
+         */
+        CBLSourceComparisonResponse: {
+            /**
+             * Candidates
+             * @description Ranked source list comparisons in this page
+             */
+            candidates?: components["schemas"]["CBLSourceComparisonMatch"][];
+            /**
+             * Candidates Total
+             * @description Number of source lists containing at least one input comic
+             */
+            candidates_total: number;
+            /**
+             * Comicvine Issue Ids
+             * @description Distinct input IDs that were compared
+             */
+            comicvine_issue_ids?: string[];
+            /**
+             * Input Total
+             * @description Distinct input comics compared
+             */
+            input_total: number;
         };
         /**
          * CBLSourceEntryDetail
@@ -18828,6 +19151,41 @@ export interface operations {
             };
         };
     };
+    compare_cbl_sources_api_v1_issue_identity_cbl_sources_compare_post: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CBLSourceComparisonRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLSourceComparisonResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_cbl_source_list_api_v1_issue_identity_cbl_sources__list_id__get: {
         parameters: {
             query?: {
@@ -19051,6 +19409,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConsolidationPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_cbl_candidates_for_reading_list_api_v1_issue_identity_reading_lists__list_id__cbl_candidates_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLReadingListCandidatesResponse"];
                 };
             };
             /** @description Validation Error */

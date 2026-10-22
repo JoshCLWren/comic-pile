@@ -133,6 +133,9 @@ test.describe('Find CBLs from a comic', () => {
     ])
 
     await page.goto(`/thread/${thread.id}`, { waitUntil: 'domcontentloaded' })
+    // Each issue row carries its own "Find CBLs" action, so the series issue
+    // list has to be expanded before the comic action exists.
+    await page.getByRole('button', { name: 'Expand', exact: true }).click()
     const open = page.getByTestId(`cbl-comic-${issueId}-open`)
     await expect(open).toBeVisible()
     await open.click()
@@ -142,8 +145,12 @@ test.describe('Find CBLs from a comic', () => {
     const secondCandidate = page.getByTestId(`cbl-comic-${issueId}-${second.id}`)
     await expect(firstCandidate).toContainText('Score 100 of 100')
     await expect(firstCandidate).toContainText('Coverage: 1 of 1 comics (100%)')
-    await expect(firstCandidate).toContainText('Same relative order')
-    await expect(secondCandidate).toContainText('Score 100 of 100')
+    // A single input comic cannot form an order pair, so the server reports
+    // the order as not comparable rather than claiming a matching order.
+    await expect(firstCandidate).toContainText('Order not comparable')
+    // The second source holds two distinct comics and matches only one, so
+    // source coverage is 1 of 2 (50%) and the score is 55 + 12.5 + 20.
+    await expect(secondCandidate).toContainText('Score 88 of 100')
     await expect(secondCandidate).toContainText(
       '1 source comic is not in this list',
     )
