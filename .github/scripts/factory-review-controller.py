@@ -17,6 +17,11 @@ from typing import Any, Literal, TypedDict, cast
 
 sys.path.insert(0, os.path.dirname(__file__))
 issue_acceptance = importlib.import_module("factory_issue_acceptance")
+_eligibility_dir = Path(__file__).resolve().parent
+if not (_eligibility_dir / "factory_eligibility.py").is_file():
+    _eligibility_dir = Path(__file__).resolve().parents[2] / "scripts"
+sys.path.insert(0, str(_eligibility_dir))
+eligibility = importlib.import_module("factory_eligibility")
 _review_policy = importlib.import_module("factory_review_policy")
 approval_can_promote = _review_policy.approval_can_promote
 current_head_approvers = _review_policy.current_head_approvers
@@ -1320,6 +1325,42 @@ def issue_acceptance_gate(pr_number: int, expected_head: str) -> GateResult:
     return gate_result("pass", "all issue acceptance criteria attested")
 
 
+def declared_dependency_gate(pr_number: int) -> GateResult:
+    """Block merge while any declared issue dependency is still open.
+
+    Fails closed on API errors.
+    """
+    pr = pr_json(pr_number)
+    issue_number = linked_issue_for_pr(pr_number, str(pr.get("headRefName") or ""))
+    if issue_number is None:
+        return gate_result("pass", "no linked issue for dependency check")
+    try:
+        issue = target_json(issue_number)
+    except RuntimeError:
+        return gate_result("retry", "linked issue could not be read for dependency check")
+    body = issue.get("body")
+    if not isinstance(body, str):
+        return gate_result("retry", "linked issue body could not be read")
+    try:
+        deps = eligibility.parse_declared_dependencies(body)
+    except Exception:
+        return gate_result("retry", "dependency parse failed")
+    open_deps: list[int] = []
+    for dep in sorted(deps):
+        try:
+            dep_issue = target_json(dep)
+        except RuntimeError:
+            return gate_result("retry", f"dependency state unavailable for #{dep}")
+        if str(dep_issue.get("state", "")).upper() != "CLOSED":
+            open_deps.append(dep)
+    if open_deps:
+        return gate_result(
+            "retry",
+            "declared dependencies still open: " + ", ".join(f"#{n}" for n in open_deps),
+        )
+    return gate_result("pass", "all declared dependencies closed")
+
+
 def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
     """Single authoritative exact-head mechanical gate for controller and workflows."""
     mergeable = poll_mergeable_gate(pr_number, expected_head)
@@ -1335,6 +1376,9 @@ def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
         acceptance = issue_acceptance_gate(pr_number, expected_head)
         if acceptance["decision"] != "pass":
             return acceptance
+    dependency = declared_dependency_gate(pr_number)
+    if dependency["decision"] != "pass":
+        return dependency
     return gate_result("pass", "all exact-head mechanical gates passed")
 
 

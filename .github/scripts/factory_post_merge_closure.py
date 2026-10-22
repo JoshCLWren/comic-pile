@@ -36,9 +36,17 @@ import os
 import re
 import subprocess
 import sys
+import importlib
+from pathlib import Path
 import unittest
 from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta, timezone
+
+_eligibility_dir = Path(__file__).resolve().parent
+if not (_eligibility_dir / 'factory_eligibility.py').is_file():
+    _eligibility_dir = Path(__file__).resolve().parents[2] / 'scripts'
+sys.path.insert(0, str(_eligibility_dir))
+eligibility = importlib.import_module('factory_eligibility')
 
 PROTECTED_ISSUES = frozenset({679, 1093, 1109})
 
@@ -673,6 +681,17 @@ def close_merged_pr_issue(
 
     labels = list(issue["labels"])
     issue_body = str(issue.get("body") or "")
+    try:
+        declared_deps = eligibility.parse_declared_dependencies(issue_body)
+    except Exception:
+        return "open-dependency"
+    for dep in declared_deps:
+        try:
+            dep_issue = _issue_view(dep)
+        except (RuntimeError, json.JSONDecodeError):
+            return "open-dependency"
+        if str(dep_issue.get("state")) != CLOSED_STATE:
+            return "open-dependency"
     if MANUAL_ONLY_MARKER in issue_body:
         # Issue #1620: an issue that declares itself human/interactive
         # controlled — including an operator production-acceptance or cutover
