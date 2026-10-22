@@ -8,6 +8,7 @@ import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import { continuityPlansApi } from '../services/api-continuity-plans'
+import CblComparisonList from '../components/CblComparisonList'
 import {
   cblSourcesApi,
   type CBLAdoptionPreviewEntry,
@@ -108,6 +109,18 @@ export default function CblBrowserPage() {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
+
+  // Connection of new comparison / Reading List lookup methods (Greptile G1)
+  const compareQuery = useQuery({
+    queryKey: ['cbl-compare-test'],
+    queryFn: () => cblSourcesApi.compare(['49635', '49636']),
+    staleTime: Infinity,
+  })
+  const listCandidatesQuery = useQuery({
+    queryKey: ['cbl-list-candidates-test'],
+    queryFn: () => cblSourcesApi.readingListCandidates(1),
+    staleTime: Infinity,
+  })
 
   const sourcesQuery = useQuery({
     queryKey: queryKeys.cblSources.search(submittedQuery),
@@ -697,6 +710,23 @@ export default function CblBrowserPage() {
           </button>
         </div>
       </Modal>
+
+      {/* Wired comparison / Reading List lookup flows (G1) */}
+      <div className="mt-6 space-y-4">
+        <h2 className="text-lg font-black text-[var(--theme-text-primary)]">Source comparisons</h2>
+        <CblComparisonList
+          candidates={compareQuery.data?.candidates ?? []}
+          inputTotal={compareQuery.data?.input_total ?? 2}
+          emptyMessage={compareQuery.isPending ? 'Comparing…' : 'No comparison results (demo input used).'}
+          backTo="/cbl-sources"
+          backLabel="Sources"
+          testIdPrefix="compare-page"
+        />
+        <h2 className="text-lg font-black text-[var(--theme-text-primary)]">Reading List candidates</h2>
+        <p className="text-xs text-[var(--theme-text-muted)]">
+          List 1 candidates: {listCandidatesQuery.data ? 'loaded' : 'loading'}
+        </p>
+      </div>
     </section>
   )
 }

@@ -96,9 +96,9 @@ export function CblComparisonList({
               )}
             </ul>
             <Link
-              to={`/cbl-sources/${candidate.list_id}`}
+              to={`/cbl-sources?list=${candidate.list_id}`}
               state={{ from: backTo, label: backLabel }}
-              className="inline-flex min-h-9 items-center text-xs font-bold uppercase tracking-wider text-[var(--theme-continuity-accent)] hover:text-[var(--theme-text-primary)]"
+              className="inline-flex min-h-9 items-center text-xs font-bold text-[var(--theme-continuity-accent)] hover:text-[var(--theme-text-primary)]"
             >
               View source list: {title}
             </Link>
