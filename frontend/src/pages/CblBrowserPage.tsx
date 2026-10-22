@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Modal from '../components/Modal'
@@ -237,10 +237,13 @@ export default function CblBrowserPage() {
     retry: false,
   })
   const graphServerPreview = graphQuery.data ?? null
-  // Update the ref synchronously during render so the next queryFn sees the latest preview.
-  if (graphQuery.data) {
-    graphPreviewRef.current = graphQuery.data
-  }
+  // Keep the latest server preview for the next request's overlap payload.
+  // A layout effect runs before React Query's fetch effect, so a new checklist
+  // answer never sends an older preview while still avoiding a render-phase
+  // side effect.
+  useLayoutEffect(() => {
+    if (graphQuery.data) graphPreviewRef.current = graphQuery.data
+  }, [graphQuery.data])
 
   /**
    * Keep local answers aligned with the server graph: honour decisions the
