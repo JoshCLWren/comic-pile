@@ -6,10 +6,25 @@ transaction boundaries.
 """
 
 from collections.abc import Iterable
-from sqlalchemy import text
+from dataclasses import dataclass
+
+from sqlalchemy import select, text
 from sqlalchemy.engine import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import TextClause
+
+from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.models.issue import Issue
+from app.models.thread import Thread
+
+
+@dataclass(frozen=True, slots=True)
+class ConfirmedComicvineIssueIdentity:
+    """One confirmed Comic Vine issue identity for a reader-owned Issue."""
+
+    issue_id: int
+    external_identity_id: int
+    comicvine_issue_id: str
 
 
 def _as_int_tuple(value: object) -> tuple[int, ...]:
@@ -42,6 +57,68 @@ def _as_object_list(value: object) -> list[object]:
 def _count_scalar(result: Result[int]) -> int:
     """Return an integer scalar count from a SQLAlchemy result."""
     return int(result.scalar_one() or 0)
+
+
+async def find_confirmed_comicvine_issue_identities(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    issue_ids: tuple[int, ...],
+) -> tuple[ConfirmedComicvineIssueIdentity, ...]:
+    """Return confirmed Comic Vine identities for reader-owned Issues only.
+
+    A confirmed mapping is the canonical exact identity used to query the
+    shared CBL catalog. Candidate, rejected, deferred, and unresolved mappings
+    are deliberately excluded so a list comparison never guesses an identity.
+    Conflicting confirmed mappings are returned as separate rows so the caller
+    can report the conflict instead of choosing one silently.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the Issues' Threads.
+        issue_ids: ComicPile Issue IDs to resolve.
+
+    Returns:
+        Confirmed identity rows ordered by Issue position, Issue ID, and
+        external identity ID.
+    """
+    if not issue_ids:
+        return ()
+
+    statement = (
+        select(
+            IssueExternalIdentityMapping.issue_id,
+            ExternalIdentity.id,
+            ExternalIdentity.external_id,
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(
+            Thread.user_id == user_id,
+            IssueExternalIdentityMapping.issue_id.in_(issue_ids),
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "issue",
+        )
+        .order_by(
+            Issue.position.asc(),
+            Issue.id.asc(),
+            ExternalIdentity.id.asc(),
+        )
+    )
+    rows = (await db.execute(statement)).all()
+    return tuple(
+        ConfirmedComicvineIssueIdentity(
+            issue_id=int(row[0]),
+            external_identity_id=int(row[1]),
+            comicvine_issue_id=str(row[2]),
+        )
+        for row in rows
+    )
 
 
 _DUPLICATE_ANOMALY_COUNT_SQL = text(

@@ -11,6 +11,115 @@ export interface CBLSourceListDiscoveryItem {
   revision_sha: string
 }
 
+export interface CBLSourceEntryDetail {
+  position: number
+  series_name: string
+  issue_number: string
+  volume_year: number | null
+  publication_year: number | null
+  comicvine_issue_id: string | null
+  comicvine_volume_id: string | null
+}
+
+export interface CBLSourceListDetail {
+  id: number
+  name: string
+  source_path: string
+  source_repository: string
+  source_ref: string
+  declared_issue_count: number | null
+  content_hash: string
+  revision_sha: string
+  entries_total: number
+  entries_offset: number
+  entries_limit: number
+  entries: CBLSourceEntryDetail[]
+}
+
+export interface CBLComicvineOccurrence {
+  list_id: number
+  list_name: string
+  source_path: string
+  source_repository: string
+  source_ref: string
+  revision_sha: string
+  position: number
+  series_name: string
+  issue_number: string
+  volume_year: number | null
+  publication_year: number | null
+  comicvine_issue_id: string
+  comicvine_volume_id: string | null
+}
+
+export interface CBLComicvineOccurrencePage {
+  comicvine_issue_id: string
+  occurrences_total: number
+  lists_total: number
+  occurrences_offset: number
+  occurrences_limit: number
+  occurrences: CBLComicvineOccurrence[]
+}
+
+export type CBLCoverageOrderStatus = 'same_order' | 'reordered' | 'not_comparable'
+
+export interface CBLSourceComparisonMatch {
+  list_id: number
+  list_name: string
+  source_path: string
+  source_repository: string
+  source_ref: string
+  revision_sha: string
+  declared_issue_count: number | null
+  entries_total: number
+  distinct_source_issues: number
+  matched_input_count: number
+  input_total: number
+  matched_occurrence_count: number
+  duplicate_match_count: number
+  source_only_issue_count: number
+  input_coverage_percentage: number
+  source_coverage_percentage: number
+  order_status: CBLCoverageOrderStatus
+  order_pair_count: number
+  order_disagreement_count: number
+  matched_input_ids: string[]
+  missing_input_ids: string[]
+  score: number
+}
+
+export interface CBLSourceComparisonResponse {
+  comicvine_issue_ids: string[]
+  input_total: number
+  candidates_total: number
+  candidates: CBLSourceComparisonMatch[]
+}
+
+export type CBLReadingListIdentityStatus = 'confirmed' | 'missing' | 'conflict'
+
+export interface CBLReadingListInputEntry {
+  position: number
+  issue_id: number
+  series_name: string
+  issue_number: string
+  comicvine_issue_id: string | null
+  comicvine_issue_ids: string[]
+  identity_status: CBLReadingListIdentityStatus
+}
+
+export interface CBLReadingListCandidatesResponse {
+  list_id: number
+  list_name: string
+  input_entry_count: number
+  input_confirmed_total: number
+  input_missing_count: number
+  input_conflict_count: number
+  input_ids: string[]
+  entries: CBLReadingListInputEntry[]
+  candidates_total: number
+  candidates: CBLSourceComparisonMatch[]
+}
+
 export type CBLAdoptionClass = 'existing' | 'missing_importable' | 'ambiguous_unresolved'
 export type CBLAdoptionDecision =
   | 'included_existing'
@@ -133,6 +242,33 @@ export function createCblSourcesApi(client: HttpClient) {
       client.get<CBLSourceListDiscoveryItem[]>('/v1/issue-identity/cbl-sources', {
         params: { q: query, limit },
       }),
+    /** Read one shared source list and its ordered occurrences (read-only). */
+    detail: (listId: number, options?: { offset?: number; limit?: number }) =>
+      client.get<CBLSourceListDetail>(`/v1/issue-identity/cbl-sources/${listId}`, {
+        params: options,
+      }),
+    /** Find every shared source occurrence that holds one exact Comic Vine issue ID. */
+    findByComicvineIssue: (
+      comicvineIssueId: string,
+      options?: { offset?: number; limit?: number },
+    ) =>
+      client.get<CBLComicvineOccurrencePage>(
+        `/v1/issue-identity/cbl-sources/by-comicvine-issue/${encodeURIComponent(comicvineIssueId)}`,
+        { params: options },
+      ),
+    /** Rank shared sources by distinct coverage and relative order. */
+    compare: (comicvineIssueIds: string[], limit = 50) =>
+      client.post<CBLSourceComparisonResponse>(
+        '/v1/issue-identity/cbl-sources/compare',
+        { comicvine_issue_ids: comicvineIssueIds },
+        { params: { limit } },
+      ),
+    /** Compare one owned Reading List's confirmed identities to shared sources. */
+    readingListCandidates: (listId: number, limit = 50) =>
+      client.get<CBLReadingListCandidatesResponse>(
+        `/v1/issue-identity/reading-lists/${listId}/cbl-candidates`,
+        { params: { limit } },
+      ),
     preview: (listId: number) =>
       client.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
     plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
