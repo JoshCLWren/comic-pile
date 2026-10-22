@@ -546,3 +546,38 @@ def test_generic_async_named_call_wrapping_remains_formatting() -> None:
     assert not delivery.pr_delivers_implementation(
         "Fix TS behavior", [path], patch(path, ['async<T>(value);'], ['async', '<T>(value);'])
     )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ('echo ${value: 1:2}', 'echo ${value:  1:2}'),
+    ('echo ${value:1+1:2}', 'echo ${value: 1 + 1 : 2}'),
+    ('echo ${@:1:2}', 'echo ${@: 1 : 2}'),
+    ('echo ${1:1:2}', 'echo ${1: 1 : 2}'),
+    ('echo ${items[@]:1:2}', 'echo ${items[@]: 1 : 2}'),
+    ('echo `printf foo`', 'echo `printf   foo`'),
+    ('echo "${value: 1:2}"', 'echo "${value:  1:2}"'),
+    ('echo "`printf foo`"', 'echo "`printf   foo`"'),
+    ('echo "$(printf foo)"', 'echo "$(printf   foo)"'),
+])
+def test_executable_shell_substitution_spacing_is_not_delivery(old: str, new: str) -> None:
+    """Arithmetic/subcommand formatting is not mistaken for changed literal data."""
+    path = '.github/scripts/worker.sh'
+    assert not delivery.pr_delivers_implementation(
+        "Fix shell behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ('echo ${value:1:2}', 'echo ${value:2:2}'),
+    ('echo ${value: -1}', 'echo ${value:-1}'),
+    ('echo ${value:-one two}', 'echo ${value:-one  two}'),
+    ('echo `printf "one two"`', 'echo `printf "one  two"`'),
+    ('echo "literal  ${value}"', 'echo "literal ${value}"'),
+    ('echo "${value:1:2}"', 'echo "${value:2:2}"'),
+])
+def test_shell_substitution_values_and_literal_spaces_remain_behavioral(old: str, new: str) -> None:
+    """Normalize executable syntax without erasing offsets, defaults or literal bytes."""
+    path = '.github/scripts/worker.sh'
+    assert delivery.pr_delivers_implementation(
+        "Fix shell behavior", [path], patch(path, old.splitlines(), new.splitlines())
+    )[0]

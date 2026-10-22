@@ -186,6 +186,50 @@ def _async_production(values: list[str], position: int) -> bool:
     return False
 
 
+
+SHELL_DYNAMIC = re.compile(
+    r"\$\{(?:[^{}]|\{[^{}]*\})*\}|`(?:\\.|[^`\\])*`"
+    r"|\$\((?:[^()]|\([^()]*\))*\)", re.DOTALL,
+)
+ARITHMETIC_TOKEN = re.compile(
+    r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\""
+    r"|[\w$]+|\+\+|--|<<|>>|&&|\|\||==|!=|<=|>=|[^\s]", re.DOTALL,
+)
+
+
+def _shell_parts(value: str, path: str) -> str:
+    """Normalize embedded executable substitutions without erasing literal spaces."""
+    def normalize(match: re.Match[str]) -> str:
+        """Leave escaped dollar signs/backticks literal."""
+        prefix = value[:match.start()]
+        backslashes = len(prefix) - len(prefix.rstrip("\\"))
+        if backslashes % 2:
+            return match.group()
+        return _shell_value(match.group(), path)
+
+    return SHELL_DYNAMIC.sub(normalize, value)
+
+
+def _shell_value(value: str, path: str) -> str:
+    """Distinguish literal data from arithmetic and command substitution syntax."""
+    if value.startswith("${"):
+        substring = re.fullmatch(
+            r"\$\{(!?(?:[A-Za-z_]\w*|[0-9]+|[@*])(?:\[[^]]*\])?):(?![-+=?])(.*)\}",
+            value, re.DOTALL
+        )
+        if substring:
+            return repr(("substring", substring[1], ARITHMETIC_TOKEN.findall(substring[2])))
+        return repr(("parameter", _shell_parts(value[2:-1], path)))
+    if value.startswith("$((") and value.endswith("))"):
+        return repr(("arithmetic", ARITHMETIC_TOKEN.findall(value[3:-2])))
+    if value.startswith("$("):
+        return repr(("command", _code_tokens(value[2:-1], path)))
+    if value.startswith("`"):
+        return repr(("command", _code_tokens(value[1:-1], path)))
+    if value.startswith('\"'):
+        return repr(("double-quoted", _shell_parts(value[1:-1], path)))
+    return value
+
 def _code_tokens(source: str, path: str) -> str:
     """Compare complete source, preserving literals and ignoring comments."""
     if path.lower().endswith(".py"):
@@ -235,7 +279,7 @@ def _code_tokens(source: str, path: str) -> str:
             if match.lastgroup not in {"string", "expansion"}:
                 return match.group()
             key = f"{marker}{len(literals)}{marker}"
-            literals[key] = match.group()
+            literals[key] = _shell_value(match.group(), path)
             return key
 
         masked = pattern.sub(protect, code)
