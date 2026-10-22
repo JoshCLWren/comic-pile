@@ -21,7 +21,16 @@ FRONT = "frontend/src/pages/CblBrowserPage.tsx"
 
 
 def patch(path: str, old: list[str], new: list[str]) -> str:
-    """Produce a per-file diff containing supplied lines and context."""
+    """Produce a per-file unified diff for a targeted regression.
+
+    Args:
+        path: Changed file path.
+        old: Lines present before the change.
+        new: Lines present after the change.
+
+    Returns:
+        A Git-style patch containing the supplied lines.
+    """
     return (
         f"diff --git a/{path} b/{path}\n"
         f"--- a/{path}\n+++ b/{path}\n"
@@ -143,7 +152,11 @@ def test_test_only_change_does_not_count_as_product_behavior() -> None:
 
 
 def load_controller() -> ModuleType:
-    """Load the hyphenated production review controller."""
+    """Load the production review controller as a testable module.
+
+    Returns:
+        Controller module with its real implementation policy wiring.
+    """
     path = SCRIPTS / "factory-review-controller.py"
     spec = importlib.util.spec_from_file_location("factory_review_controller", path)
     assert spec is not None and spec.loader is not None
@@ -197,3 +210,41 @@ def test_current_head_validation_rejects_racing_edits(
     verdict = module.implementation_delivery_gate(44, HEAD, "Implement validation")
     assert verdict["decision"] == "retry"
     assert "changed" in verdict["reason"]
+
+
+@pytest.mark.parametrize(
+    "path,old,new",
+    [
+        ("Dockerfile", "RUN false", "RUN true"),
+        ("Makefile", "build: old", "build: new"),
+        (".github/workflows/ci.yml", "run: old", "run: new"),
+        ("pyproject.toml", "requires-python = '>=3.11'",
+         "requires-python = '>=3.14'"),
+    ],
+)
+def test_build_and_workflow_fixes_are_code(
+    path: str, old: str, new: str
+) -> None:
+    """Build and workflow edits can be valid executable deliverables."""
+    assert delivery.pr_delivers_implementation(
+        "Fix build and workflow behavior", [path],
+        patch(path, [old], [new]),
+    )[0]
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ('QUERY = """SELECT 1"""', 'QUERY = """SELECT 2"""'),
+        ("QUERY = 'SELECT first column'", "QUERY = 'SELECT second column'"),
+        ("message = 'hello world'", "message = 'hello  world'"),
+    ],
+)
+def test_behavioral_string_value_edits_are_preserved(
+    old: str, new: str
+) -> None:
+    """Meaningful string edits survive code token comparison."""
+    assert delivery.pr_delivers_implementation(
+        "Fix SQL query or message", [SOURCE],
+        patch(SOURCE, [old], [new]),
+    )[0]
