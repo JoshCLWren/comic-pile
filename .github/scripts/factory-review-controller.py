@@ -17,6 +17,7 @@ from typing import Any, Literal, TypedDict, cast
 
 sys.path.insert(0, os.path.dirname(__file__))
 issue_acceptance = importlib.import_module("factory_issue_acceptance")
+implementation_delivery = importlib.import_module("factory_implementation_delivery")
 _review_policy = importlib.import_module("factory_review_policy")
 approval_can_promote = _review_policy.approval_can_promote
 current_head_approvers = _review_policy.current_head_approvers
@@ -1303,6 +1304,34 @@ def poll_mergeable_gate(
 
 
 
+def implementation_delivery_gate(
+    pr_number: int, expected_head: str, issue_body: str
+) -> GateResult:
+    """Require behavioral source changes on implementation issues.
+
+    Final semantic review must still judge runnable test evidence and issue
+    correctness. Read the full PR patch, not paths or isolated diff snippets.
+    """
+    if not HEAD_RE.fullmatch(expected_head):
+        return gate_result("deny", "reviewed commit SHA is missing or invalid")
+    try:
+        files = run_gh(
+            ["pr", "diff", str(pr_number), "--repo", REPO, "--name-only"]
+        ).stdout.splitlines()
+        patch = run_gh(
+            ["pr", "diff", str(pr_number), "--repo", REPO, "--patch"]
+        ).stdout
+    except RuntimeError as exc:
+        return gate_result("retry", f"implementation diff unavailable: {exc}")
+    current_head = str(pr_json(pr_number).get("headRefOid") or "")
+    if current_head != expected_head:
+        return gate_result("retry", "PR head changed during implementation inspection")
+    delivered, reason = implementation_delivery.pr_delivers_implementation(
+        issue_body, files, patch
+    )
+    return gate_result("pass" if delivered else "deny", reason)
+
+
 def issue_acceptance_gate(pr_number: int, expected_head: str) -> GateResult:
     """Require controller-bot attestation for the current issue body and head."""
     pr = pr_json(pr_number)
@@ -1313,6 +1342,9 @@ def issue_acceptance_gate(pr_number: int, expected_head: str) -> GateResult:
     body = issue.get("body")
     if not isinstance(body, str):
         return gate_result("retry", "linked issue body could not be read")
+    executable = implementation_delivery_gate(pr_number, expected_head, body)
+    if executable["decision"] != "pass":
+        return executable
     if not issue_acceptance.attested(
         model_comment_bodies(pr_number), issue_number, expected_head, body
     ):
@@ -1562,6 +1594,17 @@ def handle_review(
         body = issue_object.get("body")
         if not isinstance(body, str):
             raise RuntimeError("linked issue body unavailable")
+        implementation = implementation_delivery_gate(
+            pr_number, reviewed_head, body
+        )
+        if implementation["decision"] != "pass":
+            return return_to_review(
+                pr_number=pr_number, branch=branch, worker=worker,
+                reviewer=worker, verdict="not-ready", excerpt=excerpt,
+                note="Approval rejected: " + str(implementation["reason"]),
+                status="implementation-evidence-required",
+                head=reviewed_head, producer=producer,
+            )
         changed = run_gh(
             ["pr", "diff", str(pr_number), "--repo", REPO, "--name-only"]
         ).stdout.splitlines()
