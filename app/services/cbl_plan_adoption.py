@@ -147,7 +147,6 @@ class AdoptionMergeReport:
     created_positions: list[int] = field(default_factory=list)
     excluded_positions: list[int] = field(default_factory=list)
     unresolved_positions: list[int] = field(default_factory=list)
-    entry_decisions: dict[int, str] = field(default_factory=dict)
 
 
 @dataclass

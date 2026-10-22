@@ -713,6 +713,17 @@
             "title": "Issue Number",
             "type": "string"
           },
+          "publication_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publication Year"
+          },
           "read_at": {
             "anyOf": [
               {
@@ -780,6 +791,17 @@
               }
             ],
             "title": "Series Provider"
+          },
+          "volume_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Year"
           }
         },
         "required": [

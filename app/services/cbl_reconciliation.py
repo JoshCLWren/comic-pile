@@ -16,7 +16,7 @@ discarded.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import re
@@ -26,7 +26,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
-from app.services.cbl_source_selection import load_saved_entry_decisions
 from app.services.issue_identity_reconciliation import resolve_cbl_entries_to_canonical
 from app.services.collection_exclusion_guard import annotate_collection_exclusions
 
@@ -92,7 +91,6 @@ class CBLAdoptionPlan:
     unresolved_count: int
     final_adopted_count: int
     final_adopted_order: tuple[int, ...]
-    saved_entry_decisions: dict[str, bool] = field(default_factory=dict)
 
 
 def cbl_series_group_id(entry: dict[str, object]) -> str:
@@ -126,7 +124,6 @@ def calculate_cbl_adoption_plan(
     *,
     series_decisions: dict[str, bool] | None = None,
     entry_decisions: dict[str, bool] | None = None,
-    saved_entry_decisions: dict[str, bool] | None = None,
 ) -> CBLAdoptionPlan:
     """Calculate an adoption plan without database or persistence access.
 
@@ -135,10 +132,6 @@ def calculate_cbl_adoption_plan(
     are never adopted, but excluding their series defers them exactly like a
     per-entry skip so one exclusion clears the attention gate (#3542). An entry
     decision overrides its series decision.
-
-    ``saved_entry_decisions`` carries the reader's saved choices for a source
-    they already adopted. It is reported back with the plan so a reopened
-    source restores those choices instead of resetting them.
     """
     series_choices = {str(key): value for key, value in (series_decisions or {}).items()}
     entry_choices = {str(key): value for key, value in (entry_decisions or {}).items()}
@@ -222,38 +215,7 @@ def calculate_cbl_adoption_plan(
         unresolved_count=unresolved,
         final_adopted_count=len(adopted_positions),
         final_adopted_order=tuple(adopted_positions),
-        saved_entry_decisions=dict(saved_entry_decisions or {}),
     )
-
-
-def _saved_entry_decisions_by_entry_id(
-    entries: tuple[dict[str, object], ...],
-    saved_by_position: dict[int, bool],
-) -> dict[str, bool]:
-    """Map saved position decisions onto the entries that still exist.
-
-    A saved position that no longer exists in the source is dropped, and a
-    source position the reader never decided stays absent so a newly published
-    occurrence is reviewed instead of silently inheriting an old choice.
-
-    Args:
-        entries: Reconciled source entries in source order.
-        saved_by_position: Saved decisions keyed by CBL source position.
-
-    Returns:
-        Saved decisions keyed by ``cbl_entry_id`` string.
-    """
-    decisions: dict[str, bool] = {}
-    for entry in entries:
-        entry_id = entry.get("cbl_entry_id")
-        position = entry.get("cbl_position")
-        if not isinstance(entry_id, int) or isinstance(entry_id, bool):
-            continue
-        if not isinstance(position, int) or isinstance(position, bool):
-            continue
-        if position in saved_by_position:
-            decisions[str(entry_id)] = saved_by_position[position]
-    return decisions
 
 
 async def preview_cbl_adoption(
@@ -266,26 +228,18 @@ async def preview_cbl_adoption(
 ) -> tuple[CBLReconciliationReport, CBLAdoptionPlan]:
     """Return reconciliation and a dry-run adoption plan without mutating rows.
 
-    A source the reader already adopted restores the reader's saved
-    include/exclude choices. A first add keeps the all-checked default, so
-    every source series and issue starts selected.
+    Every source series and issue starts selected, so a first add needs no
+    per-entry decision. Durable save/reopen of reader choices is owned by the
+    Option E upsert ticket (#4022), not by this read-only preview.
     """
     report = await reconcile_cbl_source_list(db, user_id=user_id, list_id=list_id)
     entries = tuple(
         {**entry, "series_group_id": cbl_series_group_id(entry)} for entry in report.entries
     )
-    saved_by_position = await load_saved_entry_decisions(
-        db,
-        user_id=user_id,
-        cbl_source_list_id=list_id,
-    )
-    saved_entry_decisions = _saved_entry_decisions_by_entry_id(entries, saved_by_position)
-    effective_entry_decisions = {**saved_entry_decisions, **(entry_decisions or {})}
     return report, calculate_cbl_adoption_plan(
         entries,
         series_decisions=series_decisions,
-        entry_decisions=effective_entry_decisions,
-        saved_entry_decisions=saved_entry_decisions,
+        entry_decisions=entry_decisions,
     )
 
 

@@ -160,6 +160,8 @@ class CBLAdoptionEntryResponse(BaseModel):
     series_name: str
     issue_number: str
     series_group_id: str
+    volume_year: int | None = None
+    publication_year: int | None = None
     adoption_class: Literal["existing", "missing_importable", "ambiguous_unresolved"]
     adoption_decision: Literal[
         "included_existing",

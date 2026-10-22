@@ -28,6 +28,8 @@ export interface CBLAdoptionPreviewEntry {
   series_name: string
   issue_number: string
   series_group_id: string
+  volume_year?: number | null
+  publication_year?: number | null
   adoption_class: CBLAdoptionClass
   adoption_decision: CBLAdoptionDecision
   adopted: boolean

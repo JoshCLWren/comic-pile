@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
@@ -85,6 +85,8 @@ function entry(overrides: Partial<CBLAdoptionPreviewEntry>): CBLAdoptionPreviewE
     series_name: 'Ultimate Spider-Man',
     issue_number: '1',
     series_group_id: 'group-1',
+    volume_year: null,
+    publication_year: null,
     adoption_class: 'existing',
     adoption_decision: 'included_existing',
     adopted: true,
@@ -175,6 +177,17 @@ async function selectSource(user: ReturnType<typeof userEvent.setup>, p = previe
 async function confirmAdd(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
   await user.click(screen.getByRole('button', { name: 'Add reading order' }))
+}
+
+async function openChecklist(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Customize' }))
+}
+
+async function expandVolume(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+): Promise<void> {
+  await user.click(screen.getByRole('button', { name: `Show issues for ${label}` }))
 }
 
 describe('CblBrowserPage', () => {
@@ -445,13 +458,14 @@ describe('CblBrowserPage', () => {
         ],
       }),
     )
-    await user.click(screen.getByRole('button', { name: 'Customize' }))
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
     expect(screen.getByText('Already in ComicPile · read')).toBeInTheDocument()
     expect(screen.getByText('Already in ComicPile · matched by title')).toBeInTheDocument()
     expect(screen.getByText('Missing · will be added')).toBeInTheDocument()
     expect(screen.getByText('Missing · choose whether to add')).toBeInTheDocument()
     expect(screen.getByText('Excluded')).toBeInTheDocument()
-    expect(screen.getByText('Needs identity resolution')).toBeInTheDocument()
+    expect(screen.getByText('Needs resolution before commit')).toBeInTheDocument()
     expect(
       screen.getByText(
         'This entry has no ComicVine issue ID, so ComicPile cannot match it to an owned comic.',
@@ -531,25 +545,24 @@ describe('CblBrowserPage', () => {
     const addButton = screen.getByRole('button', { name: 'Add this reading order' })
     expect(addButton).toBeDisabled()
     expect(
-      screen.getByText(/Some entries need identity resolution before this source can be added/),
+      screen.getByText(/Some entries need resolution before this source can be added/),
     ).toBeInTheDocument()
     expect(mockCommitNew).not.toHaveBeenCalled()
   })
 
-  it('customize excludes a series locally without re-planning (#3482)', async () => {
+  it('customize excludes a volume locally without re-planning (#3482)', async () => {
     const user = userEvent.setup()
     renderPage()
     await searchFor(user)
     await selectSource(user)
     expect(mockPlan).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('button', { name: 'Customize' }))
-    expect(screen.getByRole('heading', { name: 'Series choices' })).toBeInTheDocument()
-    const group = screen.getByRole('group', { name: 'Ultimate Spider-Man series choice' })
-    const exclude = within(group).getByRole('button', { name: 'Exclude' })
-    expect(exclude).toHaveAttribute('aria-pressed', 'false')
-    await user.click(exclude)
+    await openChecklist(user)
+    expect(screen.getByRole('heading', { name: 'Included issues' })).toBeInTheDocument()
+    const group = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man series' })
+    expect(group).toBeChecked()
+    await user.click(group)
     expect(mockPlan).not.toHaveBeenCalled()
-    expect(exclude).toHaveAttribute('aria-pressed', 'true')
+    expect(group).not.toBeChecked()
     await waitFor(() => {
       expect(
         screen.getByText('2 entries · 0 already in ComicPile · 0 will be added'),
@@ -557,24 +570,114 @@ describe('CblBrowserPage', () => {
     })
   })
 
-  it('include all and include none set every series decision locally', async () => {
+  it('include all and include none set every volume decision locally', async () => {
     const user = userEvent.setup()
     renderPage()
     await searchFor(user)
     await selectSource(user)
-    await user.click(screen.getByRole('button', { name: 'Customize' }))
-    const group = screen.getByRole('group', { name: 'Ultimate Spider-Man series choice' })
+    await openChecklist(user)
+    const group = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man series' })
     await user.click(screen.getByRole('button', { name: 'Include none' }))
     expect(mockPlan).not.toHaveBeenCalled()
-    expect(within(group).getByRole('button', { name: 'Exclude' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(group).not.toBeChecked()
     await user.click(screen.getByRole('button', { name: 'Include all' }))
-    expect(within(group).getByRole('button', { name: 'Include' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    expect(group).toBeChecked()
+  })
+
+  it('every volume and issue checkbox starts checked on the first add (#4014)', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+    await openChecklist(user)
+    expect(screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man series' })).toBeChecked()
+    expect(screen.getByText('2 of 2 selected')).toBeInTheDocument()
+    await expandVolume(user, 'Ultimate Spider-Man')
+    expect(screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #1' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #2' })).toBeChecked()
+  })
+
+  it('unchecking one issue makes its volume checkbox indeterminate (#4014)', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
+    const group = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man series' })
+    const missing = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #2' })
+    await user.click(missing)
+    expect(group).toBePartiallyChecked()
+    expect(screen.getByText('1 of 2 selected')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        screen.getByText('2 entries · 1 already in ComicPile · 0 will be added'),
+      ).toBeInTheDocument()
+    })
+    // Re-checking that issue restores the volume's checked state.
+    await user.click(missing)
+    expect(group).toBeChecked()
+    expect(screen.getByText('2 of 2 selected')).toBeInTheDocument()
+  })
+
+  it('re-checking a volume restores the issues the reader unchecked (#4014)', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
+    const group = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man series' })
+    await user.click(screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #2' }))
+    expect(group).toBePartiallyChecked()
+    await user.click(group)
+    expect(group).toBeChecked()
+    await waitFor(() => {
+      expect(
+        screen.getByText('2 entries · 1 already in ComicPile · 1 will be added'),
+      ).toBeInTheDocument()
+    })
+  })
+
+  it('keeps two same-named volumes in separate groups (#4014)', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await searchFor(user)
+    await selectSource(
+      user,
+      preview({
+        entries: [
+          entry({ cbl_position: 1, cbl_entry_id: 101, volume_year: 2012 }),
+          entry({
+            cbl_position: 2,
+            cbl_entry_id: 102,
+            series_group_id: 'group-2',
+            volume_year: 2019,
+          }),
+        ],
+        summary: {
+          reused_existing_count: 2,
+          missing_would_create_count: 0,
+          excluded_count: 0,
+          unresolved_count: 0,
+          awaiting_opt_in_count: 0,
+          final_adopted_count: 2,
+          final_adopted_order: [1, 2],
+          reused_existing_positions: [1, 2],
+          missing_would_create_positions: [],
+          excluded_positions: [],
+          unresolved_positions: [],
+          awaiting_opt_in_positions: [],
+        },
+      }),
     )
+    await openChecklist(user)
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man (2012) series' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man (2019) series' }),
+    ).toBeInTheDocument()
   })
 
   it('per-entry include checkbox uses a unique name and applies locally', async () => {
@@ -582,7 +685,8 @@ describe('CblBrowserPage', () => {
     renderPage()
     await searchFor(user)
     await selectSource(user)
-    await user.click(screen.getByRole('button', { name: 'Customize' }))
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
     const owned = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #1' })
     const missing = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #2' })
     expect(owned).toBeChecked()
@@ -609,7 +713,8 @@ describe('CblBrowserPage', () => {
     renderPage()
     await searchFor(user)
     await selectSource(user)
-    await user.click(screen.getByRole('button', { name: 'Customize' }))
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
     const owned = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #1' })
     expect(owned).toBeChecked()
     await user.click(owned)
@@ -690,9 +795,8 @@ describe('CblBrowserPage', () => {
     renderPage()
     await searchFor(user)
     await selectSource(user)
-    await user.click(screen.getByRole('button', { name: 'Customize' }))
-    const group = screen.getByRole('group', { name: 'Ultimate Spider-Man series choice' })
-    await user.click(within(group).getByRole('button', { name: 'Exclude' }))
+    await openChecklist(user)
+    await user.click(screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man series' }))
     mockDiscover.mockResolvedValue([source])
     await user.clear(screen.getByLabelText('Search source lists'))
     await user.type(screen.getByLabelText('Search source lists'), 'other')
@@ -703,7 +807,7 @@ describe('CblBrowserPage', () => {
       ).not.toBeInTheDocument()
     })
     expect(
-      screen.queryByRole('heading', { name: 'Series choices' }),
+      screen.queryByRole('heading', { name: 'Included issues' }),
     ).not.toBeInTheDocument()
   })
 
@@ -746,7 +850,8 @@ describe('CblBrowserPage', () => {
     expect(
       screen.getByText(/You can skip individual entries under Customize/),
     ).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Customize' }))
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
     await user.click(screen.getByRole('button', { name: 'Skip' }))
     expect(mockPlan).not.toHaveBeenCalled()
     await waitFor(() => {
@@ -797,10 +902,12 @@ describe('CblBrowserPage', () => {
       screen.getByText('1 entry still needs attention before this source can be added.'),
     ).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Customize' }))
-    const group = screen.getByRole('group', { name: 'Ultimate Hawkeye series choice' })
-    await user.click(within(group).getByRole('button', { name: 'Exclude' }))
+    await openChecklist(user)
+    const group = screen.getByRole('checkbox', { name: 'Include Ultimate Hawkeye series' })
+    expect(group).toBeChecked()
+    await user.click(group)
     expect(mockPlan).not.toHaveBeenCalled()
+    await expandVolume(user, 'Ultimate Hawkeye')
     await waitFor(() => {
       expect(screen.getByText('Skipped')).toBeInTheDocument()
       expect(
@@ -813,7 +920,7 @@ describe('CblBrowserPage', () => {
     await user.click(screen.getByRole('button', { name: 'Unskip' }))
     await waitFor(() => {
       expect(
-        screen.getByText('Needs identity resolution'),
+        screen.getByText('Needs resolution before commit'),
       ).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
     })

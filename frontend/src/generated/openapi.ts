@@ -6553,6 +6553,8 @@ export interface components {
             is_duplicate_identity: boolean;
             /** Issue Number */
             issue_number: string;
+            /** Publication Year */
+            publication_year?: number | null;
             /** Read At */
             read_at: string | null;
             /** Read Status */
@@ -6569,6 +6571,8 @@ export interface components {
             series_name: string;
             /** Series Provider */
             series_provider: string | null;
+            /** Volume Year */
+            volume_year?: number | null;
         };
         /**
          * CBLAdoptionPlanRequest
