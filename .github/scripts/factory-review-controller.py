@@ -1309,27 +1309,21 @@ def implementation_delivery_gate(
 ) -> GateResult:
     """Require behavioral source changes on implementation issues.
 
-    Final semantic review must still judge runnable test evidence and issue
-    correctness. Read the full PR patch, not paths or isolated diff snippets.
-
     Args:
-        pr_number: Current GitHub pull request number.
-        expected_head: Exact independently reviewed commit SHA.
-        issue_body: Fresh authoritative linked-issue text.
+        pr_number: PR whose implementation is being checked.
+        expected_head: Immutable reviewed commit SHA.
+        issue_body: Authoritative linked issue contract.
 
     Returns:
-        Fail-closed gate result with actionable reasons.
+        Pass for behavioral delivery, deny for non-delivery, or retry on read failure.
     """
     if not HEAD_RE.fullmatch(expected_head):
         return gate_result("deny", "reviewed commit SHA is missing or invalid")
     try:
-        files = run_gh(
-            ["pr", "diff", str(pr_number), "--repo", REPO, "--name-only"]
-        ).stdout.splitlines()
-        patch = run_gh(
-            ["pr", "diff", str(pr_number), "--repo", REPO, "--patch"]
-        ).stdout
-    except RuntimeError as exc:
+        files, patch = implementation_delivery.complete_pr_diff(
+            pr_number, expected_head, REPO, lambda args: run_gh(args).stdout
+        )
+    except (RuntimeError, ValueError, KeyError, TypeError) as exc:
         return gate_result("retry", f"implementation diff unavailable: {exc}")
     current_head = str(pr_json(pr_number).get("headRefOid") or "")
     if current_head != expected_head:
@@ -1611,6 +1605,8 @@ def handle_review(
                 reviewer=worker, verdict="not-ready", excerpt=excerpt,
                 note="Approval rejected: " + str(implementation["reason"]),
                 status="implementation-evidence-required",
+                stage=("factory:changes-requested"
+                       if implementation["decision"] == "deny" else "factory:review"),
                 head=reviewed_head, producer=producer,
             )
         changed = run_gh(

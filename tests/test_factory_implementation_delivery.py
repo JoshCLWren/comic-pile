@@ -6,7 +6,7 @@ import importlib
 import importlib.util
 import sys
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
+from types import ModuleType
 
 import pytest
 from pytest import MonkeyPatch
@@ -21,15 +21,15 @@ FRONT = "frontend/src/pages/CblBrowserPage.tsx"
 
 
 def patch(path: str, old: list[str], new: list[str]) -> str:
-    """Produce a per-file unified diff for a targeted regression.
+    """Produce a per-file diff containing supplied lines and context.
 
     Args:
-        path: Changed file path.
-        old: Lines present before the change.
-        new: Lines present after the change.
+        path: Changed source path.
+        old: Complete old source lines.
+        new: Complete new source lines.
 
     Returns:
-        A Git-style patch containing the supplied lines.
+        Unified patch with the full file context.
     """
     return (
         f"diff --git a/{path} b/{path}\n"
@@ -152,10 +152,10 @@ def test_test_only_change_does_not_count_as_product_behavior() -> None:
 
 
 def load_controller() -> ModuleType:
-    """Load the production review controller as a testable module.
+    """Load the hyphenated production review controller.
 
     Returns:
-        Controller module with its real implementation policy wiring.
+        Imported production controller module.
     """
     path = SCRIPTS / "factory-review-controller.py"
     spec = importlib.util.spec_from_file_location("factory_review_controller", path)
@@ -171,7 +171,6 @@ def test_authoritative_review_gate_rejects_docs_only_implementation(
     """The real controller gate, not just its helper, refuses docs-only PRs."""
     module = load_controller()
     doc = "docs/issue-plans/4010.md"
-    commands: list[list[str]] = []
     current = {
         "state": "OPEN",
         "headRefName": "factory/44-4010-opencode-free",
@@ -183,18 +182,12 @@ def test_authoritative_review_gate_rejects_docs_only_implementation(
     })
     monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
 
-    def fake_run(args: list[str], **_kwargs: object) -> SimpleNamespace:
-        commands.append(args)
-        text = doc + "\n" if "--name-only" in args else patch(
-            doc, ["Plan"], ["Edited plan"]
-        )
-        return SimpleNamespace(stdout=text)
-
-    monkeypatch.setattr(module, "run_gh", fake_run)
+    monkeypatch.setattr(module.implementation_delivery, "complete_pr_diff", lambda *_args: (
+        [doc], patch(doc, ["Plan"], ["Edited plan"])
+    ))
     verdict = module.issue_acceptance_gate(4040, HEAD)
     assert verdict["decision"] == "deny"
     assert "production source" in verdict["reason"]
-    assert any("--patch" in command for command in commands)
 
 
 def test_current_head_validation_rejects_racing_edits(
@@ -203,13 +196,120 @@ def test_current_head_validation_rejects_racing_edits(
     """No stale-head executable evidence can be carried into approval."""
     module = load_controller()
     monkeypatch.setattr(module, "pr_json", lambda _pr: {"headRefOid": "b" * 40})
-    monkeypatch.setattr(module, "run_gh", lambda args: SimpleNamespace(stdout=(
-        SOURCE + "\n" if "--name-only" in args else
-        patch(SOURCE, ["return False"], ["return True"])
-    )))
+    monkeypatch.setattr(module.implementation_delivery, "complete_pr_diff", lambda *_args: (
+        [SOURCE], patch(SOURCE, ["return False"], ["return True"])
+    ))
     verdict = module.implementation_delivery_gate(44, HEAD, "Implement validation")
     assert verdict["decision"] == "retry"
     assert "changed" in verdict["reason"]
+
+
+@pytest.mark.parametrize("path", ["Dockerfile", "Makefile", ".github/workflows/ci.yml"])
+def test_behavioral_build_files_are_implementation(path: str) -> None:
+    """Build and CI behavior must not require an unrelated application edit."""
+    assert delivery.pr_delivers_implementation(
+        "Repair the build", [path], patch(path, ["run: false"], ["run: true"])
+    )[0]
+
+
+@pytest.mark.parametrize("old,new", [
+    ('QUERY = """SELECT 1"""', 'QUERY = """SELECT 2"""'),
+    ('MESSAGE = "two words"', 'MESSAGE = "twowords"'),
+    ('QUERY = """SELECT\n    1\n"""', 'QUERY = """SELECT\n    2\n"""'),
+    ('URL = "https://a/#one"', 'URL = "https://a/#two"'),
+])
+def test_python_string_values_are_behavioral(old: str, new: str) -> None:
+    """Literal contents, including spaces and comment markers, affect behavior."""
+    assert delivery.pr_delivers_implementation(
+        "Fix returned text", [SOURCE], patch(SOURCE, old.splitlines(), new.splitlines())
+    )[0]
+
+
+def test_long_docstring_and_block_comment_changes_are_not_behavior() -> None:
+    """Complete-file context handles edits far from opening delimiters."""
+    for path, opening, closing in ((SOURCE, '"""', '"""'), (FRONT, '/*', '*/')):
+        old = [opening] + [f"explanation {i}" for i in range(30)] + [closing]
+        new = old.copy()
+        new[15] = "changed prose"
+        assert not delivery.pr_delivers_implementation(
+            "Implement browsing", [path], patch(path, old, new)
+        )[0]
+
+
+def test_complete_diff_uses_immutable_sources_and_preserves_no_newline() -> None:
+    """The reader obtains whole files at merge base/head, including final lines."""
+    import json
+
+    calls: list[list[str]] = []
+
+    def read(args: list[str]) -> str:
+        calls.append(args)
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({"head": {"sha": HEAD}, "base": {"sha": "base"}})
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
+        if endpoint.endswith("/files"):
+            return json.dumps([[{"filename": SOURCE, "status": "modified",
+                                 "patch": "@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2"}]])
+        return "VALUE = 1" if endpoint.endswith("ref=ancestor") else "VALUE = 2"
+
+    paths, diff = delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+    assert delivery.pr_delivers_implementation("Fix value", paths, diff)[0]
+    assert any(f"ref={HEAD}" in command[-1] for command in calls)
+
+
+@pytest.mark.parametrize("closed", [False, True])
+def test_post_merge_refuses_non_delivery_and_repairs_keyword_closure(
+    monkeypatch: MonkeyPatch, closed: bool,
+) -> None:
+    """Both open issues and prematurely auto-closed issues retain implementation work."""
+    closure = importlib.import_module("factory_post_merge_closure")
+
+    monkeypatch.setattr(closure, "_pr_info", lambda _pr: {
+        "branch": "factory/46-4042-kilo-auto", "body": "Closes #4042",
+        "state": "MERGED", "head": HEAD,
+    })
+    monkeypatch.setattr(closure, "_issue_view", lambda _issue: {
+        "state": "CLOSED" if closed else "OPEN", "body": "Implement browsing",
+        "labels": ["factory", "ralph-status:done", "factory:unowned"],
+    })
+    monkeypatch.setattr(closure, "_issue_has_open_successor_pr", lambda *_args: False)
+    monkeypatch.setattr(closure, "_repo_slug", lambda: "owner/repo")
+    monkeypatch.setattr(closure, "_closed_by_pr", lambda *_args: True)
+    monkeypatch.setattr(delivery, "complete_pr_diff", lambda *_args: (
+        ["docs/plan.md"], patch("docs/plan.md", ["old"], ["new"])
+    ))
+    mutations: list[tuple[object, ...]] = []
+    monkeypatch.setattr(closure, "_run_gh", lambda *args: mutations.append(args))
+    monkeypatch.setattr(closure, "_replace_labels", lambda *args: mutations.append(args))
+    monkeypatch.setattr(closure, "_comment_issue", lambda *args: mutations.append(args))
+    monkeypatch.setattr(closure, "_close_issue", lambda *_args: pytest.fail("must not close"))
+    assert closure.close_merged_pr_issue(4046).startswith("not-delivered:")
+    assert bool(mutations) == closed
+    if closed:
+        assert any("reopen" in mutation for mutation in mutations)
+        labels = mutations[0][1]
+        assert isinstance(labels, list)
+        assert "ralph-status:pending" in labels
+
+
+@pytest.mark.parametrize("current,change,previous", [
+    ("first\nlast", "@@ -2 +1,0 @@\n-removed", "first\nremoved\nlast"),
+    ("", "@@ -1,2 +0,0 @@\n-first\n-second", "first\nsecond"),
+    ("added", "@@ -0,0 +1 @@\n+added", ""),
+])
+def test_reverse_patch_handles_zero_length_sides(
+    current: str, change: str, previous: str,
+) -> None:
+    """Added/deleted files and deletion-only hunks use Git's zero-count offsets."""
+    assert delivery._previous_source(current, change) == previous
+
+
+def test_truncated_source_patch_fails_closed() -> None:
+    """GitHub's missing/truncated patch cannot become behavioral evidence."""
+    with pytest.raises(RuntimeError, match="incomplete"):
+        delivery._previous_source("new", "@@ -1,2 +1 @@\n-old\n+new")
 
 
 @pytest.mark.parametrize(
@@ -248,3 +348,21 @@ def test_behavioral_string_value_edits_are_preserved(
         "Fix SQL query or message", [SOURCE],
         patch(SOURCE, [old], [new]),
     )[0]
+
+
+@pytest.mark.parametrize("event,commit,expected", [
+    ("closed", HEAD, True), ("closed", "other-delivery", False),
+    ("closed", None, False), ("reopened", HEAD, False),
+])
+def test_only_own_keyword_closure_may_be_reopened(
+    monkeypatch: MonkeyPatch, event: str, commit: str | None, expected: bool,
+) -> None:
+    """Historical non-delivery cannot undo a later delivery or manual closure."""
+    import json
+
+    closure = importlib.import_module("factory_post_merge_closure")
+    monkeypatch.setattr(closure, "_repo_slug", lambda: "owner/repo")
+    monkeypatch.setattr(closure, "_run_gh", lambda *_args: json.dumps([[
+        {"event": "closed", "commit_id": HEAD}, {"event": event, "commit_id": commit},
+    ]]))
+    assert closure._closed_by_pr(4042, {"head": HEAD, "merge": "merge"}) is expected

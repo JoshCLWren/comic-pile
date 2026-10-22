@@ -2858,3 +2858,27 @@ def test_provenance_failure_with_failed_fallback_comment_still_blocks(
     assert result["head"] == REVIEWED_HEAD
     assert transitions[-1]["pr_stage"] == "factory:blocked"
     assert all(item["pr_stage"] != "factory:ready" for item in transitions)
+
+
+@pytest.mark.parametrize("decision,stage", [
+    ("deny", "factory:changes-requested"), ("retry", "factory:review"),
+])
+def test_non_delivery_never_promotes_semantic_approval(
+    monkeypatch: MonkeyPatch, decision: str, stage: str,
+) -> None:
+    """Known non-delivery routes to repair; transient reads require fresh review."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(
+        monkeypatch, module, [payload], comments=producer_contribution(),
+    )
+    monkeypatch.setattr(module, "implementation_delivery_gate", lambda *_args: {
+        "decision": decision, "reason": "no executable delivery verified",
+    })
+    result = module.handle_review(
+        worker="17", pr_number=1390, verdict="approve",
+        reviewed_head=REVIEWED_HEAD, review_log="/tmp/model.log",
+    )
+    assert result["status"] == "implementation-evidence-required"
+    assert transitions[-1]["pr_stage"] == stage
+    assert "no executable delivery verified" in str(posted[-1]["note"])

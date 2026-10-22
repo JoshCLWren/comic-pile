@@ -6,19 +6,20 @@ reviewer still has to verify each linked-issue requirement and its tests.
 
 from __future__ import annotations
 
+import ast
+import difflib
+import json
 import re
-from collections.abc import Iterable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable
+from urllib.parse import quote
 
 DOC_SUFFIXES = (".md", ".rst", ".txt", ".adoc")
+BEHAVIORAL_FILENAMES = frozenset({"dockerfile", "containerfile", "makefile", "gnumakefile"})
 SOURCE_SUFFIXES = (
     ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
     ".sh", ".sql", ".html", ".css", ".scss", ".vue", ".svelte",
-    ".yml", ".yaml", ".toml", ".json",
+    ".yml", ".yaml", ".json", ".toml", ".ini", ".cfg",
 )
-BEHAVIORAL_FILENAMES = frozenset({
-    "dockerfile", "containerfile", "makefile", "gnumakefile",
-})
 TYPE_LINE = re.compile(
     r"(?im)^\s*(?:\*\*)?(?:issue\s+type|deliverable\s+type|"
     r"work\s+type)\s*:(?:\*\*)?\s*(?:\*\*)?"
@@ -72,140 +73,90 @@ def substantive_changed_files(changed_files: Iterable[str]) -> list[str]:
     return [
         path for path in changed_files
         if path.strip()
-        and (
-            path.lower().endswith(SOURCE_SUFFIXES)
-            or path.rsplit("/", 1)[-1].lower() in BEHAVIORAL_FILENAMES
-            or path.lower().endswith((".dockerfile", ".containerfile"))
-        )
+        and (path.lower().endswith(SOURCE_SUFFIXES)
+             or path.lower().rsplit("/", 1)[-1] in BEHAVIORAL_FILENAMES
+             or path.lower().endswith((".dockerfile", ".containerfile")))
         and not _is_docs_path(path)
         and not _is_test_path(path)
     ]
 
 
-@dataclass
-class _LexState:
-    """Comment/documentation state for one side of a patch hunk."""
+class _WithoutDocstrings(ast.NodeTransformer):
+    """Remove only actual Python documentation expression nodes."""
 
-    triple: str = ""
-    triple_is_code: bool = False
-    block: bool = False
+    def visit(self, node: ast.AST) -> ast.AST:
+        """Strip leading docstrings while preserving behavioral string literals.
+
+        Args:
+            node: Python syntax node being traversed.
+
+        Returns:
+            Node with only documentation expressions removed.
+        """
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if (node.body and isinstance(node.body[0], ast.Expr)
+                    and isinstance(node.body[0].value, ast.Constant)
+                    and isinstance(node.body[0].value.value, str)):
+                node.body = node.body[1:]
+        return super().visit(node)
 
 
-def _executable_text(line: str, path: str, state: _LexState) -> str:
-    """Strip non-executable comments without erasing string semantics.
-
-    A bare Python triple-quoted statement is documentation; an assigned or
-    returned triple-quoted string is executable data. String values are
-    preserved byte-for-byte so SQL/query/configuration fixes qualify.
-    """
-    filename = path.rsplit("/", 1)[-1].lower()
-    python = path.lower().endswith(".py")
-    hash_comments = python or path.lower().endswith(
-        (".sh", ".yaml", ".yml", ".toml")
-    ) or filename in BEHAVIORAL_FILENAMES
-    whitespace_matters = path.lower().endswith(
-        (".yaml", ".yml", ".toml")
-    ) or filename in {"makefile", "gnumakefile"}
-    result: list[str] = []
-    pos = 0
-    while pos < len(line):
-        if state.triple:
-            end = line.find(state.triple, pos)
-            if end < 0:
-                if state.triple_is_code:
-                    result.append(line[pos:])
-                break
-            if state.triple_is_code:
-                result.append(line[pos : end + 3])
-            pos = end + 3
-            state.triple = ""
-            state.triple_is_code = False
-            continue
-        if state.block:
-            end = line.find("*/", pos)
-            if end < 0:
-                break
-            pos = end + 2
-            state.block = False
-            continue
-        if python and line.startswith(('"""', "'''"), pos):
-            delimiter = line[pos : pos + 3]
-            prefix = "".join(result).strip()
-            is_code = bool(prefix and prefix.lower() not in {"r", "u", "f", "b"})
-            end = line.find(delimiter, pos + 3)
-            if is_code:
-                result.append(line[pos:] if end < 0 else line[pos : end + 3])
-            if end < 0:
-                state.triple = delimiter
-                state.triple_is_code = is_code
-                break
-            pos = end + 3
-            continue
-        if not python and line.startswith("//", pos):
-            break
-        if not python and line.startswith("/*", pos):
-            state.block = True
-            pos += 2
-            continue
-        if hash_comments and line[pos] == "#":
-            break
-        if line[pos] in {"'", '"'}:
-            # Do not interpret comment delimiters inside a string.
-            quote = line[pos]
-            end = pos + 1
-            while end < len(line):
-                if line[end] == "\\":
-                    end += 2
-                elif line[end] == quote:
-                    end += 1
-                    break
-                else:
-                    end += 1
-            result.append(line[pos:end])
-            pos = end
-            continue
-        if whitespace_matters or not line[pos].isspace():
-            result.append(line[pos])
-        pos += 1
-    code = "".join(result)
-    # Standalone quoted statements have no executable effect in Python.
-    if python and re.fullmatch(r"[rubfRUBF]*(['\"]).*\1", code.strip()):
-        return ""
-    return code if whitespace_matters else code.strip()
+def _code_tokens(source: str, path: str) -> str:
+    """Compare complete source, preserving literals and ignoring comments."""
+    if path.lower().endswith(".py"):
+        tree = _WithoutDocstrings().visit(ast.parse(source))
+        return ast.dump(tree, include_attributes=False)
+    name = path.lower().rsplit("/", 1)[-1]
+    hash_comments = path.lower().endswith((".sh", ".yml", ".yaml", ".toml", ".ini", ".cfg"))
+    hash_comments = hash_comments or name in BEHAVIORAL_FILENAMES
+    # Match literals before comment delimiters so URLs, SQL strings, and
+    # whitespace within values remain behavioral. Full source provides the
+    # lexical context even when a changed line is deep inside a block comment.
+    comments = r"\#[^\n]*" if hash_comments else r"/\*.*?\*/|//[^\n]*"
+    if path.lower().endswith(".sql"):
+        comments = r"/\*.*?\*/|--[^\n]*"
+    if path.lower().endswith((".html", ".vue", ".svelte")):
+        comments += r"|<!--.*?-->"
+    pattern = re.compile(
+        r"(?P<string>'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`(?:\\.|[^`\\])*`)"
+        + r"|(?P<comment>" + comments + r")|(?P<space>\s+)|(?P<code>.)",
+        re.DOTALL,
+    )
+    if path.lower().endswith((".yml", ".yaml")) or name in {"makefile", "gnumakefile"}:
+        # Indentation/newlines carry executable structure in these formats.
+        tokens = [match.group() for match in pattern.finditer(source)
+                  if match.lastgroup != "comment"]
+        return repr(tokens)
+    tokens = [match.group() for match in pattern.finditer(source)
+              if match.lastgroup not in {"comment", "space"}]
+    return repr(tokens)
 
 
 def _has_code_delta(patch: str, path: str) -> bool:
-    """Inspect only the old and new executable sides of source-file hunks."""
-    deleted: list[str] = []
-    added: list[str] = []
-    old = _LexState()
-    new = _LexState()
+    """Compare old/new complete sources, failing closed on incomplete Python."""
+    old: list[str] = []
+    new: list[str] = []
     in_hunk = False
     for line in patch.splitlines():
         if line.startswith("@@"):
-            old = _LexState()
-            new = _LexState()
+            # Production callers provide complete-file context. A partial
+            # hunk cannot establish whether its first line is inside a comment.
+            if in_hunk or not re.match(r"@@ -[01](?:,\d+)? \+[01](?:,\d+)? @@", line):
+                return False
             in_hunk = True
-            continue
-        if not in_hunk:
-            continue
-        if line.startswith("diff --git "):
-            break
-        if line.startswith("\\ No newline"):
-            continue
-        if line.startswith("+") and not line.startswith("+++"):
-            token = _executable_text(line[1:], path, new)
-            if token:
-                added.append(token)
-        elif line.startswith("-") and not line.startswith("---"):
-            token = _executable_text(line[1:], path, old)
-            if token:
-                deleted.append(token)
-        elif line.startswith(" "):
-            _executable_text(line[1:], path, old)
-            _executable_text(line[1:], path, new)
-    # Pure formatting/comments must not qualify. Deletions are valid code edits.
-    return bool(added or deleted) and added != deleted
+        elif in_hunk and line.startswith("+"):
+            new.append(line[1:])
+        elif in_hunk and line.startswith("-"):
+            old.append(line[1:])
+        elif in_hunk and line.startswith(" "):
+            old.append(line[1:])
+            new.append(line[1:])
+    if not in_hunk:
+        return False
+    try:
+        return _code_tokens("\n".join(old), path) != _code_tokens("\n".join(new), path)
+    except (SyntaxError, ValueError):
+        return False
 
 
 def _file_patches(diff_text: str) -> dict[str, str]:
@@ -259,3 +210,96 @@ def pr_delivers_implementation(
         "only documentation, comments, docstrings or formatting changed "
         "in production source files; executable delivery is unverified",
     )
+
+
+
+def _previous_source(current: str, patch: str) -> str:
+    """Reverse GitHub's patch against complete head source, validating every hunk."""
+    lines = current.splitlines()
+    previous: list[str] = []
+    cursor = 0
+    entries = patch.splitlines()
+    index = 0
+    while index < len(entries):
+        header = re.fullmatch(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@.*", entries[index])
+        if not header:
+            raise RuntimeError("missing or malformed source patch hunk")
+        start = int(header[3]) - (int(header[4] or 1) > 0)
+        if start < cursor or start > len(lines):
+            raise RuntimeError("source patch has invalid hunk coordinates")
+        previous.extend(lines[cursor:start])
+        cursor = start
+        old_count = new_count = 0
+        index += 1
+        while index < len(entries) and not entries[index].startswith("@@"):
+            entry = entries[index]
+            index += 1
+            if entry.startswith("\\ No newline"):
+                continue
+            if not entry or entry[0] not in " +-":
+                raise RuntimeError("unrecognized source patch line")
+            if entry[0] in " +":
+                if cursor >= len(lines) or lines[cursor] != entry[1:]:
+                    raise RuntimeError("source patch does not match immutable head")
+                cursor += 1
+                new_count += 1
+            if entry[0] in " -":
+                previous.append(entry[1:])
+                old_count += 1
+        if old_count != int(header[2] or 1) or new_count != int(header[4] or 1):
+            raise RuntimeError("incomplete source patch; cannot verify delivery")
+    previous.extend(lines[cursor:])
+    return "\n".join(previous)
+
+
+def complete_pr_diff(
+    pr_number: int, expected_head: str, repo: str,
+    run: Callable[[list[str]], str],
+) -> tuple[list[str], str]:
+    """Fetch full source context and reconstruct the PR's original base.
+
+    Args:
+        pr_number: Open or merged pull request number.
+        expected_head: Commit being reviewed.
+        repo: Repository owner/name.
+        run: GitHub CLI reader that raises RuntimeError on failure.
+
+    Returns:
+        Changed paths and a unified diff with complete source context.
+
+    Raises:
+        RuntimeError: If the head changes or complete source is unavailable.
+    """
+    info = json.loads(run(["api", f"repos/{repo}/pulls/{pr_number}"]))
+    if info["head"]["sha"] != expected_head:
+        raise RuntimeError("PR head changed during implementation inspection")
+    files = json.loads(run([
+        "api", "--paginate", "--slurp", f"repos/{repo}/pulls/{pr_number}/files",
+    ]))
+    records = [record for page in files for record in page]
+    paths = [record["filename"] for record in records]
+    candidates = set(substantive_changed_files(paths))
+    patches: list[str] = []
+    for record in records:
+        path = record["filename"]
+        if path not in candidates or record["status"] == "renamed" and not record.get("changes"):
+            continue
+        patch = record.get("patch")
+        if not isinstance(patch, str) or not patch:
+            raise RuntimeError(f"source patch unavailable for {path}")
+        new = "" if record["status"] == "removed" else run([
+            "api", "-H", "Accept: application/vnd.github.raw+json",
+            f"repos/{repo}/contents/{quote(path, safe='/')}?ref={expected_head}",
+        ])
+        # Reverse the original PR patch rather than comparing against current
+        # main, which can already contain the merged head during closure.
+        old = _previous_source(new, patch)
+        patches.append(
+            f"diff --git a/{path} b/{path}\n" + "".join(difflib.unified_diff(
+                [line + "\n" for line in old.splitlines()],
+                [line + "\n" for line in new.splitlines()],
+                fromfile=f"a/{path}", tofile=f"b/{path}",
+                n=max(len(old.splitlines()), len(new.splitlines())) + 1,
+            ))
+        )
+    return paths, "\n".join(patches)
