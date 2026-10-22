@@ -76,7 +76,8 @@ def test_contract_head_and_issue_must_match():
 
 def test_issue_body_revision_and_head_invalidate_trusted_marker():
     old = acceptance.marker(4010, HEAD, ISSUE)
-    assert acceptance.attested([f"{old}\n### Review"], 4010, HEAD, ISSUE)
+    assert acceptance.attested([old], 4010, HEAD, ISSUE)
+    assert not acceptance.attested([f"{old}\n### Review"], 4010, HEAD, ISSUE)
     assert not acceptance.attested([old], 4010, NEXT, ISSUE)
     assert not acceptance.attested([old], 4010, HEAD, ISSUE + "\nNew requirement")
     assert not acceptance.attested(["<!-- untrusted imitation -->"], 4010, HEAD, ISSUE)
