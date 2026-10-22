@@ -87,9 +87,9 @@ export default function ReadingGraphSummary({
                 <span
                   className={`text-xs font-bold ${
                     node.state === 'continues'
-                      ? 'text-emerald-300'
+                      ? 'text-[var(--theme-success)]'
                       : node.state === 'waits'
-                        ? 'text-amber-200'
+                        ? 'text-[var(--theme-warning)]'
                         : 'text-[var(--theme-text-muted)]'
                   }`}
                 >
@@ -127,7 +127,7 @@ export default function ReadingGraphSummary({
                   {decided ? (
                     <span>{overlapDecisionLabel(overlap, choices)}</span>
                   ) : (
-                    <span className="text-amber-200">Needs a decision before saving</span>
+                    <span className="text-[var(--theme-warning)]">Needs a decision before saving</span>
                   )}
                 </li>
               )

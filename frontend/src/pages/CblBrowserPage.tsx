@@ -62,9 +62,9 @@ function statusLabel(entry: CBLAdoptionPreviewEntry): string {
 }
 
 function statusClass(entry: CBLAdoptionPreviewEntry): string {
-  if (entry.adoption_decision === 'included_existing') return 'text-emerald-300'
-  if (entry.adoption_decision === 'would_create_missing') return 'text-sky-300'
-  if (entry.adoption_decision === 'unresolved') return 'text-amber-300'
+  if (entry.adoption_decision === 'included_existing') return 'text-[var(--theme-success)]'
+  if (entry.adoption_decision === 'would_create_missing') return 'text-[var(--theme-text-primary)]'
+  if (entry.adoption_decision === 'unresolved') return 'text-[var(--theme-warning)]'
   return 'text-[var(--theme-text-muted)]'
 }
 
@@ -273,7 +273,7 @@ export default function CblBrowserPage() {
   )
   const pendingOverlaps = unresolvedOverlaps(graph, overlapChoices)
   const graphLoading =
-    selectedSource !== null && preview !== null && graphQuery.isPending && !graphQuery.isError
+    selectedSource !== null && preview !== null && (graphQuery.isPending || graphQuery.isFetching) && !graphQuery.isError
   const graphUnavailable = selectedSource !== null && preview !== null && graphQuery.isError
   const graphCycleErrors = graph?.cycle_errors ?? []
   const pendingOverlapNames = pendingOverlaps
@@ -396,7 +396,7 @@ export default function CblBrowserPage() {
     const continuesAdd = graphDialogContinuesAdd
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
-    if (continuesAdd && unresolvedOverlaps(graph, overlapChoices).length === 0) {
+    if (continuesAdd && unresolvedOverlaps(graph, overlapChoices).length === 0 && graphCycleErrors.length === 0) {
       setConfirmOpen(true)
     }
   }
@@ -442,7 +442,7 @@ export default function CblBrowserPage() {
   }
 
   const confirmCommit = () => {
-    if (!selectedSource || !preview || isCommitting) return
+    if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || graphUnavailable || pendingOverlaps.length > 0) return
     setConfirmOpen(false)
     commitMutation.mutate({ source: selectedSource, preview })
   }
@@ -621,7 +621,7 @@ export default function CblBrowserPage() {
           )}
 
           {needsAttentionCount > 0 && (
-            <p className="text-xs text-amber-300">
+            <p className="text-xs text-[var(--theme-warning)]">
               {summary?.unresolved_count
                 ? 'Some entries need resolution before this source can be added. '
                 : ''}
@@ -635,7 +635,7 @@ export default function CblBrowserPage() {
           )}
 
           {graphUnavailable && (
-            <p role="status" className="text-xs text-amber-200">
+            <p role="status" className="text-xs text-[var(--theme-warning)]">
               ComicPile could not load the reading graph, so it cannot check overlapping series
               right now. You can still add this source.{' '}
               <button
@@ -680,7 +680,7 @@ export default function CblBrowserPage() {
                 </p>
               )}
               {!commitBlockedReason && pendingOverlaps.length > 0 && (
-                <p className="max-w-xs text-xs text-amber-200">
+                <p className="max-w-xs text-xs text-[var(--theme-warning)]">
                   {pendingOverlaps.length === 1
                     ? `Decide how ${pendingOverlapNames} should continue before adding this source.`
                     : `Decide how ${pendingOverlaps.length} overlapping series should continue before adding this source.`}
@@ -789,7 +789,7 @@ export default function CblBrowserPage() {
                                       {statusLabel(entry)}
                                     </span>
                                     {resolutionReason && (
-                                      <span className="mt-1 block text-xs text-amber-200">
+                                      <span className="mt-1 block text-xs text-[var(--theme-warning)]">
                                         {resolutionReason}
                                       </span>
                                     )}
