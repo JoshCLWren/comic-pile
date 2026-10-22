@@ -753,10 +753,19 @@ export default function CblBrowserPage() {
           </div>
         ) : listCandidatesQuery.isPending ? (
           <p className="text-sm text-[var(--theme-text-muted)]">Loading Reading List candidates…</p>
+        ) : (listCandidatesQuery.data?.input_confirmed_total ?? 0) === 0 ? (
+          <p
+            className="text-sm text-[var(--theme-text-muted)]"
+            data-testid="reading-list-candidates-identity-gaps"
+          >
+            No confirmed Comic Vine IDs to compare:{' '}
+            {listCandidatesQuery.data?.input_missing_count ?? 0} missing and{' '}
+            {listCandidatesQuery.data?.input_conflict_count ?? 0} conflicting.
+          </p>
         ) : (
           <CblComparisonList
             candidates={listCandidatesQuery.data?.candidates ?? []}
-            inputTotal={listCandidatesQuery.data?.input_entry_count ?? 0}
+            inputTotal={listCandidatesQuery.data?.input_confirmed_total ?? 0}
             emptyMessage="No matching sources for this Reading List."
             backTo="/cbl-sources"
             backLabel="Sources"

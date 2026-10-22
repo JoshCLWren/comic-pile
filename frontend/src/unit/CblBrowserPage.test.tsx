@@ -21,6 +21,24 @@ vi.mock('../services/api-cbl-sources', () => ({
     preview: vi.fn(),
     plan: vi.fn(),
     commitNew: vi.fn(),
+    compare: vi.fn().mockResolvedValue({
+      comicvine_issue_ids: [],
+      input_total: 2,
+      candidates_total: 0,
+      candidates: [],
+    }),
+    readingListCandidates: vi.fn().mockResolvedValue({
+      list_id: 1,
+      list_name: 'Reading List',
+      input_entry_count: 0,
+      input_confirmed_total: 0,
+      input_missing_count: 0,
+      input_conflict_count: 0,
+      input_ids: [],
+      entries: [],
+      candidates_total: 0,
+      candidates: [],
+    }),
   },
 }))
 
