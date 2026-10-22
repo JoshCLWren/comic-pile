@@ -51,6 +51,11 @@ def requirements(body: str) -> list[str]:
         if item:
             flush()
             line = re.sub(r"^\[[ xX]\]\s*", "", item.group(1)).strip()
+        # Dependency links are verified by the separate factory dependency gate.
+        # Do not make an implementation PR change code merely to satisfy a
+        # pointer to an already-delivered prerequisite.
+        if re.fullmatch(r"#\d+", line) or re.fullmatch(r"Part of #\d+(?:\s+and\s+governed by #\d+)?\.", line):
+            continue
         if line:
             current.append(line)
     flush()
