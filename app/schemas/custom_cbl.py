@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.continuity_plan import ContinuityPlanResponse
+from app.services.reading_overlap_identity import VOLUME_KEY_PATTERN
 
 
 class ReadingListEntryIntent(BaseModel):
@@ -143,3 +144,66 @@ class CustomCBLApplyResponse(ContinuityPlanResponse):
 
     added_issue_ids: list[int]
     skipped_existing_issue_ids: list[int]
+
+
+class OverlapDecisionItem(BaseModel):
+    """One stored reader-approved overlap choice inside one Reading List."""
+
+    id: int
+    continuing_volume_id: str
+    waiting_volume_id: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class OverlapVolumeCandidate(BaseModel):
+    """One owned Thread with the exact Comic Vine volume it resolves to."""
+
+    thread_id: int
+    thread_title: str
+    volume_id: str
+
+
+class OverlapDecisionSetResponse(BaseModel):
+    """One owned Reading List's overlap decisions and their version token.
+
+    ``updated_at`` is the version of this list's decision set. It changes only
+    when an approved choice changes, so an ordinary membership upsert never
+    invalidates a stored choice.
+    """
+
+    list_id: int
+    updated_at: datetime
+    decisions: list[OverlapDecisionItem] = Field(default_factory=list)
+    candidate_volumes: list[OverlapVolumeCandidate] = Field(default_factory=list)
+
+
+class OverlapDecisionWrite(BaseModel):
+    """One reader-approved overlap choice for one owned Reading List."""
+
+    continuing_volume_id: str = Field(
+        min_length=11,
+        max_length=110,
+        pattern=VOLUME_KEY_PATTERN.pattern,
+        description="Exact Comic Vine volume allowed to keep progressing.",
+    )
+    waiting_volume_id: str = Field(
+        min_length=11,
+        max_length=110,
+        pattern=VOLUME_KEY_PATTERN.pattern,
+        description="Exact Comic Vine volume allowed to keep waiting.",
+    )
+    expected_updated_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Optimistic-concurrency token from GET ``updated_at``. When present, "
+            "a mismatch returns 409 ``reading_overlap_version_conflict``."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_distinct_volumes(self) -> OverlapDecisionWrite:
+        """Reject a decision that would exempt a volume from itself."""
+        if self.continuing_volume_id == self.waiting_volume_id:
+            raise ValueError("an overlap decision must name two distinct volumes")
+        return self

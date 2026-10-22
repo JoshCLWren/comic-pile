@@ -11,6 +11,33 @@ from app.models.external_identity import ExternalIdentity
 COMICVINE_PROVIDER = "comicvine"
 
 
+async def get_source_list(
+    db: AsyncSession,
+    *,
+    cbl_source_list_id: int,
+) -> tuple[CBLSourceList, str] | None:
+    """Load one shared CBL source list with its repository name.
+
+    Args:
+        db: Async database session.
+        cbl_source_list_id: Shared CBL source list ID.
+
+    Returns:
+        The source list paired with its source repository name, or ``None``
+        when the ID is unknown.
+    """
+    row = (
+        await db.execute(
+            select(CBLSourceList, CBLSource.repository)
+            .join(CBLSource, CBLSource.id == CBLSourceList.source_id)
+            .where(CBLSourceList.id == cbl_source_list_id)
+        )
+    ).first()
+    if row is None:
+        return None
+    return row[0], row[1]
+
+
 async def discover_cbl_source_lists(
     db: AsyncSession,
     *,
