@@ -887,3 +887,19 @@ async def fetch_comicvine_mapping_health(
             )
 
     return health_map
+
+
+async def owned_title_exists(db: AsyncSession, user_id: int, title: str) -> bool:
+    """Check whether a reader already has a thread with an exact display title.
+
+    Args:
+        db: Current transaction.
+        user_id: Reader whose titles are checked.
+        title: Proposed display title.
+
+    Returns:
+        Whether any thread owned by this reader uses the title.
+    """
+    return await db.scalar(
+        select(Thread.id).where(Thread.user_id == user_id, Thread.title == title).limit(1)
+    ) is not None
