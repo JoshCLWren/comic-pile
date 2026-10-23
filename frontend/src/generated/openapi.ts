@@ -2081,6 +2081,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/custom-cbls/{list_id}/overlap-decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Custom Cbl Overlap Decisions
+         * @description Return one owned Reading List's overlap decisions and version token.
+         *
+         *     Args:
+         *         list_id: Identifier of the Reading List to read.
+         *         current_user: Authenticated reader making the request.
+         *         db: Database session for the request.
+         *
+         *     Returns:
+         *         The list's saved overlap decisions, the current version token, and
+         *         the reader's selectable volume candidates for new decisions.
+         *
+         *     Raises:
+         *         HTTPException: With status 404 when the reader does not own the list.
+         */
+        get: operations["read_custom_cbl_overlap_decisions_api_v1_custom_cbls__list_id__overlap_decisions_get"];
+        /**
+         * Save Custom Cbl Overlap Decision
+         * @description Save one reader-approved overlap choice inside an owned Reading List.
+         *
+         *     Args:
+         *         list_id: Identifier of the Reading List to update.
+         *         payload: The overlap choice to save, naming two exact Comic Vine volumes.
+         *         current_user: Authenticated reader making the request.
+         *         db: Database session for the request.
+         *
+         *     Returns:
+         *         The list's updated decision set and version token.
+         *
+         *     Raises:
+         *         HTTPException: With status 404 for a foreign list, 409 for a stale
+         *             version token, and 422 for an unusable or cyclic choice.
+         */
+        put: operations["save_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Custom Cbl Overlap Decision
+         * @description Remove one reader-approved overlap choice from an owned Reading List.
+         *
+         *     Args:
+         *         list_id: Identifier of the Reading List to update.
+         *         decision_id: Identifier of the overlap decision to remove.
+         *         current_user: Authenticated reader making the request.
+         *         db: Database session for the request.
+         *         expected_updated_at: Decision version token the client last read. None
+         *             skips the concurrency check.
+         *
+         *     Returns:
+         *         The list's updated decision set and version token.
+         *
+         *     Raises:
+         *         HTTPException: With status 404 for a foreign list or unknown decision,
+         *             409 for a stale version token, and 422 when removing the choice
+         *             would make the reader's constraint graph cyclic.
+         */
+        delete: operations["delete_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions__decision_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/custom-cbls/{list_id}/reader": {
         parameters: {
             query?: never;
@@ -11869,6 +11954,82 @@ export interface components {
             scope: string;
         };
         /**
+         * OverlapDecisionItem
+         * @description One stored reader-approved overlap choice inside one Reading List.
+         */
+        OverlapDecisionItem: {
+            /** Continuing Volume Id */
+            continuing_volume_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Waiting Volume Id */
+            waiting_volume_id: string;
+        };
+        /**
+         * OverlapDecisionSetResponse
+         * @description One owned Reading List's overlap decisions and their version token.
+         *
+         *     ``updated_at`` is the version of this list's decision set. It changes only
+         *     when an approved choice changes, so an ordinary membership upsert never
+         *     invalidates a stored choice.
+         */
+        OverlapDecisionSetResponse: {
+            /** Candidate Volumes */
+            candidate_volumes?: components["schemas"]["OverlapVolumeCandidate"][];
+            /** Decisions */
+            decisions?: components["schemas"]["OverlapDecisionItem"][];
+            /** List Id */
+            list_id: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * OverlapDecisionWrite
+         * @description One reader-approved overlap choice for one owned Reading List.
+         */
+        OverlapDecisionWrite: {
+            /**
+             * Continuing Volume Id
+             * @description Exact Comic Vine volume allowed to keep progressing.
+             */
+            continuing_volume_id: string;
+            /**
+             * Expected Updated At
+             * @description Optimistic-concurrency token from GET ``updated_at``. When present, a mismatch returns 409 ``reading_overlap_version_conflict``.
+             */
+            expected_updated_at?: string | null;
+            /**
+             * Waiting Volume Id
+             * @description Exact Comic Vine volume allowed to keep waiting.
+             */
+            waiting_volume_id: string;
+        };
+        /**
+         * OverlapVolumeCandidate
+         * @description One owned Thread with the exact Comic Vine volume it resolves to.
+         */
+        OverlapVolumeCandidate: {
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string;
+            /** Volume Id */
+            volume_id: string;
+        };
+        /**
          * OverrideRequest
          * @description Schema for manual thread override.
          */
@@ -18329,6 +18490,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_custom_cbl_overlap_decisions_api_v1_custom_cbls__list_id__overlap_decisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverlapDecisionWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions__decision_id__delete: {
+        parameters: {
+            query?: {
+                expected_updated_at?: string | null;
+            };
+            header?: never;
+            path: {
+                list_id: number;
+                decision_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
                 };
             };
             /** @description Validation Error */

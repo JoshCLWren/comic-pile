@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
 from app.repositories import reading_list_authoring_repository as authoring
+from app.repositories import reading_overlap_decision_repository as overlap
 from app.services.reading_list_evaluator import (
     ReadingIssue,
     ReadingList,
@@ -114,6 +115,12 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
             by_list.setdefault(entry.list_id, []).append(
                 ReadingListEntry(entry.issue_id, entry.gate, entry.skipped)
             )
+        volume_keys = await overlap.resolve_thread_volume_keys(
+            db, user_id, [row.id for row in threads]
+        )
+        decisions = overlap.group_decisions_by_list(
+            await overlap.load_overlap_decisions(db, user_id)
+        )
         explicit = [row for row in dependencies if row.origin == "reader"]
         for row in explicit:
             if row.source_issue_id not in issue_ids or row.target_issue_id not in issue_ids:
@@ -121,12 +128,24 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
         titles = {row.id: row.title for row in threads}
         return ShadowReadingInputs(
             user_id=user_id,
-            threads=tuple(ReadingThread(row.id, row.status) for row in threads),
+            threads=tuple(
+                ReadingThread(
+                    row.id,
+                    row.status,
+                    comicvine_volume_id=volume_keys.get(row.id),
+                )
+                for row in threads
+            ),
             issues=tuple(
                 ReadingIssue(row.id, row.thread_id, row.position, row.status) for row in issues
             ),
             lists=tuple(
-                ReadingList(row.id, row.mode, tuple(by_list.get(row.id, ())))
+                ReadingList(
+                    row.id,
+                    row.mode,
+                    tuple(by_list.get(row.id, ())),
+                    overlap_decisions=decisions.get(row.id, ()),
+                )
                 for row in sorted(lists, key=lambda row: row.id)
             ),
             prerequisites=tuple(

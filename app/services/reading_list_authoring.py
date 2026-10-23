@@ -1,9 +1,12 @@
 """Atomic Option E authoring validation without materializing dependency edges."""
 
+from collections.abc import Mapping
+
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories import reading_list_authoring_repository as repository
+from app.repositories import reading_overlap_decision_repository as overlap_repository
 from app.schemas.custom_cbl import ReadingListPredecessorChange
 from app.services.reading_list_cycle_validator import (
     ReadingCycleError,
@@ -16,17 +19,47 @@ from app.services.reading_list_evaluator import (
     ReadingPrerequisite,
     ReadingSnapshot,
     ReadingThread,
+    SeriesOverlapDecision,
 )
 
 
+async def _overlap_decisions_by_list(
+    db: AsyncSession,
+    user_id: int,
+    projected: Mapping[int, tuple[SeriesOverlapDecision, ...]] | None,
+) -> dict[int, tuple[SeriesOverlapDecision, ...]]:
+    """Resolve the reader-approved overlap decisions of one reader.
+
+    Args:
+        db: Current authoring transaction.
+        user_id: Reader whose decisions are resolved.
+        projected: Complete replacement decision set keyed by Reading List ID.
+            None loads the reader's durable decisions.
+
+    Returns:
+        Mapping of Reading List ID to its reader-approved overlap decisions.
+    """
+    if projected is not None:
+        return {list_id: tuple(values) for list_id, values in projected.items()}
+    records = await overlap_repository.load_overlap_decisions(db, user_id)
+    return overlap_repository.group_decisions_by_list(records)
+
+
 async def load_authoring_snapshot(
-    db: AsyncSession, user_id: int
+    db: AsyncSession,
+    user_id: int,
+    *,
+    overlap_decisions: Mapping[int, tuple[SeriesOverlapDecision, ...]] | None = None,
 ) -> tuple[ReadingSnapshot, dict[int, str]]:
     """Read complete constraints without classifying historical dependencies.
 
     Args:
         db: Current authoring transaction.
         user_id: Reader whose complete constraint graph is loaded.
+        overlap_decisions: Complete replacement reader-approved overlap
+            decisions keyed by Reading List ID. None loads the reader's durable
+            decisions; a write path passes its projected set so the validated
+            graph is the one the write would create.
 
     Returns:
         Snapshot and display names, sharing a single load of owned Issues.
@@ -37,6 +70,10 @@ async def load_authoring_snapshot(
     entries = await repository.load_entries(db, user_id)
     requirements = await repository.load_requirements(db, user_id)
     excluded = await repository.load_excluded_issue_ids(db, user_id, issues)
+    volume_keys = await overlap_repository.resolve_thread_volume_keys(
+        db, user_id, [thread.id for thread in threads]
+    )
+    decisions = await _overlap_decisions_by_list(db, user_id, overlap_decisions)
     if any(row.source_issue_id in excluded for row in requirements):
         raise HTTPException(
             status_code=422,
@@ -52,7 +89,9 @@ async def load_authoring_snapshot(
         )
     snapshot = ReadingSnapshot(
         user_id=user_id,
-        threads=tuple(ReadingThread(t.id, t.status, t.title) for t in threads),
+        threads=tuple(
+            ReadingThread(t.id, t.status, t.title, volume_keys.get(t.id)) for t in threads
+        ),
         issues=tuple(ReadingIssue(i.id, i.thread_id, i.position, i.status) for i in issues),
         lists=tuple(
             ReadingList(
@@ -60,6 +99,7 @@ async def load_authoring_snapshot(
                 row.mode,
                 tuple(by_list.get(row.id, ())),
                 row.name,
+                decisions.get(row.id, ()),
             )
             for row in lists
         ),
