@@ -36,18 +36,24 @@ class ParityReport:
     differences: tuple[ParityDifference, ...]
 
 
+def _numeric_id(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
 def _volume(metadata: dict[str, object] | None) -> int | None:
     if metadata is None:
         return None
     nested = metadata.get("volume")
     value = nested.get("id") if isinstance(nested, dict) else metadata.get("volume_id")
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str) and value.isdigit():
-        return int(value)
-    return None
+    return _numeric_id(value)
 
 
 async def compare_roll_projection(
@@ -160,8 +166,8 @@ async def compare_roll_projection(
                 metadata = mapping["metadata"] or {}
                 count = metadata.get("count_of_issues")
                 if mapping["status"] == "confirmed" and mapping["external_id"] == str(volume_id):
-                    if isinstance(count, int) and not isinstance(count, bool):
-                        run_length = count
+                    if (parsed_count := _numeric_id(count)) is not None:
+                        run_length = parsed_count
                         break
         check("reader.issue_count", tid, run_length, item.reader.issue_count)
     expected_last = dict(latest) if latest is not None else None

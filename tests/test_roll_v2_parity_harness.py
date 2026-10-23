@@ -4,9 +4,10 @@ from datetime import UTC, datetime
 from time import perf_counter
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, User
+from app.models import Event, ExternalIdentity, User
 from app.schemas.roll_v2 import RollLastRead
 from app.services.roll_v2_parity import compare_roll_projection
 from app.services.roll_v2_projection import get_v2_rollable_projection
@@ -104,9 +105,21 @@ async def test_parity_reports_deliberately_wrong_frontier(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "volume_shape,volume_id",
+    [
+        ("flat", 20764),
+        ("flat", "20764"),
+        ("flat", 20764.0),
+        ("nested", "20764"),
+        ("nested", 20764.0),
+    ],
+)
 async def test_parity_checks_canonical_ratings_and_detects_a_changed_average(
     async_db: AsyncSession,
     default_user: User,
+    volume_id: int | str | float,
+    volume_shape: str,
 ) -> None:
     """Independent history aggregation detects changes to production rating math."""
     thread, issues = await _make_thread(
@@ -125,6 +138,22 @@ async def test_parity_checks_canonical_ratings_and_detects_a_changed_average(
             series_id=20764,
             series_name="Canonical",
         )
+    for identity in (
+        await async_db.scalars(
+            select(ExternalIdentity).where(
+                ExternalIdentity.provider == "comicvine",
+                ExternalIdentity.entity_type == "issue",
+            )
+        )
+    ).all():
+        metadata = dict(identity.metadata_json or {})
+        if volume_shape == "nested":
+            metadata.pop("volume_id", None)
+            metadata["volume"] = {"id": volume_id, "name": "Canonical"}
+        else:
+            metadata["volume_id"] = volume_id
+        identity.metadata_json = metadata
+    await async_db.flush()
     await _catalog_series(async_db, external_id="20764", name="Canonical", count_of_issues=12)
     await _rate(async_db, issues[0], rating=3.0, timestamp=D1)
     await _rate(async_db, issues[0], rating=4.0, timestamp=D2)
