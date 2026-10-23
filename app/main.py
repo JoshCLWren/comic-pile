@@ -41,6 +41,11 @@ from app.performance_budgets import (
     get_performance_budget_manager,
     run_bounded,
 )
+from app.router_mounts import (
+    RouterMount,
+    build_router_mounts,
+    select_mounts_for_path,
+)
 from app.safe_logging import safe_connection_metadata
 
 logger = logging.getLogger(__name__)
@@ -207,6 +212,32 @@ logger.info(
 )
 
 
+#: Route prefixes whose routers are registered before deferred loading starts.
+#: A request for one of these answers from the already-registered table and must
+#: not pay to register anything else (issue #3479).
+_EAGER_ROUTE_PREFIXES: tuple[str, ...] = (
+    "/api/ping",
+    "/api/metrics",
+    "/api/v1/metrics",
+    "/api/v1/keepalive",
+    "/health",
+)
+
+
+def _is_eager_path(path: str) -> bool:
+    """Return whether ``path`` is served by an eagerly registered route.
+
+    Args:
+        path: Concrete request path.
+
+    Returns:
+        True when the path answers from the lightweight cold-start route table.
+    """
+    return any(
+        path == prefix or path.startswith(f"{prefix}/") for prefix in _EAGER_ROUTE_PREFIXES
+    )
+
+
 def _register_lightweight_routers(app: FastAPI) -> None:
     """Register lightweight routers that are always needed.
 
@@ -237,190 +268,13 @@ def _register_lightweight_routers(app: FastAPI) -> None:
     app.include_router(metrics.router, prefix="/api/v1", tags=["metrics"])
 
 
-def _register_heavy_routers(app: FastAPI) -> None:
-    """Register routers that may pull in heavier optional dependencies.
-
-    These are moved behind lazy imports so a cold start that only serves /api/ping
-    does not pay the cost of image-processing or performance-telemetry stacks.
-    """
-    # Performance metrics collection and query (issue #834).
-    # Records and exposes production startup and page-load timing data
-    # so regressions can be tied to deployments. Versioned-surface only:
-    # new client resources must not introduce bare /api/* routes.
-    from app.api import performance_metric
-
-    app.include_router(
-        performance_metric.router,
-        prefix="/api/v1/performance-metrics",
-        tags=["performance-metrics"],
-    )
-
-    # Edge-cacheable remote cover image optimizer. Unauthenticated by design
-    # (<img> tags cannot send auth); strictly allowlisted upstreams only.
-    from app.api import images
-
-    app.include_router(images.router, tags=["images"])
-
-
-def _register_core_routers(app: FastAPI) -> None:
-    """Register core API routers that are always needed.
-
-    These imports are deferred to function scope so they are not executed at
-    module load time, reducing the cold-start import graph.
-    """
-    # API route prefix convention:
-
-    # - Every domain resource is reachable under the versioned /api/v1/* surface.
-    # - Legacy resources remain available under /api/* as compatibility aliases.
-    # - Retained auth, session, snooze, undo, roll, and rating resources have
-    #   explicit v1 aliases while legacy paths remain compatibility surfaces.
-    # - Admin (internal ops), bug reports, metrics, and non-production debug
-    #   tooling expose canonical /api/v1 twins of their legacy mounts.
-    # - Ping is operational telemetry exempt from versioning; test helpers stay
-    #   test-only tooling under bare /api/test/* in test environments.
-    # Add new client resources under /api/v1/*; do not introduce new bare
-    # /api/* routes.
-    from app.api import admin
-    from app.api import analytics
-    from app.api import auth
-    from app.api import bug_report
-    from app.api import catalog
-    from app.api import cbl_plan_adoption
-    from app.api import comicvine_resolution
-    from app.api import creators
-    from app.api import cron
-    from app.api import demo
-    from app.api import dependency
-    from app.api import delivery
-    from app.api import health
-    from app.api import identity_inbox
-    from app.api import issue
-    from app.api import issue_identity
-    from app.api import preferences
-    from app.api import queue
-    from app.api import rate
-    from app.api import reading_boundary
-    from app.api import reading_mode
-    from app.api import reading_orders
-    from app.api import reading_plan_sync
-    from app.api import recommendation_diagnostics
-    from app.api import roll
-    from app.api import session
-    from app.api import snooze
-    from app.api import bootstrap_telemetry
-    from app.api import taste
-    from app.api import taste_signal
-    from app.api import tags
-    from app.api import thread
-    from app.api import traffic_metrics
-    from app.api import undo
-
-    # Compose the dependency sub-routers into ``dependency.router`` before the
-    # router is copied into the app: ``include_router`` snapshots routes at call
-    # time, so sub-routes added afterwards would never be reachable. See
-    # ``app.api.dependency.mount_subrouters``.
-    dependency.mount_subrouters()
-
-    app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
-    app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
-    # New client resources (e.g. the Roll exclusion drill-down for #3330) are
-    # versioned-only: no bare /api/* twin.
-    app.include_router(roll.v1_router, prefix="/api/v1/roll", tags=["roll"])
-    # Roll v2: versioned-only, no unversioned alias per #2716
-    app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
-    app.include_router(admin.router, prefix="/api", tags=["admin"])
-    app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
-    app.include_router(analytics.router, prefix="/api", tags=["analytics"])
-    app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
-    app.include_router(health.router, prefix="/api", tags=["health"])
-    app.include_router(health.router, prefix="/api/v1", tags=["health"])
-    app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
-    app.include_router(bug_report.router, prefix="/api/v1/bug-reports", tags=["bug-reports"])
-    app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-    app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-    app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
-    app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
-    # New client resources (e.g. paginated completed threads for issue #2567)
-    # are versioned-only: no bare /api/* twin.
-    app.include_router(thread.v1_router, prefix="/api/v1/threads", tags=["threads"])
-    app.include_router(issue.router, tags=["issues"])
-    app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
-    app.include_router(creators.router, tags=["creators"])
-    app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
-    app.include_router(tags.router)
-    app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
-    app.include_router(rate.router, prefix="/api/v1/rate", tags=["rate"])
-    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-    app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
-    app.include_router(reading_orders.router, tags=["reading-orders"])
-    # Versioned-only canonical Reading Boundaries explanations (#4024).
-    app.include_router(
-        reading_boundary.router, prefix="/api/v1", tags=["reading-boundaries"]
-    )
-    app.include_router(
-        reading_plan_sync.router, prefix="/api/v1", tags=["reading-plan-sync"]
-    )
-    # Machine-triggered Vercel Cron endpoint. It is secret-gated, omitted from
-    # the generated client schema, and delegates all work to the sync service.
-    app.include_router(cron.router, prefix="/api/v1", tags=["cron"])
-    app.include_router(
-        recommendation_diagnostics.router, prefix="/api", tags=["recommendations"]
-    )
-    app.include_router(session.router, prefix="/api/sessions", tags=["session"])
-    # Versioned-only new client resources (e.g. the #2744 correction-sheet
-    # examples) have no bare /api/* twin. The v1 router is registered before the
-    # legacy twin so its literal paths resolve ahead of /{session_id}.
-    app.include_router(session.v1_router, prefix="/api/v1/sessions", tags=["session"])
-    app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
-    app.include_router(reading_mode.router, tags=["reading-mode"])
-    app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
-    app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
-    app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
-    app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
-    app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
-    app.include_router(taste_signal.router, prefix="/api/v1", tags=["taste-signals"])
-    app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
-    app.include_router(bootstrap_telemetry.router, prefix="/api", tags=["bootstrap-telemetry"])
-    app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
-    app.include_router(delivery.router, prefix="/api/v1", tags=["delivery"])
-    # Guest demo (#2757): versioned-only new client resource, so no bare
-    # /api/* twin. It is intentionally unauthenticated and read-only.
-    app.include_router(demo.router, prefix="/api/v1/demo", tags=["demo"])
-    app.include_router(catalog.router, tags=["catalog"])
-    app.include_router(identity_inbox.router, tags=["identity-inbox"])
-    app.include_router(issue_identity.router, tags=["issue-identity"])
-    app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
-
-
-def _register_debug_routers(app: FastAPI, environment: str) -> None:
-    """Register debug routers in non-production environments.
-
-    Args:
-        app: The FastAPI application instance.
-        environment: Current application environment string.
-    """
-    if environment != "production":
-        from app.api import debug
-
-        app.include_router(debug.router, prefix="/api", tags=["debug"])
-        app.include_router(debug.router, prefix="/api/v1", tags=["debug"])
-
-
-def _register_test_routers(app: FastAPI) -> None:
-    """Register test-helper routers when running in the test environment."""
-    if os.getenv("TEST_ENVIRONMENT") == "true":
-        from app.api.test_helpers import router as test_helpers_router
-
-        app.include_router(test_helpers_router, prefix="/api", tags=["test"])
-
-
 def register_all_routers(app: FastAPI, environment: str) -> None:
-    """Register all routers in optimized order.
+    """Register every router in the historical order.
 
-    Router modules are imported lazily inside each sub-function so that a cold
-    ping invocation does not load the full import graph. Registration order:
-    lightweight (ping, metrics) -> core API routers -> heavy/optional routers
-    -> environment-specific debug and test routers.
+    Router modules are imported lazily inside each mount so that a cold ping
+    invocation does not load the full import graph. Registration order is the
+    historical ``include_router`` order: lightweight (ping, metrics, keepalive)
+    then every deferred mount from :mod:`app.router_mounts`.
 
     Args:
         app: The FastAPI application instance.
@@ -431,21 +285,18 @@ def register_all_routers(app: FastAPI, environment: str) -> None:
 
 
 def register_deferred_routers(app: FastAPI, environment: str) -> None:
-    """Register every router that is not needed to answer ``/api/ping``.
+    """Register every router that the lightweight cold start leaves out.
 
     Split out of :func:`register_all_routers` so a cold serverless start can
-    register the core and heavy routers on the first non-ping request instead of
-    at import time. The first request that needs a deferred router pays the
-    import cost once; every ping before that stays light.
+    register one resource mount on demand instead of importing the whole API
+    surface. See :mod:`app.router_mounts` for the mount registry.
 
     Args:
         app: The FastAPI application instance.
         environment: Current application environment string.
     """
-    _register_core_routers(app)
-    _register_heavy_routers(app)
-    _register_debug_routers(app, environment)
-    _register_test_routers(app)
+    for mount in build_router_mounts(environment):
+        mount.register(app)
 
 
 def _register_api_not_found_route(app: FastAPI) -> None:
@@ -560,33 +411,87 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
         return await call_next(request)
 
-    # Register routers with deferred module imports to reduce cold-start cost.
-    # In deferred mode only the lightweight ping/metrics routers are registered
-    # now; the rest land on the first non-ping request and are spliced back into
-    # this position so the catch-all and SPA routes keep matching last.
+    # Register routers with deferred, per-resource module imports to reduce
+    # cold-start cost. In deferred mode only the lightweight ping/metrics/
+    # keepalive routers are registered now. Each real request registers just the
+    # mounts its resource segment needs (issue #3479) and splices them in after
+    # the lightweight routes so the JSON 404 fallback and SPA routes keep
+    # matching last.
     deferred_route_index: list[int | None] = [None]
+    deferred_inserted = [0]
+    deferred_mounts: list[RouterMount] = []
+    registered_mount_keys: set[str] = set()
+    fallback_registered = [False]
 
-    def register_pending_routers() -> None:
-        """Register the deferred routers at their original position, exactly once."""
+    def _register_deferred_mount(mount: RouterMount) -> None:
+        """Register one deferred mount at its historical position, once."""
+        if mount.key in registered_mount_keys:
+            return
+        registered_mount_keys.add(mount.key)
+        existing_count = len(app.router.routes)
+        mount.register(app)
+        new_routes = app.router.routes[existing_count:]
+        if not new_routes:
+            return
+        del app.router.routes[existing_count:]
+        index = deferred_route_index[0]
+        assert index is not None
+        insert_at = index + deferred_inserted[0]
+        app.router.routes[insert_at:insert_at] = new_routes
+        deferred_inserted[0] += len(new_routes)
+        # A route registered after the schema was generated must appear in it.
+        app.openapi_schema = None
+
+    def _register_api_fallback() -> None:
+        """Place the JSON 404 fallback after every registered API route."""
+        if fallback_registered[0]:
+            return
+        fallback_registered[0] = True
+        existing_count = len(app.router.routes)
+        _register_api_not_found_route(app)
+        fallback_routes = app.router.routes[existing_count:]
+        del app.router.routes[existing_count:]
+        index = deferred_route_index[0]
+        assert index is not None
+        # Later mounts insert at the same index, so the fallback always stays
+        # after the routes registered before it.
+        insert_at = index + deferred_inserted[0]
+        app.router.routes[insert_at:insert_at] = fallback_routes
+
+    def register_routers_for_path(path: str) -> None:
+        """Register the deferred mounts a request path needs.
+
+        Unknown ``/api/*`` segments register nothing and answer from the routes
+        that are already registered. Every non-API path (docs, OpenAPI schema,
+        SPA) completes the whole route table so introspection stays complete.
+
+        Args:
+            path: Concrete request path.
+        """
         if deferred_route_index[0] is None:
             return
-        route_index = deferred_route_index[0]
-        deferred_route_index[0] = None
-        existing_count = len(app.router.routes)
-        register_deferred_routers(app, app_settings.environment)
-        _register_api_not_found_route(app)
-        if len(app.router.routes) <= existing_count:
+        if _is_eager_path(path):
             return
-        deferred_routes = app.router.routes[existing_count:]
-        del app.router.routes[existing_count:]
-        app.router.routes[route_index:route_index] = deferred_routes
+        mounts = (
+            select_mounts_for_path(path, deferred_mounts)
+            if path.startswith("/api/")
+            else tuple(deferred_mounts)
+        )
+        for mount in mounts:
+            _register_deferred_mount(mount)
+        _register_api_fallback()
 
     if defer_router_imports:
         _register_lightweight_routers(app)
         deferred_route_index[0] = len(app.router.routes)
+        deferred_mounts.extend(build_router_mounts(app_settings.environment))
     else:
         register_all_routers(app, app_settings.environment)
         _register_api_not_found_route(app)
+
+    # Exposed for the cold-start route-surface guards and for tests that drive
+    # lazy registration without issuing HTTP requests.
+    app.state.register_routers_for_path = register_routers_for_path
 
     # Error-only request logging (body redaction + environment-aware sanitization).
     add_request_logging_middleware(app, app_settings.environment)
@@ -1008,9 +913,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         is_ping_probe = request_path == "/api/ping" or request_path.startswith("/api/ping/")
         if not is_ping_probe:
             # Registration is synchronous, so concurrent cold requests cannot
-            # interleave it; this runs before routing so the deferred routers
-            # are part of the table the router matches against.
-            register_pending_routers()
+            # interleave it; this runs before routing so the mounts the request
+            # needs are part of the table the router matches against.
+            register_routers_for_path(request_path)
         if not is_ping_probe and not defer_heavy_init:
             try:
                 await _ensure_heavy_init()
