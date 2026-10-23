@@ -38,8 +38,14 @@ def _evt(
 def test_3708_roll_identity_preserved_over_cross_thread_rate() -> None:
     """Roll Starman #45; rate B.P.R.D. #1 — card must stay #45."""
     events = [
-        _evt(event_id=1, session_id=101, event_type="roll", selected_thread_id=1, issue_id=10, issue_number="45"),
-        _evt(event_id=2, session_id=101, event_type="rate", thread_id=2, issue_id=20, issue_number="1"),
+        _evt(
+            event_id=1, session_id=101, event_type="roll",
+            selected_thread_id=1, issue_id=10, issue_number="45",
+        ),
+        _evt(
+            event_id=2, session_id=101, event_type="rate",
+            thread_id=2, issue_id=20, issue_number="1",
+        ),
     ]
     proj = project_session_history_events([101], events)
     # Rolled thread (1) keeps its roll identity; rated thread (2) keeps its rate identity.
@@ -50,8 +56,14 @@ def test_3708_roll_identity_preserved_over_cross_thread_rate() -> None:
 def test_3708_rate_does_not_overwrite_roll_on_same_thread() -> None:
     """If roll then rate both on same thread with different issues, roll wins."""
     events = [
-        _evt(event_id=1, session_id=102, event_type="roll", selected_thread_id=5, issue_id=50, issue_number="7"),
-        _evt(event_id=2, session_id=102, event_type="rate", thread_id=5, issue_id=51, issue_number="8"),
+        _evt(
+            event_id=1, session_id=102, event_type="roll",
+            selected_thread_id=5, issue_id=50, issue_number="7",
+        ),
+        _evt(
+            event_id=2, session_id=102, event_type="rate",
+            thread_id=5, issue_id=51, issue_number="8",
+        ),
     ]
     proj = project_session_history_events([102], events)
     assert resolve_history_issue_identity(proj, 102, 5) == (50, "7")
