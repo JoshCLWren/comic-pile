@@ -130,3 +130,23 @@ async def test_new_volume_name_preserves_long_title_suffix_and_owner_scope(
     assert thread.title == expected
     assert len(thread.title) <= 200
     assert thread.user_id == second.id
+
+
+    # A distinct confirmed volume for this same reader must preserve both suffixes.
+    other_identity = ExternalIdentity(
+        provider="comicvine", entity_type="series", external_id="301",
+    )
+    async_db.add(other_identity)
+    await async_db.flush()
+    collision = await _ensure_missing_issue_created(
+        async_db, second.id,
+        fact={**fact, "external_series_identity_id": other_identity.id,
+              "comicvine_issue_id": "3001"},
+        volume_year=1983,
+    )
+    other_thread = await async_db.get(Thread, collision.issue.thread_id)
+    assert other_thread is not None
+    assert other_thread.id != thread.id
+    assert other_thread.title != thread.title
+    assert other_thread.title.endswith(" (1983) (run 2)")
+    assert len(other_thread.title) <= 200
