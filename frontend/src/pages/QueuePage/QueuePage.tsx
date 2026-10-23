@@ -156,10 +156,7 @@ const {
   const handleRepositionConfirm = useCallback(
     async (targetPosition: number) => {
       if (!modals.repositioningThread) return
-      if (
-        targetPosition < 1 ||
-        targetPosition > authoritativeActiveCount
-      ) {
+      if (targetPosition < 1 || targetPosition > authoritativeActiveCount) {
         window.alert('Invalid position specified. Please choose a valid position.')
         return
       }

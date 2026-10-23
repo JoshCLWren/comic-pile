@@ -181,6 +181,78 @@ describe('PositionMenu', () => {
     expect(screen.getByText('Move to Back')).toBeInTheDocument()
   })
 
+  it('shows the three position actions when position order is active', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+        positionActionsAvailable
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /series actions/i }))
+
+    expect(screen.getByRole('menuitem', { name: 'Move to front' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Reposition series' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Move to back' })).toBeInTheDocument()
+  })
+
+  it('hides the three position actions when position order is not active (#3771)', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+        positionActionsAvailable={false}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /series actions/i }))
+
+    expect(screen.queryByRole('menuitem', { name: 'Move to front' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Reposition series' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Move to back' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Move to Front')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reposition\u2026')).not.toBeInTheDocument()
+    expect(screen.queryByText('Move to Back')).not.toBeInTheDocument()
+  })
+
+  it('keeps unrelated actions such as Remove from Queue when position actions are hidden', async () => {
+    const user = userEvent.setup()
+    const onRemoveFromQueue = vi.fn()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+        onRemoveFromQueue={onRemoveFromQueue}
+        positionActionsAvailable={false}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /series actions/i }))
+
+    const removeItem = screen.getByRole('menuitem', { name: 'Remove from queue' })
+    expect(removeItem).toBeInTheDocument()
+    await user.click(removeItem)
+    expect(onRemoveFromQueue).toHaveBeenCalledWith(1)
+  })
+
   it('calls onMoveToFront when Move to Front is clicked', async () => {
     const user = userEvent.setup()
     const onMoveToFront = vi.fn()

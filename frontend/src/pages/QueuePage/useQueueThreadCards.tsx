@@ -101,6 +101,7 @@ export function useQueueThreadCards({
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
           onDelete={() => actions.requestDelete(thread)}
+          onRemoveFromQueue={() => actions.requestRemove(thread)}
           positionActionsAvailable={positionActionsAvailable}
         />
       )
