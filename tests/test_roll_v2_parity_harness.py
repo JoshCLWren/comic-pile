@@ -241,3 +241,53 @@ async def test_parity_last_read_uses_current_number_and_null_rating_events(
         last_read=wrong,
     )
     assert [row.field for row in changed.differences] == ["last_read"]
+
+
+@pytest.mark.asyncio
+async def test_conflicting_mappings_keep_the_selected_canonical_progress(
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A second confirmed volume must not create a false thread-scope mismatch."""
+    _, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Conflicted",
+        issue_count=2,
+        queue_position=1,
+        read_through=1,
+    )
+    for position, issue in enumerate(issues):
+        await _confirm_identity(
+            async_db,
+            issue,
+            external_id=f"4000-parity-{position}",
+            series_id=20764,
+            series_name="Canonical",
+        )
+    await _confirm_identity(
+        async_db,
+        issues[1],
+        external_id="4000-z-alternative",
+        series_id=99999,
+        series_name="Alternative",
+    )
+    await _catalog_series(async_db, external_id="20764", name="Canonical", count_of_issues=12)
+    reading_session = await _active_session(async_db, default_user)
+    items, last_read, _ = await get_v2_rollable_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        die_size=6,
+        excluded_thread_ids=[],
+    )
+    assert items[0].identity.state.value == "conflicting"
+    assert items[0].identity.canonical_series_id == "20764"
+    report = await compare_roll_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        items=items,
+        last_read=last_read,
+    )
+    assert report.differences == ()

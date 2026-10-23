@@ -126,14 +126,20 @@ async def compare_roll_projection(
         confirmed = [
             row for row in mappings.get(item.issue.id, []) if row["mapping_status"] == "confirmed"
         ]
-        volume_ids = {_volume(row["mapping_metadata"]) for row in confirmed}
-        volume_ids.discard(None)
-        if len(volume_ids) != 1:
+        # Confirmed mappings can conflict. The contract still selects metadata
+        # by confidence then external ID; ambiguity must not invent a thread fallback.
+        confirmed.sort(
+            key=lambda row: (
+                -(row["mapping_confidence"] if row["mapping_confidence"] is not None else -1.0),
+                row["mapping_external_id"] or "",
+            )
+        )
+        volume_id = _volume(confirmed[0]["mapping_metadata"]) if confirmed else None
+        if volume_id is None:
             check("reader.progress_scope", tid, "thread", item.reader.progress_scope.value)
             check("reader.read_count", tid, fact["read_count"], item.reader.read_count)
             check("reader.issue_count", tid, fact["issue_count"] or None, item.reader.issue_count)
             continue
-        volume_id = next(iter(volume_ids))
         check(
             "identity.canonical_series_id", tid, str(volume_id), item.identity.canonical_series_id
         )
