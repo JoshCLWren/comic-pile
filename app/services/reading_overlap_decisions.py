@@ -198,10 +198,10 @@ def _projected_decisions(
         The complete replacement decision set keyed by Reading List ID.
     """
     # The ``superseded`` set covers both (continuing, waiting) and (waiting,
-# continuing) volume-direction pairs, so that replacing a pair removes any
-# existing choice in either direction for the same two volumes. This handles
-# the invariant that ``replaced`` is always canonical (continuing, waiting)
-# while stored decisions may exist in either direction.
+    # continuing) volume-direction pairs, so that replacing a pair removes any
+    # existing choice in either direction for the same two volumes. This handles
+    # the invariant that ``replaced`` is always canonical (continuing, waiting)
+    # while stored decisions may exist in either direction.
     projected = {key: values for key, values in grouped.items() if key != list_id}
     superseded = {replaced, (replaced[1], replaced[0])}
     kept = tuple(
