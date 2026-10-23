@@ -253,6 +253,8 @@ export const queryKeys = {
     all: ['comicVine'] as const,
     issueIntelligence: (issueId: number) =>
       ['comicVine', 'issueIntelligence', issueId] as const,
+    issueIdentity: (issueId: number) =>
+      ['comicVine', 'issueIdentity', issueId] as const,
     seriesMappingPreview: (
       originIssueId: number,
       provider: string,
@@ -292,6 +294,14 @@ export const queryKeys = {
   cblSources: {
     all: ['cblSources'] as const,
     search: (query: string) => ['cblSources', 'search', normalizedSearch(query)] as const,
+    detail: (listId: number, limit: number) =>
+      ['cblSources', 'detail', listId, limit] as const,
+    comicvineIssue: (comicvineIssueId: string) =>
+      ['cblSources', 'comicvineIssue', comicvineIssueId] as const,
+    comparison: (comicvineIssueIds: string[]) =>
+      ['cblSources', 'comparison', comicvineIssueIds] as const,
+    readingListCandidates: (listId: number) =>
+      ['cblSources', 'readingListCandidates', listId] as const,
     preview: (listId: number) => ['cblSources', 'preview', listId] as const,
     adoptionPlan: (
       listId: number,

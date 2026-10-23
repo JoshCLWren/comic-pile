@@ -6,10 +6,26 @@ transaction boundaries.
 """
 
 from collections.abc import Iterable
-from sqlalchemy import text
+from dataclasses import dataclass
+
+from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import TextClause
+
+from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.models.issue import Issue
+from app.models.thread import Thread
+
+
+@dataclass(frozen=True, slots=True)
+class ConfirmedComicvineIssueIdentity:
+    """One confirmed Comic Vine issue identity for a reader-owned Issue."""
+
+    issue_id: int
+    external_identity_id: int
+    comicvine_issue_id: str
 
 
 def _as_int_tuple(value: object) -> tuple[int, ...]:
@@ -42,6 +58,68 @@ def _as_object_list(value: object) -> list[object]:
 def _count_scalar(result: Result[int]) -> int:
     """Return an integer scalar count from a SQLAlchemy result."""
     return int(result.scalar_one() or 0)
+
+
+async def find_confirmed_comicvine_issue_identities(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    issue_ids: tuple[int, ...],
+) -> tuple[ConfirmedComicvineIssueIdentity, ...]:
+    """Return confirmed Comic Vine identities for reader-owned Issues only.
+
+    A confirmed mapping is the canonical exact identity used to query the
+    shared CBL catalog. Candidate, rejected, deferred, and unresolved mappings
+    are deliberately excluded so a list comparison never guesses an identity.
+    Conflicting confirmed mappings are returned as separate rows so the caller
+    can report the conflict instead of choosing one silently.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the Issues' Threads.
+        issue_ids: ComicPile Issue IDs to resolve.
+
+    Returns:
+        Confirmed identity rows ordered by Issue position, Issue ID, and
+        external identity ID.
+    """
+    if not issue_ids:
+        return ()
+
+    statement = (
+        select(
+            IssueExternalIdentityMapping.issue_id,
+            ExternalIdentity.id,
+            ExternalIdentity.external_id,
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(
+            Thread.user_id == user_id,
+            IssueExternalIdentityMapping.issue_id.in_(issue_ids),
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "issue",
+        )
+        .order_by(
+            Issue.position.asc(),
+            Issue.id.asc(),
+            ExternalIdentity.id.asc(),
+        )
+    )
+    rows = (await db.execute(statement)).all()
+    return tuple(
+        ConfirmedComicvineIssueIdentity(
+            issue_id=int(row[0]),
+            external_identity_id=int(row[1]),
+            comicvine_issue_id=str(row[2]),
+        )
+        for row in rows
+    )
 
 
 _DUPLICATE_ANOMALY_COUNT_SQL = text(
@@ -333,3 +411,115 @@ async def find_conflicting_provider_identities(
             }
         )
     return conflicts
+
+
+async def upsert_comicvine_external_identity(
+    db: AsyncSession,
+    *,
+    external_id: str,
+    series_name: str,
+    volume_year: int | None,
+) -> ExternalIdentity:
+    """Upsert a Comic Vine external identity with metadata.
+    
+    Args:
+        db: Database session.
+        external_id: Comic Vine issue external ID.
+        series_name: Series name for metadata.
+        volume_year: Volume start year for metadata.
+        
+    Returns:
+        The external identity (existing or newly created).
+    """
+    # Build the upsert statement
+    statement = pg_insert(ExternalIdentity).values(
+        provider="comicvine",
+        entity_type="issue",
+        external_id=external_id,
+        metadata_json={
+            "volume": {
+                "name": series_name,
+                "start_year": volume_year,
+            }
+        },
+    ).on_conflict_do_nothing(
+        index_elements=("provider", "entity_type", "external_id"),
+    )
+    
+    await db.execute(statement)
+    
+    # Return the existing or newly created identity
+    result = await db.execute(
+        select(ExternalIdentity).where(
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "issue",
+            ExternalIdentity.external_id == external_id,
+        )
+    )
+    return result.scalar_one()
+
+
+async def get_comicvine_external_identity(
+    db: AsyncSession,
+    *,
+    external_id: str,
+) -> ExternalIdentity | None:
+    """Get a Comic Vine external identity by external ID.
+    
+    Args:
+        db: Database session.
+        external_id: Comic Vine issue external ID.
+        
+    Returns:
+        The external identity, or None if not found.
+    """
+    result = await db.execute(
+        select(ExternalIdentity).where(
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "issue",
+            ExternalIdentity.external_id == external_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def upsert_issue_external_identity_mapping(
+    db: AsyncSession,
+    *,
+    issue_id: int,
+    external_identity_id: int,
+    status: str = "confirmed",
+    evidence_source: str = "fixture",
+) -> IssueExternalIdentityMapping:
+    """Upsert an issue to external identity mapping.
+    
+    Args:
+        db: Database session.
+        issue_id: Issue ID to map.
+        external_identity_id: External identity ID to map to.
+        status: Mapping status (default: "confirmed").
+        evidence_source: Source of the mapping evidence.
+        
+    Returns:
+        The mapping (existing or newly created).
+    """
+    # Build the upsert statement
+    statement = pg_insert(IssueExternalIdentityMapping).values(
+        issue_id=issue_id,
+        external_identity_id=external_identity_id,
+        status=status,
+        evidence_source=evidence_source,
+    ).on_conflict_do_nothing(
+        index_elements=("issue_id", "external_identity_id"),
+    )
+    
+    await db.execute(statement)
+    
+    # Return the existing or newly created mapping
+    result = await db.execute(
+        select(IssueExternalIdentityMapping).where(
+            IssueExternalIdentityMapping.issue_id == issue_id,
+            IssueExternalIdentityMapping.external_identity_id == external_identity_id,
+        )
+    )
+    return result.scalar_one()

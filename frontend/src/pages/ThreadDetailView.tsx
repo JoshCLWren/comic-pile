@@ -33,6 +33,7 @@ import { IssueTagRowChips } from '../components/Tags/IssueTagRowChips'
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
 import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
+import { CblComicFinder } from '../components/CblSourceFinder'
 import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
@@ -585,6 +586,13 @@ export default function ThreadDetailView() {
                               />
                             </span>
                             <div className="flex items-center gap-3">
+                              <CblComicFinder
+                                issueId={issue.id}
+                                comicLabel={`${thread.title} #${issue.issue_number}`}
+                                backTo={`/thread/${thread.id}`}
+                                backLabel="Series"
+                                testIdPrefix={`cbl-comic-${issue.id}`}
+                              />
                               <button
                                 type="button"
                                 onClick={() =>
