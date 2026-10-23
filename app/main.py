@@ -219,6 +219,13 @@ def _register_lightweight_routers(app: FastAPI) -> None:
 
     app.include_router(ping.router, prefix="/api", tags=["ping"])
 
+    # Lightweight keep-alive endpoint for Neon warm-pool maintenance (issue #3480).
+    # Runs a minimal SELECT 1 on the pooled connection to prevent Neon
+    # from suspending during active use. Requires no authentication.
+    from app.api import keepalive
+
+    app.include_router(keepalive.router, prefix="/api", tags=["keepalive"])
+
     # Expose the metrics router in every environment so production performance
     # tracking (issue #834) and future regression checks can read startup
     # telemetry. It returns only process startup epoch and duration.
@@ -987,8 +994,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         defer_heavy_init = os.getenv("TEST_ENVIRONMENT") == "true" and os.getenv(
             "ENABLE_LAZY_HEAVY_INIT_IN_TESTS"
         ) != "true"
-        # Exempt the keep-warm probe including its trailing-slash form, which
+        # Exempt the keep-warm ping probe including its trailing-slash form, which
         # Starlette would otherwise slash-redirect only after heavy init ran.
+        # The /api/keepalive endpoint is NOT exempt - it needs the database pool.
         request_path = request.url.path
         is_ping_probe = request_path == "/api/ping" or request_path.startswith("/api/ping/")
         if not is_ping_probe:

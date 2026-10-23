@@ -480,8 +480,14 @@ function CrossoversListRedirect() {
   return <Navigate to="/continuity-plans" replace />
 }
 
+import { useKeepalive } from './hooks/useKeepalive'
+
 function RootRoute({ onBugReportSubmit }: { onBugReportSubmit: BugReportSubmit }) {
   const { authState } = useAuth()
+  const isAuthenticated = authState.status === 'authenticated'
+
+  // Keep Neon warm only while authenticated and actively using the app (issue #3480)
+  useKeepalive(isAuthenticated)
 
   if (authState.isLoading) {
     return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Checking authentication...</div>
