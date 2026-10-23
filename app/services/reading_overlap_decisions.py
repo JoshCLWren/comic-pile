@@ -183,6 +183,11 @@ def _projected_decisions(
 ) -> dict[int, tuple[SeriesOverlapDecision, ...]]:
     """Return the reader's complete decision set with one pair replaced.
 
+    An approved direction supersedes the opposite direction for the same two
+    volumes. Otherwise a reader who changes their answer would leave both
+    contradictory choices stored, and the evaluator would waive both strict
+    edges instead of honoring the reader's latest decision.
+
     Args:
         grouped: Durable decisions of every list keyed by Reading List ID.
         list_id: Reading List whose pair is replaced.
@@ -192,11 +197,17 @@ def _projected_decisions(
     Returns:
         The complete replacement decision set keyed by Reading List ID.
     """
+    # The ``superseded`` set covers both (continuing, waiting) and (waiting,
+    # continuing) volume-direction pairs, so that replacing a pair removes any
+    # existing choice in either direction for the same two volumes. This handles
+    # the invariant that ``replaced`` is always canonical (continuing, waiting)
+    # while stored decisions may exist in either direction.
     projected = {key: values for key, values in grouped.items() if key != list_id}
+    superseded = {replaced, (replaced[1], replaced[0])}
     kept = tuple(
         decision
         for decision in grouped.get(list_id, ())
-        if (decision.continuing_volume_id, decision.waiting_volume_id) != replaced
+        if (decision.continuing_volume_id, decision.waiting_volume_id) not in superseded
     )
     projected[list_id] = (*kept, replacement)
     return projected
@@ -315,7 +326,9 @@ async def save_overlap_decision(
     if advanced is None:
         raise HTTPException(status_code=404, detail=f"Reading List {list_id} not found")
     await db.flush()
-    # Build the response while still holding the lock, before committing
+    # Build the response while still holding the lock, before committing.
+    # The response is fully materialized here; no ORM model attributes are accessed
+    # after this point or after `await db.commit()` below, so MissingGreenlet is avoided.
     response = await _decision_set(
         db,
         user_id=user_id,
