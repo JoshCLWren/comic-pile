@@ -537,16 +537,16 @@ async def fetch_parity_last_read(
     result = await db.execute(
         select(
             Event.issue_id,
-            Event.issue_number,
+            func.coalesce(Issue.issue_number, Event.issue_number).label("issue_number"),
             Event.thread_id,
             Thread.title,
             Event.timestamp,
         )
-        .join(Thread, Thread.id == Event.thread_id)
+        .select_from(Event)
+        .outerjoin(Issue, Issue.id == Event.issue_id)
+        .join(Thread, and_(Thread.id == Event.thread_id, Thread.user_id == user_id))
         .where(Event.session_id == session_id)
-        .where(Thread.user_id == user_id)
         .where(Event.type == "rate")
-        .where(Event.rating.isnot(None))
         .order_by(Event.timestamp.desc(), Event.id.desc())
         .limit(1)
     )
