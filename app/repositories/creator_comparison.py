@@ -125,13 +125,17 @@ async def load_creator_comparison_inputs(
 ) -> CreatorComparisonInputs:
     """Load every user-scoped input needed for one bounded batch comparison.
 
-    The batch is served by exactly three queries no matter how many creator
+    The batch is served by exactly four queries no matter how many creator
     keys are requested (max 4):
 
     1. the authenticated user's owned issues, their read/unread status, and
        their stable local thread/series identity;
     2. confirmed ComicVine issue metadata for those issues (creator credits);
-    3. the latest effective ``rate`` event rating per owned issue.
+    3. the user's threads' manual creator credits, read once per thread
+       (issue #4035 — the same thread-only shape issue #3387 gave the
+       creator-summary route, so the stored manual-credit document is never
+       repeated on every owned-issue row);
+    4. the latest effective ``rate`` event rating per owned issue.
 
     Args:
         db: Async database session.
@@ -191,8 +195,13 @@ async def load_creator_comparison_inputs(
             if credit.external_id in requested_creator_ids:
                 by_key.setdefault((credit.external_id, credit.roles), credit)
 
-    # Manual thread-level creator credits for issues without ComicVine metadata
-    # (same definition as creator_summary so both surfaces agree).
+    # 3. Manual thread-level creator credits for issues without ComicVine
+    # metadata (issue #4035: both creator surfaces must agree on library
+    # membership, so this reuses the creator_summary definition). Read once
+    # per thread rather than projected across the owned-issue join above:
+    # repeating the stored JSON document on every issue row is the
+    # wide-library anti-pattern issue #3387 removed from the summary route.
+    # ``thread_ids`` only guards the empty library, which owns no thread.
     thread_ids = {ot.thread_id for ot in owned_issue_threads.values()}
     thread_manual_credits: dict[int, list[dict[str, object]]] = {}
     if thread_ids:
@@ -203,6 +212,8 @@ async def load_creator_comparison_inputs(
             if manual_credits:
                 thread_manual_credits[int(thread_id)] = manual_credits
 
+    # Confirmed ComicVine credits take priority: an issue already attributed by
+    # provider metadata never falls back to the thread's manual credits.
     for issue_id, owned_thread in owned_issue_threads.items():
         if issue_id in issues_with_creator_metadata:
             continue
@@ -234,7 +245,7 @@ async def load_creator_comparison_inputs(
         if by_key
     }
 
-    # 3. Latest effective rating per owned issue (latest event wins).
+    # 4. Latest effective rating per owned issue (latest event wins).
     rate_result = await db.execute(
         select(Event.issue_id, Event.rating)
         .join(Issue, Issue.id == Event.issue_id)
