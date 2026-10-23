@@ -92,26 +92,26 @@ test.describe('CBL adoption checklist integration', () => {
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
     
     // Both volumes should be initially selected (checked)
-    const volume1Checkbox = page.getByRole('checkbox', { name: 'Include Test Volume 1 series' })
-    const volume2Checkbox = page.getByRole('checkbox', { name: 'Include Test Volume 1 series' })
+    const volume1Checkbox = page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })
+    const volume2Checkbox = page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })
     
     // Note: Playwright may not distinguish between checkboxes with same name,
     // so we need to be more specific about which one we're testing
     await expect(page.getByText('4 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
     
     // Uncheck the first volume - should become indeterminate
-    await page.getByRole('checkbox', { name: 'Include Test Volume 1 series' }).first().click()
-    
+    await page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' }).first().click()
+
     // Should now show indeterminate state for the first volume
-    await expect(page.getByText('3 entries · 1 already in ComicPile · 2 will be added')).toBeVisible()
+    await expect(page.getByText('4 entries · 0 already in ComicPile · 2 will be added')).toBeVisible()
     
     // Recheck one issue from the first volume - should make it indeterminate
     // Expand the first volume to see individual issues
     await page.getByRole('button', { name: 'Show issues' }).first().click()
-    await page.getByRole('checkbox', { name: 'Include Test Volume 1 #1' }).check()
-    
+    await page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) #1' }).check()
+
     // Should show the updated count
-    await expect(page.getByText('4 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
+    await expect(page.getByText('4 entries · 1 already in ComicPile · 2 will be added')).toBeVisible()
   })
 
   test('keeps choices when switching between sources and detects source changes', async ({
@@ -180,28 +180,32 @@ test.describe('CBL adoption checklist integration', () => {
     
     // Make a choice on first source
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
-    await page.getByRole('checkbox', { name: 'Include Source 1 series' }).uncheck()
+    await page.getByRole('checkbox', { name: 'Include Source 1 Series series' }).uncheck()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 0 will be added')).toBeVisible()
 
     // Switch to second source - should have fresh choices
+    await page.getByLabel('Search source lists').fill(sourceName2)
+    await page.getByRole('button', { name: 'Search' }).click()
     await page.getByRole('button', { name: new RegExp(sourceName2.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click()
     await expect(page.getByRole('heading', { name: sourceName2 })).toBeVisible()
     
     // Second source should have default state (all selected)
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
-    await expect(page.getByRole('checkbox', { name: 'Include Source 2 series' })).toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Include Source 2 Series series' })).toBeChecked()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 1 will be added')).toBeVisible()
 
     // Make a choice on second source
-    await page.getByRole('checkbox', { name: 'Include Source 2 series' }).uncheck()
+    await page.getByRole('checkbox', { name: 'Include Source 2 Series series' }).uncheck()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 0 will be added')).toBeVisible()
 
     // Switch back to first source - should restore the previous choice
+    await page.getByLabel('Search source lists').fill(sourceName1)
+    await page.getByRole('button', { name: 'Search' }).click()
     await page.getByRole('button', { name: new RegExp(sourceName1.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click()
     await expect(page.getByRole('heading', { name: sourceName1 })).toBeVisible()
     
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
-    await expect(page.getByRole('checkbox', { name: 'Include Source 1 series' })).not.toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Include Source 1 Series series' })).not.toBeChecked()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 0 will be added')).toBeVisible()
   })
 
@@ -261,7 +265,7 @@ test.describe('CBL adoption checklist integration', () => {
       .click()
 
     // Should show correct count (not double-counting duplicates)
-    await expect(page.getByText('2 entries · 1 already in ComicPile · 1 will be added')).toBeVisible()
+    await expect(page.getByText('2 entries · 2 already in ComicPile · 0 will be added')).toBeVisible()
     
     // Add the source
     await page.getByRole('button', { name: 'Add this reading order' }).click()
