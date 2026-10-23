@@ -34,6 +34,8 @@ test('collection-excluded material stays unselected in the reviewed CBL source',
   await page.getByRole('button', { name: new RegExp(sourceName) }).click()
   const include = page.getByRole('checkbox', { name: 'Include Absolute Flash Exclusion Browser #1' })
   await expect(page.getByText('Excluded from your collection')).toBeVisible()
+  await expect(page.getByText(/Series-level choices apply/)).toContainText('Individual entry choices override a series choice.')
+  await expect(page.getByText(/Three adoption choices per entry/)).toContainText('new) Exclude')
   await expect(include).not.toBeChecked()
   await expect(include).toBeDisabled()
   await page.getByRole('group', { name: 'Absolute Flash Exclusion Browser series choice' }).getByRole('button', { name: 'Include', exact: true }).click()

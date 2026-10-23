@@ -31,11 +31,13 @@ function statusLabel(entry: CBLAdoptionPreviewEntry): string {
   }
   switch (entry.adoption_decision) {
     case 'included_existing':
-      return entry.read_status === 'read' ? 'Already in ComicPile · read' : 'Already in ComicPile'
+      return entry.read_status === 'read'
+        ? 'Already in ComicPile · read'
+        : 'Already in ComicPile · reuse existing'
     case 'would_create_missing':
-      return 'Missing · selected to add'
+      return 'Missing · importable (new comic)'
     case 'awaiting_opt_in':
-      return 'Missing · choose whether to add'
+      return 'Missing · choose: include or exclude'
     case 'excluded':
       return 'Excluded'
     case 'unresolved':
@@ -44,9 +46,9 @@ function statusLabel(entry: CBLAdoptionPreviewEntry): string {
 }
 
 function statusClass(entry: CBLAdoptionPreviewEntry): string {
-  if (entry.adoption_decision === 'included_existing') return 'text-emerald-300'
+  if (entry.adoption_decision === 'included_existing') return 'text-[var(--theme-success)]'
   if (entry.adoption_decision === 'would_create_missing') return 'text-sky-300'
-  if (entry.adoption_decision === 'unresolved') return 'text-amber-300'
+  if (entry.adoption_decision === 'unresolved') return 'text-[var(--theme-warning)]'
   return 'text-[var(--theme-text-muted)]'
 }
 
@@ -349,8 +351,8 @@ export default function ReadingPlanAddMaterial({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 id="series-decisions-heading" className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-primary)]">Series choices</h4>
                   <div className="flex gap-2">
-                    <button type="button" disabled={isCommitting || isPreviewing} onClick={() => chooseAllSeries(true)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Include all</button>
-                    <button type="button" disabled={isCommitting || isPreviewing} onClick={() => chooseAllSeries(false)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-muted)] disabled:opacity-50">Include none</button>
+                    <button type="button" disabled={isCommitting || isPreviewing} onClick={() => chooseAllSeries(true)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Include all series</button>
+                    <button type="button" disabled={isCommitting || isPreviewing} onClick={() => chooseAllSeries(false)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-muted)] disabled:opacity-50">Exclude all series</button>
                   </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -365,8 +367,8 @@ export default function ReadingPlanAddMaterial({
                   ))}
                 </div>
                 <p className="text-xs text-[var(--theme-text-dim)]">
-                  Uncheck Include on an owned issue to leave it out of this plan. Individual choices
-                  override a series choice. Comics stay in ComicPile.
+                  Series-level choices apply to all entries in that series group. Individual entry choices{' '}
+                  <span className="font-medium">override</span> a series choice. Comics stay in ComicPile.
                 </p>
               </section>
 
@@ -387,7 +389,7 @@ export default function ReadingPlanAddMaterial({
                           aria-label={`Include ${entry.series_name} #${entry.issue_number}`}
                           onChange={(event) => chooseEntry(entry, event.target.checked)}
                         />
-                        Include
+                        <span className="font-medium">Include</span>
                       </label>
                     )}
                   </li>
@@ -395,16 +397,28 @@ export default function ReadingPlanAddMaterial({
               </ol>
 
               {preview.summary.unresolved_count > 0 && (
-                <p className="text-xs text-amber-300">Resolve ambiguous identities before adding this source.</p>
-              )}
-              {preview.summary.awaiting_opt_in_count > 0 && (
-                <p className="text-xs text-[var(--theme-text-muted)]">Choose whether to include each missing comic before committing.</p>
-              )}
-              {commitDisabled && (
-                <p className="text-xs text-[var(--theme-text-muted)]">
-                  Save or cancel planner changes before adding CBL material.
+                <p className="text-xs text-[var(--theme-warning)]">
+                  <strong>Resolve unresolved comics or exclude their series</strong> before committing.
                 </p>
               )}
+              {preview.summary.awaiting_opt_in_count > 0 && (
+                <p className="text-xs text-[var(--theme-text-muted)]">
+                  Missing comics not yet confirmed as importable. Choose whether to{' '}
+                  <span className="font-medium">include</span> or{' '}
+                  <span className="font-medium">exclude</span>{' '}each one before committing.
+                </p>
+              )}
+              {commitDisabled && (
+                <p className="text-xs text-[var(--theme-text-dim)]">
+                  Save or cancel unsaved planner changes before adding material.
+                </p>
+              )}
+              <p className="text-xs text-[var(--theme-text-dim)]">
+                Three adoption choices per entry:{' '}
+                <span className="font-medium text-[var(--theme-success)]">Include</span> – add this comic (reuse existing or importable new){' '}
+                <span className="font-medium text-[var(--theme-text-muted)]">Exclude</span> – leave this comic out{' '}
+                <span className="font-medium text-[var(--theme-warning)]">Unresolved</span> – needs identity resolution first
+              </p>
 
               <button
                 type="button"
