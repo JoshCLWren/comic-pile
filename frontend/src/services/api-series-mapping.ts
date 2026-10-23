@@ -140,6 +140,8 @@ export function seriesMappingScopeMessage(basis: string | null): string {
       return 'ComicVine did not return the issue list for this volume. Try again to check it. Nothing was changed.'
     case 'queue_thread_bootstrap_no_exact_match':
       return 'No issue numbers in this series match this ComicVine volume safely. Choose a different volume or check the individual issues. Nothing was changed.'
+    case 'queue_thread_bootstrap_volume_identity_mismatch':
+      return 'This ComicVine volume does not match this series. Choose a different volume. Nothing was changed.'
     case 'thread_has_no_issues':
       return 'This series has no tracked issues to map. Nothing was changed.'
     case 'origin_issue_not_found':

@@ -279,7 +279,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Unconfirmed Origin",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         roster = [_roster_row(500000 + number, str(number)) for number in (1, 2)]
@@ -302,13 +302,13 @@ class TestQueueThreadBootstrapPreview:
         anchor_thread, anchor_issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Anchor Thread",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         _, other_issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Other Thread",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["3"],
         )
         roster = [_roster_row(500000 + number, str(number)) for number in (1, 2, 3, 4)]
@@ -344,7 +344,7 @@ class TestQueueThreadBootstrapPreview:
         _, other_issues = await _create_thread_with_issues(
             async_db,
             user_id=other_user.id,
-            title="Someone Else's Thread",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1"],
         )
         roster = [_roster_row(500001, "1")]
@@ -368,7 +368,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Duplicate Roster",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         roster = [
@@ -401,7 +401,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Duplicate Local",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "1.", "2"],
         )
         roster = [_roster_row(500001, "1"), _roster_row(500002, "2")]
@@ -425,7 +425,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Bootstrap Specials",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2", "Annual"],
         )
         roster = [
@@ -453,7 +453,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Mismatched Volume",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2", "3"],
         )
         roster = [_roster_row(500010, "10"), _roster_row(500011, "11")]
@@ -477,7 +477,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Confirmed Conflict",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         await _confirm_issue(async_db, issues[0], external_id="999999")
@@ -503,7 +503,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Confirmed Agreement",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         await _confirm_issue(async_db, issues[0], external_id="500001")
@@ -533,7 +533,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Confirmed Inventory",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         await _confirm_issue(async_db, issues[0], external_id="500001")
@@ -565,7 +565,7 @@ class TestQueueThreadBootstrapCommit:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Stale Bootstrap",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         roster = [_roster_row(500001, "1"), _roster_row(500002, "2")]
@@ -605,7 +605,7 @@ class TestQueueThreadBootstrapCommit:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Idempotent Bootstrap",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2", "3"],
         )
         roster = [_roster_row(500000 + number, str(number)) for number in (1, 2, 3)]
@@ -640,7 +640,7 @@ class TestQueueThreadBootstrapCommit:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Unsafe Bootstrap",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         roster = [
