@@ -469,6 +469,29 @@ class TestQueueThreadBootstrapPreview:
         assert all(count == 0 for count in data["counts"].values())
 
     @pytest.mark.asyncio
+    async def test_wrong_series_title_with_overlapping_numbers_is_rejected(
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data
+    ) -> None:
+        """A different series title with overlapping issue numbers is rejected (regression for #3932)."""
+        user = sample_data["user"]
+        _, issues = await _create_thread_with_issues(
+            async_db,
+            user_id=user.id,
+            title="Green Lantern",
+            issue_numbers=["1", "2"],
+        )
+        roster = [_roster_row(500001, "1"), _roster_row(500002, "2")]
+        with _patch_comicvine(roster):
+            response = await auth_client.post(PREVIEW_URL, json=_bootstrap_payload(issues[0].id))
+        assert response.status_code == 200
+        data = response.json()
+        assert data["scope"]["status"] == "unavailable"
+        assert data["scope"]["basis"] == "queue_thread_bootstrap_volume_identity_mismatch"
+        assert data["preview_token"] is None
+        assert data["rows"] == []
+        assert all(count == 0 for count in data["counts"].values())
+
+    @pytest.mark.asyncio
     async def test_confirmed_disagreement_is_reported_as_a_conflict(
         self, auth_client: AsyncClient, async_db: AsyncSession, sample_data
     ) -> None:

@@ -875,6 +875,13 @@ def _normalize_volume_series_title(raw_value: object) -> str:
     return " ".join(text.casefold().split())
 
 
+def _extract_series_year(raw_value: object) -> str | None:
+    if raw_value is None:
+        return None
+    m = re.search(r"\((\d{4}(?:-\d{4})?)\)\s*$", str(raw_value).strip())
+    return m.group(1) if m else None
+
+
 def _volume_identity_matches(thread_title: object, volume_name: object) -> bool:
     """Return whether a candidate volume corroborates the owned series.
 
@@ -884,9 +891,21 @@ def _volume_identity_matches(thread_title: object, volume_name: object) -> bool:
     agree with the series it claims to represent before any of its rows may be
     marked safe. An empty/unknown title on either side cannot establish that
     agreement, so it is treated as a mismatch (fail closed).
+
+    Explicit year disagreements are preserved as mismatches: "Batman (2011)"
+    does not match "Batman (1940)". A missing year is ignored only when it
+    does not contradict the available evidence (i.e. only one side carries a
+    year, or both agree).
     """
-    left = _normalize_volume_series_title(thread_title)
-    right = _normalize_volume_series_title(volume_name)
+    left_raw = thread_title
+    right_raw = volume_name
+    left_year = _extract_series_year(left_raw)
+    right_year = _extract_series_year(right_raw)
+    # Explicit conflicting years => mismatch regardless of base title.
+    if left_year is not None and right_year is not None and left_year != right_year:
+        return False
+    left = _normalize_volume_series_title(left_raw)
+    right = _normalize_volume_series_title(right_raw)
     if not left or not right:
         return False
     return left == right
