@@ -980,7 +980,7 @@ except Exception:
       log "trusted controller gates for PR #${NUMBER} decision=${GATES_DECISION:-empty}; not merging (reason: $(echo "$GATES_OUTPUT" | python3 -c '
 import sys, json
 try:
-    data = json.loads(sys.stdin.read().strip()
+    data = json.loads(sys.stdin.read().strip())
     print(data.get("reason", "no decision"))
 except Exception:
     print(sys.stdin.read()[:200])
