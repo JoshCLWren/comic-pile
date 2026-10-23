@@ -417,6 +417,154 @@
         "title": "BootstrapAliasSnapshotSchema",
         "type": "object"
       },
+      "BoundaryEditorTarget": {
+        "description": "Where the reader can change the rule that produced a boundary.\n\nThe target is a descriptor, not a URL: the client owns routing so a\nrenamed surface never breaks a stored deep link.",
+        "properties": {
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
+          "kind": {
+            "enum": [
+              "reading_list",
+              "prerequisite",
+              "issue"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "list_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "List Id"
+          },
+          "prerequisite_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prerequisite Id"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "BoundaryEditorTarget",
+        "type": "object"
+      },
+      "BoundaryIssue": {
+        "description": "One named Issue, labeled with its Comic Vine volume when known.",
+        "properties": {
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "reading_lists": {
+            "items": {
+              "$ref": "#/components/schemas/BoundaryReadingList"
+            },
+            "title": "Reading Lists",
+            "type": "array"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "title": "Thread Title",
+            "type": "string"
+          },
+          "volume_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Label"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "label"
+        ],
+        "title": "BoundaryIssue",
+        "type": "object"
+      },
+      "BoundaryReadingList": {
+        "description": "One owned Reading List that places an Issue.",
+        "properties": {
+          "list_id": {
+            "title": "List Id",
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "strict",
+              "loose"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "name",
+          "mode"
+        ],
+        "title": "BoundaryReadingList",
+        "type": "object"
+      },
       "BugReportCreate": {
         "description": "Request schema for creating a bug report or feature request.",
         "properties": {
@@ -13008,6 +13156,209 @@
           "identity_source"
         ],
         "title": "ReaderContextSeries",
+        "type": "object"
+      },
+      "ReadingBoundaryBatchRequest": {
+        "description": "Owned series IDs to explain in one request.",
+        "properties": {
+          "thread_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Thread Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "thread_ids"
+        ],
+        "title": "ReadingBoundaryBatchRequest",
+        "type": "object"
+      },
+      "ReadingBoundaryBatchResponse": {
+        "description": "Canonical explanations keyed by Thread ID.",
+        "properties": {
+          "threads": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReadingBoundaryExplanation"
+            },
+            "title": "Threads",
+            "type": "object"
+          }
+        },
+        "required": [
+          "threads"
+        ],
+        "title": "ReadingBoundaryBatchResponse",
+        "type": "object"
+      },
+      "ReadingBoundaryBlocker": {
+        "description": "One live Option E requirement that currently blocks the next Issue.",
+        "properties": {
+          "editor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "enum": [
+              "strict_order",
+              "hold",
+              "after_previous",
+              "prerequisite"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "reading_list",
+              "reader_prerequisite"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "waiting_on": {
+            "items": {
+              "$ref": "#/components/schemas/BoundaryIssue"
+            },
+            "title": "Waiting On",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "origin",
+          "reason"
+        ],
+        "title": "ReadingBoundaryBlocker",
+        "type": "object"
+      },
+      "ReadingBoundaryExplanation": {
+        "description": "Canonical explanation of one series' reading boundaries.",
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingBoundaryBlocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "historical": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingBoundaryHistorical"
+            },
+            "title": "Historical",
+            "type": "array"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadingBoundaryNext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "blocked",
+              "available",
+              "complete",
+              "unavailable"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "state",
+          "summary"
+        ],
+        "title": "ReadingBoundaryExplanation",
+        "type": "object"
+      },
+      "ReadingBoundaryHistorical": {
+        "description": "A reader-owned association that is not a live blocker.\n\nHistorical rows never gate execution. They are listed so the reader can\nsee an old association without it being presented as a live boundary.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "editor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "enum": [
+              "converted_prerequisite",
+              "legacy_dependency",
+              "skipped_entry"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "detail"
+        ],
+        "title": "ReadingBoundaryHistorical",
+        "type": "object"
+      },
+      "ReadingBoundaryNext": {
+        "description": "The Issue the reader may read now.",
+        "properties": {
+          "editor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issue": {
+            "$ref": "#/components/schemas/BoundaryIssue"
+          }
+        },
+        "required": [
+          "issue"
+        ],
+        "title": "ReadingBoundaryNext",
         "type": "object"
       },
       "ReadingGraphBlocker": {
@@ -28829,6 +29180,103 @@
         "summary": "Post Rate",
         "tags": [
           "rate"
+        ]
+      }
+    },
+    "/api/v1/reading-boundaries": {
+      "post": {
+        "description": "Explain several owned series in one canonical eligibility snapshot.\n\nArgs:\n    payload: Owned Thread identifiers to explain.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    Explanations keyed by Thread identifier.\n\nRaises:\n    HTTPException: With status 404 when a Thread is absent or foreign.",
+        "operationId": "get_reading_boundary_batch_api_v1_reading_boundaries_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingBoundaryBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingBoundaryBatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reading Boundary Batch",
+        "tags": [
+          "reading-boundaries",
+          "reading-boundaries"
+        ]
+      }
+    },
+    "/api/v1/reading-boundaries/{thread_id}": {
+      "get": {
+        "description": "Explain one owned series through the canonical Option E result.\n\nArgs:\n    thread_id: Owned Thread to explain.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    Named waiting Issues, live blockers, history, and editor targets.\n\nRaises:\n    HTTPException: With status 404 when the Thread is absent or foreign.",
+        "operationId": "get_reading_boundary_api_v1_reading_boundaries__thread_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingBoundaryExplanation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reading Boundary",
+        "tags": [
+          "reading-boundaries",
+          "reading-boundaries"
         ]
       }
     },

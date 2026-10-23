@@ -290,6 +290,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import preferences
     from app.api import queue
     from app.api import rate
+    from app.api import reading_boundary
     from app.api import reading_mode
     from app.api import reading_orders
     from app.api import reading_plan_sync
@@ -343,6 +344,10 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
     app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
     app.include_router(reading_orders.router, tags=["reading-orders"])
+    # Versioned-only canonical Reading Boundaries explanations (#4024).
+    app.include_router(
+        reading_boundary.router, prefix="/api/v1", tags=["reading-boundaries"]
+    )
     app.include_router(
         reading_plan_sync.router, prefix="/api/v1", tags=["reading-plan-sync"]
     )

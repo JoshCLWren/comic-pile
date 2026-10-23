@@ -40,6 +40,7 @@ class ReadingEligibilitySnapshot:
     issue_thread_ids: Mapping[int, int] = field(default_factory=dict)
     list_labels: Mapping[int, str] = field(default_factory=dict)
     thread_labels: Mapping[int, str] = field(default_factory=dict)
+    active_prerequisite_ids: frozenset[int] = frozenset()
 
     def __post_init__(self) -> None:
         """Detach mutable inputs so consumers cannot change another caller's result."""
@@ -52,6 +53,9 @@ class ReadingEligibilitySnapshot:
         object.__setattr__(self, "issue_thread_ids", MappingProxyType(dict(self.issue_thread_ids)))
         object.__setattr__(self, "list_labels", MappingProxyType(dict(self.list_labels)))
         object.__setattr__(self, "thread_labels", MappingProxyType(dict(self.thread_labels)))
+        object.__setattr__(
+            self, "active_prerequisite_ids", frozenset(self.active_prerequisite_ids)
+        )
 
     def candidate_ids(
         self,
@@ -141,6 +145,9 @@ async def load_eligibility_snapshot(db: AsyncSession, user_id: int) -> ReadingEl
         issue_labels=dict(inputs.issue_labels),
         list_labels=dict(inputs.list_labels),
         thread_labels=dict(inputs.thread_labels),
+        active_prerequisite_ids=frozenset(
+            prerequisite.prerequisite_id for prerequisite in inputs.prerequisites
+        ),
     )
 
 
