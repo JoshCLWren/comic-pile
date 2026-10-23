@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
@@ -57,7 +58,7 @@ function renderBuilder(onApplied = vi.fn()) {
   })
   render(
     <QueryClientProvider client={client}>
-      <CustomCBLBuilder planId={18} onApplied={onApplied} />
+      <MemoryRouter><CustomCBLBuilder planId={18} onApplied={onApplied} /></MemoryRouter>
     </QueryClientProvider>,
   )
   return { client, onApplied }
@@ -200,6 +201,33 @@ const waitingConfirmationError = {
 }
 
 describe('CustomCBLBuilder', () => {
+  it('explains a Create cycle with named comics and an owned prerequisite editor link', async () => {
+    mocks.create.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 422, data: { detail: {
+        code: 'reading_list_cycle',
+        message: 'Reading constraint cycle: Issue 1002365 -> Issue 1000768',
+        path: [{
+          source_issue_id: 1002365, source_issue_name: 'X-Force/Champions Annual 1998', source_thread_id: 12,
+          target_issue_id: 1000768, target_issue_name: 'X-Force #85', target_thread_id: 12,
+          origin: 'prerequisite 1001867 (converted)', prerequisite_origin: 'converted', provenance: [],
+        }],
+      } } },
+    })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(screen.getByLabelText('New custom CBL name'), { target: { value: 'My new list' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/ }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('An existing reading cycle prevents creating this list')
+    expect(alert).toHaveTextContent('X-Force/Champions Annual 1998 → X-Force #85')
+    expect(alert).toHaveTextContent('No new list was saved')
+    expect(alert).not.toHaveTextContent('1002365')
+    expect(screen.getByLabelText('New custom CBL name')).toHaveValue('My new list')
+    expect(screen.getByRole('link', { name: 'Review prerequisites for X-Force #85' })).toHaveAttribute('href', '/thread/12?prerequisites=1')
+    fireEvent.change(screen.getByLabelText('Custom CBL'), { target: { value: '9' } })
+    await waitFor(() => expect(screen.queryByText(/An existing reading cycle/)).not.toBeInTheDocument())
+  })
   beforeEach(() => {
     vi.resetAllMocks()
     mocks.list.mockResolvedValue([

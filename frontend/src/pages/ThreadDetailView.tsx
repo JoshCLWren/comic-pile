@@ -95,6 +95,13 @@ export default function ThreadDetailView() {
   const focusedIssueRef = useRef<number | null>(null)
   const [issuesExpanded, setIssuesExpanded] = useState(requestedIssueId > 0)
   const [isDependencyOpen, setIsDependencyOpen] = useState(false)
+  const dependencyLocationRef = useRef<string | null>(null)
+  const openPrerequisites = new URLSearchParams(location.search).get('prerequisites') === '1'
+  useEffect(() => {
+    if (!thread || !openPrerequisites || dependencyLocationRef.current === location.key) return
+    dependencyLocationRef.current = location.key
+    setIsDependencyOpen(true)
+  }, [thread, openPrerequisites, location.key])
   // Tag editing (issue #3032): one editor serves the thread and any single
   // issue, while bulk-select mode enables multi-select bulk add/remove.
   const [tagEditorIssue, setTagEditorIssue] = useState<{

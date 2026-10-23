@@ -164,6 +164,7 @@ async def validate_authored_list(
         HTTPException: For invalid constraints, cycles, or missing confirmation.
     """
     snapshot, names = await load_authoring_snapshot(db, user_id)
+    thread_ids = {issue.issue_id: issue.thread_id for issue in snapshot.issues}
     try:
         validate_reading_constraints(snapshot)
     except ReadingCycleError as exc:
@@ -175,10 +176,12 @@ async def validate_authored_list(
                 "path": [
                     {
                         "source_issue_id": e.source_issue_id,
+                        "source_thread_id": thread_ids.get(e.source_issue_id),
                         "source_issue_name": names.get(
                             e.source_issue_id, f"Issue #{e.source_issue_id}"
                         ),
                         "target_issue_id": e.target_issue_id,
+                        "target_thread_id": thread_ids.get(e.target_issue_id),
                         "target_issue_name": names.get(
                             e.target_issue_id, f"Issue #{e.target_issue_id}"
                         ),

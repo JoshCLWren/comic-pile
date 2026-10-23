@@ -1,6 +1,7 @@
 import { ReadingListReader } from './ReadingListReader'
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
@@ -568,6 +569,21 @@ export default function CustomCBLBuilder({
     () => (saveMutation.error ? decodeCustomCBLError(saveMutation.error) : null),
     [saveMutation.error],
   )
+  const createErrorDetail = useMemo(
+    () => createMutation.error ? decodeCustomCBLError(createMutation.error) : null,
+    [createMutation.error],
+  )
+  const createCycleError = createErrorDetail?.code === 'reading_list_cycle'
+    ? describeCyclePath(createErrorDetail.cyclePath, () => 'An affected comic', 'create')
+    : null
+  const cycleEditorLinks = new Map<number, string>()
+  if (createCycleError) {
+    for (const edge of createErrorDetail?.cyclePath ?? []) {
+      if (!edge.prerequisite_origin) continue
+      if (edge.source_thread_id && edge.source_issue_name) cycleEditorLinks.set(edge.source_thread_id, edge.source_issue_name)
+      if (edge.target_thread_id && edge.target_issue_name) cycleEditorLinks.set(edge.target_thread_id, edge.target_issue_name)
+    }
+  }
   const confirmationChanges =
     saveErrorDetail?.code === 'reading_list_predecessor_confirmation_required' &&
     saveErrorDetail.predecessorChanges.length > 0
@@ -660,6 +676,7 @@ export default function CustomCBLBuilder({
     setMessage(null)
   }
   const chooseList = (value: string) => {
+    createMutation.reset()
     const next = value ? Number(value) : null
     if (next === selectedId) return
     // Saving can fail with a structured preview/cycle error tied to the list that
@@ -703,7 +720,7 @@ export default function CustomCBLBuilder({
   const structuredSaveError = confirmationChanges !== null || cycleError !== null
   const error =
     exportError ??
-    createMutation.error ??
+    (createCycleError ? null : createMutation.error) ??
     deleteMutation.error ??
     applyMutation.error ??
     (structuredSaveError ? null : saveMutation.error) ??
@@ -1080,6 +1097,18 @@ export default function CustomCBLBuilder({
               <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-[var(--theme-text-muted)]" aria-label="Strict list coverage warnings">
                 {warnings.map((warning) => <li key={warning}>{warning}</li>)}
               </ul>
+            </div>
+          )}
+          {createCycleError && (
+            <div role="alert" className="space-y-2 text-sm text-[var(--theme-error)]">
+              <p>{createCycleError}</p>
+              {cycleEditorLinks.size > 0 && (
+                <ul className="space-y-1">
+                  {[...cycleEditorLinks].map(([threadId, issueName]) => (
+                    <li key={threadId}><Link className="text-[var(--theme-continuity-accent)] underline" to={`/thread/${threadId}?prerequisites=1`}>Review prerequisites for {issueName}</Link></li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
           {cycleError && <p role="alert" className="text-sm text-[var(--theme-warning)]">{cycleError}</p>}
