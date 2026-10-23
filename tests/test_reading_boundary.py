@@ -47,6 +47,7 @@ FOURTH_WORLD_ID = 1
 JLI_ID = 2
 MISTER_MIRACLE_ID = 3
 LIST_ID = 10
+USER_ID = 1
 
 
 @pytest.fixture
@@ -62,7 +63,7 @@ def option_e(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 def _fixture() -> tuple[ReadingSnapshot, ReadingEligibilitySnapshot, BoundaryShadowLabels]:
     """Build the #1615 JLI/Mister Miracle graph with one historical association."""
     state = ReadingSnapshot(
-        user_id=1,
+        user_id=USER_ID,
         threads=(
             ReadingThread(FOURTH_WORLD_ID, name="Fourth World", comicvine_volume_id=FOURTH_WORLD),
             ReadingThread(JLI_ID, name="JLI", comicvine_volume_id=JLI),
