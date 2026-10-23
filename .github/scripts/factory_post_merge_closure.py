@@ -544,7 +544,7 @@ def _issue_view(issue_number: int) -> dict[str, object]:
     }
 
 
-def _issue_has_open_successor_pr(issue_number: int, merged_pr: int) -> bool:
+def _issue_has_open_successor_pr(issue_number: int, merged_pr: int) -> bool | str:
     """Return whether another open PR also claims the issue.
 
     Args:
@@ -554,26 +554,37 @@ def _issue_has_open_successor_pr(issue_number: int, merged_pr: int) -> bool:
     Returns:
         True when an open PR other than ``merged_pr`` links the issue by
         factory branch shape or closing keyword.
+        "unknown" when GitHub API lookup fails.
     """
-    raw = _run_gh(
-        "pr",
-        "list",
-        "--repo",
-        _repo_slug(),
-        "--state",
-        "open",
-        "--limit",
-        "300",
-        "--json",
-        "number,headRefName,body",
-    )
-    for pr in json.loads(raw):
-        number = int(pr.get("number") or 0)
-        if number == merged_pr:
-            continue
-        if linked_issue(str(pr.get("headRefName") or ""), pr.get("body")) == issue_number:
-            return True
-    return False
+    try:
+        raw = _run_gh(
+            "pr",
+            "list",
+            "--repo",
+            _repo_slug(),
+            "--state",
+            "open",
+            "--limit",
+            "300",
+            "--json",
+            "number,headRefName,body",
+        )
+        data = json.loads(raw)
+        if not isinstance(data, list):
+            return False
+        for pr in data:
+            if not isinstance(pr, dict):
+                continue
+            number = int(pr.get("number") or 0)
+            if number == merged_pr:
+                continue
+            if linked_issue(str(pr.get("headRefName") or ""), pr.get("body")) == issue_number:
+                return True
+        return False
+    except Exception:
+        # Return a special value to indicate lookup failed, preventing
+        # false assumption that no successor PR exists
+        return "unknown"
 
 
 def _replace_labels(issue_number: int, labels: list[str]) -> None:
@@ -873,7 +884,11 @@ def close_merged_pr_issue(
         return "acceptance-parent-requires-verdict"
     if closure_blocked_by_active_work(labels, require_quiescent):
         return "active-work"
-    if _issue_has_open_successor_pr(issue_number, pr_number):
+    has_successor = _issue_has_open_successor_pr(issue_number, pr_number)
+    if has_successor == "unknown":
+        # Lookup failure prevents closure verification - stop closure
+        return "successor-lookup-failed"
+    if has_successor:
         return "successor-open"
 
     try:
@@ -887,6 +902,8 @@ def close_merged_pr_issue(
         else:
             delivered, reason = True, "explicit non-implementation contract"
     except (RuntimeError, ValueError, KeyError, TypeError) as exc:
+        # Keep the delivery-unverified return so failed checks wait for a retry
+        # instead of approving closure of unverified work.
         return f"delivery-unverified:{exc}"
     # Validate delivery before dependency-based early returns, so a non-delivering
     # PR can still repair an issue GitHub closed through its closing keyword.
