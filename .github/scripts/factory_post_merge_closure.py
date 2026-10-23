@@ -884,10 +884,11 @@ def close_merged_pr_issue(
         return "acceptance-parent-requires-verdict"
     if closure_blocked_by_active_work(labels, require_quiescent):
         return "active-work"
-    if _issue_has_open_successor_pr(issue_number, pr_number) == "unknown":
+    has_successor = _issue_has_open_successor_pr(issue_number, pr_number)
+    if has_successor == "unknown":
         # Lookup failure prevents closure verification - stop closure
         return "successor-lookup-failed"
-    if _issue_has_open_successor_pr(issue_number, pr_number):
+    if has_successor:
         return "successor-open"
 
     try:
