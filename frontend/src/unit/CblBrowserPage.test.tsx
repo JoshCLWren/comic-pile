@@ -30,6 +30,42 @@ vi.mock('../services/api-cbl-sources', () => ({
     preview: vi.fn(),
     plan: vi.fn(),
     commitNew: vi.fn(),
+    compare: vi.fn(),
+    findByComicvineIssue: vi.fn(),
+    readingListCandidates: vi.fn(),
+    detail: vi.fn().mockResolvedValue({
+      id: 7,
+      name: 'Ultimate Reading Order',
+      source_path: 'Marvel/Ultimate.cbl',
+      source_repository: 'JoshCLWren/CBL-ReadingLists',
+      source_ref: 'JoshCLWren/CBL-ReadingLists:Marvel/Ultimate.cbl',
+      declared_issue_count: 2,
+      content_hash: 'hash-1',
+      revision_sha: 'abcdef1234567890',
+      entries_total: 2,
+      entries_offset: 0,
+      entries_limit: 200,
+      entries: [
+        {
+          position: 1,
+          series_name: 'Ultimate Spider-Man',
+          issue_number: '1',
+          volume_year: null,
+          publication_year: null,
+          comicvine_issue_id: '4000-1',
+          comicvine_volume_id: '4000-vol-1',
+        },
+        {
+          position: 2,
+          series_name: 'Ultimate Spider-Man',
+          issue_number: '2',
+          volume_year: null,
+          publication_year: null,
+          comicvine_issue_id: '4000-2',
+          comicvine_volume_id: '4000-vol-1',
+        },
+      ],
+    }),
   },
 }))
 
@@ -72,9 +108,9 @@ function LocationProbe() {
   return <p data-testid="location">{location.pathname}</p>
 }
 
-function renderPage() {
+function renderPage(initialEntry = '/cbl-sources') {
   return render(
-    <MemoryRouter initialEntries={['/cbl-sources']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route path="/cbl-sources" element={<CblBrowserPage />} />
         <Route path="/continuity-plans/:id" element={<LocationProbe />} />
@@ -214,6 +250,20 @@ describe('CblBrowserPage', () => {
     expect(screen.getByLabelText('Search source lists')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument()
     expect(mockDiscover).not.toHaveBeenCalled()
+  })
+
+  it('opens the deep-linked source list detail with its ordered positions', async () => {
+    renderPage('/cbl-sources?list=7')
+    const detail = await screen.findByTestId('cbl-source-detail')
+    expect(detail).toHaveTextContent('Ultimate Reading Order')
+    expect(detail).toHaveTextContent('4000-1')
+    expect(detail).toHaveTextContent('4000-2')
+    expect(detail).toHaveTextContent('vol 4000-vol-1')
+  })
+
+  it('does not open a source detail without a list parameter', () => {
+    renderPage()
+    expect(screen.queryByTestId('cbl-source-detail')).not.toBeInTheDocument()
   })
 
   it('searches and lists matching sources', async () => {

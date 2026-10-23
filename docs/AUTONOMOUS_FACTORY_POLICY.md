@@ -174,6 +174,25 @@ A worker diff is pushed only after the trusted pre-push fast checks pass for the
 
 Every push invalidates prior review, readiness, and merge eligibility. Re-fetch the exact SHA, current review threads, mergeability, and CI after every push.
 
+Implementation delivery is a separate mechanical prerequisite to semantic approval and merge.
+Implementation issues must change behavioral source, build, or workflow content; docs, tests,
+comments, docstrings, and formatting alone do not qualify. An explicit `Issue type: docs-only`
+(or another supported non-implementation declaration) permits the declared documentary output.
+The controller reconstructs complete old/new files from the immutable head and original PR patch
+so changes inside long comments and docstrings cannot borrow executable context. Missing or
+truncated source evidence fails closed. Independent exact-head acceptance review still judges
+issue-specific runnable tests, including explicitly reused existing tests, and actual correctness.
+Post-merge closure runs the same delivery policy, leaves non-delivered issues open, and reopens
+known non-deliveries prematurely closed by GitHub keywords. It never infers completion from a
+source filename alone.
+
+Bash comparison uses shfmt's typed syntax tree; CSS and JavaScript/TypeScript use
+Tree-sitter syntax trees, and Python uses its native AST. Parser positions and comments
+are excluded while literal/heredoc input remains data. The pinned `factory-syntax`
+dependency group is included in local development installs; control-plane workflows
+install the same pins through `.github/actions/factory-syntax`. No parser downloads occur
+while inspecting PR content, and a missing parser fails closed with an actionable retry.
+
 ## Gated autonomous merges
 
 Workers may merge a PR without asking again only after all of these gates are satisfied for the exact current head SHA:

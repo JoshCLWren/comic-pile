@@ -37,6 +37,9 @@ jobs:
         with:
           ref: main
 
+      - name: Install factory syntax parsers
+        uses: ./.github/actions/factory-syntax
+
       - name: Reconcile exact-head provenance
         env:
           GH_TOKEN: ${{ github.token }}

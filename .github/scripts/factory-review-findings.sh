@@ -543,5 +543,37 @@ factory_review_findings_mission() {
 ----- BEGIN REVIEW FINDINGS -----
 ${content}
 ----- END REVIEW FINDINGS -----"
+  factory_issue_acceptance_mission "$pr" "$head"
+  return 0
+}
+
+
+# Supply the actual linked issue, not merely the PR author's description, for
+# every independent semantic review. The controller independently re-fetches it.
+factory_issue_acceptance_mission() {
+  local pr="$1" head="$2" pr_json issue issue_json repo="$GITHUB_REPOSITORY"
+  [[ -n "$repo" ]] || repo="JoshCLWren/comic-pile"
+  local acceptance_script=""
+  if [[ -n "${TRUSTED_REVIEW_CONTROLLER:-}" ]]; then
+    acceptance_script="$(dirname "$TRUSTED_REVIEW_CONTROLLER")/factory_issue_acceptance.py"
+  fi
+  if [[ -z "$acceptance_script" || ! -f "$acceptance_script" ]]; then
+    printf '\nISSUE ACCEPTANCE UNAVAILABLE: trusted policy script is missing; do not approve.\n'
+    return 0
+  fi
+  pr_json="$(gh pr view "$pr" --json headRefName,body 2>/dev/null)" || pr_json=''
+  issue="$(printf '%s' "$pr_json" | python3 "$acceptance_script" resolve 2>/dev/null)" || issue=''
+  if [[ -z "$issue" ]]; then
+    printf '\nISSUE ACCEPTANCE UNAVAILABLE: no linked issue; do not approve.\n'
+    return 0
+  fi
+  issue_json="$(gh api "repos/$repo/issues/$issue" 2>/dev/null)" || issue_json=''
+  if [[ -z "$issue_json" ]]; then
+    printf '\nISSUE ACCEPTANCE UNAVAILABLE: issue #%s fetch failed; do not approve.\n' "$issue"
+    return 0
+  fi
+  if ! printf '%s' "$issue_json" | python3 "$acceptance_script" mission "$issue" "$head"; then
+    printf '\nISSUE ACCEPTANCE UNAVAILABLE: rubric failed; do not approve.\n'
+  fi
   return 0
 }

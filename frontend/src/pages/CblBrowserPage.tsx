@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Modal from '../components/Modal'
 import ReadingGraphOverlapDialog from '../components/ReadingGraphOverlapDialog'
@@ -10,6 +10,7 @@ import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import { continuityPlansApi } from '../services/api-continuity-plans'
+import { CblSourceDetailPanel } from '../components/CblSourceDetailPanel'
 import {
   cblSourcesApi,
   type CBLAdoptionPreviewEntry,
@@ -113,6 +114,7 @@ async function recoverAdoptedPlan(source: CBLSourceListDiscoveryItem) {
 export default function CblBrowserPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [submittedQuery, setSubmittedQuery] = useState('')
   const [hasSearched, setHasSearched] = useState(false)
@@ -133,6 +135,12 @@ export default function CblBrowserPage() {
   /** Whether finishing the questionnaire should continue into the add confirmation. */
   const [graphDialogContinuesAdd, setGraphDialogContinuesAdd] = useState(false)
   const graphPreviewRef = useRef<ReadingGraphPreview | null>(null)
+
+  // A `list` query parameter opens one shared source list in place, so a
+  // comparison result can link straight to the source detail it names.
+  const requestedListId = searchParams.get('list')
+  const parsedListId = requestedListId ? Number.parseInt(requestedListId, 10) : Number.NaN
+  const deepLinkedListId = Number.isInteger(parsedListId) && parsedListId > 0 ? parsedListId : null
 
   const sourcesQuery = useQuery({
     queryKey: queryKeys.cblSources.search(submittedQuery),
@@ -312,6 +320,8 @@ export default function CblBrowserPage() {
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
     commitMutation.reset()
+    // A new search leaves the deep-linked source detail behind.
+    setSearchParams({}, { replace: true })
   }
 
   const loadPreview = (source: CBLSourceListDiscoveryItem) => {
@@ -462,6 +472,10 @@ export default function CblBrowserPage() {
           what it would do, then add it as a Reading Plan in one step.
         </p>
       </header>
+
+      {deepLinkedListId !== null && (
+        <CblSourceDetailPanel listId={deepLinkedListId} />
+      )}
 
       <form onSubmit={search} className="flex flex-col gap-2 sm:flex-row">
         <label className="sr-only" htmlFor="cbl-browser-search">
@@ -890,6 +904,7 @@ export default function CblBrowserPage() {
           </button>
         </div>
       </Modal>
+
     </section>
   )
 }
