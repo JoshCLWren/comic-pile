@@ -537,7 +537,8 @@ while (( $(remaining) > 480 )); do
           ;;
         *)
           log "trusted controller gates for PR #${NUMBER} decision=${FACTORY_MERGE_GATE_DECISION:-empty}; not merging (reason: ${FACTORY_MERGE_GATE_REASON:-no reason})"
-          # Do not merge: release lease and select other work
+          SKIP_PRS+=("$NUMBER")
+# Do not merge: release lease and select other work
           ;;
       esac
     fi
