@@ -480,6 +480,8 @@ function CrossoversListRedirect() {
   return <Navigate to="/continuity-plans" replace />
 }
 
+import { useKeepalive } from './hooks/useKeepalive'
+
 function RootRoute({ onBugReportSubmit }: { onBugReportSubmit: BugReportSubmit }) {
   const { authState } = useAuth()
 
@@ -541,7 +543,11 @@ function AppRoutes() {
   useScrollRestoration()
   
   const isAuthenticated = authState.status === 'authenticated'
-  
+
+  // Keep Neon warm only while authenticated and actively using the app (issue #3480).
+  // Mounted at the route root so it stays active across all authenticated pages.
+  useKeepalive(isAuthenticated)
+
   return (
     <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
       <Seo />
