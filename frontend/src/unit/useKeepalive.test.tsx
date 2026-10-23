@@ -59,15 +59,7 @@ function renderWarmShellAcrossRoutes() {
   return render(
     <MemoryRouter initialEntries={['/queue']}>
       <Routes>
-        <Route
-          path="/"
-          element={
-            <>
-              <WarmShell />
-              <Outlet />
-            </>
-          }
-        >
+        <Route path="/" element={<WarmShell />}>
           <Route path="queue" element={<CrossingRouteButton />} />
           <Route path="sessions" element={<div>sessions body</div>} />
         </Route>
