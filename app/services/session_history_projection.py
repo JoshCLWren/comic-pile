@@ -84,9 +84,13 @@ def project_session_history_events(
                 issue_by_session_thread, session_id, event.selected_thread_id, event
             )
         elif event.type == "rate" and event.thread_id is not None:
-            _record_issue_identity(
-                issue_by_session_thread, session_id, event.thread_id, event
-            )
+            # Rate identity only contributes when no roll for this thread in this
+            # session has already established the shown issue (#3708).
+            key = (session_id, event.thread_id)
+            if key not in issue_by_session_thread:
+                _record_issue_identity(
+                    issue_by_session_thread, session_id, event.thread_id, event
+                )
 
         if event.type in _DIE_EVENT_TYPES and event.die_after is not None:
             die_path_lists[session_id].append(event.die_after)
