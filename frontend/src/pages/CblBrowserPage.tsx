@@ -229,6 +229,8 @@ export default function CblBrowserPage() {
   // If the source's content changed since choices were saved, the saved
   // entryDecisions no longer match the new cbl_entry_id rows. Discard the
   // stale overrides and require a fresh review before committing.
+  // Intentionally omitting sourceDecisions from deps to prevent re-render loop.
+  // The effect only needs to react to selectedSource and previewQuery.data changes.
   useEffect(() => {
     if (!selectedSource || !previewQuery.data) return
     const saved = sourceDecisions[selectedSource.id]
@@ -242,7 +244,7 @@ export default function CblBrowserPage() {
     setSeriesDecisions({})
     setEntryDecisions({})
     setStaleReview(true)
-  }, [selectedSource, previewQuery.data, sourceDecisions])
+  }, [selectedSource, previewQuery.data])
 
   const sources = sourcesQuery.data ?? []
   const hasChoices =
