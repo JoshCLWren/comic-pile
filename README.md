@@ -115,7 +115,15 @@ To obtain a key:
 COMICVINE_API_KEY=your-key uv run python scripts/hydrate_comicvine_issues.py --user-id 1 --live-refresh --output .cache/comicvine-hydrator/user-1-live.json
 ```
 
-For local-first runs you can also point at a local ComicVine SQLite snapshot (`COMICVINE_LOCAL_DB` / `COMICPILE_COMICVINE_SQLITE_PATH`) and skip the API key entirely.
+For local-first runs with the hydrator script, use the `--comicvine-db` parameter and omit `--live-refresh` to avoid requiring an API key:
+
+```bash
+uv run python scripts/hydrate_comicvine_issues.py --user-id 1 --comicvine-db ./localcv.db --output .cache/comicvine-hydrator/user-1-report.json
+```
+
+Other scripts use environment variables for local snapshots:
+- `scripts/backfill_read_comicvine.py` uses `COMICVINE_LOCAL_DB`
+- `comic_pile/local_comicvine.py` uses `COMICPILE_COMICVINE_SQLITE_PATH`
 
 ### 5. Verify the app is up
 
