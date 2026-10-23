@@ -110,15 +110,15 @@ When a fixed-model worker's provider runs out of quota or budget, the worker's s
 
 ## Acceptance Criteria Verification
 
-- [x] 402 or 429 quota failure in smoke step pauses worker instead of leaving red failure loop
-- [x] Persisted state includes reset time and source
-- [x] While paused, dispatcher runs don't fail and don't start worker
-- [x] Factory visibility lists paused workers with `paused-until` time (UTC and CT) and source
-- [x] After reset, exactly one resume smoke runs
-- [x] Pass clears pause, quota failure starts new pause
-- [x] Unknown reset uses bounded backoff (1h, 2h, 4h, capped at 24h)
-- [x] Worker 46 is never paused or resumed
-- [x] Workers 48 and 55 would pause until inferred reset times
+- [ ] 402 or 429 quota failure in smoke step pauses worker instead of leaving red failure loop
+- [ ] Persisted state includes reset time and source
+- [ ] While paused, dispatcher runs don't fail and don't start worker
+- [ ] Factory visibility lists paused workers with `paused-until` time (UTC and CT) and source
+- [ ] After reset, exactly one resume smoke runs
+- [ ] Pass clears pause, quota failure starts new pause
+- [ ] Unknown reset uses bounded backoff (1h, 2h, 4h, capped at 24h)
+- [ ] Worker 46 is never paused or resumed
+- [ ] Workers 48 and 55 would pause until inferred reset times
 
 ## Implementation Order
 
