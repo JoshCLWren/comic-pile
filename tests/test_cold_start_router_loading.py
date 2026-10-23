@@ -29,7 +29,25 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 API_FALLBACK_PATH = "/api/{path:path}"
 PREREQUISITE_SWITCH_PATH = "/api/v1/roll/switch-prerequisite"
 SNOOZE_PATH = "/api/v1/snooze/"
+#: The #3479 import-time target measured on a workstation (Python 3.14, warm
+#: cache). Slower runners must not fail this target, which is why the hard
+#: gate is runner-relative (see the import-budget test's docstring).
 IMPORT_BUDGET_MS = 600
+#: The cold entry path may cost at most this multiple of the FastAPI framework
+#: floor measured by the same interpreter. The pre-#3479 entry-path import
+#: measured about 3.5x that floor; the deferred entry path costs about 2x.
+IMPORT_FRAMEWORK_RATIO = 3.0
+#: Modules a cold ``api.index`` must not pay to import (#3479). The eager
+#: catalog, images, and delivery routers and their backends (comicvine, httpx,
+#: PyGithub) belong behind the per-resource deferred mounts.
+FORBIDDEN_COLD_IMPORTS: tuple[str, ...] = (
+    "app.api.catalog",
+    "app.services.comicvine_provider",
+    "app.api.images",
+    "httpx",
+    "app.api.delivery",
+    "github",
+)
 
 
 def _iter_effective_routes(routes, prefix: str = ""):
@@ -170,22 +188,59 @@ async def test_prerequisite_switch_is_reachable_on_the_first_request() -> None:
     assert PREREQUISITE_SWITCH_PATH in _route_paths(app)
 
 
-def test_api_index_import_stays_within_the_cold_start_budget() -> None:
-    """``import api.index`` must stay under the 0.6 s cold-start import budget."""
+def _importtime_modules(source: str) -> dict[str, int]:
+    """Import ``source`` in a fresh interpreter and report per-module costs.
+
+    Args:
+        source: Python source executed under ``-X importtime``.
+
+    Returns:
+        Mapping from module name to cumulative import microseconds.
+    """
     result = subprocess.run(
-        [sys.executable, "-X", "importtime", "-c", "import api.index"],
+        [sys.executable, "-X", "importtime", "-c", source],
         capture_output=True,
         text=True,
         cwd=REPOSITORY_ROOT,
         check=True,
         timeout=120,
     )
-
-    import_us = None
+    modules: dict[str, int] = {}
     for line in result.stderr.splitlines():
-        if line.rstrip().endswith("| api.index"):
-            import_us = int(line.rsplit("|", 2)[1].strip())
-    assert import_us is not None, "importtime did not report api.index"
-    assert import_us < IMPORT_BUDGET_MS * 1000, (
-        f"import api.index took {import_us / 1000:.0f} ms; budget is {IMPORT_BUDGET_MS} ms"
+        if not line.startswith("import time:"):
+            continue
+        _self, cumulative, name = line.removeprefix("import time:").split("|", 2)
+        if not cumulative.strip().isdigit():
+            # CPython 3.14+ emits a column-header line before the report.
+            continue
+        modules[name.strip()] = int(cumulative.strip())
+    return modules
+
+
+def test_api_index_import_stays_within_the_cold_start_budget() -> None:
+    """``import api.index`` must stay inside the cold-start import budget.
+
+    The hard budget is runner-relative: the test measures the FastAPI
+    framework floor with the same interpreter on the same machine and allows
+    the cold import up to ``IMPORT_FRAMEWORK_RATIO`` times that floor. A
+    fixed 600 ms wall-clock assertion flaked on GitHub Actions runners that
+    import Python several times slower than a workstation (an import that
+    costs about 490 ms at full speed measured 2471 ms there); the ratio stays
+    stable because both measurements scale with the same interpreter and
+    filesystem. Heavy cold imports are also caught structurally: the
+    catalog, comicvine, images, delivery, httpx, and PyGithub top-level
+    modules must not appear in the importtime report at all.
+    """
+    api_report = _importtime_modules("import api.index")
+    assert "api.index" in api_report, "importtime did not report api.index"
+
+    for heavy in FORBIDDEN_COLD_IMPORTS:
+        assert heavy not in api_report, f"{heavy} leaks into the cold api.index import"
+
+    framework_floor_us = _importtime_modules("import fastapi")["fastapi"]
+    budget = max(IMPORT_BUDGET_MS * 1000, framework_floor_us * IMPORT_FRAMEWORK_RATIO)
+    import_us = api_report["api.index"]
+    assert import_us < budget, (
+        f"import api.index took {import_us / 1000:.0f} ms; budget is {budget / 1000:.0f} ms "
+        f"(fastapi floor {framework_floor_us / 1000:.0f} ms)"
     )
