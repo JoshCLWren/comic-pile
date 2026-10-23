@@ -18,7 +18,9 @@ from httpx import AsyncClient
 from sqlalchemy import Connection, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.cbl_reference import CBLSource, CBLSourceList
 from app.models.custom_cbl import CustomCBLList
+from app.models.custom_cbl_source_link import CustomCBLSourceLink
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -1126,3 +1128,93 @@ async def test_stored_decision_cannot_cross_reader_or_list_ownership(
         await async_db.commit()
     assert "fk_custom_cbl_overlap_decision_owner_list" in str(error.value)
     await async_db.rollback()
+
+
+@pytest.mark.asyncio
+async def test_source_refresh_preserves_linked_reader_overlap_decision(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Refreshing shared provenance never resets a linked reader's approval."""
+    user = await get_or_create_user_async(async_db)
+    _, waiting_issue = await _volume_thread(
+        async_db,
+        user_id=user.id,
+        title="Mister Miracle",
+        queue_position=1,
+        volume_external_id="202",
+    )
+    _, continuing_issue = await _volume_thread(
+        async_db,
+        user_id=user.id,
+        title="JLI",
+        queue_position=2,
+        volume_external_id="101",
+    )
+    issue_ids = [waiting_issue.id, continuing_issue.id]
+    continuing_thread_id = continuing_issue.thread_id
+    user_id = user.id
+    source = CBLSource(
+        repository="test/overlap-refresh",
+        revision_sha="a" * 40,
+        synced_at=datetime.now(UTC),
+    )
+    async_db.add(source)
+    await async_db.flush()
+    source_list = CBLSourceList(
+        source_id=source.id,
+        source_path="DC/JLI.cbl",
+        name="JLI",
+        revision_sha="a" * 40,
+        content_hash="a" * 64,
+        declared_issue_count=2,
+    )
+    async_db.add(source_list)
+    await async_db.flush()
+    source_list_id = source_list.id
+    await async_db.commit()
+    list_id = await _strict_list(auth_client, issue_ids)
+    async_db.add(
+        CustomCBLSourceLink(
+            user_id=user_id,
+            cbl_source_list_id=source_list_id,
+            custom_cbl_list_id=list_id,
+            source_revision_sha="a" * 40,
+            source_content_hash="a" * 64,
+        )
+    )
+    await async_db.commit()
+    saved = await auth_client.put(
+        f"/api/v1/custom-cbls/{list_id}/overlap-decisions",
+        json={"continuing_volume_id": CONTINUING_VOLUME, "waiting_volume_id": WAITING_VOLUME},
+    )
+    assert saved.status_code == 200, saved.text
+    before = saved.json()
+    before_blockers = await _thread_blockers(async_db, user_id, continuing_thread_id)
+    assert before_blockers == []
+
+    # A shared catalog refresh advances source provenance, not reader approval.
+    await async_db.refresh(source)
+    await async_db.refresh(source_list)
+    source.revision_sha = "b" * 40
+    source_list.revision_sha = "b" * 40
+    source_list.content_hash = "b" * 64
+    await async_db.commit()
+    async_db.expire_all()
+
+    reloaded = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/overlap-decisions")
+    assert reloaded.status_code == 200, reloaded.text
+    assert reloaded.json()["decisions"] == before["decisions"]
+    assert reloaded.json()["updated_at"] == before["updated_at"]
+    continuing = await async_db.get(Issue, issue_ids[1])
+    waiting = await async_db.get(Issue, issue_ids[0])
+    assert continuing is not None and waiting is not None
+    assert continuing.status == waiting.status == "unread"
+    assert await _thread_blockers(async_db, user_id, continuing.thread_id) == []
+    link = (
+        await async_db.execute(
+            select(CustomCBLSourceLink).where(CustomCBLSourceLink.custom_cbl_list_id == list_id)
+        )
+    ).scalar_one()
+    assert link.source_revision_sha == "a" * 40
+    assert link.source_content_hash == "a" * 64
