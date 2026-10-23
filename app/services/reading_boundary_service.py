@@ -18,6 +18,7 @@ from app.repositories.reading_boundary_repository import (
 from app.schemas.reading_boundary import (
     BoundaryEditorTarget,
     BoundaryIssue,
+    BoundaryReadingList,
     ReadingBoundaryBatchResponse,
     ReadingBoundaryBlocker,
     ReadingBoundaryExplanation,
@@ -75,7 +76,14 @@ def _issue_label(labels: BoundaryShadowLabels, issue_id: int) -> BoundaryIssue:
         issue_number=row.issue_number,
         volume_label=row.volume_label,
         label=name,
-        reading_lists=row.reading_lists,
+        reading_lists=[
+            BoundaryReadingList(
+                list_id=membership.list_id,
+                name=membership.name,
+                mode=membership.mode,
+            )
+            for membership in row.reading_lists
+        ],
     )
 
 

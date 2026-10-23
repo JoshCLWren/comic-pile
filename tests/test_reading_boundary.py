@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_reading_execution_settings
 from app.models import Dependency, Issue, Thread, User
+from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.repositories.reading_boundary_repository import (
     BoundaryIssueLabels,
     BoundaryListLabels,
     BoundaryPrerequisiteLabels,
+    BoundaryReadingListMembership,
     BoundaryShadowLabels,
     BoundaryThreadLabels,
     load_boundary_labels,
@@ -367,3 +369,121 @@ async def test_api_returns_named_live_blocker_and_excludes_history(
         json={"thread_ids": [foreign_id]},
     )
     assert missing.status_code == 404
+
+
+def test_owned_list_names_and_modes_appear_on_next_and_waiting_issues() -> None:
+    """Owned list membership labels survive projection onto next and waiting Issues."""
+    _state, snapshot, labels = _fixture()
+
+    membership = BoundaryReadingListMembership(
+        list_id=LIST_ID, name="JLI", mode="strict"
+    )
+    new_issues = dict(labels.issues)
+    for issue_id in (F2, J2, M1):
+        row = new_issues[issue_id]
+        new_issues[issue_id] = replace(row, reading_lists=[membership])
+    labels = replace(labels, issues=new_issues)
+
+    jli = project_boundary_explanation(snapshot, labels, JLI_ID)
+    assert jli.next is not None
+    assert jli.next.issue.reading_lists[0].name == "JLI"
+    assert jli.next.issue.reading_lists[0].mode == "strict"
+
+    miracle = project_boundary_explanation(snapshot, labels, MISTER_MIRACLE_ID)
+    assert miracle.next is not None
+    assert miracle.next.issue.reading_lists[0].name == "JLI"
+    assert miracle.next.issue.reading_lists[0].mode == "strict"
+    assert miracle.blockers
+    assert miracle.blockers[0].waiting_on[0].reading_lists[0].name == "JLI"
+    assert miracle.blockers[0].waiting_on[0].reading_lists[0].mode == "strict"
+
+
+@pytest.mark.asyncio
+async def test_api_returns_unavailable_when_option_e_disabled_single(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A disabled Option E explains one owned series as unavailable."""
+    user = await get_or_create_user_async(async_db)
+    thread, _issues = await _owned_series(async_db, user.id, "Fourth World", 1)
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/reading-boundaries/{thread.id}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["state"] == "unavailable"
+    assert body["next"] is None
+    assert body["blockers"] == []
+    assert body["historical"] == []
+
+
+@pytest.mark.asyncio
+async def test_api_returns_unavailable_when_option_e_disabled_batch(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A disabled Option E explains every requested owned series as unavailable."""
+    user = await get_or_create_user_async(async_db)
+    first, _ = await _owned_series(async_db, user.id, "First", 1)
+    second, _ = await _owned_series(async_db, user.id, "Second", 2)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/reading-boundaries",
+        json={"thread_ids": [first.id, second.id]},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert set(body["threads"]) == {str(first.id), str(second.id)}
+    for thread in (first, second):
+        assert body["threads"][str(thread.id)]["state"] == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_api_includes_owned_list_names_and_modes_on_issues(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Owned list names and modes appear on next and waiting Issues."""
+    user = await get_or_create_user_async(async_db)
+    other = User(username="boundary_list_other", password_hash="unused")
+    async_db.add(other)
+    await async_db.flush()
+    fourth, fourth_issues = await _owned_series(async_db, user.id, "Fourth World", 1)
+    miracle, miracle_issues = await _owned_series(async_db, user.id, "Mister Miracle", 2)
+
+    cbl = CustomCBLList(user_id=user.id, name="JLI", mode="strict")
+    async_db.add(cbl)
+    await async_db.flush()
+    async_db.add_all(
+        [
+            CustomCBLEntry(
+                list_id=cbl.id, issue_id=fourth_issues[1].id, position=1, gate="none"
+            ),
+            CustomCBLEntry(
+                list_id=cbl.id, issue_id=miracle_issues[0].id, position=2, gate="none"
+            ),
+        ]
+    )
+    async_db.add(
+        Dependency(
+            source_issue_id=fourth_issues[1].id,
+            target_issue_id=miracle_issues[0].id,
+            origin="reader",
+            classification="A",
+            provenance="Explicit reader prerequisite",
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/reading-boundaries/{miracle.id}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["next"]["issue"]["reading_lists"][0]["name"] == "JLI"
+    assert body["next"]["issue"]["reading_lists"][0]["mode"] == "strict"
+    assert body["blockers"][0]["waiting_on"][0]["reading_lists"][0]["name"] == "JLI"
+    assert body["blockers"][0]["waiting_on"][0]["reading_lists"][0]["mode"] == "strict"

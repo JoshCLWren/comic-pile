@@ -18,8 +18,6 @@ from app.models.external_identity import (
     ExternalIdentity,
     ThreadExternalSeriesMapping,
 )
-from app.schemas.reading_boundary import BoundaryReadingList
-
 from app.models.issue import Issue
 from app.models.thread import Thread
 
@@ -35,6 +33,19 @@ class BoundaryThreadLabels:
 
 
 @dataclass(frozen=True, slots=True)
+class BoundaryReadingListMembership:
+    """Plain owned Reading List membership for one Issue.
+
+    This is repository data, not a response schema. The service converts it
+    into ``BoundaryReadingList`` when building the reader response.
+    """
+
+    list_id: int
+    name: str
+    mode: str
+
+
+@dataclass(frozen=True, slots=True)
 class BoundaryIssueLabels:
     """Reader-facing labels for one Issue, detached from ORM models."""
 
@@ -43,7 +54,7 @@ class BoundaryIssueLabels:
     thread_title: str
     issue_number: str
     volume_label: str | None = None
-    reading_lists: list[BoundaryReadingList] = field(default_factory=list)
+    reading_lists: list[BoundaryReadingListMembership] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,7 +247,7 @@ async def load_boundary_labels(
     }
 
     # Load owned list memberships for each issue (reading_lists on BoundaryIssue).
-    issue_reading_lists: dict[int, list[BoundaryReadingList]] = {
+    issue_reading_lists: dict[int, list[BoundaryReadingListMembership]] = {
         issue_id: [] for issue_id in issue_labels
     }
     if active_list_ids:
@@ -251,7 +262,7 @@ async def load_boundary_labels(
             list_row = lists.get(entry.list_id)
             if list_row is not None:
                 issue_reading_lists[entry.issue_id].append(
-                    BoundaryReadingList(
+                    BoundaryReadingListMembership(
                         list_id=list_row.list_id,
                         name=list_row.name,
                         mode=list_row.mode,
