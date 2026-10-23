@@ -46,9 +46,9 @@ function statusLabel(entry: CBLAdoptionPreviewEntry): string {
 }
 
 function statusClass(entry: CBLAdoptionPreviewEntry): string {
-  if (entry.adoption_decision === 'included_existing') return 'text-emerald-300'
+  if (entry.adoption_decision === 'included_existing') return 'text-[var(--theme-success)]'
   if (entry.adoption_decision === 'would_create_missing') return 'text-sky-300'
-  if (entry.adoption_decision === 'unresolved') return 'text-amber-300'
+  if (entry.adoption_decision === 'unresolved') return 'text-[var(--theme-warning)]'
   return 'text-[var(--theme-text-muted)]'
 }
 
@@ -397,25 +397,28 @@ export default function ReadingPlanAddMaterial({
               </ol>
 
               {preview.summary.unresolved_count > 0 && (
-                <p className="text-xs text-amber-300">
-                  <strong>Unresolved required comics must be resolved or deliberately unchecked</strong> before committing.
+                <p className="text-xs text-[var(--theme-warning)]">
+                  <strong>Resolve unresolved comics or exclude their series</strong> before committing.
                 </p>
               )}
               {preview.summary.awaiting_opt_in_count > 0 && (
                 <p className="text-xs text-[var(--theme-text-muted)]">
-                  Missing comics not yet confirmed as importable. Choose whether to
-                  <span className="font-medium">include</span> or
+                  Missing comics not yet confirmed as importable. Choose whether to{' '}
+                  <span className="font-medium">include</span> or{' '}
                   <span className="font-medium">exclude</span> each one before committing.
                 </p>
               )}
               {commitDisabled && (
                 <p className="text-xs text-[var(--theme-text-dim)]">
-                  Three adoption choices per entry:
-                  <span className="font-medium text-emerald-300">Include</span> – add this comic (reuse existing or importable new)
-                  <span className="font-medium text-sky-300">Exclude</span> – leave this comic out
-                  <span className="font-medium text-amber-300">Unresolved</span> – needs identity resolution first
+                  Save or cancel unsaved planner changes before adding material.
                 </p>
               )}
+              <p className="text-xs text-[var(--theme-text-dim)]">
+                Three adoption choices per entry:{' '}
+                <span className="font-medium text-[var(--theme-success)]">Include</span> – add this comic (reuse existing or importable new){' '}
+                <span className="font-medium text-[var(--theme-text-muted)]">Exclude</span> – leave this comic out{' '}
+                <span className="font-medium text-[var(--theme-warning)]">Unresolved</span> – needs identity resolution first
+              </p>
 
               <button
                 type="button"
