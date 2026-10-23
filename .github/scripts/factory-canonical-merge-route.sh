@@ -72,6 +72,7 @@ factory_run_canonical_merge_gates() {
     FACTORY_MERGE_GATE_REASON='invalid pull request number'
     return 1
   fi
+  expected_head="${expected_head,,}"  # normalize to lowercase for validation
   if [[ ! "$expected_head" =~ ^[0-9a-f]{40}$ ]]; then
     FACTORY_MERGE_GATE_REASON='expected head is not a full lowercase Git SHA'
     return 1
@@ -93,7 +94,10 @@ factory_run_canonical_merge_gates() {
     FACTORY_MERGE_GATE_REASON="${FACTORY_MERGE_GATE_REASON:-trusted controller returned no decision}"
     return 1
   fi
-  [[ "$FACTORY_MERGE_GATE_DECISION" == 'pass' ]]
+  if [[ "$FACTORY_MERGE_GATE_DECISION" != 'pass' ]]; then
+    FACTORY_MERGE_GATE_REASON="trusted controller decision=${FACTORY_MERGE_GATE_DECISION:-empty}; required pass"
+    return 1
+  fi
 }
 
 factory_classify_closure_outcome() {
@@ -148,7 +152,9 @@ factory_merge_with_canonical_gates() {
   closure_output="$(python3 "$closure_script" --pr "$pr" 2>&1)" || closure_status=$?
   # The closure module prints its decision on the last non-empty line; error
   # output can be multi-line.
-  outcome="$(printf '%s\n' "$closure_output" | awk 'NF { line=$0 } END { print line }')"
+  # Prefer explicit canonical outcomes; otherwise take last non-empty line.
+  # Any non-canonical line conservatively maps to blocked, never to success.
+  outcome="$(printf '%s\n' "$closure_output" | awk 'NF { last=$0; if ($0=="closed"||$0=="already-closed"||$0=="no-linked-issue") ok=$0 } END { print (ok?ok:last) }')"
   FACTORY_CLOSURE_OUTCOME="$outcome"
   if (( closure_status != 0 )); then
     FACTORY_CLOSURE_STATUS='error'
