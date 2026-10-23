@@ -3674,6 +3674,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading-boundaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Reading Boundary Batch
+         * @description Explain several owned series in one canonical eligibility snapshot.
+         *
+         *     Args:
+         *         payload: Owned Thread identifiers to explain.
+         *         current_user: Authenticated reader making the request.
+         *         db: Database session for the request.
+         *
+         *     Returns:
+         *         Explanations keyed by Thread identifier.
+         *
+         *     Raises:
+         *         HTTPException: With status 404 when a Thread is absent or foreign.
+         */
+        post: operations["get_reading_boundary_batch_api_v1_reading_boundaries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading-boundaries/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reading Boundary
+         * @description Explain one owned series through the canonical Option E result.
+         *
+         *     Args:
+         *         thread_id: Owned Thread to explain.
+         *         current_user: Authenticated reader making the request.
+         *         db: Database session for the request.
+         *
+         *     Returns:
+         *         Named waiting Issues, live blockers, history, and editor targets.
+         *
+         *     Raises:
+         *         HTTPException: With status 404 when the Thread is absent or foreign.
+         */
+        get: operations["get_reading_boundary_api_v1_reading_boundaries__thread_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reading-mode": {
         parameters: {
             query?: never;
@@ -6676,6 +6738,65 @@ export interface components {
              * @description Aggregated counts per (alias, web_origin, status class).
              */
             counters?: components["schemas"]["BootstrapAliasCounterSchema"][];
+        };
+        /**
+         * BoundaryEditorTarget
+         * @description Where the reader can change the rule that produced a boundary.
+         *
+         *     The target is a descriptor, not a URL: the client owns routing so a
+         *     renamed surface never breaks a stored deep link.
+         */
+        BoundaryEditorTarget: {
+            /** Issue Id */
+            issue_id?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "reading_list" | "prerequisite" | "issue";
+            /** Label */
+            label: string;
+            /** List Id */
+            list_id?: number | null;
+            /** Prerequisite Id */
+            prerequisite_id?: number | null;
+            /** Thread Id */
+            thread_id?: number | null;
+        };
+        /**
+         * BoundaryIssue
+         * @description One named Issue, labeled with its Comic Vine volume when known.
+         */
+        BoundaryIssue: {
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Label */
+            label: string;
+            /** Reading Lists */
+            reading_lists?: components["schemas"]["BoundaryReadingList"][];
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string;
+            /** Volume Label */
+            volume_label?: string | null;
+        };
+        /**
+         * BoundaryReadingList
+         * @description One owned Reading List that places an Issue.
+         */
+        BoundaryReadingList: {
+            /** List Id */
+            list_id: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "strict" | "loose";
+            /** Name */
+            name: string;
         };
         /**
          * BugReportCreate
@@ -12711,6 +12832,92 @@ export interface components {
             recent_ratings?: components["schemas"]["ReaderContextRecentRating"][];
             /** Series Name */
             series_name?: string | null;
+        };
+        /**
+         * ReadingBoundaryBatchRequest
+         * @description Owned series IDs to explain in one request.
+         */
+        ReadingBoundaryBatchRequest: {
+            /** Thread Ids */
+            thread_ids: number[];
+        };
+        /**
+         * ReadingBoundaryBatchResponse
+         * @description Canonical explanations keyed by Thread ID.
+         */
+        ReadingBoundaryBatchResponse: {
+            /** Threads */
+            threads: {
+                [key: string]: components["schemas"]["ReadingBoundaryExplanation"];
+            };
+        };
+        /**
+         * ReadingBoundaryBlocker
+         * @description One live Option E requirement that currently blocks the next Issue.
+         */
+        ReadingBoundaryBlocker: {
+            editor?: components["schemas"]["BoundaryEditorTarget"] | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "strict_order" | "hold" | "after_previous" | "prerequisite";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "reading_list" | "reader_prerequisite";
+            /** Reason */
+            reason: string;
+            /** Waiting On */
+            waiting_on?: components["schemas"]["BoundaryIssue"][];
+        };
+        /**
+         * ReadingBoundaryExplanation
+         * @description Canonical explanation of one series' reading boundaries.
+         */
+        ReadingBoundaryExplanation: {
+            /** Blockers */
+            blockers?: components["schemas"]["ReadingBoundaryBlocker"][];
+            /** Historical */
+            historical?: components["schemas"]["ReadingBoundaryHistorical"][];
+            next?: components["schemas"]["ReadingBoundaryNext"] | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "blocked" | "available" | "complete" | "unavailable";
+            /** Summary */
+            summary: string;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * ReadingBoundaryHistorical
+         * @description A reader-owned association that is not a live blocker.
+         *
+         *     Historical rows never gate execution. They are listed so the reader can
+         *     see an old association without it being presented as a live boundary.
+         */
+        ReadingBoundaryHistorical: {
+            /** Detail */
+            detail: string;
+            editor?: components["schemas"]["BoundaryEditorTarget"] | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "converted_prerequisite" | "legacy_dependency" | "skipped_entry";
+            /** Label */
+            label: string;
+        };
+        /**
+         * ReadingBoundaryNext
+         * @description The Issue the reader may read now.
+         */
+        ReadingBoundaryNext: {
+            editor?: components["schemas"]["BoundaryEditorTarget"] | null;
+            issue: components["schemas"]["BoundaryIssue"];
         };
         /**
          * ReadingGraphBlocker
@@ -20745,6 +20952,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reading_boundary_batch_api_v1_reading_boundaries_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingBoundaryBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reading_boundary_api_v1_reading_boundaries__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingBoundaryExplanation"];
                 };
             };
             /** @description Validation Error */

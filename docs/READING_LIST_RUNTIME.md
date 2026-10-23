@@ -119,6 +119,14 @@ availability. With execution disabled, unread entries are labeled `legacy`; open
 the reader never activates stored strict modes or gates. Ownership is checked
 before loading eligibility. These reads do not repair pointers or mutate progress.
 
+`GET /api/v1/reading-boundaries/{thread_id}` and `POST /api/v1/reading-boundaries`
+project that same canonical evaluator result for one owned series or a bounded
+batch. They name the next Issue, every live blocker's waiting Issues, the owned
+Reading List or authored prerequisite responsible, and an editor target. Inactive
+legacy and converted associations appear only in `historical`; they never become
+live blockers and are not repaired or deleted. The endpoints are versioned-only
+and require an authenticated owner.
+
 The custom CBL editor's **Read this list** control opens this current-list reader.
 Available issues can be marked read directly, and read issues can be marked unread.
 These explicit writes use the existing Issue APIs; all affected reader, Roll, Queue
