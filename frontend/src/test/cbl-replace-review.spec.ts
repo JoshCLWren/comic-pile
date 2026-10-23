@@ -1,4 +1,6 @@
+// Run with the local fixture backend's Option E execution enabled.
 import { test, expect } from './fixtures'
+import type { ReadingListPredecessorChange } from '../services/api-custom-cbl'
 import type { Page } from '@playwright/test'
 import { createThread, getAuthToken } from './helpers'
 
@@ -503,16 +505,30 @@ test.describe('CBL replacement review', () => {
 
     // Another save changes the list version while the review is open.
     const headers = await authHeaders(page)
+    const changeRequest = {
+      name: `Stale List ${suffix}`,
+      description: 'cancel and stale target',
+      mode: 'strict',
+      issue_ids: [firstIssueId],
+      entry_intents: { [firstIssueId]: { gate: 'none', skipped: false } },
+      checkpoint_issue_ids: [],
+    }
+    const previewChange = await page.request.put(`/api/v1/custom-cbls/${listId}`, {
+      headers, data: changeRequest,
+    })
+    expect(previewChange.status(), await previewChange.text()).toBe(409)
+    // SAFETY: the server's named predecessor changes are reviewed before resubmission.
+    const confirmation = await previewChange.json() as {
+      detail: { code: string; predecessor_changes: ReadingListPredecessorChange[] }
+    }
+    expect(confirmation.detail.code).toBe('reading_list_predecessor_confirmation_required')
+    expect(confirmation.detail.predecessor_changes).toHaveLength(1)
+    expect(confirmation.detail.predecessor_changes[0]).toMatchObject({
+      issue_id: secondIssueId, before_issue_ids: [firstIssueId], after_issue_ids: [],
+    })
     const changed = await page.request.put(`/api/v1/custom-cbls/${listId}`, {
       headers,
-      data: {
-        name: `Stale List ${suffix}`,
-        description: 'cancel and stale target',
-        mode: 'strict',
-        issue_ids: [firstIssueId],
-        entry_intents: { [firstIssueId]: { gate: 'none', skipped: false } },
-        checkpoint_issue_ids: [],
-      },
+      data: { ...changeRequest, confirmed_predecessor_changes: confirmation.detail.predecessor_changes },
     })
     expect(changed.ok(), await changed.text()).toBeTruthy()
 
@@ -633,7 +649,7 @@ test.describe('CBL replacement review', () => {
   })
 
   test('replacement graph impact agrees with Roll blocking after the list is applied', async ({
-    authenticatedPage,
+    authenticatedPage, allowExpectedBrowserFailures,
   }) => {
     const page = authenticatedPage
     const suffix = Date.now()
@@ -723,6 +739,11 @@ test.describe('CBL replacement review', () => {
     const impact = page.getByTestId('cbl-replace-graph-impact')
     await expect(impact).toContainText('1 gain a wait')
     await expect(impact).toContainText('1 lose every wait')
+    // The two explicit confirmation dialogs intentionally originate from 409 responses.
+    allowExpectedBrowserFailures.allow(
+      { category: 'console', message: 'status of 409 (Conflict)' },
+      { category: 'console', message: 'API Error: AxiosError: Request failed with status code 409' },
+    )
     await page.getByTestId('confirm-replace').click()
 
     // Reversing a strict list re-changes stored waits, so the server demands

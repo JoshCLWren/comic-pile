@@ -158,4 +158,21 @@ describe('CblReplaceReviewPanel', () => {
     await user.click(screen.getByTestId('undo-replace'))
     expect(onUndo).toHaveBeenCalledTimes(1)
   })
+  it('keeps optional legacy intents usable and lets readers restore a selection or cancel', async () => {
+    const user = userEvent.setup()
+    const onCancel = vi.fn()
+    const entries: ReplaceEntry[] = [
+      { comicId: 11, title: 'A #1', included: true, manual: true },
+      { comicId: 12, title: 'B #1', included: true, manual: true },
+    ]
+    render(<CblReplaceReviewPanel listName="Legacy" listId={9} mode="strict"
+      before={entries} after={entries} onConfirm={vi.fn()} onCancel={onCancel} />)
+    expect(screen.getByText(/2 saved entries are not in this CBL/)).toBeVisible()
+    await user.click(screen.getByTestId('toggle-11'))
+    await user.click(screen.getByTestId('toggle-11'))
+    expect(screen.getByTestId('toggle-11')).toBeChecked()
+    await user.click(screen.getByTestId('cancel-replace'))
+    expect(onCancel).toHaveBeenCalledOnce()
+  })
+
 })

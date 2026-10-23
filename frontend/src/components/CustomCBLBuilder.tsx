@@ -84,8 +84,8 @@ function sameEntries(left: CustomCBLEntry[], right: CustomCBLEntry[]): boolean {
       return (
         other !== undefined &&
         entry.issue_id === other.issue_id &&
-        entry.gate === other.gate &&
-        entry.skipped === other.skipped &&
+        entry.gate === (other.gate ?? DEFAULT_GATE) &&
+        entry.skipped === (other.skipped ?? false) &&
         Boolean(entry.is_checkpoint) === Boolean(other.is_checkpoint)
       )
     })
@@ -682,19 +682,20 @@ export default function CustomCBLBuilder({
     if (!selectedId || !persisted || dirty || disabled || isPending) return
     setExportError(null)
     let url: string | null = null
+    let anchor: HTMLAnchorElement | null = null
     try {
       const xml = await customCBLApi.exportXml(selectedId)
       const blob = new Blob([xml], { type: 'application/xml' })
       url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
+      anchor = document.createElement('a')
       anchor.href = url
       anchor.download = `${persisted.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'custom-reading-list'}.cbl`
       document.body.appendChild(anchor)
       anchor.click()
-      anchor.remove()
     } catch (caught) {
       setExportError(caught instanceof Error ? caught : new Error('Custom CBL export failed.'))
     } finally {
+      anchor?.remove()
       if (url) URL.revokeObjectURL(url)
     }
   }

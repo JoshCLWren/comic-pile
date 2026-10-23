@@ -152,6 +152,53 @@ function previewResponse(entries: PreviewRow[]) {
   }
 }
 
+async function openReplacementReview(repeatSourceEntry = false) {
+  cblMocks.discover.mockResolvedValue([globalSource])
+  const rows = existingList.entries.map((entry) => ({
+    cbl_position: entry.position,
+    cbl_entry_id: entry.id,
+    series_name: entry.series_name,
+    issue_number: entry.issue_number,
+    series_group_id: String(entry.thread_id),
+    adoption_class: 'existing',
+    adoption_decision: 'included_existing',
+    adopted: true,
+    resolved_issue_id: entry.issue_id,
+    resolution_status: 'resolved_exact',
+  }))
+  if (repeatSourceEntry) rows.push({ ...rows[0]! })
+  cblMocks.preview.mockResolvedValue(previewResponse(rows))
+  renderBuilder()
+  fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+  fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+  await screen.findByText('Starman #55')
+  fireEvent.click(screen.getByRole('button', { name: 'Replace using CBL' }))
+  fireEvent.change(screen.getByLabelText('Search global CBL sources'), { target: { value: 'Starman' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Find CBLs' }))
+  fireEvent.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
+  await screen.findByTestId('confirm-replace')
+}
+
+const waitingChange = {
+  issue_id: 30001,
+  issue_name: 'All-Star Comics #1',
+  before_issue_ids: [],
+  before_issue_names: [],
+  after_issue_ids: [26360],
+  after_issue_names: ['Starman #55'],
+}
+
+const waitingConfirmationError = {
+  isAxiosError: true,
+  response: {
+    status: 409,
+    data: { detail: {
+      code: 'reading_list_predecessor_confirmation_required',
+      predecessor_changes: [waitingChange],
+    } },
+  },
+}
+
 describe('CustomCBLBuilder', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -1422,8 +1469,131 @@ describe('CustomCBLBuilder', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Download blocked')
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:failed-custom-cbl')
+    expect(document.querySelector('a[download]')).not.toBeInTheDocument()
 
     anchorClick.mockRestore()
   })
+  it('confirms restored waits before Undo and sends only the reviewed confirmation', async () => {
+    const replaced = { ...existingList, updated_at: '2026-09-14T03:10:00Z' }
+    mocks.update.mockResolvedValueOnce(replaced)
+      .mockRejectedValueOnce(waitingConfirmationError).mockResolvedValueOnce(existingList)
+    await openReplacementReview()
+    fireEvent.click(screen.getByTestId('confirm-replace'))
+    await screen.findByText(/Replaced this Reading List/)
+    mocks.get.mockResolvedValue(replaced)
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last replacement' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm undo waiting changes' })
+    expect(dialog).toHaveTextContent('All-Star Comics #1 now waits on Starman #55.')
+    expect(mocks.update).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and restore' }))
+    await screen.findByText(/Restored the previous list membership/)
+    expect(mocks.update).toHaveBeenLastCalledWith(9, expect.objectContaining({
+      issue_ids: [26360, 30001], confirmed_predecessor_changes: [waitingChange],
+    }))
+    expect(screen.queryByRole('button', { name: 'Undo last replacement' })).not.toBeInTheDocument()
+  })
+
+  it('cancels an Undo confirmation without discarding its retryable snapshot', async () => {
+    const replaced = { ...existingList, updated_at: '2026-09-14T03:10:00Z' }
+    mocks.update.mockResolvedValueOnce(replaced).mockRejectedValueOnce(waitingConfirmationError)
+    await openReplacementReview()
+    fireEvent.click(screen.getByTestId('confirm-replace'))
+    await screen.findByText(/Replaced this Reading List/)
+    mocks.get.mockResolvedValue(replaced)
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last replacement' }))
+    await screen.findByRole('dialog', { name: 'Confirm undo waiting changes' })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(mocks.update).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: 'Undo last replacement' })).toBeEnabled()
+  })
+
+  it('retains Undo after a transient write failure so the reader can retry', async () => {
+    const replaced = { ...existingList, updated_at: '2026-09-14T03:10:00Z' }
+    mocks.update.mockResolvedValueOnce(replaced).mockRejectedValueOnce(new Error('Connection lost'))
+      .mockResolvedValueOnce(existingList)
+    await openReplacementReview()
+    fireEvent.click(screen.getByTestId('confirm-replace'))
+    await screen.findByText(/Replaced this Reading List/)
+    mocks.get.mockResolvedValue(replaced)
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last replacement' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Connection lost')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last replacement' }))
+    await screen.findByText(/Restored the previous list membership/)
+    expect(mocks.update).toHaveBeenCalledTimes(3)
+  })
+
+  it('cancels replacement waiting changes without sending a second write', async () => {
+    mocks.update.mockRejectedValueOnce(waitingConfirmationError)
+    await openReplacementReview()
+    fireEvent.click(screen.getByTestId('confirm-replace'))
+    await screen.findByRole('dialog', { name: 'Confirm replacement waiting changes' })
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(mocks.update).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('confirm-replace')).toBeEnabled()
+  })
+
+  it('shows a replacement write failure and lets the reader dismiss the review', async () => {
+    mocks.update.mockRejectedValueOnce(new Error('Replacement unavailable'))
+    await openReplacementReview()
+    fireEvent.click(screen.getByTestId('confirm-replace'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Replacement unavailable')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByTestId('cbl-replace-review')).not.toBeInTheDocument()
+    expect(mocks.update).toHaveBeenCalledTimes(1)
+  })
+
+  it('deduplicates repeated source occurrences and can reload the selected source', async () => {
+    mocks.update.mockResolvedValue(existingList)
+    await openReplacementReview(true)
+    fireEvent.click(screen.getByRole('button', { name: /Global Starman CBL/ }))
+    await waitFor(() => expect(cblMocks.preview).toHaveBeenCalledTimes(2))
+    fireEvent.click(screen.getByTestId('confirm-replace'))
+    await screen.findByText(/Replaced this Reading List/)
+    expect(mocks.update).toHaveBeenCalledWith(9, expect.objectContaining({ issue_ids: [26360, 30001] }))
+  })
+
+  it('reports an unstructured creation failure and keeps the draft name for retry', async () => {
+    mocks.create.mockRejectedValue({ unavailable: true })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(screen.getByLabelText('New custom CBL name'), { target: { value: 'Retry me' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Custom CBL operation failed.')
+    expect(screen.getByLabelText('New custom CBL name')).toHaveValue('Retry me')
+  })
+
+  it('keeps a list editable after apply and delete requests fail', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    mocks.apply.mockRejectedValue(new Error('Apply unavailable'))
+    mocks.delete.mockRejectedValue(new Error('Delete unavailable'))
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    await screen.findByText('Starman #55')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to this Reading Plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Apply unavailable')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Delete unavailable')
+    expect(screen.getByLabelText('Custom CBL')).toHaveValue('9')
+    expect(screen.getByRole('list', { name: 'Custom CBL ordered issues' })).toHaveTextContent('Starman #55')
+  })
+
+  it('accepts older lists without optional mode, description, or gate fields', async () => {
+    mocks.get.mockResolvedValue({ ...existingList, mode: undefined, description: null, entries: existingList.entries.map(
+      (entry) => ({ ...entry, gate: undefined }),
+    ) })
+    mocks.update.mockResolvedValue(existingList)
+    await openReplacementReview()
+    fireEvent.click(screen.getByTestId('confirm-replace'))
+    await screen.findByText(/Replaced this Reading List/)
+    expect(mocks.update).toHaveBeenCalledWith(9, expect.objectContaining({
+      description: null, mode: 'loose', entry_intents: {
+        26360: { gate: 'none', skipped: false }, 30001: { gate: 'none', skipped: false },
+      },
+    }))
+  })
+
 })
 
