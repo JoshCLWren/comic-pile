@@ -42,7 +42,10 @@ from app.repositories.custom_cbl_source_link_repository import (
     get_owned_list,
     insert_link,
 )
-from app.repositories.reading_list_authoring_repository import lock_reader
+from app.repositories.reading_list_authoring_repository import (
+    create_list,
+    lock_reader,
+)
 
 _LIST_NAME_MAX = 200
 
@@ -156,13 +159,12 @@ async def ensure_first_add_link(
     destination_name = (list_name or source_list.name)[:_LIST_NAME_MAX]
     savepoint = await db.begin_nested()
     try:
-        new_list = CustomCBLList(
+        new_list = await create_list(
+            db,
             user_id=user_id,
             name=destination_name,
             mode="loose",
         )
-        db.add(new_list)
-        await db.flush()
         link = await insert_link(
             db,
             user_id=user_id,
