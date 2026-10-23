@@ -405,7 +405,7 @@ export default function ReadingPlanAddMaterial({
                 <p className="text-xs text-[var(--theme-text-muted)]">
                   Missing comics not yet confirmed as importable. Choose whether to{' '}
                   <span className="font-medium">include</span> or{' '}
-                  <span className="font-medium">exclude</span> each one before committing.
+                  <span className="font-medium">exclude</span>{' '}each one before committing.
                 </p>
               )}
               {commitDisabled && (
