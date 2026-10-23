@@ -55,11 +55,19 @@
       }
     },
     {
-      "src": "/(login|register|forgot-password|reset-password|demo|rate|analytics|roll|help|queue|creators|creators/compare|history|crossovers|crossovers/.+|continuity-plans|continuity-plans/.+|whats-new|glossary|identity-inbox|cbl-sources)(\\.html)?",
-      "dest": "/static/react/$1.html",
+      "src": "/(analytics|cbl-sources|continuity-plans|continuity-plans/events|continuity-plans/new|creators|creators/compare|crossovers|demo|forgot-password|glossary|help|history|identity-inbox|login|queue|rate|register|reset-password|roll|whats-new)(\\.html)?",
+      "dest": "/$1.html",
       "headers": {
         "Cache-Control": "public, max-age=0, must-revalidate",
-        "X-Robots-Tag": "noindex, nofollow"
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; frame-src 'none';",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+        "X-ComicPile-Frontend": "vercel-static",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-Robots-Tag": "noindex, nofollow",
+        "X-XSS-Protection": "1; mode=block"
       }
     },
     {
@@ -77,6 +85,7 @@
         "X-ComicPile-Frontend": "vercel-static",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
+        "X-Robots-Tag": "noindex, nofollow",
         "X-XSS-Protection": "1; mode=block"
       }
     }
