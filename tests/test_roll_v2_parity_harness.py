@@ -11,21 +11,21 @@ from app.repositories.roll_v2_parity import fetch_parity_frontiers, fetch_parity
 
 
 @pytest.mark.asyncio
-async def test_parity_frontiers_empty(db: AsyncSession):
+async def test_parity_frontiers_empty(db: AsyncSession) -> None:
     """Parity frontiers returns empty dict for empty input."""
     result = await fetch_parity_frontiers(db, user_id=1, thread_ids=[])
     assert result == {}
 
 
 @pytest.mark.asyncio
-async def test_parity_last_read_shape(db: AsyncSession):
+async def test_parity_last_read_shape(db: AsyncSession) -> None:
     """Parity last read returns None when no matching session exists."""
     # No session with matching user; should return None
     result = await fetch_parity_last_read(db, session_id=999999, user_id=1)
     assert result is None
 
 
-def test_parity_mismatch_detection():
+def test_parity_mismatch_detection() -> None:
     """Prove deliberate mismatch reporting.
 
     The parity query previously excluded rating null events; after fixing
@@ -39,5 +39,11 @@ def test_parity_mismatch_detection():
     # expectation to surface the mismatch explicitly.
     expected_fields = {"issue_id", "issue_number", "thread_id", "thread_title", "read_at"}
     # Simulated ParityLastReadRow shape
-    sample = {"issue_id": 1, "issue_number": "1", "thread_id": 2, "thread_title": "T", "read_at": None}
+    sample = {
+        "issue_id": 1,
+        "issue_number": "1",
+        "thread_id": 2,
+        "thread_title": "T",
+        "read_at": None,
+    }
     assert set(sample.keys()) == expected_fields
