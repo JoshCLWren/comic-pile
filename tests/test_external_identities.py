@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.external_identities import (
     ExternalIdentityMappingError,
     ExternalIdentitySpec,
+    _batch_identity_query,
     link_issue_external_identity,
     link_thread_external_series,
     upsert_external_identities,
@@ -474,6 +475,8 @@ async def test_batch_identity_lookup_preserves_provider_and_type_pairs(
         ],
     )
     requested = [("comicvine", "issue", "same"), ("other", "series", "other-id")]
+    fetched = list((await async_db.scalars(_batch_identity_query(requested))).all())
+    assert {(row.provider, row.entity_type, row.external_id) for row in fetched} == set(requested)
     result = await upsert_external_identities(
         async_db,
         specs=[ExternalIdentitySpec(*key, metadata_json={"updated": True}) for key in requested],
