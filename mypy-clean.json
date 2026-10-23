@@ -68,6 +68,7 @@
   "app/repositories/creator_detail.py",
   "app/repositories/creator_summary.py",
   "app/repositories/creator_team_chemistry.py",
+  "app/repositories/custom_cbl_source_link_repository.py",
   "app/repositories/dependency_group_repository.py",
   "app/repositories/dependency_repository.py",
   "app/repositories/failed_login_repository.py",
