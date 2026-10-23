@@ -88,13 +88,17 @@ function graphImpact(
   )
   const afterRequirements = computeEntryRequirements(
     mode,
-    after
-      .filter((entry) => selected.has(entry.comicId))
-      .map((entry) => ({
-        issue_id: entry.comicId,
-        gate: entry.gate ?? 'none',
-        skipped: Boolean(entry.skipped),
-      })),
+    after.flatMap((entry) =>
+      selected.has(entry.comicId)
+        ? [
+            {
+              issue_id: entry.comicId,
+              gate: entry.gate ?? 'none',
+              skipped: Boolean(entry.skipped),
+            },
+          ]
+        : [],
+    ),
   )
   const beforeWaiting = waitingIssueIds(beforeRequirements)
   const afterWaiting = waitingIssueIds(afterRequirements)

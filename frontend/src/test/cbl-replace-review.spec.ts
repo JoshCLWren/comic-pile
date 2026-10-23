@@ -408,6 +408,9 @@ test.describe('CBL replacement review', () => {
     await page.getByLabel('Search global CBL sources').fill('Same Name')
     await page.getByRole('button', { name: 'Find CBLs' }).click()
     await page.getByRole('button', { name: /Same Name Source/ }).click()
+    // The saved entry stays checked as a manual addition by default. Replace
+    // this list's membership with only the CBL source, exactly as reviewed.
+    await page.getByTestId(`toggle-${firstIssueId}`).uncheck()
     await page.getByTestId('confirm-replace').click()
     await expect(builder.getByRole('status')).toContainText('Replaced this Reading List')
 
@@ -721,6 +724,14 @@ test.describe('CBL replacement review', () => {
     await expect(impact).toContainText('1 gain a wait')
     await expect(impact).toContainText('1 lose every wait')
     await page.getByTestId('confirm-replace').click()
+
+    // Reversing a strict list re-changes stored waits, so the server demands
+    // the same confirmation the preview warned about before it writes anything.
+    const confirmDialog = page.getByRole('dialog', {
+      name: 'Confirm replacement waiting changes',
+    })
+    await expect(confirmDialog).toBeVisible()
+    await confirmDialog.getByRole('button', { name: 'Confirm and replace' }).click()
     await expect(builder.getByRole('status')).toContainText('Replaced this Reading List')
 
     await builder.getByRole('button', { name: 'Apply to this Reading Plan' }).click()
@@ -728,5 +739,17 @@ test.describe('CBL replacement review', () => {
 
     expect(await isThreadBlocked(page, first.id)).toBe(true)
     expect(await isThreadBlocked(page, second.id)).toBe(false)
+
+    // Undoing a confirmed strict reorder re-changes the same stored waits, so
+    // it must ask for the same explicit confirmation instead of failing.
+    await builder.getByRole('button', { name: 'Undo last replacement' }).click()
+    const undoDialog = page.getByRole('dialog', { name: 'Confirm undo waiting changes' })
+    await expect(undoDialog).toBeVisible()
+    await undoDialog.getByRole('button', { name: 'Confirm and restore' }).click()
+    await expect(builder.getByRole('status')).toContainText(
+      'Read history and ratings were not changed',
+    )
+    const restored = await getReadingList(page, listId)
+    expect(restored.entries.map((entry) => entry.issue_id)).toEqual([firstIssueId, secondIssueId])
   })
 })

@@ -162,6 +162,18 @@ class StaleReadingListUndoError extends Error {
 }
 
 /**
+ * Exact before/after review projection for one Reading List replacement.
+ *
+ * Named so the owner contract stays explicit instead of widening through an
+ * anonymous return type.
+ */
+interface ReplacementModel {
+  before: ReplaceEntry[]
+  after: ReplaceEntry[]
+  unresolvedCount: number
+}
+
+/**
  * Project one CBL source preview onto a Reading List replacement review.
  *
  * Only already-resolved canonical Issues can join a Reading List. Source rows
@@ -176,7 +188,7 @@ class StaleReadingListUndoError extends Error {
 function buildReplacementModel(
   list: CustomCBL,
   preview: CBLAdoptionPreview,
-): { before: ReplaceEntry[]; after: ReplaceEntry[]; unresolvedCount: number } {
+): ReplacementModel {
   const savedByIssue = new Map(list.entries.map((entry) => [entry.issue_id, entry]))
   const before: ReplaceEntry[] = list.entries.map((entry) => ({
     comicId: entry.issue_id,
@@ -289,6 +301,9 @@ export default function CustomCBLBuilder({
     issueIds: number[]
     changes: ReadingListPredecessorChange[]
   } | null>(null)
+  const [undoConfirmation, setUndoConfirmation] = useState<
+    ReadingListPredecessorChange[] | null
+  >(null)
   const [replaceError, setReplaceError] = useState<string | null>(null)
 
   const listsQuery = useQuery({
@@ -430,15 +445,16 @@ export default function CustomCBLBuilder({
         null,
         checkpointTargetsFor(persisted.entries),
       )
-      const saved = await customCBLApi.update(selectedId, {
+      const payload: CustomCBLWrite = {
         name: name.trim(),
         description: description.trim() || null,
         mode,
         issue_ids: selectedIssueIds,
         entry_intents: entryIntents,
         checkpoint_issue_ids: checkpointIssueIds,
-        ...(confirmed ? { confirmed_predecessor_changes: confirmed } : {}),
-      })
+      }
+      if (confirmed) payload.confirmed_predecessor_changes = confirmed
+      const saved = await customCBLApi.update(selectedId, payload)
       return { saved, undo, sourceLabel: cblSource.name || cblSource.source_path }
     },
     onSuccess: async ({ saved, undo, sourceLabel }) => {
@@ -474,13 +490,23 @@ export default function CustomCBLBuilder({
     },
   })
   const undoReplacementMutation = useMutation({
-    mutationFn: async (payload: CustomCBLWrite) => {
+    mutationFn: async ({
+      payload,
+      confirmed,
+    }: {
+      payload: CustomCBLWrite
+      confirmed: ReadingListPredecessorChange[] | null
+    }) => {
       if (!selectedId) throw new Error('Choose a custom CBL first.')
       if (undoBaseline !== null) {
         const current = await customCBLApi.get(selectedId)
         if (current.updated_at !== undoBaseline) throw new StaleReadingListUndoError()
       }
-      return customCBLApi.update(selectedId, payload)
+      // Restoring a snapshot can re-change stored waits (for example, undoing a
+      // confirmed strict reorder), so the same confirmation contract applies.
+      const body: CustomCBLWrite = { ...payload }
+      if (confirmed) body.confirmed_predecessor_changes = confirmed
+      return customCBLApi.update(selectedId, body)
     },
     onSuccess: async (saved) => {
       await applyUpdatedCustomCBL(queryClient, saved)
@@ -488,14 +514,26 @@ export default function CustomCBLBuilder({
       setMode(saved.mode ?? DEFAULT_MODE)
       setUndoPayload(null)
       setUndoBaseline(null)
+      setUndoConfirmation(null)
       setReplaceError(null)
       setMessage('Restored the previous list membership and order. Read history and ratings were not changed.')
     },
     onError: (error) => {
+      const detail = decodeCustomCBLError(error)
+      if (
+        detail.code === 'reading_list_predecessor_confirmation_required' &&
+        detail.predecessorChanges.length > 0
+      ) {
+        // Keep the Undo snapshot so the reader can confirm this exact restore.
+        setUndoConfirmation(detail.predecessorChanges)
+        setReplaceError(null)
+        return
+      }
       if (error instanceof StaleReadingListUndoError) {
         setUndoPayload(null)
         setUndoBaseline(null)
       }
+      setUndoConfirmation(null)
       setReplaceError(messageFor(error, 'Unable to undo this Reading List replacement.'))
     },
   })
@@ -635,6 +673,7 @@ export default function CustomCBLBuilder({
     setReplaceBaseline(null)
     setReplaceError(null)
     setReplaceConfirmation(null)
+    setUndoConfirmation(null)
     setUndoPayload(null)
     setUndoBaseline(null)
     setSelectedId(next)
@@ -709,7 +748,13 @@ export default function CustomCBLBuilder({
   }
   const undoReplacement = () => {
     if (!undoPayload || isPending) return
-    undoReplacementMutation.mutate(undoPayload)
+    undoReplacementMutation.mutate({ payload: undoPayload, confirmed: null })
+  }
+  const confirmUndoReplacement = () => {
+    const changes = undoConfirmation
+    if (!undoPayload || !changes || undoReplacementMutation.isPending) return
+    setUndoConfirmation(null)
+    undoReplacementMutation.mutate({ payload: undoPayload, confirmed: changes })
   }
 
   return (
@@ -1101,6 +1146,35 @@ export default function CustomCBLBuilder({
               className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
             >
               {replaceMutation.isPending ? 'Replacing…' : 'Confirm and replace'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={undoConfirmation !== null}
+        title="Confirm undo waiting changes"
+        onClose={() => setUndoConfirmation(null)}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Restoring the previous list changes which issues wait on which. Review the restored waits, then confirm. Cancel keeps the replaced list exactly as it is.
+          </p>
+          <ul className="space-y-2" aria-label="Undo waiting changes">
+            {(undoConfirmation ?? []).map((change) => (
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
+                {describePredecessorChange(change)}
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => setUndoConfirmation(null)} disabled={undoReplacementMutation.isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Cancel</button>
+            <button
+              type="button"
+              onClick={confirmUndoReplacement}
+              disabled={undoReplacementMutation.isPending}
+              className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
+            >
+              {undoReplacementMutation.isPending ? 'Restoring…' : 'Confirm and restore'}
             </button>
           </div>
         </div>
