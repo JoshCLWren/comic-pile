@@ -8232,6 +8232,10 @@ export interface components {
              * @enum {string}
              */
             ordering_mode: "informational" | "strict_sequential";
+            /** Source Names */
+            source_names?: {
+                [key: string]: string;
+            };
             /** Source Paths */
             source_paths?: string[];
             /** Step Count */
@@ -13683,6 +13687,8 @@ export interface components {
             adopted_at?: string | null;
             /** Content Hash */
             content_hash?: string | null;
+            /** Display Name */
+            display_name?: string | null;
             /** Id */
             id: number;
             /** Raw Source Path */

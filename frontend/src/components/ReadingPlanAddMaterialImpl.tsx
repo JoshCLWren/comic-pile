@@ -12,7 +12,7 @@ import {
   type CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
 import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
-import { displayCblRepository, displayCblSourcePath } from '../utils/cblSourceDisplay'
+import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
 
 interface ReadingPlanAddMaterialProps {
   planId: number
@@ -279,26 +279,33 @@ export default function ReadingPlanAddMaterial({
               {sources.map((source) => {
                 const publicPath = displayCblSourcePath(source.source_path)
                 const publicRepo = displayCblRepository(source.source_repository)
+                const sourceTitle = displayCblSourceTitle(source.name, source.source_path) ?? 'Reading order'
                 const meta = [
-                  publicRepo,
                   source.declared_issue_count !== null ? `${source.declared_issue_count} issues` : null,
                 ].filter(Boolean)
                 return (
-                <button
-                  key={source.id}
-                  type="button"
-                  onClick={() => loadPreview(source)}
-                  disabled={isCommitting}
-                  className={`rounded-xl border p-3 text-left disabled:opacity-50 ${selectedSource?.id === source.id ? 'border-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)]'} hover:bg-white/5`}
-                >
-                  <span className="block text-sm font-bold text-[var(--theme-text-primary)]">{source.name}</span>
-                  {publicPath && (
-                    <span className="mt-1 block text-xs text-[var(--theme-text-muted)]">{publicPath}</span>
-                  )}
-                  {meta.length > 0 && (
-                    <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">{meta.join(' · ')}</span>
-                  )}
-                </button>
+                  <div key={source.id} role="group" aria-label={`Source ${sourceTitle}`} className="min-w-0 space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => loadPreview(source)}
+                      disabled={isCommitting}
+                      className={`w-full rounded-xl border p-3 text-left disabled:opacity-50 ${selectedSource?.id === source.id ? 'border-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)]'} hover:bg-white/5`}
+                    >
+                      <span className="block text-sm font-bold text-[var(--theme-text-primary)]">{sourceTitle}</span>{' '}
+                      {meta.length > 0 && (
+                        <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">{meta.join(' · ')}</span>
+                      )}
+                    </button>
+                    {(publicPath || publicRepo) && (
+                      <details className="text-xs text-[var(--theme-text-dim)]">
+                        <summary className="cursor-pointer font-bold text-[var(--theme-text-muted)]">Source details</summary>
+                        <div className="mt-2 space-y-1 break-words">
+                          {publicPath && <p>{publicPath}</p>}
+                          {publicRepo && <p>{publicRepo}</p>}
+                        </div>
+                      </details>
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -323,7 +330,7 @@ export default function ReadingPlanAddMaterial({
           {preview && selectedSource && (
             <section className="space-y-3 rounded-xl border border-[var(--theme-border)] p-3" aria-labelledby="source-preview-heading">
               <div>
-                <h3 id="source-preview-heading" className="text-sm font-black text-[var(--theme-text-primary)]">{selectedSource.name}</h3>
+                <h3 id="source-preview-heading" className="text-sm font-black text-[var(--theme-text-primary)]">{displayCblSourceTitle(selectedSource.name, selectedSource.source_path) ?? 'Reading order'}</h3>
                 <details className="mt-2">
                   <summary className="cursor-pointer text-xs font-bold text-[var(--theme-text-muted)]">
                     Source details

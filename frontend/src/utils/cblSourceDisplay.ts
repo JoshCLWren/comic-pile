@@ -7,6 +7,7 @@
 
 const MIRROR_NAME = 'CBL-ReadingLists'
 const PUBLIC_REPOSITORY = 'JoshCLWren/CBL-ReadingLists'
+const CUSTOM_SOURCE_REFERENCE = /^custom-cbl:/i
 
 function normalizedPath(value: string): string {
   return value.trim().replace(/\\/g, '/')
@@ -41,6 +42,7 @@ function stripMetadataTags(value: string): string {
 export function displayCblSourceName(sourcePath: string): string | null {
   const normalized = normalizedPath(sourcePath)
   if (!normalized) return null
+  if (CUSTOM_SOURCE_REFERENCE.test(normalized)) return 'Custom Reading List'
 
   // Remove the .cbl extension if present
   let name = normalized.replace(/\.cbl$/, '')
@@ -86,6 +88,12 @@ export function displayCblSourceTitle(
   sourcePath: string,
 ): string | null {
   const supplied = name?.trim()
+  if (supplied && CUSTOM_SOURCE_REFERENCE.test(supplied)) {
+    return displayCblSourceName(sourcePath) ?? 'Custom Reading List'
+  }
+  if (supplied && isFilesystemSourceLocation(supplied)) {
+    return displayCblSourceName(supplied) ?? displayCblSourceName(sourcePath)
+  }
   if (supplied) {
     const title = stripMetadataTags(supplied.replace(/\.cbl$/i, '').trim())
     if (title) return title
@@ -102,6 +110,7 @@ export function displayCblSourceTitle(
 export function isFilesystemSourceLocation(value: string): boolean {
   const normalized = normalizedPath(value)
   return (
+    /^[a-z]:\//i.test(normalized) ||
     normalized.startsWith('/') ||
     normalized.startsWith('file:') ||
     normalized.startsWith('mnt/') ||
@@ -117,7 +126,7 @@ export function isFilesystemSourceLocation(value: string): boolean {
  */
 export function displayCblRepository(repository: string): string | null {
   const trimmed = repository.trim()
-  if (!trimmed) return null
+  if (!trimmed || CUSTOM_SOURCE_REFERENCE.test(trimmed)) return null
   if (!isFilesystemSourceLocation(trimmed)) return trimmed
   const normalized = normalizedPath(trimmed)
   if (normalized.endsWith(MIRROR_NAME) || normalized.includes(`/${MIRROR_NAME}`)) {
@@ -134,7 +143,7 @@ export function displayCblRepository(repository: string): string | null {
  */
 export function displayCblSourcePath(sourcePath: string): string | null {
   const normalized = normalizedPath(sourcePath)
-  if (!normalized) return null
+  if (!normalized || CUSTOM_SOURCE_REFERENCE.test(normalized)) return null
   const marker = `${MIRROR_NAME}/`
   const markerIndex = normalized.indexOf(marker)
   if (markerIndex >= 0) {
@@ -146,4 +155,37 @@ export function displayCblSourcePath(sourcePath: string): string | null {
     return fileName.replace(/\.cbl$/, '') || null
   }
   return normalized
+}
+
+/**
+ * Return a reader-safe label for an owned Reading List name.
+ *
+ * Reading List names are chosen by the reader, so bracketed prefixes such as
+ * `[DC] Crisis` are part of the name and must not be treated as CBL filename
+ * metadata. Stored references and host filesystem locations are not names and
+ * are still hidden.
+ *
+ * @param name - The owned Reading List name, when the reader has one.
+ * @param sourcePath - Retained source reference used only as a safe fallback.
+ * @returns The reader's name verbatim, a reader-safe fallback, or null.
+ *
+ * @example
+ * displayReadingListName('[DC] Crisis', 'custom-cbl:42')
+ * // returns '[DC] Crisis'
+ * displayReadingListName('custom-cbl:42', 'custom-cbl:42')
+ * // returns 'Custom Reading List'
+ */
+export function displayReadingListName(
+  name: string | null | undefined,
+  sourcePath?: string | null,
+): string | null {
+  const supplied = name?.trim()
+  if (
+    supplied &&
+    !CUSTOM_SOURCE_REFERENCE.test(supplied) &&
+    !isFilesystemSourceLocation(supplied)
+  ) {
+    return supplied
+  }
+  return displayCblSourceTitle(null, sourcePath ?? supplied ?? '')
 }
