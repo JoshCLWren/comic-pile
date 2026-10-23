@@ -171,7 +171,9 @@ async def _thread_blockers(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("stored_prefix", ["", "4050-"])
 async def test_reader_saves_and_reloads_one_overlap_decision(
+    stored_prefix: str,
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
@@ -182,14 +184,14 @@ async def test_reader_saves_and_reloads_one_overlap_decision(
         user_id=user.id,
         title="Mister Miracle",
         queue_position=1,
-        volume_external_id="202",
+        volume_external_id=f"{stored_prefix}202",
     )
     _continuing_thread, continuing_issue = await _volume_thread(
         async_db,
         user_id=user.id,
         title="JLI",
         queue_position=2,
-        volume_external_id="101",
+        volume_external_id=f"{stored_prefix}101",
     )
     await async_db.commit()
     list_id = await _strict_list(
