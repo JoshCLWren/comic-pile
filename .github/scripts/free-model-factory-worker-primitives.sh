@@ -999,8 +999,8 @@ except Exception:
     # marker comments are applied consistently.
     issue_number="$(linked_issue_from_pr "$NUMBER")" || return 3
     if [[ -n "$issue_number" ]]; then
-      python3 .github/scripts/factory_post_merge_closure.py close \
-        --pr "$NUMBER" --dry-run false >/dev/null 2>&1 || true
+      python3 .github/scripts/factory_post_merge_closure.py \
+        --pr "$NUMBER" >/dev/null 2>&1 || true
     fi
     continue
   fi
