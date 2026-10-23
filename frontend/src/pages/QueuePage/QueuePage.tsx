@@ -150,6 +150,7 @@ const {
     activeThreads,
     modals,
     session,
+    positionActionsAvailable: sortBy === 'position',
   })
 
   const handleRepositionConfirm = useCallback(
