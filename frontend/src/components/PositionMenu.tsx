@@ -16,6 +16,7 @@ interface PositionMenuProps {
   onDelete: (threadId: number) => void
   // called when the user selects the Remove from Queue action
   onRemoveFromQueue?: (threadId: number) => void
+  positionActionsAvailable?: boolean
   snoozeIcon?: string
   snoozeLabel?: string
   snoozeDisabled?: boolean
@@ -41,6 +42,7 @@ export default function PositionMenu({
   snoozeDisabled,
   snoozeDisabledReason = SNOOZE_REQUIRES_PENDING_SERIES_REASON,
   onSnooze,
+  positionActionsAvailable = true,
 }: PositionMenuProps) {
   const { openThreadId, closeMenu: closeContextMenu, openMenu, toggleMenu } = usePositionMenu()
   const isOpen = openThreadId === thread.id
@@ -203,38 +205,42 @@ export default function PositionMenu({
     title?: string
     action: () => void
   }> = [
-    {
-      label: 'Move to Front',
-      icon: '\u2B06',
-      ariaLabel: 'Move to front',
-      action: () => {
-        onMoveToFront(thread.id)
-        // The action handler restores focus to this row's trigger once the
-        // refetched list settles; the remount detaches the element closeMenu
-        // would focus (#3147).
-        closeMenu()
-      },
-    },
-    {
-      label: 'Reposition\u2026',
-      icon: '\u2261',
-      ariaLabel: 'Reposition series',
-      action: () => {
-        onReposition(thread)
-        // The reposition modal should manage focus restoration.
-        closeMenu()
-      },
-    },
-    {
-      label: 'Move to Back',
-      icon: '\u2193',
-      ariaLabel: 'Move to back',
-      action: () => {
-        onMoveToBack(thread.id)
-        // Same as Move to Front.
-        closeMenu()
-      },
-    },
+    ...(positionActionsAvailable
+      ? [
+          {
+            label: 'Move to Front',
+            icon: '\u2B06',
+            ariaLabel: 'Move to front',
+            action: () => {
+              onMoveToFront(thread.id)
+              // The action handler restores focus to this row's trigger once the
+              // refetched list settles; the remount detaches the element closeMenu
+              // would focus (#3147).
+              closeMenu()
+            },
+          },
+          {
+            label: 'Reposition\u2026',
+            icon: '\u2261',
+            ariaLabel: 'Reposition series',
+            action: () => {
+              onReposition(thread)
+              // The reposition modal should manage focus restoration.
+              closeMenu()
+            },
+          },
+          {
+            label: 'Move to Back',
+            icon: '\u2193',
+            ariaLabel: 'Move to back',
+            action: () => {
+              onMoveToBack(thread.id)
+              // Same as Move to Front.
+              closeMenu()
+            },
+          },
+        ]
+      : []),
     {
       label: 'Edit Series',
       icon: '\u270F\uFE0F',

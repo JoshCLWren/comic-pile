@@ -673,6 +673,40 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.click(screen.getByTestId('position-slider-cancel'))
 })
 
+  it('offers position actions only in Position sort while keeping Remove from Queue (#3771)', async () => {
+  const user = userEvent.setup()
+  mockedUseQueueThreads.mockReturnValue({
+    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 4 }],
+    isPending: false,
+    refetch: vi.fn(),
+  })
+
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const openMenu = async () => user.click(screen.getByRole('button', { name: /series actions/i }))
+
+  // Position sort (the default) keeps every position action.
+  await openMenu()
+  expect(screen.getByRole('menuitem', { name: /move to front/i })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: /reposition/i })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: /move to back/i })).toBeInTheDocument()
+  await user.keyboard('{Escape}')
+
+  // Title and Recently added orders do not display queue_position, so those
+  // actions cannot change what the reader sees and must not be offered.
+  for (const sortLabel of ['Title', 'Recently added']) {
+    await user.click(screen.getByRole('button', { name: sortLabel }))
+    await openMenu()
+    expect(screen.queryByRole('menuitem', { name: /move to front/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /reposition/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /move to back/i })).not.toBeInTheDocument()
+
+    // Unrelated row actions stay available.
+    await user.click(screen.getByRole('menuitem', { name: /remove from queue/i }))
+    expect(screen.getByTestId('remove-thread-dialog')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
+  }
+})
+
   it('reports queue mutation failures and invalid reposition requests', async () => {
   const user = userEvent.setup()
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('front failed')), isPending: false })

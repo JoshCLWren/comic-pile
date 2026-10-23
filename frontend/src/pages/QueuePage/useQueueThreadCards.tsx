@@ -20,6 +20,8 @@ interface UseQueueThreadCardsParams {
   modals: QueueModals
   /** Current reading session, used to resolve per-row snooze state. */
   session?: SessionCurrent | null
+  /** Whether position-based actions (move to front/back, reposition) apply. */
+  positionActionsAvailable?: boolean
 }
 
 /**
@@ -40,6 +42,7 @@ export function useQueueThreadCards({
   activeThreads,
   modals,
   session,
+  positionActionsAvailable = true,
 }: UseQueueThreadCardsParams) {
   const navigate = useNavigate()
   const blockingByThreadId = useQueueBlockingInfo(activeThreads.map((thread) => thread.id))
@@ -99,9 +102,10 @@ export function useQueueThreadCards({
           onDependencies={() => modals.openDependenciesModal(thread)}
           onDelete={() => actions.requestDelete(thread)}
           onRemoveFromQueue={() => actions.requestRemove(thread)}
+          positionActionsAvailable={positionActionsAvailable}
         />
       )
     },
-    [actions, activeThreads, blockingByThreadId, crossovers, modals, navigate, session, snoozedThreadIds],
+    [actions, activeThreads, blockingByThreadId, crossovers, modals, navigate, session, snoozedThreadIds, positionActionsAvailable],
   )
 }
