@@ -15,6 +15,7 @@ relying on package-attribute access, which this package no longer provides.
 ROUTER_SUBMODULES = (
     "analytics",
     "cbl_comicvine_lookup",
+    "cbl_catalog",
     "cbl_sources",
     "collection_exclusions",
     "continuity_plan",

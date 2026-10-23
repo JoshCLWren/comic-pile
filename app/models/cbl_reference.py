@@ -58,6 +58,12 @@ class CBLSourceList(Base):
     __table_args__ = (
         UniqueConstraint("source_id", "source_path", name="uq_cbl_source_list_path"),
         Index("ix_cbl_source_list_source_active", "source_id", "active"),
+        Index(
+            "ix_cbl_source_list_active_path",
+            "active",
+            "source_path",
+            postgresql_ops={"source_path": "text_pattern_ops"},
+        ),
     )
 
 
