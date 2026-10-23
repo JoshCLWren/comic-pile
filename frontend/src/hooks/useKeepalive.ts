@@ -43,7 +43,7 @@ export function useKeepalive(enabled = true) {
     }
 
     try {
-      await api.get('/keepalive', { timeout: 5000 })
+      await api.get('/v1/keepalive', { timeout: 5000 })
     } catch (error) {
       // Silently ignore keepalive failures - they're best-effort
       console.debug('Keepalive ping failed:', error)
@@ -127,6 +127,12 @@ export function useKeepalive(enabled = true) {
     lastActivityRef.current = Date.now()
     isVisibleRef.current = !document.hidden
 
+    // Prewarm on app open while the tab is visible so the wake overlaps with
+    // the user reading the screen instead of the first real action (issue #3480).
+    if (isVisibleRef.current) {
+      void callKeepalive(true)
+    }
+
     // Add activity listeners
     ACTIVITY_EVENTS.forEach((event) => {
       document.addEventListener(event, handleActivity, { passive: true })
@@ -151,7 +157,7 @@ export function useKeepalive(enabled = true) {
       })
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [enabled, handleActivity, handleVisibilityChange, isUserActive, startInterval, stopInterval])
+  }, [callKeepalive, enabled, handleActivity, handleVisibilityChange, isUserActive, startInterval, stopInterval])
 
   return {
     isWarming,

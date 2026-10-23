@@ -74,6 +74,7 @@
   "app/repositories/health_repository.py",
   "app/repositories/issue_identity_repository.py",
   "app/repositories/issue_repository.py",
+  "app/repositories/keepalive_repository.py",
   "app/repositories/password_reset_token_repository.py",
   "app/repositories/perf_alarm_repository.py",
   "app/repositories/performance_metric_repository.py",

@@ -16,7 +16,7 @@ from app.services import keepalive_service
 router = APIRouter()
 
 
-@router.get("/keepalive", response_model=KeepaliveResponse)
+@router.get("/keepalive", response_model=KeepaliveResponse, include_in_schema=False)
 async def keepalive(
     db: AsyncSession = Depends(get_db),
 ) -> KeepaliveResponse:
