@@ -7,7 +7,7 @@ re-querying the evaluator or exposing storage identifiers.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,8 @@ from app.models.external_identity import (
     ExternalIdentity,
     ThreadExternalSeriesMapping,
 )
+from app.schemas.reading_boundary import BoundaryReadingList
+
 from app.models.issue import Issue
 from app.models.thread import Thread
 
@@ -41,6 +43,7 @@ class BoundaryIssueLabels:
     thread_title: str
     issue_number: str
     volume_label: str | None = None
+    reading_lists: list[BoundaryReadingList] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +234,39 @@ async def load_boundary_labels(
         for row in list_rows
         if row.id in active_list_ids
     }
+
+    # Load owned list memberships for each issue (reading_lists on BoundaryIssue).
+    issue_reading_lists: dict[int, list[BoundaryReadingList]] = {
+        issue_id: [] for issue_id in issue_labels
+    }
+    if active_list_ids:
+        entry_rows = (
+            await db.scalars(
+                select(CustomCBLEntry).where(CustomCBLEntry.list_id.in_(list(active_list_ids)))
+            )
+        ).all()
+        for entry in entry_rows:
+            if entry.issue_id not in issue_reading_lists:
+                continue
+            list_row = lists.get(entry.list_id)
+            if list_row is not None:
+                issue_reading_lists[entry.issue_id].append(
+                    BoundaryReadingList(
+                        list_id=list_row.list_id,
+                        name=list_row.name,
+                        mode=list_row.mode,
+                    )
+                )
+    # Attach memberships to issue labels.
+    for issue_id in issue_labels:
+        issue_labels[issue_id] = BoundaryIssueLabels(
+            issue_id=issue_labels[issue_id].issue_id,
+            thread_id=issue_labels[issue_id].thread_id,
+            thread_title=issue_labels[issue_id].thread_title,
+            issue_number=issue_labels[issue_id].issue_number,
+            volume_label=issue_labels[issue_id].volume_label,
+            reading_lists=issue_reading_lists.get(issue_id, []),
+        )
 
     prerequisites: dict[int, BoundaryPrerequisiteLabels] = {}
     for row in prerequisite_rows:

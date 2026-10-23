@@ -27,7 +27,7 @@ from app.schemas.reading_boundary import (
 from app.services.errors import NotFoundError
 from app.services.reading_eligibility_service import (
     ReadingEligibilitySnapshot,
-    load_eligibility_snapshot,
+    get_execution_eligibility,
 )
 from app.services.reading_list_evaluator import Blocker, ThreadEligibility
 
@@ -75,6 +75,7 @@ def _issue_label(labels: BoundaryShadowLabels, issue_id: int) -> BoundaryIssue:
         issue_number=row.issue_number,
         volume_label=row.volume_label,
         label=name,
+        reading_lists=row.reading_lists,
     )
 
 
@@ -306,7 +307,17 @@ async def get_reading_boundary_explanation(
     labels = await boundary_repository.load_boundary_labels(db, user_id)
     if thread_id not in labels.threads:
         raise NotFoundError(f"Thread {thread_id} not found")
-    snapshot = await load_eligibility_snapshot(db, user_id)
+    snapshot = await get_execution_eligibility(db, user_id)
+    if snapshot is None:
+        thread = labels.threads[thread_id]
+        return ReadingBoundaryExplanation(
+            thread_id=thread_id,
+            state="unavailable",
+            summary=f"Option E is not active for {thread.title}.",
+            next=None,
+            blockers=[],
+            historical=[],
+        )
     return project_boundary_explanation(snapshot, labels, thread_id)
 
 
@@ -330,7 +341,20 @@ async def get_reading_boundary_explanations(
     missing = [thread_id for thread_id in thread_ids if thread_id not in labels.threads]
     if missing:
         raise NotFoundError(f"Thread {missing[0]} not found")
-    snapshot = await load_eligibility_snapshot(db, user_id)
+    snapshot = await get_execution_eligibility(db, user_id)
+    if snapshot is None:
+        threads = {}
+        for thread_id in thread_ids:
+            thread = labels.threads[thread_id]
+            threads[thread_id] = ReadingBoundaryExplanation(
+                thread_id=thread_id,
+                state="unavailable",
+                summary=f"Option E is not active for {thread.title}.",
+                next=None,
+                blockers=[],
+                historical=[],
+            )
+        return ReadingBoundaryBatchResponse(threads=threads)
     return ReadingBoundaryBatchResponse(
         threads={
             thread_id: project_boundary_explanation(snapshot, labels, thread_id)
