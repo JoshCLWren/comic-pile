@@ -84,9 +84,13 @@ def project_session_history_events(
                 issue_by_session_thread, session_id, event.selected_thread_id, event
             )
         elif event.type == "rate" and event.thread_id is not None:
-            _record_issue_identity(
-                issue_by_session_thread, session_id, event.thread_id, event
-            )
+            # Rate identity only contributes when no roll for this thread in this
+            # session has already established the shown issue (#3708).
+            key = (session_id, event.thread_id)
+            if key not in issue_by_session_thread:
+                _record_issue_identity(
+                    issue_by_session_thread, session_id, event.thread_id, event
+                )
 
         if event.type in _DIE_EVENT_TYPES and event.die_after is not None:
             die_path_lists[session_id].append(event.die_after)
@@ -110,10 +114,12 @@ def resolve_history_issue_identity(
 ) -> tuple[int | None, str | None] | None:
     """Return the issue identity a session recorded for one thread.
 
-    The remembered identity comes from the latest event in the session that
-    named this thread and carried an issue: the roll that offered the issue or
-    the rating that read it. Events about other threads never contribute, so a
-    card naming one series never shows another series' issue number (#3763).
+    Identity is established per thread: a roll records the issue it offered,
+    and a rate contributes only when no roll in that session has already
+    established the shown issue for that thread, so a later rating can never
+    overwrite the rolled issue (#3708). Events about other threads never
+    contribute, so a card naming one series never shows another series' issue
+    number (#3763).
 
     Args:
         projection: Projection built from the page's ordered events.
@@ -121,7 +127,7 @@ def resolve_history_issue_identity(
         thread_id: Thread the History row names.
 
     Returns:
-        The recorded ``(issue_id, issue_number)`` pair, or None when the
-        session recorded no issue for that thread.
+        The recorded ``(issue_id, issue_number)`` pair for that thread, or None
+        when the session recorded no issue for it.
     """
     return projection.issue_by_session_thread.get((session_id, thread_id))
