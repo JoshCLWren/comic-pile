@@ -20,6 +20,8 @@ from app.models.external_identity import ExternalIdentity, IssueExternalIdentity
 from app.models.issue import Issue
 from app.models.thread import Thread
 
+from app.repositories.creator_summary import extract_manual_creator_credits as _summary_extract_manual
+
 COMICVINE_PROVIDER = "comicvine"
 
 # Maximum number of creators allowed in a single comparison request
@@ -188,6 +190,42 @@ async def load_creator_comparison_inputs(
         for credit in credits:
             if credit.external_id in requested_creator_ids:
                 by_key.setdefault((credit.external_id, credit.roles), credit)
+
+    # Manual thread-level creator credits for issues without ComicVine metadata
+    # (same definition as creator_summary so both surfaces agree).
+    thread_ids = {ot.thread_id for ot in owned_issue_threads.values()}
+    thread_manual_credits: dict[int, list[dict[str, object]]] = {}
+    if thread_ids:
+        thread_result = await db.execute(
+            select(Thread.id, Thread.manual_creator_credits).where(Thread.user_id == user_id)
+        )
+        for thread_id, manual_credits in thread_result.all():
+            if manual_credits:
+                thread_manual_credits[int(thread_id)] = manual_credits
+
+    for issue_id, owned_thread in owned_issue_threads.items():
+        if issue_id in issues_with_creator_metadata:
+            continue
+        manual_credits = thread_manual_credits.get(owned_thread.thread_id, [])
+        if not manual_credits:
+            continue
+        converted = _summary_extract_manual(manual_credits)
+        # convert summary CreatorCredit -> comparison CreatorCredit (same fields)
+        credits = [
+            CreatorCredit(
+                external_id=c.external_id,
+                roles=c.roles,
+                display_name=c.display_name,
+            )
+            for c in converted
+        ]
+        if credits:
+            issues_with_creator_metadata.add(issue_id)
+            by_key = per_issue_credits.setdefault(issue_id, {})
+            for credit in credits:
+                if credit.external_id in requested_creator_ids:
+                    by_key.setdefault((credit.external_id, credit.roles), credit)
+
     issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = {
         issue_id: tuple(
             sorted(by_key.values(), key=lambda credit: (credit.external_id, credit.roles))
