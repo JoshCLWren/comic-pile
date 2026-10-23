@@ -901,8 +901,12 @@ def _volume_identity_matches(thread_title: object, volume_name: object) -> bool:
     right_raw = volume_name
     left_year = _extract_series_year(left_raw)
     right_year = _extract_series_year(right_raw)
-    # Explicit conflicting years => mismatch regardless of base title.
-    if left_year is not None and right_year is not None and left_year != right_year:
+    # Compare launch years: a range like "2011-2016" and a bare "2011" agree
+    # when their launch years match.
+    left_launch = left_year[:4] if left_year is not None else None
+    right_launch = right_year[:4] if right_year is not None else None
+    # Explicit conflicting launch years => mismatch regardless of base title.
+    if left_launch is not None and right_launch is not None and left_launch != right_launch:
         return False
     left = _normalize_volume_series_title(left_raw)
     right = _normalize_volume_series_title(right_raw)
