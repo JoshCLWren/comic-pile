@@ -30,6 +30,103 @@ make dev
 
 The frontend runs at `http://localhost:5173`. The FastAPI service and Swagger UI run at `http://localhost:8000` and `http://localhost:8000/docs`.
 
+## Self-hosting / local quickstart
+
+Comic Pile runs from source against a standard PostgreSQL database. The local path below uses the repository's bundled Docker Compose PostgreSQL service (host port **5435**) and does not require Neon. For a hosted Neon database instead, see [Self-hosting with Neon](docs/DEPLOYMENT.md#self-hosting-with-neon).
+
+### Prerequisites
+
+- Docker (for PostgreSQL)
+- Python 3.14 and `uv`
+- Node.js and `pnpm`
+
+### 1. Clone and configure
+
+```bash
+git clone https://github.com/JoshCLWren/comic-pile.git
+cd comic-pile
+cp .env.example .env
+```
+
+Edit `.env` as needed. The local defaults in `.env.example` already point at the bundled database:
+
+```dotenv
+DATABASE_URL=postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/comicpile
+```
+
+### 2. Environment variables
+
+| Variable | Required? | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | Yes | Default local: `postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/comicpile` |
+| `SECRET_KEY` | Yes | Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `ENVIRONMENT` | No (defaults) | `development` / `production` / `test` |
+| `CORS_ORIGINS` | Required in production | Comma-separated origins |
+| `COMICVINE_API_KEY` | Optional | Used by ComicVine hydrator/backfill scripts (`docs/COMICVINE_HYDRATOR.md`); not listed in `.env.example` |
+
+See `.env.example` for additional optional settings (access-token lifetime, logging, rating system, etc.). Do not invent variable names; only names present in `.env.example` or existing docs are supported.
+
+### 3. Start PostgreSQL and bootstrap
+
+`make setup` starts the local PostgreSQL container, waits for it to be ready, installs Python and frontend dependencies, runs Alembic migrations, and seeds deterministic demo data:
+
+```bash
+make setup
+```
+
+This uses `docker compose up -d db`, which exposes PostgreSQL on host port **5435** (container port 5432). Data persists in the `postgres_data` Docker volume.
+
+If you prefer to manage containers yourself, the equivalent is:
+
+```bash
+docker compose up -d db
+# wait for readiness, then:
+uv sync --all-extras
+pnpm install --frozen-lockfile
+make migrate
+make seed-dev
+```
+
+The full Compose stack is also available (`docker compose up -d`), which additionally runs the API on `http://localhost:8003` and pgAdmin on `http://localhost:5051`. The frontend is not served by Compose; run it separately (step 4).
+
+### 4. Run the app
+
+```bash
+make dev
+```
+
+This starts the Vite frontend and the FastAPI API together. Alternatively, run only the API with `make dev-api`.
+
+### ComicVine API key (optional)
+
+Comic Vine integration is optional for a basic local run; the app works without it. A key is only needed for live ComicVine hydration/backfill (see [`docs/COMICVINE_HYDRATOR.md`](docs/COMICVINE_HYDRATOR.md)).
+
+To obtain a key:
+
+1. Create an account and sign in at [comicvine.gamespot.com](https://comicvine.gamespot.com).
+2. Open your account/API key page and request an API key.
+3. Set it in your environment when running the hydrator/backfill scripts:
+
+```bash
+COMICVINE_API_KEY=your-key uv run python scripts/hydrate_comicvine_issues.py --user-id 1 --live-refresh --output .cache/comicvine-hydrator/user-1-live.json
+```
+
+For local-first runs you can also point at a local ComicVine SQLite snapshot (`COMICVINE_LOCAL_DB` / `COMICPILE_COMICVINE_SQLITE_PATH`) and skip the API key entirely.
+
+### 5. Verify the app is up
+
+After `make setup` + `make dev` (or the Compose equivalent):
+
+- Frontend: [http://localhost:5173](http://localhost:5173)
+- API / Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Dependency health: `GET http://localhost:8000/api/v1/health/dependencies`
+
+A healthy local response from the dependency endpoint confirms the API can reach PostgreSQL. The endpoint is open whenever `HEALTH_CHECK_TOKEN` is unset, regardless of `ENVIRONMENT`. In production, set `HEALTH_CHECK_TOKEN` in the server's environment and send its value in the `X-Health-Token` header.
+
+### Neon (hosted) path
+
+Neon remains the maintained production database. For self-hosting on Neon, follow [Self-hosting with Neon](docs/DEPLOYMENT.md#self-hosting-with-neon). The local path above stands on its own without Neon.
+
 ## Run with Neon
 
 Comic Pile is a PostgreSQL application, so local development can use the bundled local database while a hosted installation can use Neon. The maintained production deployment runs on Neon.
