@@ -95,7 +95,7 @@ factory_run_canonical_merge_gates() {
     return 1
   fi
   if [[ "$FACTORY_MERGE_GATE_DECISION" != 'pass' ]]; then
-    FACTORY_MERGE_GATE_REASON="trusted controller decision=${FACTORY_MERGE_GATE_DECISION:-empty}; required pass"
+    FACTORY_MERGE_GATE_REASON="${FACTORY_MERGE_GATE_REASON:-trusted controller decision=${FACTORY_MERGE_GATE_DECISION:-empty}; required pass}"
     return 1
   fi
 }
