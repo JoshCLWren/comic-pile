@@ -2901,6 +2901,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Cbl Reading Graph
+         * @description Preview the prospective reading graph for a CBL selection (read-only).
+         *
+         *     The graph comes from the same Option E evaluator and cycle validator that
+         *     execute the reader's saved lists. It never writes list membership, issue
+         *     status, or an overlap decision.
+         *
+         *     Args:
+         *         list_id: Shared CBL source list being adopted or updated.
+         *         payload: Included source positions, prior answers, and optional list
+         *             to preview as updated instead of newly added.
+         *         current_user: Authenticated reader whose existing lists are included.
+         *         db: Async database session for the request.
+         *
+         *     Returns:
+         *         Prospective series nodes, overlap questions with both choice effects,
+         *         the issue directory with active blockers, and any cycle rejection.
+         */
+        post: operations["preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issue-identity/cbl/{list_id}/reconciliation": {
         parameters: {
             query?: never;
@@ -12615,6 +12650,176 @@ export interface components {
             series_name?: string | null;
         };
         /**
+         * ReadingGraphBlocker
+         * @description One active unread restriction in the reader's language.
+         */
+        ReadingGraphBlocker: {
+            /** Explanation */
+            explanation: string;
+            /** Gate Issue Id */
+            gate_issue_id?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "strict_order" | "hold" | "after_previous" | "prerequisite";
+            /** List Id */
+            list_id?: number | null;
+            /** Waiting On Issue Ids */
+            waiting_on_issue_ids?: number[];
+        };
+        /**
+         * ReadingGraphChoiceEffect
+         * @description Prospective effect of one answer to a genuine series conflict.
+         */
+        ReadingGraphChoiceEffect: {
+            /**
+             * Choice
+             * @enum {string}
+             */
+            choice: "protect_order" | "continue_series";
+            /** Detail */
+            detail: string;
+            /** Label */
+            label: string;
+            /** Rollable Issue Ids */
+            rollable_issue_ids?: number[];
+            /** Series */
+            series?: components["schemas"]["ReadingGraphSeriesNode"][];
+            /** Waiting Issue Ids */
+            waiting_issue_ids?: number[];
+        };
+        /**
+         * ReadingGraphCycleError
+         * @description A cycle or invalid relationship rejected before any write.
+         */
+        ReadingGraphCycleError: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * ReadingGraphIssueReference
+         * @description One concrete comic the prospective graph may name as waiting or rollable.
+         */
+        ReadingGraphIssueReference: {
+            /** Blockers */
+            blockers?: components["schemas"]["ReadingGraphBlocker"][];
+            /** Comicvine Volume Id */
+            comicvine_volume_id?: string | null;
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Series Name */
+            series_name: string;
+        };
+        /**
+         * ReadingGraphOverlap
+         * @description One conflict between two exact volumes in the prospective list.
+         */
+        ReadingGraphOverlap: {
+            /** Blocked Issue Ids */
+            blocked_issue_ids?: number[];
+            /** Choices */
+            choices?: components["schemas"]["ReadingGraphChoiceEffect"][];
+            continuing_series: components["schemas"]["ReadingGraphSeriesReference"];
+            /** Overlap Id */
+            overlap_id: string;
+            /** Question */
+            question: string;
+            /** Selected Choice */
+            selected_choice?: ("protect_order" | "continue_series") | null;
+            waiting_series: components["schemas"]["ReadingGraphSeriesReference"];
+        };
+        /**
+         * ReadingGraphOverlapChoice
+         * @description One answer the reader has already given during this preview session.
+         */
+        ReadingGraphOverlapChoice: {
+            /**
+             * Choice
+             * @enum {string}
+             */
+            choice: "protect_order" | "continue_series";
+            /** Overlap Id */
+            overlap_id: string;
+        };
+        /**
+         * ReadingGraphPreview
+         * @description Complete read-only graph preview for one source selection.
+         */
+        ReadingGraphPreview: {
+            /** Content Hash */
+            content_hash: string;
+            /** Cycle Errors */
+            cycle_errors?: components["schemas"]["ReadingGraphCycleError"][];
+            /** Issues */
+            issues?: components["schemas"]["ReadingGraphIssueReference"][];
+            /** Overlaps */
+            overlaps?: components["schemas"]["ReadingGraphOverlap"][];
+            /** Revision Sha */
+            revision_sha: string;
+            /** Rollable Issue Ids */
+            rollable_issue_ids?: number[];
+            /** Series */
+            series?: components["schemas"]["ReadingGraphSeriesNode"][];
+            /** Source List Id */
+            source_list_id: number;
+            /** Waiting Issue Ids */
+            waiting_issue_ids?: number[];
+        };
+        /**
+         * ReadingGraphPreviewRequest
+         * @description Read-only request: included source positions plus answers already given.
+         */
+        ReadingGraphPreviewRequest: {
+            /** Included Positions */
+            included_positions?: number[];
+            /** Overlap Choices */
+            overlap_choices?: components["schemas"]["ReadingGraphOverlapChoice"][];
+            /** Target List Id */
+            target_list_id?: number | null;
+        };
+        /**
+         * ReadingGraphSeriesNode
+         * @description One series node with its prospective eligibility totals.
+         */
+        ReadingGraphSeriesNode: {
+            /** Comicvine Volume Id */
+            comicvine_volume_id: string;
+            /** Rollable Count */
+            rollable_count: number;
+            /** Series Name */
+            series_name: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "continues" | "waits" | "mixed";
+            /** Unread Count */
+            unread_count: number;
+            /** Waiting Count */
+            waiting_count: number;
+            /** Waits For Issue Ids */
+            waits_for_issue_ids?: number[];
+            /** Year */
+            year?: number | null;
+        };
+        /**
+         * ReadingGraphSeriesReference
+         * @description Exact Comic Vine series/volume identity plus reader-facing labels.
+         */
+        ReadingGraphSeriesReference: {
+            /** Comicvine Volume Id */
+            comicvine_volume_id: string;
+            /** Series Name */
+            series_name: string;
+            /** Year */
+            year?: number | null;
+        };
+        /**
          * ReadingListEntryIntent
          * @description Explicit positional intent for one stable member Issue.
          */
@@ -19536,6 +19741,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CBLAdoptionPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingGraphPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingGraphPreview"];
                 };
             };
             /** @description Validation Error */
