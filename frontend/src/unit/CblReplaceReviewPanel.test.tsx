@@ -105,6 +105,28 @@ describe('CblReplaceReviewPanel', () => {
     expect(screen.getByTestId('confirm-replace')).toBeDisabled()
   })
 
+  it('reports changed waits when a strict order reverses', () => {
+    const order = [
+      { comicId: 1, title: 'A #1', included: true, saved: true, gate: 'none' as const, skipped: false },
+      { comicId: 2, title: 'B #1', included: true, saved: true, gate: 'none' as const, skipped: false },
+    ]
+    render(
+      <CblReplaceReviewPanel
+        listName="Reverse order"
+        listId={9}
+        mode="strict"
+        before={order}
+        after={[order[1]!, order[0]!]}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    const impact = screen.getByTestId('cbl-replace-graph-impact')
+    expect(impact).toHaveTextContent('1 gain a wait')
+    expect(impact).toHaveTextContent('1 lose every wait')
+  })
+
   it('offers Undo only when a reversible list replacement exists', async () => {
     const user = userEvent.setup()
     const onUndo = vi.fn()

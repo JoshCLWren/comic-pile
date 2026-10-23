@@ -57,11 +57,11 @@ function countEdges(requirements: Map<number, number[]>): number {
   return edges
 }
 
-/** Count entries that wait on at least one earlier entry. */
-function countWaiting(requirements: Map<number, number[]>): number {
-  let waiting = 0
-  for (const waitsOn of requirements.values()) {
-    if (waitsOn.length > 0) waiting += 1
+/** Collect the Issue IDs that wait on at least one earlier entry. */
+function waitingIssueIds(requirements: Map<number, number[]>): Set<number> {
+  const waiting = new Set<number>()
+  for (const [issueId, waitsOn] of requirements.entries()) {
+    if (waitsOn.length > 0) waiting.add(issueId)
   }
   return waiting
 }
@@ -96,13 +96,21 @@ function graphImpact(
         skipped: Boolean(entry.skipped),
       })),
   )
-  const beforeWaiting = countWaiting(beforeRequirements)
-  const afterWaiting = countWaiting(afterRequirements)
+  const beforeWaiting = waitingIssueIds(beforeRequirements)
+  const afterWaiting = waitingIssueIds(afterRequirements)
+  let newlyBlocked = 0
+  for (const issueId of afterWaiting) {
+    if (!beforeWaiting.has(issueId)) newlyBlocked += 1
+  }
+  let newlyFreed = 0
+  for (const issueId of beforeWaiting) {
+    if (!afterWaiting.has(issueId)) newlyFreed += 1
+  }
   return {
     beforeEdges: countEdges(beforeRequirements),
     afterEdges: countEdges(afterRequirements),
-    newlyBlocked: Math.max(0, afterWaiting - beforeWaiting),
-    newlyFreed: Math.max(0, beforeWaiting - afterWaiting),
+    newlyBlocked,
+    newlyFreed,
   }
 }
 
