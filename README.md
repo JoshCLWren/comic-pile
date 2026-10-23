@@ -2,6 +2,10 @@
 
 **Roll to read. Rotate your stack.**
 
+[![Comic Pile Roll page: a large 3D die showing the faces 4 and 1 above a "Roll Again" button, with the in-play queue listing Superman, Batman, The Flash, and Aquaman](docs/images/roll-hero.png)](https://comic-pile.vercel.app)
+
+**[▶ Try the live demo at comic-pile.vercel.app](https://comic-pile.vercel.app)**
+
 Comic Pile is an open-source, dice-driven comic-reading tracker for turning a comic backlog into an actual reading habit. It manages the reading queue, tracks sessions and ratings, and makes "what should I read next?" a roll instead of another round of sorting the pile.
 
 [Live app](https://comic-pile.vercel.app) · [Deployment and Neon](docs/DEPLOYMENT.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [MIT License](LICENSE)
