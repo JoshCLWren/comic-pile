@@ -315,6 +315,27 @@ export const queryKeys = {
       Object.entries(entryDecisions).sort(([a], [b]) => a.localeCompare(b)),
     ] as const,
   },
+  /**
+   * Read-only prospective reading graph for a CBL adoption (#4020).
+   *
+   * The key includes the included source positions and the reader's series
+   * answers, so each choice asks the server for the graph that answer produces
+   * instead of re-deriving eligibility in the browser.
+   */
+  readingGraph: {
+    all: ['readingGraph'] as const,
+    preview: (
+      sourceListId: number,
+      includedPositions: number[],
+      choices: Record<string, string>,
+    ) => [
+      'readingGraph',
+      'preview',
+      sourceListId,
+      [...includedPositions].sort((left, right) => left - right),
+      Object.entries(choices).sort(([left], [right]) => left.localeCompare(right)),
+    ] as const,
+  },
   customCBLs: {
     readers: () => ['customCBLs', 'reader'] as const,
     reader: (id: number) => ['customCBLs', 'reader', id] as const,

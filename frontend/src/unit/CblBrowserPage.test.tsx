@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CblBrowserPage from '../pages/CblBrowserPage'
 import { cblSourcesApi } from '../services/api-cbl-sources'
 import { continuityPlansApi } from '../services/api-continuity-plans'
+import { readingGraphApi } from '../services/api-reading-graph'
 import type {
   CBLAdoptionPreview,
   CBLAdoptionPreviewEntry,
@@ -14,6 +15,14 @@ import type {
 } from '../services/api-cbl-sources'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { cast } from '../utils/cast'
+import {
+  MISTER_MIRACLE_OVERLAP,
+  SECOND_MISTER_MIRACLE_OVERLAP,
+  afterContinuingChoice,
+  readingGraphPreview,
+  withSavedChoice,
+  withoutOverlap,
+} from './readingGraphFixture'
 
 vi.mock('../services/api-cbl-sources', () => ({
   cblSourcesApi: {
@@ -60,6 +69,12 @@ vi.mock('../services/api-cbl-sources', () => ({
   },
 }))
 
+vi.mock('../services/api-reading-graph', () => ({
+  readingGraphApi: {
+    preview: vi.fn(),
+  },
+}))
+
 vi.mock('../services/api-continuity-plans', () => ({
   continuityPlansApi: {
     list: vi.fn(),
@@ -75,6 +90,7 @@ const mockDiscover = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.discover)
 const mockPreview = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.preview)
 const mockPlan = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.plan)
 const mockCommitNew = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commitNew)
+const mockGraphPreview = cast<ReturnType<typeof vi.fn>>(readingGraphApi.preview)
 const mockListPlans = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
 const mockGetPlan = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.get)
 const mockApplyCommitted = cast<ReturnType<typeof vi.fn>>(applyCommittedReadingPlan)
@@ -191,6 +207,7 @@ function preview(overrides?: {
 beforeEach(() => {
   vi.clearAllMocks()
   queryClient.clear()
+  mockGraphPreview.mockResolvedValue(withoutOverlap())
 })
 
 async function searchFor(user: ReturnType<typeof userEvent.setup>, term = 'ultimate') {
@@ -539,7 +556,7 @@ describe('CblBrowserPage', () => {
       expect(mockCommitNew).toHaveBeenCalledWith(
         7,
         expect.objectContaining({ total_positions: 2 }),
-        { series_decisions: {}, entry_decisions: {} },
+        { series_decisions: {}, entry_decisions: {}, overlap_decisions: [] },
       )
     })
     await waitFor(() => {
@@ -974,5 +991,227 @@ describe('CblBrowserPage', () => {
       ).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
     })
+  })
+
+  it('skips the reading graph entirely when the source has no real overlap (#4020)', async () => {
+    const user = userEvent.setup()
+    mockGraphPreview.mockResolvedValue(withoutOverlap())
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    await waitFor(() => {
+      expect(mockGraphPreview).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.queryByTestId('reading-graph-summary')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
+    expect(
+      screen.getByRole('heading', { name: 'Add this reading order?' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Resolve overlapping series' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('asks about a real overlap one series at a time, then shows the new graph (#4020)', async () => {
+    const user = userEvent.setup()
+    mockGraphPreview.mockImplementation(
+      async (_listId: number, request: { overlap_choices: Array<{ choice: string }> }) =>
+        request.overlap_choices.some((entry) => entry.choice === 'continue_series')
+          ? afterContinuingChoice()
+          : readingGraphPreview(),
+    )
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    const summary = await screen.findByTestId('reading-graph-summary')
+    expect(summary).toHaveTextContent('Reading graph')
+    expect(summary).toHaveTextContent('3 series · 1 rollable · 4 waiting')
+    expect(summary).toHaveTextContent('Mister Miracle (1989)')
+    expect(summary).toHaveTextContent('Waits for Fourth World #2')
+    expect(summary).toHaveTextContent('Needs a decision before saving')
+
+    await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
+    expect(
+      screen.getByRole('heading', { name: 'Resolve overlapping series' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Add this reading order?' }),
+    ).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('radio', { name: /Mister Miracle waits; JLI continues/ }),
+    )
+    await waitFor(() => {
+      expect(mockGraphPreview).toHaveBeenLastCalledWith(
+        7,
+        expect.objectContaining({
+          overlap_choices: [
+            { overlap_id: MISTER_MIRACLE_OVERLAP.overlap_id, choice: 'continue_series' },
+          ],
+        }),
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Use these choices' }))
+    // Finishing the questionnaire continues into the add confirmation.
+    expect(
+      screen.getByRole('heading', { name: 'Add this reading order?' }),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('reading-graph-summary')).toHaveTextContent(
+      'Mister Miracle waits; JLI continues',
+    )
+    expect(screen.getByTestId('reading-graph-summary')).toHaveTextContent(
+      '3 series · 2 rollable · 3 waiting',
+    )
+
+    mockCommitNew.mockResolvedValue({ id: 51 })
+    mockApplyCommitted.mockResolvedValue(undefined)
+    await user.click(screen.getByRole('button', { name: 'Add reading order' }))
+    await waitFor(() => {
+      expect(mockCommitNew).toHaveBeenCalledTimes(1)
+    })
+    const [, , choices] = mockCommitNew.mock.calls[0]
+    expect(choices.overlap_decisions).toEqual([
+      { overlap_id: MISTER_MIRACLE_OVERLAP.overlap_id, choice: 'continue_series' },
+    ])
+  })
+
+  it('restores a saved series decision without asking again (#4020)', async () => {
+    const user = userEvent.setup()
+    mockGraphPreview.mockResolvedValue(withSavedChoice('continue_series'))
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    const summary = await screen.findByTestId('reading-graph-summary')
+    await waitFor(() => {
+      expect(summary).toHaveTextContent('Mister Miracle waits; JLI continues')
+    })
+    expect(summary).not.toHaveTextContent('Needs a decision before saving')
+    expect(
+      screen.getByRole('button', { name: 'Review series decisions' }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
+    expect(
+      screen.getByRole('heading', { name: 'Add this reading order?' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Resolve overlapping series' }),
+    ).not.toBeInTheDocument()
+
+    mockCommitNew.mockResolvedValue({ id: 52 })
+    mockApplyCommitted.mockResolvedValue(undefined)
+    await user.click(screen.getByRole('button', { name: 'Add reading order' }))
+    await waitFor(() => {
+      expect(mockCommitNew).toHaveBeenCalledTimes(1)
+    })
+    const [, , choices] = mockCommitNew.mock.calls[0]
+    expect(choices.overlap_decisions).toEqual([
+      { overlap_id: MISTER_MIRACLE_OVERLAP.overlap_id, choice: 'continue_series' },
+    ])
+  })
+
+  it('asks about same-named volumes separately (#4020)', async () => {
+    const user = userEvent.setup()
+    mockGraphPreview.mockResolvedValue(
+      readingGraphPreview({
+        overlaps: [MISTER_MIRACLE_OVERLAP, SECOND_MISTER_MIRACLE_OVERLAP],
+      }),
+    )
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    await screen.findByTestId('reading-graph-summary')
+    await user.click(screen.getByRole('button', { name: 'Resolve 2 series overlaps' }))
+    expect(screen.getByText('Overlap 1 of 2')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', {
+        name: 'Should Justice League International (1987) continue while Mister Miracle (1989) waits?',
+      }),
+    ).toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('radio', { name: /Mister Miracle waits; JLI continues/ }),
+    )
+    mockGraphPreview.mockResolvedValue(
+      readingGraphPreview({
+        overlaps: [
+          { ...MISTER_MIRACLE_OVERLAP, selected_choice: 'continue_series' },
+          SECOND_MISTER_MIRACLE_OVERLAP,
+        ],
+      }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Next series' }))
+    expect(screen.getByText('Overlap 2 of 2')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', {
+        name: 'Should Justice League International (1987) continue while Mister Miracle (2019) waits?',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the one-decision flow when the reading graph is unavailable (#4020)', async () => {
+    const user = userEvent.setup()
+    const committed = { id: 42, name: 'Ultimate Universe' }
+    mockCommitNew.mockResolvedValue(committed)
+    mockApplyCommitted.mockResolvedValue(undefined)
+    mockGraphPreview.mockRejectedValue(new Error('Not Found'))
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/ComicPile could not load the reading graph/),
+      ).toBeInTheDocument()
+    })
+    const addButton = screen.getByRole('button', { name: 'Add this reading order' })
+    expect(addButton).not.toBeDisabled()
+    await user.click(addButton)
+    expect(
+      screen.getByRole('heading', { name: 'Add this reading order?' }),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Add reading order' }))
+    await waitFor(() => {
+      expect(mockCommitNew).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(mockApplyCommitted).toHaveBeenCalled()
+      expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/42')
+    })
+  })
+
+  it('blocks adding when the proposed graph contains a cycle (#4020)', async () => {
+    const user = userEvent.setup()
+    mockGraphPreview.mockResolvedValue(
+      readingGraphPreview({
+        cycle_errors: [
+          {
+            code: 'series_overlap_cycle',
+            message: 'Fourth World #2 and Mister Miracle #1 would wait on each other.',
+          },
+        ],
+      }),
+    )
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Add this reading order' }),
+      ).toBeDisabled()
+    })
+    expect(
+      screen.getByText('Fourth World #2 and Mister Miracle #1 would wait on each other.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Resolve the reading-order loop before adding this source.'),
+    ).toBeInTheDocument()
   })
 })

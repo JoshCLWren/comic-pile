@@ -30,9 +30,13 @@ The three existing themes are `classic`, `ink-gold`, and `command-center`. New f
 | Danger | `--theme-danger` | Destructive or cancel semantics |
 | Danger hover | `--theme-danger-hover` | Interactive destructive state |
 | Warning | `--theme-warning` | Caution and graded-scale middle semantics |
+| Success | `--theme-success` | Positive end of the graded scale: a resolved or still-rollable outcome |
+| Error | `--theme-error` | Failed-operation feedback that is not a destructive action |
 | Focus ring | `--theme-focus-ring` | Keyboard/focus visibility |
 
-The older `--bg-*`, `--text-*`, `--accent-*`, and `--glass-*` variables are compatibility aliases. The `--glass-*` variables are deprecated and new work should prefer the `--theme-*` semantic vocabulary. New surface styling should use semantic classes like `.surface-panel`, `.surface-glass`, and `.surface-modal` instead of effect-based approaches.
+The older `--bg-*`, `--text-*`, `--accent-*`, and `--glass-*` variables are compatibility aliases. The `--glass-*` variables are deprecated and new work should prefer the `--theme-*` semantic vocabulary. The short `--theme-text` alias resolves to `--theme-text-primary`. New surface styling should use semantic classes like `.surface-panel`, `.surface-glass`, and `.surface-modal` instead of effect-based approaches.
+
+The state roles form a graded scale. `--theme-danger` carries destructive or cancel semantics, `--theme-warning` carries caution and the middle of the scale, and `--theme-success` carries the positive end: an outcome that resolved cleanly or may keep progressing. `--theme-error` reports a failed operation that is not itself a destructive action, so a failed load does not have to borrow cancel styling. Use the role for the product meaning, and pair it with text so color is never the only carrier of status.
 
 `frontend/src/index.css` contains older root-level theme values such as `--theme-primary` and `--theme-bg-card`. Do not treat those as a second design system or add parallel tokens there. A new semantic role belongs with the `data-theme` token sets in `styles.css` and must be defined for every theme.
 

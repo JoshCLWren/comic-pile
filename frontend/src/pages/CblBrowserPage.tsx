@@ -1,8 +1,10 @@
 import axios from 'axios'
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Modal from '../components/Modal'
+import ReadingGraphOverlapDialog from '../components/ReadingGraphOverlapDialog'
+import ReadingGraphSummary from '../components/ReadingGraphSummary'
 import TriStateCheckbox from '../components/TriStateCheckbox'
 import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
@@ -14,6 +16,20 @@ import {
   type CBLAdoptionPreviewEntry,
   type CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
+import {
+  buildReadingGraphRequest,
+  hasGenuineOverlap,
+  overlapChoicePayload,
+  readingGraphSeriesLabel,
+  unresolvedOverlaps,
+  withLocalChoices,
+  type ReadingGraphChoices,
+} from '../utils/readingGraphOverlaps'
+import {
+  readingGraphApi,
+  type ReadingGraphOverlapChoiceId,
+  type ReadingGraphPreview,
+} from '../services/api-reading-graph'
 import {
   applyCblAdoptionChoices,
   buildCblSeriesGroups,
@@ -47,9 +63,9 @@ function statusLabel(entry: CBLAdoptionPreviewEntry): string {
 }
 
 function statusClass(entry: CBLAdoptionPreviewEntry): string {
-  if (entry.adoption_decision === 'included_existing') return 'text-emerald-300'
-  if (entry.adoption_decision === 'would_create_missing') return 'text-sky-300'
-  if (entry.adoption_decision === 'unresolved') return 'text-amber-300'
+  if (entry.adoption_decision === 'included_existing') return 'text-[var(--theme-success)]'
+  if (entry.adoption_decision === 'would_create_missing') return 'text-[var(--theme-text-primary)]'
+  if (entry.adoption_decision === 'unresolved') return 'text-[var(--theme-warning)]'
   return 'text-[var(--theme-text-muted)]'
 }
 
@@ -110,6 +126,15 @@ export default function CblBrowserPage() {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
+  /**
+   * Series-level answers for the prospective graph. Keyed by the server's
+   * stable overlap identity; restored from saved decisions on reopen.
+   */
+  const [overlapChoices, setOverlapChoices] = useState<ReadingGraphChoices>({})
+  const [graphDialogOpen, setGraphDialogOpen] = useState(false)
+  /** Whether finishing the questionnaire should continue into the add confirmation. */
+  const [graphDialogContinuesAdd, setGraphDialogContinuesAdd] = useState(false)
+  const graphPreviewRef = useRef<ReadingGraphPreview | null>(null)
 
   // A `list` query parameter opens one shared source list in place, so a
   // comparison result can link straight to the source detail it names.
@@ -145,6 +170,7 @@ export default function CblBrowserPage() {
       cblSourcesApi.commitNew(source.id, preview, {
         series_decisions: seriesDecisions,
         entry_decisions: entryDecisions,
+        overlap_decisions: overlapChoicePayload(graphQuery.data ?? null, overlapChoices),
       }),
     onSuccess: async (committed) => {
       setAmbiguousCommit(false)
@@ -188,6 +214,83 @@ export default function CblBrowserPage() {
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
   const seriesGroups = useMemo(() => (preview ? buildCblSeriesGroups(preview) : []), [preview])
+
+  /**
+   * The graph preview follows the reader's checklist and answers. `preview` is
+   * already a local projection of the checklist, so unchecking a whole volume
+   * removes its conflicts from the next graph request.
+   */
+  const includedPositions = useMemo(
+    () =>
+      preview
+        ? preview.entries.filter((entry) => entry.adopted).map((entry) => entry.cbl_position)
+        : [],
+    [preview],
+  )
+  const graphQuery = useQuery({
+    queryKey: queryKeys.readingGraph.preview(
+      selectedSource?.id ?? 0,
+      includedPositions,
+      overlapChoices,
+    ),
+    queryFn: () => {
+      if (!selectedSource) throw new Error('Choose a CBL source first.')
+      return readingGraphApi.preview(
+        selectedSource.id,
+        buildReadingGraphRequest(includedPositions, graphPreviewRef.current, overlapChoices),
+      )
+    },
+    enabled: selectedSource !== null && preview !== null,
+    placeholderData: (previous) => previous,
+    retry: false,
+  })
+  const graphServerPreview = graphQuery.data ?? null
+  // Keep the latest server preview for the next request's overlap payload.
+  // A layout effect runs before React Query's fetch effect, so a new checklist
+  // answer never sends an older preview while still avoiding a render-phase
+  // side effect.
+  useLayoutEffect(() => {
+    if (graphQuery.data) graphPreviewRef.current = graphQuery.data
+  }, [graphQuery.data])
+
+  /**
+   * Keep local answers aligned with the server graph: honour decisions the
+   * server has already saved for this reader/list, and drop answers whose
+   * conflict no longer exists after a checklist change.
+   */
+  useEffect(() => {
+    const data = graphQuery.data
+    if (!data) return
+    setOverlapChoices((current) => {
+      const existing = new Set(data.overlaps.map((overlap) => overlap.overlap_id))
+      const next: ReadingGraphChoices = {}
+      let changed = false
+      for (const [overlapId, choice] of Object.entries(current)) {
+        if (existing.has(overlapId)) next[overlapId] = choice
+        else changed = true
+      }
+      for (const overlap of data.overlaps) {
+        if (!(overlap.overlap_id in next) && overlap.selected_choice !== null) {
+          next[overlap.overlap_id] = overlap.selected_choice
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+  }, [graphQuery.data])
+
+  const graph = useMemo(
+    () => (graphServerPreview ? withLocalChoices(graphServerPreview, overlapChoices) : null),
+    [graphServerPreview, overlapChoices],
+  )
+  const pendingOverlaps = unresolvedOverlaps(graph, overlapChoices)
+  const graphLoading =
+    selectedSource !== null && preview !== null && (graphQuery.isPending || graphQuery.isFetching) && !graphQuery.isError
+  const graphUnavailable = selectedSource !== null && preview !== null && graphQuery.isError
+  const graphCycleErrors = graph?.cycle_errors ?? []
+  const pendingOverlapNames = pendingOverlaps
+    .map((overlap) => readingGraphSeriesLabel(overlap.waiting_series))
+    .join(', ')
   const listError = previewQuery.error ?? sourcesQuery.error
   const commitError = staleReview
     ? 'This source changed after you reviewed it. Refresh the preview before adding it.'
@@ -213,6 +316,9 @@ export default function CblBrowserPage() {
     setExpandedGroups({})
     setStaleReview(false)
     setAmbiguousCommit(false)
+    setOverlapChoices({})
+    setGraphDialogOpen(false)
+    setGraphDialogContinuesAdd(false)
     commitMutation.reset()
     // A new search leaves the deep-linked source detail behind.
     setSearchParams({}, { replace: true })
@@ -229,6 +335,9 @@ export default function CblBrowserPage() {
     setExpandedGroups({})
     setStaleReview(false)
     setAmbiguousCommit(false)
+    setOverlapChoices({})
+    setGraphDialogOpen(false)
+    setGraphDialogContinuesAdd(false)
     commitMutation.reset()
     if (reloadSelectedSource) void previewQuery.refetch()
   }
@@ -277,6 +386,35 @@ export default function CblBrowserPage() {
     setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }))
   }
 
+  /**
+   * Record one series-level answer.
+   *
+   * The answer is scoped to the server's exact volume pair, so it never relaxes
+   * another series or a same-titled run. The next graph preview recomputes
+   * every blocker from the same evaluator instead of a local guess.
+   */
+  const chooseOverlap = (overlapId: string, choice: ReadingGraphOverlapChoiceId) => {
+    if (isCommitting) return
+    setOverlapChoices((current) => ({ ...current, [overlapId]: choice }))
+    commitMutation.reset()
+    setAmbiguousCommit(false)
+  }
+
+  const reviewOverlaps = () => {
+    if (isCommitting) return
+    setGraphDialogContinuesAdd(false)
+    setGraphDialogOpen(true)
+  }
+
+  const finishOverlapDialog = () => {
+    const continuesAdd = graphDialogContinuesAdd
+    setGraphDialogOpen(false)
+    setGraphDialogContinuesAdd(false)
+    if (continuesAdd && unresolvedOverlaps(graph, overlapChoices).length === 0 && graphCycleErrors.length === 0) {
+      setConfirmOpen(true)
+    }
+  }
+
   const summary = preview?.summary
   const needsAttentionCount =
     (summary?.unresolved_count ?? 0) + (summary?.awaiting_opt_in_count ?? 0)
@@ -288,11 +426,15 @@ export default function CblBrowserPage() {
         ? 'Refresh the preview before adding it.'
         : needsAttentionCount > 0
           ? `${countPhraseWithArticle(needsAttentionCount, 'entry still needs', 'entries still need')} attention before this source can be added.`
-          : (summary?.final_adopted_count ?? 0) === 0
-            ? 'Nothing is selected to add.'
-            : isCommitting
-              ? null
-              : null
+          : graphCycleErrors.length > 0
+            ? 'Resolve the reading-order loop before adding this source.'
+            : graphLoading
+              ? 'Checking the reading graph…'
+              : (summary?.final_adopted_count ?? 0) === 0
+                ? 'Nothing is selected to add.'
+                : isCommitting
+                  ? null
+                  : null
   const commitBlocked = commitBlockedReason !== null || isCommitting || !preview
   const consequenceLine =
     preview && summary
@@ -305,11 +447,16 @@ export default function CblBrowserPage() {
 
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
+    if (pendingOverlaps.length > 0) {
+      setGraphDialogContinuesAdd(true)
+      setGraphDialogOpen(true)
+      return
+    }
     setConfirmOpen(true)
   }
 
   const confirmCommit = () => {
-    if (!selectedSource || !preview || isCommitting) return
+    if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || pendingOverlaps.length > 0) return
     setConfirmOpen(false)
     commitMutation.mutate({ source: selectedSource, preview })
   }
@@ -492,7 +639,7 @@ export default function CblBrowserPage() {
           )}
 
           {needsAttentionCount > 0 && (
-            <p className="text-xs text-amber-300">
+            <p className="text-xs text-[var(--theme-warning)]">
               {summary?.unresolved_count
                 ? 'Some entries need resolution before this source can be added. '
                 : ''}
@@ -503,6 +650,30 @@ export default function CblBrowserPage() {
                 ? 'You can skip individual entries under Customize to adopt the rest.'
                 : ''}
             </p>
+          )}
+
+          {graphUnavailable && (
+            <p role="status" className="text-xs text-[var(--theme-warning)]">
+              ComicPile could not load the reading graph, so it cannot check overlapping series
+              right now. You can still add this source.{' '}
+              <button
+                type="button"
+                onClick={() => void graphQuery.refetch()}
+                className="font-bold underline underline-offset-2"
+              >
+                Retry graph
+              </button>
+            </p>
+          )}
+
+          {graph && hasGenuineOverlap(graph) && (
+            <ReadingGraphSummary
+              preview={graph}
+              choices={overlapChoices}
+              onReview={reviewOverlaps}
+              disabled={isCommitting}
+              busy={graphQuery.isFetching}
+            />
           )}
 
           <div className="flex flex-wrap items-start gap-2">
@@ -525,6 +696,13 @@ export default function CblBrowserPage() {
                 <p className="max-w-xs text-xs text-[var(--theme-text-muted)] flex items-center gap-1">
                   <span className="inline-block w-2 h-2 rounded-full bg-[var(--theme-warning)]"></span>
                   {commitBlockedReason}
+                </p>
+              )}
+              {!commitBlockedReason && pendingOverlaps.length > 0 && (
+                <p className="max-w-xs text-xs text-[var(--theme-warning)]">
+                  {pendingOverlaps.length === 1
+                    ? `Decide how ${pendingOverlapNames} should continue before adding this source.`
+                    : `Decide how ${pendingOverlaps.length} overlapping series should continue before adding this source.`}
                 </p>
               )}
               {commitError && (
@@ -630,7 +808,7 @@ export default function CblBrowserPage() {
                                       {statusLabel(entry)}
                                     </span>
                                     {resolutionReason && (
-                                      <span className="mt-1 block text-xs text-amber-200">
+                                      <span className="mt-1 block text-xs text-[var(--theme-warning)]">
                                         {resolutionReason}
                                       </span>
                                     )}
@@ -679,6 +857,21 @@ export default function CblBrowserPage() {
             </div>
           )}
         </section>
+      )}
+
+      {graph && (
+        <ReadingGraphOverlapDialog
+          isOpen={graphDialogOpen}
+          preview={graph}
+          choices={overlapChoices}
+          onChoose={chooseOverlap}
+          onClose={() => {
+            setGraphDialogOpen(false)
+            setGraphDialogContinuesAdd(false)
+          }}
+          onDone={finishOverlapDialog}
+          busy={graphQuery.isFetching}
+        />
       )}
 
       <Modal
