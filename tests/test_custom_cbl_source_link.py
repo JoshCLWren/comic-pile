@@ -1,11 +1,13 @@
 """PostgreSQL transaction coverage for reader-owned CBL source links."""
 
 import asyncio
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select
+import pytest_asyncio
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.models.cbl_reference import CBLSource, CBLSourceList
@@ -16,12 +18,25 @@ from app.models.user import User
 from app.services.custom_cbl_source_link_service import ensure_first_add_link, get_owned_destination
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def clean_shared_sources(async_db_committed: AsyncSession) -> AsyncIterator[None]:
+    """Remove committed global source facts after all test sessions close."""
+    try:
+        yield
+    finally:
+        await async_db_committed.rollback()
+        source_id = async_db_committed.info.pop("source_link_test_source_id", None)
+        if isinstance(source_id, int):
+            await async_db_committed.execute(delete(CBLSource).where(CBLSource.id == source_id))
+        await async_db_committed.commit()
+
+
 async def _seed(db: AsyncSession) -> tuple[int, int, int]:
     """Persist two readers and one uniquely identified shared source."""
     token = uuid4().hex
     readers = [User(username=f"link-{token}-{i}", password_hash="unused") for i in range(2)]
     source = CBLSource(
-        repository=f"test/{token}", revision_sha="a" * 40, synced_at=datetime.now(UTC)
+        repository=f"test/source-link-{token}", revision_sha="a" * 40, synced_at=datetime.now(UTC)
     )
     db.add_all([*readers, source])
     await db.flush()
@@ -34,6 +49,7 @@ async def _seed(db: AsyncSession) -> tuple[int, int, int]:
     )
     db.add(listing)
     await db.flush()
+    db.info["source_link_test_source_id"] = source.id
     result = (readers[0].id, readers[1].id, listing.id)
     await db.commit()
     return result
