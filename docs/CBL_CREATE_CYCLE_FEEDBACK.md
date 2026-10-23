@@ -10,6 +10,8 @@ prerequisite edges, the editor offers links to `/thread/:id?prerequisites=1`, wh
 existing prerequisite dialog after the owned series loads. Closing the dialog does not reopen it
 on a background refresh. Older responses without series IDs still show readable feedback without
 inventing a destination. Selecting an existing list clears a failed Create's feedback.
+The Edit Series Notes label is associated with its textarea so the corrective editing path is
+accessible by name.
 
 This changes error presentation and remediation navigation. Cycle validation and transactional
 rollback remain in force. It does not delete, classify or repair legacy production prerequisites;
@@ -19,3 +21,5 @@ Regressions cover PostgreSQL cycle rollback and owning-series IDs, Create feedba
 preservation, existing Save behavior, and desktop/mobile Chromium navigation into the real
 prerequisite editor. The browser test supplies only the legacy cycle's 422 response; account,
 series, plan creation and editor reads use the real local API.
+After dismissal, it saves a real notes edit and verifies the dialog remains closed when refreshed
+series data renders.

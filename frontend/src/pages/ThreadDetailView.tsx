@@ -1,6 +1,6 @@
 import { EligibilityExplanation } from '../components/EligibilityExplanation'
 import { useThreadBlockingInfo } from '../hooks/useDependencies'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
@@ -95,6 +95,7 @@ export default function ThreadDetailView() {
   const focusedIssueRef = useRef<number | null>(null)
   const [issuesExpanded, setIssuesExpanded] = useState(requestedIssueId > 0)
   const [isDependencyOpen, setIsDependencyOpen] = useState(false)
+  const editNotesId = useId()
   const dependencyLocationRef = useRef<string | null>(null)
   const openPrerequisites = new URLSearchParams(location.search).get('prerequisites') === '1'
   useEffect(() => {
@@ -738,10 +739,11 @@ export default function ThreadDetailView() {
             )}
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-stone-500">
+              <label htmlFor={editNotesId} className="text-sm font-medium text-stone-500">
                 Notes
               </label>
               <textarea
+                id={editNotesId}
                 value={editForm.notes}
                 onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
                 className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"

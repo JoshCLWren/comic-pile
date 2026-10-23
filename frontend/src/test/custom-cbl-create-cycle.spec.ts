@@ -62,5 +62,15 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     await editor.getByRole('button', { name: 'Close modal' }).click()
     await expect(editor).toBeHidden()
     await expect(page.getByRole('heading', { name: threadTitle, exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Edit', exact: true }).click()
+    const edit = page.getByRole('dialog', { name: 'Edit Series', exact: true })
+    const refreshedNotes = `Controlled series refresh ${suffix}`
+    await edit.getByLabel('Notes', { exact: true }).fill(refreshedNotes)
+    await edit.getByRole('button', { name: 'Save Changes', exact: true }).click()
+    await expect(edit).toBeHidden()
+    await expect(page.getByText(refreshedNotes, { exact: true })).toBeVisible()
+    // Let effects caused by the changed thread settle before asserting dismissal.
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    await expect(editor).toBeHidden()
   })
 }
