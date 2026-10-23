@@ -156,3 +156,36 @@ export function displayCblSourcePath(sourcePath: string): string | null {
   }
   return normalized
 }
+
+/**
+ * Return a reader-safe label for an owned Reading List name.
+ *
+ * Reading List names are chosen by the reader, so bracketed prefixes such as
+ * `[DC] Crisis` are part of the name and must not be treated as CBL filename
+ * metadata. Stored references and host filesystem locations are not names and
+ * are still hidden.
+ *
+ * @param name - The owned Reading List name, when the reader has one.
+ * @param sourcePath - Retained source reference used only as a safe fallback.
+ * @returns The reader's name verbatim, a reader-safe fallback, or null.
+ *
+ * @example
+ * displayReadingListName('[DC] Crisis', 'custom-cbl:42')
+ * // returns '[DC] Crisis'
+ * displayReadingListName('custom-cbl:42', 'custom-cbl:42')
+ * // returns 'Custom Reading List'
+ */
+export function displayReadingListName(
+  name: string | null | undefined,
+  sourcePath?: string | null,
+): string | null {
+  const supplied = name?.trim()
+  if (
+    supplied &&
+    !CUSTOM_SOURCE_REFERENCE.test(supplied) &&
+    !isFilesystemSourceLocation(supplied)
+  ) {
+    return supplied
+  }
+  return displayCblSourceTitle(null, sourcePath ?? supplied ?? '')
+}

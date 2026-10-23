@@ -4,7 +4,7 @@ import GlossaryLink from '../components/GlossaryLink'
 import Modal from '../components/Modal'
 import { useDeleteReadingPlan, useReadingPlans } from '../hooks/useReadingPlans'
 import { readingPlanModeLabel } from '../services/api-continuity-plans'
-import { displayCblSourceTitle, displayCblSourcePath } from '../utils/cblSourceDisplay'
+import { displayCblSourcePath, displayReadingListName } from '../utils/cblSourceDisplay'
 
 function formatDate(iso: string): string {
   try {
@@ -137,7 +137,7 @@ export default function ContinuityPlansIndexPage() {
         <ul className="grid gap-3 md:grid-cols-2">
           {plans.map((plan) => {
             const isDeletingThis = deletePlan.isPending && deleteTargetId === plan.id
-            const sourceTitle = displayCblSourceTitle(plan.source_names?.[plan.source_paths[0]], plan.source_paths[0] ?? '')
+            const sourceTitle = displayReadingListName(plan.source_names?.[plan.source_paths[0]], plan.source_paths[0])
             const sourcePaths = plan.source_paths.map(displayCblSourcePath).filter(Boolean)
             return (
               <li

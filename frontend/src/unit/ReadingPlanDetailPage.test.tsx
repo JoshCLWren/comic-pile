@@ -206,6 +206,14 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.queryByText(/custom-cbl:/)).not.toBeInTheDocument()
   })
 
+  it('preserves bracketed prefixes in owned Reading List names', async () => {
+    const source = { ...readerView.sources[0], raw_source_path: 'custom-cbl:1000002', source_path: null, display_name: '[Favorites]' }
+    mockGetReader.mockResolvedValue({ ...readerView, sources: [source], available_now: readerView.available_now.map((issue) => ({ ...issue, source_paths: [source.raw_source_path] })) })
+    renderPage()
+    expect(await screen.findByText('Source reading order: [Favorites]')).toBeVisible()
+    expect(screen.queryByText('Source reading order: Custom Reading List')).not.toBeInTheDocument()
+  })
+
   it('shows progress, available now, and the actual blocker', async () => {
     renderPage()
 

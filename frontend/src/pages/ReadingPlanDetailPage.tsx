@@ -1,4 +1,4 @@
-import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
+import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle, displayReadingListName } from '../utils/cblSourceDisplay'
 import { ReaderIssueActions } from '../components/ReaderIssueActions'
 import { EligibilityExplanation } from '../components/EligibilityExplanation'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -142,7 +142,7 @@ export default function ReadingPlanDetailPage() {
   const view = readerQuery.data
   const sourceNames = Object.fromEntries(view.sources.map((source) => [
     source.raw_source_path,
-    displayCblSourceTitle(source.display_name, source.source_path ?? source.raw_source_path) ?? 'Reading order',
+    displayReadingListName(source.display_name, source.source_path ?? source.raw_source_path) ?? 'Reading order',
   ]))
   const modeLabel = readingPlanModeLabel(view.ordering_mode)
   const isStrict = view.ordering_mode === 'strict_sequential'

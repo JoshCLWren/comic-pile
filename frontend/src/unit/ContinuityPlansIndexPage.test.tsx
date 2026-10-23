@@ -145,6 +145,13 @@ describe('ContinuityPlansIndexPage', () => {
     expect(screen.queryByText(/custom-cbl:/)).not.toBeInTheDocument()
   })
 
+  it('preserves bracketed prefixes in owned source names', async () => {
+    mockList.mockResolvedValue([{ ...plan, source_paths: ['custom-cbl:1000002'], source_names: { 'custom-cbl:1000002': '[DC] Crisis' } }])
+    render(<MemoryRouter><ContinuityPlansIndexPage /></MemoryRouter>)
+    expect(await screen.findByText('Source reading order: [DC] Crisis')).toBeVisible()
+    expect(screen.queryByText('Source reading order: Crisis')).not.toBeInTheDocument()
+  })
+
   it('shows delete confirmation when delete is clicked', async () => {
     mockList.mockResolvedValue([
       plan,
