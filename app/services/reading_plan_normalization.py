@@ -26,6 +26,7 @@ from pydantic import ValidationError
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.reading_plan_source_labels import load_reading_plan_source_names
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.custom_cbl import CustomCBLList
@@ -1347,6 +1348,9 @@ async def get_plan_membership(
     edges = await reading_plan_repository.list_plan_dependency_edges(db, plan_id=plan.id)
     links = await reading_plan_repository.list_plan_dependencies(db, plan_id=plan.id)
     sources = await reading_plan_repository.list_plan_sources(db, plan_id=plan.id)
+    source_names = await load_reading_plan_source_names(
+        db, user_id=user_id, source_paths=(source.raw_source_path for source in sources),
+    )
     placements = await reading_plan_repository.list_plan_source_placements(
         db, plan_id=plan.id
     )
@@ -1380,6 +1384,7 @@ async def get_plan_membership(
         sources=[
             ReadingPlanSourceSnapshot(
                 id=source.id,
+                display_name=source_names.get(source.raw_source_path),
                 raw_source_path=public_cbl_source_path(source.raw_source_path),
                 repository=(
                     public_cbl_repository(source.repository)

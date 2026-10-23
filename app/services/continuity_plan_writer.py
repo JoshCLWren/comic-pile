@@ -79,6 +79,8 @@ from app.services.strict_plan_constraints import (
     IssueThreadIndex,
     load_issue_thread_index,
 )
+from app.services.reading_plan_source_labels import load_reading_plan_source_names
+
 
 
 PLAN_RULE_MARKER_PREFIX = "continuity-plan"
@@ -916,6 +918,11 @@ async def list_continuity_plan_items(
                 )
             ).all()
         )
+    paths_by_plan = {plan.id: plan_source_paths(plan) for plan in ordered}
+    source_names = await load_reading_plan_source_names(
+        db, user_id=user_id,
+        source_paths=(path for paths in paths_by_plan.values() for path in paths),
+    )
     return [
         ContinuityPlanListItem(
             id=plan.id,
@@ -923,7 +930,12 @@ async def list_continuity_plan_items(
             ordering_mode=plan.ordering_mode,
             lane_count=len(plan.lanes_json),
             step_count=membership_counts.get(plan.id, 0) or len(plan.nodes_json),
-            source_paths=plan_source_paths(plan),
+            source_paths=paths_by_plan[plan.id],
+            source_names={
+                path: source_names[path]
+                for path in paths_by_plan[plan.id]
+                if path in source_names
+            },
             updated_at=plan.updated_at,
         )
         for plan in ordered

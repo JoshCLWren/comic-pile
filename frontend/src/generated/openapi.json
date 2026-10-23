@@ -4102,6 +4102,13 @@
             "title": "Ordering Mode",
             "type": "string"
           },
+          "source_names": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Source Names",
+            "type": "object"
+          },
           "source_paths": {
             "items": {
               "type": "string"
@@ -15571,6 +15578,17 @@
               }
             ],
             "title": "Content Hash"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
           },
           "id": {
             "title": "Id",

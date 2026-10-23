@@ -80,6 +80,7 @@ export interface ContinuityPlanListItem {
   lane_count: number
   step_count: number
   source_paths: string[]
+  source_names?: Record<string, string>
   updated_at: string
 }
 
@@ -123,6 +124,7 @@ export interface ReadingPlanReaderLane {
 export interface ReadingPlanSourceSnapshot {
   id: number
   raw_source_path: string
+  display_name?: string | null
   repository: string | null
   source_path: string | null
   revision_sha: string | null

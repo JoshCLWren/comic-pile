@@ -115,7 +115,7 @@ async def test_preview_and_explicit_include_cannot_restore_excluded_volumes(
     assert response.json()["created_positions"] == [2]
     assert await async_db.scalar(select(func.count()).select_from(Issue)) == 1
     titles = list((await async_db.scalars(select(Thread.title))).all())
-    assert titles == ["CBL: Absolute Batman"]
+    assert titles == ["CBL: Absolute Batman (2025)"]
     # Reconciliation itself also carries the exclusion, with every source position retained.
     rows = await report_cbl_source_identity_resolution(
         async_db, user_id=user.id, source_list_id=source.id
@@ -247,8 +247,8 @@ async def test_excluded_thread_target_excludes_one_position_instead_of_failing(
     titles = set((await async_db.scalars(select(Thread.title))).all())
     assert titles == {
         "CBL: ABSOLUTE  FLASH (alternate spelling)",
-        "CBL: Absolute Green Lantern",
-        "CBL: Absolute Batman",
+        "CBL: Absolute Green Lantern (2025)",
+        "CBL: Absolute Batman (2025)",
     }
 
 

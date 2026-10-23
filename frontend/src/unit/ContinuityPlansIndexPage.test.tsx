@@ -124,7 +124,32 @@ describe('ContinuityPlansIndexPage', () => {
       </MemoryRouter>
     )
     expect(await screen.findByText('CBL-backed')).toBeInTheDocument()
-    expect(screen.getByText('Source reading order: Dark Horse/BPRD/Plague of Frogs.cbl')).toBeInTheDocument()
+    expect(screen.getByText('Source reading order: Plague of Frogs')).toBeVisible()
+    expect(screen.getByText('Dark Horse/BPRD/Plague of Frogs.cbl')).not.toBeVisible()
+    await userEvent.click(screen.getByText('Source details'))
+    expect(screen.getByText('Dark Horse/BPRD/Plague of Frogs.cbl')).toBeVisible()
+  })
+
+  it('labels a custom Reading List source without exposing its internal reference', async () => {
+    mockList.mockResolvedValue([{ ...plan, source_paths: ['custom-cbl:1000002'] }])
+    render(<MemoryRouter><ContinuityPlansIndexPage /></MemoryRouter>)
+    expect(await screen.findByText('Source reading order: Custom Reading List')).toBeVisible()
+    expect(screen.queryByText(/custom-cbl:/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /My Plan/ })).toBeEnabled()
+  })
+
+  it('uses the current owned source name returned by the server', async () => {
+    mockList.mockResolvedValue([{ ...plan, source_paths: ['custom-cbl:1000002'], source_names: { 'custom-cbl:1000002': 'Mignolaverse' } }])
+    render(<MemoryRouter><ContinuityPlansIndexPage /></MemoryRouter>)
+    expect(await screen.findByText('Source reading order: Mignolaverse')).toBeVisible()
+    expect(screen.queryByText(/custom-cbl:/)).not.toBeInTheDocument()
+  })
+
+  it('preserves bracketed prefixes in owned source names', async () => {
+    mockList.mockResolvedValue([{ ...plan, source_paths: ['custom-cbl:1000002'], source_names: { 'custom-cbl:1000002': '[DC] Crisis' } }])
+    render(<MemoryRouter><ContinuityPlansIndexPage /></MemoryRouter>)
+    expect(await screen.findByText('Source reading order: [DC] Crisis')).toBeVisible()
+    expect(screen.queryByText('Source reading order: Crisis')).not.toBeInTheDocument()
   })
 
   it('shows delete confirmation when delete is clicked', async () => {

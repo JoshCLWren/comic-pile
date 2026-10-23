@@ -4,7 +4,7 @@ import GlossaryLink from '../components/GlossaryLink'
 import Modal from '../components/Modal'
 import { useDeleteReadingPlan, useReadingPlans } from '../hooks/useReadingPlans'
 import { readingPlanModeLabel } from '../services/api-continuity-plans'
-import { displayCblSourcePath } from '../utils/cblSourceDisplay'
+import { displayCblSourcePath, displayReadingListName } from '../utils/cblSourceDisplay'
 
 function formatDate(iso: string): string {
   try {
@@ -137,6 +137,8 @@ export default function ContinuityPlansIndexPage() {
         <ul className="grid gap-3 md:grid-cols-2">
           {plans.map((plan) => {
             const isDeletingThis = deletePlan.isPending && deleteTargetId === plan.id
+            const sourceTitle = displayReadingListName(plan.source_names?.[plan.source_paths[0]], plan.source_paths[0])
+            const sourcePaths = plan.source_paths.map(displayCblSourcePath).filter(Boolean)
             return (
               <li
                 key={plan.id}
@@ -160,9 +162,9 @@ export default function ContinuityPlansIndexPage() {
                   {plan.source_paths.length > 0 && (
                     <div className="mt-3 rounded-lg border border-[var(--theme-continuity-accent)] p-2">
                       <span className="text-xs font-black text-[var(--theme-continuity-accent)]">CBL-backed</span>
-                      {displayCblSourcePath(plan.source_paths[0]) && (
+                      {sourceTitle && (
                         <span className="ml-2 text-xs text-[var(--theme-text-muted)]">
-                          Source reading order: {displayCblSourcePath(plan.source_paths[0])}
+                          Source reading order: {sourceTitle}
                         </span>
                       )}
                       {plan.source_paths.length > 1 && <span className="ml-1 text-xs text-[var(--theme-text-dim)]">+{plan.source_paths.length - 1} more</span>}
@@ -170,6 +172,14 @@ export default function ContinuityPlansIndexPage() {
                   )}
                   <p className="mt-1 text-xs text-[var(--theme-text-dim)]">Last saved {formatDate(plan.updated_at)}</p>
                 </button>
+                {sourcePaths.length > 0 && (
+                  <details className="text-xs text-[var(--theme-text-dim)]">
+                    <summary className="cursor-pointer font-bold text-[var(--theme-text-muted)]">Source details</summary>
+                    <ul className="mt-2 space-y-1 break-words">
+                      {sourcePaths.map((path, index) => <li key={`${index}-${path}`}>{path}</li>)}
+                    </ul>
+                  </details>
+                )}
                 {deleteTargetId === plan.id ? (
                   <div className="flex flex-col gap-2 border-t border-[var(--theme-border)] pt-3">
                     <p className="text-xs text-red-300">Delete this plan? Associated rules will also be removed.</p>
