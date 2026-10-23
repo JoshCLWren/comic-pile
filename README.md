@@ -108,7 +108,7 @@ To obtain a key:
 3. Set it in your environment when running the hydrator/backfill scripts:
 
 ```bash
-COMICVINE_API_KEY=your-key uv run python scripts/hydrate_comicvine_issues.py --user-id 1
+COMICVINE_API_KEY=your-key uv run python scripts/hydrate_comicvine_issues.py --user-id 1 --live-refresh --output .cache/comicvine-hydrator/user-1-live.json
 ```
 
 For local-first runs you can also point at a local ComicVine SQLite snapshot (`COMICVINE_LOCAL_DB` / `COMICPILE_COMICVINE_SQLITE_PATH`) and skip the API key entirely.
@@ -121,7 +121,7 @@ After `make setup` + `make dev` (or the Compose equivalent):
 - API / Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 - Dependency health: `GET http://localhost:8000/api/v1/health/dependencies`
 
-A healthy local response from the dependency endpoint confirms the API can reach PostgreSQL. The endpoint is open in local development (no `HEALTH_CHECK_TOKEN` configured); in production it requires the `X-Health-Token` header.
+A healthy local response from the dependency endpoint confirms the API can reach PostgreSQL. The endpoint is open whenever `HEALTH_CHECK_TOKEN` is unset, regardless of `ENVIRONMENT`. In production, set `HEALTH_CHECK_TOKEN` in the server's environment and send its value in the `X-Health-Token` header.
 
 ### Neon (hosted) path
 
