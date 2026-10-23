@@ -55,6 +55,14 @@
       }
     },
     {
+      "src": "/(login|register|forgot-password|reset-password|demo|rate|analytics|roll|help|queue|creators|creators/compare|history|crossovers|crossovers/.+|continuity-plans|continuity-plans/.+|whats-new|glossary|identity-inbox|cbl-sources)(\\.html)?",
+      "dest": "/static/react/$1.html",
+      "headers": {
+        "Cache-Control": "public, max-age=0, must-revalidate",
+        "X-Robots-Tag": "noindex, nofollow"
+      }
+    },
+    {
       "handle": "filesystem"
     },
     {
