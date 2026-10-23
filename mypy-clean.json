@@ -168,7 +168,6 @@
   "app/schemas/traffic_metrics.py",
   "app/services/cbl_catalog.py",
   "app/services/reading_plan_source_labels.py",
-
   "comic_pile/__init__.py",
   "comic_pile/comicvine_identity_repair.py",
   "comic_pile/comicvine_live_refresh.py",
