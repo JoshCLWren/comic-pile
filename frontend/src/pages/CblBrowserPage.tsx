@@ -229,8 +229,6 @@ export default function CblBrowserPage() {
   // If the source's content changed since choices were saved, the saved
   // entryDecisions no longer match the new cbl_entry_id rows. Discard the
   // stale overrides and require a fresh review before committing.
-  // Intentionally omitting sourceDecisions from deps to prevent re-render loop.
-  // The effect only needs to react to selectedSource and previewQuery.data changes.
   useEffect(() => {
     if (!selectedSource || !previewQuery.data) return
     const saved = sourceDecisions[selectedSource.id]
@@ -244,7 +242,7 @@ export default function CblBrowserPage() {
     setSeriesDecisions({})
     setEntryDecisions({})
     setStaleReview(true)
-  }, [selectedSource, previewQuery.data])
+  }, [selectedSource, previewQuery.data, sourceDecisions])
 
   const sources = sourcesQuery.data ?? []
   const hasChoices =
@@ -374,7 +372,6 @@ export default function CblBrowserPage() {
 
   const loadPreview = (source: CBLSourceListDiscoveryItem) => {
     if (isCommitting) return
-    const reloadSelectedSource = selectedSource?.id === source.id
     const saved = sourceDecisions[source.id]
     setSelectedSource(source)
     setCustomizing(false)
@@ -393,7 +390,8 @@ export default function CblBrowserPage() {
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
     commitMutation.reset()
-    if (reloadSelectedSource) void previewQuery.refetch()
+    // Refetch preview when re-selecting the same source to ensure fresh data
+    if (selectedSource?.id === source.id) void previewQuery.refetch()
   }
 
   const chooseEntry = (entry: CBLAdoptionPreviewEntry, include: boolean) => {
