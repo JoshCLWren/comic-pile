@@ -26,6 +26,21 @@ vi.mock('../services/api-custom-cbl', async () => {
   }
 })
 
+const cblMocks = vi.hoisted(() => ({
+  discover: vi.fn(),
+  preview: vi.fn(),
+}))
+
+vi.mock('../services/api-cbl-sources', async () => {
+  const actual = await vi.importActual<typeof import('../services/api-cbl-sources')>(
+    '../services/api-cbl-sources',
+  )
+  return {
+    ...actual,
+    cblSourcesApi: cblMocks,
+  }
+})
+
 function renderBuilder(onApplied = vi.fn()) {
   const client = new QueryClient({
     defaultOptions: {
@@ -697,6 +712,228 @@ describe('CustomCBLBuilder', () => {
     ).toBeInTheDocument()
   })
 
+  it('replaces only the selected Reading List from a global CBL and undoes list membership only', async () => {
+    const user = userEvent.setup()
+    cblMocks.discover.mockResolvedValue([
+      {
+        id: 101,
+        name: 'Global Starman CBL',
+        source_path: 'starman.cbl',
+        source_repository: 'shared/cbls',
+        declared_issue_count: 3,
+        content_hash: 'hash-101',
+        revision_sha: 'revision-101',
+      },
+    ])
+    cblMocks.preview.mockResolvedValue({
+      source: {
+        source_list_id: 101,
+        source_repository: 'shared/cbls',
+        source_path: 'starman.cbl',
+        content_hash: 'hash-101',
+        revision_sha: 'revision-101',
+      },
+      total_positions: 3,
+      summary: {
+        reused_existing_count: 2,
+        missing_would_create_count: 1,
+        excluded_count: 0,
+        unresolved_count: 1,
+        awaiting_opt_in_count: 0,
+        final_adopted_count: 2,
+        final_adopted_order: [0, 1],
+        reused_existing_positions: [0, 1],
+        missing_would_create_positions: [2],
+        excluded_positions: [],
+        unresolved_positions: [],
+        awaiting_opt_in_positions: [],
+      },
+      entries: [
+        {
+          cbl_position: 0,
+          cbl_entry_id: 1,
+          series_name: 'Starman',
+          issue_number: '55',
+          series_group_id: 'starman',
+          adoption_class: 'existing',
+          adoption_decision: 'included_existing',
+          adopted: true,
+          resolved_issue_id: 26360,
+          resolution_status: 'resolved_exact',
+        },
+        {
+          cbl_position: 1,
+          cbl_entry_id: 2,
+          series_name: 'JSA',
+          issue_number: '1',
+          series_group_id: 'jsa',
+          adoption_class: 'existing',
+          adoption_decision: 'included_existing',
+          adopted: true,
+          resolved_issue_id: 30002,
+          resolution_status: 'resolved_exact',
+        },
+        {
+          cbl_position: 2,
+          cbl_entry_id: 3,
+          series_name: 'JSA',
+          issue_number: '2',
+          series_group_id: 'jsa',
+          adoption_class: 'missing_importable',
+          adoption_decision: 'awaiting_opt_in',
+          adopted: false,
+          resolved_issue_id: null,
+          resolution_status: 'missing',
+        },
+      ],
+    })
+    mocks.update.mockResolvedValue({
+      ...existingList,
+      updated_at: '2026-09-14T03:10:00Z',
+      issue_count: 3,
+      entries: [
+        { ...existingList.entries[0], position: 0 },
+        {
+          id: 94,
+          position: 1,
+          issue_id: 30002,
+          thread_id: 9002,
+          series_name: 'JSA',
+          issue_number: '1',
+          status: 'unread',
+          is_checkpoint: false,
+          gate: 'none',
+          skipped: false,
+        },
+        { ...existingList.entries[1], position: 2 },
+      ],
+    })
+
+    renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Replace using CBL' }))
+    await user.type(screen.getByLabelText('Search global CBL sources'), 'Starman')
+    await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
+    await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
+
+    expect(await screen.findByTestId('cbl-replace-review')).toBeInTheDocument()
+    expect(screen.getByTestId('cbl-replace-graph-impact')).toHaveTextContent('Waits-on links')
+    expect(screen.getByTestId('default-30002')).toHaveTextContent('default')
+    expect(screen.getByTestId('manual-30001')).toHaveTextContent('(manual)')
+    expect(screen.getByText(/1 source entry is not in your library yet/)).toBeInTheDocument()
+
+    await user.click(screen.getByTestId('confirm-replace'))
+
+    await waitFor(() =>
+      expect(mocks.update).toHaveBeenCalledWith(9, {
+        name: 'Starman into JSA',
+        description: 'The bridge I actually want',
+        mode: 'loose',
+        issue_ids: [26360, 30002, 30001],
+        entry_intents: {
+          26360: { gate: 'none', skipped: false },
+          30002: { gate: 'none', skipped: false },
+          30001: { gate: 'none', skipped: false },
+        },
+        checkpoint_issue_ids: [],
+      }),
+    )
+    expect(await screen.findByRole('status')).toHaveTextContent('Replaced this Reading List')
+
+    await user.click(screen.getByRole('button', { name: 'Undo last replacement' }))
+
+    await waitFor(() =>
+      expect(mocks.update).toHaveBeenLastCalledWith(9, {
+        name: 'Starman into JSA',
+        description: 'The bridge I actually want',
+        mode: 'loose',
+        issue_ids: [26360, 30001],
+        entry_intents: {
+          26360: { gate: 'none', skipped: false },
+          30001: { gate: 'none', skipped: false },
+        },
+        checkpoint_issue_ids: [],
+      }),
+    )
+    expect(await screen.findByRole('status')).toHaveTextContent('Read history and ratings were not changed')
+  })
+
+  it('rejects a replacement review whose Reading List changed before confirmation', async () => {
+    const user = userEvent.setup()
+    cblMocks.discover.mockResolvedValue([
+      {
+        id: 101,
+        name: 'Global Starman CBL',
+        source_path: 'starman.cbl',
+        source_repository: 'shared/cbls',
+        declared_issue_count: 1,
+        content_hash: 'hash-101',
+        revision_sha: 'revision-101',
+      },
+    ])
+    cblMocks.preview.mockResolvedValue({
+      source: {
+        source_list_id: 101,
+        source_repository: 'shared/cbls',
+        source_path: 'starman.cbl',
+        content_hash: 'hash-101',
+        revision_sha: 'revision-101',
+      },
+      total_positions: 1,
+      summary: {
+        reused_existing_count: 1,
+        missing_would_create_count: 0,
+        excluded_count: 0,
+        unresolved_count: 0,
+        awaiting_opt_in_count: 0,
+        final_adopted_count: 1,
+        final_adopted_order: [0],
+        reused_existing_positions: [0],
+        missing_would_create_positions: [],
+        excluded_positions: [],
+        unresolved_positions: [],
+        awaiting_opt_in_positions: [],
+      },
+      entries: [
+        {
+          cbl_position: 0,
+          cbl_entry_id: 1,
+          series_name: 'Starman',
+          issue_number: '55',
+          series_group_id: 'starman',
+          adoption_class: 'existing',
+          adoption_decision: 'included_existing',
+          adopted: true,
+          resolved_issue_id: 26360,
+          resolution_status: 'resolved_exact',
+        },
+      ],
+    })
+
+    renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Replace using CBL' }))
+    await user.type(screen.getByLabelText('Search global CBL sources'), 'Starman')
+    await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
+    await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
+    expect(await screen.findByTestId('cbl-replace-review')).toBeInTheDocument()
+
+    mocks.get.mockResolvedValue({
+      ...existingList,
+      updated_at: '2026-09-14T04:00:00Z',
+    })
+    await user.click(screen.getByTestId('confirm-replace'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('changed after you reviewed it')
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
   it('shows export failures and revokes a created object URL', async () => {
     mocks.exportXml.mockResolvedValue('<ReadingList />')
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
@@ -724,3 +961,4 @@ describe('CustomCBLBuilder', () => {
     anchorClick.mockRestore()
   })
 })
+
