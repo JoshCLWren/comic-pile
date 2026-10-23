@@ -124,6 +124,14 @@ export default function CblBrowserPage() {
   const [seriesDecisions, setSeriesDecisions] = useState<Record<string, boolean>>({})
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  /**
+   * Reader choices keyed by source list id, so returning to a previously
+   * reviewed source restores its selections and unresolved warnings instead
+   * of silently resetting them (#4014).
+   */
+  const [sourceDecisions, setSourceDecisions] = useState<
+    Record<number, { series: Record<string, boolean>; entries: Record<string, boolean> }>
+  >({})
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
   /**
@@ -197,6 +205,16 @@ export default function CblBrowserPage() {
       setAmbiguousCommit(true)
     },
   })
+
+  // Persist the reader's choices per source so returning to a reviewed source
+  // restores them instead of resetting the checklist (#4014).
+  useEffect(() => {
+    if (!selectedSource) return
+    setSourceDecisions((current) => ({
+      ...current,
+      [selectedSource.id]: { series: seriesDecisions, entries: entryDecisions },
+    }))
+  }, [selectedSource, seriesDecisions, entryDecisions])
 
   const sources = sourcesQuery.data ?? []
   const hasChoices =
@@ -327,11 +345,17 @@ export default function CblBrowserPage() {
   const loadPreview = (source: CBLSourceListDiscoveryItem) => {
     if (isCommitting) return
     const reloadSelectedSource = selectedSource?.id === source.id
+    const saved = sourceDecisions[source.id]
     setSelectedSource(source)
     setCustomizing(false)
     setConfirmOpen(false)
-    setSeriesDecisions({})
-    setEntryDecisions({})
+    if (saved) {
+      setSeriesDecisions(saved.series)
+      setEntryDecisions(saved.entries)
+    } else {
+      setSeriesDecisions({})
+      setEntryDecisions({})
+    }
     setExpandedGroups({})
     setStaleReview(false)
     setAmbiguousCommit(false)
