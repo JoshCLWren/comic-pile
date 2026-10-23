@@ -420,51 +420,38 @@ def test_overlap_approved_removes_strict_edge_between_volumes() -> None:
     List order: J1 (vol=JLI), M1 (vol=MM), J2 (vol=JLI)
     Overlap: continuing=JLI, waiting=MM (JLI continues, MM waits)
     J2 should NOT wait for M1 because MM is in waiting for JLI.
-    But J2 should still wait for J1 (same volume).
+    But J2 should still wait for J1 (same volume). A prerequisite J2->M1
+    means this graph validates only when the M1->J2 strict edge is removed.
     """
-    # J1=1 (JLI), M1=2 (MM), J2=3 (JLI)
-    lists = (
-        ReadingList(
-            10,
-            "strict",
-            (
-                ReadingListEntry(1),  # J1
-                ReadingListEntry(2),  # M1
-                ReadingListEntry(3),  # J2
-            ),
-            name="Crossover",
-            overlap_decisions=(
-                ReadingList.__dataclass_fields__["overlap_decisions"].default_factory()
-                if False
-                else ()
-            ),
-        ),
-    )
-    # Need to construct with overlap_decisions properly
     from app.services.reading_list_evaluator import SeriesOverlapDecision
 
+    # J1=1 (JLI), M1=2 (MM), J2=3 (JLI)
+    entries = (
+        ReadingListEntry(1),  # J1 - JLI
+        ReadingListEntry(2),  # M1 - MM
+        ReadingListEntry(3),  # J2 - JLI
+    )
+    # J2 before M1 closes a cycle only if the strict M1 -> J2 edge survives.
+    prerequisites = (ReadingPrerequisite(1, 3, 2),)
     lists = (
         ReadingList(
             10,
             "strict",
-            (
-                ReadingListEntry(1),  # J1 - JLI
-                ReadingListEntry(2),  # M1 - MM
-                ReadingListEntry(3),  # J2 - JLI
-            ),
+            entries,
             name="Crossover",
             overlap_decisions=(SeriesOverlapDecision("JLI", "MM"),),
         ),
     )
     state = _overlap_snapshot(
         lists=lists,
+        prerequisites=prerequisites,
         thread_volumes={1: "JLI", 2: "MM", 3: "JLI"},
     )
     # Should validate without cycle - J2 does not wait for M1
     order = validate_reading_constraints(state, list_names={10: "Crossover"})
-    # Valid topological order: J1 before J2, M1 independent (no cycle)
     assert 1 in order and 2 in order and 3 in order
-    assert order.index(1) < order.index(3)  # J1 before J2
+    assert order.index(1) < order.index(3)  # J1 before J2 (same volume)
+    assert order.index(3) < order.index(2)  # J2 before M1 (prerequisite)
 
 
 def test_overlap_removed_rejects_genuine_cycle() -> None:
@@ -472,23 +459,23 @@ def test_overlap_removed_rejects_genuine_cycle() -> None:
 
     List order: J1 (JLI), M1 (MM), J2 (JLI)
     With NO overlap decision, strict order creates J1->M1->J2.
-    If a prerequisite also says J2->J1, that's a genuine cycle.
+    A prerequisite J2->M1 then closes the genuine cycle M1->J2->M1.
     """
+    entries = (
+        ReadingListEntry(1),  # J1 - JLI
+        ReadingListEntry(2),  # M1 - MM
+        ReadingListEntry(3),  # J2 - JLI
+    )
+    prerequisites = (ReadingPrerequisite(1, 3, 2),)
     lists = (
         ReadingList(
             10,
             "strict",
-            (
-                ReadingListEntry(1),  # J1 - JLI
-                ReadingListEntry(2),  # M1 - MM
-                ReadingListEntry(3),  # J2 - JLI
-            ),
+            entries,
             name="Crossover",
             overlap_decisions=(),  # NO overlap decision
         ),
     )
-    # Prerequisite J2 -> J1 creates cycle: J1->M1->J2->J1
-    prerequisites = (ReadingPrerequisite(1, 3, 1),)
     state = _overlap_snapshot(
         lists=lists,
         prerequisites=prerequisites,
@@ -496,11 +483,10 @@ def test_overlap_removed_rejects_genuine_cycle() -> None:
     )
     with pytest.raises(ReadingCycleError) as error:
         validate_reading_constraints(state, list_names={10: "Crossover"})
-    # Cycle should include the strict order edges and the prerequisite
+    # The cycle is the strict M1 -> J2 edge plus the J2 -> M1 prerequisite.
     edges = [(e.source_issue_id, e.target_issue_id, e.origin) for e in error.value.edges]
-    assert (1, 2, "list Crossover strict order") in edges
     assert (2, 3, "list Crossover strict order") in edges
-    assert (3, 1, "prerequisite 1 (reader)") in edges
+    assert (3, 2, "prerequisite 1 (reader)") in edges
 
 
 def test_three_list_cycle_rejected_despite_per_series_exceptions() -> None:
@@ -719,8 +705,10 @@ def test_f1615_scenario_evaluator_and_validator_agree() -> None:
     eval_result = evaluate(state_read_f1_f2_j1)
     # M1 eligible (F2 read, J1 read)
     # J2 eligible (J1 read, M1 exempt due to overlap)
-    assert eval_result[4].next_issue_id == 4  # M1 eligible
-    assert eval_result[5].next_issue_id == 5  # J2 eligible (overlap!)
+    assert eval_result[4].eligible  # M1 has no remaining blockers
+    assert eval_result[4].next_issue_id == 4
+    assert eval_result[5].eligible  # J2 has no remaining blockers (overlap!)
+    assert eval_result[5].next_issue_id == 5
 
     # Read J2 (but not M1)
     state_read_f1_f2_j1_j2 = _overlap_snapshot(
@@ -738,6 +726,7 @@ def test_f1615_scenario_evaluator_and_validator_agree() -> None:
     # J3 eligible (J2 read, M1/M2 exempt)
     # M1 still eligible (unread)
     # M2 waits for M1
+    assert eval_result[7].eligible  # no remaining blockers
     assert eval_result[7].next_issue_id == 7  # J3 eligible!
 
 
@@ -821,16 +810,18 @@ def test_overlap_strict_order_covers_maximal_non_exempt() -> None:
         thread_volumes={1: "X", 2: "Y", 3: "X", 4: "Y", 5: "X"},
     )
     order = validate_reading_constraints(state, list_names={10: "Test"})
-    # Edges: A->B (B target vol=Y, waiting empty), B->C (C target vol=X, B exempt), 
-    # C->D (D target vol=Y, waiting empty), D->E (E target vol=X, D exempt)
-    # Also A->C (C covers: A non-exempt, B exempt, so A is cover? No, maximal non-exempt is A)
-    # Wait, _strict_order_covers finds MAXIMAL non-exempt predecessors
-    # For C (index=2, vol=X): predecessors B(vol=Y,exempt), A(vol=X,non-exempt). Covers=[A]
-    # For D (index=3, vol=Y): predecessors C(vol=X), B(vol=Y), A(vol=X). waiting for Y=empty. Covers=[C] (maximal)
-    # For E (index=4, vol=X): predecessors D(exempt), C(non-exempt), B(exempt), A(non-exempt). Covers=[C] (maximal non-exempt)
-    # So edges: A->B, A->C, C->D, C->E
+    # _strict_order_covers keeps the maximal non-exempt predecessors:
+    # For C (index=2, vol=X): predecessors B(vol=Y, exempt), A(vol=X, non-exempt).
+    # Covers=[A].
+    # For D (index=3, vol=Y): waiting for Y is empty, so every earlier entry is
+    # non-exempt. Covers=[C, B]: C is the maximal cover, and B remains because
+    # overlap lets C bypass B but does not let D bypass its own series order.
+    # For E (index=4, vol=X): predecessors D(exempt), C(non-exempt),
+    # B(exempt), A(non-exempt). Covers=[C].
+    # So edges: A->B, A->C, B->D, C->D, C->E
     # Topological: A, B, C, D, E or A, C, B, D, E etc.
     assert order.index(1) < order.index(3)  # A before C
     assert order.index(3) < order.index(5)  # C before E
     assert order.index(1) < order.index(2)  # A before B
+    assert order.index(2) < order.index(4)  # B before D (waiting series order)
     assert order.index(3) < order.index(4)  # C before D
