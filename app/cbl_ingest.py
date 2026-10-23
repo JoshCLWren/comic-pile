@@ -304,8 +304,8 @@ def _parse_book(node: ET.Element, position: int) -> CBLBook:
     if not series or not issue_number:
         raise ValueError(f"book {position} is missing required Series or Number")
 
-    volume_year = _optional_int(node.get("Volume"))
-    publication_year = _optional_int(node.get("Year"))
+    volume_year = _optional_year(node.get("Volume"))
+    publication_year = _optional_year(node.get("Year"))
     series_id, issue_id = _comicvine_ids(node)
     return CBLBook(
         position=position,
@@ -342,6 +342,13 @@ def _text(node: ET.Element | None) -> str | None:
         return None
     value = node.text.strip()
     return value or None
+
+
+def _optional_year(value: str | None) -> int | None:
+    """Preserve explicit unknown year metadata without guessing an identity."""
+    if value is not None and value.strip().casefold() == "none":
+        return None
+    return _optional_int(value)
 
 
 def _optional_int(value: str | None) -> int | None:
