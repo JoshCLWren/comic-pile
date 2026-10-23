@@ -168,6 +168,31 @@ def _approvable_row_ids(rows: list[dict[str, object]]) -> list[str]:
     )
 
 
+class TestVolumeIdentityMatching:
+    """The candidate volume must corroborate the owned series (issue #3932)."""
+
+    @pytest.mark.parametrize(
+        ("thread_title", "volume_name", "expected"),
+        [
+            # A volume with a launch/end year range agrees with a bare launch year
+            # because only the launch year identifies the volume.
+            ("Batman (2011-2016)", "Batman (2011)", True),
+            ("Batman (2011)", "Batman (2011-2016)", True),
+            # Different launch years remain unrelated, even when the thread year
+            # appears elsewhere in the volume's range.
+            ("Batman (2011)", "Batman (2016)", False),
+            ("Batman (2011)", "Batman (1940-2011)", False),
+        ],
+    )
+    def test_launch_years_are_compared_not_whole_year_strings(
+        self, thread_title: str, volume_name: str, expected: bool
+    ) -> None:
+        """Year ranges match on their launch year and never on a shared end year."""
+        from app.services.catalog import _volume_identity_matches
+
+        assert _volume_identity_matches(thread_title, volume_name) is expected
+
+
 class TestQueueThreadBootstrapPreview:
     """A completely unmapped owned thread must bootstrap against a matching volume."""
 

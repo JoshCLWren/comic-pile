@@ -251,6 +251,7 @@ describe('QueueMapSeriesDialog', () => {
   it.each([
     ['provider_roster_unavailable', 'ComicVine did not return the issue list'],
     ['queue_thread_bootstrap_no_exact_match', 'No issue numbers in this series match'],
+    ['queue_thread_bootstrap_volume_identity_mismatch', 'This ComicVine volume does not match this series'],
     ['thread_has_no_issues', 'This series has no tracked issues'],
     ['origin_issue_not_found', 'The issue used to check this series is no longer available'],
     ['origin_issue_without_thread', 'The issue used to check this series is no longer available'],
