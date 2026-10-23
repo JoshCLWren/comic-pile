@@ -39,6 +39,15 @@ if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-fast-checks.sh" ]]; then
 else
   source .github/scripts/factory-fast-checks.sh
 fi
+# Canonical exact-head merge route (see factory-canonical-merge-route.sh).
+# Loaded before any PR checkout so worker-direct merges only ever execute the
+# trusted controller gate and the trusted post-merge closure policy.
+# shellcheck source=factory-canonical-merge-route.sh
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-canonical-merge-route.sh" ]]; then
+  source "$(dirname "${BASH_SOURCE[0]}")/factory-canonical-merge-route.sh"
+else
+  source .github/scripts/factory-canonical-merge-route.sh
+fi
 FACTORY_PUSH_BLOCKED_REASON=''
 
 log() { printf '[factory:%s][source:%s][model:%s] %s\n' "$WORKER" "$SOURCE" "$MODEL" "$*"; }
@@ -961,46 +970,34 @@ while (( $(remaining) > 480 )); do
   if [[ "$SOURCE" != 'kilo-auto' ]] && \
     grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
     machine_merge_gates_pass "$NUMBER" "$current"; then
-    # Run the trusted main-branch factory review controller's gates command
-    # to enforce exact-head acceptance, dependency, and delivery gates before merge.
-    # This replaces the reduced gate check in machine_merge_gates_pass with the
-    # authoritative controller that validates linked-issue prerequisites.
-    stage_trusted_review_controller
-    GATES_OUTPUT="$(python3 "$TRUSTED_REVIEW_CONTROLLER" gates \
-      --pr "$NUMBER" --expected-head "$current" 2>&1)" || GATES_OUTPUT=""
-    GATES_DECISION="$(echo "$GATES_OUTPUT" | python3 -c '
-import sys, json
-try:
-    data = json.loads(sys.stdin.read().strip())
-    print(data.get("decision", ""))
-except Exception:
-    print("")
-')"
-    if [[ -z "$GATES_DECISION" || "$GATES_DECISION" != "pass" ]]; then
-      log "trusted controller gates for PR #${NUMBER} decision=${GATES_DECISION:-empty}; not merging (reason: $(echo "$GATES_OUTPUT" | python3 -c '
-import sys, json
-try:
-    data = json.loads(sys.stdin.read().strip())
-    print(data.get("reason", "no decision"))
-except Exception:
-    print(sys.stdin.read()[:200])
-') ))"
-      # Do not merge: release lease and select other work
-      if [[ "$SOURCE" != 'kilo-auto' ]]; then
-        release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'gate-denied'
-      fi
-      continue
-    fi
-    log "trusted controller gates passed for PR #${NUMBER}; merging ${current}"
-    gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
-    factory_dispatch_production_deploy "Factory ${WORKER} merged PR #${NUMBER}"
-    # Use the trusted post-merge closure path instead of raw gh issue close.
-    # This ensures dependency-aware closure, label normalization, and durable
-    # marker comments are applied consistently.
-    issue_number="$(linked_issue_from_pr "$NUMBER")" || return 3
-    if [[ -n "$issue_number" ]]; then
-      python3 .github/scripts/factory_post_merge_closure.py \
-        --pr "$NUMBER" >/dev/null 2>&1 || true
+    # Merge only through the canonical exact-head route: the trusted controller
+    # gates (issue acceptance, exact-commit review/CI, substantive delivery and a
+    # fresh declared/native dependency check) must return JSON decision "pass",
+    # the head is pinned with --match-head-commit, and closure must use the
+    # trusted staged post-merge policy. Never run a PR-branch-controlled gate and
+    # never close the issue with a raw issue-close command.
+    if factory_merge_with_canonical_gates "$NUMBER" "$current"; then
+      log "trusted controller gates passed for PR #${NUMBER}; merged ${current}; post-merge closure ${FACTORY_CLOSURE_STATUS}: ${FACTORY_CLOSURE_OUTCOME}"
+    else
+      merge_route_status=$?
+      case "$merge_route_status" in
+        3)
+          # The merge landed but the canonical closure policy did not complete.
+          # Leave the issue open with the durable closure reason instead of
+          # treating the merge as feature acceptance.
+          log "merged PR #${NUMBER}, but post-merge closure did not complete (${FACTORY_CLOSURE_STATUS}: ${FACTORY_CLOSURE_OUTCOME}); issue left open"
+          ;;
+        2)
+          log "merge command failed for PR #${NUMBER} at ${current}; leaving it open for another route"
+          ;;
+        *)
+          log "trusted controller gates for PR #${NUMBER} decision=${FACTORY_MERGE_GATE_DECISION:-empty}; not merging (reason: ${FACTORY_MERGE_GATE_REASON:-no reason})"
+          # Do not merge: release lease and select other work
+          if [[ "$SOURCE" != 'kilo-auto' ]]; then
+            release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'gate-denied'
+          fi
+          ;;
+      esac
     fi
     continue
   fi
