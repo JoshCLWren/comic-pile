@@ -168,6 +168,31 @@ def _approvable_row_ids(rows: list[dict[str, object]]) -> list[str]:
     )
 
 
+class TestVolumeIdentityMatching:
+    """The candidate volume must corroborate the owned series (issue #3932)."""
+
+    @pytest.mark.parametrize(
+        ("thread_title", "volume_name", "expected"),
+        [
+            # A volume with a launch/end year range agrees with a bare launch year
+            # because only the launch year identifies the volume.
+            ("Batman (2011-2016)", "Batman (2011)", True),
+            ("Batman (2011)", "Batman (2011-2016)", True),
+            # Different launch years remain unrelated, even when the thread year
+            # appears elsewhere in the volume's range.
+            ("Batman (2011)", "Batman (2016)", False),
+            ("Batman (2011)", "Batman (1940-2011)", False),
+        ],
+    )
+    def test_launch_years_are_compared_not_whole_year_strings(
+        self, thread_title: str, volume_name: str, expected: bool
+    ) -> None:
+        """Year ranges match on their launch year and never on a shared end year."""
+        from app.services.catalog import _volume_identity_matches
+
+        assert _volume_identity_matches(thread_title, volume_name) is expected
+
+
 class TestQueueThreadBootstrapPreview:
     """A completely unmapped owned thread must bootstrap against a matching volume."""
 
@@ -279,7 +304,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Unconfirmed Origin",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         roster = [_roster_row(500000 + number, str(number)) for number in (1, 2)]
@@ -302,13 +327,13 @@ class TestQueueThreadBootstrapPreview:
         anchor_thread, anchor_issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Anchor Thread",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         _, other_issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Other Thread",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["3"],
         )
         roster = [_roster_row(500000 + number, str(number)) for number in (1, 2, 3, 4)]
@@ -344,7 +369,7 @@ class TestQueueThreadBootstrapPreview:
         _, other_issues = await _create_thread_with_issues(
             async_db,
             user_id=other_user.id,
-            title="Someone Else's Thread",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1"],
         )
         roster = [_roster_row(500001, "1")]
@@ -368,7 +393,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Duplicate Roster",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         roster = [
@@ -401,7 +426,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Duplicate Local",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "1.", "2"],
         )
         roster = [_roster_row(500001, "1"), _roster_row(500002, "2")]
@@ -425,7 +450,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Bootstrap Specials",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2", "Annual"],
         )
         roster = [
@@ -453,7 +478,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Mismatched Volume",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2", "3"],
         )
         roster = [_roster_row(500010, "10"), _roster_row(500011, "11")]
@@ -469,6 +494,29 @@ class TestQueueThreadBootstrapPreview:
         assert all(count == 0 for count in data["counts"].values())
 
     @pytest.mark.asyncio
+    async def test_wrong_series_title_with_overlapping_numbers_is_rejected(
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data
+    ) -> None:
+        """A different series title with overlapping issue numbers is rejected (regression for #3932)."""
+        user = sample_data["user"]
+        _, issues = await _create_thread_with_issues(
+            async_db,
+            user_id=user.id,
+            title="Green Lantern",
+            issue_numbers=["1", "2"],
+        )
+        roster = [_roster_row(500001, "1"), _roster_row(500002, "2")]
+        with _patch_comicvine(roster):
+            response = await auth_client.post(PREVIEW_URL, json=_bootstrap_payload(issues[0].id))
+        assert response.status_code == 200
+        data = response.json()
+        assert data["scope"]["status"] == "unavailable"
+        assert data["scope"]["basis"] == "queue_thread_bootstrap_volume_identity_mismatch"
+        assert data["preview_token"] is None
+        assert data["rows"] == []
+        assert all(count == 0 for count in data["counts"].values())
+
+    @pytest.mark.asyncio
     async def test_confirmed_disagreement_is_reported_as_a_conflict(
         self, auth_client: AsyncClient, async_db: AsyncSession, sample_data
     ) -> None:
@@ -477,7 +525,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Confirmed Conflict",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         await _confirm_issue(async_db, issues[0], external_id="999999")
@@ -503,7 +551,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Confirmed Agreement",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         await _confirm_issue(async_db, issues[0], external_id="500001")
@@ -533,7 +581,7 @@ class TestQueueThreadBootstrapPreview:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Confirmed Inventory",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         await _confirm_issue(async_db, issues[0], external_id="500001")
@@ -565,7 +613,7 @@ class TestQueueThreadBootstrapCommit:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Stale Bootstrap",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         roster = [_roster_row(500001, "1"), _roster_row(500002, "2")]
@@ -605,7 +653,7 @@ class TestQueueThreadBootstrapCommit:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Idempotent Bootstrap",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2", "3"],
         )
         roster = [_roster_row(500000 + number, str(number)) for number in (1, 2, 3)]
@@ -640,7 +688,7 @@ class TestQueueThreadBootstrapCommit:
         _, issues = await _create_thread_with_issues(
             async_db,
             user_id=user.id,
-            title="Unsafe Bootstrap",
+            title="B.P.R.D.: King of Fear",
             issue_numbers=["1", "2"],
         )
         roster = [

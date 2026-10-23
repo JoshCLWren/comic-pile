@@ -859,6 +859,62 @@ def _issue_number_text(raw_value: object) -> str:
     return str(raw_value)
 
 
+def _normalize_volume_series_title(raw_value: object) -> str:
+    """Normalize a series/volume title for identity comparison.
+
+    ComicVine volume names usually carry the launch year in parentheses
+    (``"Batman (1940)"``), while a reader's thread title often omits it
+    (``"Batman"``). Stripping a parenthesized year from both sides keeps those
+    equivalent, so a genuine identity match is not rejected for formatting
+    alone. Comparison is case-insensitive and ignores surrounding whitespace.
+    """
+    if raw_value is None:
+        return ""
+    text = str(raw_value).strip()
+    text = re.sub(r"\s*\(\d{4}(?:-\d{4})?\)\s*$", "", text)
+    return " ".join(text.casefold().split())
+
+
+def _extract_series_year(raw_value: object) -> str | None:
+    if raw_value is None:
+        return None
+    m = re.search(r"\((\d{4}(?:-\d{4})?)\)\s*$", str(raw_value).strip())
+    return m.group(1) if m else None
+
+
+def _volume_identity_matches(thread_title: object, volume_name: object) -> bool:
+    """Return whether a candidate volume corroborates the owned series.
+
+    Matching by issue number alone is unsafe: any volume that happens to hold
+    the same numbers (for example a 1940 Batman volume for a Green Lantern
+    thread) would otherwise be offered for one-click approval. A volume must
+    agree with the series it claims to represent before any of its rows may be
+    marked safe. An empty/unknown title on either side cannot establish that
+    agreement, so it is treated as a mismatch (fail closed).
+
+    Explicit year disagreements are preserved as mismatches: "Batman (2011)"
+    does not match "Batman (1940)". A missing year is ignored only when it
+    does not contradict the available evidence (i.e. only one side carries a
+    year, or both agree).
+    """
+    left_raw = thread_title
+    right_raw = volume_name
+    left_year = _extract_series_year(left_raw)
+    right_year = _extract_series_year(right_raw)
+    # Compare launch years: a range like "2011-2016" and a bare "2011" agree
+    # when their launch years match.
+    left_launch = left_year[:4] if left_year is not None else None
+    right_launch = right_year[:4] if right_year is not None else None
+    # Explicit conflicting launch years => mismatch regardless of base title.
+    if left_launch is not None and right_launch is not None and left_launch != right_launch:
+        return False
+    left = _normalize_volume_series_title(left_raw)
+    right = _normalize_volume_series_title(right_raw)
+    if not left or not right:
+        return False
+    return left == right
+
+
 def _classify_series_mapping_rows(
     issues_with_mappings: list[dict[str, object]],
     *,
@@ -1079,6 +1135,18 @@ async def _build_queue_thread_bootstrap_plan(
         return _unavailable_series_mapping_plan(
             origin_issue_id,
             basis="provider_roster_unavailable",
+            scope_mode=SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP,
+        )
+
+    # A volume must corroborate the owned series beyond raw issue numbers. A candidate
+    # whose title does not agree with the thread is never offered for one-click approval,
+    # even when its roster happens to contain overlapping numbers (issue #3932).
+    if not _volume_identity_matches(
+        origin_issue.get("thread_title"), series_info.get("name") if isinstance(series_info, dict) else None
+    ):
+        return _unavailable_series_mapping_plan(
+            origin_issue_id,
+            basis="queue_thread_bootstrap_volume_identity_mismatch",
             scope_mode=SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP,
         )
 
