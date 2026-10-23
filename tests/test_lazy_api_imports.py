@@ -191,8 +191,8 @@ def test_dependency_subrouters_are_mounted_exactly_once() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cold_ping_defers_core_routers_and_next_request_completes_them() -> None:
-    """Ping answers before the core routers load; the next request completes them."""
+async def test_cold_ping_defers_core_routers_and_next_request_loads_only_its_mount() -> None:
+    """Ping answers before core routers load; the next request loads only its mount."""
     eager_paths = _route_paths(create_app(serve_frontend=False))
     app = create_app(serve_frontend=False, defer_router_imports=True)
     cold_paths = _route_paths(app)
@@ -216,10 +216,21 @@ async def test_cold_ping_defers_core_routers_and_next_request_completes_them() -
     assert response.status_code == 401
 
     completed_paths = _route_paths(app)
-    assert completed_paths == eager_paths
+    assert DEPENDENCY_SUBROUTER_PATH in completed_paths
+    assert RELEASES_SUBROUTER_PATH in completed_paths
     assert completed_paths.index(DEPENDENCY_SUBROUTER_PATH) < completed_paths.index(
         API_FALLBACK_PATH
     )
+    # Only the dependency mount loaded. Every other deferred resource still has
+    # to wait for a request that needs it, which is the point of #3479.
+    assert set(completed_paths) < set(eager_paths)
+    for unrelated_path in (
+        "/api/v1/catalog/series",
+        "/api/v1/images/optimize",
+        "/api/v1/delivery",
+        "/api/v1/snooze/",
+    ):
+        assert unrelated_path not in completed_paths
 
 
 @pytest.mark.asyncio
