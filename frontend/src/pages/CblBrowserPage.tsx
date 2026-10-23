@@ -130,7 +130,11 @@ export default function CblBrowserPage() {
    * of silently resetting them (#4014).
    */
   const [sourceDecisions, setSourceDecisions] = useState<
-    Record<number, { series: Record<string, boolean>; entries: Record<string, boolean> }>
+    Record<number, {
+      content_hash: string
+      series: Record<string, boolean>
+      entries: Record<string, boolean>
+    }>
   >({})
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
@@ -207,14 +211,38 @@ export default function CblBrowserPage() {
   })
 
   // Persist the reader's choices per source so returning to a reviewed source
-  // restores them instead of resetting the checklist (#4014).
+  // restores them instead of resetting the checklist (#4014). The source's
+  // content_hash is saved alongside the choices so a changed source cannot
+  // silently apply stale entry overrides to new cbl_entry_id rows.
   useEffect(() => {
     if (!selectedSource) return
     setSourceDecisions((current) => ({
       ...current,
-      [selectedSource.id]: { series: seriesDecisions, entries: entryDecisions },
+      [selectedSource.id]: {
+        content_hash: previewQuery.data?.source.content_hash ?? '',
+        series: seriesDecisions,
+        entries: entryDecisions,
+      },
     }))
-  }, [selectedSource, seriesDecisions, entryDecisions])
+  }, [selectedSource, seriesDecisions, entryDecisions, previewQuery.data?.source.content_hash])
+
+  // If the source's content changed since choices were saved, the saved
+  // entryDecisions no longer match the new cbl_entry_id rows. Discard the
+  // stale overrides and require a fresh review before committing.
+  useEffect(() => {
+    if (!selectedSource || !previewQuery.data) return
+    const saved = sourceDecisions[selectedSource.id]
+    if (!saved) return
+    if (!saved.content_hash || saved.content_hash === previewQuery.data.source.content_hash) return
+    setSourceDecisions((current) => {
+      const next = { ...current }
+      delete next[selectedSource.id]
+      return next
+    })
+    setSeriesDecisions({})
+    setEntryDecisions({})
+    setStaleReview(true)
+  }, [selectedSource, previewQuery.data, sourceDecisions])
 
   const sources = sourcesQuery.data ?? []
   const hasChoices =

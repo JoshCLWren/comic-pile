@@ -1214,4 +1214,104 @@ describe('CblBrowserPage', () => {
       screen.getByText('Resolve the reading-order loop before adding this source.'),
     ).toBeInTheDocument()
   })
+
+  it('keeps each source\'s own checklist choices when switching sources (#4014)', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    const sourceA: CBLSourceListDiscoveryItem = {
+      id: 7,
+      name: 'Source A',
+      source_path: 'A.cbl',
+      source_repository: 'JoshCLWren/CBL-ReadingLists',
+      declared_issue_count: 2,
+      content_hash: 'hash-a',
+      revision_sha: 'aaaa',
+    }
+    const sourceB: CBLSourceListDiscoveryItem = {
+      id: 8,
+      name: 'Source B',
+      source_path: 'B.cbl',
+      source_repository: 'JoshCLWren/CBL-ReadingLists',
+      declared_issue_count: 2,
+      content_hash: 'hash-b',
+      revision_sha: 'bbbb',
+    }
+
+    mockDiscover.mockResolvedValue([sourceA, sourceB])
+    await user.type(screen.getByLabelText('Search source lists'), 'x')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Source A/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Source B/ })).toBeInTheDocument()
+    })
+
+    const previewA = preview({ source: { source_list_id: 7, content_hash: 'hash-a' } })
+    const previewB = preview({
+      source: { source_list_id: 8, content_hash: 'hash-b' },
+      entries: [
+        entry({
+          cbl_entry_id: 201,
+          series_name: 'Series B',
+          issue_number: '1',
+          series_group_id: 'group-b',
+        }),
+        entry({
+          cbl_position: 2,
+          cbl_entry_id: 202,
+          series_name: 'Series B',
+          issue_number: '2',
+          series_group_id: 'group-b',
+          adoption_class: 'missing_importable',
+          adoption_decision: 'would_create_missing',
+          adopted: true,
+          resolved_issue_id: null,
+          canonical_issue_id: null,
+          resolution_status: 'no_owned_issue_for_comicvine_id',
+        }),
+      ],
+    })
+
+    // Source A: exclude issue #2.
+    mockPreview.mockResolvedValue(previewA)
+    await user.click(screen.getByRole('button', { name: /Source A/ }))
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Source A' })).toBeInTheDocument()
+    })
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
+    await user.click(screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #2' }))
+    expect(screen.getByText('2 entries · 1 already in ComicPile · 0 will be added')).toBeInTheDocument()
+
+    // Source B: fresh choices, everything included.
+    mockPreview.mockResolvedValue(previewB)
+    await user.click(screen.getByRole('button', { name: /Source B/ }))
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Source B' })).toBeInTheDocument()
+    })
+    await openChecklist(user)
+    expect(screen.getByRole('checkbox', { name: 'Include Series B series' })).toBeChecked()
+
+    // Return to Source A: its issue choice is restored.
+    mockPreview.mockResolvedValue(previewA)
+    await user.click(screen.getByRole('button', { name: /Source A/ }))
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Source A' })).toBeInTheDocument()
+    })
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #2' }),
+    ).not.toBeChecked()
+
+    // The commit uses Source A's restored choice.
+    mockCommitNew.mockResolvedValue({ id: 88 })
+    mockApplyCommitted.mockResolvedValue(undefined)
+    await confirmAdd(user)
+    await waitFor(() => {
+      expect(mockCommitNew).toHaveBeenCalledTimes(1)
+    })
+    const [, , choices] = mockCommitNew.mock.calls[0]
+    expect(choices.entry_decisions).toEqual({ '102': false })
+  })
 })
