@@ -297,6 +297,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import roll
     from app.api import session
     from app.api import snooze
+    from app.api import bootstrap_telemetry
     from app.api import taste
     from app.api import taste_signal
     from app.api import tags
@@ -365,6 +366,7 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
     app.include_router(taste_signal.router, prefix="/api/v1", tags=["taste-signals"])
     app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
+    app.include_router(bootstrap_telemetry.router, prefix="/api", tags=["bootstrap-telemetry"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     app.include_router(delivery.router, prefix="/api/v1", tags=["delivery"])
     # Guest demo (#2757): versioned-only new client resource, so no bare

@@ -368,6 +368,55 @@
         "title": "Body_import_csv_api_v1_admin_import_csv__post",
         "type": "object"
       },
+      "BootstrapAliasCounterSchema": {
+        "description": "One aggregated bootstrap alias tally.",
+        "properties": {
+          "alias": {
+            "description": "Bootstrap alias: legacy, v1, or v2.",
+            "title": "Alias",
+            "type": "string"
+          },
+          "count": {
+            "description": "Number of observed hits.",
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "status_class": {
+            "description": "Response status class, e.g. 2xx.",
+            "title": "Status Class",
+            "type": "string"
+          },
+          "web_origin": {
+            "description": "True if request looked like a browser client.",
+            "title": "Web Origin",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "alias",
+          "web_origin",
+          "status_class",
+          "count"
+        ],
+        "title": "BootstrapAliasCounterSchema",
+        "type": "object"
+      },
+      "BootstrapAliasSnapshotSchema": {
+        "description": "Process-local bootstrap alias counters.",
+        "properties": {
+          "counters": {
+            "description": "Aggregated counts per (alias, web_origin, status class).",
+            "items": {
+              "$ref": "#/components/schemas/BootstrapAliasCounterSchema"
+            },
+            "title": "Counters",
+            "type": "array"
+          }
+        },
+        "title": "BootstrapAliasSnapshotSchema",
+        "type": "object"
+      },
       "BugReportCreate": {
         "description": "Request schema for creating a bug report or feature request.",
         "properties": {
@@ -21349,6 +21398,34 @@
         "tags": [
           "auth",
           "auth"
+        ]
+      }
+    },
+    "/api/v1/bootstrap-alias-metrics": {
+      "get": {
+        "description": "Return this instance's bootstrap alias counters.\n\nArgs:\n    current_user: Authenticated user requesting the snapshot.\n\nReturns:\n    Process-local aggregated counters sorted deterministically.",
+        "operationId": "get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapAliasSnapshotSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bootstrap Alias Metrics",
+        "tags": [
+          "bootstrap-telemetry",
+          "bootstrap-telemetry"
         ]
       }
     },

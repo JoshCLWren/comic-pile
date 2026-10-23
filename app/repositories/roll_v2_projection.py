@@ -253,7 +253,8 @@ async def fetch_rollable_candidates(
     return rows
 
 
-async def fetch_series_aggregates(    db: AsyncSession,
+async def fetch_series_aggregates(
+    db: AsyncSession,
     *,
     user_id: int,
     volume_ids: list[int],
@@ -281,7 +282,9 @@ async def fetch_series_aggregates(    db: AsyncSession,
         conditions.append(
             text(
                 f"(external_identities.metadata_json::jsonb @> CAST(:vol_a_{index} AS jsonb)"
-                f" OR external_identities.metadata_json::jsonb @> CAST(:vol_b_{index} AS jsonb))"
+                f" OR external_identities.metadata_json::jsonb @> CAST(:vol_b_{index} AS jsonb)"
+                f" OR external_identities.metadata_json::jsonb @> CAST(:vol_c_{index} AS jsonb)"
+                f" OR external_identities.metadata_json::jsonb @> CAST(:vol_d_{index} AS jsonb))"
             ).bindparams(
                 bindparam(
                     f"vol_a_{index}",
@@ -293,19 +296,35 @@ async def fetch_series_aggregates(    db: AsyncSession,
                     value=f'{{"volume_id": {volume_id}}}',
                     type_=Text,
                 ),
+                bindparam(
+                    f"vol_c_{index}",
+                    value=f'{{"volume": {{"id": "{volume_id}"}}}}',
+                    type_=Text,
+                ),
+                bindparam(
+                    f"vol_d_{index}",
+                    value=f'{{"volume_id": "{volume_id}"}}',
+                    type_=Text,
+                ),
             )
         )
     volume_match = or_(*conditions)
+    # JSON numeric IDs can stringify as "20764.0" while stored catalog IDs
+    # use "20764". Normalize integral numeric text without unsafe numeric casts.
+    catalog_volume_id = func.regexp_replace(
+        func.coalesce(
+            ExternalIdentity.metadata_json["volume"]["id"].as_string(),
+            ExternalIdentity.metadata_json["volume_id"].as_string(),
+        ),
+        r"\.0+$",
+        "",
+    )
     series_name_sq = (
         select(SeriesIdentity.metadata_json["name"].as_string())
         .where(
             SeriesIdentity.provider == "comicvine",
             SeriesIdentity.entity_type == "series",
-            SeriesIdentity.external_id
-            == func.coalesce(
-                ExternalIdentity.metadata_json["volume"]["id"].as_string(),
-                ExternalIdentity.metadata_json["volume_id"].as_string(),
-            ),
+            SeriesIdentity.external_id == catalog_volume_id,
         )
         .correlate(ExternalIdentity)
         .scalar_subquery()
@@ -315,11 +334,7 @@ async def fetch_series_aggregates(    db: AsyncSession,
         .where(
             SeriesIdentity.provider == "comicvine",
             SeriesIdentity.entity_type == "series",
-            SeriesIdentity.external_id
-            == func.coalesce(
-                ExternalIdentity.metadata_json["volume"]["id"].as_string(),
-                ExternalIdentity.metadata_json["volume_id"].as_string(),
-            ),
+            SeriesIdentity.external_id == catalog_volume_id,
         )
         .correlate(ExternalIdentity)
         .scalar_subquery()
