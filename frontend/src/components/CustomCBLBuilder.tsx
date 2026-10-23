@@ -17,6 +17,12 @@ import {
 } from '../services/api-custom-cbl'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import {
+  cblSourcesApi,
+  type CBLAdoptionPreview,
+  type CBLSourceListDiscoveryItem,
+} from '../services/api-cbl-sources'
+import CblReplaceReviewPanel, { type ReplaceEntry } from './CblReplaceReviewPanel'
+import {
   computeEntryRequirements,
   decodeCustomCBLError,
   describeCyclePath,
@@ -78,12 +84,23 @@ function sameEntries(left: CustomCBLEntry[], right: CustomCBLEntry[]): boolean {
       return (
         other !== undefined &&
         entry.issue_id === other.issue_id &&
-        entry.gate === other.gate &&
-        entry.skipped === other.skipped &&
+        entry.gate === (other.gate ?? DEFAULT_GATE) &&
+        entry.skipped === (other.skipped ?? false) &&
         Boolean(entry.is_checkpoint) === Boolean(other.is_checkpoint)
       )
     })
   )
+}
+
+function checkpointTargetsFor(entries: readonly CustomCBLEntry[]): Record<number, number[]> | null {
+  const targets: Record<number, number[]> = {}
+  for (const entry of entries) {
+    const values = entry.checkpoint_target_issue_ids
+    if (entry.is_checkpoint && values && values.length > 0) {
+      targets[entry.issue_id] = [...values]
+    }
+  }
+  return Object.keys(targets).length > 0 ? targets : null
 }
 
 function buildWritePayload(
@@ -92,6 +109,7 @@ function buildWritePayload(
   mode: ReadingListMode,
   entries: CustomCBLEntry[],
   confirmed: ReadingListPredecessorChange[] | null,
+  checkpointTargets: Record<number, number[]> | null = null,
 ): CustomCBLWrite {
   const issueIds: number[] = []
   const checkpointIds: number[] = []
@@ -110,6 +128,7 @@ function buildWritePayload(
     checkpoint_issue_ids: checkpointIds,
   }
   if (confirmed) payload.confirmed_predecessor_changes = confirmed
+  if (checkpointTargets) payload.checkpoint_targets = checkpointTargets
   return payload
 }
 
@@ -118,6 +137,112 @@ function messageFor(error: unknown, fallback: string): string {
   if (detail.message) return detail.message
   if (error instanceof Error && error.message) return error.message
   return fallback
+}
+
+/**
+ * Raised when the owned list changed after the reader opened the replacement
+ * review, so the reviewed before/after would no longer describe the target.
+ */
+class StaleReadingListReviewError extends Error {
+  constructor() {
+    super('This Reading List changed after you reviewed it. Reopen the replacement review before saving.')
+    this.name = 'StaleReadingListReviewError'
+  }
+}
+
+/**
+ * Raised when another save changed the list after the replacement Undo snapshot
+ * was taken. Applying that snapshot would silently discard the later edits.
+ */
+class StaleReadingListUndoError extends Error {
+  constructor() {
+    super('This Reading List changed after the replacement, so Undo is no longer available. Nothing was changed.')
+    this.name = 'StaleReadingListUndoError'
+  }
+}
+
+/**
+ * Exact before/after review projection for one Reading List replacement.
+ *
+ * Named so the owner contract stays explicit instead of widening through an
+ * anonymous return type.
+ */
+interface ReplacementModel {
+  before: ReplaceEntry[]
+  after: ReplaceEntry[]
+  unresolvedCount: number
+}
+
+/**
+ * Project one CBL source preview onto a Reading List replacement review.
+ *
+ * Only already-resolved canonical Issues can join a Reading List. Source rows
+ * that still need identity resolution are reported separately instead of being
+ * guessed. Saved entries that the chosen CBL does not contain stay checked so a
+ * replacement never silently discards the reader's own additions.
+ *
+ * @param list - The exact owned Reading List being replaced.
+ * @param preview - Reconciled global CBL source preview.
+ * @returns Exact before/after entries plus the count of unresolvable source rows.
+ */
+function buildReplacementModel(
+  list: CustomCBL,
+  preview: CBLAdoptionPreview,
+): ReplacementModel {
+  const savedByIssue = new Map(list.entries.map((entry) => [entry.issue_id, entry]))
+  const before: ReplaceEntry[] = list.entries.map((entry) => ({
+    comicId: entry.issue_id,
+    title: `${entry.series_name} #${entry.issue_number}`,
+    included: true,
+    saved: true,
+    gate: entry.gate,
+    skipped: entry.skipped,
+  }))
+
+  const after: ReplaceEntry[] = []
+  const sourceIssueIds = new Set<number>()
+  let unresolvedCount = 0
+  for (const entry of preview.entries) {
+    const issueId = entry.resolved_issue_id
+    if (issueId === null || entry.adoption_class !== 'existing' || sourceIssueIds.has(issueId)) {
+      if (entry.adoption_class !== 'existing' || issueId === null) unresolvedCount += 1
+      continue
+    }
+    const saved = savedByIssue.get(issueId)
+    // Collection exclusions can return an owned Issue with
+    // `adoption_decision: 'excluded'`. Only a source row the server actually
+    // adopted becomes a checked default; an excluded row stays visible only
+    // when the reader already saved it, and then as a saved entry rather than
+    // a default.
+    const sourceIncluded = entry.adopted && entry.adoption_decision !== 'excluded'
+    if (!sourceIncluded && !saved) continue
+    sourceIssueIds.add(issueId)
+    after.push({
+      comicId: issueId,
+      title: `${entry.series_name} #${entry.issue_number}`,
+      included: sourceIncluded || saved !== undefined,
+      defaultIncluded: sourceIncluded,
+      saved: saved !== undefined,
+      gate: saved?.gate ?? DEFAULT_GATE,
+      skipped: saved?.skipped ?? false,
+    })
+  }
+
+  for (const entry of list.entries) {
+    if (sourceIssueIds.has(entry.issue_id)) continue
+    after.push({
+      comicId: entry.issue_id,
+      title: `${entry.series_name} #${entry.issue_number}`,
+      included: true,
+      manual: true,
+      defaultIncluded: false,
+      saved: true,
+      gate: entry.gate,
+      skipped: entry.skipped,
+    })
+  }
+
+  return { before, after, unresolvedCount }
 }
 
 function waitDescription(
@@ -165,6 +290,21 @@ export default function CustomCBLBuilder({
   const [submittedIssueQuery, setSubmittedIssueQuery] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [exportError, setExportError] = useState<Error | null>(null)
+  const [replaceOpen, setReplaceOpen] = useState(false)
+  const [cblQuery, setCblQuery] = useState('')
+  const [cblSubmittedQuery, setCblSubmittedQuery] = useState('')
+  const [cblSource, setCblSource] = useState<CBLSourceListDiscoveryItem | null>(null)
+  const [replaceBaseline, setReplaceBaseline] = useState<string | null>(null)
+  const [undoPayload, setUndoPayload] = useState<CustomCBLWrite | null>(null)
+  const [undoBaseline, setUndoBaseline] = useState<string | null>(null)
+  const [replaceConfirmation, setReplaceConfirmation] = useState<{
+    issueIds: number[]
+    changes: ReadingListPredecessorChange[]
+  } | null>(null)
+  const [undoConfirmation, setUndoConfirmation] = useState<
+    ReadingListPredecessorChange[] | null
+  >(null)
+  const [replaceError, setReplaceError] = useState<string | null>(null)
 
   const listsQuery = useQuery({
     queryKey: queryKeys.customCBLs.list(),
@@ -183,6 +323,21 @@ export default function CustomCBLBuilder({
     queryKey: queryKeys.customCBLs.issueSearch(submittedIssueQuery),
     queryFn: () => customCBLApi.searchIssues(submittedIssueQuery),
     enabled: selectedId !== null && submittedIssueQuery.length > 0,
+  })
+  const cblSourcesQuery = useQuery({
+    queryKey: queryKeys.cblSources.search(cblSubmittedQuery),
+    queryFn: () => cblSourcesApi.discover(cblSubmittedQuery),
+    enabled: open && replaceOpen && cblSubmittedQuery.length > 0,
+  })
+  const cblPreviewQuery = useQuery({
+    queryKey: cblSource
+      ? queryKeys.cblSources.preview(cblSource.id)
+      : queryKeys.cblSources.preview(0),
+    queryFn: () => {
+      if (!cblSource) throw new Error('Choose a CBL source first.')
+      return cblSourcesApi.preview(cblSource.id)
+    },
+    enabled: open && replaceOpen && cblSource !== null,
   })
 
   useEffect(() => {
@@ -224,6 +379,10 @@ export default function CustomCBLBuilder({
       await applyUpdatedCustomCBL(queryClient, saved)
       setEntries(normalizePositions(saved.entries))
       setMode(saved.mode ?? DEFAULT_MODE)
+      // A later save makes the replacement snapshot stale: undoing it would
+      // silently discard the membership change that was just saved.
+      setUndoPayload(null)
+      setUndoBaseline(null)
       setMessage('Custom CBL saved.')
     },
   })
@@ -254,8 +413,132 @@ export default function CustomCBLBuilder({
       setMessage(`Applied to Reading Plan: ${added} added${skipped ? `, ${skipped} already present` : ''}.`)
     },
   })
+  const replaceMutation = useMutation({
+    mutationFn: async ({
+      issueIds: selectedIssueIds,
+      confirmed,
+    }: {
+      issueIds: number[]
+      confirmed: ReadingListPredecessorChange[] | null
+    }) => {
+      if (!selectedId || !persisted || !cblSource) {
+        throw new Error('Choose a Reading List and a CBL source first.')
+      }
+      // Reject a stale review against the list the reader actually saw.
+      const current = await customCBLApi.get(selectedId)
+      if (replaceBaseline !== null && current.updated_at !== replaceBaseline) {
+        throw new StaleReadingListReviewError()
+      }
+      const savedByIssue = new Map(persisted.entries.map((entry) => [entry.issue_id, entry]))
+      const entryIntents: Record<number, ReadingListEntryIntent> = {}
+      const checkpointIssueIds: number[] = []
+      for (const issueId of selectedIssueIds) {
+        const saved = savedByIssue.get(issueId)
+        entryIntents[issueId] = { gate: saved?.gate ?? DEFAULT_GATE, skipped: saved?.skipped ?? false }
+        if (saved?.is_checkpoint) checkpointIssueIds.push(issueId)
+      }
+      const undo = buildWritePayload(
+        persisted.name,
+        persisted.description ?? '',
+        persisted.mode ?? DEFAULT_MODE,
+        persisted.entries,
+        null,
+        checkpointTargetsFor(persisted.entries),
+      )
+      const payload: CustomCBLWrite = {
+        name: name.trim(),
+        description: description.trim() || null,
+        mode,
+        issue_ids: selectedIssueIds,
+        entry_intents: entryIntents,
+        checkpoint_issue_ids: checkpointIssueIds,
+      }
+      if (confirmed) payload.confirmed_predecessor_changes = confirmed
+      const saved = await customCBLApi.update(selectedId, payload)
+      return { saved, undo, sourceLabel: cblSource.name || cblSource.source_path }
+    },
+    onSuccess: async ({ saved, undo, sourceLabel }) => {
+      await applyUpdatedCustomCBL(queryClient, saved)
+      setEntries(normalizePositions(saved.entries))
+      setMode(saved.mode ?? DEFAULT_MODE)
+      setUndoPayload(undo)
+      setUndoBaseline(saved.updated_at)
+      setReplaceConfirmation(null)
+      setReplaceOpen(false)
+      setCblSource(null)
+      setCblSubmittedQuery('')
+      setCblQuery('')
+      setReplaceError(null)
+      setMessage(
+        `Replaced this Reading List from ${sourceLabel}. Read history and ratings were not changed.`,
+      )
+    },
+    onError: (error, variables) => {
+      const detail = decodeCustomCBLError(error)
+      if (
+        detail.code === 'reading_list_predecessor_confirmation_required' &&
+        detail.predecessorChanges.length > 0
+      ) {
+        setReplaceConfirmation({ issueIds: variables.issueIds, changes: detail.predecessorChanges })
+        setReplaceError(null)
+        return
+      }
+      setReplaceConfirmation(null)
+      setReplaceError(
+        messageFor(error, 'Unable to replace this Reading List from the chosen CBL.'),
+      )
+    },
+  })
+  const undoReplacementMutation = useMutation({
+    mutationFn: async ({
+      payload,
+      confirmed,
+    }: {
+      payload: CustomCBLWrite
+      confirmed: ReadingListPredecessorChange[] | null
+    }) => {
+      if (!selectedId) throw new Error('Choose a custom CBL first.')
+      if (undoBaseline !== null) {
+        const current = await customCBLApi.get(selectedId)
+        if (current.updated_at !== undoBaseline) throw new StaleReadingListUndoError()
+      }
+      // Restoring a snapshot can re-change stored waits (for example, undoing a
+      // confirmed strict reorder), so the same confirmation contract applies.
+      const body: CustomCBLWrite = { ...payload }
+      if (confirmed) body.confirmed_predecessor_changes = confirmed
+      return customCBLApi.update(selectedId, body)
+    },
+    onSuccess: async (saved) => {
+      await applyUpdatedCustomCBL(queryClient, saved)
+      setEntries(normalizePositions(saved.entries))
+      setMode(saved.mode ?? DEFAULT_MODE)
+      setUndoPayload(null)
+      setUndoBaseline(null)
+      setUndoConfirmation(null)
+      setReplaceError(null)
+      setMessage('Restored the previous list membership and order. Read history and ratings were not changed.')
+    },
+    onError: (error) => {
+      const detail = decodeCustomCBLError(error)
+      if (
+        detail.code === 'reading_list_predecessor_confirmation_required' &&
+        detail.predecessorChanges.length > 0
+      ) {
+        // Keep the Undo snapshot so the reader can confirm this exact restore.
+        setUndoConfirmation(detail.predecessorChanges)
+        setReplaceError(null)
+        return
+      }
+      if (error instanceof StaleReadingListUndoError) {
+        setUndoPayload(null)
+        setUndoBaseline(null)
+      }
+      setUndoConfirmation(null)
+      setReplaceError(messageFor(error, 'Unable to undo this Reading List replacement.'))
+    },
+  })
 
-  const isPending = createMutation.isPending || saveMutation.isPending || deleteMutation.isPending || applyMutation.isPending
+  const isPending = createMutation.isPending || saveMutation.isPending || deleteMutation.isPending || applyMutation.isPending || replaceMutation.isPending || undoReplacementMutation.isPending
   useEffect(() => {
     onPendingChange?.(isPending)
     return () => onPendingChange?.(false)
@@ -383,25 +666,36 @@ export default function CustomCBLBuilder({
     // was submitted; switching lists must not carry that feedback onto another list.
     saveMutation.reset()
     setMessage(null)
+    setReplaceOpen(false)
+    setCblSource(null)
+    setCblSubmittedQuery('')
+    setCblQuery('')
+    setReplaceBaseline(null)
+    setReplaceError(null)
+    setReplaceConfirmation(null)
+    setUndoConfirmation(null)
+    setUndoPayload(null)
+    setUndoBaseline(null)
     setSelectedId(next)
   }
   const exportList = async () => {
     if (!selectedId || !persisted || dirty || disabled || isPending) return
     setExportError(null)
     let url: string | null = null
+    let anchor: HTMLAnchorElement | null = null
     try {
       const xml = await customCBLApi.exportXml(selectedId)
       const blob = new Blob([xml], { type: 'application/xml' })
       url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
+      anchor = document.createElement('a')
       anchor.href = url
       anchor.download = `${persisted.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'custom-reading-list'}.cbl`
       document.body.appendChild(anchor)
       anchor.click()
-      anchor.remove()
     } catch (caught) {
       setExportError(caught instanceof Error ? caught : new Error('Custom CBL export failed.'))
     } finally {
+      anchor?.remove()
       if (url) URL.revokeObjectURL(url)
     }
   }
@@ -417,6 +711,52 @@ export default function CustomCBLBuilder({
     listsQuery.error
   const errorText = error ? messageFor(error, 'Custom CBL operation failed.') : null
   const warnings = persisted?.warnings ?? []
+  const replacement = useMemo(
+    () =>
+      persisted && cblPreviewQuery.data
+        ? buildReplacementModel(persisted, cblPreviewQuery.data)
+        : null,
+    [persisted, cblPreviewQuery.data],
+  )
+
+  const searchCblSources = (event: FormEvent) => {
+    event.preventDefault()
+    if (disabled || isPending) return
+    setCblSubmittedQuery(cblQuery.trim())
+    setCblSource(null)
+    setReplaceBaseline(null)
+    setReplaceConfirmation(null)
+    setReplaceError(null)
+  }
+  const chooseCblSource = (source: CBLSourceListDiscoveryItem) => {
+    if (disabled || isPending) return
+    const reload = cblSource?.id === source.id
+    setCblSource(source)
+    setReplaceBaseline(persisted?.updated_at ?? null)
+    setReplaceConfirmation(null)
+    setReplaceError(null)
+    if (reload) void cblPreviewQuery.refetch()
+  }
+  const closeReplaceReview = () => {
+    if (replaceMutation.isPending) return
+    setReplaceOpen(false)
+    setCblSource(null)
+    setCblSubmittedQuery('')
+    setCblQuery('')
+    setReplaceBaseline(null)
+    setReplaceConfirmation(null)
+    setReplaceError(null)
+  }
+  const undoReplacement = () => {
+    if (!undoPayload || isPending) return
+    undoReplacementMutation.mutate({ payload: undoPayload, confirmed: null })
+  }
+  const confirmUndoReplacement = () => {
+    const changes = undoConfirmation
+    if (!undoPayload || !changes || undoReplacementMutation.isPending) return
+    setUndoConfirmation(null)
+    undoReplacementMutation.mutate({ payload: undoPayload, confirmed: changes })
+  }
 
   return (
     <section className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3" aria-labelledby="custom-cbl-heading">
@@ -557,6 +897,173 @@ export default function CustomCBLBuilder({
 
               <button type="button" onClick={() => setReaderOpen((value) => !value)} aria-expanded={readerOpen} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-semibold text-[var(--theme-text-primary)]">{readerOpen ? 'Close list reader' : 'Read this list'}</button>
               {readerOpen && selectedId && <ReadingListReader key={selectedId} listId={selectedId} backTo={`/continuity-plans/${planId}`} />}
+
+              <div className="space-y-3 rounded-xl border border-[var(--theme-border)] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-bold text-[var(--theme-text-primary)]">Replace using CBL</h4>
+                    <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
+                      Choose a global CBL, review exact before/after Issue IDs, then replace only this Reading List.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (replaceOpen) closeReplaceReview()
+                      else setReplaceOpen(true)
+                    }}
+                    aria-expanded={replaceOpen}
+                    disabled={disabled || isPending || dirty}
+                    className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50"
+                  >
+                    {replaceOpen ? 'Close replacement review' : 'Replace using CBL'}
+                  </button>
+                </div>
+
+                {dirty && (
+                  <p className="text-xs text-[var(--theme-warning)]">
+                    Save or discard your unsaved edits before reviewing a replacement.
+                  </p>
+                )}
+
+                {replaceOpen && (
+                  <div className="space-y-3 border-t border-[var(--theme-border)] pt-3">
+                    <form onSubmit={searchCblSources} className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        aria-label="Search global CBL sources"
+                        value={cblQuery}
+                        onChange={(event) => setCblQuery(event.target.value)}
+                        placeholder="Search global CBL sources"
+                        maxLength={200}
+                        disabled={disabled || isPending}
+                        className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!cblQuery.trim() || disabled || isPending || cblSourcesQuery.isFetching}
+                        className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50"
+                      >
+                        {cblSourcesQuery.isFetching ? 'Searching…' : 'Find CBLs'}
+                      </button>
+                    </form>
+
+                    {cblSourcesQuery.isError && (
+                      <div className="space-y-2 rounded-xl border border-[var(--theme-border)] p-3">
+                        <p role="alert" className="text-sm text-[var(--theme-danger)]">
+                          {messageFor(cblSourcesQuery.error, 'Unable to search global CBL sources.')}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void cblSourcesQuery.refetch()}
+                          disabled={disabled || isPending}
+                          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50"
+                        >
+                          Retry source search
+                        </button>
+                      </div>
+                    )}
+
+                    {(cblSourcesQuery.data?.length ?? 0) > 0 && (
+                      <div className="grid gap-2" aria-label="Global CBL source candidates">
+                        {(cblSourcesQuery.data ?? []).map((source) => (
+                          <button
+                            key={source.id}
+                            type="button"
+                            onClick={() => chooseCblSource(source)}
+                            disabled={disabled || isPending}
+                            className={`rounded-xl border p-3 text-left disabled:opacity-50 ${
+                              cblSource?.id === source.id
+                                ? 'border-[var(--theme-continuity-accent)]'
+                                : 'border-[var(--theme-border)]'
+                            } hover:bg-white/5`}
+                          >
+                            <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
+                              {source.name || source.source_path}
+                            </span>
+                            <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">
+                              {source.declared_issue_count !== null
+                                ? `${source.declared_issue_count} source entries`
+                                : 'Source entries unavailable'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {cblSource && cblPreviewQuery.isPending && (
+                      <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+                        Reconciling the chosen CBL against this list…
+                      </p>
+                    )}
+
+                    {cblSource && cblPreviewQuery.isError && (
+                      <div className="space-y-2 rounded-xl border border-[var(--theme-border)] p-3">
+                        <p role="alert" className="text-sm text-[var(--theme-danger)]">
+                          {messageFor(cblPreviewQuery.error, 'Unable to preview the chosen CBL source.')}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void cblPreviewQuery.refetch()}
+                          disabled={disabled || isPending}
+                          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50"
+                        >
+                          Retry preview
+                        </button>
+                      </div>
+                    )}
+
+                    {replacement && cblSource && (
+                      <>
+                        {replacement.unresolvedCount > 0 && (
+                          <p className="text-xs text-[var(--theme-warning)]">
+                            {replacement.unresolvedCount} source {replacement.unresolvedCount === 1 ? 'entry is' : 'entries are'} not in your library yet and cannot join a Reading List until resolved. They are left out of this review.
+                          </p>
+                        )}
+                        <CblReplaceReviewPanel
+                          key={`${cblSource.id}-${replacement.after.map((entry) => entry.comicId).join(',')}`}
+                          listName={persisted.name}
+                          listId={persisted.id}
+                          mode={mode}
+                          before={replacement.before}
+                          after={replacement.after}
+                          onConfirm={(selectedIssueIds) =>
+                            replaceMutation.mutate({ issueIds: selectedIssueIds, confirmed: null })
+                          }
+                          onCancel={closeReplaceReview}
+                          onUndo={undoPayload ? undoReplacement : undefined}
+                        />
+                      </>
+                    )}
+
+                    {replaceError && (
+                      <p role="alert" className="text-sm text-[var(--theme-danger)]">
+                        {replaceError}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {undoPayload && !replaceOpen && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={undoReplacement}
+                      disabled={disabled || isPending || dirty}
+                      className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50"
+                    >
+                      {undoReplacementMutation.isPending ? 'Undoing…' : 'Undo last replacement'}
+                    </button>
+                    <span className="text-xs text-[var(--theme-text-muted)]">
+                      Restores list membership and order only; read history and ratings stay.
+                    </span>
+                  </div>
+                )}
+                {replaceError && !replaceOpen && (
+                  <p role="alert" className="text-sm text-[var(--theme-danger)]">
+                    {replaceError}
+                  </p>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => saveMutation.mutate(null)} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
                 <button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>
@@ -606,6 +1113,69 @@ export default function CustomCBLBuilder({
               className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
             >
               {saveMutation.isPending ? 'Saving…' : 'Confirm and save'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={replaceConfirmation !== null}
+        title="Confirm replacement waiting changes"
+        onClose={() => setReplaceConfirmation(null)}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Replacing this Reading List changes which issues wait on which. Review the new waits, then confirm the same replacement review. Cancel leaves the saved list exactly as it is.
+          </p>
+          <ul className="space-y-2" aria-label="Replacement waiting changes">
+            {(replaceConfirmation?.changes ?? []).map((change) => (
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
+                {describePredecessorChange(change)}
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => setReplaceConfirmation(null)} disabled={replaceMutation.isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Cancel</button>
+            <button
+              type="button"
+              onClick={() => {
+                const pending = replaceConfirmation
+                if (!pending) return
+                setReplaceConfirmation(null)
+                replaceMutation.mutate({ issueIds: pending.issueIds, confirmed: pending.changes })
+              }}
+              disabled={replaceMutation.isPending}
+              className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
+            >
+              {replaceMutation.isPending ? 'Replacing…' : 'Confirm and replace'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={undoConfirmation !== null}
+        title="Confirm undo waiting changes"
+        onClose={() => setUndoConfirmation(null)}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Restoring the previous list changes which issues wait on which. Review the restored waits, then confirm. Cancel keeps the replaced list exactly as it is.
+          </p>
+          <ul className="space-y-2" aria-label="Undo waiting changes">
+            {(undoConfirmation ?? []).map((change) => (
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
+                {describePredecessorChange(change)}
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => setUndoConfirmation(null)} disabled={undoReplacementMutation.isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Cancel</button>
+            <button
+              type="button"
+              onClick={confirmUndoReplacement}
+              disabled={undoReplacementMutation.isPending}
+              className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
+            >
+              {undoReplacementMutation.isPending ? 'Restoring…' : 'Confirm and restore'}
             </button>
           </div>
         </div>
