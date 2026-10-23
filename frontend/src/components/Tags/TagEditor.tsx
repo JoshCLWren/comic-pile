@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Modal from '../Modal'
 import { useDebounce } from '../../hooks/useDebounce'
 import {
@@ -78,6 +78,10 @@ export function TagEditor({
   const debouncedSearch = useDebounce(search, 250)
   const usable = useTags(debouncedSearch)
   const [newName, setNewName] = useState('')
+  // Latest typed name outside render state. An in-flight creation resolves
+  // against a stale closure of `newName`, so it can only notice that the
+  // viewer renamed the draft by reading this ref (PR #3996 review).
+  const typedNameRef = useRef('')
   const debouncedNewName = useDebounce(newName, 250)
   // Usable-tag lookup for the name being typed so an exact normalized match
   // blocks creation and offers reuse instead of a duplicate (issue #3423).
@@ -86,14 +90,22 @@ export function TagEditor({
   const nameLookup = useTags(debouncedNewName.trim() ? debouncedNewName : undefined)
   const normalizedTypedName = newName.trim().toLowerCase()
   const debouncedNormalizedName = debouncedNewName.trim().toLowerCase()
+  const [newColor, setNewColor] = useState<string>(DEFAULT_TAG_COLOR_NAME)
+  const [pendingNearMatches, setPendingNearMatches] = useState<NearMatch[] | null>(null)
+  // The private tag the first creation pass already persisted while it paused
+  // on similar global names. Creating a tag is not a preview: the row exists,
+  // so it must be excluded from exact-duplicate detection (otherwise the
+  // refreshed lookup hides the guidance) and reused when the viewer continues
+  // with the private tag instead of re-creating it.
+  const [pendingCreatedTag, setPendingCreatedTag] = useState<Tag | null>(null)
   const exactDuplicate =
     debouncedNormalizedName && debouncedNormalizedName === normalizedTypedName
       ? ((nameLookup.data?.tags ?? []).find(
-          (tag) => tag.normalized_name === debouncedNormalizedName,
+          (tag) =>
+            tag.normalized_name === debouncedNormalizedName &&
+            tag.id !== pendingCreatedTag?.id,
         ) ?? null)
       : null
-  const [newColor, setNewColor] = useState<string>(DEFAULT_TAG_COLOR_NAME)
-  const [pendingNearMatches, setPendingNearMatches] = useState<NearMatch[] | null>(null)
   const [managingTag, setManagingTag] = useState<Tag | null>(null)
   const [manageName, setManageName] = useState('')
   const [manageColor, setManageColor] = useState('')
@@ -141,6 +153,28 @@ export function TagEditor({
     setFailure(null)
   }
 
+  /** Keep the ref and the visible draft in lockstep for every name write. */
+  const setDraftName = (value: string) => {
+    typedNameRef.current = value
+    setNewName(value)
+  }
+
+  const clearDraftName = () => setDraftName('')
+
+  /**
+   * True while the on-screen draft still names the request that just
+   * finished. Name edits rewrite `typedNameRef` through `setDraftName`, so a
+   * mismatch means the viewer renamed the draft while that request waited.
+   * The name input and create button stay interactive during an assignment
+   * (the create button does not wait on `assign.isPending`), so a newer
+   * creation can reach the similar-name prompt before an earlier reuse or
+   * global-pick assignment resolves or fails; a later reset may only touch
+   * continuation state that still belongs to the name it was started with
+   * (PR #3996 review).
+   */
+  const draftStillNames = (nameAtStart: string) =>
+    typedNameRef.current.trim().toLowerCase() === nameAtStart.trim().toLowerCase()
+
   async function handleAssign(tag: Tag) {
     clearFeedback()
     const inherited = explainIfInherited(tag)
@@ -169,11 +203,15 @@ export function TagEditor({
       setNotice(inherited)
       return
     }
+    const typedNameAtStart = typedNameRef.current
     try {
       await assign.mutateAsync({ id: tag.id, data: payload })
       setNotice(`Used existing tag “${tag.name}”.`)
-      setNewName('')
-      setPendingNearMatches(null)
+      if (draftStillNames(typedNameAtStart)) {
+        clearDraftName()
+        setPendingNearMatches(null)
+        setPendingCreatedTag(null)
+      }
     } catch (error) {
       if (tag.scope === 'global') {
         setFailure(
@@ -182,6 +220,14 @@ export function TagEditor({
       } else {
         setFailure(tagErrorMessage(error, `Could not add “${tag.name}”.`))
       }
+    }
+    // The reuse path means we are not continuing with the privately-created
+    // tag, so its continuation state must not linger — but only while the
+    // draft still names the reuse that finished. After a rename the pending
+    // tag may belong to a newer creation whose similar-name guidance has to
+    // survive this settled assignment (PR #3996 review).
+    if (draftStillNames(typedNameAtStart)) {
+      setPendingCreatedTag(null)
     }
   }
 
@@ -192,11 +238,18 @@ export function TagEditor({
       setNotice(inherited)
       return
     }
+    const typedNameAtStart = typedNameRef.current
     try {
       await assign.mutateAsync({ id: match.id, data: payload })
       setNotice(`Used global tag “${match.name}”.`)
-      setNewName('')
-      setPendingNearMatches(null)
+      // Same draft-identity guard as handleUseExisting: a rename while this
+      // assignment waits may hand the continuation state to a newer creation
+      // that this settling global pick must not discard (PR #3996 review).
+      if (draftStillNames(typedNameAtStart)) {
+        clearDraftName()
+        setPendingNearMatches(null)
+        setPendingCreatedTag(null)
+      }
     } catch {
       setFailure(
         `“${match.name}” is a global tag, which only admins can assign. Create your private tag instead, or ask an admin.`,
@@ -223,7 +276,7 @@ export function TagEditor({
    * the API to the global tag (reused, never duplicated). A merely similar
    * global name pauses for an explicit choice: use the global match (admins
    * assign it directly; other users are told why they cannot) or continue
-   * and create the private tag anyway.
+   * with the private tag the first pass already created (issue #3766).
    */
   async function handleCreate(forcePrivate: boolean) {
     clearFeedback()
@@ -232,12 +285,52 @@ export function TagEditor({
       setFailure('Enter a tag name first.')
       return
     }
+    // Continuing after the near-match pause must not call creation again: the
+    // first pass already persisted this tag, and the API refuses a second
+    // private tag with the same normalized name.
+    if (forcePrivate && pendingCreatedTag) {
+      try {
+        // The palette stays live while the guidance is open, so a color
+        // chosen after the first pass persisted the tag must be saved before
+        // the assignment instead of being silently dropped (PR #3996 review).
+        if (tagColorName(pendingCreatedTag.color) !== newColor) {
+          await update.mutateAsync({
+            id: pendingCreatedTag.id,
+            data: { color: newColor },
+          })
+        }
+        await assign.mutateAsync({ id: pendingCreatedTag.id, data: payload })
+        setNotice(`Created and added “${pendingCreatedTag.name}”.`)
+        clearDraftName()
+        setNewColor(DEFAULT_TAG_COLOR_NAME)
+        setPendingNearMatches(null)
+        setPendingCreatedTag(null)
+      } catch (error) {
+        setFailure(
+          tagErrorMessage(error, `Could not add “${pendingCreatedTag.name}”.`),
+        )
+      }
+      return
+    }
+    setPendingCreatedTag(null)
     try {
       const result = await create.mutateAsync({
         name,
         color: newColor,
         include_near_matches: !forcePrivate,
       })
+      // The viewer may rename the draft while the request is in flight. The
+      // first pass still persisted (or matched) that submitted tag, but a late
+      // result must never become the continuation target for the name now on
+      // screen: assigning it would add the wrong tag (PR #3996 review).
+      if (typedNameRef.current.trim().toLowerCase() !== name.toLowerCase()) {
+        setPendingNearMatches(null)
+        setPendingCreatedTag(null)
+        setNotice(
+          `“${result.tag.name}” is ready to use, but the name field changed while that was saving. Add it from the tag list.`,
+        )
+        return
+      }
       if (result.redirected_to_global) {
         const sources = inheritedById.get(result.tag.id)
         if (sources) {
@@ -245,15 +338,17 @@ export function TagEditor({
             `“${name}” matches global tag “${result.tag.name}” — ` +
               `already tags this ${targetNoun} via ${formatSourceNames(sources)}.`,
           )
-          setNewName('')
+          clearDraftName()
           setPendingNearMatches(null)
+          setPendingCreatedTag(null)
           return
         }
         try {
           await assign.mutateAsync({ id: result.tag.id, data: payload })
           setNotice(`“${name}” matches global tag “${result.tag.name}” — used it.`)
-          setNewName('')
+          clearDraftName()
           setPendingNearMatches(null)
+          setPendingCreatedTag(null)
         } catch {
           setFailure(
             `“${name}” matches global tag “${result.tag.name}”, which only admins can assign.`,
@@ -262,14 +357,16 @@ export function TagEditor({
         return
       }
       if (!forcePrivate && result.near_matches.length > 0) {
+        setPendingCreatedTag(result.tag)
         setPendingNearMatches(result.near_matches)
         return
       }
       await assign.mutateAsync({ id: result.tag.id, data: payload })
       setNotice(`Created and added “${result.tag.name}”.`)
-      setNewName('')
+      clearDraftName()
       setNewColor(DEFAULT_TAG_COLOR_NAME)
       setPendingNearMatches(null)
+      setPendingCreatedTag(null)
     } catch (error) {
       const message = tagErrorMessage(error, `Could not create “${name}”.`)
       // A duplicate conflict means an exact usable tag already exists (the
@@ -473,8 +570,9 @@ export function TagEditor({
               type="text"
               value={newName}
               onChange={(event) => {
-                setNewName(event.target.value)
+                setDraftName(event.target.value)
                 setPendingNearMatches(null)
+                setPendingCreatedTag(null)
               }}
               placeholder="New tag name…"
               aria-label="New tag name"
@@ -560,7 +658,7 @@ export function TagEditor({
                   <button
                     type="button"
                     onClick={() => void handleCreate(true)}
-                    disabled={create.isPending}
+                    disabled={create.isPending || update.isPending || assign.isPending}
                     className="rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-text-primary)] transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
                   >
                     Create private anyway

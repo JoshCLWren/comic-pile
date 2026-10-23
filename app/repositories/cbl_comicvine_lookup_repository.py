@@ -41,6 +41,30 @@ class CBLComicvineOccurrenceRows:
     occurrences: tuple[CBLComicvineOccurrenceRow, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class CBLSourceCoverageRow:
+    """One shared source list that contains at least one compared input comic."""
+
+    source_list: CBLSourceList
+    source: CBLSource
+    entries_total: int
+    distinct_source_issues: int
+
+
+@dataclass(frozen=True, slots=True)
+class CBLMatchedSourceEntryRow:
+    """One source occurrence whose exact Comic Vine issue ID matches an input ID."""
+
+    list_id: int
+    position: int
+    comicvine_issue_id: str
+    series_name: str
+    issue_number: str
+    volume_year: int | None
+    publication_year: int | None
+    comicvine_volume_id: str | None
+
+
 def _matching_issue_identity_ids(comicvine_issue_id: str) -> Select[int]:
     """Return the Comic Vine issue identity rows for one exact external ID.
 
@@ -199,4 +223,157 @@ async def find_cbl_source_occurrences_by_comicvine_issue(
             )
             for row in rows
         ),
+    )
+
+
+async def find_cbl_source_coverage_candidates(
+    db: AsyncSession,
+    *,
+    comicvine_issue_ids: tuple[str, ...],
+) -> tuple[CBLSourceCoverageRow, ...]:
+    """Return shared source lists that contain at least one exact input identity.
+
+    Candidate discovery is limited to active source lists. A list qualifies
+    only when one of its entries joins a Comic Vine issue identity whose exact
+    external ID is in ``comicvine_issue_ids``. Same-titled volumes, same issue
+    numbers, and reader-owned Issue rows never create a candidate.
+
+    Args:
+        db: Database session.
+        comicvine_issue_ids: Distinct exact Comic Vine issue external IDs.
+
+    Returns:
+        One aggregate row per candidate source list with its total entry count
+        and its distinct confirmed Comic Vine issue count.
+    """
+    if not comicvine_issue_ids:
+        return ()
+
+    issue_identity = aliased(ExternalIdentity)
+    matching_list_ids = (
+        select(CBLSourceEntry.list_id.label("list_id"))
+        .join(
+            issue_identity,
+            and_(
+                issue_identity.id == CBLSourceEntry.external_issue_identity_id,
+                issue_identity.provider == COMICVINE_PROVIDER,
+                issue_identity.entity_type == ISSUE_ENTITY_TYPE,
+            ),
+        )
+        .where(issue_identity.external_id.in_(comicvine_issue_ids))
+        .distinct()
+        .subquery()
+    )
+
+    statement = (
+        select(
+            CBLSourceList,
+            CBLSource,
+            func.count(CBLSourceEntry.id).label("entries_total"),
+            func.count(func.distinct(issue_identity.id)).label("distinct_source_issues"),
+        )
+        .join(CBLSource, CBLSource.id == CBLSourceList.source_id)
+        .join(CBLSourceEntry, CBLSourceEntry.list_id == CBLSourceList.id)
+        .outerjoin(
+            issue_identity,
+            and_(
+                issue_identity.id == CBLSourceEntry.external_issue_identity_id,
+                issue_identity.provider == COMICVINE_PROVIDER,
+                issue_identity.entity_type == ISSUE_ENTITY_TYPE,
+            ),
+        )
+        .where(
+            CBLSourceList.active.is_(True),
+            CBLSourceList.id.in_(select(matching_list_ids.c.list_id)),
+        )
+        .group_by(CBLSourceList.id, CBLSource.id)
+        .order_by(CBLSourceList.name.asc(), CBLSourceList.id.asc())
+    )
+    rows = (await db.execute(statement)).all()
+    return tuple(
+        CBLSourceCoverageRow(
+            source_list=row[0],
+            source=row[1],
+            entries_total=int(row[2]),
+            distinct_source_issues=int(row[3]),
+        )
+        for row in rows
+    )
+
+
+async def find_matched_cbl_source_entries(
+    db: AsyncSession,
+    *,
+    list_ids: tuple[int, ...],
+    comicvine_issue_ids: tuple[str, ...],
+) -> tuple[CBLMatchedSourceEntryRow, ...]:
+    """Return every matching source occurrence inside the candidate lists.
+
+    The rows keep the source's original position order, including repeated
+    occurrences of the same exact issue identity. Volume identity is reported
+    as context so callers can render the source without granting ownership.
+
+    Args:
+        db: Database session.
+        list_ids: Candidate source list IDs.
+        comicvine_issue_ids: Distinct exact Comic Vine issue external IDs.
+
+    Returns:
+        Matching source occurrences ordered by list, source position, and row ID.
+    """
+    if not list_ids or not comicvine_issue_ids:
+        return ()
+
+    issue_identity = aliased(ExternalIdentity)
+    volume_identity = aliased(ExternalIdentity)
+    statement = (
+        select(
+            CBLSourceEntry.list_id,
+            CBLSourceEntry.position,
+            issue_identity.external_id,
+            CBLSourceEntry.series_name,
+            CBLSourceEntry.issue_number,
+            CBLSourceEntry.volume_year,
+            CBLSourceEntry.publication_year,
+            volume_identity.external_id,
+        )
+        .join(
+            issue_identity,
+            and_(
+                issue_identity.id == CBLSourceEntry.external_issue_identity_id,
+                issue_identity.provider == COMICVINE_PROVIDER,
+                issue_identity.entity_type == ISSUE_ENTITY_TYPE,
+            ),
+        )
+        .outerjoin(
+            volume_identity,
+            and_(
+                volume_identity.id == CBLSourceEntry.external_series_identity_id,
+                volume_identity.provider == COMICVINE_PROVIDER,
+                volume_identity.entity_type == SERIES_ENTITY_TYPE,
+            ),
+        )
+        .where(
+            CBLSourceEntry.list_id.in_(list_ids),
+            issue_identity.external_id.in_(comicvine_issue_ids),
+        )
+        .order_by(
+            CBLSourceEntry.list_id.asc(),
+            CBLSourceEntry.position.asc(),
+            CBLSourceEntry.id.asc(),
+        )
+    )
+    rows = (await db.execute(statement)).all()
+    return tuple(
+        CBLMatchedSourceEntryRow(
+            list_id=int(row[0]),
+            position=int(row[1]),
+            comicvine_issue_id=str(row[2]),
+            series_name=str(row[3]),
+            issue_number=str(row[4]),
+            volume_year=None if row[5] is None else int(row[5]),
+            publication_year=None if row[6] is None else int(row[6]),
+            comicvine_volume_id=None if row[7] is None else str(row[7]),
+        )
+        for row in rows
     )

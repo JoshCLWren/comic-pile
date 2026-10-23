@@ -47,3 +47,15 @@ def test_stage_does_not_copy_policy_from_pr_checkout() -> None:
     staging = worker.split("stage_trusted_review_controller() {", 1)[1].split("\n}", 1)[0]
     assert staging.index('cp scripts/factory_eligibility.py') < staging.index('TRUSTED_REVIEW_CONTROLLER=')
     assert '[[ -z "${TRUSTED_REVIEW_CONTROLLER:-}" ]] || return 0' in staging
+
+
+def test_dependency_merge_gate_modules_are_staged_from_trusted_main() -> None:
+    """Both worker stages pin the dependency parser and closure module."""
+    for name in ("free-model-factory-worker.sh", "free-model-factory-worker-primitives.sh"):
+        content = (ROOT / ".github/scripts" / name).read_text()
+        staging = content.split("stage_trusted_review_controller() {", 1)[1].split("\n}", 1)[0]
+        for dep in (
+            ".github/scripts/factory_post_merge_closure.py",
+            "scripts/factory_eligibility.py",
+        ):
+            assert f"cp {dep} " in staging, (name, dep)

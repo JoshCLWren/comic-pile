@@ -436,11 +436,11 @@ async def list_sessions(
                             if resolved_number is not None:
                                 issue_id_pending = thread.next_unread_issue_id
                                 issue_number_pending = resolved_number
-                    agg = rate_agg.get(
+                    agg_pending: _RateAggregate = rate_agg.get(
                         sid, {"issues_read": 0, "last_rating": None}
                     )
-                    issues_read = agg["issues_read"] or None
-                    last_rating = agg["last_rating"]
+                    issues_read = agg_pending["issues_read"] or None
+                    last_rating = agg_pending["last_rating"]
                     raw_result = roll_event.result if roll_event else None
                     safe_result = raw_result if raw_result and raw_result > 0 else None
                     active_threads_dict[sid] = ActiveThreadInfo(

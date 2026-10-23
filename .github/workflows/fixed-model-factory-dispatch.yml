@@ -72,6 +72,9 @@ jobs:
         with:
           ref: main
 
+      - name: Install factory syntax parsers
+        uses: ./.github/actions/factory-syntax
+
       - name: Install pinned Rotisserie decision CLI
         id: rotisserie_install
         shell: bash

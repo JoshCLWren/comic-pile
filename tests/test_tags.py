@@ -387,6 +387,105 @@ class TestDuplicatePrevention:
         assert result.tag.scope == "private"
         assert result.tag.name == "Avengers Assemble"
 
+    async def test_service_suggests_near_matches_from_schema_default(
+        self, admin_user: User, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Schema default ``include_near_matches=True`` flows through to the service layer."""
+        service = TagService(async_db)
+        await service.create_tag(admin_user, "PlanTag", color="red", scope="global")
+
+        # This is a service-level test: it verifies the TagCreate schema default
+        # (True) that the endpoint threads through, not the HTTP layer itself.
+        from app.schemas.tags import TagCreate
+        request = TagCreate(name="PlanTagger", color="blue")
+        assert request.include_near_matches is True
+
+        result = await service.create_tag(
+            non_admin_user,
+            name=request.name,
+            color=request.color,
+            scope=request.scope,
+            include_near_matches=request.include_near_matches,
+        )
+
+        # Not an exact match, so no redirect; similar global tags are suggested.
+        assert result.redirected_to_global is False
+        assert result.tag.scope == "private"
+        assert result.tag.name == "PlanTagger"
+        assert len(result.near_matches) > 0
+        assert any(tag.name == "PlanTag" for tag in result.near_matches)
+
+    async def test_api_suggests_near_matches_via_endpoint(
+        self,
+        admin_auth_client: AsyncClient,
+        user_auth_client: AsyncClient,
+        admin_user: User,
+        non_admin_user: User,
+        async_db: AsyncSession,
+    ) -> None:
+        """API endpoint suggests near matches by default when creating similar private tags."""
+        # Create a global tag first
+        global_resp = await admin_auth_client.post(
+            "/api/v1/tags/", json={"name": "PlanTag", "color": "red", "scope": "global"}
+        )
+        assert global_resp.status_code == 200
+
+        # Create a private tag with similar name via API
+        resp = await user_auth_client.post(
+            "/api/v1/tags/", json={"name": "PlanTagger", "color": "blue"}
+        )
+        assert resp.status_code == 200
+
+        data = resp.json()
+        assert data["tag"]["name"] == "PlanTagger"
+        assert data["tag"]["scope"] == "private"
+        assert data["redirected_to_global"] is False
+        # Should include near matches with the global tag
+        assert len(data["near_matches"]) > 0
+        assert any(match["name"] == "PlanTag" for match in data["near_matches"])
+
+    async def test_explicit_opt_out_suppresses_near_match_suggestions(
+        self,
+        admin_auth_client: AsyncClient,
+        user_auth_client: AsyncClient,
+        admin_user: User,
+        non_admin_user: User,
+        async_db: AsyncSession,
+    ) -> None:
+        """An explicit ``include_near_matches=False`` suppresses the suggestions.
+
+        The request schema now opts in by default, so the opt-out is the only
+        way to create a similar private tag without the near-match list. The
+        same name is used on both requests so the flag is the only difference.
+        """
+        service = TagService(async_db)
+        await service.create_tag(admin_user, "PlanTag", color="red", scope="global")
+
+        result = await service.create_tag(
+            non_admin_user,
+            "PlanTagset",
+            color="blue",
+            include_near_matches=False,
+        )
+        assert result.redirected_to_global is False
+        assert result.near_matches == []
+
+        default_resp = await admin_auth_client.post(
+            "/api/v1/tags/", json={"name": "PlanTagging", "color": "blue"}
+        )
+        assert default_resp.status_code == 200
+        default_data = default_resp.json()
+        assert any(match["name"] == "PlanTag" for match in default_data["near_matches"])
+
+        opt_out_resp = await user_auth_client.post(
+            "/api/v1/tags/",
+            json={"name": "PlanTagging", "color": "blue", "include_near_matches": False},
+        )
+        assert opt_out_resp.status_code == 200
+        opt_out_data = opt_out_resp.json()
+        assert opt_out_data["redirected_to_global"] is False
+        assert opt_out_data["near_matches"] == []
+
     async def test_same_private_name_allowed_for_different_users(
         self, admin_user: User, non_admin_user: User, async_db: AsyncSession
     ) -> None:

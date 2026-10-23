@@ -1,14 +1,21 @@
 """Regression tests for test-only browser helpers."""
 
+import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+)
 
 from app.services.test_helpers import (
+    create_test_cbl_source,
     create_test_issue_identity,
     create_test_reading_order,
     expire_current_session,
@@ -212,6 +219,156 @@ def _effective_route_paths(app: object) -> set[str]:
         nested_prefix = f"{prefix}{getattr(include_context, 'prefix', '')}"
         stack[0:0] = [(nested, nested_prefix) for nested in nested_routes]
     return paths
+
+
+@pytest.mark.asyncio
+async def test_create_test_cbl_source_reuses_shared_comicvine_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Seeding many CBL sources must reuse one shared Comic Vine identity row."""
+    from app.schemas.test_fixtures import TestCblSourceCreate, TestCblSourceEntryCreate
+
+    monkeypatch.setenv("TEST_ENVIRONMENT", "true")
+    identity = SimpleNamespace(id=88)
+    issue = SimpleNamespace(id=12, thread_id=4)
+    owner = SimpleNamespace(id=4, user_id=99)
+    db = AsyncMock(spec=AsyncSession)
+    # Statement order: identity upsert, identity re-select, issue select,
+    # owner select, mapping upsert, mapping re-select.
+    db.execute.side_effect = [
+        Mock(),
+        _query_result(identity),
+        _query_result(issue),
+        _query_result(owner),
+        Mock(),
+        _query_result(Mock()),  # Mock for mapping re-select
+    ]
+    db.flush.return_value = None
+    db.commit.return_value = None
+    db.add.side_effect = lambda obj: setattr(obj, "id", 7)
+
+    response = await create_test_cbl_source(
+        db,
+        user_id=99,
+        payload=TestCblSourceCreate(
+            name="Fixture Compare A",
+            source_path="Fixtures/Compare A.cbl",
+            content_hash="hash-a",
+            revision_sha="rev-a",
+            repository="fixture-repo-a",
+            entries=[
+                TestCblSourceEntryCreate(
+                    position=1,
+                    series_name="Compare Series",
+                    issue_number="1",
+                    issue_id=12,
+                    comicvine_issue_id="4000-compare-a",
+                )
+            ],
+        ),
+    )
+
+    assert response.entries[0].comicvine_issue_id == "4000-compare-a"
+    added_types = [call.args[0].__class__.__name__ for call in db.add.call_args_list]
+    assert "ExternalIdentity" not in added_types
+    assert "IssueExternalIdentityMapping" not in added_types
+    # The identity and mapping writes must be database-level upserts, not
+    # check-then-create reads that can race under concurrent fixture calls:
+    # identity upsert, identity re-select, issue, owner, mapping upsert, mapping re-select.
+    assert db.execute.await_count == 6
+
+
+@pytest.mark.asyncio
+async def test_create_test_cbl_source_upserts_shared_identity_concurrently(
+    monkeypatch: pytest.MonkeyPatch,
+    async_db_committed: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Two concurrent fixture calls sharing one Comic Vine ID must never race.
+
+    The collector used to check-then-create the shared ExternalIdentity row, so
+    two overlapping fixture calls could both pass the existence test and violate
+    the unique constraint. The database-level upsert lets the losing call's
+    insert no-op instead.
+    """
+    from app.models.external_identity import (
+        ExternalIdentity,
+        IssueExternalIdentityMapping,
+    )
+    from app.models.issue import Issue
+    from app.models.thread import Thread
+    from app.models.user import User
+    from app.schemas.test_fixtures import TestCblSourceCreate, TestCblSourceEntryCreate
+
+    monkeypatch.setenv("TEST_ENVIRONMENT", "true")
+
+    owner = User(username="cbl-concurrency-user")
+    async_db_committed.add(owner)
+    await async_db_committed.flush()
+    thread = Thread(
+        title="Concurrency Thread",
+        format="comic",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=0,
+        status="active",
+        user_id=owner.id,
+        reading_progress="unstarted",
+    )
+    async_db_committed.add(thread)
+    await async_db_committed.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1)
+    async_db_committed.add(issue)
+    await async_db_committed.commit()
+
+    payload = TestCblSourceCreate(
+        name="Fixture Concurrency A",
+        entries=[
+            TestCblSourceEntryCreate(
+                position=1,
+                series_name="Concurrency Series",
+                issue_number="1",
+                issue_id=issue.id,
+                comicvine_issue_id="4000-concurrency-shared",
+            )
+        ],
+    )
+    second_session_maker = async_sessionmaker(bind=db_engine, expire_on_commit=False)
+
+    async with second_session_maker() as second_session:
+        first_response, second_response = await asyncio.gather(
+            create_test_cbl_source(
+                async_db_committed,
+                user_id=owner.id,
+                payload=payload,
+            ),
+            create_test_cbl_source(
+                second_session,
+                user_id=owner.id,
+                payload=payload,
+            ),
+        )
+
+    assert first_response.id != second_response.id
+    shared_id = "4000-concurrency-shared"
+    assert first_response.entries[0].comicvine_issue_id == shared_id
+    assert second_response.entries[0].comicvine_issue_id == shared_id
+
+    identities_total = await async_db_committed.scalar(
+        select(func.count())
+        .select_from(ExternalIdentity)
+        .where(ExternalIdentity.external_id == shared_id)
+    )
+    # Exactly one shared identity row survived two overlapping calls.
+    assert identities_total == 1
+
+    mappings_total = await async_db_committed.scalar(
+        select(func.count()).select_from(IssueExternalIdentityMapping).where(
+            IssueExternalIdentityMapping.issue_id == issue.id
+        )
+    )
+    # Exactly one confirmed mapping survived two overlapping calls too.
+    assert mappings_total == 1
 
 
 def test_test_helper_routes_are_mounted_only_in_test_environment(
