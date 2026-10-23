@@ -150,6 +150,7 @@ function renderPage() {
 async function openEditDialog() {
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Edit' }))
+  expect(await screen.findByLabelText('Notes')).toBeVisible()
   const addInput = await screen.findByTestId('issue-add-input')
   return { user, addInput }
 }

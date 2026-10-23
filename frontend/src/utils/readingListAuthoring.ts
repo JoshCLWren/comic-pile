@@ -99,6 +99,8 @@ function decodeCycleEdge(value: JsonValue): ReadingListCycleEdge | null {
   }
   if (isString(value.source_issue_name)) edge.source_issue_name = value.source_issue_name
   if (isString(value.target_issue_name)) edge.target_issue_name = value.target_issue_name
+  if (isNumber(value.source_thread_id) && Number.isSafeInteger(value.source_thread_id) && value.source_thread_id > 0) edge.source_thread_id = value.source_thread_id
+  if (isNumber(value.target_thread_id) && Number.isSafeInteger(value.target_thread_id) && value.target_thread_id > 0) edge.target_thread_id = value.target_thread_id
   return edge
 }
 
@@ -159,20 +161,28 @@ export function describePredecessorChange(change: ReadingListPredecessorChange):
  *
  * @param edges - Structured cycle edges returned with the 422.
  * @param nameFor - Resolves a persisted Issue ID to its display name.
+ * @param context - Create reports a pre-existing cycle; save reports a rejected order.
  * @returns Actionable sentence readers can act on.
  */
 export function describeCyclePath(
   edges: ReadingListCycleEdge[],
   nameFor: (issueId: number) => string,
+  context: 'create' | 'save' = 'save',
 ): string {
+  const prefix = context === 'create'
+    ? 'An existing reading cycle prevents creating this list'
+    : 'This order would create a reading cycle'
+  const remediation = context === 'create'
+    ? 'Review the affected reading requirements, then try again. No new list was saved.'
+    : 'Change the sequence and try again.'
   const first = edges[0]
   if (!first) {
-    return 'This order would create a reading cycle. Change the sequence and try again.'
+    return `${prefix}. ${remediation}`
   }
   const resolve = (issueId: number, provided?: string) => provided ?? nameFor(issueId)
   const nodes = [resolve(first.source_issue_id, first.source_issue_name)]
   for (const edge of edges) nodes.push(resolve(edge.target_issue_id, edge.target_issue_name))
-  return `This order would create a reading cycle: ${nodes.join(' → ')}. Change the sequence and try again.`
+  return `${prefix}: ${nodes.join(' → ')}. ${remediation}`
 }
 
 /**
