@@ -961,16 +961,46 @@ while (( $(remaining) > 480 )); do
   if [[ "$SOURCE" != 'kilo-auto' ]] && \
     grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
     machine_merge_gates_pass "$NUMBER" "$current"; then
-    log "all exact-head gates passed for PR #${NUMBER}; merging ${current}"
+    # Run the trusted main-branch factory review controller's gates command
+    # to enforce exact-head acceptance, dependency, and delivery gates before merge.
+    # This replaces the reduced gate check in machine_merge_gates_pass with the
+    # authoritative controller that validates linked-issue prerequisites.
+    stage_trusted_review_controller
+    GATES_OUTPUT="$(python3 "$TRUSTED_REVIEW_CONTROLLER" gates \
+      --pr "$NUMBER" --expected-head "$current" 2>&1)" || GATES_OUTPUT=""
+    GATES_DECISION="$(echo "$GATES_OUTPUT" | python3 -c '
+import sys, json
+try:
+    data = json.loads(sys.stdin.read().strip())
+    print(data.get("decision", ""))
+except Exception:
+    print("")
+')"
+    if [[ -z "$GATES_DECISION" || "$GATES_DECISION" != "pass" ]]; then
+      log "trusted controller gates for PR #${NUMBER} decision=${GATES_DECISION:-empty}; not merging (reason: $(echo "$GATES_OUTPUT" | python3 -c '
+import sys, json
+try:
+    data = json.loads(sys.stdin.read().strip()
+    print(data.get("reason", "no decision"))
+except Exception:
+    print(sys.stdin.read()[:200])
+') ))"
+      # Do not merge: release lease and select other work
+      if [[ "$SOURCE" != 'kilo-auto' ]]; then
+        release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'gate-denied'
+      fi
+      continue
+    fi
+    log "trusted controller gates passed for PR #${NUMBER}; merging ${current}"
     gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
     factory_dispatch_production_deploy "Factory ${WORKER} merged PR #${NUMBER}"
+    # Use the trusted post-merge closure path instead of raw gh issue close.
+    # This ensures dependency-aware closure, label normalization, and durable
+    # marker comments are applied consistently.
     issue_number="$(linked_issue_from_pr "$NUMBER")" || return 3
     if [[ -n "$issue_number" ]]; then
-      state="$(gh issue view "$issue_number" --json state --jq .state 2>/dev/null || true)"
-      if [[ "$state" == 'OPEN' ]]; then
-        gh issue close "$issue_number" --reason completed \
-          --comment "Closed after Factory ${WORKER} merged PR #${NUMBER} through the exact-head gates."
-      fi
+      python3 .github/scripts/factory_post_merge_closure.py close \
+        --pr "$NUMBER" --dry-run false >/dev/null 2>&1 || true
     fi
     continue
   fi
