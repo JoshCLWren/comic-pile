@@ -26,11 +26,6 @@ export function useKeepalive(enabled = true) {
   const isPrewarmingRef = useRef<boolean>(false)
   const [isWarming, setIsWarming] = useState(false)
 
-  // Update last activity timestamp
-  const handleActivity = useCallback(() => {
-    lastActivityRef.current = Date.now()
-  }, [])
-
   // Check if user is considered active (activity within timeout)
   const isUserActive = useCallback(() => {
     return Date.now() - lastActivityRef.current < ACTIVITY_TIMEOUT_MS
@@ -48,7 +43,7 @@ export function useKeepalive(enabled = true) {
     }
 
     try {
-      await api.get('/api/keepalive', { timeout: 5000 })
+      await api.get('/keepalive', { timeout: 5000 })
     } catch (error) {
       // Silently ignore keepalive failures - they're best-effort
       console.debug('Keepalive ping failed:', error)
@@ -83,18 +78,33 @@ export function useKeepalive(enabled = true) {
     }, KEEPALIVE_INTERVAL_MS)
   }, [callKeepalive, isUserActive, stopInterval])
 
+  // Update last activity timestamp and restart keepalive when activity resumes
+  const handleActivity = useCallback(() => {
+    const wasStopped = intervalRef.current === null
+    lastActivityRef.current = Date.now()
+    // Restart the timer (and prewarm) when activity resumes in a visible tab
+    // after it had been stopped due to idle or a hidden tab.
+    if (isVisibleRef.current && wasStopped) {
+      void callKeepalive(true)
+      startInterval()
+    }
+  }, [callKeepalive, startInterval])
+
   // Handle visibility change
   const handleVisibilityChange = useCallback(() => {
     const nowVisible = !document.hidden
     isVisibleRef.current = nowVisible
 
     if (nowVisible) {
+      // Treat returning to the tab as fresh activity so a long-hidden tab
+      // does not keep a stale "idle" timestamp that blocks restart.
+      lastActivityRef.current = Date.now()
       // Tab became visible - prewarm immediately (debounced)
       if (prewarmTimeoutRef.current) {
         clearTimeout(prewarmTimeoutRef.current)
       }
       prewarmTimeoutRef.current = setTimeout(() => {
-        if (!document.hidden && isUserActive()) {
+        if (!document.hidden) {
           void callKeepalive(true)
           startInterval()
         }
@@ -107,7 +117,7 @@ export function useKeepalive(enabled = true) {
         prewarmTimeoutRef.current = null
       }
     }
-  }, [callKeepalive, isUserActive, startInterval, stopInterval])
+  }, [callKeepalive, startInterval, stopInterval])
 
   // Set up event listeners
   useEffect(() => {

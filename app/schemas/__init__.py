@@ -33,6 +33,7 @@ from app.schemas.issue import (
     ThreadIssueCreatorsResponse,
 )
 from app.schemas.migration import MigrateToIssuesRequest
+from app.schemas.keepalive import KeepaliveResponse
 from app.schemas.performance_metric import (
     PerformanceMetricComparison,
     PerformanceMetricCreate,
@@ -139,6 +140,7 @@ __all__ = [
     "IssueOrderValidationResponse",
     # Migration
     "MigrateToIssuesRequest",
+    "KeepaliveResponse",
     # Performance Metrics
     "PerformanceMetricCreate",
     "PerformanceMetricQuery",
