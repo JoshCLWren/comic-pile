@@ -133,8 +133,14 @@ describe('ReadingPlanAddMaterial', () => {
 
     await waitFor(() => expect(mocks.preview).toHaveBeenCalledWith(42))
     expect(await screen.findByText('B.P.R.D.: The Black Flame #2')).toBeInTheDocument()
-    expect(screen.getByText('Already in ComicPile')).toBeInTheDocument()
-    expect(screen.getByText('Missing · selected to add')).toBeInTheDocument()
+    expect(screen.getByText('Already in ComicPile · reuse existing')).toBeInTheDocument()
+    expect(screen.getByText(/Series-level choices apply/)).toHaveTextContent(
+      'Individual entry choices override a series choice.',
+    )
+    expect(screen.getByText(/Three adoption choices per entry/)).toHaveTextContent(
+      'Include – add this comic (reuse existing or importable new) Exclude – leave this comic out Unresolved',
+    )
+    expect(screen.getByText('Missing · importable (new comic)')).toBeInTheDocument()
     expect(screen.getByText('Needs identity resolution')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add selected material' })).toBeDisabled()
   })

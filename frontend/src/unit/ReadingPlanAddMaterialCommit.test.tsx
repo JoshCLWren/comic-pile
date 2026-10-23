@@ -83,7 +83,7 @@ async function openSource(): Promise<void> {
   fireEvent.click(screen.getByRole('button', { name: 'Add from CBL' }))
   await waitFor(() => expect(mocks.discover).toHaveBeenCalledWith('B.P.R.D.'))
   fireEvent.click(await screen.findByRole('button', { name: /B\.P\.R\.D\. Plague of Frogs Vol\. 3/i }))
-  await screen.findByText('Already in ComicPile')
+  await screen.findByText('Already in ComicPile · reuse existing')
 }
 
 describe('ReadingPlanAddMaterial canonical commit', () => {
@@ -152,7 +152,7 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
       name: 'Include B.P.R.D.: The Universal Machine #1',
     })
     fireEvent.click(missingBox)
-    await screen.findByText('Missing · selected to add')
+    await screen.findByText('Missing · importable (new comic)')
     fireEvent.click(missingBox)
     expect(mocks.plan).not.toHaveBeenCalled()
     expect(await screen.findByText('Excluded')).toBeInTheDocument()
@@ -182,7 +182,7 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     const commitButton = await screen.findByRole('button', { name: 'Add selected material' })
     expect(commitButton).toBeDisabled()
     expect(
-      screen.getByText('Save or cancel planner changes before adding CBL material.'),
+      screen.getByText('Save or cancel unsaved planner changes before adding material.'),
     ).toBeVisible()
     fireEvent.click(commitButton)
     expect(mocks.commit).not.toHaveBeenCalled()
@@ -211,10 +211,10 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     await waitFor(() => expect(mocks.commit).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(onCommitPendingChange).toHaveBeenCalledWith(true))
 
-    expect(screen.getByRole('button', { name: 'Include all' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Include none' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Include all' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Include none' }))
+    expect(screen.getByRole('button', { name: 'Include all series' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Exclude all series' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Include all series' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Exclude all series' }))
     expect(onCommitPendingChange).toHaveBeenLastCalledWith(true)
     expect(mocks.commit).toHaveBeenCalledTimes(1)
     expect(mocks.plan).not.toHaveBeenCalled()
@@ -252,13 +252,13 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
 
     mocks.preview.mockResolvedValueOnce(preview())
     fireEvent.click(screen.getByRole('button', { name: /B\.P\.R\.D\. Plague of Frogs Vol\. 3/i }))
-    await screen.findByText('Missing · choose whether to add')
+    await screen.findByText('Missing · choose: include or exclude')
     fireEvent.click(
       screen.getByRole('checkbox', { name: 'Include B.P.R.D.: The Universal Machine #1' }),
     )
     expect(mocks.plan).not.toHaveBeenCalled()
     expect(screen.queryByText('selection boom')).not.toBeInTheDocument()
-    expect(await screen.findByText('Missing · selected to add')).toBeInTheDocument()
+    expect(await screen.findByText('Missing · importable (new comic)')).toBeInTheDocument()
   })
 
   it('shows the empty discovery state without inventing source material', async () => {

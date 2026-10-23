@@ -367,7 +367,7 @@ export default function ReadingPlanAddMaterial({
                   ))}
                 </div>
                 <p className="text-xs text-[var(--theme-text-dim)]">
-                  Series-level choices apply to all entries in that series group. Individual entry choices
+                  Series-level choices apply to all entries in that series group. Individual entry choices{' '}
                   <span className="font-medium">override</span> a series choice. Comics stay in ComicPile.
                 </p>
               </section>
