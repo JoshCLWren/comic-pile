@@ -250,3 +250,31 @@ async def set_entry_intents(
             entry.gate = gate
             entry.skipped = skipped
     await db.flush()
+
+
+async def create_list(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    name: str,
+    mode: Literal["strict", "loose"] = "loose",
+) -> CustomCBLList:
+    """Create a new user-owned custom CBL list.
+
+    Args:
+        db: Database session.
+        user_id: Owner user ID.
+        name: List name.
+        mode: List mode (strict or loose).
+
+    Returns:
+        The newly created list instance.
+    """
+    new_list = CustomCBLList(
+        user_id=user_id,
+        name=name,
+        mode=mode,
+    )
+    db.add(new_list)
+    await db.flush()
+    return new_list
