@@ -458,6 +458,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bootstrap-alias-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Bootstrap Alias Metrics
+         * @description Return this instance's bootstrap alias counters.
+         *
+         *     Args:
+         *         current_user: Authenticated user requesting the snapshot.
+         *
+         *     Returns:
+         *         Process-local aggregated counters sorted deterministically.
+         */
+        get: operations["get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/bug-reports/": {
         parameters: {
             query?: never;
@@ -6422,6 +6448,43 @@ export interface components {
         Body_import_csv_api_v1_admin_import_csv__post: {
             /** File */
             file: string;
+        };
+        /**
+         * BootstrapAliasCounterSchema
+         * @description One aggregated bootstrap alias tally.
+         */
+        BootstrapAliasCounterSchema: {
+            /**
+             * Alias
+             * @description Bootstrap alias: legacy, v1, or v2.
+             */
+            alias: string;
+            /**
+             * Count
+             * @description Number of observed hits.
+             */
+            count: number;
+            /**
+             * Status Class
+             * @description Response status class, e.g. 2xx.
+             */
+            status_class: string;
+            /**
+             * Web Origin
+             * @description True if request looked like a browser client.
+             */
+            web_origin: boolean;
+        };
+        /**
+         * BootstrapAliasSnapshotSchema
+         * @description Process-local bootstrap alias counters.
+         */
+        BootstrapAliasSnapshotSchema: {
+            /**
+             * Counters
+             * @description Aggregated counts per (alias, web_origin, status class).
+             */
+            counters?: components["schemas"]["BootstrapAliasCounterSchema"][];
         };
         /**
          * BugReportCreate
@@ -15758,6 +15821,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapAliasSnapshotSchema"];
                 };
             };
         };

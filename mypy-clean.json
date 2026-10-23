@@ -93,6 +93,7 @@
   "app/repositories/release_repository.py",
   "app/repositories/revoked_token_repository.py",
   "app/repositories/roll_repository.py",
+  "app/repositories/roll_v2_parity.py",
   "app/repositories/roll_v2_projection.py",
   "app/repositories/snooze_repository.py",
   "app/repositories/tag_repository.py",

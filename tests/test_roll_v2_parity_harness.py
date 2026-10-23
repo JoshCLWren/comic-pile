@@ -1,49 +1,214 @@
-"""Minimal harness usage proof for roll_v2 parity reads.
+"""Database-backed parity, mutation sensitivity, and measured fixture coverage."""
 
-Verifies that the parity helpers are callable and return expected shapes,
-and demonstrates mismatch detection for a deliberate rule divergence.
-"""
+from datetime import UTC, datetime
+from time import perf_counter
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.roll_v2_parity import fetch_parity_frontiers, fetch_parity_last_read
+from app.models import Event, User
+from app.schemas.roll_v2 import RollLastRead
+from app.services.roll_v2_parity import compare_roll_projection
+from app.services.roll_v2_projection import get_v2_rollable_projection
+from tests.test_roll_v2_projection import (
+    D1,
+    D2,
+    _active_session,
+    _catalog_series,
+    _confirm_identity,
+    _make_thread,
+    _projection_calls,
+    _rate,
+)
 
 
 @pytest.mark.asyncio
-async def test_parity_frontiers_empty(db: AsyncSession) -> None:
-    """Parity frontiers returns empty dict for empty input."""
-    result = await fetch_parity_frontiers(db, user_id=1, thread_ids=[])
-    assert result == {}
+@pytest.mark.parametrize("pool_size", [0, 1, 20, 100])
+async def test_real_projection_agrees_with_reference(
+    async_db: AsyncSession,
+    default_user: User,
+    pool_size: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Compare actual production output at representative candidate sizes."""
+    reading_session = await _active_session(async_db, default_user)
+    for position in range(pool_size):
+        await _make_thread(
+            async_db,
+            default_user,
+            title=f"Parity {position}",
+            issue_count=2,
+            queue_position=position + 1,
+            read_through=1,
+        )
+    started = perf_counter()
+    calls, (items, last_read, _) = await _projection_calls(
+        async_db,
+        monkeypatch,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        die_size=max(1, pool_size),
+        excluded_thread_ids=[],
+    )
+    projection_ms = (perf_counter() - started) * 1000
+    assert 1 <= calls <= 3
+    report = await compare_roll_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        items=items,
+        last_read=last_read,
+    )
+    print(
+        f"pool={pool_size} projection_queries={calls} projection_ms={projection_ms:.2f} "
+        f"reference_ms={report.reference_ms:.2f}"
+    )
+    assert report.compared_items == pool_size
+    assert report.reference_ms >= 0
+    assert report.differences == ()
 
 
 @pytest.mark.asyncio
-async def test_parity_last_read_shape(db: AsyncSession) -> None:
-    """Parity last read returns None when no matching session exists."""
-    # No session with matching user; should return None
-    result = await fetch_parity_last_read(db, session_id=999999, user_id=1)
-    assert result is None
+async def test_parity_reports_deliberately_wrong_frontier(
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A corrupted real response must produce a named, actionable mismatch."""
+    reading_session = await _active_session(async_db, default_user)
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Mismatch",
+        issue_count=2,
+        queue_position=1,
+    )
+    items, last_read, _ = await get_v2_rollable_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        die_size=6,
+        excluded_thread_ids=[],
+    )
+    items[0].issue.id = issues[1].id
+    report = await compare_roll_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        items=items,
+        last_read=last_read,
+    )
+    difference = next(value for value in report.differences if value.field == "issue.id")
+    assert difference.thread_id == thread.id
+    assert difference.expected == issues[0].id
+    assert difference.actual == issues[1].id
 
 
-def test_parity_mismatch_detection() -> None:
-    """Prove deliberate mismatch reporting.
+@pytest.mark.asyncio
+async def test_parity_checks_canonical_ratings_and_detects_a_changed_average(
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Independent history aggregation detects changes to production rating math."""
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Canonical",
+        issue_count=3,
+        queue_position=1,
+        read_through=2,
+    )
+    for position, issue in enumerate(issues):
+        await _confirm_identity(
+            async_db,
+            issue,
+            external_id=f"4000-parity-{position}",
+            series_id=20764,
+            series_name="Canonical",
+        )
+    await _catalog_series(async_db, external_id="20764", name="Canonical", count_of_issues=12)
+    await _rate(async_db, issues[0], rating=3.0, timestamp=D1)
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D2)
+    await _rate(async_db, issues[1], rating=5.0, timestamp=D2)
+    reading_session = await _active_session(async_db, default_user)
+    items, last_read, _ = await get_v2_rollable_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        die_size=6,
+        excluded_thread_ids=[],
+    )
+    report = await compare_roll_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        items=items,
+        last_read=last_read,
+    )
+    assert report.differences == ()
+    items[0].reader.average_rating = 0.0
+    changed = await compare_roll_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        items=items,
+        last_read=last_read,
+    )
+    assert any(
+        row.field == "reader.average_rating" and row.thread_id == thread.id
+        for row in changed.differences
+    )
 
-    The parity query previously excluded rating null events; after fixing
-    the rule to match production, a deliberate change would be caught by
-    comparing the two implementations. Here we assert the expected shape
-    so a future change that re-introduces the old filter can be detected
-    by a test failure.
-    """
-    # This is a placeholder assertion that documents the intended parity
-    # behavior. If the parity query diverges from production, update the
-    # expectation to surface the mismatch explicitly.
-    expected_fields = {"issue_id", "issue_number", "thread_id", "thread_title", "read_at"}
-    # Simulated ParityLastReadRow shape
-    sample = {
-        "issue_id": 1,
-        "issue_number": "1",
-        "thread_id": 2,
-        "thread_title": "T",
-        "read_at": None,
-    }
-    assert set(sample.keys()) == expected_fields
+
+@pytest.mark.asyncio
+async def test_parity_last_read_uses_current_number_and_null_rating_events(
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A renamed Issue and a null rating retain production last-read semantics."""
+    reading_session = await _active_session(async_db, default_user)
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Last read",
+        issue_count=2,
+        queue_position=1,
+        read_through=1,
+    )
+    async_db.add(
+        Event(
+            type="rate",
+            session_id=reading_session.id,
+            thread_id=thread.id,
+            issue_id=issues[0].id,
+            issue_number="old-number",
+            rating=None,
+            timestamp=datetime.now(UTC),
+        )
+    )
+    issues[0].issue_number = "renamed"
+    await async_db.flush()
+    items, last_read, _ = await get_v2_rollable_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        die_size=6,
+        excluded_thread_ids=[],
+    )
+    assert last_read is not None and last_read.issue_number == "renamed"
+    report = await compare_roll_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        items=items,
+        last_read=last_read,
+    )
+    assert report.differences == ()
+    wrong = RollLastRead.model_validate({**last_read.model_dump(), "issue_number": "old-number"})
+    changed = await compare_roll_projection(
+        async_db,
+        user_id=default_user.id,
+        session_id=reading_session.id,
+        items=items,
+        last_read=wrong,
+    )
+    assert [row.field for row in changed.differences] == ["last_read"]
