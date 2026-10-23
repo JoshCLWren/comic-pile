@@ -1141,6 +1141,151 @@
         "title": "CBLPlacement",
         "type": "object"
       },
+      "CBLReadingListCandidatesResponse": {
+        "description": "Confirmed-comic gaps plus ranked shared CBL sources for one Reading List.",
+        "properties": {
+          "candidates": {
+            "description": "Ranked source list comparisons in this page",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceComparisonMatch"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "candidates_total": {
+            "description": "Number of source lists containing at least one input comic",
+            "minimum": 0.0,
+            "title": "Candidates Total",
+            "type": "integer"
+          },
+          "entries": {
+            "description": "Every current list entry and its identity gap",
+            "items": {
+              "$ref": "#/components/schemas/CBLReadingListInputEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "input_confirmed_total": {
+            "description": "Distinct confirmed Comic Vine issue IDs compared",
+            "minimum": 0.0,
+            "title": "Input Confirmed Total",
+            "type": "integer"
+          },
+          "input_conflict_count": {
+            "description": "List entries with conflicting confirmed Comic Vine issue IDs",
+            "minimum": 0.0,
+            "title": "Input Conflict Count",
+            "type": "integer"
+          },
+          "input_entry_count": {
+            "description": "Every current list entry",
+            "minimum": 0.0,
+            "title": "Input Entry Count",
+            "type": "integer"
+          },
+          "input_ids": {
+            "description": "Distinct confirmed input IDs in list order",
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "input_missing_count": {
+            "description": "List entries without a confirmed Comic Vine issue ID",
+            "minimum": 0.0,
+            "title": "Input Missing Count",
+            "type": "integer"
+          },
+          "list_id": {
+            "description": "Owned Reading List ID",
+            "title": "List Id",
+            "type": "integer"
+          },
+          "list_name": {
+            "description": "Owned Reading List name",
+            "title": "List Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "input_entry_count",
+          "input_confirmed_total",
+          "input_missing_count",
+          "input_conflict_count",
+          "candidates_total"
+        ],
+        "title": "CBLReadingListCandidatesResponse",
+        "type": "object"
+      },
+      "CBLReadingListInputEntry": {
+        "description": "One current Reading List entry and its confirmed Comic Vine identity state.",
+        "properties": {
+          "comicvine_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confirmed Comic Vine issue ID when exactly one is confirmed",
+            "title": "Comicvine Issue Id"
+          },
+          "comicvine_issue_ids": {
+            "description": "Every confirmed Comic Vine issue ID, including conflicting IDs",
+            "items": {
+              "type": "string"
+            },
+            "title": "Comicvine Issue Ids",
+            "type": "array"
+          },
+          "identity_status": {
+            "description": "Whether this entry has one usable confirmed exact identity",
+            "enum": [
+              "confirmed",
+              "missing",
+              "conflict"
+            ],
+            "title": "Identity Status",
+            "type": "string"
+          },
+          "issue_id": {
+            "description": "ComicPile issue ID",
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "description": "Reader-facing issue number",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "description": "Current order position in the Reading List",
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "series_name": {
+            "description": "Reader-facing series name",
+            "title": "Series Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "issue_id",
+          "series_name",
+          "issue_number",
+          "identity_status"
+        ],
+        "title": "CBLReadingListInputEntry",
+        "type": "object"
+      },
       "CBLReconciliationEntryResponse": {
         "description": "Typed reconciliation and read-state data for one CBL source position.",
         "properties": {
@@ -1412,6 +1557,236 @@
           "has_prev"
         ],
         "title": "CBLReconciliationResponse",
+        "type": "object"
+      },
+      "CBLSourceComparisonMatch": {
+        "description": "Coverage and order comparison for one shared CBL source list.",
+        "properties": {
+          "declared_issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Issue count declared by the source list",
+            "title": "Declared Issue Count"
+          },
+          "distinct_source_issues": {
+            "description": "Distinct confirmed Comic Vine issues in the source list",
+            "minimum": 0.0,
+            "title": "Distinct Source Issues",
+            "type": "integer"
+          },
+          "duplicate_match_count": {
+            "description": "Matched positions beyond the first occurrence of each distinct input comic",
+            "minimum": 0.0,
+            "title": "Duplicate Match Count",
+            "type": "integer"
+          },
+          "entries_total": {
+            "description": "Every occurrence in the source list",
+            "minimum": 0.0,
+            "title": "Entries Total",
+            "type": "integer"
+          },
+          "input_coverage_percentage": {
+            "description": "Percentage of distinct input comics covered",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Input Coverage Percentage",
+            "type": "integer"
+          },
+          "input_total": {
+            "description": "Distinct input comics compared",
+            "minimum": 0.0,
+            "title": "Input Total",
+            "type": "integer"
+          },
+          "list_id": {
+            "description": "CBL source list ID",
+            "title": "List Id",
+            "type": "integer"
+          },
+          "list_name": {
+            "description": "Display name of the CBL source list",
+            "title": "List Name",
+            "type": "string"
+          },
+          "matched_input_count": {
+            "description": "Distinct input comics found in this source list",
+            "minimum": 0.0,
+            "title": "Matched Input Count",
+            "type": "integer"
+          },
+          "matched_input_ids": {
+            "description": "Matched distinct IDs in input order",
+            "items": {
+              "type": "string"
+            },
+            "title": "Matched Input Ids",
+            "type": "array"
+          },
+          "matched_occurrence_count": {
+            "description": "Source positions that hold a matching input comic",
+            "minimum": 0.0,
+            "title": "Matched Occurrence Count",
+            "type": "integer"
+          },
+          "missing_input_ids": {
+            "description": "Input IDs absent from this source list",
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Input Ids",
+            "type": "array"
+          },
+          "order_disagreement_count": {
+            "description": "Matched pairs whose relative order differs from the input order",
+            "minimum": 0.0,
+            "title": "Order Disagreement Count",
+            "type": "integer"
+          },
+          "order_pair_count": {
+            "description": "Comparable matched comic pairs",
+            "minimum": 0.0,
+            "title": "Order Pair Count",
+            "type": "integer"
+          },
+          "order_status": {
+            "description": "Relative order of matched distinct comics",
+            "enum": [
+              "same_order",
+              "reordered",
+              "not_comparable"
+            ],
+            "title": "Order Status",
+            "type": "string"
+          },
+          "revision_sha": {
+            "description": "Source revision the list was imported from",
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "score": {
+            "description": "Relevance score balancing coverage, precision, and order",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "integer"
+          },
+          "source_coverage_percentage": {
+            "description": "Percentage of this source's distinct comics that matched",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Source Coverage Percentage",
+            "type": "integer"
+          },
+          "source_only_issue_count": {
+            "description": "Distinct source comics whose exact ID is not in the input list",
+            "minimum": 0.0,
+            "title": "Source Only Issue Count",
+            "type": "integer"
+          },
+          "source_path": {
+            "description": "Reader-safe path of the CBL source file",
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_ref": {
+            "description": "Reader-safe ``repository:path`` source identity",
+            "title": "Source Ref",
+            "type": "string"
+          },
+          "source_repository": {
+            "description": "Reader-safe source repository identity",
+            "title": "Source Repository",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "revision_sha",
+          "entries_total",
+          "distinct_source_issues",
+          "matched_input_count",
+          "input_total",
+          "matched_occurrence_count",
+          "duplicate_match_count",
+          "source_only_issue_count",
+          "input_coverage_percentage",
+          "source_coverage_percentage",
+          "order_status",
+          "order_pair_count",
+          "order_disagreement_count",
+          "score"
+        ],
+        "title": "CBLSourceComparisonMatch",
+        "type": "object"
+      },
+      "CBLSourceComparisonRequest": {
+        "description": "Distinct confirmed Comic Vine issue IDs to compare against shared CBL sources.",
+        "properties": {
+          "comicvine_issue_ids": {
+            "description": "Confirmed Comic Vine issue IDs in the caller's intended order",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Comicvine Issue Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "comicvine_issue_ids"
+        ],
+        "title": "CBLSourceComparisonRequest",
+        "type": "object"
+      },
+      "CBLSourceComparisonResponse": {
+        "description": "Ranked shared CBL source lists for one confirmed input set.",
+        "properties": {
+          "candidates": {
+            "description": "Ranked source list comparisons in this page",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceComparisonMatch"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "candidates_total": {
+            "description": "Number of source lists containing at least one input comic",
+            "minimum": 0.0,
+            "title": "Candidates Total",
+            "type": "integer"
+          },
+          "comicvine_issue_ids": {
+            "description": "Distinct input IDs that were compared",
+            "items": {
+              "type": "string"
+            },
+            "title": "Comicvine Issue Ids",
+            "type": "array"
+          },
+          "input_total": {
+            "description": "Distinct input comics compared",
+            "minimum": 0.0,
+            "title": "Input Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "input_total",
+          "candidates_total"
+        ],
+        "title": "CBLSourceComparisonResponse",
         "type": "object"
       },
       "CBLSourceEntryDetail": {
@@ -12584,6 +12959,458 @@
           "identity_source"
         ],
         "title": "ReaderContextSeries",
+        "type": "object"
+      },
+      "ReadingGraphBlocker": {
+        "description": "One active unread restriction in the reader's language.",
+        "properties": {
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "gate_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gate Issue Id"
+          },
+          "kind": {
+            "enum": [
+              "strict_order",
+              "hold",
+              "after_previous",
+              "prerequisite"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "list_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "List Id"
+          },
+          "waiting_on_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Waiting On Issue Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "explanation"
+        ],
+        "title": "ReadingGraphBlocker",
+        "type": "object"
+      },
+      "ReadingGraphChoiceEffect": {
+        "description": "Prospective effect of one answer to a genuine series conflict.",
+        "properties": {
+          "choice": {
+            "enum": [
+              "protect_order",
+              "continue_series"
+            ],
+            "title": "Choice",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "rollable_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Rollable Issue Ids",
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphSeriesNode"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "waiting_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Waiting Issue Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "choice",
+          "label",
+          "detail"
+        ],
+        "title": "ReadingGraphChoiceEffect",
+        "type": "object"
+      },
+      "ReadingGraphCycleError": {
+        "description": "A cycle or invalid relationship rejected before any write.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ReadingGraphCycleError",
+        "type": "object"
+      },
+      "ReadingGraphIssueReference": {
+        "description": "One concrete comic the prospective graph may name as waiting or rollable.",
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphBlocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "comicvine_volume_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Volume Id"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "series_name": {
+            "title": "Series Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "series_name",
+          "issue_number"
+        ],
+        "title": "ReadingGraphIssueReference",
+        "type": "object"
+      },
+      "ReadingGraphOverlap": {
+        "description": "One conflict between two exact volumes in the prospective list.",
+        "properties": {
+          "blocked_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Blocked Issue Ids",
+            "type": "array"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphChoiceEffect"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "continuing_series": {
+            "$ref": "#/components/schemas/ReadingGraphSeriesReference"
+          },
+          "overlap_id": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Overlap Id",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "selected_choice": {
+            "anyOf": [
+              {
+                "enum": [
+                  "protect_order",
+                  "continue_series"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Choice"
+          },
+          "waiting_series": {
+            "$ref": "#/components/schemas/ReadingGraphSeriesReference"
+          }
+        },
+        "required": [
+          "overlap_id",
+          "continuing_series",
+          "waiting_series",
+          "question"
+        ],
+        "title": "ReadingGraphOverlap",
+        "type": "object"
+      },
+      "ReadingGraphOverlapChoice": {
+        "description": "One answer the reader has already given during this preview session.",
+        "properties": {
+          "choice": {
+            "enum": [
+              "protect_order",
+              "continue_series"
+            ],
+            "title": "Choice",
+            "type": "string"
+          },
+          "overlap_id": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Overlap Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "overlap_id",
+          "choice"
+        ],
+        "title": "ReadingGraphOverlapChoice",
+        "type": "object"
+      },
+      "ReadingGraphPreview": {
+        "description": "Complete read-only graph preview for one source selection.",
+        "properties": {
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "cycle_errors": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphCycleError"
+            },
+            "title": "Cycle Errors",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphIssueReference"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "overlaps": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphOverlap"
+            },
+            "title": "Overlaps",
+            "type": "array"
+          },
+          "revision_sha": {
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "rollable_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Rollable Issue Ids",
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphSeriesNode"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "source_list_id": {
+            "title": "Source List Id",
+            "type": "integer"
+          },
+          "waiting_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Waiting Issue Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_list_id",
+          "content_hash",
+          "revision_sha"
+        ],
+        "title": "ReadingGraphPreview",
+        "type": "object"
+      },
+      "ReadingGraphPreviewRequest": {
+        "description": "Read-only request: included source positions plus answers already given.",
+        "properties": {
+          "included_positions": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "maxItems": 10000,
+            "title": "Included Positions",
+            "type": "array"
+          },
+          "overlap_choices": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphOverlapChoice"
+            },
+            "maxItems": 1000,
+            "title": "Overlap Choices",
+            "type": "array"
+          },
+          "target_list_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target List Id"
+          }
+        },
+        "title": "ReadingGraphPreviewRequest",
+        "type": "object"
+      },
+      "ReadingGraphSeriesNode": {
+        "description": "One series node with its prospective eligibility totals.",
+        "properties": {
+          "comicvine_volume_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Comicvine Volume Id",
+            "type": "string"
+          },
+          "rollable_count": {
+            "minimum": 0.0,
+            "title": "Rollable Count",
+            "type": "integer"
+          },
+          "series_name": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Series Name",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "continues",
+              "waits",
+              "mixed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "unread_count": {
+            "minimum": 0.0,
+            "title": "Unread Count",
+            "type": "integer"
+          },
+          "waiting_count": {
+            "minimum": 0.0,
+            "title": "Waiting Count",
+            "type": "integer"
+          },
+          "waits_for_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Waits For Issue Ids",
+            "type": "array"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "series_name",
+          "state",
+          "unread_count",
+          "rollable_count",
+          "waiting_count"
+        ],
+        "title": "ReadingGraphSeriesNode",
+        "type": "object"
+      },
+      "ReadingGraphSeriesReference": {
+        "description": "Exact Comic Vine series/volume identity plus reader-facing labels.",
+        "properties": {
+          "comicvine_volume_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Comicvine Volume Id",
+            "type": "string"
+          },
+          "series_name": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Series Name",
+            "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "series_name"
+        ],
+        "title": "ReadingGraphSeriesReference",
         "type": "object"
       },
       "ReadingListEntryIntent": {
@@ -26128,6 +26955,69 @@
         ]
       }
     },
+    "/api/v1/issue-identity/cbl-sources/compare": {
+      "post": {
+        "description": "Rank shared CBL sources by exact coverage and relative order.\n\nThe comparison receives confirmed Comic Vine issue IDs, never reader Issue\nIDs. It reads only the shared catalog, so one reader's owned collection\ncannot change the answer. Coverage counts distinct exact identities while\nrepeated source occurrences remain visible, and same-titled volumes never\nmatch by title or issue number.\n\nArgs:\n    payload: Distinct confirmed Comic Vine issue IDs in intended order.\n    current_user: Authenticated reader. Unused: the shared catalog answer\n        must not vary by reader.\n    db: Async database session.\n    limit: Maximum number of ranked source lists to return.\n\nReturns:\n    Ranked source comparisons with coverage, duplicate, and order evidence.",
+        "operationId": "compare_cbl_sources_api_v1_issue_identity_cbl_sources_compare_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CBLSourceComparisonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLSourceComparisonResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compare Cbl Sources",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "issue-identity"
+        ]
+      }
+    },
     "/api/v1/issue-identity/cbl-sources/{list_id}": {
       "get": {
         "description": "Return every ordered source occurrence for one CBL list (read-only).\n\nSource occurrences keep their original position, including repeated\npositions for duplicated issues. Large lists are returned as a bounded page\nso no list is silently truncated; ``entries_total`` reports the full count\nso callers can page through every occurrence.\n\nArgs:\n    list_id: CBL source list identifier.\n    current_user: Authenticated reader.\n    db: Async database session.\n    offset: Zero-based index of the first returned source occurrence.\n    limit: Maximum number of source occurrences to return.\n\nReturns:\n    One CBL source list with its ordered source occurrences.\n\nRaises:\n    HTTPException: 404 when the list does not exist or is inactive.",
@@ -26305,6 +27195,66 @@
         "summary": "Api Cbl Adoption Preview",
         "tags": [
           "issue-identity",
+          "issue-identity"
+        ]
+      }
+    },
+    "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview": {
+      "post": {
+        "description": "Preview the prospective reading graph for a CBL selection (read-only).\n\nThe graph comes from the same Option E evaluator and cycle validator that\nexecute the reader's saved lists. It never writes list membership, issue\nstatus, or an overlap decision.\n\nArgs:\n    list_id: Shared CBL source list being adopted or updated.\n    payload: Included source positions, prior answers, and optional list\n        to preview as updated instead of newly added.\n    current_user: Authenticated reader whose existing lists are included.\n    db: Async database session for the request.\n\nReturns:\n    Prospective series nodes, overlap questions with both choice effects,\n    the issue directory with active blockers, and any cycle rejection.",
+        "operationId": "preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "title": "List Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingGraphPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingGraphPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Cbl Reading Graph",
+        "tags": [
+          "dependencies",
+          "dependencies",
           "issue-identity"
         ]
       }
@@ -26544,6 +27494,69 @@
         "summary": "Api Preview Consolidation",
         "tags": [
           "issue-identity",
+          "issue-identity"
+        ]
+      }
+    },
+    "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates": {
+      "get": {
+        "description": "Find shared CBL sources that cover one owned Reading List.\n\nOnly distinct confirmed Comic Vine issue IDs from the reader's Issues are\nused to query the shared catalog. Entries without a confirmed ID, and\nentries with conflicting confirmed IDs, are returned as explicit gaps so\nthe caller never substitutes a title/issue-number guess or claims that no\nCBL exists.\n\nArgs:\n    list_id: Owned Reading List identifier.\n    current_user: Authenticated owner of the Reading List.\n    db: Async database session.\n    limit: Maximum number of ranked source lists to return.\n\nReturns:\n    Every list entry's identity state plus ranked source comparisons.",
+        "operationId": "find_cbl_candidates_for_reading_list_api_v1_issue_identity_reading_lists__list_id__cbl_candidates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "List Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLReadingListCandidatesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Find Cbl Candidates For Reading List",
+        "tags": [
+          "dependencies",
+          "dependencies",
           "issue-identity"
         ]
       }

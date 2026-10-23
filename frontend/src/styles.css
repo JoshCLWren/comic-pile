@@ -59,6 +59,7 @@ body {
   --theme-danger-hover: #e74c3c;
   --theme-focus-ring: #d4890e;
   --theme-warning: #fbbf24;
+  --theme-success: #34d399;
   --theme-error: #ef4444;
   --bg-glow: #2a2018;
   --bg-main: var(--theme-bg-page);
@@ -89,6 +90,7 @@ body {
   --theme-danger-hover: #de5b52;
   --theme-focus-ring: #e0a419;
   --theme-warning: #f0bd3f;
+  --theme-success: #4ade80;
   --theme-error: #c6473f;
   --bg-glow: #3a2610;
   --bg-main: var(--theme-bg-page);
@@ -119,6 +121,7 @@ body {
   --theme-danger-hover: #ff5c6c;
   --theme-focus-ring: #00d4ff;
   --theme-warning: #ffd166;
+  --theme-success: #39ff88;
   --theme-error: #ff4757;
   --bg-glow: #131640;
   --bg-main: var(--theme-bg-page);

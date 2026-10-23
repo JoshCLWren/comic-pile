@@ -437,6 +437,12 @@ describe('targeted cache effects', () => {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.readers() })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.all })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
+      // Saving a list changes the confirmed identities its CBL candidates were
+      // compared with, so the candidate query must not serve the stale match set.
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: queryKeys.cblSources.readingListCandidates(customCBL.id),
+        exact: true,
+      })
 
       expect(setQueryData).toHaveBeenCalledWith(queryKeys.customCBLs.detail(customCBL.id), customCBL)
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.list(), exact: true })

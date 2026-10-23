@@ -341,6 +341,7 @@ async def resolve_volume_identity_ids(
         wanted.add(normalized)
         candidates.add(external_id)
         candidates.add(normalized)
+        candidates.add(f"4050-{external_id}")
     if not candidates:
         return {}
     rows = await db.execute(

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { render, screen, waitFor, within } from '@testing-library/react'
@@ -57,6 +57,7 @@ const SEMANTIC_TOKENS = [
   '--theme-danger-hover',
   '--theme-focus-ring',
   '--theme-warning',
+  '--theme-success',
   '--theme-error',
 ] as const
 
@@ -109,6 +110,22 @@ function loadIndexStylesheet(): string {
       ? fileURLToPath(specifier)
       : resolve(process.cwd(), 'src', 'index.css')
   return readFileSync(stylesheet, 'utf8')
+}
+
+/**
+ * Read the canonical visual grammar from the repository root.
+ *
+ * The grammar owns the meaning of every semantic theme role, so the contract
+ * test can check that a shipped role is documented instead of drifting.
+ */
+function loadVisualGrammar(): string {
+  let directory = process.cwd()
+  for (let depth = 0; depth < 4; depth += 1) {
+    const candidate = resolve(directory, 'docs', 'FRONTEND_VISUAL_GRAMMAR.md')
+    if (existsSync(candidate)) return readFileSync(candidate, 'utf8')
+    directory = resolve(directory, '..')
+  }
+  throw new Error('docs/FRONTEND_VISUAL_GRAMMAR.md was not found above the frontend package')
 }
 
 function extractThemeBlock(css: string, theme: ThemeId): string {
@@ -318,6 +335,31 @@ describe('semantic theme stylesheet contract (#1646)', () => {
           `${token} literal ${literal} must not equal a danger-hover literal`,
         ).toBe(false)
       }
+    }
+  })
+
+  /**
+   * Issue #4020: the visual grammar requires every semantic role to be
+   * documented there, so a new `--theme-*` role cannot ship with an
+   * undocumented meaning.
+   */
+  it('documents every semantic theme role in the visual grammar (#4020)', () => {
+    const css = loadStylesheet()
+    const grammar = loadVisualGrammar()
+
+    const declared = new Set<string>()
+    for (const theme of THEMES) {
+      for (const token of extractTokenMap(extractThemeBlock(css, theme)).keys()) {
+        if (token.startsWith('--theme-')) declared.add(token)
+      }
+    }
+    expect(declared.size).toBeGreaterThan(0)
+
+    for (const token of declared) {
+      expect(
+        grammar,
+        `${token} must be documented in docs/FRONTEND_VISUAL_GRAMMAR.md`,
+      ).toContain(token)
     }
   })
 })

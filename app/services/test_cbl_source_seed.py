@@ -9,12 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
-from app.models.external_identity import (
-    ExternalIdentity,
-    IssueExternalIdentityMapping,
-)
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.repositories.issue_identity_repository import (
+    upsert_comicvine_external_identity,
+    upsert_issue_external_identity_mapping,
+)
 from app.schemas.test_fixtures import (
     TestCblSourceCreate,
     TestCblSourceEntryResponse,
@@ -68,19 +68,18 @@ async def create_test_cbl_source(
         volume_year = raw.volume_year
         comicvine_id = raw.comicvine_issue_id or f"4000-fixture-{user_id}-{position}"
 
-        identity = ExternalIdentity(
-            provider="comicvine",
-            entity_type="issue",
+        # Multiple comparison fixtures must be able to reference the same
+        # Comic Vine identity: one shared catalog issue appears in many CBL
+        # sources, and the identity row is unique per provider/external id.
+        # A database-level upsert keeps two concurrent fixture calls from
+        # both passing a check-then-create existence test and racing one
+        # unique insert; the losing call's insert simply does nothing.
+        identity = await upsert_comicvine_external_identity(
+            db,
             external_id=comicvine_id,
-            metadata_json={
-                "volume": {
-                    "name": series_name,
-                    "start_year": volume_year,
-                }
-            },
+            series_name=series_name,
+            volume_year=volume_year,
         )
-        db.add(identity)
-        await db.flush()
 
         if raw.issue_id is not None:
             issue = (
@@ -99,15 +98,17 @@ async def create_test_cbl_source(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Issue {raw.issue_id} not found",
                 )
-            db.add(
-                IssueExternalIdentityMapping(
-                    issue_id=issue.id,
-                    external_identity_id=identity.id,
-                    status="confirmed",
-                    evidence_source="e2e-fixture",
-                )
+            # Same database-level upsert as the identity row: two concurrent
+            # fixture calls can race this mapping's unique constraint
+            # (issue_id, external_identity_id), so insert and let the loser
+            # no-op instead of an existence check.
+            await upsert_issue_external_identity_mapping(
+                db,
+                issue_id=issue.id,
+                external_identity_id=identity.id,
+                status="confirmed",
+                evidence_source="e2e-fixture",
             )
-
         db.add(
             CBLSourceEntry(
                 list_id=source_list.id,

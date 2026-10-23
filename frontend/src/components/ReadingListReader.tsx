@@ -4,6 +4,7 @@ import { customCBLApi } from '../services/api-custom-cbl'
 import { queryKeys } from '../query/queryKeys'
 import { EligibilityExplanation } from './EligibilityExplanation'
 import { ReaderIssueActions } from './ReaderIssueActions'
+import { CblReadingListFinder } from './CblSourceFinder'
 
 const AVAILABILITY = {
   read: 'Read', available: 'Available now', blocked: 'Waiting', later: 'After earlier unread issues in this series',
@@ -11,7 +12,7 @@ const AVAILABILITY = {
 }
 
 /** Current authored membership, never the shorter historical plan copy. */
-export function ReadingListReader({ listId }: { listId: number }) {
+export function ReadingListReader({ listId, backTo }: { listId: number; backTo?: string }) {
   const query = useQuery({
     queryKey: queryKeys.customCBLs.reader(listId),
     queryFn: () => customCBLApi.getReader(listId),
@@ -22,6 +23,13 @@ export function ReadingListReader({ listId }: { listId: number }) {
   return <section aria-label={`Read ${view.name}`} className="space-y-3">
     <h4 className="text-base font-bold text-[var(--theme-text-primary)]">{view.name} · {view.mode === 'strict' ? 'Strict order' : 'Loose order'}</h4>
     {view.execution_mode === 'legacy' && <p className="text-sm text-[var(--theme-text-muted)]">Reading List execution is not active yet. Saved modes and gates do not change current Roll availability.</p>}
+    <CblReadingListFinder
+      listId={listId}
+      listName={view.name}
+      backTo={backTo ?? '/continuity-plans'}
+      backLabel="Reading Plans"
+      testIdPrefix="cbl-reading-list"
+    />
     {(view.entries ?? []).length === 0 ? <p>This Reading List is empty.</p> : <ol className="space-y-2">
       {(view.entries ?? []).map((entry) => <li key={entry.issue_id} className="surface-panel rounded-xl p-3">
         <Link to={`/thread/${entry.thread_id}`} className="text-sm font-semibold text-[var(--theme-text-primary)]">{entry.series_name} #{entry.issue_number}</Link>

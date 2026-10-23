@@ -35,6 +35,9 @@ jobs:
         with:
           ref: main
 
+      - name: Install factory syntax parsers
+        uses: ./.github/actions/factory-syntax
+
       - name: Ensure GitHub CLI supports JSON PR checks
         shell: bash
         run: |

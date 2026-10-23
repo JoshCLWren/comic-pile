@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib.util
 import subprocess
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -330,6 +330,20 @@ def configure_review_handoff(
     )
     monkeypatch.setattr(controller, "review_comment_bodies", lambda _pr: [])
     configure_model_provenance(monkeypatch, controller, HEAD)
+    # These cases exercise mechanical handoff after semantic prerequisites.
+    # Delivery/acceptance refusal has focused controller integration coverage.
+    monkeypatch.setattr(controller, "target_json", lambda _issue: {
+        "state": "open", "body": "Implement the requested behavior",
+    })
+    monkeypatch.setattr(controller, "implementation_delivery_gate", lambda *_args: {
+        "decision": "pass", "reason": "fixture source delivery verified",
+    })
+    monkeypatch.setattr(controller.issue_acceptance, "validate", lambda *_args: [])
+    monkeypatch.setattr(controller, "run_gh", lambda *_args, **_kwargs: SimpleNamespace(
+        stdout="app/feature.py\n", stderr="", returncode=0,
+    ))
+    monkeypatch.setattr(controller, "attest_exact_head_author", lambda **_kwargs: None)
+    monkeypatch.setattr(controller, "persist_cross_model_review_marker", lambda **_kwargs: None)
     monkeypatch.setattr(
         controller,
         "roster_model_for_worker",

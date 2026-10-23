@@ -1,7 +1,7 @@
 """Add durable per-reader custom CBL source links (#4021).
 
 Revision ID: q7c100000001
-Revises: q4m500000001
+Revises: r40180000001
 Create Date: 2026-10-21 00:00:00.000000
 
 Introduces ``custom_cbl_source_links``: one stable per-reader,
@@ -13,7 +13,7 @@ existing Reading Plan/Reading List progress is untouched; planned CBL
 backfill or reader repair remains a separate explicit-approval gate.
 
 This revision continues the repository's single head at
-``q4m500000001``. It must never point at an interior revision: a revision
+``r40180000001``. It must never point at an interior revision: a revision
 with an already-existing child forks the migration graph, leaves two
 Alembic heads, and makes ``alembic upgrade head`` fail on deployment.
 """
@@ -25,7 +25,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "q7c100000001"
-down_revision: str | Sequence[str] | None = "q4m500000001"
+down_revision: str | Sequence[str] | None = "r40180000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
