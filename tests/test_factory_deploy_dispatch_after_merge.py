@@ -66,7 +66,7 @@ def test_known_bot_merge_paths_are_all_found() -> None:
     assert {
         ".github/workflows/factory-ready-merge-drain.yml",
         ".github/workflows/fixed-model-factory-dispatch.yml",
-        ".github/scripts/free-model-factory-worker-primitives.sh",
+        ".github/scripts/factory-canonical-merge-route.sh",
         ".github/scripts/nvidia-factory-worker.sh",
         ".github/scripts/omniroute-factory-worker.sh",
     } <= paths
