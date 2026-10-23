@@ -104,3 +104,21 @@ describe('cblSourceDisplay', () => {
   })
 })
 
+
+
+describe('CBL source identifier boundaries', () => {
+  it('uses readable labels for internal Reading List references', () => {
+    expect(displayCblSourceName('custom-cbl:1000002')).toBe('Custom Reading List')
+    expect(displayCblSourcePath('custom-cbl:1000002')).toBeNull()
+    expect(displayCblSourceTitle('custom-cbl:1000002', 'Marvel/Alpha Flight.cbl')).toBe('Alpha Flight')
+    expect(displayCblSourceTitle('custom-cbl:1000002', 'custom-cbl:1000002')).toBe('Custom Reading List')
+    expect(displayCblRepository('custom-cbl:1000002')).toBeNull()
+  })
+
+  it('never treats an absolute filesystem location as a declared source title', () => {
+    expect(displayCblSourceTitle('/mnt/backup/Alpha Flight.cbl', 'Marvel/Alpha Flight.cbl')).toBe('Alpha Flight')
+    expect(displayCblSourceTitle('C:/backup/Alpha Flight.cbl', 'Marvel/Alpha Flight.cbl')).toBe('Alpha Flight')
+    expect(isFilesystemSourceLocation('C:/backup/Alpha Flight.cbl')).toBe(true)
+    expect(displayCblRepository('C:/private/comics')).toBeNull()
+  })
+})

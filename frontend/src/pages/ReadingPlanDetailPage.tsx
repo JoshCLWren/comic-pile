@@ -1,3 +1,4 @@
+import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
 import { ReaderIssueActions } from '../components/ReaderIssueActions'
 import { EligibilityExplanation } from '../components/EligibilityExplanation'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -29,7 +30,7 @@ function availabilityLabel(issue: ReadingPlanReaderIssue): string {
   return 'Upcoming'
 }
 
-function IssueRow({ issue }: { issue: ReadingPlanReaderIssue }) {
+function IssueRow({ issue, sourceNames }: { issue: ReadingPlanReaderIssue; sourceNames: Readonly<Record<string, string>> }) {
   const isRead = issue.availability === 'read'
   const isBlocked = issue.availability === 'blocked'
   const isAvailable = issue.availability === 'available'
@@ -67,7 +68,7 @@ function IssueRow({ issue }: { issue: ReadingPlanReaderIssue }) {
         <ReaderIssueActions issueId={issue.issue_id} threadId={issue.thread_id} issueNumber={issue.issue_number} isRead={isRead} available={isAvailable} />
         {issue.source_paths.length > 0 && (
           <p className="mt-1 text-xs text-[var(--theme-text-dim)]">
-            Source reading order: {issue.source_paths[0]}
+            Source reading order: {sourceNames[issue.source_paths[0]] ?? displayCblSourceTitle(null, issue.source_paths[0]) ?? 'Reading order'}
             {issue.source_paths.length > 1 ? ` +${issue.source_paths.length - 1} more` : ''}
           </p>
         )}
@@ -139,6 +140,10 @@ export default function ReadingPlanDetailPage() {
   }
 
   const view = readerQuery.data
+  const sourceNames = Object.fromEntries(view.sources.map((source) => [
+    source.raw_source_path,
+    displayCblSourceTitle(source.display_name, source.source_path ?? source.raw_source_path) ?? 'Reading order',
+  ]))
   const modeLabel = readingPlanModeLabel(view.ordering_mode)
   const isStrict = view.ordering_mode === 'strict_sequential'
   const percent = progressPercent(view.progress.read_issues, view.progress.total_issues)
@@ -237,7 +242,7 @@ export default function ReadingPlanDetailPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {view.available_now.map((issue) => (
-              <IssueRow key={issue.occurrence_id} issue={issue} />
+              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
             ))}
           </ul>
         )}
@@ -255,7 +260,7 @@ export default function ReadingPlanDetailPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {view.blocked_next.map((issue) => (
-              <IssueRow key={issue.occurrence_id} issue={issue} />
+              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
             ))}
           </ul>
         )}
@@ -271,7 +276,7 @@ export default function ReadingPlanDetailPage() {
           </p>
           <ul className="mt-3 space-y-2">
             {upcoming.map((issue) => (
-              <IssueRow key={issue.occurrence_id} issue={issue} />
+              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
             ))}
           </ul>
         </section>
@@ -290,13 +295,25 @@ export default function ReadingPlanDetailPage() {
             Where this plan’s order came from. A source reading order is not a hard reading block.
           </p>
           <ul className="mt-2 space-y-1 text-sm text-[var(--theme-text-primary)]">
-            {view.sources.map((source) => (
-              <li key={source.id}>
-                {source.repository ? `${source.repository}: ` : ''}
-                {source.source_path ?? source.raw_source_path}
-                {source.revision_sha ? ` · ${source.revision_sha.slice(0, 8)}` : ''}
-              </li>
-            ))}
+            {view.sources.map((source) => {
+              const path = displayCblSourcePath(source.source_path ?? source.raw_source_path)
+              const repository = source.repository ? displayCblRepository(source.repository) : null
+              return (
+                <li key={source.id}>
+                  <p>{sourceNames[source.raw_source_path]}</p>
+                  {(path || repository || source.revision_sha) && (
+                    <details className="mt-1 text-xs text-[var(--theme-text-dim)]">
+                      <summary className="cursor-pointer font-bold text-[var(--theme-text-muted)]">Source details</summary>
+                      <div className="mt-2 space-y-1 break-words">
+                        {path && <p>{path}</p>}
+                        {repository && <p>{repository}</p>}
+                        {source.revision_sha && <p>Revision {source.revision_sha.slice(0, 8)}</p>}
+                      </div>
+                    </details>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </section>
       )}
@@ -336,7 +353,7 @@ export default function ReadingPlanDetailPage() {
                 ) : (
                   <ul className="space-y-2">
                     {lane.issues.map((issue) => (
-                      <IssueRow key={issue.occurrence_id} issue={issue} />
+                      <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
                     ))}
                   </ul>
                 )}

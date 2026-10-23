@@ -26,11 +26,31 @@ describe('ReadingPlanAddMaterial', () => {
     window.history.replaceState({}, '', '/continuity-plans/77')
   })
 
+  it('shows the source title and keeps safe provenance behind a disclosure', async () => {
+    mocks.discover.mockResolvedValue([{
+      id: 42, name: '[Marvel] Alpha Flight',
+      source_path: '/mnt/bigdata/CBL-ReadingLists/Marvel/Teams/Alpha Flight.cbl',
+      source_repository: '/mnt/bigdata/CBL-ReadingLists',
+      declared_issue_count: 228, content_hash: 'hash', revision_sha: 'revision',
+    }])
+    render(<ReadingPlanAddMaterial planId={77} planName="Alpha Flight" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add from CBL' }))
+    const candidate = await screen.findByRole('button', { name: 'Alpha Flight 228 issues' })
+    expect(candidate).toBeVisible()
+    const path = screen.getByText('Marvel/Teams/Alpha Flight.cbl')
+    expect(path).not.toBeVisible()
+    expect(screen.queryByText(/\/mnt\/bigdata/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Source details'))
+    expect(path).toBeVisible()
+    expect(screen.getByText('JoshCLWren/CBL-ReadingLists')).toBeVisible()
+    expect(mocks.preview).not.toHaveBeenCalled()
+  })
+
   it('discovers sources from the plan name and renders the reconciliation preview for the current plan', async () => {
     mocks.discover.mockResolvedValue([
       {
         id: 42,
-        name: 'B.P.R.D. Plague of Frogs',
+        name: '/mnt/bigdata/CBL-ReadingLists/Dark Horse/B.P.R.D. Plague of Frogs.cbl',
         source_path: 'Dark Horse/BPRD/Plague of Frogs.cbl',
         source_repository: 'example/cbl',
         declared_issue_count: 37,
@@ -132,6 +152,8 @@ describe('ReadingPlanAddMaterial', () => {
     fireEvent.click(await screen.findByRole('button', { name: /B\.P\.R\.D\. Plague of Frogs/i }))
 
     await waitFor(() => expect(mocks.preview).toHaveBeenCalledWith(42))
+    expect(await screen.findByRole('heading', { name: 'B.P.R.D. Plague of Frogs' })).toBeVisible()
+    expect(screen.queryByText(/\/mnt\/bigdata/)).not.toBeInTheDocument()
     expect(await screen.findByText('B.P.R.D.: The Black Flame #2')).toBeInTheDocument()
     expect(screen.getByText('Already in ComicPile · reuse existing')).toBeInTheDocument()
     expect(screen.getByText(/Series-level choices apply/)).toHaveTextContent(

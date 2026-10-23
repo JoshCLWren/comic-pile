@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -197,6 +197,15 @@ beforeEach(() => {
 })
 
 describe('ReadingPlanDetailPage', () => {
+  it('uses readable source names in issue rows and keeps provenance in details', async () => {
+    const source = { ...readerView.sources[0], raw_source_path: 'custom-cbl:1000002', source_path: null, display_name: 'Mignolaverse' }
+    mockGetReader.mockResolvedValue({ ...readerView, sources: [source], available_now: readerView.available_now.map((issue) => ({ ...issue, source_paths: [source.raw_source_path] })) })
+    renderPage()
+    expect(await screen.findByText('Mignolaverse')).toBeVisible()
+    expect(screen.getByText('Source reading order: Mignolaverse')).toBeVisible()
+    expect(screen.queryByText(/custom-cbl:/)).not.toBeInTheDocument()
+  })
+
   it('shows progress, available now, and the actual blocker', async () => {
     renderPage()
 
@@ -211,7 +220,9 @@ describe('ReadingPlanDetailPage', () => {
     expect(within(screen.getByTestId('upcoming-material')).getByText('Cable #76')).toBeInTheDocument()
     expect(screen.getByText('Source reading order')).toBeInTheDocument()
     expect(screen.getByText('CBL-backed')).toBeInTheDocument()
-    expect(screen.getByText('Marvel/Age of Apocalypse.cbl')).toBeInTheDocument()
+    expect(screen.getByText('Marvel/Age of Apocalypse.cbl')).not.toBeVisible()
+    fireEvent.click(screen.getByText('Source details'))
+    expect(screen.getByText('Marvel/Age of Apocalypse.cbl')).toBeVisible()
     expect(screen.getByRole('link', { name: 'Continue reading' })).toHaveAttribute('href', '/thread/4')
     expect(screen.getByRole('button', { name: 'Edit plan' })).toBeInTheDocument()
     expect(screen.queryByText(/ContinuityRule/i)).not.toBeInTheDocument()
