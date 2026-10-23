@@ -8,6 +8,11 @@ from scripts.check_markdown_docs import (
     iter_markdown_files,
 )
 
+GOOD_FIRST_ISSUES_URL = (
+    "https://github.com/JoshCLWren/comic-pile/issues"
+    "?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"
+)
+
 
 def test_find_broken_local_links_accepts_valid_local_and_external_links(tmp_path: Path) -> None:
     """Accept valid inline, reference, anchor, and external links.
@@ -121,6 +126,23 @@ def test_find_unapproved_root_markdown_flags_documentation_sprawl(tmp_path: Path
     (tmp_path / "RANDOM_NOTES.md").write_text("# Notes\n", encoding="utf-8")
 
     assert find_unapproved_root_markdown(tmp_path) == ["RANDOM_NOTES.md"]
+
+
+def test_contributing_links_good_first_issue_label_filter() -> None:
+    """Keep the newcomer pointer on the canonical good-first-issue label query.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    contributing = (Path(__file__).parents[1] / "CONTRIBUTING.md").read_text(encoding="utf-8")
+
+    assert "## Good first issues" in contributing
+    assert f"[`good first issue`]({GOOD_FIRST_ISSUES_URL})" in contributing
+    assert "## Pre-commit hook" in contributing
+    assert "## Testing guidelines" in contributing
 
 
 def test_documentation_workflow_cannot_rewrite_pull_request_heads() -> None:
