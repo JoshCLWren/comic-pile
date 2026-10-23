@@ -183,6 +183,11 @@ def _projected_decisions(
 ) -> dict[int, tuple[SeriesOverlapDecision, ...]]:
     """Return the reader's complete decision set with one pair replaced.
 
+    An approved direction supersedes the opposite direction for the same two
+    volumes. Otherwise a reader who changes their answer would leave both
+    contradictory choices stored, and the evaluator would waive both strict
+    edges instead of honoring the reader's latest decision.
+
     Args:
         grouped: Durable decisions of every list keyed by Reading List ID.
         list_id: Reading List whose pair is replaced.
@@ -193,10 +198,11 @@ def _projected_decisions(
         The complete replacement decision set keyed by Reading List ID.
     """
     projected = {key: values for key, values in grouped.items() if key != list_id}
+    superseded = {replaced, (replaced[1], replaced[0])}
     kept = tuple(
         decision
         for decision in grouped.get(list_id, ())
-        if (decision.continuing_volume_id, decision.waiting_volume_id) != replaced
+        if (decision.continuing_volume_id, decision.waiting_volume_id) not in superseded
     )
     projected[list_id] = (*kept, replacement)
     return projected
