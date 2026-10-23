@@ -911,9 +911,31 @@ def close_merged_pr_issue(
         open_deps, dependency_state_known = _declared_dependency_blockers(
             issue_number, issue_body
         )
+        issue_closed_by_this_pr = (
+            str(issue["state"]) == CLOSED_STATE
+            and _closed_by_pr(issue_number, info)
+        )
         if not dependency_state_known:
+            if issue_closed_by_this_pr and not dry_run:
+                pending = [label for label in labels
+                           if label not in STAGE_LABELS and not OWNER_RE.fullmatch(label)
+                           and not label.startswith("ralph-status:")]
+                pending.extend(["ralph-status:pending", "factory:unowned"])
+                _replace_labels(issue_number, pending)
+                _run_gh("issue", "reopen", str(issue_number), "--repo", _repo_slug())
+                _comment_issue(
+                    issue_number,
+                    f"PR #{pr_number} dependency state unreadable; closure not ratified.",
+                )
             return "open-dependency"
         if open_deps:
+            if issue_closed_by_this_pr and not dry_run:
+                blocked = [label for label in labels
+                           if label not in STAGE_LABELS and not OWNER_RE.fullmatch(label)
+                           and not label.startswith("ralph-status:")]
+                blocked.extend(["factory:blocked", "ralph-status:blocked", "factory"])
+                _replace_labels(issue_number, blocked)
+                _run_gh("issue", "reopen", str(issue_number), "--repo", _repo_slug())
             if not dry_run:
                 _record_dependency_block(pr_number, issue_number, open_deps)
             return "open-dependency: " + ", ".join(f"#{number}" for number in open_deps)
@@ -930,7 +952,9 @@ def close_merged_pr_issue(
                 issue_number, f"PR #{pr_number} did not deliver implementation: {reason}"
             )
         return f"not-delivered:{reason}"
-    if str(issue["state"]) != "OPEN":
+    if str(issue["state"]) != "OPEN" and not (
+        delivered and str(issue["state"]) == CLOSED_STATE and _closed_by_pr(issue_number, info)
+    ):
         return "already-closed"
     if dry_run:
         return f"dry-run:replace-labels-with{target_labels(labels)}+close"
