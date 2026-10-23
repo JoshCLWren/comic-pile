@@ -550,6 +550,9 @@ async def upsert_overlap_decision(
             )
         )
     ).scalar_one_or_none()
+    # The returned OverlapDecisionRecord is a frozen dataclass with only
+    # primitive types (int, str, datetime); it carries no ORM references and
+    # is safe to use after `await db.commit()` in the calling code path.
     now = datetime.now(UTC)
     if row is None:
         row = CustomCBLOverlapDecision(

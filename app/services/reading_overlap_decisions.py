@@ -197,6 +197,11 @@ def _projected_decisions(
     Returns:
         The complete replacement decision set keyed by Reading List ID.
     """
+    # The ``superseded`` set covers both (continuing, waiting) and (waiting,
+# continuing) volume-direction pairs, so that replacing a pair removes any
+# existing choice in either direction for the same two volumes. This handles
+# the invariant that ``replaced`` is always canonical (continuing, waiting)
+# while stored decisions may exist in either direction.
     projected = {key: values for key, values in grouped.items() if key != list_id}
     superseded = {replaced, (replaced[1], replaced[0])}
     kept = tuple(
@@ -321,7 +326,9 @@ async def save_overlap_decision(
     if advanced is None:
         raise HTTPException(status_code=404, detail=f"Reading List {list_id} not found")
     await db.flush()
-    # Build the response while still holding the lock, before committing
+    # Build the response while still holding the lock, before committing.
+    # The response is fully materialized here; no ORM model attributes are accessed
+    # after this point or after `await db.commit()` below, so MissingGreenlet is avoided.
     response = await _decision_set(
         db,
         user_id=user_id,
