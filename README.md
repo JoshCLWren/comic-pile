@@ -2,6 +2,10 @@
 
 **Roll to read. Rotate your stack.**
 
+[![GitHub stars](https://img.shields.io/github/stars/JoshCLWren/comic-pile?style=social&label=Stars)](https://github.com/JoshCLWren/comic-pile)
+
+If Comic Pile helps you pick your next read, star the repo ⭐
+
 Comic Pile is an open-source, dice-driven comic-reading tracker for turning a comic backlog into an actual reading habit. It manages the reading queue, tracks sessions and ratings, and makes "what should I read next?" a roll instead of another round of sorting the pile.
 
 [Live app](https://comic-pile.vercel.app) · [Deployment and Neon](docs/DEPLOYMENT.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [MIT License](LICENSE)
