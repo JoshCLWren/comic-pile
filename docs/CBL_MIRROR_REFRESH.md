@@ -93,3 +93,10 @@ Refresh behavior:
 
 A production bulk source sync remains a separately authorized operation. This script does not run
 from a web request, does not fetch GitHub, and does not apply reader repairs.
+
+Identity lookups use bounded batches of 500 distinct keys, grouped by the exact provider and
+entity type. Each group uses an external-ID membership predicate instead of repeating all three
+comparisons for every ID. A 500-ID Comic Vine issue batch therefore binds 502 values rather than
+1,500, both before insertion and during the conflict-safe refresh. Mixed providers and issue/series
+identities remain separate even when their external ID strings coincide. This bounds the query
+shape without changing the identities, metadata freshness rules, or transaction boundary.
