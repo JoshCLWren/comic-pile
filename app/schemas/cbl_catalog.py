@@ -90,3 +90,17 @@ class CBLErrorResponse(BaseModel):
     """Envelope for catalog error responses: ``{"detail": {"code": ..., "message": ...}}``."""
 
     detail: CBLErrorDetail
+
+
+class CBLDatabaseUnavailableDetail(BaseModel):
+    """Application-wide database acquisition error, before route execution."""
+
+    code: Literal["database_unavailable"]
+    message: str
+    status: Literal["SERVICE_UNAVAILABLE"]
+
+
+class CBLDatabaseUnavailableResponse(BaseModel):
+    """Global retryable outage envelope used when a dependency cannot connect."""
+
+    error: CBLDatabaseUnavailableDetail

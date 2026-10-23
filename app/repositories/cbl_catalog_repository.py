@@ -180,6 +180,10 @@ async def browse_cbl_source_lists(
     total_statement = select(func.count()).select_from(CBLSourceList).where(*conditions)
     total = int(await db.scalar(total_statement) or 0)
 
+    offset = (page - 1) * page_size
+    if offset >= total:
+        return CatalogListPage(rows=[], total=total)
+
     statement = (
         select(CBLSourceList, CBLSource.repository)
         .join(CBLSource, CBLSource.id == CBLSourceList.source_id)
@@ -189,7 +193,7 @@ async def browse_cbl_source_lists(
             CBLSourceList.source_path.asc(),
             CBLSourceList.id.asc(),
         )
-        .offset((page - 1) * page_size)
+        .offset(offset)
         .limit(page_size)
     )
     rows = (await db.execute(statement)).all()

@@ -248,18 +248,12 @@ async def test_folder_with_trailing_space_round_trips(
     assert root.status_code == 200, root.text
     dc = next(folder for folder in root.json()["folders"] if folder["name"] == "DC")
 
-    publisher = await auth_client.get(
-        f"{CATALOG_URL}/folders", params={"folder": dc["path"]}
-    )
+    publisher = await auth_client.get(f"{CATALOG_URL}/folders", params={"folder": dc["path"]})
     assert publisher.status_code == 200, publisher.text
-    events = next(
-        folder for folder in publisher.json()["folders"] if folder["name"] == "Events "
-    )
+    events = next(folder for folder in publisher.json()["folders"] if folder["name"] == "Events ")
     assert events["path"] == "DC/Events "
 
-    followed = await auth_client.get(
-        f"{CATALOG_URL}/browse", params={"folder": events["path"]}
-    )
+    followed = await auth_client.get(f"{CATALOG_URL}/browse", params={"folder": events["path"]})
     assert followed.status_code == 200, followed.text
     assert [item["name"] for item in followed.json()["items"]] == ["One"]
 
@@ -640,3 +634,92 @@ async def test_catalog_paths_are_not_shadowed_by_the_source_list_detail_route() 
     ]
     assert all(index > max(catalog_indexes) for index in detail_indexes)
 
+
+@pytest.mark.asyncio
+async def test_extreme_page_returns_empty_without_overflowing_postgres(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """An out-of-range page never binds an overflowing PostgreSQL OFFSET."""
+    await _nested_catalog(async_db)
+    response = await auth_client.get(
+        f"{CATALOG_URL}/browse", params={"q": "JLI", "page": 2**63, "page_size": 100}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == []
+    assert response.json()["total"] == 1
+    assert response.json()["has_next"] is False
+
+
+@pytest.mark.asyncio
+async def test_metadata_search_indexes_exist(
+    async_db: AsyncSession,
+) -> None:
+    """Metadata-created schemas retain both migration-managed search indexes."""
+    index_rows = (
+        (
+            await async_db.execute(
+                text("SELECT indexname FROM pg_indexes WHERE tablename = 'cbl_source_lists'")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {"ix_cbl_source_list_name_trgm", "ix_cbl_source_list_source_path_trgm"} <= set(
+        index_rows
+    )
+    for column in ("name", "source_path"):
+        await async_db.execute(text("SET LOCAL enable_seqscan = off"))
+        plan = "\n".join(
+            (
+                await async_db.execute(
+                    text(
+                        f"EXPLAIN SELECT id FROM cbl_source_lists WHERE {column} ILIKE '%miracle%'"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert f"ix_cbl_source_list_{column}_trgm" in plan, plan
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["folders", "browse"])
+async def test_catalog_documents_dependency_acquisition_outage(
+    auth_client: AsyncClient,
+    path: str,
+) -> None:
+    """The generated 503 contract includes the global dependency error shape."""
+    from pydantic import TypeAdapter
+
+    from app.database import get_db
+    from app.exceptions import DatabaseUnavailableError
+    from app.main import app
+    from app.schemas.cbl_catalog import CBLErrorResponse, CBLDatabaseUnavailableResponse
+
+    async def _unavailable() -> AsyncSession:
+        raise DatabaseUnavailableError("database connection failed")
+
+    original = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = _unavailable
+    try:
+        response = await auth_client.get(f"{CATALOG_URL}/{path}")
+    finally:
+        if original is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = original
+    assert response.status_code == 503, response.text
+    adapter = TypeAdapter(CBLErrorResponse | CBLDatabaseUnavailableResponse)
+    parsed = adapter.validate_python(response.json())
+    assert isinstance(parsed, CBLDatabaseUnavailableResponse)
+    assert parsed.error.code == "database_unavailable"
+    schema = app.openapi()
+    response_schema = schema["paths"][f"{CATALOG_URL}/{path}"]["get"]["responses"]["503"][
+        "content"
+    ]["application/json"]["schema"]
+    assert {item["$ref"].split("/")[-1] for item in response_schema["anyOf"]} == {
+        "CBLErrorResponse",
+        "CBLDatabaseUnavailableResponse",
+    }

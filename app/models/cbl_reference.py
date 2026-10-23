@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    DDL,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    event,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -59,6 +69,18 @@ class CBLSourceList(Base):
         UniqueConstraint("source_id", "source_path", name="uq_cbl_source_list_path"),
         Index("ix_cbl_source_list_source_active", "source_id", "active"),
         Index(
+            "ix_cbl_source_list_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_cbl_source_list_source_path_trgm",
+            "source_path",
+            postgresql_using="gin",
+            postgresql_ops={"source_path": "gin_trgm_ops"},
+        ),
+        Index(
             "ix_cbl_source_list_active_path",
             "active",
             "source_path",
@@ -97,3 +119,11 @@ class CBLSourceEntry(Base):
         Index("ix_cbl_source_entry_series_identity", "external_series_identity_id"),
         Index("ix_cbl_source_entry_issue_identity", "external_issue_identity_id"),
     )
+
+
+# Metadata-created PostgreSQL schemas need the same operator classes as migrations.
+event.listen(
+    CBLSourceList.__table__,
+    "before_create",
+    DDL("CREATE EXTENSION IF NOT EXISTS pg_trgm").execute_if(dialect="postgresql"),
+)

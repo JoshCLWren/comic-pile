@@ -7291,6 +7291,31 @@ export interface components {
             occurrences_total: number;
         };
         /**
+         * CBLDatabaseUnavailableDetail
+         * @description Application-wide database acquisition error, before route execution.
+         */
+        CBLDatabaseUnavailableDetail: {
+            /**
+             * Code
+             * @constant
+             */
+            code: "database_unavailable";
+            /** Message */
+            message: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "SERVICE_UNAVAILABLE";
+        };
+        /**
+         * CBLDatabaseUnavailableResponse
+         * @description Global retryable outage envelope used when a dependency cannot connect.
+         */
+        CBLDatabaseUnavailableResponse: {
+            error: components["schemas"]["CBLDatabaseUnavailableDetail"];
+        };
+        /**
          * CBLErrorDetail
          * @description Machine-readable error code and message for a catalog failure.
          */
@@ -20132,13 +20157,13 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description The shared CBL catalog is temporarily unavailable. */
+            /** @description Catalog query or database connection temporarily unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["CBLErrorResponse"] | components["schemas"]["CBLDatabaseUnavailableResponse"];
                 };
             };
         };
@@ -20259,13 +20284,13 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description The shared CBL catalog is temporarily unavailable. */
+            /** @description Catalog query or database connection temporarily unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["CBLErrorResponse"] | components["schemas"]["CBLDatabaseUnavailableResponse"];
                 };
             };
         };

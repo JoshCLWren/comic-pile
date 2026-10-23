@@ -1481,6 +1481,45 @@
         "title": "CBLComicvineOccurrencePage",
         "type": "object"
       },
+      "CBLDatabaseUnavailableDetail": {
+        "description": "Application-wide database acquisition error, before route execution.",
+        "properties": {
+          "code": {
+            "const": "database_unavailable",
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "const": "SERVICE_UNAVAILABLE",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "status"
+        ],
+        "title": "CBLDatabaseUnavailableDetail",
+        "type": "object"
+      },
+      "CBLDatabaseUnavailableResponse": {
+        "description": "Global retryable outage envelope used when a dependency cannot connect.",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CBLDatabaseUnavailableDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "CBLDatabaseUnavailableResponse",
+        "type": "object"
+      },
       "CBLErrorDetail": {
         "description": "Machine-readable error code and message for a catalog failure.",
         "properties": {
@@ -27685,11 +27724,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CBLErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CBLDatabaseUnavailableResponse"
+                    }
+                  ],
+                  "title": "Response 503 Browse Cbl Source Catalog Api V1 Issue Identity Cbl Sources Browse Get"
                 }
               }
             },
-            "description": "The shared CBL catalog is temporarily unavailable."
+            "description": "Catalog query or database connection temporarily unavailable."
           }
         },
         "security": [
@@ -27905,11 +27952,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CBLErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CBLDatabaseUnavailableResponse"
+                    }
+                  ],
+                  "title": "Response 503 List Cbl Source Folders Api V1 Issue Identity Cbl Sources Folders Get"
                 }
               }
             },
-            "description": "The shared CBL catalog is temporarily unavailable."
+            "description": "Catalog query or database connection temporarily unavailable."
           }
         },
         "security": [

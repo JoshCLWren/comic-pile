@@ -27,6 +27,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.cbl_catalog import (
     CBLCatalogBrowseResponse,
+    CBLDatabaseUnavailableResponse,
     CBLErrorResponse,
     CBLFolderListingResponse,
 )
@@ -60,8 +61,8 @@ def _error_detail(code: str, message: str) -> dict[str, str]:
         400: {"model": CBLErrorResponse, "description": "Invalid folder path."},
         404: {"model": CBLErrorResponse, "description": "Folder not found."},
         503: {
-            "model": CBLErrorResponse,
-            "description": "The shared CBL catalog is temporarily unavailable.",
+            "model": CBLErrorResponse | CBLDatabaseUnavailableResponse,
+            "description": "Catalog query or database connection temporarily unavailable.",
         },
     },
 )
@@ -115,8 +116,8 @@ async def list_cbl_source_folders(
         },
         404: {"model": CBLErrorResponse, "description": "Folder not found."},
         503: {
-            "model": CBLErrorResponse,
-            "description": "The shared CBL catalog is temporarily unavailable.",
+            "model": CBLErrorResponse | CBLDatabaseUnavailableResponse,
+            "description": "Catalog query or database connection temporarily unavailable.",
         },
     },
 )
