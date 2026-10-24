@@ -278,3 +278,26 @@ async def create_list(
     db.add(new_list)
     await db.flush()
     return new_list
+
+
+async def owned_reading_list_names(
+    db: AsyncSession, user_id: int, list_ids: set[int],
+) -> dict[int, str]:
+    """Load readable names for a bounded set of reader-owned Reading Lists.
+
+    Args:
+        db: Current read transaction.
+        user_id: Reader whose source labels are requested.
+        list_ids: Referenced Reading List identifiers.
+
+    Returns:
+        Owned list IDs mapped to their current names; foreign/missing IDs omitted.
+    """
+    if not list_ids:
+        return {}
+    rows = (await db.execute(
+        select(CustomCBLList.id, CustomCBLList.name).where(
+            CustomCBLList.user_id == user_id, CustomCBLList.id.in_(list_ids),
+        )
+    )).all()
+    return dict(rows)

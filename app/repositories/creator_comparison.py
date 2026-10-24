@@ -20,6 +20,8 @@ from app.models.external_identity import ExternalIdentity, IssueExternalIdentity
 from app.models.issue import Issue
 from app.models.thread import Thread
 
+from app.repositories.creator_summary import extract_manual_creator_credits as _summary_extract_manual
+
 COMICVINE_PROVIDER = "comicvine"
 
 # Maximum number of creators allowed in a single comparison request
@@ -123,13 +125,17 @@ async def load_creator_comparison_inputs(
 ) -> CreatorComparisonInputs:
     """Load every user-scoped input needed for one bounded batch comparison.
 
-    The batch is served by exactly three queries no matter how many creator
+    The batch is served by exactly four queries no matter how many creator
     keys are requested (max 4):
 
     1. the authenticated user's owned issues, their read/unread status, and
        their stable local thread/series identity;
     2. confirmed ComicVine issue metadata for those issues (creator credits);
-    3. the latest effective ``rate`` event rating per owned issue.
+    3. the user's threads' manual creator credits, read once per thread
+       (issue #4035 — the same thread-only shape issue #3387 gave the
+       creator-summary route, so the stored manual-credit document is never
+       repeated on every owned-issue row);
+    4. the latest effective ``rate`` event rating per owned issue.
 
     Args:
         db: Async database session.
@@ -188,6 +194,49 @@ async def load_creator_comparison_inputs(
         for credit in credits:
             if credit.external_id in requested_creator_ids:
                 by_key.setdefault((credit.external_id, credit.roles), credit)
+
+    # 3. Manual thread-level creator credits for issues without ComicVine
+    # metadata (issue #4035: both creator surfaces must agree on library
+    # membership, so this reuses the creator_summary definition). Read once
+    # per thread rather than projected across the owned-issue join above:
+    # repeating the stored JSON document on every issue row is the
+    # wide-library anti-pattern issue #3387 removed from the summary route.
+    # ``thread_ids`` only guards the empty library, which owns no thread.
+    thread_ids = {ot.thread_id for ot in owned_issue_threads.values()}
+    thread_manual_credits: dict[int, list[dict[str, object]]] = {}
+    if thread_ids:
+        thread_result = await db.execute(
+            select(Thread.id, Thread.manual_creator_credits).where(Thread.user_id == user_id)
+        )
+        for thread_id, manual_credits in thread_result.all():
+            if manual_credits:
+                thread_manual_credits[int(thread_id)] = manual_credits
+
+    # Confirmed ComicVine credits take priority: an issue already attributed by
+    # provider metadata never falls back to the thread's manual credits.
+    for issue_id, owned_thread in owned_issue_threads.items():
+        if issue_id in issues_with_creator_metadata:
+            continue
+        manual_credits = thread_manual_credits.get(owned_thread.thread_id, [])
+        if not manual_credits:
+            continue
+        converted = _summary_extract_manual(manual_credits)
+        # convert summary CreatorCredit -> comparison CreatorCredit (same fields)
+        credits = [
+            CreatorCredit(
+                external_id=c.external_id,
+                roles=c.roles,
+                display_name=c.display_name,
+            )
+            for c in converted
+        ]
+        if credits:
+            issues_with_creator_metadata.add(issue_id)
+            by_key = per_issue_credits.setdefault(issue_id, {})
+            for credit in credits:
+                if credit.external_id in requested_creator_ids:
+                    by_key.setdefault((credit.external_id, credit.roles), credit)
+
     issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = {
         issue_id: tuple(
             sorted(by_key.values(), key=lambda credit: (credit.external_id, credit.roles))
@@ -196,7 +245,7 @@ async def load_creator_comparison_inputs(
         if by_key
     }
 
-    # 3. Latest effective rating per owned issue (latest event wins).
+    # 4. Latest effective rating per owned issue (latest event wins).
     rate_result = await db.execute(
         select(Event.issue_id, Event.rating)
         .join(Issue, Issue.id == Event.issue_id)

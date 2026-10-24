@@ -28,8 +28,10 @@ export interface ReadingListPredecessorChange {
 export interface ReadingListCycleEdge {
   source_issue_id: number
   source_issue_name?: string
+  source_thread_id?: number
   target_issue_id: number
   target_issue_name?: string
+  target_thread_id?: number
   origin: string | null
   prerequisite_origin: 'reader' | 'converted' | null
   provenance: string[]

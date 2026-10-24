@@ -2771,6 +2771,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issue-identity/cbl-sources/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse Cbl Source Catalog
+         * @description Browse one catalog folder or search all CBLs by name and source path.
+         *
+         *     With a blank ``q`` the response describes the immediate contents of
+         *     ``folder``. With a non-blank ``q`` the search spans the entire shared
+         *     catalog, regardless of ``folder``, and ``scope`` is ``"search"``. ``total``
+         *     is the truthful number of matches, so callers can page past 100 results.
+         *
+         *     Args:
+         *         current_user: The authenticated user (injected by dependency).
+         *         db: The async database session (injected by dependency).
+         *         folder: The catalog folder path to browse. Empty string for root.
+         *         q: Optional search query for CBL name and source path.
+         *         page: Page number (1-indexed).
+         *         page_size: Number of results per page (1-100).
+         *
+         *     Returns:
+         *         CBLCatalogBrowseResponse: The browse response containing entries and pagination info.
+         */
+        get: operations["browse_cbl_source_catalog_api_v1_issue_identity_cbl_sources_browse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}": {
         parameters: {
             query?: never;
@@ -2843,6 +2879,38 @@ export interface paths {
          *         Ranked source comparisons with coverage, duplicate, and order evidence.
          */
         post: operations["compare_cbl_sources_api_v1_issue_identity_cbl_sources_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/issue-identity/cbl-sources/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Cbl Source Folders
+         * @description List immediate subfolders of one shared CBL catalog folder.
+         *
+         *     The root folder is addressed with an empty ``folder`` value. A request for a
+         *     folder with no active CBLs or subfolders returns a stable 404 envelope; a
+         *     malformed path returns 400.
+         *
+         *     Args:
+         *         current_user: The authenticated user (injected by dependency).
+         *         db: The async database session (injected by dependency).
+         *         folder: The catalog folder path to list. Empty string for root.
+         *
+         *     Returns:
+         *         CBLFolderListingResponse: The folder listing containing subfolders.
+         */
+        get: operations["list_cbl_source_folders_api_v1_issue_identity_cbl_sources_folders_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7048,6 +7116,74 @@ export interface components {
             unresolved_positions: number[];
         };
         /**
+         * CBLBreadcrumb
+         * @description One step in the folder breadcrumb, from the catalog root to the folder.
+         */
+        CBLBreadcrumb: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+        };
+        /**
+         * CBLCatalogBrowseResponse
+         * @description Paginated CBL results for one folder or one catalog-wide search.
+         */
+        CBLCatalogBrowseResponse: {
+            /** Breadcrumbs */
+            breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
+            /** Folder */
+            folder: string;
+            /** Folders */
+            folders: components["schemas"]["CBLSourceFolder"][];
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Items */
+            items: components["schemas"]["CBLCatalogListItem"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Query */
+            query?: string | null;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "folder" | "search";
+            /** Total */
+            total: number;
+            /** Total Pages */
+            total_pages: number;
+        };
+        /**
+         * CBLCatalogListItem
+         * @description One active persisted source list shown in a catalog folder or search page.
+         *
+         *     The shape mirrors the Add-material discovery item, but it is a distinct
+         *     model so the catalog browsing surface never shares a schema title with the
+         *     discovery surface: two same-named models would collapse into one entry in
+         *     the generated OpenAPI components.
+         */
+        CBLCatalogListItem: {
+            /** Content Hash */
+            content_hash: string;
+            /** Declared Issue Count */
+            declared_issue_count: number | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Revision Sha */
+            revision_sha: string;
+            /** Source Path */
+            source_path: string;
+            /** Source Repository */
+            source_repository: string;
+        };
+        /**
          * CBLComicvineOccurrenceDetail
          * @description One source position that contains an exact Comic Vine issue identity.
          */
@@ -7153,6 +7289,76 @@ export interface components {
              * @description Total matching source occurrences in the shared catalog
              */
             occurrences_total: number;
+        };
+        /**
+         * CBLDatabaseUnavailableDetail
+         * @description Application-wide database acquisition error, before route execution.
+         */
+        CBLDatabaseUnavailableDetail: {
+            /**
+             * Code
+             * @constant
+             */
+            code: "database_unavailable";
+            /** Message */
+            message: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "SERVICE_UNAVAILABLE";
+        };
+        /**
+         * CBLDatabaseUnavailableResponse
+         * @description Global retryable outage envelope used when a dependency cannot connect.
+         */
+        CBLDatabaseUnavailableResponse: {
+            error: components["schemas"]["CBLDatabaseUnavailableDetail"];
+        };
+        /**
+         * CBLErrorDetail
+         * @description Machine-readable error code and message for a catalog failure.
+         */
+        CBLErrorDetail: {
+            /**
+             * Code
+             * @description Stable machine-readable error code.
+             */
+            code: string;
+            /**
+             * Message
+             * @description Human-readable error message.
+             */
+            message: string;
+        };
+        /**
+         * CBLErrorResponse
+         * @description Envelope for catalog error responses: ``{"detail": {"code": ..., "message": ...}}``.
+         */
+        CBLErrorResponse: {
+            detail: components["schemas"]["CBLErrorDetail"];
+        };
+        /**
+         * CBLFolderListingResponse
+         * @description Response for browsing one catalog folder's immediate subfolders.
+         */
+        CBLFolderListingResponse: {
+            /** Breadcrumbs */
+            breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
+            /**
+             * Direct List Count
+             * @description Active CBLs stored directly in the requested folder.
+             */
+            direct_list_count: number;
+            /** Folder */
+            folder: string;
+            /** Folders */
+            folders: components["schemas"]["CBLSourceFolder"][];
+            /**
+             * Total List Count
+             * @description Active CBLs anywhere below the requested folder.
+             */
+            total_list_count: number;
         };
         /**
          * CBLPlacement
@@ -7550,6 +7756,32 @@ export interface components {
             source_path: string;
             /** Source Repository */
             source_repository: string;
+        };
+        /**
+         * CBLSourceFolder
+         * @description One immediate child folder of the requested catalog folder.
+         */
+        CBLSourceFolder: {
+            /**
+             * Direct List Count
+             * @description Active CBLs stored directly in this folder.
+             */
+            direct_list_count: number;
+            /**
+             * Name
+             * @description Folder name (one path segment).
+             */
+            name: string;
+            /**
+             * Path
+             * @description Full source-relative folder path.
+             */
+            path: string;
+            /**
+             * Total List Count
+             * @description Active CBLs anywhere below this folder.
+             */
+            total_list_count: number;
         };
         /**
          * CBLSourceListDetail
@@ -8232,6 +8464,10 @@ export interface components {
              * @enum {string}
              */
             ordering_mode: "informational" | "strict_sequential";
+            /** Source Names */
+            source_names?: {
+                [key: string]: string;
+            };
             /** Source Paths */
             source_paths?: string[];
             /** Step Count */
@@ -13683,6 +13919,8 @@ export interface components {
             adopted_at?: string | null;
             /** Content Hash */
             content_hash?: string | null;
+            /** Display Name */
+            display_name?: string | null;
             /** Id */
             id: number;
             /** Raw Source Path */
@@ -19875,6 +20113,67 @@ export interface operations {
             };
         };
     };
+    browse_cbl_source_catalog_api_v1_issue_identity_cbl_sources_browse_get: {
+        parameters: {
+            query?: {
+                folder?: string;
+                q?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLCatalogBrowseResponse"];
+                };
+            };
+            /** @description Invalid folder path or search query. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+            /** @description Folder not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Catalog query or database connection temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"] | components["schemas"]["CBLDatabaseUnavailableResponse"];
+                };
+            };
+        };
+    };
     find_cbl_sources_by_comicvine_issue_api_v1_issue_identity_cbl_sources_by_comicvine_issue__comicvine_issue_id__get: {
         parameters: {
             query?: {
@@ -19940,6 +20239,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_cbl_source_folders_api_v1_issue_identity_cbl_sources_folders_get: {
+        parameters: {
+            query?: {
+                folder?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLFolderListingResponse"];
+                };
+            };
+            /** @description Invalid folder path. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+            /** @description Folder not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Catalog query or database connection temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"] | components["schemas"]["CBLDatabaseUnavailableResponse"];
                 };
             };
         };

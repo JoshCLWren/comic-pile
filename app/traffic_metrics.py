@@ -11,12 +11,15 @@ fleet-wide totals by keeping the maximum count per key across polls of the
 same instance ID; counters are monotonic within a process lifetime.
 """
 
+from __future__ import annotations
+
 import secrets
 import threading
 from collections.abc import Mapping
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
-from app.schemas.traffic_metrics import RouteTrafficCounter, TrafficMetricsSnapshot
+if TYPE_CHECKING:
+    from app.schemas.traffic_metrics import TrafficMetricsSnapshot
 
 _UNMATCHED_ROUTE: Final = "__unmatched__"
 _OVERFLOW_ROUTE: Final = "__overflow__"
@@ -98,10 +101,17 @@ def record_route_hit(method: str, path_template: str, status_code: int) -> None:
 def traffic_snapshot() -> TrafficMetricsSnapshot:
     """Return the current process-local traffic tally.
 
+    The snapshot schemas are imported here rather than at module scope: this
+    module is part of the always-imported request-logging stack, and the
+    ``app.schemas`` package must not load on the Vercel cold-start path
+    (issue #3479).
+
     Returns:
         Snapshot with ``instance_id`` and a deterministically sorted
         ``counters`` list of aggregated request tallies.
     """
+    from app.schemas.traffic_metrics import RouteTrafficCounter, TrafficMetricsSnapshot
+
     with _lock:
         counters = [
             RouteTrafficCounter(

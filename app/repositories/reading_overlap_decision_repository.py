@@ -13,7 +13,7 @@ from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select, union_all, update
+from sqlalchemy import delete, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -511,6 +511,10 @@ async def upsert_overlap_decision(
 ) -> OverlapDecisionRecord:
     """Store one reader-approved overlap choice for one owned list.
 
+    The approved direction supersedes the opposite direction for the same two
+    volumes, so changing an answer converges on exactly one stored decision
+    instead of leaving both contradictory choices in place.
+
     Args:
         db: Current transaction.
         user_id: Reader who owns the list and the choice.
@@ -523,6 +527,18 @@ async def upsert_overlap_decision(
     Returns:
         The stored decision.
     """
+    await db.execute(
+        delete(CustomCBLOverlapDecision)
+        .where(
+            CustomCBLOverlapDecision.list_id == list_id,
+            CustomCBLOverlapDecision.user_id == user_id,
+            CustomCBLOverlapDecision.continuing_external_identity_id
+            == waiting_identity_id,
+            CustomCBLOverlapDecision.waiting_external_identity_id
+            == continuing_identity_id,
+        )
+        .execution_options(synchronize_session=False)
+    )
     row = (
         await db.execute(
             select(CustomCBLOverlapDecision).where(
@@ -534,6 +550,9 @@ async def upsert_overlap_decision(
             )
         )
     ).scalar_one_or_none()
+    # The returned OverlapDecisionRecord is a frozen dataclass with only
+    # primitive types (int, str, datetime); it carries no ORM references and
+    # is safe to use after `await db.commit()` in the calling code path.
     now = datetime.now(UTC)
     if row is None:
         row = CustomCBLOverlapDecision(

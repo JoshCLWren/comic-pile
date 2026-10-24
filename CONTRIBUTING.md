@@ -4,6 +4,13 @@ Thanks for contributing to Comic Pile. This project values clear APIs, mobile-fi
 
 Participation in Comic Pile project spaces is also governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## Good first issues
+
+Looking for a small, well-scoped starter task? Browse open issues labeled
+[`good first issue`](https://github.com/JoshCLWren/comic-pile/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+These issues are sized for a first contribution and follow the same review, CI, and
+merge flow described below.
+
 ## Pull requests and the factory
 
 Open a ready-for-review PR from your fork or repository branch. Contributor,

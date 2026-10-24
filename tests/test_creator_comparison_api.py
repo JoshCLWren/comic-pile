@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.models import Event, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.repositories.creator_comparison import MIN_RATED_ISSUES_PER_SERIES
+from app.repositories.creator_summary import manual_creator_id
 
 D1 = datetime(2026, 3, 1, tzinfo=UTC)
 D2 = datetime(2026, 3, 2, tzinfo=UTC)
@@ -465,6 +466,144 @@ async def test_coverage_reports_true_partial_metadata(
 
 
 @pytest.mark.asyncio
+async def test_compare_includes_manually_entered_creators(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Manually entered creators compare like any ComicVine-backed creator.
+
+    Issue #4035 regression: thread-level manual credits fed the creator
+    detail page while the comparison reported the same creator as "not
+    available in your library". Both surfaces must share one definition of
+    library membership, so a manual-only creator compares with full metrics
+    and satisfies coverage exactly like confirmed provider metadata.
+    """
+    writer_thread, writer_issues = await _make_thread(
+        async_db, default_user, title="Manual Writer Book", issue_count=3,
+        queue_position=1, read_through=3
+    )
+    writer_thread.manual_creator_credits = [{"name": "Manual Writer", "roles": ["writer"]}]
+    await async_db.flush()
+    for issue in writer_issues:
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+
+    artist_thread, artist_issues = await _make_thread(
+        async_db, default_user, title="Manual Artist Book", issue_count=2,
+        queue_position=2, read_through=2
+    )
+    artist_thread.manual_creator_credits = [{"name": "Manual Artist", "roles": ["artist"]}]
+    await async_db.flush()
+    await _rate(async_db, artist_issues[0], rating=5.0, timestamp=D2)
+
+    writer_key = f"creator:{manual_creator_id('Manual Writer')}"
+    artist_key = f"creator:{manual_creator_id('Manual Artist')}"
+    response = await auth_client.get(f"/api/v1/creators/compare?keys={writer_key},{artist_key}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["comparisons"]) == {writer_key, artist_key}
+
+    writer = body["comparisons"][writer_key]
+    assert writer["display_name"] == "Manual Writer"
+    assert writer["normalized_roles"] == ["writer"]
+    assert writer["ratings_count"] == 3
+    assert writer["average_rating"] == pytest.approx(4.0)
+
+    artist = body["comparisons"][artist_key]
+    assert artist["display_name"] == "Manual Artist"
+    assert artist["ratings_count"] == 1
+    assert artist["average_rating"] == pytest.approx(5.0)
+
+    coverage = body["coverage"]
+    assert coverage["rated_issues_total"] == 4
+    assert coverage["rated_issues_with_creator_metadata"] == 4
+    assert coverage["ratings_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_compare_mixes_manual_and_comicvine_creators(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """One comparison can hold a manual creator and a ComicVine creator.
+
+    The mixed case is the shape the QA repro in issue #4035 exercises: a
+    reader comparing an established ComicVine-backed creator against a
+    manually entered one in a single bounded batch request.
+    """
+    mapped_thread, mapped_issues = await _make_thread(
+        async_db, default_user, title="Mapped Book", issue_count=2,
+        queue_position=1, read_through=2
+    )
+    for issue in mapped_issues:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 1, "name": "Writer One", "role": "writer"}]
+        )
+    await _rate(async_db, mapped_issues[0], rating=5.0, timestamp=D1)
+
+    manual_thread, manual_issues = await _make_thread(
+        async_db, default_user, title="Manual Book", issue_count=2,
+        queue_position=2, read_through=2
+    )
+    manual_thread.manual_creator_credits = [{"name": "Manual Writer", "roles": ["writer"]}]
+    await async_db.flush()
+    await _rate(async_db, manual_issues[0], rating=3.0, timestamp=D2)
+
+    manual_key = f"creator:{manual_creator_id('Manual Writer')}"
+    response = await auth_client.get(f"/api/v1/creators/compare?keys=creator:1,{manual_key}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["comparisons"]) == {"creator:1", manual_key}
+    assert body["comparisons"]["creator:1"]["average_rating"] == pytest.approx(5.0)
+    assert body["comparisons"][manual_key]["average_rating"] == pytest.approx(3.0)
+    assert body["coverage"]["rated_issues_total"] == 2
+    assert body["coverage"]["rated_issues_with_creator_metadata"] == 2
+    assert body["coverage"]["ratings_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_compare_confirmed_comicvine_credits_take_priority_over_manual(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Confirmed ComicVine credits take priority over thread manual credits.
+
+    The manual fallback covers only issues without confirmed provider
+    metadata, so an issue with a confirmed ComicVine mapping keeps its
+    provider attribution while the thread's manual credit covers the rest.
+    """
+    thread, issues = await _make_thread(
+        async_db, default_user, title="Mixed Book", issue_count=3,
+        queue_position=1, read_through=3
+    )
+    thread.manual_creator_credits = [{"name": "Manual Writer", "roles": ["writer"]}]
+    await async_db.flush()
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 7, "name": "Provider Writer", "role": "writer"}]
+    )
+    for issue in issues:
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+
+    manual_key = f"creator:{manual_creator_id('Manual Writer')}"
+    response = await auth_client.get(f"/api/v1/creators/compare?keys=creator:7,{manual_key}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["comparisons"]) == {"creator:7", manual_key}
+    # The confirmed-mapping issue is attributed to the ComicVine credit only;
+    # the manual credit covers the two issues without provider metadata.
+    assert body["comparisons"]["creator:7"]["ratings_count"] == 1
+    assert body["comparisons"][manual_key]["ratings_count"] == 2
+    assert body["coverage"]["rated_issues_total"] == 3
+    assert body["coverage"]["rated_issues_with_creator_metadata"] == 3
+    assert body["coverage"]["ratings_complete"] is True
+
+
+@pytest.mark.asyncio
 async def test_compare_issues_a_creator_independent_query_count(
     auth_client: AsyncClient,
     async_db: AsyncSession,
@@ -522,12 +661,14 @@ async def test_compare_issues_a_creator_independent_query_count(
     assert four.status_code == 200
     assert len(two.json()["comparisons"]) == 2
     assert len(four.json()["comparisons"]) == 4
-    # Auth lookup plus the three fixed batch queries; never one per creator.
-    # ``load_creator_comparison_inputs`` is independent of the creator-summary
-    # read that issue #3387 split into a separate thread query, so this bound
-    # stays tight and must not drift when that route's query count changes.
+    # Auth lookup plus the four fixed batch queries; never one per creator.
+    # The fourth batch query is the thread-only manual-credit read added by
+    # issue #4035 (the same per-thread shape issue #3387 gave the creator
+    # summary route). ``load_creator_comparison_inputs`` is independent of the
+    # creator-summary route's query count, so this bound stays fixed and must
+    # not drift when that route changes.
     assert len(four_creator_selects) == len(two_creator_selects)
-    assert len(four_creator_selects) <= 4, four_creator_selects
+    assert len(four_creator_selects) <= 5, four_creator_selects
 
 
 @pytest.mark.asyncio

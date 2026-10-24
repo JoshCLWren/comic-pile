@@ -107,9 +107,15 @@ async def test_global_three_list_cycle_rolls_back(
     path = cycle.json()["detail"]["path"]
     assert path
     canonical = {a: "Series 0 #1", b: "Series 1 #1", c: "Series 2 #1"}
+    thread_ids = {
+        issue.id: issue.thread_id
+        for issue in (await async_db.scalars(select(Issue).where(Issue.id.in_([a, b, c])))).all()
+    }
     for edge in path:
         assert edge["source_issue_name"] == canonical[edge["source_issue_id"]]
         assert edge["target_issue_name"] == canonical[edge["target_issue_id"]]
+        assert edge["source_thread_id"] == thread_ids[edge["source_issue_id"]]
+        assert edge["target_thread_id"] == thread_ids[edge["target_issue_id"]]
     assert len((await auth_client.get("/api/v1/custom-cbls")).json()) == 2
 
 
@@ -120,8 +126,14 @@ async def test_gate_removal_preserves_stable_prerequisite_and_read_state(
 ) -> None:
     """List edits and deletion cannot rewrite stable source/target requirements."""
     a, b, c = await _members(async_db)
-    requirement = Dependency(source_issue_id=a, target_issue_id=c, note="reader-authored",
-                             origin="reader", classification="A", provenance="Explicit reader prerequisite")
+    requirement = Dependency(
+        source_issue_id=a,
+        target_issue_id=c,
+        note="reader-authored",
+        origin="reader",
+        classification="A",
+        provenance="Explicit reader prerequisite",
+    )
     async_db.add(requirement)
     await async_db.commit()
     requirement_id = requirement.id
@@ -185,8 +197,15 @@ async def test_exclusion_stranding_requirement_fails_closed(
     """Authoring cannot silently hide an excluded prerequisite source."""
     a, b, _ = await _members(async_db)
     user = await get_or_create_user_async(async_db)
-    async_db.add(Dependency(source_issue_id=a, target_issue_id=b,
-                            origin="reader", classification="A", provenance="Explicit reader prerequisite"))
+    async_db.add(
+        Dependency(
+            source_issue_id=a,
+            target_issue_id=b,
+            origin="reader",
+            classification="A",
+            provenance="Explicit reader prerequisite",
+        )
+    )
     issue = await async_db.get(Issue, a)
     assert issue is not None
     if target == "issue":
@@ -300,8 +319,16 @@ async def test_series_and_stable_prerequisite_cycles_reject_atomically(
 ) -> None:
     """A failed mode edit restores metadata and cannot reverse a stable requirement."""
     a, b, c = await _members(async_db)
-    async_db.add(Dependency(source_issue_id=a, target_issue_id=c, note="explicit",
-                            origin="reader", classification="A", provenance="Explicit reader prerequisite"))
+    async_db.add(
+        Dependency(
+            source_issue_id=a,
+            target_issue_id=c,
+            note="explicit",
+            origin="reader",
+            classification="A",
+            provenance="Explicit reader prerequisite",
+        )
+    )
     await async_db.commit()
     created = await auth_client.post(
         "/api/v1/custom-cbls",

@@ -3,12 +3,13 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.external_identities import (
     ExternalIdentityMappingError,
     ExternalIdentitySpec,
+    _batch_identity_query,
     link_issue_external_identity,
     link_thread_external_series,
     upsert_external_identities,
@@ -422,6 +423,67 @@ async def test_upsert_external_identities_empty_iterable(
     """Empty iterable returns empty mapping without database access."""
     result = await upsert_external_identities(async_db, specs=[])
     assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_batch_identity_lookup_does_not_repeat_provider_binds_per_id(
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Large CBL batches bind provider/type once per family, including refresh."""
+    select_bind_counts: list[int] = []
+
+    def record_lookup(
+        connection: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        if statement.startswith("SELECT external_identities."):
+            assert isinstance(parameters, (tuple, list, dict))
+            select_bind_counts.append(len(parameters))
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", record_lookup)
+    try:
+        result = await upsert_external_identities(
+            async_db,
+            specs=[ExternalIdentitySpec("comicvine", "issue", f"bulk-{i}") for i in range(501)],
+        )
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", record_lookup)
+
+    assert len(result) == 501
+    assert len({identity.id for identity in result.values()}) == 501
+    assert len(select_bind_counts) == 4  # Two bounded lookups, before and after insertion.
+    assert max(select_bind_counts) <= 502
+
+
+@pytest.mark.asyncio
+async def test_batch_identity_lookup_preserves_provider_and_type_pairs(
+    async_db: AsyncSession,
+) -> None:
+    """An ID in one requested family cannot pull in another family's identity."""
+    seeded = await upsert_external_identities(
+        async_db,
+        specs=[
+            ExternalIdentitySpec(provider, entity_type, external_id, metadata_json={"keep": True})
+            for provider in ("comicvine", "other")
+            for entity_type in ("issue", "series")
+            for external_id in ("same", "other-id")
+        ],
+    )
+    requested = [("comicvine", "issue", "same"), ("other", "series", "other-id")]
+    fetched = list((await async_db.scalars(_batch_identity_query(requested))).all())
+    assert {(row.provider, row.entity_type, row.external_id) for row in fetched} == set(requested)
+    result = await upsert_external_identities(
+        async_db,
+        specs=[ExternalIdentitySpec(*key, metadata_json={"updated": True}) for key in requested],
+    )
+    assert set(result) == set(requested)
+    for key, identity in seeded.items():
+        assert identity.metadata_json == ({"updated": True} if key in requested else {"keep": True})
 
 
 @pytest.mark.asyncio

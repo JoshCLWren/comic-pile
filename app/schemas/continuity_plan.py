@@ -258,6 +258,7 @@ class ContinuityPlanListItem(BaseModel):
     lane_count: int
     step_count: int
     source_paths: list[str] = Field(default_factory=list)
+    source_names: dict[str, str] = Field(default_factory=dict)
     updated_at: datetime
 
 

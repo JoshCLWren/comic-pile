@@ -669,6 +669,26 @@ async def _ensure_missing_issue_created(
         return MaterializedIssue(issue, True)
 
 
+async def _new_series_thread_title(
+    db: AsyncSession, user_id: int, *, series_name: str, volume_year: int | None,
+) -> str:
+    """Name a new confirmed run without colliding with a reader's existing titles.
+
+    The materialization caller holds the reader lock throughout creation, so
+    concurrent imports cannot choose the same available title. Existing mapped
+    threads are reused before reaching this helper and are never renamed.
+    """
+    base = f"CBL: {series_name}"
+    year = f" ({volume_year})" if volume_year is not None else ""
+    run = 1
+    while True:
+        suffix = year if run == 1 else f"{year} (run {run})"
+        title = f"{base[:200 - len(suffix)].rstrip()}{suffix}"
+        if not await thread_repository.owned_title_exists(db, user_id, title):
+            return title
+        run += 1
+
+
 async def _find_or_create_series_thread(
     db: AsyncSession,
     user_id: int,
@@ -681,6 +701,8 @@ async def _find_or_create_series_thread(
 
     Prefers the stable external series identity via its thread mapping; falls
     back to a volume-disambiguated ``CBL:` title when identity is unavailable.
+    Newly created confirmed volumes also retain their year and get a readable
+    run suffix when that title is already used by a different volume.
 
     Args:
         db: Database session.
@@ -710,7 +732,9 @@ async def _find_or_create_series_thread(
         if identity is not None:
             thread = Thread(
                 user_id=user_id,
-                title=f"CBL: {series_name}",
+                title=await _new_series_thread_title(
+                    db, user_id, series_name=series_name, volume_year=volume_year,
+                ),
                 format="comic",
                 queue_position=await thread_repository.max_queue_position(db, user_id) + 1,
                 status="active",

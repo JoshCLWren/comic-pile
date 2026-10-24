@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import Select, and_, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +51,27 @@ class ExternalIdentitySpec:
     external_url: str | None = None
     metadata_json: dict[str, object] | None = None
     provider_updated_at: datetime | None = None
+
+
+def _batch_identity_query(
+    keys: list[tuple[str, str, str]],
+) -> Select[ExternalIdentity]:
+    """Match exact keys without repeating provider/type comparisons for each ID."""
+    families: dict[tuple[str, str], list[str]] = {}
+    for provider, entity_type, external_id in keys:
+        families.setdefault((provider, entity_type), []).append(external_id)
+    return select(ExternalIdentity).where(
+        or_(
+            *(
+                and_(
+                    ExternalIdentity.provider == provider,
+                    ExternalIdentity.entity_type == entity_type,
+                    ExternalIdentity.external_id.in_(external_ids),
+                )
+                for (provider, entity_type), external_ids in families.items()
+            )
+        )
+    )
 
 
 async def upsert_external_identities(
@@ -102,18 +123,7 @@ async def upsert_external_identities(
     existing_by_key: dict[tuple[str, str, str], ExternalIdentity] = {}
     for index in range(0, len(unique_keys), _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE):
         chunk = unique_keys[index : index + _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE]
-        conditions = [
-            (ExternalIdentity.provider == provider)
-            & (ExternalIdentity.entity_type == entity_type)
-            & (ExternalIdentity.external_id == external_id)
-            for provider, entity_type, external_id in chunk
-        ]
-        combined_condition = conditions[0]
-        for cond in conditions[1:]:
-            combined_condition = combined_condition | cond
-        rows = list(
-            (await db.execute(select(ExternalIdentity).where(combined_condition))).scalars().all()
-        )
+        rows = list((await db.execute(_batch_identity_query(chunk))).scalars().all())
         for row in rows:
             existing_by_key[(row.provider, row.entity_type, row.external_id)] = row
 
@@ -162,20 +172,7 @@ async def upsert_external_identities(
         refreshed_by_key: dict[tuple[str, str, str], ExternalIdentity] = {}
         for index in range(0, len(unique_keys), _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE):
             chunk = unique_keys[index : index + _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE]
-            refresh_conditions = [
-                (ExternalIdentity.provider == provider)
-                & (ExternalIdentity.entity_type == entity_type)
-                & (ExternalIdentity.external_id == external_id)
-                for provider, entity_type, external_id in chunk
-            ]
-            combined_refresh = refresh_conditions[0]
-            for cond in refresh_conditions[1:]:
-                combined_refresh = combined_refresh | cond
-            refreshed = list(
-                (await db.execute(select(ExternalIdentity).where(combined_refresh)))
-                .scalars()
-                .all()
-            )
+            refreshed = list((await db.execute(_batch_identity_query(chunk))).scalars().all())
             for row in refreshed:
                 refreshed_by_key[(row.provider, row.entity_type, row.external_id)] = row
         existing_by_key = refreshed_by_key

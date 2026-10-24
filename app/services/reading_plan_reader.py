@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from comic_pile.dependencies import build_blocking_explanation
+from app.services.reading_plan_source_labels import load_reading_plan_source_names
 from app.repositories import continuity_repository, reading_plan_repository
 from app.services import reading_plan_release_source_service as release_source_service
 from app.services.reading_eligibility_service import (
@@ -214,6 +215,9 @@ async def get_reading_plan_reader(
     for row in incoming_rows:
         incoming[row.target_issue_id].append(row)
     sources = await reading_plan_repository.list_plan_sources(db, plan_id=plan_id_value)
+    source_names = await load_reading_plan_source_names(
+        db, user_id=user_id, source_paths=(source.raw_source_path for source in sources),
+    )
     source_paths_by_id = {source.id: source.raw_source_path for source in sources}
     placement_rows = await reading_plan_repository.list_plan_source_placements(
         db, plan_id=plan_id_value
@@ -289,6 +293,7 @@ async def get_reading_plan_reader(
         sources=[
             ReadingPlanSourceSnapshot(
                 id=source.id,
+                display_name=source_names.get(source.raw_source_path),
                 raw_source_path=source.raw_source_path,
                 repository=source.repository,
                 source_path=source.source_path,

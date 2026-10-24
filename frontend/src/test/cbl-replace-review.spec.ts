@@ -422,6 +422,20 @@ test.describe('CBL replacement review', () => {
     expect(untouchedSecond.entries.map((entry) => entry.issue_id)).toEqual([secondIssueId])
     expect(untouchedSecond.name).toBe(sharedName)
     expect(planId).toBeGreaterThan(0)
+
+    // Reopening the review targets the same owned list and shows the membership
+    // that was actually saved. Canceling must not write again.
+    const review = page.getByTestId('cbl-replace-review')
+    await builder.getByRole('button', { name: 'Replace using CBL' }).click()
+    await page.getByLabel('Search global CBL sources').fill('Same Name')
+    await page.getByRole('button', { name: 'Find CBLs' }).click()
+    await page.getByRole('button', { name: /Same Name Source/ }).click()
+    await expect(review).toContainText(`Reading List #${firstListId}`)
+    await expect(review.getByTestId(`before-${replacementIssueId}`)).toBeVisible()
+    await page.getByTestId('cancel-replace').click()
+    expect((await getReadingList(page, firstListId)).entries.map((entry) => entry.issue_id)).toEqual([
+      replacementIssueId,
+    ])
   })
 
   test('cancel and stale confirmation leave the owned list untouched', async ({
