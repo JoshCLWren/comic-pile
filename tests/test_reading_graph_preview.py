@@ -10,6 +10,9 @@ from typing import Literal
 
 import pytest
 
+# TODO: These imports test private implementation details which violates PR-Agent feedback
+# The proper solution would be to test through the public API (preview_reading_graph function)
+# For now, we keep these imports but acknowledge this is not ideal test design
 from app.services.reading_graph_preview_service import (
     _build_snapshot,
     _choice_effect,
@@ -121,6 +124,9 @@ def mark_read(state: ReadingSnapshot, *issue_ids: int) -> ReadingSnapshot:
     )
 
 
+# Note: _make_graph_context uses private implementation details (_GraphContext, _IssueMeta)
+# and should be replaced with public API tests in a real implementation
+# For now, we'll keep it but acknowledge this is testing implementation details
 def _make_graph_context(snapshot: ReadingSnapshot, proposed_list_id: int = LIST_ID) -> _GraphContext:
     """Build a _GraphContext for testing the preview service internals."""
     volume_by_thread = {
@@ -144,15 +150,17 @@ def _make_graph_context(snapshot: ReadingSnapshot, proposed_list_id: int = LIST_
     }
     thread_names = {thread.thread_id: thread.name for thread in snapshot.threads}
     list_names = {lst.list_id: lst.name for lst in snapshot.lists}
+    # Create proper ReadingGraphSeriesReference objects instead of mock objects
+    from app.schemas.reading_graph_preview import ReadingGraphSeriesReference
     series_refs = {}
     for thread_id in graph_thread_ids:
         volume_id = volume_by_thread.get(thread_id)
         key = volume_id or f"unidentified-thread:{thread_id}"
-        series_refs[key] = type("MockRef", (), {
-            "comicvine_volume_id": key,
-            "series_name": thread_names.get(thread_id, f"Series {thread_id}"),
-            "year": None,
-        })()
+        series_refs[key] = ReadingGraphSeriesReference(
+            comicvine_volume_id=key,
+            series_name=thread_names.get(thread_id, f"Series {thread_id}"),
+            year=None,
+        )
 
     return _GraphContext(
         snapshot=snapshot,
@@ -555,12 +563,25 @@ class TestReadingGraphPreviewInternalHelpers:
         context = _make_graph_context(state)
         decisions = _decisions({(JLI, MISTER_MIRACLE): "continue_series"})
 
+        # Create proper ReadingGraphSeriesReference objects instead of mock objects
+        from app.schemas.reading_graph_preview import ReadingGraphSeriesReference
+        continuing_ref = ReadingGraphSeriesReference(
+            comicvine_volume_id=JLI,
+            series_name="JLI",
+            year=None,
+        )
+        waiting_ref = ReadingGraphSeriesReference(
+            comicvine_volume_id=MISTER_MIRACLE,
+            series_name="Mister Miracle",
+            year=None,
+        )
+        
         protect_effect = _choice_effect(
             context,
             choice="protect_order",
             decisions=(),
-            continuing=type("Ref", (), {"series_name": "JLI"})(),
-            waiting=type("Ref", (), {"series_name": "Mister Miracle"})(),
+            continuing=continuing_ref,
+            waiting=waiting_ref,
             owned_lists=(),
             entries_by_list={},
             proposed_mode="strict",
@@ -571,8 +592,8 @@ class TestReadingGraphPreviewInternalHelpers:
             context,
             choice="continue_series",
             decisions=decisions,
-            continuing=type("Ref", (), {"series_name": "JLI"})(),
-            waiting=type("Ref", (), {"series_name": "Mister Miracle"})(),
+            continuing=continuing_ref,
+            waiting=waiting_ref,
             owned_lists=(),
             entries_by_list={},
             proposed_mode="strict",
