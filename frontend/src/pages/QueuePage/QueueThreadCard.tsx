@@ -1,3 +1,4 @@
+import { EligibilityExplanation } from '../../components/EligibilityExplanation'
 import { ReadingBoundaryExplanation } from '../../components/ReadingBoundaryExplanation'
 import type { ReadingBoundaryExplanation as BoundaryExplanation } from '../../services/api-reading-boundaries'
 import { Link } from 'react-router-dom'
@@ -20,8 +21,6 @@ interface QueueThreadCardProps {
   blockingDependencies: BlockingDependency[]
   readingBoundary?: BoundaryExplanation
   boundaryPending?: boolean
-  boundaryError?: boolean
-  onRetryBoundaries?: () => void
   /**
    * Crossover memberships resolved by the owning list view.
    *
@@ -63,8 +62,6 @@ export default function QueueThreadCard({
   blockingDependencies,
   readingBoundary,
   boundaryPending,
-  boundaryError,
-  onRetryBoundaries,
   crossoverGroups,
   crossoverGroupsLoading,
   crossoverGroupsError,
@@ -93,13 +90,21 @@ export default function QueueThreadCard({
   // `total_issues` is optional in the generated list item; absent and null
   // both mean the thread has no known issue total.
   const isMigrated = thread.total_issues != null
-  const blockerLabels = readingBoundary
-    ? readingBoundary.blockers?.flatMap((blocker) => blocker.waiting_on?.map((issue) => issue.label) ?? []) ?? []
-    : blockingDependencies.map((dependency) => dependency.label)
+  const canonicalBlockerLabels =
+    readingBoundary?.blockers?.flatMap((blocker) => blocker.waiting_on?.map((issue) => issue.label) ?? []) ?? []
+  // Default deployments get no canonical blockers, so the lock tooltip keeps
+  // naming the legacy batch's requirements instead of falling back to generic
+  // copy (#4025).
+  const blockerLabels =
+    canonicalBlockerLabels.length > 0
+      ? canonicalBlockerLabels
+      : blockingDependencies.map((dependency) => dependency.label)
 
+  // `summary` is interactive chrome inside the card: toggling the historical
+  // associations must expand them instead of opening Thread Detail.
   const isInteractiveTarget = (target: EventTarget | null, card: HTMLDivElement) => {
     const interactive = target instanceof Element
-      ? target.closest('button, a, input, select, textarea, [role="button"], [role="link"]')
+      ? target.closest('button, a, input, select, textarea, summary, [role="button"], [role="link"]')
       : null
     return interactive !== null && interactive !== card
   }
@@ -220,7 +225,27 @@ export default function QueueThreadCard({
               data-testid="queue-thread-blocked-detail"
               className="mt-2 w-full rounded-lg border border-[var(--theme-continuity-accent)]/20 bg-[var(--theme-continuity-accent)]/10 px-3 py-2 text-left text-xs text-[var(--theme-text-muted)]"
             >
-              <ReadingBoundaryExplanation explanation={readingBoundary} isPending={boundaryPending} isError={boundaryError} onRetry={onRetryBoundaries} />
+              <ReadingBoundaryExplanation
+                explanation={readingBoundary}
+                isPending={boundaryPending}
+                fallback={
+                  <>
+                    <EligibilityExplanation
+                      isBlocked={isBlocked}
+                      reasons={thread.blocking_reasons}
+                      dependencies={blockingDependencies}
+                    />
+                    <button
+                      type="button"
+                      onClick={onDependencies}
+                      aria-label={`View dependencies for ${thread.title}`}
+                      className="min-h-11 text-sm font-semibold text-[var(--theme-continuity-accent)]"
+                    >
+                      Manage prerequisites
+                    </button>
+                  </>
+                }
+              />
               {isBlocked && <p className="mt-1 text-[var(--theme-text-dim)]">Read &amp; Rate unlocks once the active reading requirements are satisfied.</p>}
             </div>
           )}

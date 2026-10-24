@@ -19,6 +19,7 @@ import {
 } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
+import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api-threads'
 import { issueDependenciesApi } from '../services/api-dependencies'
@@ -55,6 +56,12 @@ vi.mock('../hooks/useSnooze', () => ({
 
 vi.mock('../hooks/useQueueBlockingInfo', () => ({
   useQueueBlockingInfo: vi.fn(() => ({})),
+}))
+
+// The canonical boundary batch is the queue's primary blocking source; stub it so
+// these tests exercise the queue's legacy fallback path without real requests.
+vi.mock('../hooks/useReadingBoundaries', () => ({
+  useReadingBoundaries: vi.fn(),
 }))
 
 vi.mock('../services/api-threads', () => ({
@@ -131,6 +138,8 @@ const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseReadingBoundaries = vi.mocked(useReadingBoundaries) as any
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -221,6 +230,12 @@ beforeEach(() => {
     restoreLastView: vi.fn(),
   })
   mockedUseQueueBlockingInfo.mockReturnValue({})
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: { threads: {} },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })
   mockedListForThread.mockResolvedValue({ issues: [] })
   // SAFETY: full response shape satisfies RollResponse; cast bypasses strict mock typing
   mockedThreadsApi.setPending.mockResolvedValue({} as never)

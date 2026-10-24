@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { BoundaryEditorTarget, BoundaryIssue, ReadingBoundaryExplanation as Explanation } from '../services/api-reading-boundaries'
 
@@ -23,13 +24,22 @@ interface Props {
   isPending?: boolean
   isError?: boolean
   onRetry?: () => void
+  /**
+   * Legacy availability explanation for deployments where the canonical
+   * evaluator is switched off. The endpoint answers `state: "unavailable"` for
+   * every series in that mode, so callers supply the server's existing
+   * next-issue/blocker detail instead of dropping it.
+   */
+  fallback?: ReactNode
 }
 
+const UNAVAILABLE = <p className="text-sm text-[var(--theme-text-muted)]">Reading boundaries are unavailable.</p>
+
 /** Present the evaluator's result; recorded associations never become inferred blockers. */
-export function ReadingBoundaryExplanation({ explanation, isPending, isError, onRetry }: Props) {
+export function ReadingBoundaryExplanation({ explanation, isPending, isError, onRetry, fallback }: Props) {
   if (isError) return <div role="alert" className="text-sm text-[var(--theme-error)]"><p>Reading boundaries could not be loaded.</p><button type="button" className="min-h-11 underline" onClick={onRetry}>Retry reading boundaries</button></div>
   if (isPending) return <p role="status" className="text-sm text-[var(--theme-text-muted)]">Loading reading boundaries…</p>
-  if (!explanation || explanation.state === 'unavailable') return <p className="text-sm text-[var(--theme-text-muted)]">Reading boundaries are unavailable.</p>
+  if (!explanation || explanation.state === 'unavailable') return <>{fallback ?? UNAVAILABLE}</>
   return (
     <div className="min-w-0 space-y-2 break-words text-sm text-[var(--theme-text-muted)]" data-testid="canonical-reading-boundary">
       <p className={`font-semibold ${explanation.state === 'blocked' ? 'text-[var(--theme-warning)]' : 'text-[var(--theme-text-primary)]'}`}>{explanation.summary}</p>

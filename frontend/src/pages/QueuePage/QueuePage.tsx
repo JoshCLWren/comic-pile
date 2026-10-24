@@ -145,7 +145,7 @@ const {
 
   // Row rendering (blocking, crossovers, snooze state) lives in the extracted
   // module so this page stays a thin route composition.
-  const renderThreadCard = useQueueThreadCards({
+  const { renderThreadCard, boundaryError, retryBoundaries } = useQueueThreadCards({
     actions,
     activeThreads,
     modals,
@@ -218,6 +218,25 @@ const {
           >
             +
           </button>
+        )}
+
+        {boundaryError && (
+          <div
+            role="alert"
+            className="surface-panel rounded-xl p-3 text-sm text-[var(--theme-text-muted)] md:p-4"
+          >
+            <p>
+              Reading boundaries could not be loaded. Rows fall back to their recorded
+              prerequisites.
+            </p>
+            <button
+              type="button"
+              onClick={() => void retryBoundaries()}
+              className="min-h-11 font-semibold text-[var(--theme-continuity-accent)] underline"
+            >
+              Retry reading boundaries
+            </button>
+          </div>
         )}
 
         <QueueList

@@ -19,6 +19,7 @@ import {
 } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
+import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useToast } from '../contexts/useToast'
 import { threadsApi } from '../services/api-threads'
@@ -57,6 +58,14 @@ vi.mock('../hooks/useSnooze', () => ({
 
 vi.mock('../hooks/useQueueBlockingInfo', () => ({
   useQueueBlockingInfo: vi.fn(() => ({})),
+}))
+
+// The Queue renders canonical reading boundaries for every visible row. These
+// page tests exercise queue behaviour, so the batch answer is stubbed instead of
+// reaching the network; the default mirrors a deployment without the canonical
+// evaluator, which keeps the legacy blocking fallback in play.
+vi.mock('../hooks/useReadingBoundaries', () => ({
+  useReadingBoundaries: vi.fn(),
 }))
 
 vi.mock('../services/api-threads', () => ({
@@ -114,6 +123,8 @@ const mockedUseSession = vi.mocked(useSession) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseReadingBoundaries = vi.mocked(useReadingBoundaries) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
@@ -150,6 +161,12 @@ beforeEach(() => {
   })
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: { threads: {} },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })
   mockedUseBugReportRestore.mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
@@ -562,6 +579,27 @@ describe('Keyboard Accessibility', () => {
   ).toBeInTheDocument()
   await user.click(screen.getByTestId('queue-empty-add-series'))
   expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
+})
+
+it('shows one shared boundary failure notice and retries the batch', async () => {
+  const refetch = vi.fn()
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isError: true,
+    refetch,
+  })
+  const user = userEvent.setup()
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+
+  // Unblocked rows alone must still surface the failure, exactly once.
+  expect(screen.getAllByRole('alert')).toHaveLength(1)
+  expect(
+    screen.getByText(/Reading boundaries could not be loaded/),
+  ).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'Retry reading boundaries' }))
+  expect(refetch).toHaveBeenCalledTimes(1)
 })
 
   it('prevents reading blocked threads and reports delete failures', async () => {

@@ -1,3 +1,5 @@
+import { EligibilityExplanation } from '../components/EligibilityExplanation'
+import { useThreadBlockingInfo } from '../hooks/useDependencies'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { ReadingBoundaryExplanation } from '../components/ReadingBoundaryExplanation'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -77,6 +79,16 @@ export default function ThreadDetailView() {
     Number.isInteger(parsedThreadId) && parsedThreadId > 0 ? parsedThreadId : null
 
   const boundaryQuery = useReadingBoundaries(threadId ? [threadId] : [])
+  // Canonical explanations are only produced while the evaluator is enabled.
+  // Default deployments get `state: "unavailable"` for every series, so the
+  // server's legacy availability batch stays the fallback source of the next
+  // issue and its named blockers (#4025).
+  const canonicalBoundaryUnavailable =
+    threadId !== null &&
+    !boundaryQuery.isPending &&
+    !boundaryQuery.isError &&
+    boundaryQuery.data?.threads[threadId]?.state === 'unavailable'
+  const legacyBlockingInfo = useThreadBlockingInfo(canonicalBoundaryUnavailable ? threadId : null)
   const { data: thread, error: threadError, refetch } = useThread(threadId)
   const {
     connectedThreads,
@@ -317,7 +329,29 @@ export default function ThreadDetailView() {
 
       <div className="space-y-4 md:space-y-6">
         <section className="surface-panel rounded-xl p-3 md:p-4" aria-label="Next issue availability">
-          <ReadingBoundaryExplanation explanation={boundaryQuery.data?.threads[thread.id]} isPending={boundaryQuery.isPending} isError={boundaryQuery.isError} onRetry={() => { void boundaryQuery.refetch() }} />
+          <ReadingBoundaryExplanation
+            explanation={boundaryQuery.data?.threads[thread.id]}
+            isPending={boundaryQuery.isPending}
+            isError={boundaryQuery.isError}
+            onRetry={() => { void boundaryQuery.refetch() }}
+            fallback={
+              legacyBlockingInfo.isError ? (
+                <div role="alert" className="text-sm text-[var(--theme-error)]">
+                  <p>Unable to load reading requirements.</p>
+                  <button type="button" className="min-h-11 underline" onClick={() => void legacyBlockingInfo.refetch()}>Retry requirements</button>
+                </div>
+              ) : legacyBlockingInfo.isPending ? (
+                <p role="status" className="text-sm text-[var(--theme-text-muted)]">Loading reading requirements…</p>
+              ) : (
+                <EligibilityExplanation
+                  isBlocked={legacyBlockingInfo.data?.threads[thread.id]?.is_blocked ?? thread.is_blocked}
+                  reasons={legacyBlockingInfo.data?.threads[thread.id]?.blocking_reasons ?? thread.blocking_reasons}
+                  dependencies={legacyBlockingInfo.data?.threads[thread.id]?.blocking_dependencies}
+                  emptyLabel={thread.status === 'completed' ? 'Every issue is read' : thread.status !== 'active' ? 'Series is inactive' : thread.next_unread_issue_number ? `Next unread: #${thread.next_unread_issue_number}` : thread.total_issues == null && thread.issues_remaining > 0 ? 'Available now' : 'No available unread issue'}
+                />
+              )
+            }
+          />
         </section>
         {showReadingProgress && (
           <div className="surface-panel p-3 md:p-4 space-y-3">

@@ -443,7 +443,7 @@ it('renders named blocked-by dependencies and an empty blocking list as links', 
   await waitFor(() =>
     expect(screen.getByRole('link', { name: 'Open Prequel' })).toHaveAttribute('href', '/thread/9'),
   )
-  expect(screen.getByText('This series blocks nothing')).toBeInTheDocument()
+  expect(screen.getByText('No recorded outgoing prerequisites')).toBeInTheDocument()
 })
 
 it('renders blocker issue number on thread detail when known', async () => {
@@ -494,7 +494,7 @@ it('renders named blocking dependencies when nothing blocks this thread', async 
   })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  await waitFor(() => expect(screen.getByText('No incoming explicit prerequisites')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('No recorded incoming prerequisites')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 
@@ -512,7 +512,7 @@ it('lists a circular dependency once instead of under both directions (#3239)', 
 
   expect(screen.getByRole('heading', { name: /Circular Dependencies/ })).toBeInTheDocument()
   expect(
-    screen.getByText(/part of a dependency loop with this series/),
+    screen.getByText(/These recorded prerequisite relationships form a cycle/),
   ).toBeInTheDocument()
   expect(
     screen.getByRole('link', { name: 'Open Magneto Rex (circular dependency)' }),
@@ -665,6 +665,46 @@ it('uses canonical list blockers even when explicit connected prerequisites are 
   expect(await screen.findByText('Waiting')).toBeVisible()
   expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toHaveAttribute('href', '/thread/2?issue=9#issue-9')
   expect(screen.queryByText('Available now')).not.toBeInTheDocument()
+})
+
+it('falls back to the legacy availability explanation when canonical boundaries are unavailable', async () => {
+  vi.mocked(readingBoundariesApi.batch).mockResolvedValue({
+    threads: { 1: { thread_id: 1, state: 'unavailable', summary: 'Option E is not active for Saga.' } },
+  })
+  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({
+    threads: {
+      1: {
+        is_blocked: true,
+        blocking_reasons: ['Hold in Ultimate: waiting on One Year In #1'],
+        blocking_dependencies: [
+          {
+            issue_id: 9,
+            thread_id: 2,
+            thread_title: 'One Year In',
+            issue_number: '1',
+            label: 'Hold in Ultimate: waiting on One Year In #1',
+          },
+        ],
+      },
+    },
+  })
+  renderPage()
+
+  expect(await screen.findByTestId('eligibility-explanation')).toBeVisible()
+  expect(screen.getByText('Waiting')).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toHaveAttribute(
+    'href',
+    '/thread/2?issue=9#issue-9',
+  )
+  expect(screen.queryByText('Reading boundaries are unavailable.')).not.toBeInTheDocument()
+  expect(dependenciesApi.getBatchBlockingInfo).toHaveBeenCalledWith([1])
+})
+
+it('does not request legacy availability while canonical boundaries answer', async () => {
+  renderPage()
+
+  expect(await screen.findByText('Available now')).toBeVisible()
+  expect(dependenciesApi.getBatchBlockingInfo).not.toHaveBeenCalled()
 })
 
 it('opens the exact required issue after loading its later page', async () => {
