@@ -385,14 +385,28 @@ export default function CblBrowserPage() {
     setCustomizing(false)
     setConfirmOpen(false)
     if (saved) {
-      setSeriesDecisions(saved.series)
-      setEntryDecisions(saved.entries)
+      // If the source's content has changed since choices were saved,
+      // the saved entryDecisions have stale cbl_entry_id values that no
+      // longer match the server's entry rows. Discard them and require a
+      // fresh review before committing.
+      if (previewQuery.data?.source.content_hash !== saved.content_hash) {
+        setSeriesDecisions({})
+        setEntryDecisions({})
+        setStaleReview(true)
+      } else {
+        setSeriesDecisions(saved.series)
+        setEntryDecisions(saved.entries)
+      }
     } else {
       setSeriesDecisions({})
       setEntryDecisions({})
     }
     setExpandedGroups({})
-    setStaleReview(false)
+    // Only clear staleReview when the content_hash matches; otherwise
+    // the stale-detection effect (or the warning below) will keep it set.
+    if (!saved || previewQuery.data?.source.content_hash === saved.content_hash) {
+      setStaleReview(false)
+    }
     setAmbiguousCommit(false)
     setOverlapChoices({})
     setGraphDialogOpen(false)
