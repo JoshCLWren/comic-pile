@@ -207,6 +207,36 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
     expect(screen.getByText('Reading boundaries are unavailable.')).toBeInTheDocument()
   })
 
+  it('offers a retry when the canonical boundaries request fails', async () => {
+    const user = userEvent.setup()
+    const onRetryBoundaries = vi.fn()
+    renderWithToast(ratingView({
+      readingBoundariesRequested: false,
+      readingBoundaryError: true,
+      onRetryBoundaries,
+    }))
+
+    await user.click(screen.getByTestId('reading-boundaries-button'))
+    expect(screen.getByRole('alert')).toHaveTextContent('Reading boundaries could not be loaded.')
+    await user.click(screen.getByRole('button', { name: 'Retry reading boundaries' }))
+    expect(onRetryBoundaries).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not request the boundary scope again when closing an open card', async () => {
+    const user = userEvent.setup()
+    const onShowBoundaries = vi.fn()
+    renderWithToast(ratingView({
+      readingBoundariesRequested: true,
+      readingBoundary: { thread_id: 1, state: 'available', summary: 'Available now' },
+      onShowBoundaries,
+    }))
+
+    expect(screen.getByTestId('reading-boundaries-content')).toBeInTheDocument()
+    await user.click(screen.getByTestId('reading-boundaries-button'))
+    expect(onShowBoundaries).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('reading-boundaries-content')).not.toBeInTheDocument()
+  })
+
   it('still renders comic and decision regions and rating actions', () => {
     renderWithToast(ratingView({
       readingBoundariesRequested: true,

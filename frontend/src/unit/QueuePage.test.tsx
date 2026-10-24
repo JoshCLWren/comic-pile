@@ -581,6 +581,71 @@ describe('Keyboard Accessibility', () => {
   expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
 })
 
+it('uses canonical boundary blockers for queue rows instead of legacy dependencies', () => {
+  mockedUseQueueThreads.mockReturnValue({
+    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] }],
+    isPending: false,
+    refetch: vi.fn(),
+  })
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: {
+      threads: {
+        1: {
+          thread_id: 1,
+          state: 'blocked',
+          summary: 'Saga #5 is waiting on 1 live requirement.',
+          blockers: [
+            {
+              kind: 'hold',
+              origin: 'reading_list',
+              reason: 'Hold in Ultimate: waiting on One Year In #1',
+              waiting_on: [
+                { issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1' },
+              ],
+              editor: { kind: 'reading_list', list_id: 4, label: 'Ultimate' },
+            },
+          ],
+        },
+      },
+    },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+
+  const readButton = screen.getByLabelText('Read & Rate')
+  expect(readButton).toBeDisabled()
+  expect(readButton).toHaveAttribute('title', expect.stringContaining('Hold in Ultimate'))
+  expect(screen.getByTestId('canonical-reading-boundary')).toBeInTheDocument()
+  // A canonical answer suppresses the legacy batch read, so rows never pay for
+  // two sources of blocking truth.
+  expect(mockedUseQueueBlockingInfo).toHaveBeenLastCalledWith([])
+})
+
+it('follows canonical availability over a stale legacy blocked flag', () => {
+  mockedUseQueueThreads.mockReturnValue({
+    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: true, blocking_reasons: ['Blocked by: Prequel'] }],
+    isPending: false,
+    refetch: vi.fn(),
+  })
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: {
+      threads: {
+        1: { thread_id: 1, state: 'available', summary: 'Saga #5 is available now.' },
+      },
+    },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+
+  expect(screen.getByLabelText('Read & Rate')).not.toBeDisabled()
+  expect(screen.queryByLabelText('Blocked series')).not.toBeInTheDocument()
+  expect(mockedUseQueueBlockingInfo).toHaveBeenLastCalledWith([])
+})
+
 it('shows one shared boundary failure notice and retries the batch', async () => {
   const refetch = vi.fn()
   mockedUseReadingBoundaries.mockReturnValue({

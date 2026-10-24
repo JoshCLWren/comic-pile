@@ -211,7 +211,7 @@ describe('targeted cache effects', () => {
       queryKeys.thread.summary(thread.id),
       thread,
     )
-    expect(invalidateQueries).toHaveBeenCalledTimes(4)
+    expect(invalidateQueries).toHaveBeenCalledTimes(5)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -225,6 +225,9 @@ describe('targeted cache effects', () => {
     })
     // The History card counts the same rows through the paginated session list.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })
+    // Rating marks the issue read, so canonical reading boundaries must
+    // recompute instead of retaining the pre-rating blocker.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
     expect(resetQueries).not.toHaveBeenCalled()
   })
 
