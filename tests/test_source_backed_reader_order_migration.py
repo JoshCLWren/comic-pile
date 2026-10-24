@@ -544,10 +544,20 @@ async def test_source_backed_migration_refuses_needs_review_intersection(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("source_dependency_id", [None, 101, 1929])
 async def test_source_already_migrated_requires_legacy_debt_cleared(
     async_db: AsyncSession,
+    source_dependency_id: int | None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Canonical plan alone is not already-migrated while source-note debt remains."""
+    # These are fresh fixture dependencies, not the production rows recorded in
+    # Step 14. Explicit IDs exercise collisions without inheriting that audit's
+    # classifications; the needs_review rejection has its own fixture above.
+    monkeypatch.setattr(
+        "app.services.source_backed_reader_order_migration._explicit_classifications",
+        lambda _index: ({}, {}),
+    )
     from app.services.reader_order_migration_coordinator import (
         _source_already_migrated,
         _source_legacy_debt_cleared,
@@ -628,6 +638,7 @@ async def test_source_already_migrated_requires_legacy_debt_cleared(
         async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue.id))
 
     source_dependency = Dependency(
+        id=source_dependency_id,
         source_issue_id=issues[0].id,
         target_issue_id=issues[1].id,
         note=f"cbl-order:source:{source_list.content_hash}:1->2",
