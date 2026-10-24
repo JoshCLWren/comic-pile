@@ -323,6 +323,67 @@ class TagInheritanceService:
             )
         return results
 
+    async def issues_still_inheriting_tag(
+        self, user: User, tag_id: int, issue_ids: Sequence[int]
+    ) -> list[int]:
+        """Return the subset of issues that keep a tag through inheritance.
+
+        Bulk removal (issue #3433, issue #3557) must distinguish targets that
+        truly lost the tag from targets whose direct assignment never existed
+        but that still show the tag through their thread or a containing
+        Reading Plan. The same additive parent paths and the same privacy
+        boundary as the effective-tag reads apply: only the viewer's own plans
+        and visible assignments contribute.
+
+        Args:
+            user: The requesting user.
+            tag_id: Primary key of the tag.
+            issue_ids: Issue ids to inspect. Duplicates are ignored.
+
+        Returns:
+            The inspected issue ids, in first-seen order, that still inherit
+            the tag from their thread or from a containing owned Reading Plan.
+        """
+        unique_ids = list(dict.fromkeys(issue_ids))
+        if not unique_ids:
+            return []
+        thread_by_issue = await issue_repository.thread_ids_for_issues(
+            self._db, issue_ids=unique_ids, user_id=user.id
+        )
+        plans_by_issue = await reading_plan_repository.plans_containing_issues_for_user(
+            self._db, issue_ids=unique_ids, user_id=user.id
+        )
+        targets: list[tuple[str, int]] = [
+            ("Thread", thread_id) for thread_id in set(thread_by_issue.values())
+        ]
+        plan_ids = {plan.id for plans in plans_by_issue.values() for plan in plans}
+        targets.extend(("ContinuityPlan", plan_id) for plan_id in plan_ids)
+        holder_thread_ids: set[int] = set()
+        holder_plan_ids: set[int] = set()
+        if targets:
+            pairs = await tag_repository.list_visible_assignments_for_targets(
+                self._db, user.id, targets
+            )
+            for tag, assignment in pairs:
+                if tag.id != tag_id:
+                    continue
+                if assignment.target_type == "Thread":
+                    holder_thread_ids.add(assignment.target_id)
+                elif assignment.target_type == "ContinuityPlan":
+                    holder_plan_ids.add(assignment.target_id)
+        still: list[int] = []
+        for issue_id in unique_ids:
+            thread_id = thread_by_issue.get(issue_id)
+            inherited = thread_id is not None and thread_id in holder_thread_ids
+            if not inherited:
+                inherited = any(
+                    plan.id in holder_plan_ids
+                    for plan in plans_by_issue.get(issue_id, [])
+                )
+            if inherited:
+                still.append(issue_id)
+        return still
+
     async def get_thread_effective_tags(
         self, user: User, thread_id: int
     ) -> EffectiveTagsResult:

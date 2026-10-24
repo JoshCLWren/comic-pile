@@ -73,6 +73,36 @@ async def resolve_owned_thread_id(
     return result.scalar_one_or_none()
 
 
+async def thread_ids_for_issues(
+    db: AsyncSession, *, issue_ids: list[int], user_id: int
+) -> dict[int, int]:
+    """Resolve thread IDs for several owned issues in one round trip.
+
+    Bulk variant of :func:`resolve_owned_thread_id` for callers that inspect
+    many issues at once (the bulk-unassign inheritance report in issue
+    #3557). The same privacy boundary applies: an issue maps to its thread
+    only when the thread belongs to ``user_id``.
+
+    Args:
+        db: Database session.
+        issue_ids: Canonical Issue ids to resolve. Duplicates are ignored.
+        user_id: Owner that must own the parent threads.
+
+    Returns:
+        Map from each requested issue ID to its owning thread ID. Issues that
+        do not exist or whose thread is owned by someone else are omitted.
+    """
+    unique_ids = list(dict.fromkeys(issue_ids))
+    if not unique_ids:
+        return {}
+    result = await db.execute(
+        select(Issue.id, Issue.thread_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Issue.id.in_(unique_ids), Thread.user_id == user_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
+
+
 async def find_owned(db: AsyncSession, user_id: int, issue_id: int) -> Issue | None:
     """Find an issue by ID scoped to the owner of its parent thread.
 

@@ -73,6 +73,12 @@ class BulkAssignmentResult:
         requested_ids: Deduplicated target ids the request asked about.
         affected_ids: Targets whose assignment state actually changed.
         already_ids: Targets already in the desired state.
+        still_inherited_ids: Subset of ``already_ids`` that keep the tag
+            through inheritance after a bulk removal (issue #3433). An issue
+            whose thread or containing Reading Plan still holds the tag keeps
+            showing it even though it has no direct assignment, so callers
+            must not report it as untagged. Always empty for bulk adds and
+            for target types that cannot inherit in v1.
     """
 
     tag_id: int
@@ -80,6 +86,7 @@ class BulkAssignmentResult:
     requested_ids: list[int]
     affected_ids: list[int] = field(default_factory=list)
     already_ids: list[int] = field(default_factory=list)
+    still_inherited_ids: list[int] = field(default_factory=list)
 
 
 @dataclass
