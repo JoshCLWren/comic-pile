@@ -225,10 +225,11 @@ export default function CblBrowserPage() {
   useEffect(() => {
     if (!selectedSource) return
     if (!previewQuery.data) return
+    const previewData = previewQuery.data
     setSourceDecisions((current) => ({
       ...current,
       [selectedSource.id]: {
-        content_hash: previewQuery.data.source.content_hash,
+        content_hash: previewData.source.content_hash,
         series: seriesDecisions,
         entries: entryDecisions,
       },
