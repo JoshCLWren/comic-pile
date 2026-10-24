@@ -516,6 +516,7 @@ async def bulk_unassign_tag(
         requested_ids=result.requested_ids,
         affected_ids=result.affected_ids,
         already_ids=result.already_ids,
+        still_inherited_ids=result.still_inherited_ids,
     )
 
 
