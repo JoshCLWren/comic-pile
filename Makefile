@@ -63,7 +63,7 @@ lint:  ## Run code linting
 	fi
 	bash scripts/lint.sh
 
-python-ci-lint:  ## Exact CI ruff + ty (full repo, no path filter)
+python-ci-lint:  ## Full-repo ruff + ty + hardcoded-ID guard (no path filter)
 	bash scripts/check-python-ci-lint.sh
 
 setup:  ## Install dependencies, start PostgreSQL, migrate, and seed deterministic demo data

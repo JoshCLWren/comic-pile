@@ -1,0 +1,36 @@
+---
+description: Never hardcode primary-key IDs in tests or app code
+alwaysApply: true
+---
+
+# No hardcoded primary-key IDs
+
+Do **not** introduce new literal primary-key identities in Python tests or app code.
+
+**Forbidden in `tests/` (AST-guarded by `tests/test_hardcoded_ids.py`):**
+- `User(id=<int>)`
+- `user_id=<int>` as a Call keyword with an integer constant (including
+  `ReadingSnapshot(user_id=1)`, `replace(..., user_id=2)`, ORM constructors)
+
+**Forbidden in `app/`:** new `user_id=1` literals.
+
+**Required instead:**
+- Database-generated IDs from fixtures (`default_user.id`, `get_or_create_user_async`,
+  flushed ORM `.id` values)
+- For pure in-memory evaluator snapshots that need stable reader keys, pass
+  `user_id=default_user.id` (or another fixture-owned id). Do **not** write
+  `user_id=1` / `user_id=2` even as “fixture constants” in Call keywords — the
+  guard sees those AST literals. Module-level names only help when the Call uses
+  the name (`user_id=READER_ID`), never the bare integer.
+
+**Do not expand** `tests/hardcoded_ids_baseline.json`. Fix the new literal or shrink
+an existing baseline entry when removing one.
+
+**Migration / recovery fixtures:** production Step 14+ classifications are keyed by
+real dependency IDs. Synthetic Dependency rows must not inherit those lookups when
+auto-IDs collide (isolate with an explicit test double, or advance sequences past
+the classification map). See `tests/test_reader_order_migration_coordinator.py`.
+
+**Local gate:** `bash scripts/check-python-ci-lint.sh` runs
+`pytest tests/test_hardcoded_ids.py` after ruff/ty. A green ruff/ty-only run is not
+enough after adding or editing Python tests.
