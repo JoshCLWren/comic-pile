@@ -67,9 +67,25 @@ def test_known_bot_merge_paths_are_all_found() -> None:
         ".github/workflows/factory-ready-merge-drain.yml",
         ".github/workflows/fixed-model-factory-dispatch.yml",
         ".github/scripts/factory-canonical-merge-route.sh",
+    } <= paths
+
+
+def test_worker_direct_merge_routes_delegate_to_the_canonical_merge_path() -> None:
+    """Worker wrappers never merge directly; only the canonical route does.
+
+    ``nvidia-factory-worker.sh`` and ``omniroute-factory-worker.sh`` used to call
+    ``gh pr merge`` themselves. They now delegate to
+    ``factory_merge_with_canonical_gates``, so the deploy dispatch must be
+    asserted on the canonical route (already in ``bot_merge_paths``) instead of
+    on the wrappers.
+    """
+    for rel in (
         ".github/scripts/nvidia-factory-worker.sh",
         ".github/scripts/omniroute-factory-worker.sh",
-    } <= paths
+    ):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        assert "factory_merge_with_canonical_gates" in text, rel
+        assert not [n for n, line in code_lines(ROOT / rel) if MERGE_RE.search(line)], rel
 
 
 def test_every_bot_merge_path_dispatches_deploy_production() -> None:

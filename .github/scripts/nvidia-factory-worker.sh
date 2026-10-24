@@ -63,13 +63,6 @@ replace_labels() {
   gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
 }
 
-current_stage() {
-  local number="$1" fallback="$2" labels stage
-  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
-  stage="$(jq -r --arg stage_re "$STAGE_RE" '[.[] | select(test($stage_re))][0] // empty' <<< "$labels")"
-  if [[ -n "$stage" ]]; then printf '%s\n' "$stage"; else printf '%s\n' "$fallback"; fi
-}
-
 current_owner_is_self() {
   local number="$1" labels
   labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
@@ -89,17 +82,6 @@ linked_issue_from_pr() {
     issue="$(printf '%s' "$title" | grep -oiE '(fix|fixes|resolve|resolves|close|closes)[[:space:]]+#[0-9]+' | head -1 | grep -oE '[0-9]+' || true)"
   fi
   printf '%s' "$issue"
-}
-
-release_target() {
-  local number="$1" fallback_stage="$2" reason="$3"
-  local stage epoch marker
-  stage="$(current_stage "$number" "$fallback_stage")"
-  epoch="$(date +%s)"
-  marker="<!-- comic-pile-factory-claim-released-v3:target-${number}:${WORKER_ID}:${epoch}:${reason} -->"
-  replace_labels "$number" 'factory:unowned' "$stage"
-  gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
-  log "released target #${number} to factory:unowned at ${stage} (${reason})"
 }
 
 release_pr_and_issue() {
@@ -605,7 +587,7 @@ while (( $(remaining) > 480 )); do
             release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'gate-denied'
           fi
           SKIP_PRS+=("$NUMBER")
-# Do not merge: release lease and select other work
+          # Do not merge: release lease and select other work
           ;;
       esac
     fi
