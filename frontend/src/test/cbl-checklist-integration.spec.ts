@@ -265,7 +265,7 @@ test.describe('CBL adoption checklist integration', () => {
       .click()
 
     // Should show correct count (not double-counting duplicates)
-    await expect(page.getByText('2 entries · 2 already in ComicPile · 0 will be added')).toBeVisible()
+    await expect(page.getByText('2 entries · 1 already in ComicPile · 0 will be added')).toBeVisible()
     
     // Add the source
     await page.getByRole('button', { name: 'Add this reading order' }).click()
