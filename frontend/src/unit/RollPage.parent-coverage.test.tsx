@@ -5,7 +5,9 @@ import RollPage from '../pages/RollPage'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 const spies = vi.hoisted(() => ({
-  navigate: vi.fn(), refetch: vi.fn().mockResolvedValue({}),
+  navigate: vi.fn(),
+  refetch: vi.fn().mockResolvedValue({}),
+  invalidateRollBootstrapOnNavigation: vi.fn().mockResolvedValue({}),
   setDie: vi.fn().mockResolvedValue({}), clearDie: vi.fn().mockResolvedValue({}),
   roll: vi.fn().mockResolvedValue({}), dismissPending: vi.fn().mockResolvedValue({}),
   override: vi.fn().mockResolvedValue({}), snooze: vi.fn().mockResolvedValue({}),
@@ -98,6 +100,13 @@ vi.mock('../services/api-skip', () => ({ skipApi: { skip: vi.fn().mockResolvedVa
 vi.mock('../services/api', () => ({ default: {} }))
 vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
 vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
+vi.mock('../query/cacheEffects', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../query/cacheEffects')>()
+  return {
+    ...actual,
+    invalidateRollBootstrapOnNavigation: spies.invalidateRollBootstrapOnNavigation,
+  }
+})
 vi.mock('../components/LazyDice3D', () => ({
   default: ({ onRollComplete }: { onRollComplete?: () => void }) => (
     <div data-testid="dice"><button type="button" onClick={onRollComplete}>complete dice</button></div>
@@ -322,11 +331,12 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByTestId('roll-back-to-queue'))
 
     // "Back to queue" is navigation, not resolution (issue #3761): the pending
-    // read must survive, so the header action never dismisses it. It refreshes
-    // bootstrap instead, which is what lets the return visit rehydrate the
-    // selection, and still lands the reader on /queue (issue #3107).
+    // read must survive, so the header action never dismisses it. It marks
+    // the bootstrap cache stale instead of eagerly refetching, which avoids
+    // an extra HTTP request on navigation while preserving the no-stale-pending
+    // guarantee (issue #4140). The reader still lands on /queue (issue #3107).
     expect(spies.dismissPending).not.toHaveBeenCalled()
-    await waitFor(() => expect(spies.refetch).toHaveBeenCalled())
+    await waitFor(() => expect(spies.invalidateRollBootstrapOnNavigation).toHaveBeenCalled())
     await waitFor(() => expect(spies.navigate).toHaveBeenCalledWith('/queue'))
 
     // navigate is mocked here, so the page is still mounted. The preserved
