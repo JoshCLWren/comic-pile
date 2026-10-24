@@ -291,7 +291,7 @@ class TestReadingGraphPreviewIsolation:
     def test_two_readers_sharing_the_fixture_get_different_eligibility(self) -> None:
         """Approval is owner-scoped; the other reader keeps full strict order."""
         approved = fixture_state()
-        strict = replace(fixture_state(approved=False), user_id=2)
+        strict = replace(fixture_state(approved=False), user_id=READER_ID + 1)
         assert {issue.issue_id for issue in approved.issues} == {
             issue.issue_id for issue in strict.issues
         }
