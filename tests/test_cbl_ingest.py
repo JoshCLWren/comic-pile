@@ -187,7 +187,9 @@ def test_other_invalid_year_values_remain_errors(tmp_path: Path, attribute: str)
     """Only the explicit None sentinel is recognized, not arbitrary bad metadata."""
     path = tmp_path / "invalid.cbl"
     path.write_text(
-        f'<ReadingList><Books><Book Series="X" Number="1" {attribute}="unknown" /></Books></ReadingList>'
+        "<ReadingList><Books>"
+        f'<Book Series="X" Number="1" {attribute}="unknown" />'
+        "</Books></ReadingList>"
     )
     with pytest.raises(ValueError, match="expected integer value"):
         parse_cbl_file(path, mirror_path=tmp_path)

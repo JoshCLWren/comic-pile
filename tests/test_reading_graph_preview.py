@@ -127,7 +127,9 @@ def mark_read(state: ReadingSnapshot, *issue_ids: int) -> ReadingSnapshot:
 # Note: _make_graph_context uses private implementation details (_GraphContext, _IssueMeta)
 # and should be replaced with public API tests in a real implementation
 # For now, we'll keep it but acknowledge this is testing implementation details
-def _make_graph_context(snapshot: ReadingSnapshot, proposed_list_id: int = LIST_ID) -> _GraphContext:
+def _make_graph_context(
+    snapshot: ReadingSnapshot, proposed_list_id: int = LIST_ID
+) -> _GraphContext:
     """Build a _GraphContext for testing the preview service internals."""
     volume_by_thread = {
         thread.thread_id: thread.comicvine_volume_id for thread in snapshot.threads
@@ -511,7 +513,13 @@ class TestReadingGraphPreviewValidatorAgreement:
         """A waived pair cannot close a cycle, because the evaluator never gated it."""
         from app.services.reading_list_cycle_validator import validate_reading_constraints
         state = fixture_state()
-        state = replace(state, prerequisites=(*state.prerequisites, ReadingPrerequisite(9, target, source)))
+        state = replace(
+            state,
+            prerequisites=(
+                *state.prerequisites,
+                ReadingPrerequisite(9, target, source),
+            ),
+        )
         assert set(validate_reading_constraints(state)) == {F1, F2, J1, J2, J3, M1, M2}
 
     @pytest.mark.parametrize(
@@ -522,7 +530,13 @@ class TestReadingGraphPreviewValidatorAgreement:
         """A pair the evaluator still enforces rejects a contradicting prerequisite."""
         from app.services.reading_list_cycle_validator import validate_reading_constraints
         state = fixture_state()
-        state = replace(state, prerequisites=(*state.prerequisites, ReadingPrerequisite(9, target, source)))
+        state = replace(
+            state,
+            prerequisites=(
+                *state.prerequisites,
+                ReadingPrerequisite(9, target, source),
+            ),
+        )
         with pytest.raises(ReadingCycleError):
             validate_reading_constraints(state)
 
@@ -553,7 +567,8 @@ class TestReadingGraphPreviewInternalHelpers:
         # Seed with JLI thread
         seed = {2}
         expanded = _expand_graph_threads(state, seed, context.issue_meta)
-        # Should discover Mister Miracle (via M1 strict_order) and Fourth World (via F2 prerequisite on M1)
+        # Should discover Mister Miracle (via M1 strict_order) and Fourth World
+        # (via F2 prerequisite on M1)
         assert 3 in expanded  # Mister Miracle
         assert 1 in expanded  # Fourth World
 
@@ -647,7 +662,10 @@ class TestReadingGraphPreviewSnapshotImmutability:
         original_entries = tuple((e.issue_id, e.gate, e.skipped) for e in state.lists[0].entries)
         _ = evaluate(state)
         assert tuple((i.issue_id, i.status) for i in state.issues) == original_issues
-        assert tuple((e.issue_id, e.gate, e.skipped) for e in state.lists[0].entries) == original_entries
+        assert (
+            tuple((e.issue_id, e.gate, e.skipped) for e in state.lists[0].entries)
+            == original_entries
+        )
 
     def test_validator_does_not_mutate_snapshot(self) -> None:
         """Validating the graph never changes read status or list entries."""
@@ -657,7 +675,10 @@ class TestReadingGraphPreviewSnapshotImmutability:
         original_entries = tuple((e.issue_id, e.gate, e.skipped) for e in state.lists[0].entries)
         _ = validate_reading_constraints(state)
         assert tuple((i.issue_id, i.status) for i in state.issues) == original_issues
-        assert tuple((e.issue_id, e.gate, e.skipped) for e in state.lists[0].entries) == original_entries
+        assert (
+            tuple((e.issue_id, e.gate, e.skipped) for e in state.lists[0].entries)
+            == original_entries
+        )
 
     def test_build_snapshot_is_independent(self) -> None:
         """Building a new snapshot with different decisions doesn't mutate originals."""
