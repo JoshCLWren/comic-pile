@@ -1,5 +1,9 @@
 # Comic Pile
 
+[![Comic Pile Roll page: a large 3D die showing the faces 4 and 1 above a "Roll Again" button, with the in-play queue listing Superman, Batman, The Flash, and Aquaman](docs/images/roll-hero.png)](https://comic-pile.vercel.app)
+
+**[▶ Try the live demo at comic-pile.vercel.app](https://comic-pile.vercel.app)**
+
 **Roll to read. Rotate your stack.**
 
 [![GitHub stars](https://img.shields.io/github/stars/JoshCLWren/comic-pile?style=social&label=Stars)](https://github.com/JoshCLWren/comic-pile)
@@ -112,6 +116,16 @@ COMICVINE_API_KEY=your-key uv run python scripts/hydrate_comicvine_issues.py --u
 ```
 
 For local-first runs you can also point at a local ComicVine SQLite snapshot (`COMICVINE_LOCAL_DB` / `COMICPILE_COMICVINE_SQLITE_PATH`) and skip the API key entirely.
+
+For local-first runs with the hydrator script, use the `--comicvine-db` parameter and omit `--live-refresh` to avoid requiring an API key:
+
+```bash
+uv run python scripts/hydrate_comicvine_issues.py --user-id 1 --comicvine-db ./localcv.db --output .cache/comicvine-hydrator/user-1-report.json
+```
+
+Other scripts use environment variables for local snapshots:
+- `scripts/backfill_read_comicvine.py` uses `COMICVINE_LOCAL_DB`
+- `comic_pile/local_comicvine.py` uses `COMICPILE_COMICVINE_SQLITE_PATH`
 
 ### 5. Verify the app is up
 
