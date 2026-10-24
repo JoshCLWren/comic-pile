@@ -203,7 +203,9 @@ class TestReadingGraphPreviewBaseline:
         context = _make_graph_context(state)
         issues = _issue_references(context, evaluate(state))
         j2 = next(i for i in issues if i.issue_id == J2)
-        assert any(b.kind == "strict_order" and b.waiting_on_issue_ids == [M1] for b in j2.blockers)
+        # Verify J2 has a strict_order blocker pointing to M1
+        blocker = next(b for b in j2.blockers if b.kind == "strict_order")
+        assert blocker.waiting_on_issue_ids == [M1]
 
 
 class TestReadingGraphPreviewWithChoice:
