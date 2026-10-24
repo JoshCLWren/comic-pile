@@ -92,26 +92,26 @@ test.describe('CBL adoption checklist integration', () => {
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
     
     // Both volumes should be initially selected (checked)
-    const volume1Checkbox = page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })
-    const volume2Checkbox = page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })
+    // Use nth-of-type to distinguish between the two volumes with the same name
+    const volumeCheckboxes = page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })
+    await expect(volumeCheckboxes.nth(0)).toBeChecked()
+    await expect(volumeCheckboxes.nth(1)).toBeChecked()
     
-    // Note: Playwright may not distinguish between checkboxes with same name,
-    // so we need to be more specific about which one we're testing
     await expect(page.getByText('4 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
     
-    // Uncheck the first volume - should become indeterminate
-    await page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' }).first().click()
+    // Uncheck the first volume - should become unchecked (not indeterminate since it has only 1 issue)
+    await volumeCheckboxes.nth(0).click()
 
-    // Should now show indeterminate state for the first volume
-    await expect(page.getByText('4 entries · 0 already in ComicPile · 2 will be added')).toBeVisible()
+    // Should now show 1 already in ComicPile (the second volume's owned issue)
+    await expect(page.getByText('4 entries · 1 already in ComicPile · 2 will be added')).toBeVisible()
     
-    // Recheck one issue from the first volume - should make it indeterminate
+    // Recheck one issue from the first volume - should make it checked again
     // Expand the first volume to see individual issues
     await page.getByRole('button', { name: 'Show issues' }).first().click()
     await page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) #1' }).check()
 
-    // Should show the updated count
-    await expect(page.getByText('4 entries · 1 already in ComicPile · 2 will be added')).toBeVisible()
+    // Should show the updated count - both volumes' owned issues now included
+    await expect(page.getByText('4 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
   })
 
   test('keeps choices when switching between sources and detects source changes', async ({

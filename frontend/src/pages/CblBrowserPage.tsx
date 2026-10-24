@@ -136,6 +136,10 @@ export default function CblBrowserPage() {
       entries: Record<string, boolean>
     }>
   >({})
+  // Ref to access current sourceDecisions in useEffect without adding it to deps
+  // (avoids re-render loop when setSourceDecisions is called)
+  const sourceDecisionsRef = useRef(sourceDecisions)
+  sourceDecisionsRef.current = sourceDecisions
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
   /**
@@ -231,7 +235,7 @@ export default function CblBrowserPage() {
   // stale overrides and require a fresh review before committing.
   useEffect(() => {
     if (!selectedSource || !previewQuery.data) return
-    const saved = sourceDecisions[selectedSource.id]
+    const saved = sourceDecisionsRef.current[selectedSource.id]
     if (!saved) return
     if (!saved.content_hash || saved.content_hash === previewQuery.data.source.content_hash) return
     setSourceDecisions((current) => {
@@ -242,7 +246,7 @@ export default function CblBrowserPage() {
     setSeriesDecisions({})
     setEntryDecisions({})
     setStaleReview(true)
-  }, [selectedSource, previewQuery.data, sourceDecisions])
+  }, [selectedSource, previewQuery.data])
 
   const sources = sourcesQuery.data ?? []
   const hasChoices =
