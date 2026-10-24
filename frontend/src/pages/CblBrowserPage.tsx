@@ -188,6 +188,26 @@ export default function CblBrowserPage() {
   const [seriesDecisions, setSeriesDecisions] = useState<Record<string, boolean>>({})
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  /**
+   * Reader choices keyed by source list id, so returning to a previously
+   * reviewed source restores its selections and unresolved warnings instead
+   * of silently resetting them (#4014).
+   */
+  const [sourceDecisions, setSourceDecisions] = useState<
+    Record<number, {
+      content_hash: string
+      series: Record<string, boolean>
+      entries: Record<string, boolean>
+    }>
+  >({})
+  // Ref to access current sourceDecisions in useEffect without adding it to deps.
+  // sourceDecisions is deliberately omitted from the stale-detection effect's
+  // dependency array: that effect clears sourceDecisions on a content-hash
+  // mismatch, so including it would re-trigger the effect after every clear and
+  // restart a render loop. The ref reads the latest saved decisions without
+  // scheduling a re-render (CblBrowserPage.tsx:236-249).
+  const sourceDecisionsRef = useRef(sourceDecisions)
+  sourceDecisionsRef.current = sourceDecisions
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
   /**
@@ -215,9 +235,10 @@ export default function CblBrowserPage() {
 
   // Late-settling commit callbacks read this mirror instead of a stale closure
   // so they can tell whether the reader still looks at the source they added.
-  useEffect(() => {
-    viewedSourceIdRef.current = deepLinkedListId
-  }, [deepLinkedListId])
+  // Assign during render rather than in an effect: a request can settle between
+  // a Back/Forward render and its effects, and the callbacks must already see
+  // the new view then.
+  viewedSourceIdRef.current = deepLinkedListId
 
   useEffect(() => {
     setCustomizing(false)
@@ -230,6 +251,16 @@ export default function CblBrowserPage() {
     setOverlapChoices({})
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
+    // Restore the checklist saved for the source the URL now shows (#4014),
+    // after the reset above, so Back/Forward and the results list both return
+    // the reader to the choices they already made.
+    if (deepLinkedListId !== null) {
+      const saved = sourceDecisionsRef.current[deepLinkedListId]
+      if (saved) {
+        setSeriesDecisions(saved.series)
+        setEntryDecisions(saved.entries)
+      }
+    }
     // A commit still running belongs to the reader, not to whichever source
     // Back/Forward just re-opened: keep it tracked so the pending Add stays
     // blocked, and only discard a settled result (its callbacks check the
@@ -282,10 +313,10 @@ export default function CblBrowserPage() {
       // The write is real no matter which source the view shows, so the
       // caches must learn the committed plan. The reader's next step, instead,
       // belongs to the view they were on: pressing Back or Forward while the
-      // request ran must not be hijacked when it completes.
-      const stillViewing = viewedSourceIdRef.current === variables.source.id
+      // request ran must not be hijacked when it completes. Compare after the
+      // cache work too, because Back can land while that await is pending.
       await applyCommittedReadingPlan(queryClient, committed)
-      if (stillViewing) {
+      if (viewedSourceIdRef.current === variables.source.id) {
         setAmbiguousCommit(false)
         navigate(`/continuity-plans/${committed.id}`)
       }
@@ -296,24 +327,27 @@ export default function CblBrowserPage() {
       // shows. Only surface messages or navigate for the view that made the
       // request: pressing Back while an Add is in flight must not hijack the
       // reader's new view or surface stale messages there.
-      const stillViewing = viewedSourceIdRef.current === variables.source.id
       if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
-        if (stillViewing) setStaleReview(true)
+        if (viewedSourceIdRef.current === variables.source.id) setStaleReview(true)
         return
       }
       if (!isAmbiguousNetworkFailure(commitError)) return
       try {
         const recovered = await recoverAdoptedPlan(variables.source)
         if (recovered) {
-          if (stillViewing) setAmbiguousCommit(false)
           await applyCommittedReadingPlan(queryClient, recovered)
-          if (stillViewing) navigate(`/continuity-plans/${recovered.id}`)
+          // Re-read the view after recovery and cache writes: the reader may
+          // have pressed Back during either await.
+          if (viewedSourceIdRef.current === variables.source.id) {
+            setAmbiguousCommit(false)
+            navigate(`/continuity-plans/${recovered.id}`)
+          }
           return
         }
       } catch {
         // Recovery cannot confirm whether the plan was created.
       }
-      if (stillViewing) setAmbiguousCommit(true)
+      if (viewedSourceIdRef.current === variables.source.id) setAmbiguousCommit(true)
     },
   })
 
@@ -327,6 +361,42 @@ export default function CblBrowserPage() {
       setCommitSourceId(null)
     }
   }, [commitSourceId, deepLinkedListId, commitIsPending, resetCommitMutation])
+
+  // Persist the reader's choices per source so returning to a reviewed source
+  // restores them instead of resetting the checklist (#4014). The source's
+  // content_hash is saved alongside the choices so a changed source cannot
+  // silently apply stale entry overrides to new cbl_entry_id rows.
+  useEffect(() => {
+    if (!selectedSource) return
+    if (!previewQuery.data) return
+    const previewData = previewQuery.data
+    setSourceDecisions((current) => ({
+      ...current,
+      [selectedSource.id]: {
+        content_hash: previewData.source.content_hash,
+        series: seriesDecisions,
+        entries: entryDecisions,
+      },
+    }))
+  }, [selectedSource, seriesDecisions, entryDecisions, previewQuery.data])
+
+  // If the source's content changed since choices were saved, the saved
+  // entryDecisions no longer match the new cbl_entry_id rows. Discard the
+  // stale overrides and require a fresh review before committing.
+  useEffect(() => {
+    if (!selectedSource || !previewQuery.data) return
+    const saved = sourceDecisionsRef.current[selectedSource.id]
+    if (!saved) return
+    if (!saved.content_hash || saved.content_hash === previewQuery.data.source.content_hash) return
+    setSourceDecisions((current) => {
+      const next = { ...current }
+      delete next[selectedSource.id]
+      return next
+    })
+    setSeriesDecisions({})
+    setEntryDecisions({})
+    setStaleReview(true)
+  }, [selectedSource, previewQuery.data])
 
   const hasChoices =
     Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
@@ -346,12 +416,16 @@ export default function CblBrowserPage() {
   /**
    * The graph preview follows the reader's checklist and answers. `preview` is
    * already a local projection of the checklist, so unchecking a whole volume
-   * removes its conflicts from the next graph request.
+   * removes its conflicts from the next graph request. Only resolved positions
+   * are sent: missing comics do not exist in the graph yet, and the preview API
+   * rejects unresolved source positions (#4014).
    */
   const includedPositions = useMemo(
     () =>
       preview
-        ? preview.entries.filter((entry) => entry.adopted).map((entry) => entry.cbl_position)
+        ? preview.entries
+            .filter((entry) => entry.adopted && entry.resolved_issue_id !== null)
+            .map((entry) => entry.cbl_position)
         : [],
     [preview],
   )
@@ -493,7 +567,18 @@ export default function CblBrowserPage() {
   const openSource = (source: CBLSourceListDiscoveryItem) => {
     if (isCommitting) return
     resetSelectionState()
+    // Restore the reader's checklist for a source they already reviewed
+    // (#4014). The fetched preview re-verifies the saved content hash once it
+    // arrives, so a changed source cannot silently apply stale entry overrides.
+    const saved = sourceDecisions[source.id]
+    if (saved) {
+      setSeriesDecisions(saved.series)
+      setEntryDecisions(saved.entries)
+    }
     applyBrowseState({ folder, query: submittedQuery, page, list: source.id })
+    // Re-selecting the source already on screen keeps the same URL, so ask for
+    // fresh preview data explicitly instead of trusting the cached copy.
+    if (selectedSource?.id === source.id) void previewQuery.refetch()
   }
 
   const chooseEntry = (entry: CBLAdoptionPreviewEntry, include: boolean) => {
