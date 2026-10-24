@@ -6,6 +6,7 @@ import { isDefinitiveAuthenticationFailure } from '../services/authFailure'
 const RESUME_REQUEST_TIMEOUT_MS = 15000
 const RESUME_RETRY_DELAY_MS = 750
 const MAX_RESUME_ATTEMPTS = 2
+const AUTOMATIC_MIN_BACKGROUND_INTERVAL_MS = 60000
 
 type RecoveryState = 'idle' | 'reconnecting' | 'failed'
 type RecoveryMode = 'automatic' | 'explicit'
@@ -27,20 +28,38 @@ export default function ResumeRecovery({
 }: ResumeRecoveryProps) {
   const [recoveryState, setRecoveryState] = useState<RecoveryState>('idle')
   const requestSequence = useRef(0)
-  const lastValidationAt = useRef(0)
+  const lastSuccessfulValidationAt = useRef(0)
   const explicitRecoveryActive = useRef(false)
+  const automaticRecoveryInFlight = useRef(false)
+  const hiddenAt = useRef<number | null>(null)
+  const lastTriggerWasBfcache = useRef(false)
 
-  const runRecovery = useCallback(async (mode: RecoveryMode) => {
+  const runRecovery = useCallback(async (mode: RecoveryMode, options?: { bypassGate?: boolean }) => {
     if (mode === 'automatic') {
       if (explicitRecoveryActive.current) {
         return
       }
-
-      const now = Date.now()
-      if (now - lastValidationAt.current < 1000) {
+      if (automaticRecoveryInFlight.current) {
         return
       }
-      lastValidationAt.current = now
+
+      const bypassGate = options?.bypassGate === true
+      const now = Date.now()
+      if (!bypassGate) {
+        if (lastSuccessfulValidationAt.current > 0) {
+          if (now - lastSuccessfulValidationAt.current < AUTOMATIC_MIN_BACKGROUND_INTERVAL_MS) {
+            return
+          }
+        } else {
+          if (hiddenAt.current !== null) {
+            if (now - hiddenAt.current < AUTOMATIC_MIN_BACKGROUND_INTERVAL_MS) {
+              return
+            }
+          }
+        }
+      }
+
+      automaticRecoveryInFlight.current = true
     } else {
       explicitRecoveryActive.current = true
     }
@@ -65,10 +84,20 @@ export default function ResumeRecovery({
           if (sequence !== requestSequence.current) {
             return
           }
+          if (mode === 'automatic') {
+            lastSuccessfulValidationAt.current = Date.now()
+            hiddenAt.current = null
+            lastTriggerWasBfcache.current = false
+          }
           setRecoveryState('idle')
           return
         } catch (error) {
           if (isDefinitiveAuthenticationFailure(error)) {
+            if (mode === 'automatic') {
+              lastSuccessfulValidationAt.current = Date.now()
+              hiddenAt.current = null
+              lastTriggerWasBfcache.current = false
+            }
             return
           }
           if (attempt < MAX_RESUME_ATTEMPTS) {
@@ -81,6 +110,11 @@ export default function ResumeRecovery({
         setRecoveryState('failed')
       }
     } finally {
+      if (mode === 'automatic') {
+        if (sequence === requestSequence.current) {
+          automaticRecoveryInFlight.current = false
+        }
+      }
       if (mode === 'explicit' && sequence === requestSequence.current) {
         explicitRecoveryActive.current = false
       }
@@ -88,13 +122,32 @@ export default function ResumeRecovery({
   }, [recoverSession, revalidateSession])
 
   useEffect(() => {
+    if (document.visibilityState === 'hidden') {
+      if (hiddenAt.current === null) {
+        hiddenAt.current = Date.now()
+      }
+    }
+
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
-        void runRecovery('automatic')
+        lastTriggerWasBfcache.current = true
+        hiddenAt.current = null
+        void runRecovery('automatic', { bypassGate: true })
       }
     }
     const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (hiddenAt.current === null) {
+          hiddenAt.current = Date.now()
+        }
+        return
+      }
       if (document.visibilityState === 'visible') {
+        if (lastTriggerWasBfcache.current) {
+          lastTriggerWasBfcache.current = false
+          void runRecovery('automatic', { bypassGate: true })
+          return
+        }
         void runRecovery('automatic')
       }
     }
@@ -104,6 +157,9 @@ export default function ResumeRecovery({
     return () => {
       requestSequence.current += 1
       explicitRecoveryActive.current = false
+      automaticRecoveryInFlight.current = false
+      hiddenAt.current = null
+      lastTriggerWasBfcache.current = false
       window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
