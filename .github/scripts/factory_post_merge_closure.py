@@ -2353,7 +2353,13 @@ This issue is a product contract and acceptance parent.
                     return_value={
                         "state": "CLOSED",
                         "body": "Delivered work.\nDepends on #4024",
-                        "labels": ["enhancement", "factory", "factory:blocked", "ralph-status:blocked", "factory:unowned"],
+                        "labels": [
+                            "enhancement",
+                            "factory",
+                            "factory:blocked",
+                            "ralph-status:blocked",
+                            "factory:unowned",
+                        ],
                     },
                 ):
                     with patch.object(

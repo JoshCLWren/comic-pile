@@ -90,6 +90,10 @@ Refresh behavior:
   remain active.
 - Replaying the same revision and content hashes performs no source/list/entry/identity writes.
 - Publisher and arbitrarily nested source paths are preserved verbatim as source-relative paths.
+- Optional `Volume` and `Year` values containing the explicit `None` sentinel (case-insensitive,
+  surrounding whitespace ignored) are preserved as unknown years. The occurrence stays in source
+  order; missing provider identities remain unresolved. Other malformed numeric values and missing
+  required `Series`/`Number` still produce a path-specific parse failure. `NumIssues` remains numeric.
 
 A production bulk source sync remains a separately authorized operation. This script does not run
 from a web request, does not fetch GitHub, and does not apply reader repairs.
