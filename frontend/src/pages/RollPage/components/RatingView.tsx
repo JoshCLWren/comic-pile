@@ -83,6 +83,10 @@ export function RatingView({ data }: RatingViewProps) {
             readerContextError={data.readerContextError}
             readingContextRequested={data.readingContextRequested}
             readingBoundariesRequested={data.readingBoundariesRequested}
+            readingBoundary={data.readingBoundary}
+            readingBoundaryPending={data.readingBoundaryPending}
+            readingBoundaryError={data.readingBoundaryError}
+            onRetryBoundaries={data.onRetryBoundaries}
             readingOrders={data.readingOrders}
             readingOrdersIsLoading={data.readingOrdersIsLoading}
             readingOrdersError={data.readingOrdersError}

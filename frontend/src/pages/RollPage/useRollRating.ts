@@ -53,12 +53,12 @@ export function useRollRating({
   const [readingContextRequested, setReadingContextRequested] = useState(false)
   const [readingBoundariesRequested, setReadingBoundariesRequested] = useState(false)
 
-  const readerContextRequested = readingContextRequested || readingBoundariesRequested
+  const readerContextRequested = readingContextRequested
 
   // Reading orders and connected-thread metadata belong to the Reading Context
   // surface only, so they stay disabled until that surface is requested. The
-  // Reading Boundaries surface shares the reader-context payload, not these two
-  // queries.
+  // Reading Boundaries surface uses its own canonical explanation query, not
+  // the recorded-association reader-context payload.
   //
   // React Query reports a disabled query as pending, so the loading flags are
   // gated on the request scope. Otherwise a card would render a permanent

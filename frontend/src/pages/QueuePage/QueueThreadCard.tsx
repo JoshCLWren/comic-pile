@@ -1,4 +1,5 @@
-import { EligibilityExplanation } from '../../components/EligibilityExplanation'
+import { ReadingBoundaryExplanation } from '../../components/ReadingBoundaryExplanation'
+import type { ReadingBoundaryExplanation as BoundaryExplanation } from '../../services/api-reading-boundaries'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import Tooltip from '../../components/Tooltip'
@@ -17,6 +18,10 @@ interface QueueThreadCardProps {
   index: number
   isBlocked: boolean
   blockingDependencies: BlockingDependency[]
+  readingBoundary?: BoundaryExplanation
+  boundaryPending?: boolean
+  boundaryError?: boolean
+  onRetryBoundaries?: () => void
   /**
    * Crossover memberships resolved by the owning list view.
    *
@@ -56,6 +61,10 @@ export default function QueueThreadCard({
   index,
   isBlocked,
   blockingDependencies,
+  readingBoundary,
+  boundaryPending,
+  boundaryError,
+  onRetryBoundaries,
   crossoverGroups,
   crossoverGroupsLoading,
   crossoverGroupsError,
@@ -84,7 +93,9 @@ export default function QueueThreadCard({
   // `total_issues` is optional in the generated list item; absent and null
   // both mean the thread has no known issue total.
   const isMigrated = thread.total_issues != null
-  const blockerLabels = blockingDependencies.map((dependency) => dependency.label)
+  const blockerLabels = readingBoundary
+    ? readingBoundary.blockers?.flatMap((blocker) => blocker.waiting_on?.map((issue) => issue.label) ?? []) ?? []
+    : blockingDependencies.map((dependency) => dependency.label)
 
   const isInteractiveTarget = (target: EventTarget | null, card: HTMLDivElement) => {
     const interactive = target instanceof Element
@@ -166,7 +177,7 @@ export default function QueueThreadCard({
               <MarqueeTitle title={thread.title} />
             </button>
             {isBlocked && (
-              <Tooltip content={blockerLabels.length > 0 ? blockerLabels.join('\n') : 'Blocked by a prerequisite'}>
+              <Tooltip content={blockerLabels.length > 0 ? blockerLabels.join('\n') : 'Waiting for reading requirements'}>
                 <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked series">🔒</span>
               </Tooltip>
             )}
@@ -204,14 +215,13 @@ export default function QueueThreadCard({
               <CrossoverTags groups={crossoverGroups} label={`Crossovers for ${thread.title}`} />
             )}
           </div>
-          {isBlocked && (
+          {(isBlocked || (readingBoundary?.historical?.length ?? 0) > 0) && (
             <div
               data-testid="queue-thread-blocked-detail"
               className="mt-2 w-full rounded-lg border border-[var(--theme-continuity-accent)]/20 bg-[var(--theme-continuity-accent)]/10 px-3 py-2 text-left text-xs text-[var(--theme-text-muted)]"
             >
-              <EligibilityExplanation isBlocked reasons={thread.blocking_reasons} dependencies={blockingDependencies} />
-              <button type="button" onClick={onDependencies} aria-label={`View dependencies for ${thread.title}`} className="min-h-11 text-sm font-semibold text-[var(--theme-continuity-accent)]">Manage prerequisites</button>
-              <p className="mt-1 text-[var(--theme-text-dim)]">Secondary actions are in the menu. Read &amp; Rate unlocks once the blocker{blockingDependencies.length > 1 ? 's' : ''} above {blockingDependencies.length > 1 ? 'are' : 'is'} cleared.</p>
+              <ReadingBoundaryExplanation explanation={readingBoundary} isPending={boundaryPending} isError={boundaryError} onRetry={onRetryBoundaries} />
+              {isBlocked && <p className="mt-1 text-[var(--theme-text-dim)]">Read &amp; Rate unlocks once the active reading requirements are satisfied.</p>}
             </div>
           )}
         </div>

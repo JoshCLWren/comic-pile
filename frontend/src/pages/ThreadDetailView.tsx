@@ -1,5 +1,5 @@
-import { EligibilityExplanation } from '../components/EligibilityExplanation'
-import { useThreadBlockingInfo } from '../hooks/useDependencies'
+import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
+import { ReadingBoundaryExplanation } from '../components/ReadingBoundaryExplanation'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useParams } from 'react-router-dom'
@@ -76,7 +76,7 @@ export default function ThreadDetailView() {
   const threadId =
     Number.isInteger(parsedThreadId) && parsedThreadId > 0 ? parsedThreadId : null
 
-  const blockingInfo = useThreadBlockingInfo(threadId)
+  const boundaryQuery = useReadingBoundaries(threadId ? [threadId] : [])
   const { data: thread, error: threadError, refetch } = useThread(threadId)
   const {
     connectedThreads,
@@ -317,16 +317,7 @@ export default function ThreadDetailView() {
 
       <div className="space-y-4 md:space-y-6">
         <section className="surface-panel rounded-xl p-3 md:p-4" aria-label="Next issue availability">
-          {blockingInfo.isError ? (
-            <div role="alert"><p>Unable to load reading requirements.</p><button type="button" onClick={() => void blockingInfo.refetch()}>Retry requirements</button></div>
-          ) : blockingInfo.isPending ? <p>Loading reading requirements…</p> : (
-            <EligibilityExplanation
-              isBlocked={blockingInfo.data?.threads[thread.id]?.is_blocked ?? thread.is_blocked}
-              reasons={blockingInfo.data?.threads[thread.id]?.blocking_reasons ?? thread.blocking_reasons}
-              dependencies={blockingInfo.data?.threads[thread.id]?.blocking_dependencies}
-              emptyLabel={thread.status === 'completed' ? 'Every issue is read' : thread.status !== 'active' ? 'Series is inactive' : thread.next_unread_issue_number ? `Next unread: #${thread.next_unread_issue_number}` : thread.total_issues == null && thread.issues_remaining > 0 ? 'Available now' : 'No available unread issue'}
-            />
-          )}
+          <ReadingBoundaryExplanation explanation={boundaryQuery.data?.threads[thread.id]} isPending={boundaryQuery.isPending} isError={boundaryQuery.isError} onRetry={() => { void boundaryQuery.refetch() }} />
         </section>
         {showReadingProgress && (
           <div className="surface-panel p-3 md:p-4 space-y-3">
@@ -382,7 +373,7 @@ export default function ThreadDetailView() {
             <p className="text-xs text-stone-500">Loading dependencies...</p>
           )}
           {!connectedError && !connectedPending && connectedThreads.length === 0 && (
-            <p className="text-xs text-stone-500">No explicit series prerequisites</p>
+            <p className="text-xs text-stone-500">No recorded series prerequisites</p>
           )}
           {!connectedError && !connectedPending && connectedThreads.length > 0 && (
             <div className="space-y-3">
@@ -404,9 +395,9 @@ export default function ThreadDetailView() {
                       <div className="space-y-1">
                         <h3 className="text-base font-bold text-[var(--theme-warning)]">⚠️ Circular Dependencies</h3>
                         <p className="text-xs text-[var(--theme-text-muted)]">
-                          Each series below is part of a dependency loop with this series — an
-                          impossible reading order until the loop is broken. They are listed here
-                          once instead of under both directions.
+                          These recorded prerequisite relationships form a cycle. Current reading
+                          eligibility is explained above; recorded associations alone are not
+                          evidence that a comic is blocked.
                         </p>
                         {circular.map((t) => (
                           <Link
@@ -425,8 +416,8 @@ export default function ThreadDetailView() {
                     )}
 
                     <div className="space-y-1">
-                      <h3 className="text-base font-bold text-stone-400">Blocked by</h3>
-                      {blockedBy.length === 0 && <p className="text-xs text-stone-500">No incoming explicit prerequisites</p>}
+                      <h3 className="text-base font-bold text-stone-400">Recorded incoming prerequisites</h3>
+                      {blockedBy.length === 0 && <p className="text-xs text-stone-500">No recorded incoming prerequisites</p>}
                       {blockedBy.map((t) => (
                         <Link
                           key={`${t.dependency_id}-blocked-by`}
@@ -442,8 +433,8 @@ export default function ThreadDetailView() {
                       ))}
                     </div>
                     <div className="space-y-1">
-                      <h3 className="text-base font-bold text-stone-400">Blocking</h3>
-                      {blocking.length === 0 && <p className="text-xs text-stone-500">This series blocks nothing</p>}
+                      <h3 className="text-base font-bold text-stone-400">Recorded outgoing prerequisites</h3>
+                      {blocking.length === 0 && <p className="text-xs text-stone-500">No recorded outgoing prerequisites</p>}
                       {blocking.map((t) => (
                         <Link
                           key={`${t.dependency_id}-blocking`}
