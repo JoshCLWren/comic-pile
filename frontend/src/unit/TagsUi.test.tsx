@@ -1295,6 +1295,7 @@ describe('BulkTagToolbar (issue #3032)', () => {
       requested_ids: [1, 2],
       affected_ids: [1],
       already_ids: [2],
+      still_inherited_ids: [],
     })
 
     render(
@@ -1329,6 +1330,7 @@ describe('BulkTagToolbar (issue #3032)', () => {
       requested_ids: [1],
       affected_ids: [1],
       already_ids: [],
+      still_inherited_ids: [],
     })
 
     render(
@@ -1344,6 +1346,37 @@ describe('BulkTagToolbar (issue #3032)', () => {
       target_type: 'Issue',
       target_ids: [1],
     })
+  })
+
+  it('reports issues that retain an inherited tag after bulk removal', async () => {
+    const user = userEvent.setup()
+    const onDone = vi.fn()
+    mockedTagsApi.list.mockResolvedValue({ tags: [makeTag(1)] })
+    mockedTagsApi.bulkUnassign.mockResolvedValue({
+      tag_id: 1,
+      target_type: 'Issue',
+      requested_ids: [1, 2, 3],
+      affected_ids: [1],
+      already_ids: [2, 3],
+      still_inherited_ids: [1, 2],
+    })
+
+    render(
+      <MemoryRouter>
+        <BulkTagToolbar
+          selectedIds={[1, 2, 3]}
+          onClearSelection={vi.fn()}
+          onDone={onDone}
+        />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: /Private 1/ }))
+    await user.click(screen.getByRole('button', { name: 'Remove tag from 3' }))
+
+    expect(onDone).toHaveBeenCalledWith(
+      'removed direct “Private 1” tag from 1 of 3 selected issues (2 issues still inherit it) (1 already untagged).',
+    )
   })
 
   it('clears the picked tag without running anything', async () => {

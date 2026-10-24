@@ -43,12 +43,25 @@ export function BulkTagToolbar({ selectedIds, onClearSelection, onDone }: BulkTa
         mode === 'add'
           ? await bulkAssign.mutateAsync({ id: picked.id, data })
           : await bulkUnassign.mutateAsync({ id: picked.id, data })
-      const verb = mode === 'add' ? 'tagged' : 'untagged'
+      const stillInheritedIds = new Set(result.still_inherited_ids)
+      const alreadyUntaggedCount = result.already_ids.filter(
+        (issueId) => !stillInheritedIds.has(issueId),
+      ).length
       const summary =
-        `${verb} “${picked.name}” on ${result.affected_ids.length} of ` +
-        `${result.requested_ids.length} selected issues` +
-        (result.already_ids.length > 0 ? ` (${result.already_ids.length} already ${mode === 'add' ? 'tagged' : 'untagged'})` : '') +
-        '.'
+        mode === 'add'
+          ? `tagged “${picked.name}” on ${result.affected_ids.length} of ` +
+            `${result.requested_ids.length} selected issues` +
+            (result.already_ids.length > 0
+              ? ` (${result.already_ids.length} already tagged)`
+              : '') +
+            '.'
+          : `removed direct “${picked.name}” tag from ${result.affected_ids.length} of ` +
+            `${result.requested_ids.length} selected issues` +
+            (result.still_inherited_ids.length > 0
+              ? ` (${result.still_inherited_ids.length} ${result.still_inherited_ids.length === 1 ? 'issue still inherits' : 'issues still inherit'} it)`
+              : '') +
+            (alreadyUntaggedCount > 0 ? ` (${alreadyUntaggedCount} already untagged)` : '') +
+            '.'
       onDone?.(summary)
       onClearSelection()
     } catch (error) {

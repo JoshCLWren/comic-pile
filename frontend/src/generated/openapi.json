@@ -19736,7 +19736,7 @@
         "type": "object"
       },
       "TagBulkAssignmentResponse": {
-        "description": "Result of a bulk tag assignment operation.\n\nAttributes:\n    tag_id: Primary key of the tag.\n    target_type: Type of the targets.\n    requested_ids: Deduplicated target ids the request asked about.\n    affected_ids: Targets whose assignment state actually changed (newly\n        assigned for bulk-add, newly removed for bulk-remove).\n    already_ids: Targets already in the desired state (already assigned\n        for bulk-add, already unassigned for bulk-remove).",
+        "description": "Result of a bulk tag assignment operation.\n\nAttributes:\n    tag_id: Primary key of the tag.\n    target_type: Type of the targets.\n    requested_ids: Deduplicated target ids the request asked about.\n    affected_ids: Targets whose assignment state actually changed (newly\n        assigned for bulk-add, newly removed for bulk-remove).\n    already_ids: Targets already in the desired state (already assigned\n        for bulk-add, already unassigned for bulk-remove).\n    still_inherited_ids: Requested issues that keep the tag through\n        inheritance after a bulk removal (issue #3433). An issue\n        whose thread or containing Reading Plan still holds the tag keeps\n        showing it even though it has no direct assignment. Always empty\n        for bulk adds and for target types that cannot inherit in v1.",
         "properties": {
           "affected_ids": {
             "items": {
@@ -19757,6 +19757,13 @@
               "type": "integer"
             },
             "title": "Requested Ids",
+            "type": "array"
+          },
+          "still_inherited_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Still Inherited Ids",
             "type": "array"
           },
           "tag_id": {
