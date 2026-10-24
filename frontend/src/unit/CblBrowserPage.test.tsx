@@ -1305,6 +1305,69 @@ describe('CblBrowserPage', () => {
     expect(screen.queryByText(/Network error/)).not.toBeInTheDocument()
   })
 
+  it('recovers a timed-out commit even after Back changed the source view (#4136)', async () => {
+    const user = userEvent.setup()
+    let rejectCommit: (error: unknown) => void = () => undefined
+    mockCommitNew.mockImplementation(
+      () =>
+        new Promise<{ id: number; name: string }>((_resolve, reject) => {
+          rejectCommit = reject
+        }),
+    )
+    mockApplyCommitted.mockResolvedValue(undefined)
+    mockBrowse.mockResolvedValue(
+      browsePage({ items: [source], total: 1, total_pages: 1 }),
+    )
+    mockPreview.mockResolvedValue(preview())
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: /Ultimate Universe/ }))
+    await confirmAdd(user)
+    await waitFor(() => {
+      expect(mockCommitNew).toHaveBeenCalledTimes(1)
+    })
+
+    // Pressing browser Back leaves the write running and changes the view away
+    // from the added source. The pending Add must stay tracked.
+    await user.click(screen.getByRole('button', { name: 'history-back' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/cbl-sources')
+    expect(screen.getByLabelText('Search source lists')).toBeDisabled()
+
+    // The server settled the add but its response was lost (an ambiguous
+    // network failure). Recovery and cache updates must still run even though
+    // the reader is no longer viewing the added source; only navigation and
+    // the stale message belong to the view that made the request.
+    const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
+      code: 'ECONNABORTED',
+    })
+    mockListPlans.mockResolvedValue([
+      {
+        id: 88,
+        name: 'Ultimate Universe',
+        ordering_mode: 'informational',
+        lane_count: 1,
+        step_count: 2,
+        source_paths: ['Ultimate.cbl'],
+        updated_at: '2026-10-12T00:00:00Z',
+      },
+    ])
+    const recovered = { id: 88, name: 'Ultimate Universe' }
+    mockGetPlan.mockResolvedValue(recovered)
+
+    await act(async () => {
+      rejectCommit(timeout)
+    })
+    await waitFor(() => {
+      expect(mockListPlans).toHaveBeenCalled()
+      expect(mockGetPlan).toHaveBeenCalledWith(88)
+      expect(mockApplyCommitted).toHaveBeenCalled()
+    })
+    // No navigation hijack: the reader stays on the catalog they returned to.
+    expect(screen.getByTestId('location')).toHaveTextContent('/cbl-sources')
+    expect(screen.queryByRole('heading', { name: 'Add this reading order?' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/ComicPile did not confirm the new plan in time/)).not.toBeInTheDocument()
+  })
+
   it('a new search resets the selection and decisions', async () => {
     const user = userEvent.setup()
     renderPage()

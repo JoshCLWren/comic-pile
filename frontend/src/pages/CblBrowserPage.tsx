@@ -291,25 +291,29 @@ export default function CblBrowserPage() {
       }
     },
     onError: async (commitError, variables) => {
-      // Surface stale or failed writes only to the view that made them.
-      if (viewedSourceIdRef.current !== variables.source.id) return
+      // A lost response can still mean the write settled on the server, so run
+      // recovery and teach the cache about it whatever source the view now
+      // shows. Only surface messages or navigate for the view that made the
+      // request: pressing Back while an Add is in flight must not hijack the
+      // reader's new view or surface stale messages there.
+      const stillViewing = viewedSourceIdRef.current === variables.source.id
       if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
-        setStaleReview(true)
+        if (stillViewing) setStaleReview(true)
         return
       }
       if (!isAmbiguousNetworkFailure(commitError)) return
       try {
         const recovered = await recoverAdoptedPlan(variables.source)
         if (recovered) {
-          setAmbiguousCommit(false)
+          if (stillViewing) setAmbiguousCommit(false)
           await applyCommittedReadingPlan(queryClient, recovered)
-          navigate(`/continuity-plans/${recovered.id}`)
+          if (stillViewing) navigate(`/continuity-plans/${recovered.id}`)
           return
         }
       } catch {
-        // Surface the timeout guidance below when recovery cannot confirm a plan.
+        // Recovery cannot confirm whether the plan was created.
       }
-      setAmbiguousCommit(true)
+      if (stillViewing) setAmbiguousCommit(true)
     },
   })
 
