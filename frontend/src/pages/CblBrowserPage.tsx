@@ -385,11 +385,18 @@ export default function CblBrowserPage() {
     setCustomizing(false)
     setConfirmOpen(false)
     if (saved) {
-      // If the source's content has changed since choices were saved,
-      // the saved entryDecisions have stale cbl_entry_id values that no
-      // longer match the server's entry rows. Discard them and require a
-      // fresh review before committing.
-      if (previewQuery.data?.source.content_hash !== saved.content_hash) {
+      // Compare against the source list fingerprint so returning to an
+      // unchanged source isn't mis-classified as stale because the
+      // preview query is still holding the previously-selected source.
+      const sourceFingerprint = source.content_hash
+      const previewMatchesSource =
+        previewQuery.data && previewQuery.data.source.source_list_id === source.id
+      if (sourceFingerprint !== saved.content_hash) {
+        setSeriesDecisions({})
+        setEntryDecisions({})
+        setStaleReview(true)
+      } else if (previewMatchesSource && previewQuery.data.source.content_hash !== saved.content_hash) {
+        // Fetched preview for this exact source confirms content changed
         setSeriesDecisions({})
         setEntryDecisions({})
         setStaleReview(true)
@@ -404,7 +411,7 @@ export default function CblBrowserPage() {
     setExpandedGroups({})
     // Only clear staleReview when the content_hash matches; otherwise
     // the stale-detection effect (or the warning below) will keep it set.
-    if (!saved || previewQuery.data?.source.content_hash === saved.content_hash) {
+    if (!saved || source.content_hash === saved.content_hash) {
       setStaleReview(false)
     }
     setAmbiguousCommit(false)
