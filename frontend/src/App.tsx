@@ -480,7 +480,6 @@ function CrossoversListRedirect() {
   return <Navigate to="/continuity-plans" replace />
 }
 
-
 function RootRoute({ onBugReportSubmit }: { onBugReportSubmit: BugReportSubmit }) {
   const { authState } = useAuth()
 
