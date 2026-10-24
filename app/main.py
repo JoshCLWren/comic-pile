@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import cast
 from xml.sax.saxutils import escape as escape_xml
 
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -17,8 +17,6 @@ from starlette.responses import Response as StarletteResponse
 from starlette.types import Scope
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import exc as sqlalchemy_exc
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_app_settings, get_database_settings
@@ -28,7 +26,6 @@ from app.csrf import (
     is_csrf_protected_request,
     log_csrf_rejection,
 )
-from app.database import get_db
 from app.exception_handlers import register_exception_handlers
 from app.lifecycle import init_database
 from app.middleware import limiter, SecurityHeadersMiddleware
