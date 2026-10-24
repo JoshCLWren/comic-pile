@@ -766,6 +766,7 @@ export async function invalidateRollBootstrapOnNavigation(
   await client.invalidateQueries({
     queryKey: queryKeys.roll.bootstrap(),
     exact: true,
+    refetchType: 'none',
   })
 }
 
