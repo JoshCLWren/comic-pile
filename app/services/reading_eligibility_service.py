@@ -13,7 +13,7 @@ from app.models import Dependency, Issue, Thread
 from app.models.collection_exclusion import CollectionExclusion
 from app.models.catalog import CatalogIssue, CatalogSeries
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
-from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
+from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.repositories.reading_shadow_repository import load_shadow_inputs
 from app.schemas.thread import ThreadResponse
 from app.schemas.dependency import BlockingDependency, BlockingExplanation
@@ -192,6 +192,7 @@ async def get_execution_eligibility(
                 CollectionExclusion,
                 CustomCBLList,
                 CustomCBLEntry,
+                CustomCBLOverlapDecision,
                 CatalogIssue,
                 CatalogSeries,
                 ExternalIdentity,
