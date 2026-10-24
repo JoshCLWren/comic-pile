@@ -179,7 +179,7 @@ test.describe('CBL adoption checklist integration', () => {
     
     // Make a choice on first source
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
-    await page.getByRole('checkbox', { name: 'Include Source 1 Series series' }).uncheck()
+    await page.getByRole('checkbox', { name: 'Include Source 1 Series (2023) series' }).uncheck()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 0 will be added')).toBeVisible()
 
     // Switch to second source - should have fresh choices
@@ -190,11 +190,11 @@ test.describe('CBL adoption checklist integration', () => {
     
     // Second source should have default state (all selected)
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
-    await expect(page.getByRole('checkbox', { name: 'Include Source 2 Series series' })).toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Include Source 2 Series (2024) series' })).toBeChecked()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 1 will be added')).toBeVisible()
 
     // Make a choice on second source
-    await page.getByRole('checkbox', { name: 'Include Source 2 Series series' }).uncheck()
+    await page.getByRole('checkbox', { name: 'Include Source 2 Series (2024) series' }).uncheck()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 0 will be added')).toBeVisible()
 
     // Switch back to first source - should restore the previous choice
@@ -204,7 +204,7 @@ test.describe('CBL adoption checklist integration', () => {
     await expect(page.getByRole('heading', { name: sourceName1 })).toBeVisible()
     
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
-    await expect(page.getByRole('checkbox', { name: 'Include Source 1 Series series' })).not.toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Include Source 1 Series (2023) series' })).not.toBeChecked()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 0 will be added')).toBeVisible()
   })
 
