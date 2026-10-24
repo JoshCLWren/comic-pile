@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { FormEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Modal from '../components/Modal'
 import ReadingGraphOverlapDialog from '../components/ReadingGraphOverlapDialog'
@@ -166,6 +166,7 @@ async function recoverAdoptedPlan(source: CBLSourceListDiscoveryItem) {
  */
 export default function CblBrowserPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -204,6 +205,21 @@ export default function CblBrowserPage() {
     setQueryDraft(submittedQuery)
   }, [submittedQuery])
 
+  useEffect(() => {
+    setCustomizing(false)
+    setConfirmOpen(false)
+    setSeriesDecisions({})
+    setEntryDecisions({})
+    setExpandedGroups({})
+    setStaleReview(false)
+    setAmbiguousCommit(false)
+    setOverlapChoices({})
+    setGraphDialogOpen(false)
+    setGraphDialogContinuesAdd(false)
+    commitMutation.reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkedListId])
+
   /**
    * Browse the shared catalog immediately: entering the page shows the root
    * folders and sources without requiring a search submission.
@@ -216,8 +232,8 @@ export default function CblBrowserPage() {
   })
   const browsePage = browseQuery.data ?? null
   const selectedSource =
-    browsePage && deepLinkedListId !== null
-      ? (browsePage.items.find((item) => item.id === deepLinkedListId) ?? null)
+    deepLinkedListId !== null
+      ? (browsePage?.items.find((item) => item.id === deepLinkedListId) ?? null)
       : null
 
   const previewQuery = useQuery({
@@ -599,8 +615,13 @@ export default function CblBrowserPage() {
         <div className="space-y-4">
           <CblSourceDetailPanel
             listId={deepLinkedListId}
-            backHref={browseHref(folder, submittedQuery, page)}
-            backLabel="results"
+            {...(isObject(location.state) && isString((location.state as Record<string, unknown>).from)
+              ? {}
+              : {
+                  backHref: browseHref(folder, submittedQuery, page),
+                  backLabel:
+                    folder || submittedQuery || page > 1 ? 'results' : 'back to results',
+                })}
           />
 
           {previewError && (
@@ -940,7 +961,7 @@ export default function CblBrowserPage() {
           )}
 
           {catalogError && (
-            <div role="alert" className="space-y-2 text-sm text-[var(--theme-danger)]">
+            <div role="alert" className="space-y-2 text-sm text-[var(--theme-error)]">
               <p>{catalogError.message}</p>
               <button
                 type="button"
@@ -1003,7 +1024,7 @@ export default function CblBrowserPage() {
                     <li key={child.path}>
                       <button
                         type="button"
-                        disabled={isCommitting}
+                        disabled={isCommitting || browseQuery.isPlaceholderData}
                         onClick={() => openFolder(child.path)}
                         className="w-full rounded-xl border border-[var(--theme-border)] p-3 text-left hover:bg-white/5 disabled:opacity-50"
                       >
@@ -1040,7 +1061,7 @@ export default function CblBrowserPage() {
                         <button
                           type="button"
                           onClick={() => openSource(source)}
-                          disabled={isCommitting}
+                          disabled={isCommitting || browseQuery.isPlaceholderData}
                           className="w-full rounded-xl border border-[var(--theme-border)] p-3 text-left hover:bg-white/5 disabled:opacity-50"
                         >
                           <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
@@ -1083,7 +1104,7 @@ export default function CblBrowserPage() {
                     <button
                       type="button"
                       onClick={() => openPage(page - 1)}
-                      disabled={!browsePage.has_previous || isCommitting}
+                      disabled={!browsePage.has_previous || isCommitting || browseQuery.isPlaceholderData}
                       className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
                     >
                       Previous page
@@ -1094,7 +1115,7 @@ export default function CblBrowserPage() {
                     <button
                       type="button"
                       onClick={() => openPage(page + 1)}
-                      disabled={!browsePage.has_next || isCommitting}
+                      disabled={!browsePage.has_next || isCommitting || browseQuery.isPlaceholderData}
                       className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
                     >
                       Next page
