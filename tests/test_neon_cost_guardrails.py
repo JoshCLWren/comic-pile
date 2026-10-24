@@ -25,7 +25,6 @@ async def test_public_probes_do_not_connect_to_database(
 
     async def forbidden_db() -> AsyncSession:
         raise AssertionError("Public liveness probe must not wake Neon")
-        yield  # pragma: no cover
 
     app.dependency_overrides[get_db] = forbidden_db
 
