@@ -19,9 +19,9 @@ test.describe('CBL adoption checklist integration', () => {
       total_issues: 1,
     })
     const ownedIssue1 = await getFirstIssueId(page, owned1.id)
-    
+
     const owned2 = await createThread(page, {
-      title: 'Test Volume 1 (2019)', // Different volume (different year)
+      title: 'Test Volume 2 (2019)', // Different volume (different year)
       format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
@@ -42,7 +42,8 @@ test.describe('CBL adoption checklist integration', () => {
         revision_sha: `checklist-test-revision-${fixtureSuffix}`,
         repository: `JoshCLWren/CBL-ReadingLists-fixture-${fixtureSuffix}`,
         entries: [
-          // First volume - Test Volume 1 (2012) - owned
+          // First volume - Test Volume 1 (2012) - owned issue plus a missing
+          // issue so the group can be partially selected (indeterminate).
           {
             position: 1,
             series_name: 'Test Volume 1',
@@ -50,9 +51,16 @@ test.describe('CBL adoption checklist integration', () => {
             issue_id: ownedIssue1,
             volume_year: 2012,
           },
-          // Second volume - Test Volume 2 (2019) - different series to ensure distinct groups
           {
             position: 2,
+            series_name: 'Test Volume 1',
+            issue_number: '2',
+            volume_year: 2012,
+            comicvine_issue_id: '4000-missing-vol1-2',
+          },
+          // Second volume - Test Volume 2 (2019) - different series to ensure distinct groups
+          {
+            position: 3,
             series_name: 'Test Volume 2',
             issue_number: '1',
             issue_id: ownedIssue2,
@@ -60,14 +68,14 @@ test.describe('CBL adoption checklist integration', () => {
           },
           // Missing entries (same series group)
           {
-            position: 3,
+            position: 4,
             series_name: 'Missing Series 1',
             issue_number: '1',
             volume_year: 2023,
             comicvine_issue_id: '4000-missing-1',
           },
           {
-            position: 4,
+            position: 5,
             series_name: 'Missing Series 1',
             issue_number: '2',
             volume_year: 2023,
@@ -93,24 +101,32 @@ test.describe('CBL adoption checklist integration', () => {
     await expect(page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })).toBeChecked()
     await expect(page.getByRole('checkbox', { name: 'Include Test Volume 2 (2019) series' })).toBeChecked()
     
-    await expect(page.getByText('4 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
-    
+    await expect(page.getByText('5 entries · 2 already in ComicPile · 3 will be added')).toBeVisible()
+
     // Uncheck the first volume (2012) - should become unchecked
     await page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' }).click()
 
-    // First volume unchecked, second still checked -> 2 entries excluded, 2 will be added
-    await expect(page.getByText('4 entries · 1 already in ComicPile · 2 will be added')).toBeVisible()
-    
-    // Recheck one issue from the first volume - should make it indeterminate
+    // First volume unchecked, second still checked -> 3 entries excluded, 2 will be added
+    await expect(page.getByText('5 entries · 1 already in ComicPile · 2 will be added')).toBeVisible()
+
+    // Recheck one issue from the first volume - should make the volume indeterminate
     // Expand the first volume (2012) to see individual issues
     await page.getByRole('button', { name: 'Show issues for Test Volume 1 (2012)' }).click()
     await page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) #1' }).check()
 
-    // Should show the updated count: 2 already in ComicPile (volumes 2012 + 2019) + 2 will be added (missing)
-    await expect(page.getByText('4 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
-    
-    // Also verify the first volume checkbox is now indeterminate
-    await expect(page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })).toBeChecked({ checked: true }) // indeterminate shows as checked in some implementations
+    // Should show the updated count: 2 already in ComicPile (volumes 2012 + 2019) + 2 will be added (missing series)
+    await expect(page.getByText('5 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
+
+    // The first volume is only partly selected, so its native checkbox must be
+    // in the mixed (indeterminate) state - not fully checked or unchecked.
+    // Playwright rejects combining a `checked` expectation with `indeterminate`;
+    // the indeterminate assertion alone is the exact mixed-state contract.
+    await expect(
+      page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' }),
+    ).toBeChecked({ indeterminate: true })
+    await expect(
+      page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' }),
+    ).not.toBeChecked()
   })
 
   test('keeps choices when switching between sources and detects source changes', async ({
@@ -133,13 +149,14 @@ test.describe('CBL adoption checklist integration', () => {
         source_path: sourcePath1,
         content_hash: `source-choice-1-${fixtureSuffix}`,
         revision_sha: `source-choice-1-revision-${fixtureSuffix}`,
-        repository: `JoshCLWren/CBL-ReadingLists-fixture-${fixtureSuffix}`,
+        repository: `JoshCLWren/CBL-ReadingLists-fixture-1-${fixtureSuffix}`,
         entries: [
           {
             position: 1,
             series_name: 'Source 1 Series',
             issue_number: '1',
             volume_year: 2023,
+            comicvine_issue_id: `4000-source-choice-1-${fixtureSuffix}`,
           },
         ],
       },
@@ -154,13 +171,14 @@ test.describe('CBL adoption checklist integration', () => {
         source_path: sourcePath2,
         content_hash: `source-choice-2-${fixtureSuffix}`,
         revision_sha: `source-choice-2-revision-${fixtureSuffix}`,
-        repository: `JoshCLWren/CBL-ReadingLists-fixture-${fixtureSuffix}`,
+        repository: `JoshCLWren/CBL-ReadingLists-fixture-2-${fixtureSuffix}`,
         entries: [
           {
             position: 1,
             series_name: 'Source 2 Series',
             issue_number: '1',
             volume_year: 2024,
+            comicvine_issue_id: `4000-source-choice-2-${fixtureSuffix}`,
           },
         ],
       },
