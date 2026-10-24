@@ -16,6 +16,7 @@ OWNER_RE='^factory:(unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$'
 STAGE_RE='^factory:(building|review|changes-requested|ci|ready|blocked)$'
 SKIP_PRS=()
 MODE="run"
+SOURCE="${FACTORY_SOURCE:-omniroute}"
 
 if [[ "${1:-}" == "--smoke" ]]; then
   MODE="smoke"
@@ -38,6 +39,15 @@ if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-dispatch-production-deploy.sh" 
 else
   source .github/scripts/factory-dispatch-production-deploy.sh
 fi
+# Canonical exact-head merge route (see factory-canonical-merge-route.sh).
+# Loaded before any PR checkout so worker-direct merges only ever execute the
+# trusted controller gate and the trusted post-merge closure policy.
+# shellcheck source=factory-canonical-merge-route.sh
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-canonical-merge-route.sh" ]]; then
+  source "$(dirname "${BASH_SOURCE[0]}")/factory-canonical-merge-route.sh"
+else
+  source .github/scripts/factory-canonical-merge-route.sh
+fi
 
 log() { printf '[factory:%s][omniroute:%s][model:%s] %s\n' "$WORKER" "$PROVIDER" "$MODEL" "$*"; }
 remaining() { echo $((DEADLINE - $(date +%s))); }
@@ -55,6 +65,51 @@ replace_labels() {
     map(select((test($owner_re)|not) and (test($stage_re)|not) and . != "factory"))
     + ["factory", $owner, $stage] | unique' <<< "$labels")"
   gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
+}
+
+current_stage() {
+  local number="$1" fallback="$2" labels stage
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  stage="$(jq -r --arg stage_re "$STAGE_RE" '[.[] | select(test($stage_re))][0] // empty' <<< "$labels")"
+  if [[ -n "$stage" ]]; then printf '%s\n' "$stage"; else printf '%s\n' "$fallback"; fi
+}
+
+current_owner_is_self() {
+  local number="$1" labels
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels"
+}
+
+linked_issue_from_pr() {
+  local pr="$1" branch body title issue
+  branch="$(gh pr view "$pr" --json headRefName --jq '.headRefName // empty' 2>/dev/null || true)"
+  issue="$(sed -nE 's#^factory/[0-9]+-([0-9]+)-.*$#\1#p' <<< "$branch")"
+  if [[ -z "$issue" ]]; then
+    body="$(gh pr view "$pr" --json body --jq '.body // empty' 2>/dev/null || true)"
+    issue="$(printf '%s' "$body" | grep -oiE '(closes|fixes|resolves)[[:space:]]+#[0-9]+' | head -1 | grep -oE '[0-9]+' || true)"
+  fi
+  if [[ -z "$issue" ]]; then
+    title="$(gh pr view "$pr" --json title --jq '.title // empty' 2>/dev/null || true)"
+    issue="$(printf '%s' "$title" | grep -oiE '(fix|fixes|resolve|resolves|close|closes)[[:space:]]+#[0-9]+' | head -1 | grep -oE '[0-9]+' || true)"
+  fi
+  printf '%s' "$issue"
+}
+
+release_pr_and_issue() {
+  local pr="$1" branch="$2" stage="$3" reason="$4" issue state
+  replace_labels "$pr" 'factory:unowned' "$stage"
+  issue="$(linked_issue_from_pr "$pr")"
+  if [[ -n "$issue" ]]; then
+    state="$(gh issue view "$issue" --json state --jq .state 2>/dev/null || true)"
+    if [[ "$state" == 'OPEN' ]] && current_owner_is_self "$issue"; then
+      replace_labels "$issue" 'factory:unowned' "$stage"
+    fi
+  fi
+  local epoch marker
+  epoch="$(date +%s)"
+  marker="<!-- comic-pile-factory-claim-released-v3:pr-${pr}:${WORKER_ID}:${epoch}:${reason} -->"
+  gh issue comment "$pr" --body "$marker" >/dev/null 2>&1 || true
+  log "released pr #${pr} to factory:unowned at ${stage} (${reason})"
 }
 
 record_no_diff_attempt() {
@@ -311,8 +366,19 @@ stage_trusted_review_controller() {
     trusted_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/comic-pile-review-controller.XXXXXX")"
     cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
     cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+    cp .github/scripts/factory_issue_acceptance.py "$trusted_dir/factory_issue_acceptance.py"
+    cp .github/scripts/factory_implementation_delivery.py "$trusted_dir/factory_implementation_delivery.py"
+    cp .github/scripts/factory_post_merge_closure.py "$trusted_dir/factory_post_merge_closure.py"
     # Bind model provenance to a trusted main checkout snapshot, not PR data.
     cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
+    if [[ -f .github/scripts/factory_eligibility.py ]]; then
+      cp .github/scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py"
+    elif [[ -f scripts/factory_eligibility.py ]]; then
+      cp scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py"
+    else
+      log 'trusted controller bundle missing factory_eligibility.py; failing closed' >&2
+      return 1
+    fi
     cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
     chmod +x "$trusted_dir/factory-review-controller.py"
     TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
@@ -479,17 +545,41 @@ while (( $(remaining) > 480 )); do
   fi
 
   current="$(git rev-parse HEAD)"
-  if grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && machine_merge_gates_pass "$NUMBER" "$current"; then
-    log "all exact-head gates passed for PR #${NUMBER}; merging ${current}"
-    gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
-    factory_dispatch_production_deploy "Factory ${WORKER} merged PR #${NUMBER}"
-    issue_number="$(sed -nE "s#^factory/${WORKER}-([0-9]+)-omniroute$#\\1#p" <<< "$BRANCH")"
-    if [[ -n "$issue_number" ]]; then
-      state="$(gh issue view "$issue_number" --json state --jq .state 2>/dev/null || true)"
-      if [[ "$state" == 'OPEN' ]]; then
-        gh issue close "$issue_number" --reason completed \
-          --comment "Closed after Factory ${WORKER} · ${CALL_SIGN} merged PR #${NUMBER} through the normal exact-head gates."
-      fi
+  if [[ "$SOURCE" != 'kilo-auto' ]] && \
+    grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
+    machine_merge_gates_pass "$NUMBER" "$current"; then
+    # Merge only through the canonical exact-head route: the trusted controller
+    # gates (issue acceptance, exact-commit review/CI, substantive delivery and a
+    # fresh declared/native dependency check) must return JSON decision "pass",
+    # the head is pinned with --match-head-commit, and closure must use the
+    # trusted staged post-merge policy. Never run a PR-branch-controlled gate and
+    # never close the issue with a raw issue-close command.
+    if factory_merge_with_canonical_gates "$NUMBER" "$current"; then
+      log "trusted controller gates passed for PR #${NUMBER}; merged ${current}; post-merge closure ${FACTORY_CLOSURE_STATUS}: ${FACTORY_CLOSURE_OUTCOME}"
+    else
+      merge_route_status=$?
+      case "$merge_route_status" in
+        3)
+          # The merge landed but the canonical closure policy did not complete.
+          # Leave the issue open with the durable closure reason instead of
+          # treating the merge as feature acceptance.
+          log "merged PR #${NUMBER}, but post-merge closure did not complete (${FACTORY_CLOSURE_STATUS}: ${FACTORY_CLOSURE_OUTCOME}); issue left open"
+          ;;
+        2)
+          log "merge command failed for PR #${NUMBER} at ${current}; leaving it open for another route"
+          ;;
+        *)
+          log "trusted controller gates for PR #${NUMBER} decision=${FACTORY_MERGE_GATE_DECISION:-empty}; not merging (reason: ${FACTORY_MERGE_GATE_REASON:-no reason})"
+          # Refused by the trusted controller: release the PR and linked issue,
+          # then skip it for the rest of this session so the loop cannot rerun
+          # the same agent on a PR the controller already denied.
+          if [[ "$SOURCE" != 'kilo-auto' ]]; then
+            release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'gate-denied'
+          fi
+          SKIP_PRS+=("$NUMBER")
+          # Do not merge: release lease and select other work
+          ;;
+      esac
     fi
     continue
   fi

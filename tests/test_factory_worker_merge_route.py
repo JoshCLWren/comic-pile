@@ -387,20 +387,22 @@ def test_merge_command_failure_does_not_run_closure(tmp_path: Path) -> None:
     assert _closure_calls(fields["calls"]) == []
 
 
-def _worker_merge_call_site() -> str:
-    source = PRIMITIVES.read_text(encoding="utf-8")
+def _worker_merge_call_site(script: Path = PRIMITIVES) -> str:
+    source = script.read_text(encoding="utf-8")
     start = source.index('  current="$(git rev-parse HEAD)"')
     end = source.index("  if (( transient_failure == 1 )); then", start)
     return source[start:end]
 
 
-def _run_call_site(tmp_path: Path, **env_overrides: str) -> tuple[list[str], str]:
+def _run_call_site(
+    tmp_path: Path, script: Path = PRIMITIVES, **env_overrides: str
+) -> tuple[list[str], str]:
     _, env = _fixture(tmp_path)
     env.update(env_overrides)
     worker = "mergeroute" + str(os.getpid())
     worker_log = Path("/tmp") / f"opencode-factory-{worker}.log"
     worker_log.write_text("FACTORY_GATE_READY\n", encoding="utf-8")
-    block = _worker_merge_call_site().replace(
+    block = _worker_merge_call_site(script).replace(
         'current="$(git rev-parse HEAD)"', 'current="$EXPECTED_HEAD"', 1
     )
     script = f"""
