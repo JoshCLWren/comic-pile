@@ -37,25 +37,33 @@ export default function ResumeRecovery({
   const runRecovery = useCallback(async (mode: RecoveryMode, options?: { bypassGate?: boolean }) => {
     if (mode === 'automatic') {
       if (explicitRecoveryActive.current) {
+        hiddenAt.current = null
         return
       }
       if (automaticRecoveryInFlight.current) {
+        hiddenAt.current = null
         return
       }
 
       const bypassGate = options?.bypassGate === true
       const now = Date.now()
+      const hiddenStartedAt = hiddenAt.current
+      hiddenAt.current = null
+
       if (!bypassGate) {
-        if (lastSuccessfulValidationAt.current > 0) {
-          if (now - lastSuccessfulValidationAt.current < AUTOMATIC_MIN_BACKGROUND_INTERVAL_MS) {
+        const hiddenIsBrief =
+          hiddenStartedAt !== null &&
+          now - hiddenStartedAt < AUTOMATIC_MIN_BACKGROUND_INTERVAL_MS
+        const lastSuccessIsRecent =
+          lastSuccessfulValidationAt.current > 0 &&
+          now - lastSuccessfulValidationAt.current < AUTOMATIC_MIN_BACKGROUND_INTERVAL_MS
+
+        if (hiddenStartedAt !== null) {
+          if (hiddenIsBrief || lastSuccessIsRecent) {
             return
           }
-        } else {
-          if (hiddenAt.current !== null) {
-            if (now - hiddenAt.current < AUTOMATIC_MIN_BACKGROUND_INTERVAL_MS) {
-              return
-            }
-          }
+        } else if (lastSuccessIsRecent) {
+          return
         }
       }
 
@@ -111,9 +119,7 @@ export default function ResumeRecovery({
       }
     } finally {
       if (mode === 'automatic') {
-        if (sequence === requestSequence.current) {
-          automaticRecoveryInFlight.current = false
-        }
+        automaticRecoveryInFlight.current = false
       }
       if (mode === 'explicit' && sequence === requestSequence.current) {
         explicitRecoveryActive.current = false
