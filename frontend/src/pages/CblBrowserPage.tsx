@@ -124,6 +124,26 @@ export default function CblBrowserPage() {
   const [seriesDecisions, setSeriesDecisions] = useState<Record<string, boolean>>({})
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  /**
+   * Reader choices keyed by source list id, so returning to a previously
+   * reviewed source restores its selections and unresolved warnings instead
+   * of silently resetting them (#4014).
+   */
+  const [sourceDecisions, setSourceDecisions] = useState<
+    Record<number, {
+      content_hash: string
+      series: Record<string, boolean>
+      entries: Record<string, boolean>
+    }>
+  >({})
+  // Ref to access current sourceDecisions in useEffect without adding it to deps.
+  // sourceDecisions is deliberately omitted from the stale-detection effect's
+  // dependency array: that effect clears sourceDecisions on a content-hash
+  // mismatch, so including it would re-trigger the effect after every clear and
+  // restart a render loop. The ref reads the latest saved decisions without
+  // scheduling a re-render (CblBrowserPage.tsx:236-249).
+  const sourceDecisionsRef = useRef(sourceDecisions)
+  sourceDecisionsRef.current = sourceDecisions
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
   /**
@@ -197,6 +217,42 @@ export default function CblBrowserPage() {
       setAmbiguousCommit(true)
     },
   })
+
+  // Persist the reader's choices per source so returning to a reviewed source
+  // restores them instead of resetting the checklist (#4014). The source's
+  // content_hash is saved alongside the choices so a changed source cannot
+  // silently apply stale entry overrides to new cbl_entry_id rows.
+  useEffect(() => {
+    if (!selectedSource) return
+    if (!previewQuery.data) return
+    const previewData = previewQuery.data
+    setSourceDecisions((current) => ({
+      ...current,
+      [selectedSource.id]: {
+        content_hash: previewData.source.content_hash,
+        series: seriesDecisions,
+        entries: entryDecisions,
+      },
+    }))
+  }, [selectedSource, seriesDecisions, entryDecisions, previewQuery.data])
+
+  // If the source's content changed since choices were saved, the saved
+  // entryDecisions no longer match the new cbl_entry_id rows. Discard the
+  // stale overrides and require a fresh review before committing.
+  useEffect(() => {
+    if (!selectedSource || !previewQuery.data) return
+    const saved = sourceDecisionsRef.current[selectedSource.id]
+    if (!saved) return
+    if (!saved.content_hash || saved.content_hash === previewQuery.data.source.content_hash) return
+    setSourceDecisions((current) => {
+      const next = { ...current }
+      delete next[selectedSource.id]
+      return next
+    })
+    setSeriesDecisions({})
+    setEntryDecisions({})
+    setStaleReview(true)
+  }, [selectedSource, previewQuery.data])
 
   const sources = sourcesQuery.data ?? []
   const hasChoices =
@@ -326,20 +382,44 @@ export default function CblBrowserPage() {
 
   const loadPreview = (source: CBLSourceListDiscoveryItem) => {
     if (isCommitting) return
-    const reloadSelectedSource = selectedSource?.id === source.id
+    const saved = sourceDecisions[source.id]
     setSelectedSource(source)
     setCustomizing(false)
     setConfirmOpen(false)
-    setSeriesDecisions({})
-    setEntryDecisions({})
+    if (saved) {
+      // Compare against the fetched preview for this source, not the search
+      // result's content_hash. The search result may be stale (Greptile finding).
+      // The effect at lines 240-253 will re-verify once the fresh preview arrives.
+      const previewData = previewQuery.data
+      const previewMatchesSource =
+        previewData && previewData.source.source_list_id === source.id
+      if (previewMatchesSource && previewData.source.content_hash !== saved.content_hash) {
+        // Fetched preview for this exact source confirms content changed
+        setSeriesDecisions({})
+        setEntryDecisions({})
+        setStaleReview(true)
+      } else {
+        // Either no preview yet (will be verified by effect) or content matches
+        setSeriesDecisions(saved.series)
+        setEntryDecisions(saved.entries)
+      }
+    } else {
+      setSeriesDecisions({})
+      setEntryDecisions({})
+    }
     setExpandedGroups({})
-    setStaleReview(false)
+    // Only clear staleReview when the content_hash matches; otherwise
+    // the stale-detection effect (or the warning below) will keep it set.
+    if (!saved || source.content_hash === saved.content_hash) {
+      setStaleReview(false)
+    }
     setAmbiguousCommit(false)
     setOverlapChoices({})
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
     commitMutation.reset()
-    if (reloadSelectedSource) void previewQuery.refetch()
+    // Refetch preview when re-selecting the same source to ensure fresh data
+    if (selectedSource?.id === source.id) void previewQuery.refetch()
   }
 
   const chooseEntry = (entry: CBLAdoptionPreviewEntry, include: boolean) => {

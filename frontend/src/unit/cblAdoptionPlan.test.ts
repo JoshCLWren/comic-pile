@@ -325,4 +325,37 @@ describe('buildCblSeriesGroups', () => {
     expect(cblSeriesGroupLabel('Saga', null)).toBe('Saga')
     expect(cblSeriesGroupLabel('Saga', 2012)).toBe('Saga (2012)')
   })
+
+  it('keeps same-named volumes distinct by their volume id', () => {
+    const groups = buildCblSeriesGroups({
+      ...preview,
+      entries: [
+        entry({
+          cbl_position: 1,
+          cbl_entry_id: 101,
+          series_name: 'Saga',
+          series_group_id: 'provider-series:comicvine:4050',
+          volume_year: 2012,
+        }),
+        entry({
+          cbl_position: 2,
+          cbl_entry_id: 102,
+          series_name: 'Saga',
+          series_group_id: 'provider-series:comicvine:9000',
+          volume_year: 2012,
+        }),
+      ],
+    })
+    expect(groups).toHaveLength(2)
+    expect(groups[0]?.id).toBe('provider-series:comicvine:4050')
+    expect(groups[1]?.id).toBe('provider-series:comicvine:9000')
+  })
+
+  it('becomes indeterminate when one issue of an excluded volume is rechecked', () => {
+    const excluded = applyCblAdoptionChoices(preview, { 'group-1': false }, {})
+    const rechecked = applyCblAdoptionChoices(excluded, { 'group-1': false }, { '101': true })
+    const groups = buildCblSeriesGroups(rechecked)
+    expect(groups[0]?.state).toBe('indeterminate')
+    expect(groups[0]?.selectedCount).toBe(1)
+  })
 })
