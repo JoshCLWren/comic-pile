@@ -136,8 +136,12 @@ export default function CblBrowserPage() {
       entries: Record<string, boolean>
     }>
   >({})
-  // Ref to access current sourceDecisions in useEffect without adding it to deps
-  // (avoids re-render loop when setSourceDecisions is called)
+  // Ref to access current sourceDecisions in useEffect without adding it to deps.
+  // sourceDecisions is deliberately omitted from the stale-detection effect's
+  // dependency array: that effect clears sourceDecisions on a content-hash
+  // mismatch, so including it would re-trigger the effect after every clear and
+  // restart a render loop. The ref reads the latest saved decisions without
+  // scheduling a re-render (CblBrowserPage.tsx:236-249).
   const sourceDecisionsRef = useRef(sourceDecisions)
   sourceDecisionsRef.current = sourceDecisions
   const [staleReview, setStaleReview] = useState(false)
