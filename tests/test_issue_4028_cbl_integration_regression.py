@@ -150,9 +150,9 @@ def test_4028_m1_unblocks_only_after_f2_is_read(default_user: User) -> None:
     assert M1 in offered, "M1 must become rollable once F2 is read"
 
 
-def test_4028_overlap_decision_is_per_reader_scoped(default_user: User) -> None:
+def test_4028_overlap_decision_is_per_reader_scoped(default_user: User, sample_user2: User) -> None:
     """A snapshot for a second reader without the decision keeps strict order."""
-    second = replace(_snapshot(user_id=default_user.id, approved=False), user_id=default_user.id + 1)
+    second = replace(_snapshot(user_id=default_user.id, approved=False), user_id=sample_user2.id)
     offered = _offers(second)
     assert J2 not in offered
 
