@@ -224,15 +224,16 @@ export default function CblBrowserPage() {
   // silently apply stale entry overrides to new cbl_entry_id rows.
   useEffect(() => {
     if (!selectedSource) return
+    if (!previewQuery.data) return
     setSourceDecisions((current) => ({
       ...current,
       [selectedSource.id]: {
-        content_hash: previewQuery.data?.source.content_hash ?? '',
+        content_hash: previewQuery.data.source.content_hash,
         series: seriesDecisions,
         entries: entryDecisions,
       },
     }))
-  }, [selectedSource, seriesDecisions, entryDecisions, previewQuery.data?.source.content_hash])
+  }, [selectedSource, seriesDecisions, entryDecisions, previewQuery.data])
 
   // If the source's content changed since choices were saved, the saved
   // entryDecisions no longer match the new cbl_entry_id rows. Discard the
