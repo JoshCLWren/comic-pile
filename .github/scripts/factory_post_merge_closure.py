@@ -1034,7 +1034,13 @@ def close_merged_pr_issue(
                     blocked = [label for label in labels
                                if label not in STAGE_LABELS and not OWNER_RE.fullmatch(label)
                                and not label.startswith("ralph-status:")]
-                    blocked.extend(["factory:blocked", "ralph-status:blocked", "factory", "factory:unowned"])
+                    blocked.extend(
+                        ["factory:blocked",
+                         "ralph-status:blocked",
+                         "factory",
+                         "factory:unowned",
+                        ]
+                    )
                     _replace_labels(issue_number, blocked)
                     if str(issue["state"]) == CLOSED_STATE:
                         _run_gh("issue", "reopen", str(issue_number), "--repo", _repo_slug())
