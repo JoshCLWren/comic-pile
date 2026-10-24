@@ -26,6 +26,10 @@ The canonical closure marker schema is::
 
     <!-- comic-pile-factory-merge-closure-v1:pr-<pr>:issue-<issue> -->
 
+The unreadable-dependency warning carries the stable retryable marker::
+
+    <!-- comic-pile-factory-dependency-unreadable-v1:pr-<pr>:issue-<issue> -->
+
 """
 
 from __future__ import annotations
@@ -107,6 +111,7 @@ CLOSING_RE = re.compile(
 )
 
 MERGE_CLOSURE_MARKER = "comic-pile-factory-merge-closure-v1"
+UNREADABLE_WARNING_MARKER = "comic-pile-factory-dependency-unreadable-v1"
 SWEEP_MAX_AGE_HOURS = 26
 
 
@@ -674,6 +679,64 @@ def _closed_by_pr(issue_number: int, info: Mapping[str, str]) -> bool:
     commits = {value for key in ("head", "merge") if (value := info.get(key))}
     return transitions[-1].get("commit_id") in commits
 
+
+def _has_closure_marker(issue_number: int, pr_number: int) -> bool:
+    """Return whether the issue already carries this PR's closure marker."""
+    try:
+        prefix = f"{MERGE_CLOSURE_MARKER}:pr-{pr_number}:issue-{issue_number}"
+        return any(prefix in body for body in _issue_comment_bodies(issue_number))
+    except (RuntimeError, TypeError, json.JSONDecodeError):
+        # TypeError covers a None or non-decodable payload (for example from a
+        # fake or interrupted gh call): unreadable comments mean no marker.
+        return False
+
+
+def _has_dependency_block_marker(issue_number: int, pr_number: int) -> bool:
+    """Return whether the issue carries this PR's dependency-block marker."""
+    try:
+        prefix = (
+            f"comic-pile-factory-dependency-block-v1:pr-{pr_number}:"
+            f"issue-{issue_number}:"
+        )
+        return any(prefix in body for body in _issue_comment_bodies(issue_number))
+    except (RuntimeError, TypeError, json.JSONDecodeError):
+        # TypeError covers a None or non-decodable payload: unreadable
+        # comments mean no marker.
+        return False
+
+def _unreadable_dependency_warning_marker(pr_number: int, issue_number: int) -> str:
+    """Build the stable dedupe marker for one unreadable-dependency warning.
+
+    Args:
+        pr_number: The merged pull request whose dependency state was unreadable.
+        issue_number: The delivered issue being kept unratified.
+
+    Returns:
+        An HTML comment marker unique to this PR and issue.
+    """
+    return (
+        f"<!-- {UNREADABLE_WARNING_MARKER}:pr-{pr_number}:issue-{issue_number} -->"
+    )
+
+
+def _has_unreadable_dependency_warning(issue_number: int, pr_number: int) -> bool:
+    """Return whether the issue already carries this PR's unreadable warning.
+
+    Args:
+        issue_number: The issue whose comments are searched.
+        pr_number: The merged pull request that would post the warning.
+
+    Returns:
+        True when the exact warning marker was already published.
+    """
+    try:
+        prefix = f"{UNREADABLE_WARNING_MARKER}:pr-{pr_number}:issue-{issue_number}"
+        return any(prefix in body for body in _issue_comment_bodies(issue_number))
+    except (RuntimeError, TypeError, json.JSONDecodeError):
+        # TypeError covers a None or non-decodable payload: unreadable
+        # comments must never turn the dedupe read into a crash.
+        return False
+
 def _native_open_blockers(issue_number: int) -> list[int]:
     """Return open issues GitHub records as blocking one issue natively.
 
@@ -775,7 +838,9 @@ def _record_dependency_block(
     try:
         if any(marker in body for body in _issue_comment_bodies(issue_number)):
             return
-    except (RuntimeError, json.JSONDecodeError):
+    except (RuntimeError, TypeError, json.JSONDecodeError):
+        # TypeError covers a None or non-decodable payload: unreadable
+        # comments must not raise through the marker read.
         return
     listed = ", ".join(f"#{number}" for number in sorted(blockers))
     body = "\n\n".join(
@@ -814,13 +879,17 @@ def _declared_dependency_blockers(
     for dep in sorted(declared):
         try:
             dep_issue = _issue_view(dep)
-        except (RuntimeError, json.JSONDecodeError):
+        except (RuntimeError, TypeError, json.JSONDecodeError):
+            # TypeError covers a None or non-decodable payload: unreadable
+            # dependency state must fail closed, not ratify completion.
             return [], False
         if str(dep_issue.get("state")) != CLOSED_STATE:
             open_deps.append(dep)
     try:
         open_deps.extend(_native_open_blockers(issue_number))
-    except (RuntimeError, json.JSONDecodeError):
+    except (RuntimeError, TypeError, json.JSONDecodeError):
+        # TypeError covers a None or non-decodable payload: unreadable
+        # dependency state must fail closed, not ratify completion.
         return [], False
     return sorted(set(open_deps)), True
 
@@ -882,6 +951,119 @@ def close_merged_pr_issue(
         if _unmet_parent_criteria(issue_body):
             return "acceptance-parent-incomplete"
         return "acceptance-parent-requires-verdict"
+
+    # Whether GitHub closed this issue with this PR's closing keyword, or
+    # whether we previously blocked it for this PR's dependencies. Both need
+    # dependency state rechecked before the quiescent guard: a keyword-closed
+    # issue carries ralph-status:blocked after reopening, and a previously
+    # blocked issue carries the same label, so the sweep would return
+    # active-work forever without ever re-reading whether dependencies
+    # finished.
+    issue_closed_by_this_pr = (
+        str(issue["state"]) == CLOSED_STATE
+        and _closed_by_pr(issue_number, info)
+    )
+    has_block_marker = _has_dependency_block_marker(issue_number, pr_number)
+
+    if issue_closed_by_this_pr or has_block_marker:
+        # Resolve delivery and dependencies before the quiescent guard so a
+        # keyword-closed or previously blocked issue is decided by its
+        # prerequisites, not by its own stale blocked label. Clearing both
+        # blocked labels once dependencies close lets the issue close through
+        # the normal path.
+        if str(issue["state"]) != CLOSED_STATE:
+            # The issue was already reopened past its last block: it may have
+            # been claimed or re-delivered since. A live owner lease or an
+            # open successor PR protects that work from being relabeled or
+            # dependency-closed here, even after the prerequisites finish; a
+            # still-closed issue keeps its keyword repair priority because
+            # reopening is only possible while closed.
+            if any(ACTIVE_OWNER_RE.match(label) for label in labels):
+                return "active-work"
+            has_successor = _issue_has_open_successor_pr(issue_number, pr_number)
+            if has_successor == "unknown":
+                # Lookup failure prevents closure verification - stop closure.
+                return "successor-lookup-failed"
+            if has_successor:
+                return "successor-open"
+        try:
+            if implementation_delivery.is_implementation_issue(issue_body):
+                paths, patch = implementation_delivery.complete_pr_diff(
+                    pr_number, info.get("head", ""), _repo_slug(), lambda args: _run_gh(*args)
+                )
+                delivered, reason = implementation_delivery.pr_delivers_implementation(
+                    issue_body, paths, patch
+                )
+            else:
+                delivered, reason = True, "explicit non-implementation contract"
+        except (RuntimeError, ValueError, KeyError, TypeError) as exc:
+            return f"delivery-unverified:{exc}"
+        if delivered:
+            open_deps, dependency_state_known = _declared_dependency_blockers(
+                issue_number, issue_body
+            )
+            if not dependency_state_known:
+                if not dry_run:
+                    pending = [label for label in labels
+                               if label not in STAGE_LABELS and not OWNER_RE.fullmatch(label)
+                               and not label.startswith("ralph-status:")]
+                    pending.extend(["ralph-status:pending", "factory:unowned"])
+                    _replace_labels(issue_number, pending)
+                    if str(issue["state"]) == CLOSED_STATE:
+                        _run_gh("issue", "reopen", str(issue_number), "--repo", _repo_slug())
+                    # The warning carries a stable marker so a dependency API
+                    # outage cannot notify followers on every drain tick (G4).
+                    if not _has_unreadable_dependency_warning(issue_number, pr_number):
+                        _comment_issue(
+                            issue_number,
+                            "\n\n".join(
+                                [
+                                    _unreadable_dependency_warning_marker(
+                                        pr_number, issue_number
+                                    ),
+                                    (
+                                        f"PR #{pr_number} dependency state unreadable; "
+                                        "closure not ratified."
+                                    ),
+                                ]
+                            ),
+                        )
+                return "open-dependency"
+            if open_deps:
+                if not dry_run:
+                    blocked = [label for label in labels
+                               if label not in STAGE_LABELS and not OWNER_RE.fullmatch(label)
+                               and not label.startswith("ralph-status:")]
+                    blocked.extend(["factory:blocked", "ralph-status:blocked", "factory", "factory:unowned"])
+                    _replace_labels(issue_number, blocked)
+                    if str(issue["state"]) == CLOSED_STATE:
+                        _run_gh("issue", "reopen", str(issue_number), "--repo", _repo_slug())
+                    _record_dependency_block(pr_number, issue_number, open_deps)
+                return "open-dependency: " + ", ".join(f"#{number}" for number in open_deps)
+            # Dependencies resolved: restore the canonical delivery labels and
+            # close. The closure marker only deduplicates the comment; label
+            # repair happens on every visit so a re-completed issue never
+            # keeps stale factory:blocked / ralph-status:blocked labels (G3).
+            if not dry_run:
+                _replace_labels(issue_number, target_labels(labels))
+                if not _has_closure_marker(issue_number, pr_number):
+                    _comment_issue(issue_number, closure_comment(pr_number, issue_number))
+                if str(issue["state"]) != CLOSED_STATE:
+                    _close_issue(issue_number)
+            return "closed"
+        # Not delivered: repair keyword auto-closure of this PR's closed issue.
+        if issue_closed_by_this_pr and not dry_run:
+            pending = [label for label in labels
+                       if label not in STAGE_LABELS and not OWNER_RE.fullmatch(label)
+                       and not label.startswith("ralph-status:")]
+            pending.extend(["ralph-status:pending", "factory:unowned"])
+            _replace_labels(issue_number, pending)
+            _run_gh("issue", "reopen", str(issue_number), "--repo", _repo_slug())
+            _comment_issue(
+                issue_number, f"PR #{pr_number} did not deliver implementation: {reason}"
+            )
+        return f"not-delivered:{reason}"
+
     if closure_blocked_by_active_work(labels, require_quiescent):
         return "active-work"
     has_successor = _issue_has_open_successor_pr(issue_number, pr_number)
@@ -905,38 +1087,33 @@ def close_merged_pr_issue(
         # Keep the delivery-unverified return so failed checks wait for a retry
         # instead of approving closure of unverified work.
         return f"delivery-unverified:{exc}"
-    # Validate delivery before dependency-based early returns, so a non-delivering
-    # PR can still repair an issue GitHub closed through its closing keyword.
-    if delivered:
-        open_deps, dependency_state_known = _declared_dependency_blockers(
-            issue_number, issue_body
-        )
-        if not dependency_state_known:
-            return "open-dependency"
-        if open_deps:
-            if not dry_run:
-                _record_dependency_block(pr_number, issue_number, open_deps)
-            return "open-dependency: " + ", ".join(f"#{number}" for number in open_deps)
     if not delivered:
-        if str(issue["state"]) == "CLOSED" and not dry_run and _closed_by_pr(issue_number, info):
-            # Repair GitHub keyword auto-closure of known non-delivering PRs.
-            pending = [label for label in labels
-                       if label not in STAGE_LABELS and not OWNER_RE.fullmatch(label)
-                       and not label.startswith("ralph-status:")]
-            pending.extend(["ralph-status:pending", "factory:unowned"])
-            _replace_labels(issue_number, pending)
-            _run_gh("issue", "reopen", str(issue_number), "--repo", _repo_slug())
-            _comment_issue(
-                issue_number, f"PR #{pr_number} did not deliver implementation: {reason}"
-            )
         return f"not-delivered:{reason}"
-    if str(issue["state"]) != "OPEN":
+    # Delivered issue with no prior block marker: check prerequisites before
+    # closing so an open dependency keeps the issue open.
+    open_deps, dependency_state_known = _declared_dependency_blockers(
+        issue_number, issue_body
+    )
+    if not dependency_state_known:
+        return "open-dependency"
+    if open_deps:
+        if not dry_run:
+            _record_dependency_block(pr_number, issue_number, open_deps)
+        return "open-dependency: " + ", ".join(f"#{number}" for number in open_deps)
+    if str(issue["state"]) != "OPEN" and not (
+        delivered and str(issue["state"]) == CLOSED_STATE and _closed_by_pr(issue_number, info)
+    ):
         return "already-closed"
     if dry_run:
         return f"dry-run:replace-labels-with{target_labels(labels)}+close"
+    # The marker only deduplicates the closure comment; label repair runs on
+    # every canonical closure so already-closed issues never keep stale
+    # blocked or owner labels (G3).
     _replace_labels(issue_number, target_labels(labels))
-    _comment_issue(issue_number, closure_comment(pr_number, issue_number))
-    _close_issue(issue_number)
+    if not _has_closure_marker(issue_number, pr_number):
+        _comment_issue(issue_number, closure_comment(pr_number, issue_number))
+    if str(issue["state"]) != CLOSED_STATE:
+        _close_issue(issue_number)
     return "closed"
 
 
@@ -1574,7 +1751,15 @@ This issue is a product contract and acceptance parent.
                     },
                 ):
                     with patch.object(mod, "_native_open_blockers", return_value=[]):
-                        result = close_merged_pr_issue(4024, dry_run=True)
+                        with patch.object(
+                            mod, "_issue_has_open_successor_pr", return_value=False
+                        ):
+                            with patch.object(
+                                implementation_delivery, "complete_pr_diff",
+                                return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                              "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                            ):
+                                result = close_merged_pr_issue(4024, dry_run=True)
         self.assertEqual(result, "open-dependency: #4008")
         numbers = [call.args[0] for call in mock_view.call_args_list]
         self.assertEqual(numbers, [4010, 4008])
@@ -1604,14 +1789,22 @@ This issue is a product contract and acceptance parent.
                 },
             ):
                 with patch.object(mod, "_native_open_blockers", return_value=[]):
-                    with patch.object(mod, "_run_gh", return_value="[]"):
+                    with patch.object(
+                        mod, "_issue_has_open_successor_pr", return_value=False
+                    ):
                         with patch.object(
-                            mod,
-                            "_comment_issue",
-                            side_effect=lambda _issue, body: comments.append(body),
+                            implementation_delivery, "complete_pr_diff",
+                            return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                          "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
                         ):
-                            with patch.object(mod, "_close_issue") as mock_close:
-                                result = close_merged_pr_issue(4024)
+                            with patch.object(mod, "_run_gh", return_value="[]"):
+                                with patch.object(
+                                    mod,
+                                    "_comment_issue",
+                                    side_effect=lambda _issue, body: comments.append(body),
+                                ):
+                                    with patch.object(mod, "_close_issue") as mock_close:
+                                        result = close_merged_pr_issue(4024)
         self.assertEqual(result, "open-dependency: #4008")
         mock_close.assert_not_called()
         self.assertEqual(len(comments), 1)
@@ -1647,13 +1840,21 @@ This issue is a product contract and acceptance parent.
                 },
             ):
                 with patch.object(mod, "_native_open_blockers", return_value=[]):
-                    with patch.object(mod, "_run_gh", return_value=existing):
+                    with patch.object(
+                        mod, "_issue_has_open_successor_pr", return_value=False
+                    ):
                         with patch.object(
-                            mod,
-                            "_comment_issue",
-                            side_effect=lambda _issue, body: comments.append(body),
+                            implementation_delivery, "complete_pr_diff",
+                            return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                          "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
                         ):
-                            result = close_merged_pr_issue(4024)
+                            with patch.object(mod, "_run_gh", return_value=existing):
+                                with patch.object(
+                                    mod,
+                                    "_comment_issue",
+                                    side_effect=lambda _issue, body: comments.append(body),
+                                ):
+                                    result = close_merged_pr_issue(4024)
         self.assertEqual(result, "open-dependency: #4008")
         self.assertEqual(comments, [])
 
@@ -1683,7 +1884,12 @@ This issue is a product contract and acceptance parent.
                     with patch.object(
                         mod, "_issue_has_open_successor_pr", return_value=False
                     ):
-                        result = close_merged_pr_issue(4034, dry_run=True)
+                        with patch.object(
+                            implementation_delivery, "complete_pr_diff",
+                            return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                          "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                        ):
+                            result = close_merged_pr_issue(4034, dry_run=True)
         # The dependency check passes and the closure flow reaches its
         # labeling/close decision instead of being refused outright. The
         # successor lookup is mocked so this self-test stays hermetic in the
@@ -1718,7 +1924,15 @@ This issue is a product contract and acceptance parent.
                     },
                 ):
                     with patch.object(mod, "_native_open_blockers", return_value=[]):
-                        result = close_merged_pr_issue(4040, dry_run=True)
+                        with patch.object(
+                            mod, "_issue_has_open_successor_pr", return_value=False
+                        ):
+                            with patch.object(
+                                implementation_delivery, "complete_pr_diff",
+                                return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                              "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                            ):
+                                result = close_merged_pr_issue(4040, dry_run=True)
         self.assertEqual(result, "open-dependency: #4010")
         mock_close.assert_not_called()
 
@@ -1744,7 +1958,15 @@ This issue is a product contract and acceptance parent.
                     "state": "MERGED",
                 },
             ):
-                result = close_merged_pr_issue(4041, dry_run=True)
+                with patch.object(
+                    mod, "_issue_has_open_successor_pr", return_value=False
+                ):
+                    with patch.object(
+                        implementation_delivery, "complete_pr_diff",
+                        return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                      "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                    ):
+                        result = close_merged_pr_issue(4041, dry_run=True)
         self.assertEqual(result, "open-dependency")
 
     def test_open_native_blocked_by_blocks_closure(self) -> None:
@@ -1769,7 +1991,15 @@ This issue is a product contract and acceptance parent.
                 },
             ):
                 with patch.object(mod, "_native_open_blockers", return_value=[4049]):
-                    result = close_merged_pr_issue(4051, dry_run=True)
+                    with patch.object(
+                        mod, "_issue_has_open_successor_pr", return_value=False
+                    ):
+                        with patch.object(
+                            implementation_delivery, "complete_pr_diff",
+                            return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                          "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                        ):
+                            result = close_merged_pr_issue(4051, dry_run=True)
         self.assertEqual(result, "open-dependency: #4049")
 
     def test_closed_native_blocker_allows_closure(self) -> None:
@@ -1797,7 +2027,12 @@ This issue is a product contract and acceptance parent.
                     with patch.object(
                         mod, "_issue_has_open_successor_pr", return_value=False
                     ):
-                        result = close_merged_pr_issue(4051, dry_run=True)
+                        with patch.object(
+                            implementation_delivery, "complete_pr_diff",
+                            return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                          "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                        ):
+                            result = close_merged_pr_issue(4051, dry_run=True)
         # The successor lookup is mocked so this self-test stays hermetic in
         # the no-GH_TOKEN merge-drain self-test step.
         self.assertEqual(
@@ -1830,7 +2065,15 @@ This issue is a product contract and acceptance parent.
                 with patch.object(
                     mod, "_native_open_blockers", side_effect=RuntimeError("gh failed")
                 ):
-                    result = close_merged_pr_issue(4051, dry_run=True)
+                    with patch.object(
+                        mod, "_issue_has_open_successor_pr", return_value=False
+                    ):
+                        with patch.object(
+                            implementation_delivery, "complete_pr_diff",
+                            return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                          "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                        ):
+                            result = close_merged_pr_issue(4051, dry_run=True)
         self.assertEqual(result, "open-dependency")
 
     def test_conflicting_branch_and_closing_reference_checks_the_delivered_issue(self) -> None:
@@ -1856,7 +2099,15 @@ This issue is a product contract and acceptance parent.
                 },
             ):
                 with patch.object(mod, "_native_open_blockers", return_value=[]):
-                    result = close_merged_pr_issue(4050, dry_run=True)
+                    with patch.object(
+                        mod, "_issue_has_open_successor_pr", return_value=False
+                    ):
+                        with patch.object(
+                            implementation_delivery, "complete_pr_diff",
+                            return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                          "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                        ):
+                            result = close_merged_pr_issue(4050, dry_run=True)
         self.assertEqual(result, "open-dependency: #4008")
 
     def test_sweep_reports_open_dependency_and_never_closes(self) -> None:
@@ -1895,11 +2146,16 @@ This issue is a product contract and acceptance parent.
                         with patch.object(
                             mod, "_issue_has_open_successor_pr", return_value=False
                         ):
-                            with patch.object(
-                                mod, "_native_open_blockers", return_value=[]
-                            ):
-                                with patch.object(mod, "_close_issue") as mock_close:
-                                    outcomes = sweep_stranded_closures(dry_run=True)
+                                with patch.object(
+                                    mod, "_native_open_blockers", return_value=[]
+                                ):
+                                    with patch.object(
+                                        implementation_delivery, "complete_pr_diff",
+                                        return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                                      "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                                    ):
+                                        with patch.object(mod, "_close_issue") as mock_close:
+                                            outcomes = sweep_stranded_closures(dry_run=True)
         self.assertEqual(outcomes, ["PR 4024: open-dependency: #4008"])
         mock_close.assert_not_called()
 
@@ -1942,7 +2198,12 @@ This issue is a product contract and acceptance parent.
                             with patch.object(
                                 mod, "_native_open_blockers", return_value=[]
                             ):
-                                outcomes = sweep_stranded_closures(dry_run=True)
+                                with patch.object(
+                                    implementation_delivery, "complete_pr_diff",
+                                    return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                                  "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                                ):
+                                    outcomes = sweep_stranded_closures(dry_run=True)
         self.assertEqual(
             outcomes,
             ["PR 4034: dry-run:replace-labels-with"
@@ -1973,11 +2234,639 @@ This issue is a product contract and acceptance parent.
                     },
                 ):
                     with patch.object(mod, "_native_open_blockers", return_value=[]):
-                        result = close_merged_pr_issue(4034, dry_run=True)
+                        with patch.object(
+                            mod, "_issue_has_open_successor_pr", return_value=False
+                        ):
+                            with patch.object(
+                                implementation_delivery, "complete_pr_diff",
+                                return_value=(["app/fix.py"], "diff --git a/app/fix.py b/app/fix.py\n"
+                                              "@@ -1 +1 @@\n-old = 1\n+new = 2\n"),
+                            ):
+                                result = close_merged_pr_issue(4034, dry_run=True)
         self.assertEqual(result, "open-dependency: #4016")
         numbers = [call.args[0] for call in mock_view.call_args_list]
         self.assertEqual(numbers, [4017, 4016])
         mock_close.assert_not_called()
+
+    # Regression tests for issue #4083: keyword-closed issue with dependencies (G1-G4)
+
+    def test_keyword_closed_issue_open_deps_reopens_blocked_unowned(self) -> None:
+        """Keyword-closed issue with open deps reopens with blocked+unowned labels (G1, G2)."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        comments: list[str] = []
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(mod, "_replace_labels") as mock_replace:
+                with patch.object(
+                    mod,
+                    "_issue_view",
+                    side_effect=[
+                        {
+                            "state": "CLOSED",
+                            "body": "Delivered work.\nDepends on #4008",
+                            "labels": [
+                                "enhancement",
+                                "factory",
+                                "factory:blocked",
+                                "ralph-status:blocked",
+                                "factory:unowned",
+                            ],
+                        },
+                        self._closure_issue(4008, state="OPEN"),
+                    ],
+                ) as mock_view:
+                    with patch.object(
+                        mod,
+                        "_pr_info",
+                        return_value={
+                            "branch": "factory/33-4010-kilo-auto",
+                            "body": "Closes #4010.",
+                            "state": "MERGED",
+                            "head": "abc123",
+                            "merge": "abc123",
+                        },
+                    ):
+                        with patch.object(mod, "_closed_by_pr", return_value=True):
+                            with patch.object(
+                                mod, "_has_dependency_block_marker", return_value=False
+                            ):
+                                with patch.object(
+                                    mod, "_has_closure_marker", return_value=False
+                                ):
+                                    with patch.object(mod, "_run_gh", return_value="[]"):
+                                        with patch.object(
+                                            mod,
+                                            "_comment_issue",
+                                            side_effect=lambda _issue, body: comments.append(body),
+                                        ):
+                                            with patch.object(
+                                                mod, "_issue_has_open_successor_pr",
+                                                return_value=False,
+                                            ):
+                                                with patch.object(
+                                                    mod, "_native_open_blockers", return_value=[]
+                                                ):
+                                                    with patch.object(
+                                                        implementation_delivery,
+                                                        "complete_pr_diff",
+                                                        return_value=(
+                                                            ["app/fix.py"],
+                                                            "diff --git a/app/fix.py b/app/fix.py\n"
+                                                            "@@ -1 +1 @@\n-old = 1\n+new = 2\n",
+                                                        ),
+                                                    ):
+                                                        with patch.object(
+                                                            mod.eligibility,
+                                                            "parse_declared_dependencies",
+                                                            return_value={4008},
+                                                        ):
+                                                            result = close_merged_pr_issue(
+                                                                4024, dry_run=False
+                                                            )
+        self.assertEqual(result, "open-dependency: #4008")
+        numbers = [call.args[0] for call in mock_view.call_args_list]
+        self.assertEqual(numbers, [4010, 4008])
+        mock_close.assert_not_called()
+        replaced = mock_replace.call_args[0][1]
+        self.assertIn("factory:blocked", replaced)
+        self.assertIn("ralph-status:blocked", replaced)
+        self.assertIn("factory:unowned", replaced)
+
+    def test_keyword_closed_issue_unreadable_deps_reopens_pending_unowned(self) -> None:
+        """Keyword-closed issue with unreadable deps reopens with pending+unowned (G1, A10)."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        comments: list[str] = []
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(mod, "_replace_labels") as mock_replace:
+                with patch.object(
+                    mod,
+                    "_issue_view",
+                    return_value={
+                        "state": "CLOSED",
+                        "body": "Delivered work.\nDepends on #4024",
+                        "labels": ["enhancement", "factory", "factory:blocked", "ralph-status:blocked", "factory:unowned"],
+                    },
+                ):
+                    with patch.object(
+                        mod,
+                        "_pr_info",
+                        return_value={
+                            "branch": "factory/33-4025-kilo-auto",
+                            "body": "Closes #4025.",
+                            "state": "MERGED",
+                            "head": "abc123",
+                            "merge": "abc123",
+                        },
+                    ):
+                        with patch.object(mod, "_closed_by_pr", return_value=True):
+                            with patch.object(
+                                mod, "_has_dependency_block_marker", return_value=False
+                            ):
+                                with patch.object(
+                                    mod, "_has_closure_marker", return_value=False
+                                ):
+                                    with patch.object(mod, "_run_gh", return_value="[]"):
+                                        with patch.object(
+                                            mod,
+                                            "_comment_issue",
+                                            side_effect=lambda _issue, body: comments.append(body),
+                                        ):
+                                            with patch.object(
+                                                mod, "_issue_has_open_successor_pr",
+                                                return_value=False,
+                                            ):
+                                                with patch.object(
+                                                    mod, "_native_open_blockers",
+                                                    side_effect=RuntimeError("gh failed"),
+                                                ):
+                                                    with patch.object(
+                                                        implementation_delivery,
+                                                        "complete_pr_diff",
+                                                        return_value=(
+                                                            ["app/fix.py"],
+                                                            "diff --git a/app/fix.py b/app/fix.py\n"
+                                                            "@@ -1 +1 @@\n-old = 1\n+new = 2\n",
+                                                        ),
+                                                    ):
+                                                        with patch.object(
+                                                            mod.eligibility,
+                                                            "parse_declared_dependencies",
+                                                            return_value={4024},
+                                                        ):
+                                                            result = close_merged_pr_issue(
+                                                                4041, dry_run=False
+                                                            )
+        self.assertEqual(result, "open-dependency")
+        mock_close.assert_not_called()
+        replaced = mock_replace.call_args[0][1]
+        self.assertIn("ralph-status:pending", replaced)
+        self.assertIn("factory:unowned", replaced)
+        self.assertNotIn("factory:blocked", replaced)
+        self.assertNotIn("ralph-status:blocked", replaced)
+
+    def test_keyword_closed_issue_deps_resolved_closes_without_duplicate_comment(self) -> None:
+        """Keyword-closed issue whose deps finished closes without repeating the comment (G1, G3)."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        comments: list[str] = []
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(mod, "_replace_labels") as mock_replace:
+                with patch.object(
+                    mod,
+                    "_issue_view",
+                    side_effect=[
+                        {
+                            "state": "CLOSED",
+                            "body": "Delivered work.\nDepends on #4016",
+                            "labels": [
+                                "enhancement",
+                                "factory",
+                                "factory:blocked",
+                                "ralph-status:blocked",
+                                "factory:unowned",
+                            ],
+                        },
+                        self._closure_issue(4016, state="CLOSED"),
+                    ],
+                ) as mock_view:
+                    with patch.object(
+                        mod,
+                        "_pr_info",
+                        return_value={
+                            "branch": "factory/41-4017-kilo-auto",
+                            "body": "Closes #4017.",
+                            "state": "MERGED",
+                            "head": "abc123",
+                            "merge": "abc123",
+                        },
+                    ):
+                        with patch.object(mod, "_closed_by_pr", return_value=True):
+                            with patch.object(
+                                mod, "_has_dependency_block_marker", return_value=True
+                            ):
+                                with patch.object(
+                                    mod, "_has_closure_marker", return_value=False
+                                ):
+                                    with patch.object(mod, "_run_gh", return_value="[]"):
+                                        with patch.object(
+                                            mod,
+                                            "_comment_issue",
+                                            side_effect=lambda _issue, body: comments.append(body),
+                                        ):
+                                            with patch.object(
+                                                mod, "_issue_has_open_successor_pr",
+                                                return_value=False,
+                                            ):
+                                                with patch.object(
+                                                    mod, "_native_open_blockers", return_value=[]
+                                                ):
+                                                    with patch.object(
+                                                        implementation_delivery,
+                                                        "complete_pr_diff",
+                                                        return_value=(
+                                                            ["app/fix.py"],
+                                                            "diff --git a/app/fix.py b/app/fix.py\n"
+                                                            "@@ -1 +1 @@\n-old = 1\n+new = 2\n",
+                                                        ),
+                                                    ):
+                                                        with patch.object(
+                                                            mod.eligibility,
+                                                            "parse_declared_dependencies",
+                                                            return_value={4016},
+                                                        ):
+                                                            result = close_merged_pr_issue(
+                                                                4034, dry_run=False
+                                                            )
+        self.assertEqual(result, "closed")
+        numbers = [call.args[0] for call in mock_view.call_args_list]
+        self.assertEqual(numbers, [4017, 4016])
+        mock_close.assert_not_called()
+        replaced = mock_replace.call_args[0][1]
+        self.assertNotIn("factory:blocked", replaced)
+        self.assertNotIn("ralph-status:blocked", replaced)
+        self.assertIn("factory", replaced)
+        self.assertEqual(len(comments), 1)
+        self.assertIn("comic-pile-factory-merge-closure-v1:pr-4034:issue-4017", comments[0])
+
+    def test_repeated_sweep_does_not_repeat_closure_comment(self) -> None:
+        """A sweep that re-visits an already-closed issue does not repost the closure comment (G3)."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        comments: list[str] = []
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(mod, "_replace_labels") as mock_replace:
+                with patch.object(
+                    mod,
+                    "_issue_view",
+                    return_value={
+                        "state": "CLOSED",
+                        "body": "Delivered work.",
+                        "labels": ["enhancement", "factory", "ralph-status:done"],
+                    },
+                ):
+                    with patch.object(
+                        mod,
+                        "_pr_info",
+                        return_value={
+                            "branch": "factory/41-4017-kilo-auto",
+                            "body": "Closes #4017.",
+                            "state": "MERGED",
+                            "head": "abc123",
+                            "merge": "abc123",
+                        },
+                    ):
+                        with patch.object(mod, "_closed_by_pr", return_value=True):
+                            with patch.object(
+                                mod, "_has_dependency_block_marker", return_value=False
+                            ):
+                                with patch.object(
+                                    mod, "_has_closure_marker", return_value=True
+                                ):
+                                    with patch.object(mod, "_run_gh", return_value="[]"):
+                                        with patch.object(
+                                            mod,
+                                            "_comment_issue",
+                                            side_effect=lambda _issue, body: comments.append(body),
+                                        ):
+                                            with patch.object(
+                                                mod, "_issue_has_open_successor_pr",
+                                                return_value=False,
+                                            ):
+                                                with patch.object(
+                                                    mod, "_native_open_blockers", return_value=[]
+                                                ):
+                                                    with patch.object(
+                                                        implementation_delivery,
+                                                        "complete_pr_diff",
+                                                        return_value=(
+                                                            ["app/fix.py"],
+                                                            "diff --git a/app/fix.py b/app/fix.py\n"
+                                                            "@@ -1 +1 @@\n-old = 1\n+new = 2\n",
+                                                        ),
+                                                    ):
+                                                        with patch.object(
+                                                            mod.eligibility,
+                                                            "parse_declared_dependencies",
+                                                            return_value=set(),
+                                                        ):
+                                                            result = close_merged_pr_issue(
+                                                                4034, dry_run=False
+                                                            )
+        self.assertEqual(result, "closed")
+        mock_close.assert_not_called()
+        # The marker only skips the comment; the canonical label set is still
+        # restored on this repeated visit (G3).
+        replaced = mock_replace.call_args[0][1]
+        self.assertIn("ralph-status:done", replaced)
+        self.assertNotIn("factory:blocked", replaced)
+        self.assertNotIn("ralph-status:blocked", replaced)
+        self.assertEqual(comments, [])
+
+    def test_marker_helper_treats_none_payload_as_absent(self) -> None:
+        """A None gh payload reads as no marker instead of raising (CI regression)."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(mod, "_run_gh", return_value=None):
+            self.assertFalse(_has_closure_marker(4001, 5001))
+            self.assertFalse(_has_dependency_block_marker(4001, 5001))
+            self.assertFalse(_has_unreadable_dependency_warning(4001, 5001))
+
+    def test_reopened_blocked_issue_keeps_live_owner_when_deps_finish(self) -> None:
+        """A claimed reopened issue is never relabeled or closed by the sweep (G2)."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(mod, "_replace_labels") as mock_replace:
+                with patch.object(
+                    mod,
+                    "_issue_view",
+                    return_value={
+                        "state": "OPEN",
+                        "body": "Delivered work.\nDepends on #4016",
+                        "labels": [
+                            "enhancement",
+                            "factory",
+                            "factory:blocked",
+                            "ralph-status:blocked",
+                            "factory:7",
+                        ],
+                    },
+                ):
+                    with patch.object(
+                        mod,
+                        "_pr_info",
+                        return_value={
+                            "branch": "factory/41-4017-kilo-auto",
+                            "body": "Closes #4017.",
+                            "state": "MERGED",
+                            "head": "abc123",
+                            "merge": "abc123",
+                        },
+                    ):
+                        with patch.object(mod, "_closed_by_pr", return_value=False):
+                            with patch.object(
+                                mod, "_has_dependency_block_marker", return_value=True
+                            ):
+                                with patch.object(mod, "_has_closure_marker", return_value=False):
+                                    with patch.object(
+                                        mod, "_has_unreadable_dependency_warning",
+                                        return_value=False,
+                                    ):
+                                        with patch.object(
+                                            mod, "_native_open_blockers", return_value=[]
+                                        ):
+                                            with patch.object(
+                                                mod, "_run_gh", return_value="[]"
+                                            ):
+                                                with patch.object(
+                                                    implementation_delivery,
+                                                    "complete_pr_diff",
+                                                    return_value=(
+                                                        ["app/fix.py"],
+                                                        "diff --git a/app/fix.py b/app/fix.py\n"
+                                                        "@@ -1 +1 @@\n-old = 1\n+new = 2\n",
+                                                    ),
+                                                ):
+                                                    with patch.object(
+                                                        mod.eligibility,
+                                                        "parse_declared_dependencies",
+                                                        return_value={4016},
+                                                    ):
+                                                        result = close_merged_pr_issue(
+                                                            4034, dry_run=False
+                                                        )
+        self.assertEqual(result, "active-work")
+        mock_close.assert_not_called()
+        mock_replace.assert_not_called()
+
+    def test_reopened_blocked_issue_keeps_open_successor_when_deps_finish(self) -> None:
+        """An open successor PR protects the reopened issue from closure (G2)."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(mod, "_replace_labels") as mock_replace:
+                with patch.object(
+                    mod,
+                    "_issue_view",
+                    return_value={
+                        "state": "OPEN",
+                        "body": "Delivered work.\nDepends on #4016",
+                        "labels": [
+                            "enhancement",
+                            "factory",
+                            "factory:blocked",
+                            "ralph-status:blocked",
+                            "factory:unowned",
+                        ],
+                    },
+                ):
+                    with patch.object(
+                        mod,
+                        "_pr_info",
+                        return_value={
+                            "branch": "factory/41-4017-kilo-auto",
+                            "body": "Closes #4017.",
+                            "state": "MERGED",
+                            "head": "abc123",
+                            "merge": "abc123",
+                        },
+                    ):
+                        with patch.object(mod, "_closed_by_pr", return_value=False):
+                            with patch.object(
+                                mod, "_has_dependency_block_marker", return_value=True
+                            ):
+                                with patch.object(
+                                    mod, "_issue_has_open_successor_pr", return_value=True
+                                ):
+                                    with patch.object(
+                                        mod, "_native_open_blockers", return_value=[]
+                                    ):
+                                        with patch.object(
+                                            mod, "_run_gh", return_value="[]"
+                                        ):
+                                            with patch.object(
+                                                implementation_delivery,
+                                                "complete_pr_diff",
+                                                return_value=(
+                                                    ["app/fix.py"],
+                                                    "diff --git a/app/fix.py b/app/fix.py\n"
+                                                    "@@ -1 +1 @@\n-old = 1\n+new = 2\n",
+                                                ),
+                                            ):
+                                                with patch.object(
+                                                    mod.eligibility,
+                                                    "parse_declared_dependencies",
+                                                    return_value={4016},
+                                                ):
+                                                    result = close_merged_pr_issue(
+                                                        4034, dry_run=False
+                                                    )
+        self.assertEqual(result, "successor-open")
+        mock_close.assert_not_called()
+        mock_replace.assert_not_called()
+
+    def test_reclosed_issue_still_restores_blocked_labels_with_old_marker(self) -> None:
+        """A second completion after reopen repairs labels despite the old closure marker (G3)."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        comments: list[str] = []
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(mod, "_replace_labels") as mock_replace:
+                with patch.object(
+                    mod,
+                    "_issue_view",
+                    return_value={
+                        "state": "CLOSED",
+                        "body": "Delivered work.\nDepends on #4016",
+                        "labels": [
+                            "enhancement",
+                            "factory",
+                            "factory:blocked",
+                            "ralph-status:blocked",
+                            "factory:unowned",
+                        ],
+                    },
+                ):
+                    with patch.object(
+                        mod,
+                        "_pr_info",
+                        return_value={
+                            "branch": "factory/41-4017-kilo-auto",
+                            "body": "Closes #4017.",
+                            "state": "MERGED",
+                            "head": "abc123",
+                            "merge": "abc123",
+                        },
+                    ):
+                        with patch.object(mod, "_closed_by_pr", return_value=True):
+                            with patch.object(
+                                mod, "_has_dependency_block_marker", return_value=True
+                            ):
+                                with patch.object(
+                                    mod, "_has_closure_marker", return_value=True
+                                ):
+                                    with patch.object(mod, "_run_gh", return_value="[]"):
+                                        with patch.object(
+                                            mod,
+                                            "_comment_issue",
+                                            side_effect=lambda _issue, body: comments.append(body),
+                                        ):
+                                            with patch.object(
+                                                mod, "_issue_has_open_successor_pr",
+                                                return_value=False,
+                                            ):
+                                                with patch.object(
+                                                    mod, "_native_open_blockers", return_value=[]
+                                                ):
+                                                    with patch.object(
+                                                        implementation_delivery,
+                                                        "complete_pr_diff",
+                                                        return_value=(
+                                                            ["app/fix.py"],
+                                                            "diff --git a/app/fix.py b/app/fix.py\n"
+                                                            "@@ -1 +1 @@\n-old = 1\n+new = 2\n",
+                                                        ),
+                                                    ):
+                                                        with patch.object(
+                                                            mod.eligibility,
+                                                            "parse_declared_dependencies",
+                                                            return_value={4016},
+                                                        ):
+                                                            result = close_merged_pr_issue(
+                                                                4034, dry_run=False
+                                                            )
+        self.assertEqual(result, "closed")
+        mock_close.assert_not_called()
+        self.assertEqual(comments, [])
+        replaced = mock_replace.call_args[0][1]
+        self.assertNotIn("factory:blocked", replaced)
+        self.assertNotIn("ralph-status:blocked", replaced)
+        self.assertNotIn("factory:unowned", replaced)
+        self.assertIn("ralph-status:done", replaced)
+
+    def test_unreadable_dependency_warning_is_deduplicated(self) -> None:
+        """A past unreadable-dependency warning never reposts on later sweeps (G4)."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        comments: list[str] = []
+        with patch.object(mod, "_close_issue") as mock_close:
+            with patch.object(mod, "_replace_labels") as mock_replace:
+                with patch.object(
+                    mod,
+                    "_issue_view",
+                    return_value={
+                        "state": "CLOSED",
+                        "body": "Delivered work.\nDepends on #4024",
+                        "labels": [
+                            "enhancement",
+                            "factory",
+                            "factory:blocked",
+                            "ralph-status:blocked",
+                            "factory:unowned",
+                        ],
+                    },
+                ):
+                    with patch.object(
+                        mod,
+                        "_pr_info",
+                        return_value={
+                            "branch": "factory/33-4025-kilo-auto",
+                            "body": "Closes #4025.",
+                            "state": "MERGED",
+                            "head": "abc123",
+                            "merge": "abc123",
+                        },
+                    ):
+                        with patch.object(mod, "_closed_by_pr", return_value=True):
+                            with patch.object(
+                                mod, "_has_dependency_block_marker", return_value=True
+                            ):
+                                with patch.object(mod, "_has_closure_marker", return_value=False):
+                                    with patch.object(
+                                        mod, "_has_unreadable_dependency_warning", return_value=True
+                                    ):
+                                        with patch.object(mod, "_run_gh", return_value="[]"):
+                                            with patch.object(
+                                                mod,
+                                                "_comment_issue",
+                                                side_effect=lambda _issue, body: comments.append(body),
+                                            ):
+                                                with patch.object(
+                                                    mod, "_issue_has_open_successor_pr",
+                                                    return_value=False,
+                                                ):
+                                                    with patch.object(
+                                                        mod, "_native_open_blockers",
+                                                        side_effect=RuntimeError("gh failed"),
+                                                    ):
+                                                        with patch.object(
+                                                            implementation_delivery,
+                                                            "complete_pr_diff",
+                                                            return_value=(
+                                                                ["app/fix.py"],
+                                                                "diff --git a/app/fix.py b/app/fix.py\n"
+                                                                "@@ -1 +1 @@\n-old = 1\n+new = 2\n",
+                                                            ),
+                                                        ):
+                                                            result = close_merged_pr_issue(
+                                                                4041, dry_run=False
+                                                            )
+        self.assertEqual(result, "open-dependency")
+        mock_close.assert_not_called()
+        self.assertEqual(comments, [])
+        replaced = mock_replace.call_args[0][1]
+        self.assertIn("ralph-status:pending", replaced)
+        self.assertIn("factory:unowned", replaced)
 
 
 def main() -> int:
