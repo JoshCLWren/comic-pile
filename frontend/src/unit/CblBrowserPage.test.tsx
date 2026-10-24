@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CblBrowserPage from '../pages/CblBrowserPage'
@@ -115,6 +115,16 @@ function LocationProbe() {
   )
 }
 
+/** Simulates the browser Back control that skips the page's own handlers. */
+function HistoryBackProbe() {
+  const navigate = useNavigate()
+  return (
+    <button type="button" onClick={() => navigate(-1)}>
+      history-back
+    </button>
+  )
+}
+
 function renderPage(initialEntry = '/cbl-sources') {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
@@ -125,6 +135,7 @@ function renderPage(initialEntry = '/cbl-sources') {
             <>
               <CblBrowserPage />
               <LocationProbe />
+              <HistoryBackProbe />
             </>
           }
         />
@@ -667,6 +678,19 @@ describe('CblBrowserPage', () => {
     })
   })
 
+  it('labels the return link "Back to results" when opening from the catalog root (#4136)', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(
+      browsePage({ items: [source], total: 1, total_pages: 1 }),
+    )
+    mockPreview.mockResolvedValue(preview())
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: /Ultimate Universe/ }))
+    // The detail panel already adds "Back to", so repeated words are a defect.
+    expect(await screen.findByRole('link', { name: 'Back to results' })).toBeInTheDocument()
+  })
+
   it('shows the source-only preview without needing owned comics', async () => {
     renderPage('/cbl-sources?list=7')
     const detail = await screen.findByTestId('cbl-source-detail')
@@ -937,6 +961,55 @@ describe('CblBrowserPage', () => {
     await waitFor(() => {
       expect(mockApplyCommitted).toHaveBeenCalled()
       expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/42')
+    })
+  })
+
+  it('keeps an in-flight commit tracked when Back changes the source view (#4136)', async () => {
+    const user = userEvent.setup()
+    let resolveCommit: (value: { id: number; name: string }) => void = () => undefined
+    mockCommitNew.mockImplementation(
+      () =>
+        new Promise<{ id: number; name: string }>((resolve) => {
+          resolveCommit = resolve
+        }),
+    )
+    mockApplyCommitted.mockResolvedValue(undefined)
+    mockBrowse.mockResolvedValue(
+      browsePage({ items: [source], total: 1, total_pages: 1 }),
+    )
+    mockPreview.mockResolvedValue(preview())
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: /Ultimate Universe/ }))
+    await confirmAdd(user)
+    await waitFor(() => {
+      expect(mockCommitNew).toHaveBeenCalledTimes(1)
+    })
+
+    // Pressing browser Back leaves the write running: the pending Add must
+    // stay tracked instead of being cleared by the source transition.
+    await user.click(screen.getByRole('button', { name: 'history-back' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/cbl-sources')
+    expect(await screen.findByRole('heading', { name: 'CBL Sources' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Search source lists')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled()
+    expect(screen.queryByRole('heading', { name: 'Add this reading order?' })).not.toBeInTheDocument()
+
+    // When the request completes it must not drag the reader away from the
+    // view that no longer shows the added source; the cache still learns it.
+    await act(async () => {
+      resolveCommit({ id: 42, name: 'Ultimate Universe' })
+    })
+    await waitFor(() => {
+      expect(mockApplyCommitted).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.getByTestId('location')).toHaveTextContent('/cbl-sources')
+    expect(mockCommitNew).toHaveBeenCalledTimes(1)
+
+    // The settled, out-of-view result is discarded, so the reader can browse.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Search' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: /Ultimate Universe/ })).toBeEnabled()
     })
   })
 

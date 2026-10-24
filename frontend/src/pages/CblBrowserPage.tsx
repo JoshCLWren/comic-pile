@@ -198,12 +198,26 @@ export default function CblBrowserPage() {
   const [graphDialogOpen, setGraphDialogOpen] = useState(false)
   /** Whether finishing the questionnaire should continue into the add confirmation. */
   const [graphDialogContinuesAdd, setGraphDialogContinuesAdd] = useState(false)
+  /**
+   * Source id of the current or most recent commit attempt. Commit callbacks
+   * compare it with the viewed source so a settled Add never rewrites another
+   * source's view, and a stale settled result gets discarded.
+   */
+  const [commitSourceId, setCommitSourceId] = useState<number | null>(null)
+  /** The deep-linked source currently on screen, read by late-settling commit callbacks. */
+  const viewedSourceIdRef = useRef<number | null>(null)
   const graphPreviewRef = useRef<ReadingGraphPreview | null>(null)
 
   // Keep the visible search field aligned with the URL, including browser Back.
   useEffect(() => {
     setQueryDraft(submittedQuery)
   }, [submittedQuery])
+
+  // Late-settling commit callbacks read this mirror instead of a stale closure
+  // so they can tell whether the reader still looks at the source they added.
+  useEffect(() => {
+    viewedSourceIdRef.current = deepLinkedListId
+  }, [deepLinkedListId])
 
   useEffect(() => {
     setCustomizing(false)
@@ -216,7 +230,11 @@ export default function CblBrowserPage() {
     setOverlapChoices({})
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
-    commitMutation.reset()
+    // A commit still running belongs to the reader, not to whichever source
+    // Back/Forward just re-opened: keep it tracked so the pending Add stays
+    // blocked, and only discard a settled result (its callbacks check the
+    // view before they navigate or surface errors).
+    if (!commitMutation.isPending) commitMutation.reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkedListId])
 
@@ -260,12 +278,21 @@ export default function CblBrowserPage() {
         entry_decisions: entryDecisions,
         overlap_decisions: overlapChoicePayload(graphQuery.data ?? null, overlapChoices),
       }),
-    onSuccess: async (committed) => {
-      setAmbiguousCommit(false)
+    onSuccess: async (committed, variables) => {
+      // The write is real no matter which source the view shows, so the
+      // caches must learn the committed plan. The reader's next step, instead,
+      // belongs to the view they were on: pressing Back or Forward while the
+      // request ran must not be hijacked when it completes.
+      const stillViewing = viewedSourceIdRef.current === variables.source.id
       await applyCommittedReadingPlan(queryClient, committed)
-      navigate(`/continuity-plans/${committed.id}`)
+      if (stillViewing) {
+        setAmbiguousCommit(false)
+        navigate(`/continuity-plans/${committed.id}`)
+      }
     },
     onError: async (commitError, variables) => {
+      // Surface stale or failed writes only to the view that made them.
+      if (viewedSourceIdRef.current !== variables.source.id) return
       if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
         setStaleReview(true)
         return
@@ -285,6 +312,17 @@ export default function CblBrowserPage() {
       setAmbiguousCommit(true)
     },
   })
+
+  // Discard a settled commit that belongs to a different source than the one
+  // on screen: its callbacks no longer own this view, and a stale result must
+  // not linger into the next Add.
+  const { isPending: commitIsPending, reset: resetCommitMutation } = commitMutation
+  useEffect(() => {
+    if (!commitIsPending && commitSourceId !== null && commitSourceId !== deepLinkedListId) {
+      resetCommitMutation()
+      setCommitSourceId(null)
+    }
+  }, [commitSourceId, deepLinkedListId, commitIsPending, resetCommitMutation])
 
   const hasChoices =
     Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
@@ -382,7 +420,9 @@ export default function CblBrowserPage() {
     ? 'This source changed after you reviewed it. Refresh the preview before adding it.'
     : ambiguousCommit
       ? 'ComicPile did not confirm the new plan in time. Check Reading Plans before adding again.'
-      : commitMutation.error && !isAmbiguousNetworkFailure(commitMutation.error)
+      : commitMutation.error &&
+          commitSourceId === deepLinkedListId &&
+          !isAmbiguousNetworkFailure(commitMutation.error)
         ? errorMessage(commitMutation.error, 'Unable to complete the CBL workflow.')
         : null
   const previewError = previewQuery.error
@@ -416,7 +456,9 @@ export default function CblBrowserPage() {
     setOverlapChoices({})
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
-    commitMutation.reset()
+    // Only a settled mutation is safe to discard; an in-flight commit stays
+    // tracked so no second Add can start while the write is still running.
+    if (!commitMutation.isPending) commitMutation.reset()
   }
 
   const search = (event?: FormEvent) => {
@@ -574,6 +616,7 @@ export default function CblBrowserPage() {
   const confirmCommit = () => {
     if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || pendingOverlaps.length > 0) return
     setConfirmOpen(false)
+    setCommitSourceId(selectedSource.id)
     commitMutation.mutate({ source: selectedSource, preview })
   }
 
@@ -619,8 +662,9 @@ export default function CblBrowserPage() {
               ? {}
               : {
                   backHref: browseHref(folder, submittedQuery, page),
-                  backLabel:
-                    folder || submittedQuery || page > 1 ? 'results' : 'back to results',
+                  // `CblSourceDetailPanel` already prefixes "Back to", so the
+                  // label is the destination only — at the root too.
+                  backLabel: 'results',
                 })}
           />
 
