@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import ReadingExecutionSettings, get_reading_execution_settings
 from app.models import Dependency, Event, Issue, ReadingSession, Snapshot, Thread, User
 from app.models.collection_exclusion import CollectionExclusion
-from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
+from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
+from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.services.reading_eligibility_service import get_execution_eligibility
 from comic_pile.queue import get_bounded_roll_pool_rows
 from tests.conftest import get_or_create_user_async
@@ -247,6 +248,78 @@ async def test_snapshot_shared_until_relevant_write_and_disabled_mode_is_inert(
     monkeypatch.setenv("OPTION_E_ENABLED", "false")
     get_reading_execution_settings.cache_clear()
     assert await get_execution_eligibility(async_db, user.id) is None
+
+
+async def test_overlap_decision_write_invalidates_the_shared_snapshot(
+    option_e: None,
+    async_db: AsyncSession,
+) -> None:
+    """A same-transaction overlap decision reloads eligibility instead of going stale.
+
+    A saved ``CustomCBLOverlapDecision`` changes strict-order blockers, so an
+    in-transaction write must discard the cached Option E answer exactly like an
+    Issue or Dependency write, before any commit happens.
+    """
+    user = await get_or_create_user_async(async_db)
+    waiting_thread, waiting_issues = await _series(async_db, user.id, "Waiting", 1, count=1)
+    continuing_thread, continuing_issues = await _series(
+        async_db, user.id, "Continuing", 2, count=1
+    )
+    waiting_identity = ExternalIdentity(
+        provider="comicvine", entity_type="series", external_id="9001"
+    )
+    continuing_identity = ExternalIdentity(
+        provider="comicvine", entity_type="series", external_id="9002"
+    )
+    async_db.add_all([waiting_identity, continuing_identity])
+    await async_db.flush()
+    async_db.add_all(
+        [
+            ThreadExternalSeriesMapping(
+                thread_id=waiting_thread.id,
+                external_identity_id=waiting_identity.id,
+                status="confirmed",
+                evidence_source="test",
+            ),
+            ThreadExternalSeriesMapping(
+                thread_id=continuing_thread.id,
+                external_identity_id=continuing_identity.id,
+                status="confirmed",
+                evidence_source="test",
+            ),
+        ]
+    )
+    reading_list = CustomCBLList(user_id=user.id, name="Order", mode="strict")
+    async_db.add(reading_list)
+    await async_db.flush()
+    async_db.add_all(
+        [
+            CustomCBLEntry(list_id=reading_list.id, issue_id=waiting_issues[0].id, position=1),
+            CustomCBLEntry(list_id=reading_list.id, issue_id=continuing_issues[0].id, position=2),
+        ]
+    )
+    await async_db.flush()
+    shared = await get_execution_eligibility(async_db, user.id)
+    assert shared is not None
+    assert shared.threads[waiting_thread.id].eligible
+    blocked = shared.threads[continuing_thread.id]
+    assert not blocked.eligible
+    assert blocked.blockers[0].waiting_on_issue_ids == (waiting_issues[0].id,)
+
+    async_db.add(
+        CustomCBLOverlapDecision(
+            user_id=user.id,
+            list_id=reading_list.id,
+            continuing_external_identity_id=continuing_identity.id,
+            waiting_external_identity_id=waiting_identity.id,
+        )
+    )
+    await async_db.flush()
+
+    reloaded = await get_execution_eligibility(async_db, user.id)
+    assert reloaded is not None
+    assert reloaded is not shared
+    assert reloaded.threads[continuing_thread.id].eligible
 
 
 async def test_session_filters_leave_no_roll_offer(

@@ -485,6 +485,7 @@ Use the existing canonical marker schemas:
 - needs human: `<!-- comic-pile-factory-needs-human-v2:<sha-or-issue> -->`
 - released: `<!-- comic-pile-factory-claim-released-v3:<target>:<worker>:<epoch>:<reason> -->`
 - merge closure: `<!-- comic-pile-factory-merge-closure-v1:pr-<pr>:issue-<issue> -->`
+- unreadable-dependency warning: `<!-- comic-pile-factory-dependency-unreadable-v1:pr-<pr>:issue-<issue> -->`
 - product acceptance: `<!-- product-acceptance:v1 -->`
 - stale expiration: `<!-- comic-pile-factory-stale-expiration-v1:pr-<pr>:issue-<issue>:age-<s>:sample-<n>:formula-<f>:threshold-<t> -->`
 - head contributor: `<!-- comic-pile-factory-head-contributor-v1:pr-<pr>:head-<sha>:worker-<n>:epoch-<s> -->`

@@ -397,8 +397,14 @@ stage_trusted_review_controller() {
     cp .github/scripts/factory_post_merge_closure.py "$trusted_dir/factory_post_merge_closure.py"
     # Pin model identity to trusted main, never to the adopted PR checkout.
     cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
-    cp .github/scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py" 2>/dev/null || \
+    if [[ -f .github/scripts/factory_eligibility.py ]]; then
+      cp .github/scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py"
+    elif [[ -f scripts/factory_eligibility.py ]]; then
       cp scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py"
+    else
+      log 'trusted controller bundle missing factory_eligibility.py; failing closed' >&2
+      return 1
+    fi
     cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
     chmod +x "$trusted_dir/factory-review-controller.py"
     TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
