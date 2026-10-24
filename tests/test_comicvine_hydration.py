@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.comicvine_hydration as hydration
 from app.models.external_identity import ExternalIdentity
+from app.services.comicvine_fallback import metadata_needs_hydration
 from app.services.image_delivery import canonicalize_source_url, validate_source_url
 from comic_pile.comicvine_provider import ComicVineError, ComicVineResponse
 
@@ -387,7 +388,15 @@ def test_sparse_metadata_merger_preserves_deep_evidence() -> None:
     assert merged["teams"] == [{"id": 3, "name": "Team"}]
     assert merged["story_arcs"] == [{"id": 4, "name": "Arc"}]
     assert merged["primary_image"] == "https://img/medium"
-    assert merged["raw_provider_payload"] is existing["raw_provider_payload"]
+    merged_raw = merged["raw_provider_payload"]
+    existing_raw = existing["raw_provider_payload"]
+    assert isinstance(merged_raw, dict)
+    assert isinstance(existing_raw, dict)
+    # Deep relationship evidence survives even though basic roster facts refresh.
+    assert merged_raw["person_credits"] == existing_raw["person_credits"]
+    assert merged_raw["story_arc_credits"] == existing_raw["story_arc_credits"]
+    assert merged_raw["name"] == "Roster Title"
+    assert merged_raw["cover_date"] == "1993-12-01"
     # Non-empty roster facts still refresh basic fields.
     assert merged["name"] == "Roster Title"
     assert merged["cover_date"] == "1993-12-01"
@@ -416,6 +425,7 @@ async def test_roster_import_preserves_deep_issue_metadata(async_db: AsyncSessio
     """Deep metadata survives a later basic volume-roster import (#4147)."""
     identity = await hydration.persist_issue_result(async_db, _deep_issue_result())
     stored_raw = identity.metadata_json["raw_provider_payload"]
+    assert isinstance(stored_raw, dict)
 
     updated = await hydration.persist_issue_result(
         async_db, _sparse_roster_row(), roster_row=True
@@ -428,8 +438,47 @@ async def test_roster_import_preserves_deep_issue_metadata(async_db: AsyncSessio
     assert metadata["teams"] == [{"id": 3, "name": "Team"}]
     assert metadata["story_arcs"] == [{"id": 4, "name": "Arc"}]
     assert metadata["primary_image"] == "https://img/medium"
-    assert metadata["raw_provider_payload"] is stored_raw
+    raw_payload = metadata["raw_provider_payload"]
+    assert isinstance(raw_payload, dict)
+    assert raw_payload["person_credits"] == stored_raw["person_credits"]
+    assert raw_payload["story_arc_credits"] == stored_raw["story_arc_credits"]
     assert await async_db.scalar(select(func.count()).select_from(ExternalIdentity)) == 1
+
+
+@pytest.mark.asyncio
+async def test_deep_hydration_records_application_refresh_marker(
+    async_db: AsyncSession,
+) -> None:
+    """A deep payload records when this app fetched it, not ComicVine's edit date."""
+    identity = await hydration.persist_issue_result(
+        async_db, _deep_issue_result(date_last_updated="2020-01-01T00:00:00Z")
+    )
+
+    marker = identity.metadata_json[hydration.DEEP_METADATA_REFRESHED_AT_KEY]
+    assert isinstance(marker, str)
+    assert marker
+    # ComicVine's edit date is six years old, but the deep fetch just happened.
+    assert metadata_needs_hydration(identity) is False
+
+
+@pytest.mark.asyncio
+async def test_roster_write_does_not_advance_deep_refresh_marker(
+    async_db: AsyncSession,
+) -> None:
+    """Roster bookkeeping cannot reset the deep-refresh clock (#4147)."""
+    identity = await hydration.persist_issue_result(async_db, _deep_issue_result())
+    marker = identity.metadata_json[hydration.DEEP_METADATA_REFRESHED_AT_KEY]
+
+    updated = await hydration.persist_issue_result(
+        async_db,
+        _sparse_roster_row(name="Roster Title", date_last_updated="2027-01-01T09:00:00Z"),
+        roster_row=True,
+    )
+
+    assert updated.metadata_json[hydration.DEEP_METADATA_REFRESHED_AT_KEY] == marker
+    assert updated.metadata_json["creator_credits"] == [
+        {"id": 1, "name": "Writer", "role": "writer"}
+    ]
 
 
 @pytest.mark.asyncio

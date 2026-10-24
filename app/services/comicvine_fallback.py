@@ -11,7 +11,11 @@ from pathlib import Path
 from sqlalchemy import exc as sqlalchemy_exc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.comicvine_hydration import DEEP_ISSUE_RAW_FIELDS, hydrate_issue
+from app.comicvine_hydration import (
+    DEEP_ISSUE_RAW_FIELDS,
+    DEEP_METADATA_REFRESHED_AT_KEY,
+    hydrate_issue,
+)
 from app.database import AsyncSessionLocal
 from app.models.external_identity import ExternalIdentity
 from comic_pile.comicvine_provider import (
@@ -43,6 +47,16 @@ def _normalized_timestamp(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
+def _metadata_timestamp(value: object) -> datetime | None:
+    """Parse a stored ISO-8601 metadata timestamp, returning ``None`` when unusable."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return _normalized_timestamp(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    except ValueError:
+        return None
+
+
 def metadata_needs_hydration(
     identity: ExternalIdentity,
     *,
@@ -52,6 +66,13 @@ def metadata_needs_hydration(
 
     Basic ComicVine volume-roster rows are intentionally treated as incomplete because their raw
     payload does not contain the singular issue relationship fields used by the product UI.
+
+    Age is measured from when this application last persisted a deep payload, not from
+    ComicVine's own ``date_last_updated`` edit timestamp. An issue the provider has not
+    edited for months is still fresh locally right after a successful deep fetch, so it
+    must not be re-fetched on every read. Legacy rows without the explicit marker fall
+    back to the provider revision timestamp; ``updated_at`` is only a last resort because
+    roster writes advance it without refreshing deep metadata.
 
     Args:
         identity: Confirmed ComicVine issue identity.
@@ -68,9 +89,20 @@ def metadata_needs_hydration(
         return True
 
     current_time = now or datetime.now(UTC)
-    freshness_timestamp = identity.provider_updated_at or identity.updated_at
-    updated_at = _normalized_timestamp(freshness_timestamp)
-    return current_time - updated_at >= COMICVINE_METADATA_MAX_AGE
+    deep_refreshed_at = _metadata_timestamp(metadata.get(DEEP_METADATA_REFRESHED_AT_KEY))
+    if deep_refreshed_at is None:
+        # Legacy rows predate the explicit deep-refresh marker. A provider revision
+        # newer than the stored deep payload means lower-fidelity writes (roster rows,
+        # metadata repairs) advanced our knowledge without refreshing deep credits.
+        raw_revision = _metadata_timestamp(raw_payload.get("date_last_updated"))
+        if identity.provider_updated_at is not None:
+            provider_revision = _normalized_timestamp(identity.provider_updated_at)
+            if raw_revision is not None and provider_revision > raw_revision:
+                return True
+            deep_refreshed_at = provider_revision
+        else:
+            deep_refreshed_at = _normalized_timestamp(identity.updated_at)
+    return current_time - deep_refreshed_at >= COMICVINE_METADATA_MAX_AGE
 
 
 def _comicvine_issue_id(external_id: str) -> int | None:

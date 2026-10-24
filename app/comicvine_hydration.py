@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +33,16 @@ DEEP_ISSUE_RAW_FIELDS = frozenset(
 
 Volume-roster rows omit these relationship and date fields, so a roster write must never
 be allowed to replace metadata that a singular issue response produced (#4147).
+"""
+
+DEEP_METADATA_REFRESHED_AT_KEY = "deep_metadata_refreshed_at"
+"""Metadata key recording when a full singular issue payload was persisted.
+
+ComicVine's ``date_last_updated`` (stored as ``provider_updated_at``) records when the
+provider last edited the issue, not when this application last fetched its deep payload.
+Freshness checks must use this application-side timestamp so an issue ComicVine has not
+edited in over 30 days is not re-fetched on every read. Roster writes merge into stored
+metadata and therefore never advance this marker (#4147).
 """
 
 
@@ -240,13 +250,19 @@ async def persist_issue_result(
     if not isinstance(external_id, int):
         raise ComicVineError("ComicVine issue result is missing an integer id")
     sparse_result = roster_row or not is_deep_issue_result(result)
+    metadata = normalize_issue(result)
+    if not sparse_result:
+        # Record when this application fetched the deep payload. ComicVine's own
+        # ``date_last_updated`` is a provider edit date and must not double as the
+        # refresh clock, or an unedited issue would be re-fetched on every read.
+        metadata[DEEP_METADATA_REFRESHED_AT_KEY] = datetime.now(UTC).isoformat()
     return await upsert_external_identity(
         db,
         provider=COMICVINE_PROVIDER,
         entity_type="issue",
         external_id=str(external_id),
         external_url=_external_url(result.get("site_detail_url")),
-        metadata_json=normalize_issue(result),
+        metadata_json=metadata,
         provider_updated_at=_provider_timestamp(result.get("date_last_updated")),
         metadata_merger=merge_sparse_issue_metadata if sparse_result else None,
     )
