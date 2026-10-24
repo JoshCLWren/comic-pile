@@ -281,6 +281,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             const refreshed = await fetchAllIssues()
             const expectedTotal = totalCountRef.current
             if (expectedTotal > 0 && refreshed.length < expectedTotal) {
+              // An incomplete post-create refresh must not leave the list
+              // marked fully loaded: the next Save would otherwise pass the
+              // load guard and flush a queued reorder from a base that still
+              // lacks the new issue (#4113).
+              fullyLoadedRef.current = false
               throw new Error('Could not load all issues; save aborted.')
             }
             baseIssuesRef.current = refreshed
@@ -305,11 +310,25 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               throw new Error('Synchronization incomplete; save aborted.')
             }
             baseIssuesRef.current = refreshed
+            // A complete catch-path resync restores trust in the base list so
+            // a later Save can flush remaining mutations (including reorder)
+            // without forcing an extra manual reload (#4113).
+            fullyLoadedRef.current = true
           } catch (refreshErr) {
             // The failed mutation is the root cause; the failed resync is a
             // secondary failure. Report the root cause to the reader and keep
             // both failures in the log, so the reason the save stopped is
             // never lost behind the resync error (#3764).
+            //
+            // When a post-create refresh already cleared the loaded flag, the
+            // base list is missing the new issue. Surface Retry so a later
+            // Save cannot flush a stale reorder that the server would reject
+            // and drop from the queue (#4113). If the loaded flag is still
+            // true, the last complete snapshot remains trusted — do not hide
+            // the list or permanently block Save behind Retry.
+            if (!fullyLoadedRef.current) {
+              setLoadError('Could not load all issues. Please retry.')
+            }
             console.error(
               '[IssueToggleList] Mutation failed and the follow-up resync also failed:',
               { mutationError: err, resyncError: refreshErr },

@@ -163,13 +163,16 @@ describe('IssueToggleList partial issue load (#3764)', () => {
       await expect(ref.current?.flush()).rejects.toThrow(/save aborted/i)
     })
 
-    // The truncated refresh is not published as the base list, so no later
-    // mutation can be derived from it.
-    expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
-    expect(screen.getByTestId('issue-pill-2')).toBeInTheDocument()
-    expect(screen.getByTestId('issue-pill-3')).toBeInTheDocument()
-    expect(screen.getByText(/save aborted/i)).toBeInTheDocument()
+    // The truncated refresh is not published as the base list. The dialog
+    // offers Retry so a later Save cannot flush against the stale snapshot
+    // (#4113); no write is sent for a reorder that was never queued here.
+    expect(screen.getByTestId('issue-load-retry')).toBeInTheDocument()
+    expect(screen.getByTestId('issue-action-error')).toHaveTextContent(/save aborted/i)
+    expect(screen.queryByTestId('issue-pill-1')).not.toBeInTheDocument()
     expect(mockedIssuesApi.reorder).not.toHaveBeenCalled()
+    // A second Save stays blocked until Retry completes a full load.
+    await expect(ref.current?.flush()).rejects.toThrow(/not fully loaded/i)
+    expect(mockedIssuesApi.create).toHaveBeenCalledTimes(1)
     errorSpy.mockRestore()
   })
 
