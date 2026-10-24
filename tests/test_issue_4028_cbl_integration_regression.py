@@ -50,11 +50,6 @@ J1, M1, J2, M2, J3 = 201, 202, 203, 204, 205
 LIST_ID = 10
 MISTER_MIRACLE_WAITS = SeriesOverlapDecision(JLI, MISTER_MIRACLE)
 
-#: Reader identities for the fixture. Module constants so the repository-wide
-#: hardcoded-primary-key guard never sees a bare ``user_id=<int>`` literal.
-READER_ID = 1
-OTHER_READER_ID = 2
-
 #: Durable Comic Vine volume IDs for the Postgres-backed F2/M1/J2 fixture.
 FOURTH_WORLD_EXTERNAL_ID = "4010"
 JLI_EXTERNAL_ID = "4011"
@@ -101,6 +96,7 @@ def _issues(*, read: frozenset[int]) -> tuple[ReadingIssue, ...]:
 def _snapshot(
     *,
     approved: bool,
+    user_id: int,
     read: frozenset[int] = frozenset({J1}),
 ) -> ReadingSnapshot:
     entries = (
@@ -112,7 +108,7 @@ def _snapshot(
     )
     decisions = (MISTER_MIRACLE_WAITS,) if approved else ()
     return ReadingSnapshot(
-        user_id=READER_ID,
+        user_id=user_id,
         threads=_threads(),
         issues=_issues(read=read),
         lists=(
@@ -130,40 +126,40 @@ def _offers(state: ReadingSnapshot) -> set[int]:
     }
 
 
-def test_4028_approved_overlap_rolls_j2_while_m1_waits_for_f2() -> None:
+def test_4028_approved_overlap_rolls_j2_while_m1_waits_for_f2(default_user: User) -> None:
     """With the reader's overlap choice, J2 is rollable; M1 stays blocked on F2."""
-    state = _snapshot(approved=True)
+    state = _snapshot(user_id=default_user.id, approved=True)
     offered = _offers(state)
     assert J2 in offered, "JLI must keep rolling at J2 despite unread M1"
     assert M1 not in offered, "Mister Miracle M1 must still wait on Fourth World F2"
     assert J1 not in offered, "J1 is already read and cannot roll"
 
 
-def test_4028_baseline_without_choice_blocks_j2_behind_m1() -> None:
+def test_4028_baseline_without_choice_blocks_j2_behind_m1(default_user: User) -> None:
     """Without an approved overlap, strict order keeps J2 behind M1."""
-    state = _snapshot(approved=False)
+    state = _snapshot(user_id=default_user.id, approved=False)
     offered = _offers(state)
     assert J2 not in offered, "J2 must not roll until M1 is read without overlap"
     assert J1 not in offered
 
 
-def test_4028_m1_unblocks_only_after_f2_is_read() -> None:
+def test_4028_m1_unblocks_only_after_f2_is_read(default_user: User) -> None:
     """Fourth World completion releases Mister Miracle M1 for rolling."""
-    state = _snapshot(approved=True, read=frozenset({J1, F1, F2}))
+    state = _snapshot(user_id=default_user.id, approved=True, read=frozenset({J1, F1, F2}))
     offered = _offers(state)
     assert M1 in offered, "M1 must become rollable once F2 is read"
 
 
-def test_4028_overlap_decision_is_per_reader_scoped() -> None:
+def test_4028_overlap_decision_is_per_reader_scoped(default_user: User) -> None:
     """A snapshot for a second reader without the decision keeps strict order."""
-    second = replace(_snapshot(approved=False), user_id=OTHER_READER_ID)
+    second = replace(_snapshot(user_id=default_user.id, approved=False), user_id=default_user.id + 1)
     offered = _offers(second)
     assert J2 not in offered
 
 
-def test_4028_all_threads_present_in_eligibility_result() -> None:
+def test_4028_all_threads_present_in_eligibility_result(default_user: User) -> None:
     """Evaluate returns an entry for every active thread, including blocked ones."""
-    state = _snapshot(approved=True)
+    state = _snapshot(user_id=default_user.id, approved=True)
     result = evaluate(state)
     assert set(result) == {1, 2, 3}, "Fourth World, JLI and Mister Miracle must all report"
 

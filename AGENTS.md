@@ -528,3 +528,12 @@ Before ending a turn involving an issue or PR:
   workflow and owner label before adding the complete target factory label set.
 
 Never wait for the user to request these routine label corrections.
+
+## Test identity validation
+
+Never add literal `user_id=<integer>` or `User(id=<integer>)` test identities. Use
+database-generated fixture identities, including in evaluator snapshots. Run
+`tests/test_hardcoded_ids.py` alongside changed Python tests; the standard
+`scripts/check-python-ci-lint.sh` also runs this guard. Do not expand its baseline.
+Synthetic migration fixtures must explicitly isolate production classification
+lookups; generated fixture IDs can coincide with production IDs in longer runs.

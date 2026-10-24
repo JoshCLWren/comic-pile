@@ -55,4 +55,7 @@ run_tool ruff check .
 echo "Running CI-parity Python type check: ty check --error-on-warning"
 run_tool ty check --error-on-warning
 
-echo "Python CI lint and type check passed."
+echo "Checking the hardcoded primary-key regression guard."
+run_tool pytest tests/test_hardcoded_ids.py -q --no-cov
+
+echo "Python CI lint, type check, and primary-key guard passed."
