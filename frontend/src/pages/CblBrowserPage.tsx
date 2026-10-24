@@ -124,6 +124,14 @@ export default function CblBrowserPage() {
   const [seriesDecisions, setSeriesDecisions] = useState<Record<string, boolean>>({})
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  /**
+   * Saved decisions keyed by source fingerprint to persist across source switches.
+   * The content_hash identifies a specific version of a source.
+   */
+  const [savedDecisions, setSavedDecisions] = useState<Record<string, {
+    seriesDecisions: Record<string, boolean>
+    entryDecisions: Record<string, boolean>
+  }>>({})
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
   /**
@@ -330,8 +338,6 @@ export default function CblBrowserPage() {
     setSelectedSource(source)
     setCustomizing(false)
     setConfirmOpen(false)
-    setSeriesDecisions({})
-    setEntryDecisions({})
     setExpandedGroups({})
     setStaleReview(false)
     setAmbiguousCommit(false)
@@ -339,15 +345,34 @@ export default function CblBrowserPage() {
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
     commitMutation.reset()
+    
+    // Restore saved decisions if this source version was previously customized.
+    // Key includes both source ID and content hash to avoid collisions (G2).
+    const sourceFingerprint = `${source.id}:${source.content_hash || 'no-hash'}`
+    const saved = savedDecisions[sourceFingerprint]
+    if (saved) {
+      setSeriesDecisions(saved.seriesDecisions)
+      setEntryDecisions(saved.entryDecisions)
+    } else {
+      // Start with fresh decisions for new/unseen source
+      setSeriesDecisions({})
+      setEntryDecisions({})
+    }
+    
     if (reloadSelectedSource) void previewQuery.refetch()
   }
 
   const chooseEntry = (entry: CBLAdoptionPreviewEntry, include: boolean) => {
     if (isCommitting) return
-    setEntryDecisions((current) => ({
-      ...current,
-      [String(entry.cbl_entry_id)]: include,
-    }))
+    setEntryDecisions((currentEntryDecisions) => {
+      const nextEntryDecisions = { ...currentEntryDecisions, [String(entry.cbl_entry_id)]: include }
+      // Use functional updater to get current seriesDecisions
+      setSeriesDecisions((currentSeriesDecisions) => {
+        saveDecisionsToFingerprint(currentSeriesDecisions, nextEntryDecisions)
+        return currentSeriesDecisions
+      })
+      return nextEntryDecisions
+    })
     commitMutation.reset()
     setAmbiguousCommit(false)
   }
@@ -361,24 +386,50 @@ export default function CblBrowserPage() {
    */
   const chooseSeriesGroup = (group: CblSeriesGroup, include: boolean) => {
     if (isCommitting) return
-    setSeriesDecisions((current) => ({ ...current, [group.id]: include }))
-    setEntryDecisions((current) => {
-      const next = { ...current }
-      for (const entry of group.entries) {
-        delete next[String(entry.cbl_entry_id)]
-      }
-      return next
-    })
+    // Compute both next states first, then update and save together
+    // to avoid stale closure captures (G1).
+    const nextSeriesDecisions = { ...seriesDecisions, [group.id]: include }
+    const nextEntryDecisions = { ...entryDecisions }
+    for (const entry of group.entries) {
+      delete nextEntryDecisions[String(entry.cbl_entry_id)]
+    }
+    setSeriesDecisions(nextSeriesDecisions)
+    setEntryDecisions(nextEntryDecisions)
+    saveDecisionsToFingerprint(nextSeriesDecisions, nextEntryDecisions)
     commitMutation.reset()
     setAmbiguousCommit(false)
   }
 
   const chooseAllSeries = (include: boolean) => {
     if (isCommitting) return
-    setSeriesDecisions(Object.fromEntries(seriesGroups.map((series) => [series.id, include])))
-    setEntryDecisions({})
+    const nextSeriesDecisions = Object.fromEntries(seriesGroups.map((series) => [series.id, include]))
+    const nextEntryDecisions: Record<string, boolean> = {}
+    setSeriesDecisions(nextSeriesDecisions)
+    setEntryDecisions(nextEntryDecisions)
+    saveDecisionsToFingerprint(nextSeriesDecisions, nextEntryDecisions)
     commitMutation.reset()
     setAmbiguousCommit(false)
+  }
+
+  /**
+   * Save current decisions to the source fingerprint for persistence across source switches.
+   * Keyed by both source ID and content hash to avoid collisions between different sources
+   * containing the same file (G2).
+   */
+  const saveDecisionsToFingerprint = (
+    nextSeriesDecisions: Record<string, boolean>,
+    nextEntryDecisions: Record<string, boolean>,
+  ) => {
+    if (!selectedSource) return
+    // Use both source ID and content hash to uniquely identify the source version
+    const sourceFingerprint = `${selectedSource.id}:${selectedSource.content_hash || 'no-hash'}`
+    setSavedDecisions((current) => ({
+      ...current,
+      [sourceFingerprint]: {
+        seriesDecisions: nextSeriesDecisions,
+        entryDecisions: nextEntryDecisions,
+      },
+    }))
   }
 
   const toggleGroup = (groupId: string) => {
