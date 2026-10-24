@@ -891,9 +891,14 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         ) != "true"
         # Exempt the keep-warm ping probe including its trailing-slash form, which
         # Starlette would otherwise slash-redirect only after heavy init ran.
-        # The /api/v1/keepalive endpoint is NOT exempt - it needs the database pool.
+        # Public liveness/probe endpoints are dependency-free and must not wake Neon.
         request_path = request.url.path
-        is_ping_probe = request_path == "/api/ping" or request_path.startswith("/api/ping/")
+        is_ping_probe = (
+            request_path == "/api/ping"
+            or request_path.startswith("/api/ping/")
+            or request_path == "/health"
+            or request_path == "/api/v1/keepalive"
+        )
         if not is_ping_probe:
             # Registration is synchronous, so concurrent cold requests cannot
             # interleave it; this runs before routing so the mounts the request
