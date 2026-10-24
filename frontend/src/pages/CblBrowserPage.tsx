@@ -124,6 +124,14 @@ export default function CblBrowserPage() {
   const [seriesDecisions, setSeriesDecisions] = useState<Record<string, boolean>>({})
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  /**
+   * Saved decisions keyed by source fingerprint to persist across source switches.
+   * The content_hash identifies a specific version of a source.
+   */
+  const [savedDecisions, setSavedDecisions] = useState<Record<string, {
+    seriesDecisions: Record<string, boolean>
+    entryDecisions: Record<string, boolean>
+  }>>({})
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
   /**
@@ -330,8 +338,6 @@ export default function CblBrowserPage() {
     setSelectedSource(source)
     setCustomizing(false)
     setConfirmOpen(false)
-    setSeriesDecisions({})
-    setEntryDecisions({})
     setExpandedGroups({})
     setStaleReview(false)
     setAmbiguousCommit(false)
@@ -339,15 +345,29 @@ export default function CblBrowserPage() {
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
     commitMutation.reset()
+    
+    // Restore saved decisions if this source version was previously customized
+    const sourceFingerprint = source.content_hash || source.id.toString()
+    const saved = savedDecisions[sourceFingerprint]
+    if (saved) {
+      setSeriesDecisions(saved.seriesDecisions)
+      setEntryDecisions(saved.entryDecisions)
+    } else {
+      // Start with fresh decisions for new/unseen source
+      setSeriesDecisions({})
+      setEntryDecisions({})
+    }
+    
     if (reloadSelectedSource) void previewQuery.refetch()
   }
 
   const chooseEntry = (entry: CBLAdoptionPreviewEntry, include: boolean) => {
     if (isCommitting) return
-    setEntryDecisions((current) => ({
-      ...current,
-      [String(entry.cbl_entry_id)]: include,
-    }))
+    setEntryDecisions((current) => {
+      const next = { ...current, [String(entry.cbl_entry_id)]: include }
+      saveDecisionsToFingerprint(next)
+      return next
+    })
     commitMutation.reset()
     setAmbiguousCommit(false)
   }
@@ -361,12 +381,17 @@ export default function CblBrowserPage() {
    */
   const chooseSeriesGroup = (group: CblSeriesGroup, include: boolean) => {
     if (isCommitting) return
-    setSeriesDecisions((current) => ({ ...current, [group.id]: include }))
+    setSeriesDecisions((current) => {
+      const nextSeries = { ...current, [group.id]: include }
+      saveDecisionsToFingerprint(nextSeries)
+      return nextSeries
+    })
     setEntryDecisions((current) => {
       const next = { ...current }
       for (const entry of group.entries) {
         delete next[String(entry.cbl_entry_id)]
       }
+      saveDecisionsToFingerprint(next)
       return next
     })
     commitMutation.reset()
@@ -375,10 +400,27 @@ export default function CblBrowserPage() {
 
   const chooseAllSeries = (include: boolean) => {
     if (isCommitting) return
-    setSeriesDecisions(Object.fromEntries(seriesGroups.map((series) => [series.id, include])))
+    const nextSeries = Object.fromEntries(seriesGroups.map((series) => [series.id, include]))
+    setSeriesDecisions(nextSeries)
     setEntryDecisions({})
+    saveDecisionsToFingerprint(nextSeries)
     commitMutation.reset()
     setAmbiguousCommit(false)
+  }
+
+  /**
+   * Save current decisions to the source fingerprint for persistence across source switches.
+   */
+  const saveDecisionsToFingerprint = (currentEntryDecisions: Record<string, boolean> = entryDecisions) => {
+    if (!selectedSource) return
+    const sourceFingerprint = selectedSource.content_hash || selectedSource.id.toString()
+    setSavedDecisions((current) => ({
+      ...current,
+      [sourceFingerprint]: {
+        seriesDecisions,
+        entryDecisions: currentEntryDecisions,
+      },
+    }))
   }
 
   const toggleGroup = (groupId: string) => {
