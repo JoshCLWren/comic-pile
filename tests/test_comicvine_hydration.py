@@ -6,8 +6,11 @@ from dataclasses import dataclass
 from typing import cast
 
 import pytest
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.comicvine_hydration as hydration
+from app.models.external_identity import ExternalIdentity
 from app.services.image_delivery import canonicalize_source_url, validate_source_url
 from comic_pile.comicvine_provider import ComicVineError, ComicVineResponse
 
@@ -165,6 +168,34 @@ async def test_persist_issue_result_uses_provider_independent_identity(
     assert observed["entity_type"] == "issue"
     assert observed["external_url"] == "https://comicvine/issue/99"
     assert observed["provider_updated_at"] is not None
+    assert observed["metadata_merger"] is hydration.merge_sparse_issue_metadata
+
+
+@pytest.mark.asyncio
+async def test_persist_issue_result_uses_sparse_merger_for_sparse_or_roster_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sparse and roster writes merge; full singular writes stay authoritative."""
+    observed: dict[str, object] = {}
+
+    async def fake_upsert(db: object, **kwargs: object) -> FakeIdentity:
+        observed.clear()
+        observed.update(kwargs)
+        return FakeIdentity(str(kwargs["external_id"]), cast(dict[str, object], kwargs["metadata_json"]))
+
+    monkeypatch.setattr(hydration, "upsert_external_identity", fake_upsert)
+    sparse = {"id": 99, "issue_number": "5", "volume": {"id": 5162}}
+
+    await hydration.persist_issue_result(cast(object, None), sparse)
+    assert observed["metadata_merger"] is hydration.merge_sparse_issue_metadata
+
+    await hydration.persist_issue_result(
+        cast(object, None), _deep_issue_result(), roster_row=True
+    )
+    assert observed["metadata_merger"] is hydration.merge_sparse_issue_metadata
+
+    await hydration.persist_issue_result(cast(object, None), _deep_issue_result())
+    assert observed["metadata_merger"] is None
 
 
 @pytest.mark.asyncio
@@ -286,7 +317,9 @@ async def test_hydrate_volume_persists_volume_and_complete_roster(
     async def fake_volume(db: object, result: dict[str, object]) -> FakeIdentity:
         return FakeIdentity(str(result["id"]), result)
 
-    async def fake_issue(db: object, result: dict[str, object]) -> FakeIdentity:
+    async def fake_issue(
+        db: object, result: dict[str, object], *, roster_row: bool = False
+    ) -> FakeIdentity:
         return FakeIdentity(str(result["id"]), result)
 
     monkeypatch.setattr(hydration, "persist_volume_result", fake_volume)
@@ -302,3 +335,217 @@ def test_result_object_rejects_collection_shape() -> None:
     """Singular hydration must reject collection-shaped responses."""
     with pytest.raises(ComicVineError, match="object result"):
         hydration._result_object({"results": []})
+
+
+def _deep_issue_result(**overrides: object) -> dict[str, object]:
+    """Return a singular-issue provider row carrying deep relationship evidence."""
+    raw: dict[str, object] = {
+        "id": 37625,
+        "name": "The Deep Title",
+        "issue_number": "5",
+        "cover_date": "1993-11-01",
+        "store_date": "1993-10-01",
+        "volume": {"id": 5162, "name": "1963"},
+        "image": {"medium_url": "https://img/medium"},
+        "person_credits": [{"id": 1, "name": "Writer", "role": "writer"}],
+        "character_credits": [{"id": 2, "name": "Hero"}],
+        "team_credits": [{"id": 3, "name": "Team"}],
+        "story_arc_credits": [{"id": 4, "name": "Arc"}],
+        "date_last_updated": "2026-08-10T09:00:00Z",
+        "site_detail_url": "https://comicvine/issue/37625",
+    }
+    raw.update(overrides)
+    return raw
+
+
+def _sparse_roster_row(**overrides: object) -> dict[str, object]:
+    """Return a basic volume-roster row without deep relationship evidence."""
+    raw: dict[str, object] = {
+        "id": 37625,
+        "name": "The Deep Title",
+        "issue_number": "5",
+        "volume": {"id": 5162, "name": "1963"},
+        "image": {"medium_url": "https://img/medium"},
+        "site_detail_url": "https://comicvine/issue/37625",
+        "date_last_updated": "2026-08-10T09:00:00Z",
+    }
+    raw.update(overrides)
+    return raw
+
+
+def test_sparse_metadata_merger_preserves_deep_evidence() -> None:
+    """A sparse roster row must not erase deep credits, arcs, cover, or raw evidence."""
+    existing = hydration.normalize_issue(_deep_issue_result())
+    incoming = hydration.normalize_issue(
+        _sparse_roster_row(name="Roster Title", cover_date="1993-12-01")
+    )
+
+    merged = hydration.merge_sparse_issue_metadata(existing, incoming)
+
+    assert merged["creator_credits"] == [{"id": 1, "name": "Writer", "role": "writer"}]
+    assert merged["characters"] == [{"id": 2, "name": "Hero"}]
+    assert merged["teams"] == [{"id": 3, "name": "Team"}]
+    assert merged["story_arcs"] == [{"id": 4, "name": "Arc"}]
+    assert merged["primary_image"] == "https://img/medium"
+    assert merged["raw_provider_payload"] is existing["raw_provider_payload"]
+    # Non-empty roster facts still refresh basic fields.
+    assert merged["name"] == "Roster Title"
+    assert merged["cover_date"] == "1993-12-01"
+
+
+def test_sparse_metadata_merger_keeps_deep_image_when_roster_row_omits_it() -> None:
+    """Missing roster fields leave stored values untouched instead of nulling them."""
+    existing = hydration.normalize_issue(_deep_issue_result())
+    sparse_without_image: dict[str, object] = {
+        "id": 37625,
+        "issue_number": "5",
+        "volume": {"id": 5162, "name": "1963"},
+    }
+
+    merged = hydration.merge_sparse_issue_metadata(
+        existing, hydration.normalize_issue(sparse_without_image)
+    )
+
+    assert merged["primary_image"] == "https://img/medium"
+    assert merged["cover_date"] == "1993-11-01"
+    assert merged["store_date"] == "1993-10-01"
+
+
+@pytest.mark.asyncio
+async def test_roster_import_preserves_deep_issue_metadata(async_db: AsyncSession) -> None:
+    """Deep metadata survives a later basic volume-roster import (#4147)."""
+    identity = await hydration.persist_issue_result(async_db, _deep_issue_result())
+    stored_raw = identity.metadata_json["raw_provider_payload"]
+
+    updated = await hydration.persist_issue_result(
+        async_db, _sparse_roster_row(), roster_row=True
+    )
+
+    assert updated.id == identity.id
+    metadata = updated.metadata_json
+    assert metadata["creator_credits"] == [{"id": 1, "name": "Writer", "role": "writer"}]
+    assert metadata["characters"] == [{"id": 2, "name": "Hero"}]
+    assert metadata["teams"] == [{"id": 3, "name": "Team"}]
+    assert metadata["story_arcs"] == [{"id": 4, "name": "Arc"}]
+    assert metadata["primary_image"] == "https://img/medium"
+    assert metadata["raw_provider_payload"] is stored_raw
+    assert await async_db.scalar(select(func.count()).select_from(ExternalIdentity)) == 1
+
+
+@pytest.mark.asyncio
+async def test_roster_import_preserves_deep_metadata_even_when_roster_is_newer(
+    async_db: AsyncSession,
+) -> None:
+    """A newer sparse provider timestamp still cannot downgrade richer stored evidence."""
+    await hydration.persist_issue_result(async_db, _deep_issue_result())
+
+    updated = await hydration.persist_issue_result(
+        async_db,
+        _sparse_roster_row(date_last_updated="2026-09-01T09:00:00Z"),
+        roster_row=True,
+    )
+
+    assert updated.metadata_json["creator_credits"] == [
+        {"id": 1, "name": "Writer", "role": "writer"}
+    ]
+    assert updated.metadata_json["story_arcs"] == [{"id": 4, "name": "Arc"}]
+
+
+@pytest.mark.asyncio
+async def test_sparse_roster_identity_is_enriched_by_later_singular_hydration(
+    async_db: AsyncSession,
+) -> None:
+    """A sparse issue can still be enriched by a later singular issue response."""
+    sparse = await hydration.persist_issue_result(
+        async_db, _sparse_roster_row(), roster_row=True
+    )
+    assert sparse.metadata_json["creator_credits"] == []
+
+    deep = await hydration.persist_issue_result(async_db, _deep_issue_result())
+
+    assert deep.id == sparse.id
+    assert deep.metadata_json["creator_credits"] == [
+        {"id": 1, "name": "Writer", "role": "writer"}
+    ]
+    assert deep.metadata_json["raw_provider_payload"] == _deep_issue_result()
+
+
+@pytest.mark.asyncio
+async def test_repeated_hydration_is_idempotent(async_db: AsyncSession) -> None:
+    """Repeated deep and roster hydration converges on the same rich metadata."""
+    await hydration.persist_issue_result(async_db, _deep_issue_result())
+    expected = (
+        await hydration.persist_issue_result(
+            async_db, _sparse_roster_row(), roster_row=True
+        )
+    ).metadata_json
+
+    for _ in range(2):
+        repeated = await hydration.persist_issue_result(
+            async_db, _sparse_roster_row(), roster_row=True
+        )
+
+    assert repeated.metadata_json == expected
+    assert repeated.metadata_json["creator_credits"] == [
+        {"id": 1, "name": "Writer", "role": "writer"}
+    ]
+    assert await async_db.scalar(select(func.count()).select_from(ExternalIdentity)) == 1
+
+
+@pytest.mark.asyncio
+async def test_absent_provider_timestamps_do_not_erase_deep_metadata(
+    async_db: AsyncSession,
+) -> None:
+    """Rows without provider timestamps still merge instead of replacing deep metadata."""
+    deep: dict[str, object] = _deep_issue_result()
+    deep.pop("date_last_updated")
+    identity = await hydration.persist_issue_result(async_db, deep)
+    assert identity.provider_updated_at is None
+
+    sparse: dict[str, object] = _sparse_roster_row()
+    sparse.pop("date_last_updated")
+    updated = await hydration.persist_issue_result(async_db, sparse, roster_row=True)
+
+    assert updated.provider_updated_at is None
+    assert updated.metadata_json["creator_credits"] == [
+        {"id": 1, "name": "Writer", "role": "writer"}
+    ]
+    assert updated.metadata_json["raw_provider_payload"] == deep
+
+
+@pytest.mark.asyncio
+async def test_genuine_deep_empty_credits_replace_stored_credits(
+    async_db: AsyncSession,
+) -> None:
+    """An explicit empty array from a full singular response is authoritative."""
+    await hydration.persist_issue_result(async_db, _deep_issue_result())
+
+    updated = await hydration.persist_issue_result(
+        async_db,
+        _deep_issue_result(person_credits=[], character_credits=[], team_credits=[]),
+    )
+
+    assert updated.metadata_json["creator_credits"] == []
+    assert updated.metadata_json["characters"] == []
+    assert updated.metadata_json["teams"] == []
+    assert updated.metadata_json["raw_provider_payload"] == _deep_issue_result(
+        person_credits=[], character_credits=[], team_credits=[]
+    )
+
+
+@pytest.mark.asyncio
+async def test_hydrate_volume_roster_does_not_erase_deep_issue(async_db: AsyncSession) -> None:
+    """The volume hydration path itself preserves a previously deep-hydrated issue."""
+    await hydration.persist_issue_result(
+        async_db, _deep_issue_result(id=1, volume={"id": 7, "name": "1963"})
+    )
+
+    _volume, issues = await hydration.hydrate_volume(
+        async_db, cast(object, FakeClient()), 7
+    )
+
+    issue = next(item for item in issues if item.external_id == "1")
+    assert issue.metadata_json["creator_credits"] == [
+        {"id": 1, "name": "Writer", "role": "writer"}
+    ]
+    assert issue.metadata_json["story_arcs"] == [{"id": 4, "name": "Arc"}]

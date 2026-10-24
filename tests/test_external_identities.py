@@ -88,6 +88,83 @@ async def test_external_identity_upsert_is_idempotent_and_rejects_stale_provider
 
 
 @pytest.mark.asyncio
+async def test_external_identity_upsert_merges_metadata_when_requested(
+    async_db: AsyncSession,
+) -> None:
+    """A supplied merger lets lower-fidelity evidence enrich without erasing deep fields."""
+    identity = await upsert_external_identity(
+        async_db,
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-deep",
+        metadata_json={
+            "name": "Deep",
+            "creator_credits": [{"id": 1, "name": "Writer"}],
+        },
+    )
+
+    def merge_sparse(
+        existing: dict[str, object], incoming: dict[str, object]
+    ) -> dict[str, object]:
+        merged = dict(existing)
+        for key, value in incoming.items():
+            if value:
+                merged[key] = value
+        return merged
+
+    updated = await upsert_external_identity(
+        async_db,
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-deep",
+        metadata_json={"name": "Roster", "creator_credits": []},
+        metadata_merger=merge_sparse,
+    )
+
+    assert updated.id == identity.id
+    assert updated.metadata_json == {
+        "name": "Roster",
+        "creator_credits": [{"id": 1, "name": "Writer"}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_external_identity_upsert_merger_applies_without_provider_timestamps(
+    async_db: AsyncSession,
+) -> None:
+    """Sparse merges still protect stored metadata when no provider timestamp exists."""
+    identity = await upsert_external_identity(
+        async_db,
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-untimed",
+        metadata_json={"name": "Deep", "creator_credits": [{"id": 1}]},
+    )
+
+    def merge_sparse(
+        existing: dict[str, object], incoming: dict[str, object]
+    ) -> dict[str, object]:
+        merged = dict(existing)
+        for key, value in incoming.items():
+            if value:
+                merged[key] = value
+        return merged
+
+    updated = await upsert_external_identity(
+        async_db,
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-untimed",
+        metadata_json={"name": "Deep", "creator_credits": []},
+        metadata_merger=merge_sparse,
+    )
+
+    assert updated.metadata_json == {"name": "Deep", "creator_credits": [{"id": 1}]}
+    assert updated.provider_updated_at is None
+    assert updated.id == identity.id
+
+
+@pytest.mark.asyncio
 async def test_issue_mapping_preserves_candidates_rejections_and_user_ownership(
     async_db: AsyncSession,
 ) -> None:

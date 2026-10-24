@@ -1,6 +1,6 @@
 """Provider-independent external identity mapping services."""
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -39,6 +39,14 @@ reducing hundreds of thousands of sequential round trips to a few hundred.
 
 class ExternalIdentityMappingError(ValueError):
     """Raised when external identity evidence cannot be linked safely."""
+
+
+MetadataMerger = Callable[[dict[str, object], dict[str, object]], dict[str, object]]
+"""Merge incoming metadata into already-stored metadata instead of replacing it.
+
+Lower-fidelity provider evidence (for example a volume-roster row) uses a merger so it
+cannot erase richer fields that a previous full provider response stored.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,6 +214,7 @@ async def upsert_external_identity(
     external_url: str | None = None,
     metadata_json: dict[str, object] | None = None,
     provider_updated_at: datetime | None = None,
+    metadata_merger: MetadataMerger | None = None,
 ) -> ExternalIdentity:
     """Create or update one provider identity without duplicating its stable key.
 
@@ -218,6 +227,10 @@ async def upsert_external_identity(
         metadata_json: Optional arbitrary metadata from the provider.
         provider_updated_at: Optional timestamp of last provider update; stale
             updates are ignored to prevent overwriting fresher data.
+        metadata_merger: Optional merge strategy for an existing identity. When
+            provided, incoming metadata is merged into the stored metadata
+            instead of replacing it wholesale. Sparse provider rows use this so
+            they cannot erase richer evidence stored by a full response.
 
     Returns:
         The created or existing external identity.
@@ -268,7 +281,14 @@ async def upsert_external_identity(
     if external_url is not None:
         identity.external_url = external_url
     if metadata_json is not None:
-        identity.metadata_json = metadata_json
+        if metadata_merger is not None:
+            merged_metadata = metadata_merger(
+                dict(identity.metadata_json or {}), metadata_json
+            )
+            if merged_metadata != identity.metadata_json:
+                identity.metadata_json = merged_metadata
+        else:
+            identity.metadata_json = metadata_json
     if provider_updated_at is not None:
         identity.provider_updated_at = provider_updated_at
     await db.flush()

@@ -11,7 +11,7 @@ from pathlib import Path
 from sqlalchemy import exc as sqlalchemy_exc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.comicvine_hydration import hydrate_issue
+from app.comicvine_hydration import DEEP_ISSUE_RAW_FIELDS, hydrate_issue
 from app.database import AsyncSessionLocal
 from app.models.external_identity import ExternalIdentity
 from comic_pile.comicvine_provider import (
@@ -31,23 +31,6 @@ COMICVINE_FALLBACK_LOCK_NAMESPACE = 1_065_000_000
 # detached task alive after the response. This deadline bounds that inline work.
 COMICVINE_FALLBACK_INLINE_TIMEOUT_SECONDS = float(
     os.environ.get("COMICVINE_FALLBACK_INLINE_TIMEOUT_SECONDS", "8.0")
-)
-
-_REQUIRED_DEEP_RAW_FIELDS = frozenset(
-    {
-        "id",
-        "name",
-        "issue_number",
-        "cover_date",
-        "store_date",
-        "image",
-        "volume",
-        "person_credits",
-        "character_credits",
-        "team_credits",
-        "story_arc_credits",
-        "date_last_updated",
-    }
 )
 
 _pending_metadata_refreshes: dict[int, asyncio.Task[bool]] = {}
@@ -81,7 +64,7 @@ def metadata_needs_hydration(
     raw_payload = metadata.get("raw_provider_payload")
     if not isinstance(raw_payload, dict):
         return True
-    if not _REQUIRED_DEEP_RAW_FIELDS.issubset(raw_payload):
+    if not DEEP_ISSUE_RAW_FIELDS.issubset(raw_payload):
         return True
 
     current_time = now or datetime.now(UTC)
