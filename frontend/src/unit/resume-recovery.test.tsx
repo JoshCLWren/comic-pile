@@ -230,7 +230,7 @@ describe('ResumeRecovery', () => {
     dispatchPageShow(true)
     await waitFor(() => expect(invalidateAfterResumeRecovery).toHaveBeenCalledOnce())
 
-    now.mockReturnValue(11_001)
+    now.mockReturnValue(10_000 + 61000)
     fireEvent(document, new Event('visibilitychange'))
     await waitFor(() => expect(revalidateSession).toHaveBeenCalledTimes(2))
 
