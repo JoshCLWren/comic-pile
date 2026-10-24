@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Exact GitHub CI parity for the python-lint and python-typecheck jobs.
+# Local Python push gate: CI ruff/ty pair plus the hardcoded primary-key guard.
 #
-# CI runs these two commands with no path arguments:
+# CI jobs python-lint and python-typecheck run these with no path arguments:
 #   ruff check .
 #   ty check --error-on-warning
 #
-# Path-filtered invocations are not a valid substitute. Re-run this script
-# after every later Python edit; a green run is invalid the moment sources change.
+# This script also runs:
+#   pytest tests/test_hardcoded_ids.py -q --no-cov
+#
+# Path-filtered ruff/ty invocations are not a valid substitute. Re-run this
+# script after every later Python edit; a green run is invalid the moment
+# sources change.
 
 set -euo pipefail
 
