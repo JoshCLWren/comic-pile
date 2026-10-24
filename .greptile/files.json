@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "path": "docs/AUTONOMOUS_FACTORY_POLICY.md",
+      "description": "Canonical factory exact-SHA review, CI, actionable findings, and merge requirements."
+    },
+    {
+      "path": "docs/ISSUE_EXECUTION_PROTOCOL.md",
+      "description": "Canonical linked-issue scope, acceptance evidence and required validation protocol."
+    },
+    {
+      "path": ".github/scripts/factory_issue_acceptance.py",
+      "description": "Exact-head linked-issue acceptance attestation contract and structured criterion report validator."
+    },
+    {
+      "path": ".github/scripts/factory-review-controller.py",
+      "description": "Required-checks and mechanical merge gates; reviewer confidence does not replace their results."
+    }
+  ]
+}
