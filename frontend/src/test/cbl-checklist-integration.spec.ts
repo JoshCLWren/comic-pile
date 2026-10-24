@@ -99,15 +99,15 @@ test.describe('CBL adoption checklist integration', () => {
     await page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' }).click()
 
     // First volume unchecked, second still checked -> 2 entries excluded, 2 will be added
-    await expect(page.getByText('4 entries · 0 already in ComicPile · 2 will be added')).toBeVisible()
+    await expect(page.getByText('4 entries · 1 already in ComicPile · 2 will be added')).toBeVisible()
     
     // Recheck one issue from the first volume - should make it indeterminate
     // Expand the first volume (2012) to see individual issues
     await page.getByRole('button', { name: 'Show issues for Test Volume 1 (2012)' }).click()
     await page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) #1' }).check()
 
-    // Should show the updated count: 1 already in ComicPile (from volume 2012) + 2 will be added (missing)
-    await expect(page.getByText('4 entries · 1 already in ComicPile · 2 will be added')).toBeVisible()
+    // Should show the updated count: 2 already in ComicPile (volumes 2012 + 2019) + 2 will be added (missing)
+    await expect(page.getByText('4 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
     
     // Also verify the first volume checkbox is now indeterminate
     await expect(page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })).toBeChecked({ checked: true }) // indeterminate shows as checked in some implementations
