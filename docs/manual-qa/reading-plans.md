@@ -56,4 +56,30 @@
 
 **Expected:** Globally excluded material stays excluded until expressly restored. List-local skip does not globally hide its issue. No implicit recreation of intentionally excluded material.
 
+## MQA-LIST-008: Explicit overlap exceptions are narrow and durable
+
+**Setup:** A strict QA list containing two overlapping ComicVine volumes plus a third series, an explicit prerequisite, and a hold/after-previous gate.
+
+**Test:** Explicitly approve one volume continuing while the other waits; inspect the preview and persisted rule, roll both volumes, then compare a same-titled different volume and another list.
+
+**Expected:** Only the exact reader-approved pair of ComicVine series/volume identities relaxes implicit cross-volume strict adjacency. Both retain their own issue order; the waiting volume is not marked read or skipped. Explicit prerequisites, hold/after-previous gates, other lists, third series, and ambiguous or different volumes still block normally. Preview and saved eligibility agree; the exception survives reloading the list. The reader can revoke the exception without changing read history.
+
+## MQA-LIST-009: Reader selects whole series or individual issues in overlaps
+
+**Setup:** A QA reading order with several overlapping series/volumes and multiple candidate issues each.
+
+**Test:** Open the reading-order creation/editing selection flow; inspect defaults; deselect a whole series, reselect it, deselect individual overlapping issues, save, and reopen. Repeat against an already-owned matching list.
+
+**Expected:** Inclusion checkboxes start selected for all offered series and issues. The reader can choose all, some or none of a series through a series-level checkbox and granular issue checkboxes, with clear mixed-selection feedback. Unchecked selections are deliberately omitted only from that list/overlap selection and do not mark comics globally excluded or read. Saving updates the intended existing list/selection (upsert), using stable canonical issue and ComicVine volume identity, without creating duplicate membership or replacing unrelated lists. No issue is silently included after the reader unchecked it.
+
+## MQA-LIST-010: Editing constraints fails closed on conflicts
+
+**Setup:** Multiple QA lists sharing issues and explicit prerequisites; include a partially represented Thread and a possible three-list/series cycle.
+
+**Test:** Save an unchanged list, reorder an after-previous entry to change its predecessor, intentionally create a cross-list cycle, and modify inclusion to omit unread issues from a partly represented Thread.
+
+**Expected:** Unchanged save is idempotent. A changed after-previous target requires explicit visible confirmation naming the new predecessor. A cycle or stranded prerequisite is rejected atomically with a human-readable path/provenance, not a partial write. Partial Thread inclusion triggers a clear warning rather than silently assuming missing issues are gated. Invalid or canceled changes preserve the prior valid list and read state.
+
+**Authority:** [Reading List execution ADR](../READING_LIST_EXECUTION_ADR.md), with the owner-approved series/issue selection design. The checkbox selection controls list membership; the separate overlap exception changes strict eligibility only for an explicitly approved pair.
+
 Some currently deployed routes may still implement older Reading Plans behavior. This inventory states intended acceptance criteria for the guarded transition, not a claim that it has already been deployed.
