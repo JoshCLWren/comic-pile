@@ -29,6 +29,7 @@ from app.repositories import tag_repository
 from app.schemas.tags import TagScope
 from app.services.errors import ConflictError, ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.ownership_guard import target_owner_id
+from app.services.tag_inheritance_service import TagInheritanceService
 
 
 @dataclass
@@ -956,12 +957,23 @@ class TagService:
             self._db, tag_id, target_type, requested_ids
         )
         await self._db.commit()
+
+        # For Issue targets, check which issues still inherit the tag through
+        # their thread or a containing Reading Plan (issue #3433, #3557).
+        still_inherited: list[int] = []
+        if target_type == "Issue":
+            inheritance_service = TagInheritanceService(self._db)
+            still_inherited = await inheritance_service.issues_still_inheriting_tag(
+                user, tag_id, requested_ids
+            )
+
         return BulkAssignmentResult(
             tag_id=tag_id,
             target_type=target_type,
             requested_ids=requested_ids,
             affected_ids=removed,
             already_ids=already,
+            still_inherited_ids=still_inherited,
         )
 
     async def preview_consumer_references(self, tag_id: int) -> dict[str, int]:
