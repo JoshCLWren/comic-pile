@@ -681,23 +681,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             return RedirectResponse("/", status_code=301)
 
     @app.get("/health", response_model=None)
-    async def health_check(db: AsyncSession = Depends(get_db)) -> dict | JSONResponse:
-        """Health check endpoint that verifies basic application functionality.
-
-        Returns:
-            JSON response with health status and database connection state.
-        """
-        from sqlalchemy import text
-
-        try:
-            await db.execute(text("SELECT 1"))
-            return {"status": "healthy", "database": "connected"}
-        except sqlalchemy_exc.DBAPIError as e:
-            logger.error(f"Health check database connection failed: {e}")
-            return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"status": "unhealthy", "database": "disconnected", "error": str(e)},
-            )
+    async def health_check() -> dict[str, str]:
+        """Public liveness check without opening a billable Neon connection."""
+        return {"status": "alive"}
 
     if serve_frontend:
 
