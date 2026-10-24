@@ -11,6 +11,7 @@ import { readingGraphApi } from '../services/api-reading-graph'
 import type {
   CBLAdoptionPreview,
   CBLAdoptionPreviewEntry,
+  CBLCatalogBrowsePage,
   CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
@@ -27,6 +28,7 @@ import {
 vi.mock('../services/api-cbl-sources', () => ({
   cblSourcesApi: {
     discover: vi.fn(),
+    browse: vi.fn(),
     preview: vi.fn(),
     plan: vi.fn(),
     commitNew: vi.fn(),
@@ -86,7 +88,7 @@ vi.mock('../query/cacheEffects', () => ({
   applyCommittedReadingPlan: vi.fn(),
 }))
 
-const mockDiscover = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.discover)
+const mockBrowse = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.browse)
 const mockPreview = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.preview)
 const mockPlan = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.plan)
 const mockCommitNew = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commitNew)
@@ -105,14 +107,27 @@ function queryWrapper({ children }: PropsWithChildren) {
 
 function LocationProbe() {
   const location = useLocation()
-  return <p data-testid="location">{location.pathname}</p>
+  return (
+    <>
+      <p data-testid="location">{location.pathname}</p>
+      <p data-testid="location-search">{location.search}</p>
+    </>
+  )
 }
 
 function renderPage(initialEntry = '/cbl-sources') {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
-        <Route path="/cbl-sources" element={<CblBrowserPage />} />
+        <Route
+          path="/cbl-sources"
+          element={
+            <>
+              <CblBrowserPage />
+              <LocationProbe />
+            </>
+          }
+        />
         <Route path="/continuity-plans/:id" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
@@ -128,6 +143,36 @@ const source: CBLSourceListDiscoveryItem = {
   declared_issue_count: 4,
   content_hash: 'hash-1',
   revision_sha: 'abcdef1234567890',
+}
+
+function browsePage(overrides: Partial<CBLCatalogBrowsePage> = {}): CBLCatalogBrowsePage {
+  return {
+    scope: 'folder',
+    folder: '',
+    query: null,
+    breadcrumbs: [{ name: 'All CBLs', path: '' }],
+    folders: [],
+    items: [],
+    page: 1,
+    page_size: 50,
+    total: 0,
+    total_pages: 0,
+    has_next: false,
+    has_previous: false,
+    ...overrides,
+  }
+}
+
+/** A search-scope page containing the shared source fixture. */
+function searchPage(term = 'ultimate', items = [source]): CBLCatalogBrowsePage {
+  return browsePage({
+    scope: 'search',
+    query: term,
+    breadcrumbs: [{ name: 'All CBLs', path: '' }],
+    items,
+    total: items.length,
+    total_pages: items.length > 0 ? 1 : 0,
+  })
 }
 
 function entry(overrides: Partial<CBLAdoptionPreviewEntry>): CBLAdoptionPreviewEntry {
@@ -208,10 +253,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   queryClient.clear()
   mockGraphPreview.mockResolvedValue(withoutOverlap())
+  mockBrowse.mockResolvedValue(browsePage())
 })
 
 async function searchFor(user: ReturnType<typeof userEvent.setup>, term = 'ultimate') {
-  mockDiscover.mockResolvedValue([source])
+  mockBrowse.mockResolvedValue(searchPage(term))
   await user.type(screen.getByLabelText('Search source lists'), term)
   await user.click(screen.getByRole('button', { name: 'Search' }))
   await waitFor(() => {
@@ -244,12 +290,19 @@ async function expandVolume(
 }
 
 describe('CblBrowserPage', () => {
-  it('renders the search form before any search', () => {
+  it('browses the catalog root immediately without a search submission', async () => {
     renderPage()
     expect(screen.getByRole('heading', { name: 'CBL Sources' })).toBeInTheDocument()
     expect(screen.getByLabelText('Search source lists')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument()
-    expect(mockDiscover).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(mockBrowse).toHaveBeenCalledWith({
+        folder: '',
+        query: '',
+        page: 1,
+        pageSize: 50,
+      })
+    })
   })
 
   it('opens the deep-linked source list detail with its ordered positions', async () => {
@@ -270,7 +323,12 @@ describe('CblBrowserPage', () => {
     const user = userEvent.setup()
     renderPage()
     await searchFor(user)
-    expect(mockDiscover).toHaveBeenCalledWith('ultimate')
+    expect(mockBrowse).toHaveBeenLastCalledWith({
+      folder: '',
+      query: 'ultimate',
+      page: 1,
+      pageSize: 50,
+    })
     expect(screen.getByText('Ultimate Universe')).toBeInTheDocument()
     expect(screen.getByText(/JoshCLWren\/CBL-ReadingLists/)).toBeInTheDocument()
     // #3939: the raw .cbl path stays out of the default search row.
@@ -284,7 +342,7 @@ describe('CblBrowserPage', () => {
       source_path: '/mnt/bigdata/CBL-ReadingLists/Marvel/Ultimate.cbl',
       source_repository: '/mnt/bigdata/CBL-ReadingLists',
     }
-    mockDiscover.mockResolvedValue([leaked])
+    mockBrowse.mockResolvedValue(searchPage('ultimate', [leaked]))
     renderPage()
     await user.type(screen.getByLabelText('Search source lists'), 'ultimate')
     await user.click(screen.getByRole('button', { name: 'Search' }))
@@ -301,13 +359,15 @@ describe('CblBrowserPage', () => {
     const user = userEvent.setup()
     const rawPath =
       'Marvel/Events/CBH/[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH).cbl'
-    mockDiscover.mockResolvedValue([
-      {
-        ...source,
-        name: '[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH)',
-        source_path: rawPath,
-      },
-    ])
+    mockBrowse.mockResolvedValue(
+      searchPage('ultimate', [
+        {
+          ...source,
+          name: '[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH)',
+          source_path: rawPath,
+        },
+      ]),
+    )
     renderPage()
     await user.type(screen.getByLabelText('Search source lists'), 'ultimate')
     await user.click(screen.getByRole('button', { name: 'Search' }))
@@ -329,7 +389,7 @@ describe('CblBrowserPage', () => {
       name: '[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH)',
       source_path: rawPath,
     }
-    mockDiscover.mockResolvedValue([listed])
+    mockBrowse.mockResolvedValue(searchPage('ultimate', [listed]))
     mockPreview.mockResolvedValue(preview({ source: { source_path: rawPath } }))
     renderPage()
     await user.type(screen.getByLabelText('Search source lists'), 'ultimate')
@@ -380,9 +440,11 @@ describe('CblBrowserPage', () => {
 
   it('falls back to a generic title when a source declares no readable title or path', async () => {
     const user = userEvent.setup()
-    mockDiscover.mockResolvedValue([
-      { ...source, name: '', source_path: '/mnt/bigdata/CBL-ReadingLists' },
-    ])
+    mockBrowse.mockResolvedValue(
+      searchPage('ultimate', [
+        { ...source, name: '', source_path: '/mnt/bigdata/CBL-ReadingLists' },
+      ]),
+    )
     mockPreview.mockResolvedValue(preview())
     renderPage()
     await user.type(screen.getByLabelText('Search source lists'), 'ultimate')
@@ -397,7 +459,7 @@ describe('CblBrowserPage', () => {
 
   it('shows an empty state when no sources match', async () => {
     const user = userEvent.setup()
-    mockDiscover.mockResolvedValue([])
+    mockBrowse.mockResolvedValue(searchPage('nothing', []))
     renderPage()
     await user.type(screen.getByLabelText('Search source lists'), 'nothing')
     await user.click(screen.getByRole('button', { name: 'Search' }))
@@ -406,15 +468,328 @@ describe('CblBrowserPage', () => {
     })
   })
 
-  it('shows an error when discovery fails', async () => {
+  it('shows an error when the catalog cannot be read', async () => {
     const user = userEvent.setup()
-    mockDiscover.mockRejectedValue(new Error('Network error'))
+    mockBrowse.mockRejectedValue(new Error('Network error'))
     renderPage()
     await user.type(screen.getByLabelText('Search source lists'), 'x')
     await user.click(screen.getByRole('button', { name: 'Search' }))
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Network error')
     })
+  })
+
+  it('shows root folders and sources immediately on entering the page', async () => {
+    mockBrowse.mockResolvedValue(
+      browsePage({
+        folders: [
+          { name: 'DC', path: 'DC', direct_list_count: 0, total_list_count: 3 },
+          { name: 'unsorted', path: 'unsorted', direct_list_count: 2, total_list_count: 2 },
+        ],
+        items: [source],
+        total: 1,
+        total_pages: 1,
+      }),
+    )
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: /DC/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /unsorted/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Ultimate Universe/ })).toBeInTheDocument()
+    expect(screen.getByText('Showing 1–1 of 1 source')).toBeInTheDocument()
+    expect(mockBrowse).toHaveBeenCalledWith({ folder: '', query: '', page: 1, pageSize: 50 })
+  })
+
+  it('follows nested folder paths including unsorted and keeps breadcrumbs', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockImplementation(
+      ({ folder }: { folder: string }) => {
+        if (folder === 'Marvel/unsorted') {
+          return Promise.resolve(
+            browsePage({
+              folder,
+              breadcrumbs: [
+                { name: 'All CBLs', path: '' },
+                { name: 'Marvel', path: 'Marvel' },
+                { name: 'unsorted', path: 'Marvel/unsorted' },
+              ],
+              items: [source],
+              total: 1,
+              total_pages: 1,
+            }),
+          )
+        }
+        const child =
+          folder === 'Marvel'
+            ? { name: 'unsorted', path: 'Marvel/unsorted' }
+            : { name: 'Marvel', path: 'Marvel' }
+        return Promise.resolve(
+          browsePage({
+            folder,
+            breadcrumbs:
+              folder === 'Marvel'
+                ? [
+                    { name: 'All CBLs', path: '' },
+                    { name: 'Marvel', path: 'Marvel' },
+                  ]
+                : [{ name: 'All CBLs', path: '' }],
+            folders: [{ ...child, direct_list_count: 0, total_list_count: 1 }],
+          }),
+        )
+      },
+    )
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: /Marvel/ }))
+    await waitFor(() => {
+      expect(mockBrowse).toHaveBeenLastCalledWith({
+        folder: 'Marvel',
+        query: '',
+        page: 1,
+        pageSize: 50,
+      })
+    })
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?folder=Marvel')
+
+    await user.click(await screen.findByRole('button', { name: /unsorted/ }))
+    await waitFor(() => {
+      expect(mockBrowse).toHaveBeenLastCalledWith({
+        folder: 'Marvel/unsorted',
+        query: '',
+        page: 1,
+        pageSize: 50,
+      })
+    })
+    const trail = screen.getByRole('navigation', { name: 'CBL folder path' })
+    expect(trail).toHaveTextContent('Marvel')
+    expect(trail).toHaveTextContent('unsorted')
+    expect(screen.getByRole('button', { name: 'unsorted' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'All CBLs' }))
+    await waitFor(() => {
+      expect(mockBrowse).toHaveBeenLastCalledWith({
+        folder: '',
+        query: '',
+        page: 1,
+        pageSize: 50,
+      })
+    })
+  })
+
+  it('paginates beyond 100 sources with stable totals', async () => {
+    const user = userEvent.setup()
+    const pageItems = (pageNumber: number) =>
+      Array.from({ length: pageNumber === 3 ? 37 : 50 }, (_, index) => ({
+        ...source,
+        id: pageNumber * 1000 + index,
+        name: `Catalog Source ${(pageNumber - 1) * 50 + index + 1}`,
+      }))
+    mockBrowse.mockImplementation(
+      ({ page: pageNumber }: { page: number }) =>
+        Promise.resolve(
+          browsePage({
+            page: pageNumber,
+            items: pageItems(pageNumber),
+            total: 137,
+            total_pages: 3,
+            has_next: pageNumber < 3,
+            has_previous: pageNumber > 1,
+          }),
+        ),
+    )
+    renderPage()
+
+    expect(await screen.findByText('Showing 1–50 of 137 sources')).toBeInTheDocument()
+    expect(screen.getByText('Page 1 of 3')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    await waitFor(() => {
+      expect(mockBrowse).toHaveBeenLastCalledWith({
+        folder: '',
+        query: '',
+        page: 2,
+        pageSize: 50,
+      })
+    })
+    expect(await screen.findByText('Showing 51–100 of 137 sources')).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?page=2')
+
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(await screen.findByText('Showing 101–137 of 137 sources')).toBeInTheDocument()
+    expect(screen.getByText('Page 3 of 3')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Previous page' }))
+    expect(await screen.findByText('Showing 51–100 of 137 sources')).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?page=2')
+  })
+
+  it('previews a source-only page and returns to the same folder, search, and page', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(
+      browsePage({
+        scope: 'search',
+        query: 'ultimate',
+        items: [source],
+        total: 1,
+        total_pages: 1,
+      }),
+    )
+    mockPreview.mockResolvedValue(preview())
+    renderPage('/cbl-sources?folder=Marvel&q=ultimate&page=2')
+
+    await user.click(await screen.findByRole('button', { name: /Ultimate Universe/ }))
+    const detail = await screen.findByTestId('cbl-source-detail')
+    expect(detail).toHaveTextContent('Ultimate Reading Order')
+    expect(detail).toHaveTextContent('4000-1')
+    expect(detail).toHaveTextContent('4000-2')
+    expect(detail).toHaveTextContent('vol 4000-vol-1')
+    expect(screen.getByTestId('location-search')).toHaveTextContent('list=7')
+
+    await user.click(screen.getByRole('link', { name: 'Back to results' }))
+    await waitFor(() => {
+      expect(screen.queryByTestId('cbl-source-detail')).not.toBeInTheDocument()
+    })
+    const search = screen.getByTestId('location-search').textContent ?? ''
+    expect(search).toContain('folder=Marvel')
+    expect(search).toContain('q=ultimate')
+    expect(search).toContain('page=2')
+    expect(search).not.toContain('list=')
+    expect(mockBrowse).toHaveBeenLastCalledWith({
+      folder: 'Marvel',
+      query: 'ultimate',
+      page: 2,
+      pageSize: 50,
+    })
+  })
+
+  it('shows the source-only preview without needing owned comics', async () => {
+    renderPage('/cbl-sources?list=7')
+    const detail = await screen.findByTestId('cbl-source-detail')
+    expect(detail).toHaveTextContent('4000-1')
+    expect(detail).toHaveTextContent('4000-2')
+    // No reader-owned reconciliation is needed to read the shared source.
+    expect(mockPreview).not.toHaveBeenCalled()
+  })
+
+  it('shows an empty state for an empty folder', async () => {
+    mockBrowse.mockResolvedValue(
+      browsePage({
+        folder: 'Empty',
+        breadcrumbs: [
+          { name: 'All CBLs', path: '' },
+          { name: 'Empty', path: 'Empty' },
+        ],
+      }),
+    )
+    renderPage('/cbl-sources?folder=Empty')
+    expect(await screen.findByText('No CBL sources in this folder.')).toBeInTheDocument()
+  })
+
+  it('shows an empty state for an empty shared catalog', async () => {
+    renderPage()
+    expect(
+      await screen.findByText('No shared CBL sources are available yet.'),
+    ).toBeInTheDocument()
+  })
+
+  it('explains a missing folder and returns to the catalog root', async () => {
+    const user = userEvent.setup()
+    const notFound = Object.assign(new Error('Not Found'), {
+      isAxiosError: true,
+      response: { status: 404, data: { detail: { code: 'folder_not_found', message: 'gone' } } },
+    })
+    mockBrowse.mockRejectedValueOnce(notFound)
+    mockBrowse.mockResolvedValue(
+      browsePage({ items: [source], total: 1, total_pages: 1 }),
+    )
+    renderPage('/cbl-sources?folder=Gone')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This folder is no longer in the shared CBL catalog.',
+    )
+    await user.click(screen.getByRole('button', { name: 'Browse all CBLs' }))
+    await waitFor(() => {
+      expect(mockBrowse).toHaveBeenLastCalledWith({
+        folder: '',
+        query: '',
+        page: 1,
+        pageSize: 50,
+      })
+    })
+    expect(await screen.findByRole('button', { name: /Ultimate Universe/ })).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).not.toHaveTextContent('folder=')
+  })
+
+  it('explains an unavailable catalog and retries the same page', async () => {
+    const user = userEvent.setup()
+    const unavailable = Object.assign(new Error('Service Unavailable'), {
+      isAxiosError: true,
+      response: { status: 503, data: { detail: { code: 'cbl_catalog_unavailable', message: 'x' } } },
+    })
+    mockBrowse.mockRejectedValueOnce(unavailable)
+    mockBrowse.mockResolvedValue(browsePage({ items: [source], total: 1, total_pages: 1 }))
+    renderPage('/cbl-sources?page=2')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The shared CBL catalog is temporarily unavailable. Try again in a moment.',
+    )
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('button', { name: /Ultimate Universe/ })).toBeInTheDocument()
+    expect(mockBrowse).toHaveBeenLastCalledWith({
+      folder: '',
+      query: '',
+      page: 2,
+      pageSize: 50,
+    })
+  })
+
+  it('reports an out-of-range page without losing the matching total', async () => {
+    mockBrowse.mockResolvedValue(
+      browsePage({
+        page: 9,
+        total: 137,
+        total_pages: 3,
+        has_previous: true,
+      }),
+    )
+    renderPage('/cbl-sources?page=9')
+    expect(await screen.findByText('No sources on page 9 of 3.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled()
+  })
+
+  it('ignores a malformed page parameter and browses the first page', async () => {
+    renderPage('/cbl-sources?page=not-a-number')
+    await waitFor(() => {
+      expect(mockBrowse).toHaveBeenCalledWith({
+        folder: '',
+        query: '',
+        page: 1,
+        pageSize: 50,
+      })
+    })
+  })
+
+  it('clears a search and returns to the current folder', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(searchPage('ultimate'))
+    renderPage('/cbl-sources?folder=Marvel&q=ultimate')
+
+    await user.click(await screen.findByRole('button', { name: 'Clear search' }))
+    await waitFor(() => {
+      expect(mockBrowse).toHaveBeenLastCalledWith({
+        folder: 'Marvel',
+        query: '',
+        page: 1,
+        pageSize: 50,
+      })
+    })
+    expect(screen.getByLabelText('Search source lists')).toHaveValue('')
+    expect(screen.getByTestId('location-search')).not.toHaveTextContent('q=')
   })
 
   it('selecting a source shows the preview with the consequence summary', async () => {
@@ -864,7 +1239,7 @@ describe('CblBrowserPage', () => {
     await selectSource(user)
     await openChecklist(user)
     await user.click(screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man series' }))
-    mockDiscover.mockResolvedValue([source])
+    mockBrowse.mockResolvedValue(searchPage('other'))
     await user.clear(screen.getByLabelText('Search source lists'))
     await user.type(screen.getByLabelText('Search source lists'), 'other')
     await user.click(screen.getByRole('button', { name: 'Search' }))

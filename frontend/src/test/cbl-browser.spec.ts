@@ -36,6 +36,70 @@ async function getFirstIssueId(page: Page, threadId: number): Promise<number> {
   return data.issues[0].id
 }
 
+test.describe('CBL browser catalog folders', () => {
+  test('browses nested folders including unsorted and previews a shared source with no owned comics', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    const headers = await authHeaders(page)
+    const suffix = `${Date.now()}`
+    const rootFolder = `Issue4010Nested${suffix}`
+    const sourceName = `Nested Shared Order ${suffix}`
+    const sourcePath = `${rootFolder}/unsorted/${sourceName}.cbl`
+    const comicvineIssueId = `4000-issue4010-${suffix}`
+
+    // No threads or issues are created for this account: the shared catalog
+    // preview must not depend on reader-owned comics.
+    const seed = await page.request.post('/api/test/cbl-source', {
+      headers,
+      data: {
+        name: sourceName,
+        source_path: sourcePath,
+        content_hash: `issue-4010-${suffix}`,
+        revision_sha: `issue-4010-revision-${suffix}`,
+        repository: 'JoshCLWren/CBL-ReadingLists',
+        entries: [
+          {
+            position: 1,
+            series_name: 'Nested Shared Series',
+            issue_number: '1',
+            comicvine_issue_id: comicvineIssueId,
+          },
+        ],
+      },
+    })
+    expect(seed.ok(), await seed.text()).toBeTruthy()
+
+    await page.goto('/cbl-sources', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: 'CBL Sources' })).toBeVisible()
+
+    // Folders and sources appear immediately; no search submission is needed.
+    await page.getByRole('button', { name: new RegExp(rootFolder) }).click()
+    await expect(page).toHaveURL(/folder=/)
+    await page.getByRole('button', { name: /^unsorted/ }).click()
+    await expect(page).toHaveURL(/unsorted/)
+    const sourceRow = page.getByRole('button', { name: new RegExp(sourceName) })
+    await expect(sourceRow).toBeVisible()
+
+    // Source-only preview: ordered positions plus the exact Comic Vine issue ID.
+    await sourceRow.click()
+    const detail = page.getByTestId('cbl-source-detail')
+    await expect(detail).toBeVisible()
+    await expect(detail).toContainText('Nested Shared Series #1')
+    await expect(detail).toContainText(comicvineIssueId)
+    await expect(page).toHaveURL(/list=/)
+
+    // Back returns to the same nested folder with the folder path preserved.
+    await page.getByRole('link', { name: 'Back to results' }).click()
+    await expect(page.getByRole('button', { name: new RegExp(sourceName) })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'CBL folder path' })).toContainText(
+      'unsorted',
+    )
+    expect(page.url()).toContain('folder=')
+    expect(page.url()).not.toContain('list=')
+  })
+})
+
 test.describe('CBL browser one-decision adoption', () => {
   test('browse → preview → Add this reading order creates and opens the plan', async ({
     authenticatedPage,
