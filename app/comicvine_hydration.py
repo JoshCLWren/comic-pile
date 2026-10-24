@@ -108,8 +108,14 @@ def _merge_raw_issue_payload(existing: object, incoming: object) -> object:
         # A fresh singular response is richer evidence and replaces the raw row.
         return incoming
     if is_deep_issue_result(existing):
-        # A roster row is a strict subset; keep the deep payload the UI relies on.
-        return existing
+        # A roster row is a strict subset; keep the deep payload the UI relies on,
+        # but merge any supplied basic fields (name, cover_date, ...) so the
+        # stored raw payload does not revert them on later normalization.
+        merged = dict(existing)
+        for key, value in incoming.items():
+            if _has_metadata_value(value):
+                merged[key] = value
+        return merged
     merged = dict(existing)
     for key, value in incoming.items():
         if _has_metadata_value(value) or key not in merged:

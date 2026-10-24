@@ -68,7 +68,8 @@ def metadata_needs_hydration(
         return True
 
     current_time = now or datetime.now(UTC)
-    updated_at = _normalized_timestamp(identity.updated_at)
+    freshness_timestamp = identity.provider_updated_at or identity.updated_at
+    updated_at = _normalized_timestamp(freshness_timestamp)
     return current_time - updated_at >= COMICVINE_METADATA_MAX_AGE
 
 
