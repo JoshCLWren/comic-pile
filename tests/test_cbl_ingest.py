@@ -1,6 +1,7 @@
 """Focused coverage for CBL mirror discovery and parsing."""
 
 from pathlib import Path
+from hashlib import sha256
 
 import pytest
 
@@ -114,9 +115,87 @@ def test_invalid_numeric_metadata_is_rejected(tmp_path: Path) -> None:
     """Reject malformed numeric metadata instead of silently coercing it."""
     path = tmp_path / "bad-year.cbl"
     path.write_text(
-        "<ReadingList><Books><Book Series='X-Men' Number='1' "
-        "Year='nope' /></Books></ReadingList>"
+        "<ReadingList><Books><Book Series='X-Men' Number='1' Year='nope' /></Books></ReadingList>"
     )
 
+    with pytest.raises(ValueError, match="expected integer value"):
+        parse_cbl_file(path, mirror_path=tmp_path)
+
+
+@pytest.mark.parametrize("attribute", ["Volume", "Year"])
+@pytest.mark.parametrize("value", ["None", " none ", "NONE"])
+def test_explicit_unknown_year_preserves_comicvine_evidence(
+    tmp_path: Path,
+    attribute: str,
+    value: str,
+) -> None:
+    """An unknown optional year does not discard the source or its exact IDs."""
+    original = 'Volume="2019"' if attribute == "Volume" else 'Year="2020"'
+    path = tmp_path / "unknown.cbl"
+    raw = CBL.replace(original, f'{attribute}="{value}"', 1)
+    path.write_text(raw)
+
+    parsed = parse_cbl_file(path, mirror_path=tmp_path)
+
+    assert len(parsed.books) == 2
+    book = parsed.books[0]
+    assert (book.volume_year if attribute == "Volume" else book.publication_year) is None
+    assert (book.comicvine_series_id, book.comicvine_issue_id) == ("123", "456")
+    assert parsed.content_hash == sha256(raw.encode()).hexdigest()
+
+
+def test_unknown_volume_keeps_unresolved_occurrence_in_source_order(tmp_path: Path) -> None:
+    """Retain an unresolved occurrence without fabricating provider identity."""
+    path = tmp_path / "ordered.cbl"
+    path.write_text(
+        CBL.replace(
+            '<Book Series="X of Swords: Creation"',
+            '<Book Series="O Judoka" Number="27" Volume="None" Year="0" />'
+            '<Book Series="X of Swords: Creation"',
+        ).replace("<NumIssues>2</NumIssues>", "<NumIssues>3</NumIssues>")
+    )
+
+    parsed, failures = parse_cbl_mirror(tmp_path)
+
+    assert not failures
+    assert parsed[0].declared_issue_count == len(parsed[0].books) == 3
+    assert [book.position for book in parsed[0].books] == [1, 2, 3]
+    unresolved = parsed[0].books[1]
+    assert (unresolved.series, unresolved.issue_number) == ("O Judoka", "27")
+    assert unresolved.volume_year is None
+    assert unresolved.comicvine_series_id is None
+    assert unresolved.comicvine_issue_id is None
+    assert parsed[0].books[2].comicvine_issue_id == "101112"
+
+
+def test_unknown_volume_preserves_nested_fork_identity(tmp_path: Path) -> None:
+    """The actual fork's unknown year does not erase its nested Comic Vine IDs."""
+    path = tmp_path / "nested.cbl"
+    path.write_text(
+        '<ReadingList><Books><Book Series="O Judoka" Number="27" Volume="None" Year="0">'
+        '<Database Name="cv" Series="154917" Issue="1032915" />'
+        '</Book></Books></ReadingList>'
+    )
+    book = parse_cbl_file(path, mirror_path=tmp_path).books[0]
+    assert book.volume_year is None
+    assert book.publication_year == 0
+    assert (book.comicvine_series_id, book.comicvine_issue_id) == ("154917", "1032915")
+
+
+@pytest.mark.parametrize("attribute", ["Volume", "Year"])
+def test_other_invalid_year_values_remain_errors(tmp_path: Path, attribute: str) -> None:
+    """Only the explicit None sentinel is recognized, not arbitrary bad metadata."""
+    path = tmp_path / "invalid.cbl"
+    path.write_text(
+        f'<ReadingList><Books><Book Series="X" Number="1" {attribute}="unknown" /></Books></ReadingList>'
+    )
+    with pytest.raises(ValueError, match="expected integer value"):
+        parse_cbl_file(path, mirror_path=tmp_path)
+
+
+def test_unknown_sentinel_does_not_relax_declared_count_validation(tmp_path: Path) -> None:
+    """NumIssues remains a numeric count rather than optional year metadata."""
+    path = tmp_path / "invalid-count.cbl"
+    path.write_text(CBL.replace("<NumIssues>2</NumIssues>", "<NumIssues>None</NumIssues>"))
     with pytest.raises(ValueError, match="expected integer value"):
         parse_cbl_file(path, mirror_path=tmp_path)
