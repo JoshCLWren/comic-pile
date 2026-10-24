@@ -274,12 +274,16 @@ export default function CblBrowserPage() {
   /**
    * The graph preview follows the reader's checklist and answers. `preview` is
    * already a local projection of the checklist, so unchecking a whole volume
-   * removes its conflicts from the next graph request.
+   * removes its conflicts from the next graph request. Only resolved positions
+   * are sent: missing comics do not exist in the graph yet, and the preview API
+   * rejects unresolved source positions (#4014).
    */
   const includedPositions = useMemo(
     () =>
       preview
-        ? preview.entries.filter((entry) => entry.adopted).map((entry) => entry.cbl_position)
+        ? preview.entries
+            .filter((entry) => entry.adopted && entry.resolved_issue_id !== null)
+            .map((entry) => entry.cbl_position)
         : [],
     [preview],
   )

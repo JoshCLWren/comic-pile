@@ -1014,6 +1014,24 @@ describe('CblBrowserPage', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('sends only resolved source positions to the reading graph preview (#4014)', async () => {
+    const user = userEvent.setup()
+    mockGraphPreview.mockResolvedValue(withoutOverlap())
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    await waitFor(() => {
+      expect(mockGraphPreview).toHaveBeenCalledTimes(1)
+    })
+    // Position 2 is missing_importable and has no resolved issue yet; the
+    // preview API rejects unresolved positions, so only position 1 is sent.
+    expect(mockGraphPreview).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ included_positions: [1] }),
+    )
+  })
+
   it('asks about a real overlap one series at a time, then shows the new graph (#4020)', async () => {
     const user = userEvent.setup()
     mockGraphPreview.mockImplementation(

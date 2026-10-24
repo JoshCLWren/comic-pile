@@ -9,17 +9,19 @@ test.describe('CBL adoption checklist integration', () => {
     const page = authenticatedPage
     const headers = await authHeaders(page)
 
-    // Create two owned issues that will be used to test volume grouping
+    // Create two owned issues for DIFFERENT volumes (different years) so they
+    // form separate groups in the checklist. The backend groups by series_name +
+    // volume_year, so using the same year would collapse them into one group.
     const owned1 = await createThread(page, {
-      title: 'Test Volume 1',
+      title: 'Test Volume 1 (2012)',
       format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const ownedIssue1 = await getFirstIssueId(page, owned1.id)
-    
+
     const owned2 = await createThread(page, {
-      title: 'Test Volume 1', // Same name as above, different volume
+      title: 'Test Volume 2 (2019)', // Different volume (different year)
       format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
@@ -30,7 +32,7 @@ test.describe('CBL adoption checklist integration', () => {
     const sourceName = `Checklist Test ${fixtureSuffix}`
     const sourcePath = `Fixtures/Checklist Test ${fixtureSuffix}.cbl`
 
-    // Seed a CBL source with multiple entries including duplicates
+    // Seed a CBL source with entries from two distinct volumes
     const seed = await page.request.post('/api/test/cbl-source', {
       headers,
       data: {
@@ -40,38 +42,42 @@ test.describe('CBL adoption checklist integration', () => {
         revision_sha: `checklist-test-revision-${fixtureSuffix}`,
         repository: `JoshCLWren/CBL-ReadingLists-fixture-${fixtureSuffix}`,
         entries: [
-          // First volume - Test Volume 1 (owned)
+          // First volume - Test Volume 1 (2012) - owned issue plus a missing
+          // issue so the group can be partially selected (indeterminate).
           {
             position: 1,
             series_name: 'Test Volume 1',
             issue_number: '1',
             issue_id: ownedIssue1,
-            series_group_id: 'provider-series:comicvine:4050',
             volume_year: 2012,
           },
-          // Second volume - Test Volume 1 (different volume, owned)
           {
             position: 2,
             series_name: 'Test Volume 1',
-            issue_number: '1',
-            issue_id: ownedIssue2,
-            series_group_id: 'provider-series:comicvine:9000',
+            issue_number: '2',
             volume_year: 2012,
+            comicvine_issue_id: '4000-missing-vol1-2',
           },
-          // Missing entries
+          // Second volume - Test Volume 2 (2019) - different series to ensure distinct groups
           {
             position: 3,
+            series_name: 'Test Volume 2',
+            issue_number: '1',
+            issue_id: ownedIssue2,
+            volume_year: 2019,
+          },
+          // Missing entries (same series group)
+          {
+            position: 4,
             series_name: 'Missing Series 1',
             issue_number: '1',
-            series_group_id: 'provider-series:comicvine:5000',
             volume_year: 2023,
             comicvine_issue_id: '4000-missing-1',
           },
           {
-            position: 4,
+            position: 5,
             series_name: 'Missing Series 1',
             issue_number: '2',
-            series_group_id: 'provider-series:comicvine:5000',
             volume_year: 2023,
             comicvine_issue_id: '4000-missing-2',
           },
@@ -91,27 +97,36 @@ test.describe('CBL adoption checklist integration', () => {
     // Verify initial state: all entries selected
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
     
-    // Both volumes should be initially selected (checked)
-    // Use nth-of-type to distinguish between the two volumes with the same name
-    const volumeCheckboxes = page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })
-    await expect(volumeCheckboxes.nth(0)).toBeChecked()
-    await expect(volumeCheckboxes.nth(1)).toBeChecked()
+    // Two distinct volume groups should be visible: (2012) and (2019)
+    await expect(page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })).toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Include Test Volume 2 (2019) series' })).toBeChecked()
     
-    await expect(page.getByText('4 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
-    
-    // Uncheck the first volume - should become unchecked (not indeterminate since it has only 1 issue)
-    await volumeCheckboxes.nth(0).click()
+    await expect(page.getByText('5 entries · 2 already in ComicPile · 3 will be added')).toBeVisible()
 
-    // Should now show 1 already in ComicPile (the second volume's owned issue)
-    await expect(page.getByText('4 entries · 1 already in ComicPile · 2 will be added')).toBeVisible()
-    
-    // Recheck one issue from the first volume - should make it checked again
-    // Expand the first volume to see individual issues
-    await page.getByRole('button', { name: 'Show issues' }).first().click()
+    // Uncheck the first volume (2012) - should become unchecked
+    await page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' }).click()
+
+    // First volume unchecked, second still checked -> 3 entries excluded, 2 will be added
+    await expect(page.getByText('5 entries · 1 already in ComicPile · 2 will be added')).toBeVisible()
+
+    // Recheck one issue from the first volume - should make the volume indeterminate
+    // Expand the first volume (2012) to see individual issues
+    await page.getByRole('button', { name: 'Show issues for Test Volume 1 (2012)' }).click()
     await page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) #1' }).check()
 
-    // Should show the updated count - both volumes' owned issues now included
-    await expect(page.getByText('4 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
+    // Should show the updated count: 2 already in ComicPile (volumes 2012 + 2019) + 2 will be added (missing series)
+    await expect(page.getByText('5 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
+
+    // The first volume is only partly selected, so its native checkbox must be
+    // in the mixed (indeterminate) state - not fully checked or unchecked.
+    // Playwright rejects combining a `checked` expectation with `indeterminate`;
+    // the indeterminate assertion alone is the exact mixed-state contract.
+    await expect(
+      page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' }),
+    ).toBeChecked({ indeterminate: true })
+    await expect(
+      page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' }),
+    ).not.toBeChecked()
   })
 
   test('keeps choices when switching between sources and detects source changes', async ({
@@ -134,13 +149,14 @@ test.describe('CBL adoption checklist integration', () => {
         source_path: sourcePath1,
         content_hash: `source-choice-1-${fixtureSuffix}`,
         revision_sha: `source-choice-1-revision-${fixtureSuffix}`,
-        repository: `JoshCLWren/CBL-ReadingLists-fixture-${fixtureSuffix}`,
+        repository: `JoshCLWren/CBL-ReadingLists-fixture-1-${fixtureSuffix}`,
         entries: [
           {
             position: 1,
             series_name: 'Source 1 Series',
             issue_number: '1',
-            series_group_id: 'provider-series:comicvine:1000',
+            volume_year: 2023,
+            comicvine_issue_id: `4000-source-choice-1-${fixtureSuffix}`,
           },
         ],
       },
@@ -155,13 +171,14 @@ test.describe('CBL adoption checklist integration', () => {
         source_path: sourcePath2,
         content_hash: `source-choice-2-${fixtureSuffix}`,
         revision_sha: `source-choice-2-revision-${fixtureSuffix}`,
-        repository: `JoshCLWren/CBL-ReadingLists-fixture-${fixtureSuffix}`,
+        repository: `JoshCLWren/CBL-ReadingLists-fixture-2-${fixtureSuffix}`,
         entries: [
           {
             position: 1,
             series_name: 'Source 2 Series',
             issue_number: '1',
-            series_group_id: 'provider-series:comicvine:2000',
+            volume_year: 2024,
+            comicvine_issue_id: `4000-source-choice-2-${fixtureSuffix}`,
           },
         ],
       },
@@ -180,7 +197,7 @@ test.describe('CBL adoption checklist integration', () => {
     
     // Make a choice on first source
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
-    await page.getByRole('checkbox', { name: 'Include Source 1 Series series' }).uncheck()
+    await page.getByRole('checkbox', { name: 'Include Source 1 Series (2023) series' }).uncheck()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 0 will be added')).toBeVisible()
 
     // Switch to second source - should have fresh choices
@@ -191,11 +208,11 @@ test.describe('CBL adoption checklist integration', () => {
     
     // Second source should have default state (all selected)
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
-    await expect(page.getByRole('checkbox', { name: 'Include Source 2 Series series' })).toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Include Source 2 Series (2024) series' })).toBeChecked()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 1 will be added')).toBeVisible()
 
     // Make a choice on second source
-    await page.getByRole('checkbox', { name: 'Include Source 2 Series series' }).uncheck()
+    await page.getByRole('checkbox', { name: 'Include Source 2 Series (2024) series' }).uncheck()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 0 will be added')).toBeVisible()
 
     // Switch back to first source - should restore the previous choice
@@ -205,7 +222,7 @@ test.describe('CBL adoption checklist integration', () => {
     await expect(page.getByRole('heading', { name: sourceName1 })).toBeVisible()
     
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
-    await expect(page.getByRole('checkbox', { name: 'Include Source 1 Series series' })).not.toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Include Source 1 Series (2023) series' })).not.toBeChecked()
     await expect(page.getByText('1 entry · 0 already in ComicPile · 0 will be added')).toBeVisible()
   })
 
@@ -242,14 +259,14 @@ test.describe('CBL adoption checklist integration', () => {
             series_name: 'Duplicate Test Series',
             issue_number: '1',
             issue_id: ownedIssueId,
-            series_group_id: 'provider-series:comicvine:3000',
+            volume_year: 2020,
           },
           {
             position: 2,
             series_name: 'Duplicate Test Series',
             issue_number: '1',
             issue_id: ownedIssueId, // Same issue ID
-            series_group_id: 'provider-series:comicvine:3000',
+            volume_year: 2020,
           },
         ],
       },
@@ -264,7 +281,8 @@ test.describe('CBL adoption checklist integration', () => {
       .getByRole('button', { name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) })
       .click()
 
-    // Should show correct count (not double-counting duplicates)
+    // Both entries point to the same owned issue, so both count as "already in ComicPile".
+    // The preview counts source positions, not distinct owned issues.
     await expect(page.getByText('2 entries · 2 already in ComicPile · 0 will be added')).toBeVisible()
     
     // Add the source
@@ -317,7 +335,7 @@ test.describe('CBL adoption checklist integration', () => {
             position: 1,
             series_name: 'Preview Test Series',
             issue_number: '1',
-            series_group_id: 'provider-series:comicvine:4000',
+            volume_year: 2021,
           },
         ],
       },
