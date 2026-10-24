@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import cast
 from xml.sax.saxutils import escape as escape_xml
 
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -17,8 +17,6 @@ from starlette.responses import Response as StarletteResponse
 from starlette.types import Scope
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import exc as sqlalchemy_exc
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_app_settings, get_database_settings
@@ -28,7 +26,6 @@ from app.csrf import (
     is_csrf_protected_request,
     log_csrf_rejection,
 )
-from app.database import get_db
 from app.exception_handlers import register_exception_handlers
 from app.lifecycle import init_database
 from app.middleware import limiter, SecurityHeadersMiddleware
@@ -250,11 +247,11 @@ def _register_lightweight_routers(app: FastAPI) -> None:
 
     app.include_router(ping.router, prefix="/api", tags=["ping"])
 
-    # Lightweight keep-alive endpoint for Neon warm-pool maintenance (issue #3480).
-    # Runs a minimal SELECT 1 on the pooled connection to prevent Neon
-    # from suspending during active use. Browser-consumed operational
-    # tooling: mounted under /api/v1 and kept out of the generated client
-    # schema (include_in_schema=False), like the bounded health probes.
+    # Dependency-free compatibility endpoint for the retired keep-alive probe
+    # (issues #3480, #4129). Older clients may still call it, but it must not
+    # open a Neon connection or postpone scale-to-zero. Mounted under /api/v1
+    # and kept out of the generated client schema
+    # (include_in_schema=False), like the bounded health probes.
     from app.api import keepalive
 
     app.include_router(keepalive.router, prefix="/api/v1", tags=["keepalive"])
@@ -681,23 +678,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             return RedirectResponse("/", status_code=301)
 
     @app.get("/health", response_model=None)
-    async def health_check(db: AsyncSession = Depends(get_db)) -> dict | JSONResponse:
-        """Health check endpoint that verifies basic application functionality.
-
-        Returns:
-            JSON response with health status and database connection state.
-        """
-        from sqlalchemy import text
-
-        try:
-            await db.execute(text("SELECT 1"))
-            return {"status": "healthy", "database": "connected"}
-        except sqlalchemy_exc.DBAPIError as e:
-            logger.error(f"Health check database connection failed: {e}")
-            return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"status": "unhealthy", "database": "disconnected", "error": str(e)},
-            )
+    async def health_check() -> dict[str, str]:
+        """Public liveness check without opening a billable Neon connection."""
+        return {"status": "alive"}
 
     if serve_frontend:
 
@@ -902,15 +885,21 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
     @app.middleware("http")
     async def heavy_init_middleware(request: Request, call_next):
-        """Ensure heavy dependencies are ready for all routes except the ping probe."""
+        """Ensure heavy dependencies are ready for all routes except public probes."""
         defer_heavy_init = os.getenv("TEST_ENVIRONMENT") == "true" and os.getenv(
             "ENABLE_LAZY_HEAVY_INIT_IN_TESTS"
         ) != "true"
-        # Exempt the keep-warm ping probe including its trailing-slash form, which
-        # Starlette would otherwise slash-redirect only after heavy init ran.
-        # The /api/v1/keepalive endpoint is NOT exempt - it needs the database pool.
+        # Exempt the dependency-free public probes, including their trailing-slash
+        # forms, which Starlette would otherwise slash-redirect only after heavy
+        # init ran. These endpoints must never wake Neon or prolong its idle window.
         request_path = request.url.path
-        is_ping_probe = request_path == "/api/ping" or request_path.startswith("/api/ping/")
+        probe_path = request_path.rstrip("/") or "/"
+        is_ping_probe = (
+            probe_path == "/health"
+            or probe_path == "/api/v1/keepalive"
+            or probe_path == "/api/ping"
+            or probe_path.startswith("/api/ping/")
+        )
         if not is_ping_probe:
             # Registration is synchronous, so concurrent cold requests cannot
             # interleave it; this runs before routing so the mounts the request
