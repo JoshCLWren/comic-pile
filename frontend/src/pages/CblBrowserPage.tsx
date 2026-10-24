@@ -389,9 +389,10 @@ export default function CblBrowserPage() {
       // Compare against the fetched preview for this source, not the search
       // result's content_hash. The search result may be stale (Greptile finding).
       // The effect at lines 240-253 will re-verify once the fresh preview arrives.
+      const previewData = previewQuery.data
       const previewMatchesSource =
-        previewQuery.data && previewQuery.data.source.source_list_id === source.id
-      if (previewMatchesSource && previewQuery.data.source.content_hash !== saved.content_hash) {
+        previewData && previewData.source.source_list_id === source.id
+      if (previewMatchesSource && previewData.source.content_hash !== saved.content_hash) {
         // Fetched preview for this exact source confirms content changed
         setSeriesDecisions({})
         setEntryDecisions({})
