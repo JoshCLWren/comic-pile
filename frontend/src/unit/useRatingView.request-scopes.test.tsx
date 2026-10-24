@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useRatingView } from '../pages/RollPage/useRatingView'
+import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { readerContextApi } from '../services/api-reader-context'
 import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useRollPageState'
 import type { RatingThread } from '../pages/RollPage/types'
@@ -10,6 +11,9 @@ import type { ReaderContextResponse } from '../services/api-reader-context'
 vi.mock('../services/api-reader-context', () => ({
   readerContextApi: { get: vi.fn() },
 }))
+
+vi.mock('../services/api-reading-boundaries', () => ({ readingBoundariesApi: { batch: vi.fn() } }))
+const getBoundaries = vi.mocked(readingBoundariesApi.batch)
 
 const getReaderContext = vi.mocked(readerContextApi.get)
 
@@ -170,6 +174,8 @@ function renderRatingView(initialScopes: ScopeOverrides = {}) {
 }
 
 beforeEach(() => {
+  getBoundaries.mockReset()
+  getBoundaries.mockResolvedValue({ threads: { [ACTIVE_THREAD.id]: { thread_id: ACTIVE_THREAD.id, state: 'available', summary: 'Ready to read.' } } })
   getReaderContext.mockReset()
   getReaderContext.mockResolvedValue(READER_CONTEXT)
 })
@@ -185,15 +191,15 @@ it('rating entry fetches no reader context while every optional scope is closed'
   expect(getReaderContext).not.toHaveBeenCalled()
 })
 
-it('reading boundaries alone enables the shared reader-context payload', async () => {
-  const { result } = renderRatingView({ readerContextRequested: true, readingBoundariesRequested: true })
-
-  await waitFor(() => expect(result.current.readerContext).not.toBeNull())
-  expect(getReaderContext).toHaveBeenCalledWith(ACTIVE_THREAD.issue_id)
-  expect(getReaderContext).toHaveBeenCalledTimes(1)
+it('reading boundaries alone fetches canonical boundaries without reader context', async () => {
+  const { result } = renderRatingView({ readingBoundariesRequested: true })
+  await waitFor(() => expect(result.current.readingBoundary?.summary).toBe('Ready to read.'))
+  expect(getBoundaries).toHaveBeenCalledWith([ACTIVE_THREAD.id])
+  expect(getBoundaries).toHaveBeenCalledTimes(1)
+  expect(getReaderContext).not.toHaveBeenCalled()
 })
 
-it('opening the second surface reuses the cached reader context instead of refetching', async () => {
+it('opening boundaries alongside context reuses the cached reader context', async () => {
   const { result, setScopes } = renderRatingView({
     readerContextRequested: true,
     readingBoundariesRequested: true,

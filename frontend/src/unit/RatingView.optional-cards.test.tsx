@@ -6,6 +6,7 @@ import { RatingView } from '../pages/RollPage/components/RatingView'
 import { ToastProvider } from '../contexts/ToastProvider'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import type { ReaderContextResponse } from '../types'
+import type { ReadingBoundaryExplanation } from '../services/api-reading-boundaries'
 import type { ReadingOrder } from '../services/api-reading-orders'
 
 function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingViewData {
@@ -134,6 +135,22 @@ function populatedContext(): ReaderContextResponse {
   }
 }
 
+function blockedBoundary(): ReadingBoundaryExplanation {
+  return {
+    thread_id: 1,
+    state: 'blocked',
+    summary: 'Saga waits on a prerequisite.',
+    blockers: [{
+      kind: 'prerequisite',
+      origin: 'reader_prerequisite',
+      reason: 'Finish the previous issue first.',
+      waiting_on: [{ issue_id: 99, thread_id: 1, thread_title: 'Saga', issue_number: '2', label: 'Saga #2' }],
+      editor: { kind: 'prerequisite', thread_id: 1, label: 'prerequisites' },
+    }],
+    historical: [{ kind: 'legacy_dependency', label: 'Recorded continuity', detail: 'Historical only.' }],
+  }
+}
+
 function readingOrdersFixture(): ReadingOrder[] {
   return [
     { id: 7, name: 'Secret Wars Path', description: null, total_items: 4, completed_items: 1, items: [] },
@@ -162,7 +179,7 @@ describe('Roll optional reading cards collapsed state (#2764)', () => {
       screen.getByText('See how this issue fits into your reading plans and continuity.'),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('Review recorded prerequisites and continuity edges around this issue.'),
+      screen.getByText('See what can be read next and which live requirements are waiting.'),
     ).toBeInTheDocument()
     expect(screen.queryByText(/preference|settings/i)).not.toBeInTheDocument()
   })
@@ -241,12 +258,14 @@ describe('Roll optional reading cards interaction (#2764)', () => {
         onShowContext,
         onShowBoundaries,
         readingBoundariesRequested: true,
-        readerContext: populatedContext(),
+        readingBoundary: blockedBoundary(),
       }),
     )
     expect(screen.getByTestId('reading-boundaries-content')).toBeInTheDocument()
-    expect(screen.getByText('Before this issue')).toBeInTheDocument()
-    expect(screen.getByText('After this issue')).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Active reading blockers' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open Saga issue #2' })).toHaveAttribute('href', '/thread/1?issue=99#issue-99')
+    expect(screen.getByRole('link', { name: 'Edit prerequisites' })).toHaveAttribute('href', '/thread/1?prerequisites=1')
+    expect(screen.getByText('Historical associations — not active blockers')).toBeInTheDocument()
     expect(screen.getByText('Finish the previous issue first.')).toBeInTheDocument()
     expect(screen.queryByTestId('reading-context-content')).not.toBeInTheDocument()
   })
@@ -289,12 +308,13 @@ describe('Roll optional reading cards interaction (#2764)', () => {
     render(
       ratingView({
         readingBoundariesRequested: true,
-        readerContextError: new Error('reader context unavailable'),
+        readingBoundaryError: true,
       }),
     )
-    const error = screen.getByTestId('reading-boundaries-error')
+    const error = screen.getByRole('alert')
     expect(error).toHaveAttribute('role', 'alert')
-    expect(screen.getByText('reader context unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Reading boundaries could not be loaded.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry reading boundaries' })).toBeEnabled()
     expect(screen.queryByTestId('reading-context-error')).not.toBeInTheDocument()
     expect(screen.getByRole('slider')).toBeEnabled()
     expect(screen.getByRole('button', { name: /mark read & save/i })).toBeEnabled()
@@ -306,6 +326,7 @@ describe('Roll optional reading cards interaction (#2764)', () => {
       ratingView({
         readingContextRequested: true,
         readingBoundariesRequested: true,
+        readingBoundary: { thread_id: 1, state: 'available', summary: 'No live reading requirements block this series.' },
         readerContext: {
           issue_id: 100,
           series: {
@@ -333,7 +354,7 @@ describe('Roll optional reading cards interaction (#2764)', () => {
       screen.getByText('No additional reading context is recorded for this issue.'),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('No prerequisites or continuity boundaries are recorded for this issue.'),
+      screen.getByText('No live reading requirements block this series.'),
     ).toBeInTheDocument()
   })
 

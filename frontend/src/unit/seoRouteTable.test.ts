@@ -52,6 +52,7 @@ describe('canonical route indexability table', () => {
   test('authenticated routes are private crawl exclusions', () => {
     const privatePaths = [
       '/queue',
+      '/reading-lists/42',
       '/thread/42',
       '/creators',
       '/creators/x-men',

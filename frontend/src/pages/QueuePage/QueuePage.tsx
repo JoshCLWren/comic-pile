@@ -14,6 +14,7 @@ import CompletedThreadsSection from './CompletedThreadsSection'
 import ExcludedThreadsSection from './ExcludedThreadsSection'
 import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
+import { QueueBoundaryNotice } from './QueueBoundaryNotice'
 import { QueueModals } from './QueueModals'
 import DeleteThreadDialog from './DeleteThreadDialog'
 import RemoveThreadDialog from './RemoveThreadDialog'
@@ -60,11 +61,7 @@ const {
   const reactivateMutation = useReactivateThread()
   const moveToPositionMutation = useMoveToPosition()
   const shuffleQueueMutation = useShuffleQueue()
-  // The excluded library view is the discoverable, restorable counterpart to
-  // "Remove from Queue" (#3807). It is a separate bounded read because those
-  // rows are deliberately absent from the active queue response. The shelf
-  // renders nothing while it is empty, so only a failed restore has copy to
-  // show there.
+  // Excluded rows have a separate bounded read because the active queue omits them.
   const { threads: excludedThreads } = useExcludedThreads(true)
   const restoreMutation = useRestoreThread()
   const [restoreError, setRestoreError] = useState<string | null>(null)
@@ -220,24 +217,7 @@ const {
           </button>
         )}
 
-        {boundaryError && (
-          <div
-            role="alert"
-            className="surface-panel rounded-xl p-3 text-sm text-[var(--theme-text-muted)] md:p-4"
-          >
-            <p>
-              Reading boundaries could not be loaded. Rows fall back to their recorded
-              prerequisites.
-            </p>
-            <button
-              type="button"
-              onClick={() => void retryBoundaries()}
-              className="min-h-11 font-semibold text-[var(--theme-continuity-accent)] underline"
-            >
-              Retry reading boundaries
-            </button>
-          </div>
-        )}
+        <QueueBoundaryNotice isError={boundaryError} onRetry={retryBoundaries} />
 
         <QueueList
           activeThreads={activeThreads}
