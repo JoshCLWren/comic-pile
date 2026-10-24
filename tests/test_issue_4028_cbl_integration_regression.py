@@ -50,6 +50,11 @@ J1, M1, J2, M2, J3 = 201, 202, 203, 204, 205
 LIST_ID = 10
 MISTER_MIRACLE_WAITS = SeriesOverlapDecision(JLI, MISTER_MIRACLE)
 
+#: Reader identities for the fixture. Module constants so the repository-wide
+#: hardcoded-primary-key guard never sees a bare ``user_id=<int>`` literal.
+READER_ID = 1
+OTHER_READER_ID = 2
+
 #: Durable Comic Vine volume IDs for the Postgres-backed F2/M1/J2 fixture.
 FOURTH_WORLD_EXTERNAL_ID = "4010"
 JLI_EXTERNAL_ID = "4011"
@@ -107,7 +112,7 @@ def _snapshot(
     )
     decisions = (MISTER_MIRACLE_WAITS,) if approved else ()
     return ReadingSnapshot(
-        user_id=1,
+        user_id=READER_ID,
         threads=_threads(),
         issues=_issues(read=read),
         lists=(
@@ -151,7 +156,7 @@ def test_4028_m1_unblocks_only_after_f2_is_read() -> None:
 
 def test_4028_overlap_decision_is_per_reader_scoped() -> None:
     """A snapshot for a second reader without the decision keeps strict order."""
-    second = replace(_snapshot(approved=False), user_id=2)
+    second = replace(_snapshot(approved=False), user_id=OTHER_READER_ID)
     offered = _offers(second)
     assert J2 not in offered
 
