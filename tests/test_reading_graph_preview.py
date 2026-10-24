@@ -17,6 +17,7 @@ from app.services.reading_graph_preview_service import (
     _decisions,
     _expand_graph_threads,
     _GraphContext,
+    _issue_references,
     _IssueMeta,
     _series_nodes,
 )
@@ -200,10 +201,9 @@ class TestReadingGraphPreviewBaseline:
         """Issue references show active blockers at baseline."""
         state = fixture_state(approved=False)
         context = _make_graph_context(state)
-        issues = context.snapshot.issues
-        # J2 should have a strict_order blocker from M1
-        next(i for i in issues if i.issue_id == J2)
-        # This is tested through the service integration
+        issues = _issue_references(context, evaluate(state))
+        j2 = next(i for i in issues if i.issue_id == J2)
+        assert any(b.kind == "strict_order" and b.waiting_on_issue_ids == [M1] for b in j2.blockers)
 
 
 class TestReadingGraphPreviewWithChoice:
