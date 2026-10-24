@@ -21,9 +21,11 @@ from app.main import create_app
 async def test_public_probes_do_not_connect_to_database(
     path: str, expected: dict[str, str]
 ) -> None:
+    """Neither probe should open the database, even if DB access would fail."""
     app = create_app(serve_frontend=False)
 
     async def forbidden_db() -> AsyncSession:
+        """Fail if a supposedly dependency-free probe uses the database."""
         raise AssertionError("Public liveness probe must not wake Neon")
 
     app.dependency_overrides[get_db] = forbidden_db
@@ -36,5 +38,6 @@ async def test_public_probes_do_not_connect_to_database(
 
 
 def test_frontend_does_not_mount_neon_keepalive() -> None:
+    """Authenticated pages must not schedule synthetic database traffic."""
     source = (Path(__file__).resolve().parents[1] / "frontend/src/App.tsx").read_text()
     assert "useKeepalive" not in source
