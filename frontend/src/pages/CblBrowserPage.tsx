@@ -396,6 +396,7 @@ export default function CblBrowserPage() {
     setSeriesDecisions({})
     setEntryDecisions({})
     setStaleReview(true)
+    setConfirmOpen(false)
   }, [selectedSource, previewQuery.data])
 
   const hasChoices =
@@ -703,7 +704,7 @@ export default function CblBrowserPage() {
   }
 
   const confirmCommit = () => {
-    if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || pendingOverlaps.length > 0) return
+    if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || pendingOverlaps.length > 0 || staleReview) return
     setConfirmOpen(false)
     setCommitSourceId(selectedSource.id)
     commitMutation.mutate({ source: selectedSource, preview })
