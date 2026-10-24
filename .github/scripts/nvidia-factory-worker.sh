@@ -63,6 +63,61 @@ replace_labels() {
   gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" --input - <<< "{\"labels\":${target}}" >/dev/null
 }
 
+current_stage() {
+  local number="$1" fallback="$2" labels stage
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  stage="$(jq -r --arg stage_re "$STAGE_RE" '[.[] | select(test($stage_re))][0] // empty' <<< "$labels")"
+  if [[ -n "$stage" ]]; then printf '%s\n' "$stage"; else printf '%s\n' "$fallback"; fi
+}
+
+current_owner_is_self() {
+  local number="$1" labels
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels"
+}
+
+linked_issue_from_pr() {
+  local pr="$1" branch body title issue
+  branch="$(gh pr view "$pr" --json headRefName --jq '.headRefName // empty' 2>/dev/null || true)"
+  issue="$(sed -nE 's#^factory/[0-9]+-([0-9]+)-.*$#\1#p' <<< "$branch")"
+  if [[ -z "$issue" ]]; then
+    body="$(gh pr view "$pr" --json body --jq '.body // empty' 2>/dev/null || true)"
+    issue="$(printf '%s' "$body" | grep -oiE '(closes|fixes|resolves)[[:space:]]+#[0-9]+' | head -1 | grep -oE '[0-9]+' || true)"
+  fi
+  if [[ -z "$issue" ]]; then
+    title="$(gh pr view "$pr" --json title --jq '.title // empty' 2>/dev/null || true)"
+    issue="$(printf '%s' "$title" | grep -oiE '(fix|fixes|resolve|resolves|close|closes)[[:space:]]+#[0-9]+' | head -1 | grep -oE '[0-9]+' || true)"
+  fi
+  printf '%s' "$issue"
+}
+
+release_target() {
+  local number="$1" fallback_stage="$2" reason="$3"
+  local stage epoch marker
+  stage="$(current_stage "$number" "$fallback_stage")"
+  epoch="$(date +%s)"
+  marker="<!-- comic-pile-factory-claim-released-v3:target-${number}:${WORKER_ID}:${epoch}:${reason} -->"
+  replace_labels "$number" 'factory:unowned' "$stage"
+  gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
+  log "released target #${number} to factory:unowned at ${stage} (${reason})"
+}
+
+release_pr_and_issue() {
+  local pr="$1" branch="$2" stage="$3" reason="$4" issue state
+  replace_labels "$pr" 'factory:unowned' "$stage"
+  issue="$(linked_issue_from_pr "$pr")"
+  if [[ -n "$issue" ]]; then
+    state="$(gh issue view "$issue" --json state --jq .state 2>/dev/null || true)"
+    if [[ "$state" == 'OPEN' ]] && current_owner_is_self "$issue"; then
+      replace_labels "$issue" 'factory:unowned' "$stage"
+    fi
+  fi
+  epoch="$(date +%s)"
+  marker="<!-- comic-pile-factory-claim-released-v3:pr-${pr}:${WORKER_ID}:${epoch}:${reason} -->"
+  gh issue comment "$pr" --body "$marker" >/dev/null 2>&1 || true
+  log "released pr #${pr} to factory:unowned at ${stage} (${reason})"
+}
+
 record_no_diff_attempt() {
   local number="$1" epoch marker
   epoch="$(date +%s)"
@@ -537,6 +592,12 @@ while (( $(remaining) > 480 )); do
           ;;
         *)
           log "trusted controller gates for PR #${NUMBER} decision=${FACTORY_MERGE_GATE_DECISION:-empty}; not merging (reason: ${FACTORY_MERGE_GATE_REASON:-no reason})"
+          # Refused by the trusted controller: release the PR and linked issue,
+          # then skip it for the rest of this session so the loop cannot rerun
+          # the same agent on a PR the controller already denied.
+          if [[ "$SOURCE" != 'kilo-auto' ]]; then
+            release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'gate-denied'
+          fi
           SKIP_PRS+=("$NUMBER")
 # Do not merge: release lease and select other work
           ;;
