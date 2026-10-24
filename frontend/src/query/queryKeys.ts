@@ -232,6 +232,8 @@ export const queryKeys = {
   },
   dependencies: {
     all: ['dependencies'] as const,
+    readingBoundaries: (threadIds: number[]) =>
+      ['dependencies', 'reading-boundaries', [...new Set(threadIds)].sort((a, b) => a - b)] as const,
     list: () => ['dependencies', 'list'] as const,
     forThread: (threadId: number) => ['dependencies', 'thread', threadId] as const,
     blocking: (threadId: number) => ['dependencies', 'blocking', threadId] as const,

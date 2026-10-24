@@ -34,6 +34,7 @@ export const routeModules = {
   continuityPlanner: () => import('../pages/ContinuityPlannerPage'),
   continuityPlansIndex: () => import('../pages/ContinuityPlansIndexPage'),
   readingPlanDetail: () => import('../pages/ReadingPlanDetailPage'),
+  readingListEditor: () => import('../pages/ReadingListEditorPage'),
   cblBrowser: () => import('../pages/CblBrowserPage'),
   glossary: () => import('../pages/HelpPage'),
   whatsNew: () => import('../pages/WhatsNewPage'),

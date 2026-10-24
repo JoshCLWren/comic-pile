@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from 'react'
-import type { SessionCurrent, ThreadListItem } from '../../types'
+import type { BlockingDependency, SessionCurrent, ThreadListItem } from '../../types'
 import { useNavigate } from 'react-router-dom'
 import { canSnoozeSeries } from '../../components/snoozeAvailability'
-import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
+import { useReadingBoundaries } from '../../hooks/useReadingBoundaries'
 import QueueThreadCard from './QueueThreadCard'
 import { useQueueCrossovers } from './useQueueCrossovers'
 import type { useQueueModals } from './useQueueModals'
@@ -10,6 +10,7 @@ import type { useQueueThreadActions } from './useQueueThreadActions'
 
 type QueueActions = ReturnType<typeof useQueueThreadActions>
 type QueueModals = ReturnType<typeof useQueueModals>
+const EMPTY_DEPENDENCIES: BlockingDependency[] = []
 
 interface UseQueueThreadCardsParams {
   /** Row-action handlers from the queue actions module. */
@@ -45,7 +46,7 @@ export function useQueueThreadCards({
   positionActionsAvailable = true,
 }: UseQueueThreadCardsParams) {
   const navigate = useNavigate()
-  const blockingByThreadId = useQueueBlockingInfo(activeThreads.map((thread) => thread.id))
+  const { data: boundaryData, isPending: boundaryPending, isError: boundaryError, refetch: refetchBoundaries } = useReadingBoundaries(activeThreads.map((thread) => thread.id))
   const crossovers = useQueueCrossovers(activeThreads)
   // Memoized so the render callback keeps a stable identity across renders
   // instead of being invalidated by a fresh array on every session snapshot.
@@ -57,8 +58,11 @@ export function useQueueThreadCards({
   return useCallback(
     (thread: ThreadListItem, index: number) => {
       const isDragOver = actions.dragOverThreadId === thread.id
-      const isBlocked = thread.is_blocked
-      const blockingDependencies = blockingByThreadId[thread.id] ?? []
+      const readingBoundary = boundaryData?.threads[thread.id]
+      const isBlocked = readingBoundary && readingBoundary.state !== 'unavailable'
+        ? readingBoundary.state === 'blocked'
+        : thread.is_blocked
+      const blockingDependencies = EMPTY_DEPENDENCIES
       const isSnoozed = snoozedThreadIds?.includes(thread.id) ?? false
       const snoozeIcon = isSnoozed ? '🔔' : '😴'
       const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
@@ -68,9 +72,9 @@ export function useQueueThreadCards({
         pendingThreadId: session?.pending_thread_id,
       })
       const readDisabled = isBlocked
-      const blockingReasons = blockingDependencies.map((dep) => dep.label)
+      const blockingReasons = readingBoundary?.blockers?.map((blocker) => blocker.reason) ?? []
       const readDisabledReason =
-        blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by a prerequisite'
+        blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Waiting for reading requirements'
 
       return (
         <QueueThreadCard
@@ -79,6 +83,10 @@ export function useQueueThreadCards({
           index={index}
           isBlocked={isBlocked}
           blockingDependencies={blockingDependencies}
+          readingBoundary={readingBoundary}
+          boundaryPending={boundaryPending}
+          boundaryError={boundaryError}
+          onRetryBoundaries={() => { void refetchBoundaries() }}
           crossoverGroups={crossovers.groupsForThread(thread.id)}
           crossoverGroupsLoading={crossovers.isPending}
           crossoverGroupsError={crossovers.hasError}
@@ -106,6 +114,6 @@ export function useQueueThreadCards({
         />
       )
     },
-    [actions, activeThreads, blockingByThreadId, crossovers, modals, navigate, session, snoozedThreadIds, positionActionsAvailable],
+    [actions, activeThreads, boundaryData, boundaryPending, boundaryError, refetchBoundaries, crossovers, modals, navigate, session, snoozedThreadIds, positionActionsAvailable],
   )
 }

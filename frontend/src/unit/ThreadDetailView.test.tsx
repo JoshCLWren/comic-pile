@@ -9,6 +9,7 @@ import { queryClient } from '../query/queryClient'
 import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
+import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { issuesApi } from '../services/api-issues'
 import { tagsApi } from '../services/api-tags'
 
@@ -48,6 +49,7 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
     },
   }
 })
+vi.mock('../services/api-reading-boundaries', () => ({ readingBoundariesApi: { batch: vi.fn() } }))
 vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn(), listCreators: vi.fn() } }))
 vi.mock('../services/api-tags', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
@@ -85,6 +87,7 @@ const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
 
 beforeEach(() => {
+  vi.mocked(readingBoundariesApi.batch).mockReset().mockResolvedValue({ threads: { 1: { thread_id: 1, state: 'available', summary: 'Available now' } } })
   routeParams.id = '1'
   locationState.state = undefined
   locationState.search = undefined
@@ -641,19 +644,22 @@ it('offers per-issue tag editing directly without enabling Select mode (#3424)',
 })
 
 it('retries canonical requirements without claiming a failed load means available', async () => {
-  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockRejectedValueOnce(new Error('offline'))
+  vi.mocked(readingBoundariesApi.batch).mockRejectedValueOnce(new Error('offline'))
   renderPage()
-  expect(await screen.findByText('Unable to load reading requirements.')).toBeVisible()
+  expect(await screen.findByText('Reading boundaries could not be loaded.')).toBeVisible()
   expect(screen.queryByText('Available now')).not.toBeInTheDocument()
-  await userEvent.click(screen.getByRole('button', { name: 'Retry requirements' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Retry reading boundaries' }))
   expect(await screen.findByText('Available now')).toBeVisible()
-  expect(dependenciesApi.getBatchBlockingInfo).toHaveBeenCalledTimes(2)
+  expect(readingBoundariesApi.batch).toHaveBeenCalledTimes(2)
 })
 
 it('uses canonical list blockers even when explicit connected prerequisites are empty', async () => {
-  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({ threads: { 1: {
-    is_blocked: true, blocking_reasons: ['Hold in Ultimate: waiting on One Year In #1'],
-    blocking_dependencies: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'Hold in Ultimate: waiting on One Year In #1' }],
+  vi.mocked(readingBoundariesApi.batch).mockResolvedValue({ threads: { 1: {
+    thread_id: 1, state: 'blocked', summary: 'Waiting', blockers: [{
+      kind: 'hold', origin: 'reading_list', reason: 'Hold in Ultimate: waiting on One Year In #1',
+      waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1', volume_label: 'One Year In (2025)' }],
+      editor: { kind: 'reading_list', list_id: 9, label: 'Ultimate' },
+    }],
   } } })
   renderPage()
   expect(await screen.findByText('Waiting')).toBeVisible()
