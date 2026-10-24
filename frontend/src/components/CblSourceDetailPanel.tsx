@@ -11,6 +11,13 @@ const PAGE_SIZE = 200
 interface CblSourceDetailPanelProps {
   /** CBL source list ID taken from the `list` query parameter. */
   listId: number
+  /**
+   * Explicit return path for an in-page preview. When omitted, the panel uses
+   * the router state supplied by the surface that linked here.
+   */
+  backHref?: string
+  /** Label for the explicit return path; defaults to the router-state label. */
+  backLabel?: string
 }
 
 /** Return path and label for the surface that opened this source detail. */
@@ -42,9 +49,16 @@ function backDestination(state: JsonRecord | null): CblBackDestination {
  * @param props - The source list to show.
  * @returns The source detail panel.
  */
-export function CblSourceDetailPanel({ listId }: CblSourceDetailPanelProps) {
+export function CblSourceDetailPanel({
+  listId,
+  backHref,
+  backLabel,
+}: CblSourceDetailPanelProps) {
   const location = useLocation()
-  const back = backDestination(isObject(location.state) ? location.state : null)
+  const routerBack = backDestination(isObject(location.state) ? location.state : null)
+  const back: CblBackDestination = backHref
+    ? { path: backHref, label: backLabel ?? 'CBL results' }
+    : routerBack
   const detailQuery = useInfiniteQuery({
     queryKey: queryKeys.cblSources.detail(listId, PAGE_SIZE),
     queryFn: ({ pageParam }) =>
