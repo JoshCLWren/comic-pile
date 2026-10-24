@@ -247,11 +247,11 @@ def _register_lightweight_routers(app: FastAPI) -> None:
 
     app.include_router(ping.router, prefix="/api", tags=["ping"])
 
-    # Lightweight keep-alive endpoint for Neon warm-pool maintenance (issue #3480).
-    # Runs a minimal SELECT 1 on the pooled connection to prevent Neon
-    # from suspending during active use. Browser-consumed operational
-    # tooling: mounted under /api/v1 and kept out of the generated client
-    # schema (include_in_schema=False), like the bounded health probes.
+    # Dependency-free compatibility endpoint for the retired keep-alive probe
+    # (issues #3480, #4129). Older clients may still call it, but it must not
+    # open a Neon connection or postpone scale-to-zero. Mounted under /api/v1
+    # and kept out of the generated client schema
+    # (include_in_schema=False), like the bounded health probes.
     from app.api import keepalive
 
     app.include_router(keepalive.router, prefix="/api/v1", tags=["keepalive"])
@@ -885,19 +885,20 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
     @app.middleware("http")
     async def heavy_init_middleware(request: Request, call_next):
-        """Ensure heavy dependencies are ready for all routes except the ping probe."""
+        """Ensure heavy dependencies are ready for all routes except public probes."""
         defer_heavy_init = os.getenv("TEST_ENVIRONMENT") == "true" and os.getenv(
             "ENABLE_LAZY_HEAVY_INIT_IN_TESTS"
         ) != "true"
-        # Exempt the keep-warm ping probe including its trailing-slash form, which
-        # Starlette would otherwise slash-redirect only after heavy init ran.
-        # Public liveness/probe endpoints are dependency-free and must not wake Neon.
+        # Exempt the dependency-free public probes, including their trailing-slash
+        # forms, which Starlette would otherwise slash-redirect only after heavy
+        # init ran. These endpoints must never wake Neon or prolong its idle window.
         request_path = request.url.path
+        probe_path = request_path.rstrip("/") or "/"
         is_ping_probe = (
-            request_path == "/api/ping"
-            or request_path.startswith("/api/ping/")
-            or request_path == "/health"
-            or request_path == "/api/v1/keepalive"
+            probe_path == "/health"
+            or probe_path == "/api/v1/keepalive"
+            or probe_path == "/api/ping"
+            or probe_path.startswith("/api/ping/")
         )
         if not is_ping_probe:
             # Registration is synchronous, so concurrent cold requests cannot

@@ -6459,10 +6459,7 @@ export interface paths {
         };
         /**
          * Health Check
-         * @description Health check endpoint that verifies basic application functionality.
-         *
-         *     Returns:
-         *         JSON response with health status and database connection state.
+         * @description Public liveness check without opening a billable Neon connection.
          */
         get: operations["health_check_health_get"];
         put?: never;

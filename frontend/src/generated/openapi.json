@@ -35127,7 +35127,7 @@
     },
     "/health": {
       "get": {
-        "description": "Health check endpoint that verifies basic application functionality.\n\nReturns:\n    JSON response with health status and database connection state.",
+        "description": "Public liveness check without opening a billable Neon connection.",
         "operationId": "health_check_health_get",
         "responses": {
           "200": {
