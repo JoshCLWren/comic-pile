@@ -50,10 +50,10 @@ test.describe('CBL adoption checklist integration', () => {
             issue_id: ownedIssue1,
             volume_year: 2012,
           },
-          // Second volume - Test Volume 1 (2019) - different volume, owned
+          // Second volume - Test Volume 2 (2019) - different series to ensure distinct groups
           {
             position: 2,
-            series_name: 'Test Volume 1',
+            series_name: 'Test Volume 2',
             issue_number: '1',
             issue_id: ownedIssue2,
             volume_year: 2019,
@@ -91,7 +91,7 @@ test.describe('CBL adoption checklist integration', () => {
     
     // Two distinct volume groups should be visible: (2012) and (2019)
     await expect(page.getByRole('checkbox', { name: 'Include Test Volume 1 (2012) series' })).toBeChecked()
-    await expect(page.getByRole('checkbox', { name: 'Include Test Volume 1 (2019) series' })).toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Include Test Volume 2 (2019) series' })).toBeChecked()
     
     await expect(page.getByText('4 entries · 2 already in ComicPile · 2 will be added')).toBeVisible()
     
@@ -139,7 +139,7 @@ test.describe('CBL adoption checklist integration', () => {
             position: 1,
             series_name: 'Source 1 Series',
             issue_number: '1',
-            series_group_id: 'provider-series:comicvine:1000',
+            volume_year: 2023,
           },
         ],
       },
@@ -160,7 +160,7 @@ test.describe('CBL adoption checklist integration', () => {
             position: 1,
             series_name: 'Source 2 Series',
             issue_number: '1',
-            series_group_id: 'provider-series:comicvine:2000',
+            volume_year: 2024,
           },
         ],
       },
@@ -241,14 +241,14 @@ test.describe('CBL adoption checklist integration', () => {
             series_name: 'Duplicate Test Series',
             issue_number: '1',
             issue_id: ownedIssueId,
-            series_group_id: 'provider-series:comicvine:3000',
+            volume_year: 2020,
           },
           {
             position: 2,
             series_name: 'Duplicate Test Series',
             issue_number: '1',
             issue_id: ownedIssueId, // Same issue ID
-            series_group_id: 'provider-series:comicvine:3000',
+            volume_year: 2020,
           },
         ],
       },
@@ -317,7 +317,7 @@ test.describe('CBL adoption checklist integration', () => {
             position: 1,
             series_name: 'Preview Test Series',
             issue_number: '1',
-            series_group_id: 'provider-series:comicvine:4000',
+            volume_year: 2021,
           },
         ],
       },
