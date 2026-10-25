@@ -16,7 +16,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import select, func, cast, case
+from sqlalchemy import select, func, cast, case, text
 from sqlalchemy.dialects.postgresql import distinct_on, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -565,7 +565,17 @@ async def load_creator_summary_inputs_for_creators(
         .where(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY].is_not(None))
         .where(func.jsonb_typeof(cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)) == "array")
         .where(
-            func.jsonb_array_length(cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)) > 0
+            text("""
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(
+                        CASE WHEN jsonb_typeof(ExternalIdentity.metadata_json->'creator_credits') = 'array'
+                             THEN ExternalIdentity.metadata_json->'creator_credits'
+                             ELSE '[]'::jsonb END
+                    ) AS elem
+                    WHERE elem->>'id' ~ '^\\d+$' AND btrim(elem->>'name') <> ''
+                )
+            """)
         )
     )
     for issue_id, in all_metadata_result.all():
