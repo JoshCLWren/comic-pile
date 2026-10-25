@@ -219,6 +219,7 @@ def _register_reading_boundary(app: FastAPI) -> None:
     from app.api import reading_boundary
 
     app.include_router(reading_boundary.router, prefix="/api/v1", tags=["reading-boundaries"])
+    app.include_router(reading_boundary.v2_router, prefix="/api/v2", tags=["reading-boundaries-v2"])
 
 
 def _register_reading_plan_sync(app: FastAPI) -> None:
