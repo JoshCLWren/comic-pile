@@ -35,7 +35,7 @@ interface Props {
 
 const UNAVAILABLE = <p className="text-sm text-[var(--theme-text-muted)]">Reading boundaries are unavailable.</p>
 
-/** Present the evaluator's result; recorded associations never become inferred blockers. */
+/** Present the evaluator's result; only current canonical requirements are presented. */
 export function ReadingBoundaryExplanation({ explanation, isPending, isError, onRetry, fallback }: Props) {
   if (isError) return <div role="alert" className="text-sm text-[var(--theme-error)]"><p>Reading boundaries could not be loaded.</p><button type="button" className="min-h-11 underline" onClick={onRetry}>Retry reading boundaries</button></div>
   if (isPending) return <p role="status" className="text-sm text-[var(--theme-text-muted)]">Loading reading boundaries…</p>
@@ -56,13 +56,6 @@ export function ReadingBoundaryExplanation({ explanation, isPending, isError, on
             </li>
           ))}
         </ul>
-      )}
-      {(explanation.historical?.length ?? 0) > 0 && (
-        <details><summary className="cursor-pointer" onClick={(e) => e.stopPropagation()}>Historical associations — not active blockers</summary>
-          <ul className="mt-2 space-y-2" aria-label="Historical reading associations">
-            {explanation.historical?.map((item, index) => <li key={`${item.kind}-${index}`}><p>{item.label}</p><p>{item.detail}</p><EditorLink editor={item.editor} /></li>)}
-          </ul>
-        </details>
       )}
     </div>
   )
