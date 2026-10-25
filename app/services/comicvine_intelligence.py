@@ -6,6 +6,7 @@ import logging
 from html.parser import HTMLParser
 import json
 from typing import cast
+from datetime import UTC, datetime
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +22,6 @@ from app.schemas.comicvine import (
     ComicVineStoryArc,
 )
 from app.schemas.issue import IssueCreatorsEntry, ThreadIssueCreatorsResponse
-from datetime import UTC, datetime
 
 from app.services.comicvine_fallback import metadata_needs_hydration
 from app.services.comicvine_metadata_repair import (
