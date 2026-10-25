@@ -232,12 +232,33 @@ class ComicVineMappingHealth(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class QueueSeriesMetadata(BaseModel):
+    """Confirmed provider series metadata projected for one Queue row.
+
+    Values come only from the reader-owned Thread's own confirmed provider
+    series identity. A value that is not stored stays ``None`` instead of being
+    inferred from the display title or a provider numeric id.
+    """
+
+    year: int | None = Field(None, description="Confirmed publication/start year.")
+    volume: str | None = Field(
+        None,
+        description=(
+            "Confirmed provider run/volume name when it adds identification beyond "
+            "the thread title. Never a fabricated numeric volume."
+        ),
+    )
+    publisher: str | None = Field(None, description="Confirmed publisher name")
+
+
 class QueueThreadListItem(BaseModel):
     """Schema for a single thread in the list/queue view.
 
     A deliberate subset of ThreadResponse. The list view does not need
     detail-only fields like last_rating, is_test, or reading_progress,
-    which reduces payload size for large lists.
+    which reduces payload size for large lists. Queue rows additionally carry
+    series metadata projected only from the thread's own confirmed provider
+    identity, so readers can tell same-titled runs apart (issue #3605).
     """
 
     id: int
@@ -256,14 +277,12 @@ class QueueThreadListItem(BaseModel):
     comicvine_mapping: ComicVineMappingHealth | None = None
     manual_creator_credits: list[ManualCreatorCredit] = Field(default_factory=list)
     tags: list[TagResponse] = Field(default_factory=list)
-    series_year: int | None = Field(
-        None, description="Confirmed publication/start year, when a verified series identity exists."
-    )
-    series_volume: str | None = Field(
-        None, description="Confirmed volume/run label, when a verified series identity exists."
-    )
-    series_publisher: str | None = Field(
-        None, description="Confirmed publisher, when a verified series identity exists."
+    series_metadata: QueueSeriesMetadata | None = Field(
+        None,
+        description=(
+            "Confirmed provider series metadata for this thread. ``None`` means the "
+            "reader-owned thread has no confirmed series identity (unmapped series)."
+        ),
     )
 
 

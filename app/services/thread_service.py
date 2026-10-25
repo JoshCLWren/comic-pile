@@ -31,6 +31,7 @@ from app.repositories import (
 from app.schemas import (
     ComicVineMappingHealth,
     ComicVineMappingStatus,
+    QueueSeriesMetadata,
     QueueThreadListItem,
     QueueThreadListResponse,
     ReactivateRequest,
@@ -43,6 +44,7 @@ from app.schemas import (
 )
 from app.schemas.tags import TagResponse, TagTargetType
 from app.services.queue_display import display_position, display_positions
+from app.services.reading_effort import publication_year_from_metadata
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership_guard import (
@@ -194,8 +196,96 @@ async def threads_to_responses(
     ]
 
 
+def _clean_metadata_text(value: object) -> str | None:
+    """Return collapsed display text from a stored provider metadata value.
+
+    Args:
+        value: Raw metadata value from ``ExternalIdentity.metadata_json``.
+
+    Returns:
+        Whitespace-collapsed non-empty text, or ``None`` when the value cannot
+        be shown as a label.
+    """
+    if not isinstance(value, str):
+        return None
+    cleaned = " ".join(value.split())
+    return cleaned or None
+
+
+def _coerce_publication_year(value: object) -> int | None:
+    """Return a plausible publication year from a stored provider value.
+
+    ComicVine returns ``start_year`` as a numeric string (``"1999"``), while
+    imported catalog metadata may store it as an integer. Booleans are rejected
+    even though ``bool`` is an ``int`` subclass.
+
+    Args:
+        value: Stored ``start_year`` metadata value.
+
+    Returns:
+        The four-digit year, or ``None`` when the value is not a plausible year.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        year = value
+    elif isinstance(value, str) and value.strip().isdigit() and len(value.strip()) == 4:
+        year = int(value.strip())
+    else:
+        return None
+    return year if 1000 <= year <= 9999 else None
+
+
+def _extract_run_label(
+    metadata: dict[str, object],
+    *,
+    normalized_title: str,
+) -> str | None:
+    """Return the stored provider run/volume name when it adds identification.
+
+    ComicVine stores no numeric volume label, so the only truthful run label is
+    the provider's own volume name. It is used only when it differs from the
+    thread title, because repeating the title would not identify a run.
+
+    Args:
+        metadata: One confirmed series ``metadata_json`` document.
+        normalized_title: Whitespace-collapsed, case-folded thread title.
+
+    Returns:
+        The stored run label, or ``None`` when no distinguishing name exists.
+    """
+    volume_ref = metadata.get("volume")
+    candidates: list[object] = []
+    if isinstance(volume_ref, dict):
+        candidates.append(volume_ref.get("name"))
+    candidates.append(metadata.get("volume_name"))
+    candidates.append(metadata.get("name"))
+    for candidate in candidates:
+        label = _clean_metadata_text(candidate)
+        if label is not None and label.casefold() != normalized_title:
+            return label
+    return None
+
+
+def _extract_publisher(metadata: dict[str, object]) -> str | None:
+    """Return the confirmed publisher name from one series metadata document.
+
+    Args:
+        metadata: One confirmed series ``metadata_json`` document.
+
+    Returns:
+        The publisher name, or ``None`` when the stored value has no usable name.
+    """
+    publisher = metadata.get("publisher")
+    if isinstance(publisher, dict):
+        return _clean_metadata_text(publisher.get("name"))
+    return _clean_metadata_text(publisher)
+
+
 def _extract_series_metadata(
     series_metadata_docs: list[dict[str, object]],
+    *,
+    thread_title: str,
 ) -> tuple[int | None, str | None, str | None]:
     """Extract confirmed series year, volume, and publisher from metadata documents.
 
@@ -206,6 +296,8 @@ def _extract_series_metadata(
     Args:
         series_metadata_docs: Confirmed series ``metadata_json`` documents for one
             thread, in mapping-id order.
+        thread_title: The owning thread's display title, used only to avoid
+            repeating the title as a run label.
 
     Returns:
         ``(series_year, series_volume, series_publisher)``, each ``None`` when no
@@ -214,50 +306,21 @@ def _extract_series_metadata(
     series_year: int | None = None
     series_volume: str | None = None
     series_publisher: str | None = None
+    normalized_title = " ".join(thread_title.split()).casefold()
 
     for metadata in series_metadata_docs:
         if not isinstance(metadata, dict):
             continue
         if series_year is None:
-            year = metadata.get("start_year")
-            if isinstance(year, bool) or not isinstance(year, int):
-                year = None
-            elif year is not None:
-                series_year = year
+            series_year = _coerce_publication_year(metadata.get("start_year"))
             if series_year is None:
-                for date_field in ("cover_date", "store_date"):
-                    value = metadata.get(date_field)
-                    if isinstance(value, str):
-                        # Year is the leading four digits of an ISO-ish date.
-                        candidate = value[:4]
-                        if candidate.isdigit() and len(candidate) == 4:
-                            series_year = int(candidate)
-                            break
+                # Series identities exported from an issue-shaped document may
+                # carry a publication date instead of a start year.
+                series_year = publication_year_from_metadata(metadata)
         if series_volume is None:
-            volume = None
-            volume_ref = metadata.get("volume")
-            if isinstance(volume_ref, dict):
-                name = volume_ref.get("name")
-                if isinstance(name, str) and name.strip():
-                    volume = name.strip()
-            if volume is None:
-                volume_name = metadata.get("volume_name")
-                if isinstance(volume_name, str) and volume_name.strip():
-                    volume = volume_name.strip()
-            if volume is not None:
-                series_volume = volume
+            series_volume = _extract_run_label(metadata, normalized_title=normalized_title)
         if series_publisher is None:
-            publisher = metadata.get("publisher")
-            if isinstance(publisher, dict):
-                name = publisher.get("name")
-                if isinstance(name, str) and name.strip():
-                    publisher = name.strip()
-                else:
-                    publisher = None
-            elif not isinstance(publisher, str) or not publisher.strip():
-                publisher = None
-            if publisher is not None:
-                series_publisher = publisher
+            series_publisher = _extract_publisher(metadata)
         if series_year is not None and series_volume is not None and series_publisher is not None:
             break
 
@@ -286,7 +349,8 @@ def to_queue_list_item(
         series_metadata_docs: Optional confirmed series identity metadata
             documents for this thread, read in one batched query for the whole
             page. When provided, used to project the verified year, volume, and
-            publisher.
+            publisher. An empty or missing list marks the row as an unmapped
+            series instead of guessing an identity.
 
     Returns:
         Narrow list-item projection of the thread response.
@@ -326,9 +390,16 @@ def to_queue_list_item(
             metadata_missing_count=metadata_missing,
         )
 
-    series_year, series_volume, series_publisher = _extract_series_metadata(
-        series_metadata_docs or []
-    )
+    series_metadata = None
+    if series_metadata_docs:
+        series_year, series_volume, series_publisher = _extract_series_metadata(
+            series_metadata_docs, thread_title=tr.title
+        )
+        series_metadata = QueueSeriesMetadata(
+            year=series_year,
+            volume=series_volume,
+            publisher=series_publisher,
+        )
 
     return QueueThreadListItem(
         id=tr.id,
@@ -347,9 +418,7 @@ def to_queue_list_item(
         comicvine_mapping=comicvine_mapping,
         manual_creator_credits=tr.manual_creator_credits,
         tags=tags or [],
-        series_year=series_year,
-        series_volume=series_volume,
-        series_publisher=series_publisher,
+        series_metadata=series_metadata,
     )
 
 
@@ -461,7 +530,7 @@ async def list_queue_threads(
     # Fetch ComicVine mapping health for issue-tracking threads on this page only
     # (batched, no N+1). Legacy threads without total_issues skip the query
     # entirely, so their per-page SQL work stays the page read, the active_count
-    # read, and the one bounded tag read added by issue #3425.
+    # read, and the bounded tag and confirmed-series reads (#3425, #3605).
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
@@ -570,8 +639,8 @@ async def list_completed_threads(
 
     # Fetch ComicVine mapping health for issue-tracking threads on this page only
     # (batched, no N+1). Legacy threads without total_issues skip the query
-    # entirely, so their per-page SQL work stays the page read plus the one
-    # bounded tag read added by issue #3425.
+    # entirely, so their per-page SQL work stays the page read plus the bounded
+    # tag and confirmed-series reads (#3425, #3605).
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
