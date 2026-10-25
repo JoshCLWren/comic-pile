@@ -125,6 +125,14 @@ def _merge_raw_issue_payload(existing: object, incoming: object) -> object:
         # stored raw payload does not revert them on later normalization.
         merged = dict(existing)
         for key, value in incoming.items():
+            if key == "date_last_updated":
+                # The roster row's revision describes the roster write, not the deep
+                # payload it is merged into. Advancing it would make a legacy identity
+                # (one without ``deep_metadata_refreshed_at``) look freshly deep-hydrated
+                # and skip the singular refresh that #4147 requires. Keeping the deep
+                # payload's own revision lets freshness compare it with the identity's
+                # provider revision.
+                continue
             if _has_metadata_value(value):
                 merged[key] = value
         return merged

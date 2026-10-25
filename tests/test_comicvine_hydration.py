@@ -486,6 +486,50 @@ async def test_roster_write_does_not_advance_deep_refresh_marker(
     ]
 
 
+def test_sparse_merge_keeps_deep_payload_revision() -> None:
+    """A roster row's revision must not replace the deep payload's revision evidence."""
+    existing = hydration.normalize_issue(_deep_issue_result())
+    incoming = hydration.normalize_issue(
+        _sparse_roster_row(name="Roster Title", date_last_updated="2026-10-20T09:00:00Z")
+    )
+
+    merged = hydration.merge_sparse_issue_metadata(existing, incoming)
+
+    raw_payload = merged["raw_provider_payload"]
+    assert isinstance(raw_payload, dict)
+    assert raw_payload["date_last_updated"] == "2026-08-10T09:00:00Z"
+    assert raw_payload["name"] == "Roster Title"
+    assert merged["creator_credits"] == [{"id": 1, "name": "Writer", "role": "writer"}]
+
+
+@pytest.mark.asyncio
+async def test_legacy_roster_write_keeps_old_deep_credits_stale(
+    async_db: AsyncSession,
+) -> None:
+    """A roster write cannot hide a legacy row's old deep credits from freshness checks."""
+    identity = await hydration.persist_issue_result(async_db, _deep_issue_result())
+    legacy_metadata = dict(identity.metadata_json)
+    legacy_metadata.pop(hydration.DEEP_METADATA_REFRESHED_AT_KEY)
+    identity.metadata_json = legacy_metadata
+    await async_db.commit()
+
+    updated = await hydration.persist_issue_result(
+        async_db,
+        _sparse_roster_row(name="Roster Title", date_last_updated="2026-10-20T09:00:00Z"),
+        roster_row=True,
+    )
+
+    raw_payload = updated.metadata_json["raw_provider_payload"]
+    assert isinstance(raw_payload, dict)
+    # The deep payload keeps its own revision, so the newer roster revision is
+    # still visible as a deep-metadata refresh debt (#4147).
+    assert raw_payload["date_last_updated"] == "2026-08-10T09:00:00Z"
+    assert updated.metadata_json["creator_credits"] == [
+        {"id": 1, "name": "Writer", "role": "writer"}
+    ]
+    assert metadata_needs_hydration(updated) is True
+
+
 @pytest.mark.asyncio
 async def test_roster_import_preserves_deep_metadata_even_when_roster_is_newer(
     async_db: AsyncSession,
