@@ -1309,7 +1309,7 @@ async def test_option_e_roll_pool_never_reaggregates_unread_issues(
     ]
     assert len(statements) == 1
     sql = statements[0].lower()
-    assert " from threads" in sql or " from threads " in sql
+    assert "from threads" in sql
     assert "join issues" not in sql
     assert "from issues" not in sql
     assert "count(" not in sql
