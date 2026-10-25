@@ -54,7 +54,7 @@ def test_check_mode_rejects_missing_or_stale_output(tmp_path: Path) -> None:
     assert output.read_text(encoding="utf-8") == "stale\n"
 
 
-def test_is_client_schema_path_keeps_infra_v1_and_ping_only() -> None:
+def test_is_client_schema_path_keeps_versioned_client_routes_and_ping() -> None:
     """Classify infrastructure paths, canonical v1 routes, and ping as client."""
     assert is_client_schema_path("/")
     assert is_client_schema_path("/health")
@@ -62,6 +62,8 @@ def test_is_client_schema_path_keeps_infra_v1_and_ping_only() -> None:
     assert is_client_schema_path("/api/ping")
     assert is_client_schema_path("/api/v1")
     assert is_client_schema_path("/api/v1/threads/")
+    assert is_client_schema_path("/api/v2/reading-boundaries")
+    assert is_client_schema_path("/api/v2/reading-boundaries/42")
 
     assert not is_client_schema_path("/api/threads/")
     assert not is_client_schema_path("/api/metrics")
@@ -76,6 +78,7 @@ def test_prune_legacy_bare_paths_drops_aliases_and_tooling() -> None:
             "/health": {"get": {}},
             "/api/ping": {"get": {}},
             "/api/v1/threads/": {"get": {}},
+            "/api/v2/reading-boundaries": {"post": {}},
             "/api/threads/": {"get": {}},
             "/api/debug/log": {"post": {}},
         },
@@ -83,7 +86,9 @@ def test_prune_legacy_bare_paths_drops_aliases_and_tooling() -> None:
 
     pruned = prune_legacy_bare_paths(schema)
 
-    assert sorted(pruned["paths"]) == ["/api/ping", "/api/v1/threads/", "/health"]
+    assert sorted(pruned["paths"]) == [
+        "/api/ping", "/api/v1/threads/", "/api/v2/reading-boundaries", "/health"
+    ]
     assert sorted(schema["paths"]) == [
         "/api/debug/log",
         "/api/ping",
