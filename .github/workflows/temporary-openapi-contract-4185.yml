@@ -1,0 +1,38 @@
+# One-off read-only generator for PR #4185, removed after applying artifacts.
+name: Temporary OpenAPI Contract Artifact 4185
+on:
+  push:
+    branches:
+      - perf/reading-boundaries-scoped-historical-20261025
+permissions:
+  contents: read
+jobs:
+  generated-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: uv sync --frozen
+      - run: pnpm install --frozen-lockfile
+      - name: Generate OpenAPI schema and TypeScript from actual FastAPI models
+        run: ENVIRONMENT=test uv run python scripts/generate_openapi_types.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openapi-v2-generated-4185
+          path: |
+            frontend/src/generated/openapi.json
+            frontend/src/generated/openapi.ts
+          retention-days: 1
