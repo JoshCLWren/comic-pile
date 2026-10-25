@@ -471,20 +471,15 @@ export interface paths {
          * Create Bug Report
          * @description Create a bug report or feature request issue on GitHub.
          *
-         *     Non-admin users are limited to one successfully created issue per rolling
-         *     hour. Admins bypass the limit.
-         *
          *     Args:
          *         body: Report type, title, description, and optional diagnostics.
          *         current_user: The authenticated user.
-         *         db: Database session used for the durable rate-limit state.
          *
          *     Returns:
          *         Created GitHub issue URL.
          *
          *     Raises:
-         *         HTTPException: If validation fails, GitHub integration is unavailable,
-         *             the non-admin hourly limit is reached, or GitHub rejects the issue.
+         *         HTTPException: If validation fails or GitHub integration is unavailable.
          */
         post: operations["create_bug_report_api_v1_bug_reports__post"];
         delete?: never;

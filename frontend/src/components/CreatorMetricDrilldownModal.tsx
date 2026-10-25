@@ -77,7 +77,7 @@ export function CreatorMetricDrilldownModal({
         isOpen={isOpen}
         onClose={onClose}
         title={`${metricLabel} Details`}
-        size="large"
+        overlayClassName="max-w-4xl"
       >
         <p role="alert" className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
           Could not load the evidence for this metric. Close this view and try again.
@@ -92,7 +92,7 @@ export function CreatorMetricDrilldownModal({
         isOpen={isOpen}
         onClose={onClose}
         title={`Loading ${metricLabel}...`}
-        size="large"
+        overlayClassName="max-w-4xl"
       >
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--theme-primary-action)]"></div>
@@ -120,7 +120,7 @@ export function CreatorMetricDrilldownModal({
       isOpen={isOpen}
       onClose={onClose}
       title={`${metricLabel} Details`}
-      size="large"
+      overlayClassName="max-w-4xl"
     >
       <div className="space-y-6">
         <div className="flex justify-end">

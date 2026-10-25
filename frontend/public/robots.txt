@@ -27,13 +27,11 @@ Disallow: /roll
 Disallow: /help
 Disallow: /queue
 Disallow: /thread/
-Disallow: /threads/
 Disallow: /creators
 Disallow: /history
 Disallow: /sessions/
 Disallow: /crossovers
 Disallow: /continuity-plans
-Disallow: /cbl-sources
 Disallow: /whats-new
 Disallow: /glossary
 Disallow: /identity-inbox

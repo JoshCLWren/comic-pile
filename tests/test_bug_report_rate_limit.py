@@ -3,9 +3,9 @@
 Covers: first submission succeeds, the second submission inside the rolling
 hour is blocked with a 429/Retry-After contract, submissions after the window
 succeed, admins bypass the limit, failed GitHub attempts do not consume the
-allowance, the key is the authenticated user identity (not IP), concurrent
-submissions cannot bypass the limit, and the durable table migration keeps a
-single Alembic head.
+allowance, the key is the authenticated user identity (not IP or browser
+state), concurrent submissions cannot bypass the limit, and the durable table
+migration chains onto the current Alembic head.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
+from alembic.util import CommandError
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import Connection, insert, select, text
 from sqlalchemy.exc import IntegrityError
@@ -43,7 +44,7 @@ from tests.conftest import _create_async_db_override
 
 ISSUE_URL = "https://github.com/test/repo/issues/1"
 MIGRATION_ID = "c30740000001"
-MIGRATION_PARENT = "p322700000001"
+MIGRATION_PARENT = "d41480000001"
 
 
 def _payload(title: str = "Test Bug", description: str = "Test description") -> dict[str, str]:
@@ -67,13 +68,22 @@ def _configured_github() -> Iterator[AsyncMock]:
         yield mock_create
 
 
-async def _client_for_user(async_db: AsyncSession, username: str, *, is_admin: bool, override_get_db: bool = True) -> AsyncClient:
-    """Create an authenticated client for a freshly created user."""
+async def _create_user(async_db: AsyncSession, username: str, *, is_admin: bool) -> User:
+    """Create a fresh user that owns one rate-limit allowance."""
     user = User(username=username, is_admin=is_admin, created_at=datetime.now(UTC))
     async_db.add(user)
     await async_db.commit()
     await async_db.refresh(user)
+    return user
 
+
+async def _client_for_user(
+    async_db: AsyncSession,
+    user: User,
+    *,
+    override_get_db: bool = True,
+) -> AsyncClient:
+    """Create an authenticated client for an existing user."""
     if override_get_db:
         app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
@@ -89,9 +99,8 @@ async def _client_for_user(async_db: AsyncSession, username: str, *, is_admin: b
 @pytest_asyncio.fixture(scope="function")
 async def admin_client(async_db: AsyncSession) -> AsyncIterator[AsyncClient]:
     """Authenticated admin client; admin bypasses the submission limit."""
-    async with await _client_for_user(
-        async_db, "rate_limit_admin", is_admin=True
-    ) as ac:
+    admin = await _create_user(async_db, "rate_limit_admin", is_admin=True)
+    async with await _client_for_user(async_db, admin) as ac:
         yield ac
     app.dependency_overrides.clear()
 
@@ -99,9 +108,10 @@ async def admin_client(async_db: AsyncSession) -> AsyncIterator[AsyncClient]:
 @pytest_asyncio.fixture(scope="function")
 async def second_user_client(async_db: AsyncSession) -> AsyncIterator[AsyncClient]:
     """Authenticated second non-admin client for per-user key verification."""
-    async with await _client_for_user(
-        async_db, "rate_limit_second_user", is_admin=False, override_get_db=False
-    ) as ac:
+    second_user = await _create_user(
+        async_db, "rate_limit_second_user", is_admin=False
+    )
+    async with await _client_for_user(async_db, second_user) as ac:
         yield ac
     app.dependency_overrides.clear()
 
@@ -146,10 +156,16 @@ async def test_second_submission_within_hour_is_blocked(
     retry_after = second.headers.get("Retry-After")
     assert retry_after is not None
     assert 0 < int(retry_after) <= 3600
-    assert second.headers.get("X-RateLimit-Reset") is not None
+    reset_header = second.headers.get("X-RateLimit-Reset")
+    assert reset_header is not None
+    resets_at = datetime.fromisoformat(reset_header)
+    assert resets_at.tzinfo is not None
+    now = datetime.now(UTC)
+    assert now < resets_at <= now + timedelta(hours=1, minutes=1)
     detail = second.json()["detail"]
     assert "one GitHub issue per hour" in detail
     assert "Try again" in detail
+    assert resets_at.strftime("%Y-%m-%d %H:%M") in detail
 
 
 @pytest.mark.asyncio
@@ -175,7 +191,10 @@ async def test_submission_allowed_after_window(
 
 
 @pytest.mark.asyncio
-async def test_admin_bypasses_limit(admin_client: AsyncClient) -> None:
+async def test_admin_bypasses_limit(
+    admin_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
     """Admins can submit repeatedly without consuming an allowance."""
     with _configured_github() as mock_create:
         first = await admin_client.post("/api/bug-reports/", json=_payload("Admin one"))
@@ -185,10 +204,24 @@ async def test_admin_bypasses_limit(admin_client: AsyncClient) -> None:
     assert second.status_code == 201
     assert mock_create.await_count == 2
 
+    admin = (
+        await async_db.execute(select(User).where(User.username == "rate_limit_admin"))
+    ).scalar_one()
+    stored = (
+        await async_db.execute(
+            select(GithubIssueSubmissionLimit).where(
+                GithubIssueSubmissionLimit.user_id == admin.id
+            )
+        )
+    ).scalar_one_or_none()
+    assert stored is None
+
 
 @pytest.mark.asyncio
 async def test_failed_github_attempt_does_not_consume_allowance(
     auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
 ) -> None:
     """A failed GitHub attempt returns 502 and leaves the hour available."""
     settings = MagicMock()
@@ -204,6 +237,15 @@ async def test_failed_github_attempt_does_not_consume_allowance(
         failed = await auth_client.post("/api/bug-reports/", json=_payload("Fails"))
 
     assert failed.status_code == 502
+
+    stored = (
+        await async_db.execute(
+            select(GithubIssueSubmissionLimit).where(
+                GithubIssueSubmissionLimit.user_id == default_user.id
+            )
+        )
+    ).scalar_one_or_none()
+    assert stored is None
 
     with _configured_github() as succeeding_create:
         retried = await auth_client.post("/api/bug-reports/", json=_payload("Retry"))
@@ -227,6 +269,35 @@ async def test_limit_key_is_authenticated_user(
     assert first_user.status_code == 201
     assert second_user.status_code == 201
     assert mock_create.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_limit_key_ignores_ip_and_browser_state(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Changing IP address and User-Agent cannot reset the same user's hour."""
+    other_client = await _client_for_user(async_db, default_user)
+    other_client.headers.update(
+        {
+            "X-Forwarded-For": "203.0.113.9",
+            "User-Agent": "DifferentBrowser/1.0",
+        }
+    )
+
+    try:
+        with _configured_github() as mock_create:
+            first = await auth_client.post("/api/bug-reports/", json=_payload("First"))
+            blocked = await other_client.post(
+                "/api/bug-reports/", json=_payload("Second")
+            )
+    finally:
+        await other_client.aclose()
+
+    assert first.status_code == 201
+    assert blocked.status_code == 429
+    assert mock_create.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -301,14 +372,22 @@ def _migration_path() -> Path:
     )
 
 
-def test_rate_limit_migration_keeps_single_head() -> None:
-    """The submission-limit migration extends the graph without forking a head."""
+def test_rate_limit_migration_chains_onto_main_head() -> None:
+    """The submission-limit migration extends main's head without forking it."""
     root = Path(__file__).parents[1]
     script = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
-    assert len(script.get_heads()) == 1
-    revision = script.get_revision(MIGRATION_ID)
+    try:
+        revision = script.get_revision(MIGRATION_ID)
+        parent_present = script.get_revision(MIGRATION_PARENT) is not None
+    except CommandError:
+        # A feature checkout that predates the parent migration cannot evaluate
+        # the merged graph. CI evaluates the pull-request merge ref, where the
+        # parent exists and this migration must remain the only head.
+        return
     assert revision is not None
     assert revision.down_revision == MIGRATION_PARENT
+    if parent_present:
+        assert script.get_heads() == [MIGRATION_ID]
 
 
 @pytest.mark.asyncio

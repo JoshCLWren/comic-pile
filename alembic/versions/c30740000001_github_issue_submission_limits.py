@@ -1,7 +1,7 @@
 """Add durable per-user GitHub issue submission rate-limit state.
 
 Revision ID: c30740000001
-Revises: p322700000001
+Revises: d41480000001
 """
 
 from collections.abc import Sequence
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c30740000001"
-down_revision: str | Sequence[str] | None = "p322700000001"
+down_revision: str | Sequence[str] | None = "d41480000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import Modal from './Modal'
 import { comicVineApi } from '../services/api-comicvine'
 import type {
@@ -13,9 +12,8 @@ import ImageWithLoading from './ImageWithLoading'
 import { optimizedImageUrl, optimizedImageSrcSet } from '../services/imageDelivery'
 import { useToast } from '../contexts/useToast'
 import { queryClient } from '../query/queryClient'
-import { invalidateAfterQueueMutation, invalidateComicVineImportStatus } from '../query/cacheEffects'
+import { invalidateAfterQueueMutation } from '../query/cacheEffects'
 import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
-import { queryKeys } from '../query/queryKeys'
 
 interface AddSeriesFromComicVineDialogProps {
   isOpen: boolean
@@ -98,28 +96,10 @@ interface ImportOutcome {
  * reports the server's tracked count rather than how many rows this particular
  * request adopted, so a null count drops the parenthetical instead of
  * inventing "0 issues".
- *
- * `result` is the import response, which only a completed import has. A
- * zero-adopted retry against an existing series is only genuinely "already up
- * to date" when every issue was reused; the per-issue outcomes say whether
- * conflicts or failures left issues still missing, and claiming completeness
- * over those would send the user away from work that is not done (#3854).
  */
-function importSuccessMessage({ seriesName, issuesAdopted, threadCreated }: ImportOutcome, result?: ComicVineImportSeriesResult): string {
+function importSuccessMessage({ seriesName, issuesAdopted, threadCreated }: ImportOutcome): string {
   if (issuesAdopted === null) {
     return `Added "${seriesName}" to ComicPile`
-  }
-  if (!threadCreated && issuesAdopted === 0) {
-    // Zero adopted is not proof of completeness: a reused issue reports the
-    // same count whether it was cleanly skipped, conflicted, or failed.
-    if (result && result.issues_conflict > 0) {
-      return `"${seriesName}" imported with ${result.issues_conflict} conflicts - check your queue for details`
-    }
-    const hasErrors = result?.issue_results?.some((issue) => issue.outcome === 'error') ?? false
-    if (hasErrors) {
-      return `"${seriesName}" imported but some issues couldn't be added - check your queue for details`
-    }
-    return `"${seriesName}" is already up to date`
   }
   return threadCreated
     ? `Added "${seriesName}" to ComicPile (${issuesAdopted} issues)`
@@ -191,29 +171,6 @@ export default function AddSeriesFromComicVineDialog({
       setAlreadyReadCount(0)
     }
   }, [isOpen])
-
-  /**
-   * Ask the server whether the selected volume is already linked (#3854).
-   *
-   * `getSeriesImportStatus` is the same user-scoped answer the lost-response
-   * recovery trusts, so the confirm copy can tell an existing series from a
-   * fresh add without waiting on the paginated queue. An unreachable check
-   * keeps the fresh-add copy; the import itself stays idempotent server-side,
-   * so a stale "new series" fallback never creates a duplicate row.
-   */
-  const selectedVolumeId = selectedSeries?.comicvine_volume_id
-  const { data: existingSeries } = useQuery({
-    queryKey: selectedVolumeId != null ? queryKeys.comicVine.importStatus(selectedVolumeId) : [],
-    queryFn: () => comicVineApi.getSeriesImportStatus(selectedVolumeId!),
-    enabled: isOpen && step === 'confirm' && selectedVolumeId != null,
-    // One read is enough: this only refines copy, and the import it describes
-    // stays idempotent server-side either way, so retrying a failing endpoint
-    // would add load without changing what the server does.
-    retry: false,
-    // The status endpoint answers for every volume; only an `imported` volume
-    // means the confirm copy should say "already in your queue".
-    select: (status) => (status?.imported ? status : null),
-  })
 
   const handleSearch = useCallback(
     async (searchQuery: string, offset = 0, append = false) => {
@@ -287,14 +244,9 @@ export default function AddSeriesFromComicVineDialog({
   }, [])
 
   const finishAdd = useCallback(
-    async (volumeId: number, outcome: ImportOutcome, result?: ComicVineImportSeriesResult) => {
-      showToast(importSuccessMessage(outcome, result), 'success')
+    async (outcome: ImportOutcome) => {
+      showToast(importSuccessMessage(outcome), 'success')
       await invalidateAfterQueueMutation(queryClient)
-      // This import just changed what the server answers for this volume, so the
-      // confirm step's cached "not imported" reply must not outlive it. Without
-      // this, re-selecting the series in the same session promised a brand-new
-      // series for one the user had just added (#3854).
-      await invalidateComicVineImportStatus(queryClient, volumeId)
       onAdded(outcome.threadId)
       onClose()
     },
@@ -314,16 +266,12 @@ export default function AddSeriesFromComicVineDialog({
         already_read_count: alreadyReadCount,
       }
       const result = await comicVineApi.importSeries(payload)
-      await finishAdd(
-        volumeId,
-        {
-          threadId: result.thread_id,
-          seriesName: result.series_name,
-          issuesAdopted: result.issues_adopted,
-          threadCreated: result.thread_created,
-        },
-        result,
-      )
+      await finishAdd({
+        threadId: result.thread_id,
+        seriesName: result.series_name,
+        issuesAdopted: result.issues_adopted,
+        threadCreated: result.thread_created,
+      })
     } catch (err: unknown) {
       // An import that outlives the client budget keeps running server-side and
       // commits after the client gives up, so a request the server never
@@ -332,16 +280,12 @@ export default function AddSeriesFromComicVineDialog({
       if (hasUnknownOutcome(err)) {
         const committed = await readCommittedImport(volumeId)
         if (committed?.thread_id != null) {
-          await finishAdd(
-            volumeId,
-            {
-              threadId: committed.thread_id,
-              seriesName: committed.series_name ?? seriesName,
-              issuesAdopted: committed.issue_count,
-              threadCreated: true,
-            },
-            undefined,
-          )
+          await finishAdd({
+            threadId: committed.thread_id,
+            seriesName: committed.series_name ?? seriesName,
+            issuesAdopted: committed.issue_count,
+            threadCreated: true,
+          })
           return
         }
         // Nothing is committed yet, but the import may still be in flight, so
@@ -506,9 +450,7 @@ export default function AddSeriesFromComicVineDialog({
                 </div>
               </div>
               <p className="text-xs text-stone-400">
-                {existingSeries
-                  ? `"${existingSeries.series_name ?? selectedSeries.name}" is already in your queue. Adding it again will not create a new series or duplicate issues — only missing issues are added to the existing series.`
-                  : `This will create a new series in your queue with all ${selectedSeries.issue_count ?? '?'} issues from the ComicVine volume.`}
+                This will create a new series in your queue with all {selectedSeries.issue_count ?? '?'} issues from the ComicVine volume.
               </p>
             </div>
             {maxAlreadyRead > 0 && (

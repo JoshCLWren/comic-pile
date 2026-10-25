@@ -250,13 +250,6 @@ export const queryKeys = {
      * repair dialog is open, so Queue rendering never pays per-card issue fetches.
      */
     queueSeriesOrigin: (threadId: number) => ['comicVine', 'queueSeriesOrigin', threadId] as const,
-    /**
-     * Server truth about whether the caller already owns one ComicVine volume.
-     * The add-series dialog reads it while the confirm step is open to choose
-     * between "already in your queue" and "creates a new series" copy (#3854),
-     * so an import must invalidate it whenever it changes that answer.
-     */
-    importStatus: (volumeId: number) => ['comicVine', 'importStatus', volumeId] as const,
   },
   readerContext: {
     all: ['readerContext'] as const,

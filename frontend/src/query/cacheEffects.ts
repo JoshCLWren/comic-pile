@@ -227,28 +227,6 @@ export async function invalidateAfterQueueMutation(
 }
 
 /**
- * Drop the cached "is this ComicVine volume imported?" answer for one volume
- * after an import (#3854).
- *
- * The add-series dialog reads that status to decide between "this will create a
- * new series" and "already in your queue". The queue-movement refresh above
- * deliberately touches only the retained Queue/Session resources, so a cached
- * `imported: false` would otherwise survive a successful import and let a
- * re-selection inside the query's `staleTime` window promise a brand-new series
- * for a series the user just added. Marking the key stale forces the next
- * confirm step to ask the server again.
- */
-export async function invalidateComicVineImportStatus(
-  client: QueryClient,
-  volumeId: number,
-): Promise<void> {
-  await client.invalidateQueries({
-    queryKey: queryKeys.comicVine.importStatus(volumeId),
-    exact: true,
-  })
-}
-
-/**
  * Refresh every surface an undo (or session restore) rewrites (#3194).
  *
  * An undo restores queue order/membership, the current session, the roll

@@ -131,34 +131,27 @@ async def get_performance_metrics_summary(
     if end_time is not None:
         base_query = base_query.where(PerformanceMetric.timestamp <= end_time)
 
-    # Aggregate from the filtered subquery so every aggregate column comes from
-    # the filtered relation itself. Selecting from the base PerformanceMetric
-    # entity alongside the subquery would add the original table to the FROM
-    # clause, producing a Cartesian product that multiplies counts and corrupts
-    # min/max/percentile results.
-    base_subquery = base_query.subquery()
-
-    # Count by cold/warm — aggregates only the filtered relation.
+    # Count by cold/warm
     count_query = select(
-        base_subquery.c.cold,
-        func.count(base_subquery.c.id).label("count"),
-    ).select_from(base_subquery).group_by(base_subquery.c.cold)
+        PerformanceMetric.cold,
+        func.count(PerformanceMetric.id).label("count"),
+    ).select_from(base_query.subquery()).group_by(PerformanceMetric.cold)
 
     count_result = await db.execute(count_query)
     by_cold: dict[bool, int] = {row.cold: int(row.count) for row in count_result.all()}
 
-    # Response time stats by cold/warm — aggregates only the filtered relation.
+    # Response time stats by cold/warm
     stats_query = select(
-        base_subquery.c.cold,
-        func.min(base_subquery.c.response_time_ms).label("min"),
-        func.max(base_subquery.c.response_time_ms).label("max"),
+        PerformanceMetric.cold,
+        func.min(PerformanceMetric.response_time_ms).label("min"),
+        func.max(PerformanceMetric.response_time_ms).label("max"),
         func.percentile_cont(0.5).within_group(
-            base_subquery.c.response_time_ms
+            PerformanceMetric.response_time_ms
         ).label("median"),
         func.percentile_cont(0.95).within_group(
-            base_subquery.c.response_time_ms
+            PerformanceMetric.response_time_ms
         ).label("p95"),
-    ).select_from(base_subquery).group_by(base_subquery.c.cold)
+    ).select_from(base_query.subquery()).group_by(PerformanceMetric.cold)
 
     stats_result = await db.execute(stats_query)
     by_cold_stats: dict[bool, dict[str, float | None]] = {
