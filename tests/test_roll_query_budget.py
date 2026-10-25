@@ -277,3 +277,53 @@ async def test_forced_legacy_roll_stays_within_budget(
         f"forced-legacy roll issued {len(statements)} statements, "
         f"budget is {ROLL_STATEMENT_BUDGET}"
     )
+
+
+@pytest.mark.asyncio
+async def test_batch_effort_matches_reference_with_constant_reads(
+    async_db: AsyncSession, db_engine: AsyncEngine, default_user: User,
+) -> None:
+    """Bulk effort preserves scalar precedence with at most three read queries."""
+    from sqlalchemy import select
+    from app.services.reading_effort import (
+        aggregate_observations, collect_classified_observations,
+        compute_effort_estimates_batch, era_prior_minutes,
+        resolve_effort_estimate, resolve_publication_year,
+    )
+
+    await _seed_library(async_db, default_user, size=LIBRARY_SIZE)
+    threads = list((await async_db.scalars(
+        select(Thread).where(Thread.user_id == default_user.id).order_by(Thread.id)
+    )).all())
+    candidates = [(thread.id, thread.next_unread_issue_id) for thread in threads]
+    # Include issue-less legacy and missing candidates without losing order.
+    candidates.extend([(threads[0].id, None), (threads[-1].id, None)])
+    observations = await collect_classified_observations(async_db, default_user.id)
+    by_issue, by_thread = aggregate_observations(observations)
+    reference = {}
+    for thread_id, issue_id in candidates:
+        year = await resolve_publication_year(async_db, thread_id=thread_id, issue_id=issue_id)
+        reference[(thread_id, issue_id)] = resolve_effort_estimate(
+            by_issue.get((thread_id, issue_id)) if issue_id is not None else None,
+            by_thread.get(thread_id), era_prior_minutes(year),
+        )
+    statements: list[str] = []
+
+    def capture(_conn: object, _cursor: object, statement: str,
+                _parameters: object, _context: object, _executemany: bool) -> None:
+        statements.append(statement)
+
+    for size in (1, 6, 20, 100, len(candidates)):
+        statements.clear()
+        selected = candidates[:size] + candidates[:1]
+        event.listen(db_engine.sync_engine, "before_cursor_execute", capture)
+        try:
+            result = await compute_effort_estimates_batch(
+                async_db, user_id=default_user.id, candidates=selected,
+            )
+        finally:
+            event.remove(db_engine.sync_engine, "before_cursor_execute", capture)
+        assert len(statements) <= 3
+        assert all(statement.lstrip().upper().startswith("SELECT") for statement in statements)
+        assert list(result) == list(dict.fromkeys(selected))
+        assert result == {key: reference[key] for key in selected}
