@@ -434,6 +434,50 @@ async def test_api_returns_named_live_blocker_and_excludes_history(
     assert body["historical"][0]["kind"] == "legacy_dependency"
     assert "not an active reading requirement" in body["historical"][0]["detail"]
 
+    # V2 is a clean versioned contract: no retired field or historical SELECT.
+    dependency_sql: list[tuple[str, tuple[str, ...]]] = []
+
+    def capture_v2(conn, cursor, statement, parameters, context, executemany):
+        if "FROM dependencies" in statement:
+            if isinstance(parameters, dict):
+                binds = tuple(str(value) for value in parameters.values())
+            elif isinstance(parameters, (list, tuple)):
+                binds = tuple(str(value) for value in parameters)
+            else:
+                binds = ()
+            dependency_sql.append((statement, binds))
+
+    event.listen(Engine, "before_cursor_execute", capture_v2)
+    try:
+        canonical_response = await auth_client.get(
+            f"/api/v2/reading-boundaries/{miracle_id}"
+        )
+        canonical_batch = await auth_client.post(
+            "/api/v2/reading-boundaries",
+            json={"thread_ids": [fourth.id, miracle_id]},
+        )
+    finally:
+        event.remove(Engine, "before_cursor_execute", capture_v2)
+
+    assert canonical_response.status_code == 200, canonical_response.text
+    canonical = canonical_response.json()
+    assert "historical" not in canonical
+    assert canonical["state"] == body["state"]
+    assert canonical["blockers"] == body["blockers"]
+    assert canonical["next"] == body["next"]
+    assert canonical_batch.status_code == 200, canonical_batch.text
+    assert set(canonical_batch.json()["threads"]) == {str(fourth.id), str(miracle_id)}
+    assert all(
+        "historical" not in explanation
+        for explanation in canonical_batch.json()["threads"].values()
+    )
+    # Only get_execution_eligibility's explicit reader-origin query is allowed.
+    # The boundary label loader must never fetch converted or unclassified rows.
+    assert all("DEPENDENCIES.ORIGIN =" in query.upper().split("WHERE", 1)[1]
+               for query, _ in dependency_sql)
+    assert all("reader" in binds for _, binds in dependency_sql)
+    assert len(dependency_sql) <= 2
+
     hidden = await auth_client.get(f"/api/v1/reading-boundaries/{foreign_id}")
     assert hidden.status_code == 404
 
