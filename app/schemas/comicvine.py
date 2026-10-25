@@ -64,3 +64,5 @@ class ComicVineIssueIntelligence(BaseModel):
     store_date: str | None = None
     creators: list[ComicVineCreator] = Field(default_factory=list)
     story_arcs: list[ComicVineStoryArc] = Field(default_factory=list)
+    metadata_status: str = "not_deep_fetched"
+    refresh_retry_after_seconds: int | None = None

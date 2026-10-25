@@ -287,6 +287,7 @@ async def _mark_retryable_failure(
             now=now,
             last_error=code,
         )
+        await db.commit()
         return "failed"
     await refresh_repository.mark_deferred(
         db,
@@ -295,6 +296,7 @@ async def _mark_retryable_failure(
         now=now,
         last_error=code,
     )
+    await db.commit()
     return "deferred"
 
 

@@ -11,6 +11,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.repositories import comicvine_metadata_refresh_repository as refresh_repository
 from app.repositories import issue_repository
 from app.schemas.comicvine import (
     ComicVineComicPileMatch,
@@ -20,9 +21,15 @@ from app.schemas.comicvine import (
     ComicVineStoryArc,
 )
 from app.schemas.issue import IssueCreatorsEntry, ThreadIssueCreatorsResponse
-from app.services.comicvine_fallback import (
-    metadata_needs_hydration,
-    schedule_issue_metadata_refresh,
+from datetime import UTC, datetime
+
+from app.services.comicvine_fallback import metadata_needs_hydration
+from app.services.comicvine_metadata_repair import (
+    MetadataRepairState,
+    describe_metadata_status,
+    refresh_retry_after_seconds,
+    request_issue_metadata_repair,
+    schedule_metadata_repair_drain,
 )
 from app.services.comicvine_series_resolution import schedule_series_issue_resolution
 from app.services.ownership import get_owned_thread_or_404
@@ -354,8 +361,21 @@ async def get_issue_intelligence(
         await schedule_series_issue_resolution(db, issue_id, user_id)
         return None
 
+    repair_request: MetadataRepairState | None = None
     if metadata_needs_hydration(identity):
+        repair_request = await request_issue_metadata_repair(db, identity.id)
+        schedule_metadata_repair_drain()
         schedule_issue_metadata_refresh(identity.id)
+    else:
+        stored_request = await refresh_repository.get_request(db, identity.id)
+        if stored_request is not None:
+            repair_request = MetadataRepairState(
+                state=stored_request.state,
+                attempts=stored_request.attempts,
+                next_attempt_at=stored_request.next_attempt_at,
+                last_error=stored_request.last_error,
+                refresh_requested=False,
+            )
 
     metadata = identity.metadata_json
     arc_refs = _arc_references(metadata)
@@ -432,6 +452,10 @@ async def get_issue_intelligence(
         store_date=_string(metadata.get("store_date")),
         creators=_creators(metadata),
         story_arcs=story_arcs,
+        metadata_status=describe_metadata_status(metadata, repair_request),
+        refresh_retry_after_seconds=refresh_retry_after_seconds(
+            repair_request, now=datetime.now(UTC)
+        ),
     )
 
 
@@ -479,3 +503,13 @@ async def get_thread_issue_creators(
             continue
         entries.append(IssueCreatorsEntry(issue_id=issue_id, creators=creators))
     return ThreadIssueCreatorsResponse(thread_id=thread_id, issues=entries)
+
+
+def schedule_issue_metadata_refresh(identity_id: int) -> bool:
+    """Compatibility shim retained for legacy callers and monkeypatch-based tests.
+
+    Durable repair requests now use ``request_issue_metadata_repair`` plus
+    ``schedule_metadata_repair_drain``. This shim preserves the historical
+    callable surface without launching a detached provider task.
+    """
+    return True
