@@ -59,7 +59,9 @@ class RollPhaseTrace:
         total_ms = (time.perf_counter() - self._started_at) * 1000
         sql_ms = max(0.0, diagnostics.database_time_ms - self._started_sql)
         queries = max(0, diagnostics.database_queries - self._started_queries)
-        logger.info(
+        # Production defaults to WARNING, so INFO diagnostics are discarded.
+        # A single summary per completed Roll is low-cardinality and actionable.
+        logger.warning(
             "roll.phase_timing total_ms=%.2f sql_ms=%.2f non_sql_wall_ms=%.2f "
             "queries=%d stages=%s",
             total_ms,
