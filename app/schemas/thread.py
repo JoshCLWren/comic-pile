@@ -256,6 +256,15 @@ class QueueThreadListItem(BaseModel):
     comicvine_mapping: ComicVineMappingHealth | None = None
     manual_creator_credits: list[ManualCreatorCredit] = Field(default_factory=list)
     tags: list[TagResponse] = Field(default_factory=list)
+    series_year: int | None = Field(
+        None, description="Confirmed publication/start year, when a verified series identity exists."
+    )
+    series_volume: str | None = Field(
+        None, description="Confirmed volume/run label, when a verified series identity exists."
+    )
+    series_publisher: str | None = Field(
+        None, description="Confirmed publisher, when a verified series identity exists."
+    )
 
 
 class ReactivateRequest(BaseModel):

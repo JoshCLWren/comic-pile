@@ -24,6 +24,7 @@ from app.models.thread import EXCLUDED_STATUS, normalize_format_value, normalize
 from app.repositories import (
     continuity_repository,
     issue_repository,
+    rate_repository,
     reading_session_repository,
     thread_repository,
 )
@@ -193,10 +194,81 @@ async def threads_to_responses(
     ]
 
 
+def _extract_series_metadata(
+    series_metadata_docs: list[dict[str, object]],
+) -> tuple[int | None, str | None, str | None]:
+    """Extract confirmed series year, volume, and publisher from metadata documents.
+
+    Reads only stored, confirmed provider metadata. Never fabricates values from
+    a display title or ComicVine numeric ID. Returns the first document that
+    carries a usable value for each field.
+
+    Args:
+        series_metadata_docs: Confirmed series ``metadata_json`` documents for one
+            thread, in mapping-id order.
+
+    Returns:
+        ``(series_year, series_volume, series_publisher)``, each ``None`` when no
+        confirmed value is available.
+    """
+    series_year: int | None = None
+    series_volume: str | None = None
+    series_publisher: str | None = None
+
+    for metadata in series_metadata_docs:
+        if not isinstance(metadata, dict):
+            continue
+        if series_year is None:
+            year = metadata.get("start_year")
+            if isinstance(year, bool) or not isinstance(year, int):
+                year = None
+            elif year is not None:
+                series_year = year
+            if series_year is None:
+                for date_field in ("cover_date", "store_date"):
+                    value = metadata.get(date_field)
+                    if isinstance(value, str):
+                        # Year is the leading four digits of an ISO-ish date.
+                        candidate = value[:4]
+                        if candidate.isdigit() and len(candidate) == 4:
+                            series_year = int(candidate)
+                            break
+        if series_volume is None:
+            volume = None
+            volume_ref = metadata.get("volume")
+            if isinstance(volume_ref, dict):
+                name = volume_ref.get("name")
+                if isinstance(name, str) and name.strip():
+                    volume = name.strip()
+            if volume is None:
+                volume_name = metadata.get("volume_name")
+                if isinstance(volume_name, str) and volume_name.strip():
+                    volume = volume_name.strip()
+            if volume is not None:
+                series_volume = volume
+        if series_publisher is None:
+            publisher = metadata.get("publisher")
+            if isinstance(publisher, dict):
+                name = publisher.get("name")
+                if isinstance(name, str) and name.strip():
+                    publisher = name.strip()
+                else:
+                    publisher = None
+            elif not isinstance(publisher, str) or not publisher.strip():
+                publisher = None
+            if publisher is not None:
+                series_publisher = publisher
+        if series_year is not None and series_volume is not None and series_publisher is not None:
+            break
+
+    return series_year, series_volume, series_publisher
+
+
 def to_queue_list_item(
     tr: ThreadResponse,
     mapping_health: dict | None = None,
     tags: list[TagResponse] | None = None,
+    series_metadata_docs: list[dict[str, object]] | None = None,
 ) -> QueueThreadListItem:
     """Convert a full ThreadResponse to a narrow QueueThreadListItem.
 
@@ -211,6 +283,10 @@ def to_queue_list_item(
             ComicVineMappingHealth projection.
         tags: Optional pre-fetched visible direct tags for the thread, read in
             one batched query for the whole page.
+        series_metadata_docs: Optional confirmed series identity metadata
+            documents for this thread, read in one batched query for the whole
+            page. When provided, used to project the verified year, volume, and
+            publisher.
 
     Returns:
         Narrow list-item projection of the thread response.
@@ -250,6 +326,10 @@ def to_queue_list_item(
             metadata_missing_count=metadata_missing,
         )
 
+    series_year, series_volume, series_publisher = _extract_series_metadata(
+        series_metadata_docs or []
+    )
+
     return QueueThreadListItem(
         id=tr.id,
         title=tr.title,
@@ -267,6 +347,9 @@ def to_queue_list_item(
         comicvine_mapping=comicvine_mapping,
         manual_creator_credits=tr.manual_creator_credits,
         tags=tags or [],
+        series_year=series_year,
+        series_volume=series_volume,
+        series_publisher=series_publisher,
     )
 
 
@@ -390,9 +473,19 @@ async def list_queue_threads(
         user_id, [tr.id for tr in thread_responses]
     )
 
+    # One batched confirmed-series read for the whole page so Queue rows show
+    # verified year/volume/publisher without a per-thread provider lookup
+    # (issue #3605). Threads with no confirmed series identity resolve to None.
+    series_metadata_map = await rate_repository.fetch_confirmed_series_identity_metadata(
+        db, [tr.id for tr in thread_responses]
+    )
+
     queue_items = [
         to_queue_list_item(
-            tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, [])
+            tr,
+            mapping_health_map.get(tr.id),
+            tags_map.get(tr.id, []),
+            series_metadata_map.get(tr.id),
         )
         for tr in thread_responses
     ]
@@ -488,9 +581,19 @@ async def list_completed_threads(
         user_id, [tr.id for tr in thread_responses]
     )
 
+    # One batched confirmed-series read for the whole page so Queue rows show
+    # verified year/volume/publisher without a per-thread provider lookup
+    # (issue #3605). Threads with no confirmed series identity resolve to None.
+    series_metadata_map = await rate_repository.fetch_confirmed_series_identity_metadata(
+        db, [tr.id for tr in thread_responses]
+    )
+
     queue_items = [
         to_queue_list_item(
-            tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, [])
+            tr,
+            mapping_health_map.get(tr.id),
+            tags_map.get(tr.id, []),
+            series_metadata_map.get(tr.id),
         )
         for tr in thread_responses
     ]
@@ -575,9 +678,19 @@ async def list_excluded_threads(
         user_id, [tr.id for tr in thread_responses]
     )
 
+    # One batched confirmed-series read for the whole page so Queue rows show
+    # verified year/volume/publisher without a per-thread provider lookup
+    # (issue #3605). Threads with no confirmed series identity resolve to None.
+    series_metadata_map = await rate_repository.fetch_confirmed_series_identity_metadata(
+        db, [tr.id for tr in thread_responses]
+    )
+
     queue_items = [
         to_queue_list_item(
-            tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, [])
+            tr,
+            mapping_health_map.get(tr.id),
+            tags_map.get(tr.id, []),
+            series_metadata_map.get(tr.id),
         )
         for tr in thread_responses
     ]
