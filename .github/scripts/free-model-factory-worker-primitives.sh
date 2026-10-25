@@ -968,8 +968,7 @@ while (( $(remaining) > 480 )); do
 
   current="$(git rev-parse HEAD)"
   if [[ "$SOURCE" != 'kilo-auto' ]] && \
-    grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
-    machine_merge_gates_pass "$NUMBER" "$current"; then
+    grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log"; then
     # Merge only through the canonical exact-head route: the trusted controller
     # gates (issue acceptance, exact-commit review/CI, substantive delivery and a
     # fresh declared/native dependency check) must return JSON decision "pass",
@@ -986,16 +985,32 @@ while (( $(remaining) > 480 )); do
           # Leave the issue open with the durable closure reason instead of
           # treating the merge as feature acceptance.
           log "merged PR #${NUMBER}, but post-merge closure did not complete (${FACTORY_CLOSURE_STATUS}: ${FACTORY_CLOSURE_OUTCOME}); issue left open"
+          # The merge landed, so the PR is closed; skip it anyway so this
+          # session never re-enters the merge route for the same target.
+          SKIP_PRS+=("$NUMBER")
           ;;
         2)
           log "merge command failed for PR #${NUMBER} at ${current}; leaving it open for another route"
+          # The PR is still open and still leased to this worker. Release the
+          # lease first so a peer can retry without waiting for this session to
+          # end, then skip it so choose_existing_pr does not hand it straight
+          # back for another full agent run.
+          if [[ "$SOURCE" != 'kilo-auto' ]]; then
+            release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'merge-failed'
+          fi
+          SKIP_PRS+=("$NUMBER")
           ;;
         *)
           log "trusted controller gates for PR #${NUMBER} decision=${FACTORY_MERGE_GATE_DECISION:-empty}; not merging (reason: ${FACTORY_MERGE_GATE_REASON:-no reason})"
-          # Do not merge: release lease and select other work
+          # Do not merge: release lease and select other work. A retry decision
+          # (for example pending required CI) is not a reason to run this PR
+          # again in the same session, and the released lease lets
+          # choose_unowned_pr hand it straight back. Record it in SKIP_PRS so
+          # the session spends its budget on other targets instead.
           if [[ "$SOURCE" != 'kilo-auto' ]]; then
             release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'gate-denied'
           fi
+          SKIP_PRS+=("$NUMBER")
           ;;
       esac
     fi
