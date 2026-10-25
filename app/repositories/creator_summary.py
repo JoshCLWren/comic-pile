@@ -16,8 +16,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import distinct_on
+from sqlalchemy import select, func, cast
+from sqlalchemy.dialects.postgresql import distinct_on, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event
@@ -443,6 +443,177 @@ async def load_creator_summary_inputs(
     )
 
 
+async def load_creator_summary_inputs_for_creators(
+    db: AsyncSession,
+    user_id: int,
+    requested_creator_ids: set[int],
+) -> CreatorSummaryInputs:
+    """Load user-scoped inputs for creator summary, filtered to requested creator IDs.
+
+    This variant uses SQLAlchemy Core / PostgreSQL set-based reads to project only
+    the requested creator credits, avoiding full-library hydration in Python.
+    The query count stays constant regardless of library size; fetched rows scale
+    with the number of requested creators and their attributed issues.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated user whose library is aggregated.
+        requested_creator_ids: Set of external person IDs to include.
+
+    Returns:
+        User-scoped :class:`CreatorSummaryInputs` containing only data for the
+        requested creators (plus global coverage totals).
+    """
+    if not requested_creator_ids:
+        # Empty request: return empty inputs with zero coverage
+        return CreatorSummaryInputs()
+
+    # 1. Owned issues and thread ids (same as before, needed for coverage totals)
+    issue_result = await db.execute(
+        select(Issue.id, Issue.status, Issue.thread_id, Issue.issue_number)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Thread.user_id == user_id)
+    )
+    owned_issues: dict[int, str] = {}
+    thread_ids: set[int] = set()
+    issue_thread_map: dict[int, int] = {}
+    issue_number_map: dict[int, str] = {}
+    for issue_id, status, thread_id, issue_number in issue_result.all():
+        owned_issue_id = int(issue_id)
+        owned_issues[owned_issue_id] = str(status)
+        thread_id_int = int(thread_id)
+        issue_thread_map[owned_issue_id] = thread_id_int
+        issue_number_map[owned_issue_id] = str(issue_number)
+        thread_ids.add(thread_id_int)
+
+    # 2. Thread titles and manual creator credits, read once per thread.
+    thread_manual_credits: dict[int, list[dict[str, object]]] = {}
+    owned_issue_series: dict[int, OwnedIssueSeries] = {}
+    if thread_ids:
+        thread_result = await db.execute(
+            select(Thread.id, Thread.title, Thread.manual_creator_credits).where(
+                Thread.user_id == user_id
+            )
+        )
+        thread_titles: dict[int, str] = {}
+        for thread_id, title, manual_credits in thread_result.all():
+            thread_id_int = int(thread_id)
+            thread_titles[thread_id_int] = str(title)
+            if manual_credits:
+                thread_manual_credits[thread_id_int] = manual_credits
+        for issue_id, thread_id in issue_thread_map.items():
+            owned_issue_series[issue_id] = OwnedIssueSeries(
+                thread_id=thread_id,
+                thread_title=thread_titles.get(thread_id, ""),
+                issue_number=issue_number_map.get(issue_id, ""),
+            )
+
+    # 3. Confirmed creator credits per owned issue (ComicVine) - PROJECTED for requested creators only
+    # Use JSONB array expansion to filter credits at the database level
+    # Cast to jsonb since the column is JSON type
+    metadata_result = await db.execute(
+        select(
+            Issue.id,
+            func.jsonb_array_elements(cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)).label("credit")
+        )
+        .join(Thread, Thread.id == Issue.thread_id)
+        .join(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.issue_id == Issue.id,
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(Thread.user_id == user_id)
+        .where(IssueExternalIdentityMapping.status == "confirmed")
+        .where(ExternalIdentity.provider == COMICVINE_PROVIDER)
+        .where(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY].is_not(None))
+    )
+    
+    per_issue_credits: dict[int, dict[tuple[int, tuple[str, ...]], CreatorCredit]] = {}
+    issues_with_creator_metadata: set[int] = set()
+    for issue_id, credit_elem in metadata_result.all():
+        # credit_elem is a JSON object from jsonb_array_elements
+        if not isinstance(credit_elem, dict):
+            continue
+        creator_id = _coerce_creator_id(credit_elem.get("id"))
+        if creator_id is None or creator_id not in requested_creator_ids:
+            continue
+        name = credit_elem.get("name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        role_value = credit_elem.get("role")
+        roles: tuple[str, ...] = ()
+        if role_value is not None:
+            parsed = {part.strip() for part in str(role_value).split(",") if part.strip()}
+            roles = tuple(sorted(parsed))
+        owned_issue_id = int(issue_id)
+        if owned_issue_id not in issues_with_creator_metadata:
+            issues_with_creator_metadata.add(owned_issue_id)
+        by_key = per_issue_credits.setdefault(owned_issue_id, {})
+        credit = CreatorCredit(
+            external_id=creator_id,
+            roles=roles,
+            display_name=name.strip(),
+        )
+        by_key.setdefault((credit.external_id, credit.roles), credit)
+
+    # 4. Manual thread-level creator credits for issues without ComicVine metadata
+    # Filter manual credits to only requested creator IDs
+    for issue_id, series in owned_issue_series.items():
+        if issue_id in issues_with_creator_metadata:
+            continue
+        manual_credits = thread_manual_credits.get(series.thread_id, [])
+        if manual_credits:
+            credits = extract_manual_creator_credits(manual_credits)
+            # Filter to requested creator IDs
+            filtered_credits = [c for c in credits if c.external_id in requested_creator_ids]
+            if filtered_credits:
+                issues_with_creator_metadata.add(issue_id)
+                by_key = per_issue_credits.setdefault(issue_id, {})
+                for credit in filtered_credits:
+                    by_key.setdefault((credit.external_id, credit.roles), credit)
+
+    issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = {
+        issue_id: tuple(
+            sorted(by_key.values(), key=lambda credit: (credit.external_id, credit.roles))
+        )
+        for issue_id, by_key in per_issue_credits.items()
+    }
+
+    # 5. Latest effective rating and timestamp per owned issue
+    rate_result = await db.execute(
+        select(Event.issue_id, Event.rating, Event.timestamp)
+        .join(Issue, Issue.id == Event.issue_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Thread.user_id == user_id)
+        .where(Event.type == "rate")
+        .where(Event.issue_id.is_not(None))
+        .where(Event.rating.is_not(None))
+        .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
+        .ext(distinct_on(Event.issue_id))
+    )
+    effective_ratings: dict[int, float] = {}
+    effective_rating_timestamps: dict[int, datetime] = {}
+    for rated_issue_id, rating, timestamp in rate_result.all():
+        if rated_issue_id is None or rating is None:
+            continue
+        normalized_issue_id = int(rated_issue_id)
+        effective_ratings[normalized_issue_id] = float(rating)
+        if timestamp is not None:
+            effective_rating_timestamps[normalized_issue_id] = timestamp
+
+    return CreatorSummaryInputs(
+        owned_issues=owned_issues,
+        owned_issue_series=owned_issue_series,
+        issue_creator_credits=issue_creator_credits,
+        issues_with_creator_metadata=frozenset(issues_with_creator_metadata),
+        effective_ratings=effective_ratings,
+        effective_rating_timestamps=effective_rating_timestamps,
+    )
+
+
 __all__ = [
     "COMICVINE_PROVIDER",
     "CREATOR_CREDITS_KEY",
@@ -454,5 +625,6 @@ __all__ = [
     "extract_creator_credits",
     "extract_manual_creator_credits",
     "load_creator_summary_inputs",
+    "load_creator_summary_inputs_for_creators",
     "manual_creator_id",
 ]

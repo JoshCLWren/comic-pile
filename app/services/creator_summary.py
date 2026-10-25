@@ -37,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.creator_summary import (
     CreatorSummaryInputs,
-    load_creator_summary_inputs,
+    load_creator_summary_inputs_for_creators,
 )
 from app.schemas.creator_summary import (
     CreatorSummariesResponse,
@@ -138,7 +138,7 @@ async def get_creator_summaries(
     Returns:
         The batch summary response keyed by requested visible creator keys.
     """
-    # Resolve requested creator IDs up-front to limit Python work to the batch.
+    # Resolve requested creator IDs up-front to limit SQL work to the batch.
     requested_id_map: dict[str, int] = {}
     requested_ids: set[int] = set()
     for key in requested_keys:
@@ -147,7 +147,7 @@ async def get_creator_summaries(
             requested_id_map[key] = creator_id
             requested_ids.add(creator_id)
 
-    inputs = await load_creator_summary_inputs(db, user_id)
+    inputs = await load_creator_summary_inputs_for_creators(db, user_id, requested_ids)
 
     rated_issue_ids = frozenset(inputs.effective_ratings)
     read_unrated_issue_ids = frozenset(
