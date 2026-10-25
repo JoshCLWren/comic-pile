@@ -250,6 +250,52 @@ async def test_roll_statement_count_is_bounded_and_pool_independent(
 
 
 @pytest.mark.asyncio
+async def test_roll_emits_one_sql_vs_non_sql_stage_breakdown(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Successful Roll records complete stage evidence with no user data."""
+    import logging
+
+    await _seed_library(async_db, default_user, size=6)
+    with caplog.at_level(logging.INFO, logger="app.api.roll"):
+        response = await auth_client.post(
+            "/api/v1/roll/",
+            json={"bandwidth": "balanced", "intent": "balanced"},
+        )
+    assert response.status_code == 200, response.text
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.api.roll"
+        and record.getMessage().startswith("roll.phase_timing")
+    ]
+    assert len(messages) == 1
+    summary = messages[0]
+    for field in (
+        "total_ms=",
+        "sql_ms=",
+        "non_sql_wall_ms=",
+        "queries=",
+        "session:",
+        "die_exclusions:",
+        "eligibility:",
+        "candidate_pool:",
+        "effort_estimates:",
+        "weighting:",
+        "selection_artifacts:",
+        "event_flush:",
+        "commit:",
+        "response:",
+    ):
+        assert field in summary
+    assert "user_id=" not in summary
+    assert "thread_id=" not in summary
+
+
+@pytest.mark.asyncio
 async def test_forced_legacy_roll_stays_within_budget(
     auth_client: AsyncClient,
     async_db: AsyncSession,
