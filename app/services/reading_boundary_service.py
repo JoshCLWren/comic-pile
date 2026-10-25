@@ -187,7 +187,15 @@ def _historical_rows(
         if owner_thread_id == thread_id
     }
     rows: list[ReadingBoundaryHistorical] = []
-    for prerequisite_id, row in sorted(labels.prerequisites.items()):
+    if labels.prerequisite_ids_by_thread:
+        incident = (
+            (edge_id, labels.prerequisites[edge_id])
+            for edge_id in labels.prerequisite_ids_by_thread.get(thread_id, ())
+        )
+    else:
+        # Detached test fixtures without an index retain the original semantics.
+        incident = iter(sorted(labels.prerequisites.items()))
+    for prerequisite_id, row in incident:
         if prerequisite_id in snapshot.active_prerequisite_ids:
             continue
         if (
@@ -312,7 +320,9 @@ async def get_reading_boundary_explanation(
     Returns:
         The reader-facing boundary explanation.
     """
-    labels = await boundary_repository.load_boundary_labels(db, user_id)
+    labels = await boundary_repository.load_boundary_labels(
+        db, user_id, requested_thread_ids={thread_id}
+    )
     if thread_id not in labels.threads:
         raise NotFoundError(f"Thread {thread_id} not found")
     snapshot = await get_execution_eligibility(db, user_id)
@@ -345,7 +355,9 @@ async def get_reading_boundary_explanations(
     Returns:
         Explanations keyed by Thread identifier.
     """
-    labels = await boundary_repository.load_boundary_labels(db, user_id)
+    labels = await boundary_repository.load_boundary_labels(
+        db, user_id, requested_thread_ids=set(thread_ids)
+    )
     missing = [thread_id for thread_id in thread_ids if thread_id not in labels.threads]
     if missing:
         raise NotFoundError(f"Thread {missing[0]} not found")
