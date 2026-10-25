@@ -57,7 +57,7 @@ test.describe('CBL browser catalog folders', () => {
         source_path: sourcePath,
         content_hash: `issue-4010-${suffix}`,
         revision_sha: `issue-4010-revision-${suffix}`,
-        repository: 'JoshCLWren/CBL-ReadingLists',
+        repository: `JoshCLWren/CBL-ReadingLists-fixture-${suffix}`,
         entries: [
           {
             position: 1,
@@ -156,6 +156,11 @@ test.describe('CBL browser one-decision adoption', () => {
     // Search and select the source.
     await page.getByLabel('Search source lists').fill(sourceName)
     await page.getByRole('button', { name: 'Search' }).click()
+    // #3939: the default view shows the reader-friendly title, never the raw .cbl path.
+    const sourceRow = page.getByRole('button', {
+      name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    })
+    await expect(sourceRow).not.toContainText(sourcePath)
     await page
       .getByRole('button', { name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) })
       .click()
@@ -166,12 +171,7 @@ test.describe('CBL browser one-decision adoption', () => {
     ).toBeVisible()
     await expect(page.getByText('/mnt/')).toHaveCount(0)
 
-    // #3939: the default view shows the reader-friendly title, never the raw .cbl path.
-    const sourceRow = page.getByRole('button', {
-      name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-    })
-    await expect(sourceRow).not.toContainText(sourcePath)
-    await expect(page.getByRole('heading', { name: sourceName })).toBeVisible()
+    await expect(page.getByTestId('cbl-source-detail').getByRole('heading', { name: sourceName })).toBeVisible()
 
     // Preview caused no mutation: no Reading Plan exists for this source yet.
     const plansBefore = await page.request.get('/api/v1/continuity-plans/', { headers })
@@ -220,6 +220,7 @@ test.describe('CBL browser one-decision adoption', () => {
 
     // Reload preserves membership and provenance.
     await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByText('Source details', { exact: true }).click()
     await expect(page.getByText(sourcePath)).toBeVisible()
   })
 
@@ -279,10 +280,7 @@ test.describe('CBL browser one-decision adoption', () => {
 
     // Progressive disclosure: exclude the missing series, then add.
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
-    const missingSeriesChoice = page.getByRole('group', {
-      name: 'Browser Customize Missing series choice',
-    })
-    await missingSeriesChoice.getByRole('button', { name: 'Exclude' }).click()
+    await page.getByRole('checkbox', { name: /Include Browser Customize Missing.*series/ }).uncheck()
     await expect(
       page.getByText('2 entries · 1 already in ComicPile · 0 will be added'),
     ).toBeVisible()
@@ -354,6 +352,7 @@ test.describe('CBL browser one-decision adoption', () => {
       .getByRole('button', { name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) })
       .click()
     await page.getByRole('button', { name: 'Customize', exact: true }).click()
+    await page.getByRole('button', { name: /Show issues for Browser Owned Exclude/ }).click()
     await page.getByRole('checkbox', { name: 'Include Browser Owned Exclude #1' }).uncheck()
     await expect(
       page.getByText('2 entries · 0 already in ComicPile · 1 will be added'),

@@ -678,8 +678,11 @@ async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("dependency_id", [None, 101])
 async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
     async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    dependency_id: int | None,
 ) -> None:
     """A Step 23B plan absorbs residual exact edges without losing its full order."""
     user = await get_or_create_user_async(async_db)
@@ -699,6 +702,7 @@ async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
     issues = [row[1] for row in rows]
     dependencies = [
         Dependency(
+            id=dependency_id,
             source_issue_id=issues[0].id,
             target_issue_id=issues[2].id,
             note="covered by Step 23B",
@@ -722,6 +726,18 @@ async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
         expected_group_names=(),
         plan_name="Legacy order projection",
         reader_order_dependency_ids=tuple(row.id for row in dependencies),
+    )
+    # Synthetic dependencies must never inherit classifications from production IDs.
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index", lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: ({row.id: "reading_plan_order" for row in dependencies}, {}),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
     )
     snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True, snapshot["errors"]
@@ -769,9 +785,9 @@ async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
     }
     contract = legacy_plan.lanes_json[0]["migration_contract"]
     assert isinstance(contract, dict)
-    assert contract["selected_dependency_ids"] == [
+    assert contract["selected_dependency_ids"] == sorted(
         dependency.id for dependency in dependencies
-    ]
+    )
     await async_db.commit()
 
     report = await build_manifest_report(

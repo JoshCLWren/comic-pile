@@ -1,0 +1,19 @@
+{
+  "statusCheck": true,
+  "autoApprove": {
+    "enabled": false
+  },
+  "instructions": "Review the actual diff against its linked GitHub issue and available exact-head CI evidence. A 5/5 code-review confidence score is not proof of green CI, verified acceptance criteria, or merge readiness. State those limits explicitly. The repository's independent exact-head CI and factory acceptance gates remain authoritative. Do not invent status, test results, or criterion completion.",
+  "rules": [
+    {
+      "id": "exact-head-ci-evidence",
+      "severity": "high",
+      "rule": "Before describing a pull request as safe to merge, inspect any GitHub Actions/check-run outcomes available for the exact reviewed head SHA. A failed or cancelled applicable CI check (including lint, typecheck, test, build, or CI Summary) is a blocking condition and must be called out by name with its actual conclusion; passing unrelated checks or previous-head results do not supersede it. Pending, skipped, stale, or unavailable CI evidence must never be represented as passing. If check results cannot be accessed, explicitly say 'CI not independently verified' rather than claiming CI is green. Do not assert that these instructions can override Greptile's numerical score or replace required GitHub checks."
+    },
+    {
+      "id": "linked-issue-acceptance-evidence",
+      "severity": "high",
+      "rule": "For each implementation PR with a linked GitHub issue, compare the actual code and executable validation evidence against every stated acceptance criterion, including scope fences and regression requirements. Identify missing behavior, unrun/invalid tests, tests that cannot exercise the stated scenario, and evidence tied to a stale PR head as blocking findings, citing concrete changed paths and criteria. A checkbox, PR description, reviewer assertion, or 'tests added' claim alone is not proof. If the linked issue or test evidence is inaccessible, say acceptance is not independently verified rather than implying completion. Do not approve a partial handoff as complete delivery."
+    }
+  ]
+}

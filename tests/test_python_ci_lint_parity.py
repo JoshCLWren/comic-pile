@@ -33,6 +33,7 @@ def test_check_script_matches_ci_commands() -> None:
     assert 'ruff check "$@"' not in script
     assert 'ty check --error-on-warning "$@"' not in script
     assert "check-python-ci-lint.sh" in _read("Makefile")
+    assert "run_tool pytest tests/test_hardcoded_ids.py -q --no-cov" in script
 
 
 def test_lint_sh_does_not_path_filter_ruff_or_ty() -> None:

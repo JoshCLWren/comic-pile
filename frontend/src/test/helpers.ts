@@ -297,6 +297,17 @@ export async function getAuthToken(page: Page): Promise<string | null> {
   });
 }
 
+export async function authHeaders(page: Page) {
+  const token = await getAuthToken(page)
+  expect(token).toBeTruthy()
+  const csrf = await getCsrfToken(page, token)
+  return {
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': csrf,
+    Authorization: `Bearer ${token}`,
+  }
+}
+
 async function getCsrfToken(page: Page, token: string | null): Promise<string> {
   const headers: Record<string, string> = {};
   if (token) {
@@ -591,4 +602,16 @@ export async function navigateToRatePage(page: Page): Promise<void> {
 
   await page.goto('/')
   await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible()
+}
+
+export async function getFirstIssueId(page: Page, threadId: number): Promise<number> {
+  const headers = await authHeaders(page)
+  const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+    headers,
+  })
+  expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the test reads only the response fields listed in this type
+  const data = (await response.json()) as { issues: Array<{ id: number }> }
+  expect(data.issues.length).toBeGreaterThan(0)
+  return data.issues[0].id
 }
