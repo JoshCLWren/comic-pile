@@ -1,11 +1,11 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { components } from '../generated/openapi'
 
-/** v2 deliberately excludes the retired historical field from its transport contract. */
-export type ReadingBoundaryExplanation = Omit<components['schemas']['ReadingBoundaryExplanation'], 'historical'>
+/** Canonical v2 is generated from FastAPI and has no historical field. */
+export type ReadingBoundaryExplanation = components['schemas']['ReadingBoundaryExplanationV2']
 export type BoundaryEditorTarget = components['schemas']['BoundaryEditorTarget']
 export type BoundaryIssue = components['schemas']['BoundaryIssue']
-type Batch = { threads: Record<string, ReadingBoundaryExplanation> }
+type Batch = components['schemas']['ReadingBoundaryBatchResponseV2']
 
 /** Read canonical explanations in bounded batches, never one request per Queue row. */
 export function createReadingBoundariesApi(client: HttpClient) {
