@@ -24,7 +24,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
-from alembic.util import CommandError
+
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import Connection, insert, select, text
 from sqlalchemy.exc import IntegrityError
@@ -224,6 +224,7 @@ async def test_failed_github_attempt_does_not_consume_allowance(
     default_user: User,
 ) -> None:
     """A failed GitHub attempt returns 502 and leaves the hour available."""
+    user_id = default_user.id
     settings = MagicMock()
     settings.is_configured = True
     with (
@@ -241,7 +242,7 @@ async def test_failed_github_attempt_does_not_consume_allowance(
     stored = (
         await async_db.execute(
             select(GithubIssueSubmissionLimit).where(
-                GithubIssueSubmissionLimit.user_id == default_user.id
+                GithubIssueSubmissionLimit.user_id == user_id
             )
         )
     ).scalar_one_or_none()
@@ -376,14 +377,8 @@ def test_rate_limit_migration_chains_onto_main_head() -> None:
     """The submission-limit migration extends main's head without forking it."""
     root = Path(__file__).parents[1]
     script = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
-    try:
-        revision = script.get_revision(MIGRATION_ID)
-        parent_present = script.get_revision(MIGRATION_PARENT) is not None
-    except CommandError:
-        # A feature checkout that predates the parent migration cannot evaluate
-        # the merged graph. CI evaluates the pull-request merge ref, where the
-        # parent exists and this migration must remain the only head.
-        return
+    revision = script.get_revision(MIGRATION_ID)
+    parent_present = script.get_revision(MIGRATION_PARENT) is not None
     assert revision is not None
     assert revision.down_revision == MIGRATION_PARENT
     if parent_present:
