@@ -30,6 +30,7 @@ import { useRollBootstrapSync } from './useRollBootstrapSync'
 import { useRollPendingSession } from './useRollPendingSession'
 import { useRollRating } from './useRollRating'
 import { useRollSnooze } from './useRollSnooze'
+import { useRollSkip } from './useRollSkip'
 import { useRollDependencies } from './useRollDependencies'
 import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
@@ -168,6 +169,23 @@ export default function RollPage() {
     )
   }, [showToast, retrySnoozeRefresh])
 
+  // A committed skip enters the next rating view from the mutation response,
+  // so an exhausted authoritative refresh can only be reported from the page.
+  // The toast reloads Roll state without repeating the skip.
+  const retrySkipRefresh = skipMutation.retryRefresh
+  const reportSkipRefreshFailed = useCallback((refreshError: unknown) => {
+    showToast(
+      `Skipped, but the Roll pool did not refresh. ${getApiErrorDetail(refreshError)}`,
+      'error',
+      {
+        label: 'Retry refresh',
+        onClick: () => {
+          void retrySkipRefresh()
+        },
+      },
+    )
+  }, [showToast, retrySkipRefresh])
+
   useRollBootstrapSync({
     state,
     bootstrap,
@@ -230,16 +248,15 @@ export default function RollPage() {
     onRefreshFailed: reportSnoozeRefreshFailed,
   })
 
-  const skip = {
-    handleUnskip: async (threadId: number) => {
-      try {
-        await unskipMutation.mutate(threadId)
-        await refetchBootstrap()
-      } catch (error) {
-        console.error('Unskip failed:', error)
-      }
-    },
-  }
+  const skip = useRollSkip({
+    state,
+    skipMutation,
+    unskipMutation,
+    refetchBootstrap,
+    enterRatingView: rating.enterRatingView,
+    expectedPendingThreadId: bootstrap?.pending_thread_id ?? undefined,
+    onRefreshFailed: reportSkipRefreshFailed,
+  })
 
   const dependencies = useRollDependencies({ state, bootstrap })
 
@@ -264,6 +281,7 @@ export default function RollPage() {
     enterRatingView: rating.enterRatingView,
     threadsApi,
     onSnoozeRefreshFailed: reportSnoozeRefreshFailed,
+    onSkipRefreshFailed: reportSkipRefreshFailed,
   })
 
   const modals = useRollModals({
@@ -333,33 +351,6 @@ export default function RollPage() {
     }
   }
 
-  const handleSkip = useCallback(async () => {
-    try {
-      const response = await skipMutation.mutate(bootstrap?.pending_thread_id ?? undefined)
-      if (!response) return
-      await refetchBootstrap()
-      const threadMetadata: ThreadMetadata = {
-        id: response.thread_id,
-        title: response.title,
-        format: response.format,
-        issues_remaining: response.issues_remaining,
-        queue_position: response.queue_position,
-        total_issues: response.total_issues ?? null,
-        reading_progress: response.reading_progress ?? null,
-        issue_id: response.issue_id ?? null,
-        issue_number: response.issue_number ?? null,
-        next_issue_id: response.next_issue_id ?? null,
-        next_issue_number: response.next_issue_number ?? null,
-        last_rolled_result: response.result ?? null,
-      }
-      state.suppressPendingAutoOpenRef.current = true
-      await rating.enterRatingView(response.thread_id, response.result ?? null, threadMetadata)
-      state.setRolledResult(response.result ?? null)
-    } catch (error) {
-      state.setErrorMessage(getApiErrorDetail(error))
-    }
-  }, [skipMutation, refetchBootstrap, rating, state, bootstrap?.pending_thread_id])
-
   const ratingViewData = useRatingView({
     state,
     bootstrap,
@@ -376,7 +367,7 @@ export default function RollPage() {
     connectedThreadsError: rating.connectedThreadsError,
     rating,
     snooze,
-    onSkip: handleSkip,
+    onSkip: skip.handleSkip,
     rateMutation,
     snoozeMutation,
     dismissPendingMutation,
