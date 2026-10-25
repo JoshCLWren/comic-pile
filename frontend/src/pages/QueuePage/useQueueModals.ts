@@ -278,11 +278,26 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     let cancelled = false
     const calculatePreview = async () => {
       const issueInput = createForm.issues
-      if (issueInput) {
+      if (issueInput && issueInput.trim()) {
         try {
-          const { parseIssueRangeDetailed } = await import('../../utils/issueParser')
-          const detail = parseIssueRangeDetailed(issueInput)
+          const { parseIssueRangeDetailed, validateIssueRangeForStaging } = await import(
+            '../../utils/issueParser'
+          )
+          // #4161: the preview must mirror the Save gate. `validateIssueRangeForStaging`
+          // is the single source of truth: an invalid entry surfaces its error here and
+          // never produces a creation count or a "will be created as a literal issue"
+          // promise. Accepted entries (including numbered labels such as "2b") preview
+          // without warnings.
+          const validation = validateIssueRangeForStaging(issueInput)
           if (cancelled) return
+          if (!validation.valid) {
+            setIssuePreview(null)
+            setIssueParseError(validation.error)
+            setIssueParseWarnings([])
+            setIssueParseBreakdown([])
+            return
+          }
+          const detail = parseIssueRangeDetailed(issueInput)
           setIssuePreview(detail.total)
           setIssueParseError(null)
           setIssueParseWarnings(detail.warnings)

@@ -183,7 +183,13 @@ describe('RollPage parent handlers', () => {
     bootstrapData.blocked_threads = []
     bootstrapData.stale_thread_count = 0
     bootstrapData.stale_thread = null
-    for (const mutation of [spies.setDie, spies.clearDie, spies.roll, spies.dismissPending, spies.override, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle, spies.rate]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
+    for (const mutation of [spies.setDie, spies.clearDie, spies.roll, spies.dismissPending, spies.override, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
+    // Rate publishes its authoritative bootstrap snapshot to the page; the mock
+    // mirrors that contract so no page-level bootstrap refetch is expected.
+    spies.rate.mockImplementation(async () => ({
+      rate: { thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 },
+      bootstrap: { ...bootstrapData },
+    }))
     spies.setPending.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
   })
 
@@ -733,17 +739,18 @@ describe('RollPage parent handlers', () => {
 
   it('handles finish-session rating refresh failure and stale migration', async () => {
     const user = userEvent.setup()
-    // The rated pool thread is rendered as stale, so the rating flow refreshes
-    // bootstrap stale data; a refresh failure must surface the error.
+    // The rated pool thread is rendered as stale, so a failed authoritative
+    // refresh from the Rate mutation must surface the error without retrying.
     bootstrapData.stale_thread = { id: 1, title: 'Saga', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
     bootstrapData.stale_thread_count = 1
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'finish rating' })).toBeInTheDocument())
-    spies.refetch.mockRejectedValueOnce(new Error('refresh failed'))
+    spies.rate.mockResolvedValueOnce({ rate: { thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 }, bootstrap: null })
     await user.click(screen.getByRole('button', { name: 'finish rating' }))
     await waitFor(() => expect(screen.getByText(/failed to refresh/i)).toBeInTheDocument())
+    expect(spies.rate).toHaveBeenCalledTimes(1)
 
     cleanup()
     bootstrapData.stale_thread = { id: 3, title: 'Unmigrated stale', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
@@ -755,7 +762,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'close migration' }))
   })
 
-  it('refreshes stale data after simple migration completion of a stale thread', async () => {
+  it('completes simple migration of a stale thread without a page-level refetch', async () => {
     const user = userEvent.setup()
     bootstrapData.stale_thread = { id: 1, title: 'Saga', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
     bootstrapData.stale_thread_count = 1
@@ -767,13 +774,16 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'save rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'complete simple' })).toBeInTheDocument())
+    spies.refetch.mockClear()
     await user.click(screen.getByRole('button', { name: 'complete simple' }))
-    await waitFor(() => expect(spies.refetch).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'complete simple' })).not.toBeInTheDocument())
+    // The Rate mutation already published authoritative stale data.
+    expect(spies.rate).toHaveBeenCalledTimes(1)
+    expect(spies.refetch).not.toHaveBeenCalled()
   })
 
-  it('refreshes bootstrap only when the rated thread was rendered stale', async () => {
+  it('never refetches bootstrap for a successful stale or fresh rating', async () => {
     const user = userEvent.setup()
-    spies.refetch.mockClear()
     bootstrapData.stale_thread = { id: 1, title: 'Saga', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
     bootstrapData.stale_thread_count = 1
     render(<RollPage />)
@@ -783,7 +793,7 @@ describe('RollPage parent handlers', () => {
     spies.refetch.mockClear()
     await user.click(screen.getByRole('button', { name: 'save rating' }))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument())
-    expect(spies.refetch).toHaveBeenCalled()
+    expect(spies.refetch).not.toHaveBeenCalled()
 
     cleanup()
     bootstrapData.stale_thread = null

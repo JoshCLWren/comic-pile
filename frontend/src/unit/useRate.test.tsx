@@ -31,7 +31,7 @@ beforeEach(() => { vi.clearAllMocks(); mockedProtectedApi.rate.mockResolvedValue
 
 it('submits ratings, applies the authoritative thread cache, and publishes Roll state', async () => {
   const reconciled = vi.fn(); window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
-  try { const { result } = renderHook(() => useRate(), { wrapper }); const payload: RatePayload = { thread_id: 1, rating: 4 }; let response: Thread | undefined; await act(async () => { response = await result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledWith(payload); expect(mockedApplyRatedThreadCache).toHaveBeenCalledWith(queryClient, thread); expect(response).toBe(thread); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(reconciled).toHaveBeenCalledTimes(1); expect(result.current.isError).toBe(false) } finally { window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled) }
+  try { const { result } = renderHook(() => useRate(), { wrapper }); const payload: RatePayload = { thread_id: 1, rating: 4 }; let response: Awaited<ReturnType<typeof result.current.mutate>> | undefined; await act(async () => { response = await result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledWith(payload); expect(mockedApplyRatedThreadCache).toHaveBeenCalledWith(queryClient, thread); expect(response?.rate).toBe(thread); expect(response?.bootstrap).toEqual(bootstrapState(null)); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(reconciled).toHaveBeenCalledTimes(1); expect(result.current.isError).toBe(false) } finally { window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled) }
 })
 
 it('shares one in-flight request across repeated submissions', async () => {
@@ -75,7 +75,7 @@ it('surfaces a delayed timeout when authoritative state still has the same pendi
 it('keeps a successful rating successful when the follow-up bootstrap refresh fails', async () => {
   mockedRollBootstrapApi.get.mockRejectedValue(new Error('refresh unavailable'))
   const { result } = renderHook(() => useRate(), { wrapper })
-  await act(async () => { await expect(result.current.mutate({ thread_id: 1, rating: 4 })).resolves.toBe(thread) })
+  await act(async () => { await expect(result.current.mutate({ thread_id: 1, rating: 4 })).resolves.toEqual({ rate: thread, bootstrap: null }) })
   expect(result.current.isError).toBe(false)
 })
 

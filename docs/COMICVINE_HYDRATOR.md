@@ -27,20 +27,51 @@ identity and creator work. The command never falls back to test or local databas
 Preview the same four stages without writes or provider calls:
 
 ```bash
-DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \\
+DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \
   --user-id 1 --dry-run
 ```
 
 Run or resume the live pipeline:
 
 ```bash
-COMICVINE_API_KEY=... DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \\
+COMICVINE_API_KEY=... DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \
   --user-id 1 --report .cache/comicvine-read-backfill.json
 ```
 
 The JSON report records phase order, per-issue results, pending work, throttled
 resources, and live request counts. `--refresh` forces provider metadata refresh
 for already mapped issues; without it, stored and local data are exhausted first.
+
+### Confirmed-mapping-only creator repair
+
+`--confirmed-only` runs the creator stages for issues that already have a confirmed
+ComicVine issue mapping and never remaps identity or performs fuzzy matching. It
+deduplicates by canonical `external_identity_id`, so sibling ComicPile issues that
+share one provider identity are hydrated once. Stages 1 and 3 (identity resolution)
+are skipped; stages 2 and 4 (local and provider creator hydration) still run with the
+usual pacing, checkpointing, `--limit`, and resumability.
+
+`--include-unread` widens the inventory to read and unread non-test issues and implies
+`--confirmed-only`. Unread and read rows that share one provider identity collapse to a
+single backfill result.
+
+```bash
+# Inventory only: no writes, no provider calls.
+DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \
+  --user-id 1 --confirmed-only --include-unread --dry-run
+
+# Bounded repair of already mapped issues.
+COMICVINE_API_KEY=... DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \
+  --user-id 1 --confirmed-only --include-unread --limit 50 \
+  --report .cache/comicvine-confirmed-repair.json
+```
+
+The report separates already-hydrated (`complete`, with a creator-credit count),
+sparse/roster-only (`needs-normalization`), never-deep-hydrated (`needs-hydration` or
+`planned-local`), provider-dependent, rate-limited, failed, and unresolved outcomes. It
+also records the before/after coverage counts (`inventory` plus `summary`) and per-phase
+provider request counts, so an operator can confirm that no bulk provider fan-out
+occurred.
 
 ## Report-only local run
 

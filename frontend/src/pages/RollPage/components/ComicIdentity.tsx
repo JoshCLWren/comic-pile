@@ -32,6 +32,7 @@ const RELATED_ISSUES_PER_ARC_LIMIT = 5
 const COVER_HEIGHT_CAP_VH = 45
 const COVER_RATIO_FALLBACK = 2 / 3
 const SUMMARY_LONG_THRESHOLD = 280
+const METADATA_REFRESH_FALLBACK_SECONDS = 10
 
 function formatRating(value: number): string {
   const normalized = parseFloat(value.toFixed(2))
@@ -84,6 +85,51 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       storyArcsDetailsRef.current.open = true
     }
   }, [metadata])
+
+  // Bounded refetch while metadata repair is in progress.
+  // Re-arms after every refetch while repair remains active, so a server that
+  // returns unchanged metadata (React Query keeps the existing reference) still
+  // gets a subsequent refresh instead of leaving credits hidden until a manual
+  // reload. The timer is cancelled on unmount and whenever the effect re-runs
+  // because the metadata moved out of a pending/running repair status.
+  useEffect(() => {
+    if (!issueId || !metadata) return
+
+    const status = metadata.metadata_status
+    const retryAfter = metadata.refresh_retry_after_seconds
+
+    if (status !== 'refresh_pending' && status !== 'refresh_running') return
+
+    let delaySeconds: number
+    if (retryAfter == null || retryAfter <= 0) {
+      delaySeconds = METADATA_REFRESH_FALLBACK_SECONDS
+    } else {
+      delaySeconds = retryAfter
+    }
+
+    let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout>
+
+    // Wait for each refetch to settle before arming the next one so a provider
+    // response slower than the delay cannot overlap (and cancel) the next poll.
+    const arm = () => {
+      timeoutId = setTimeout(() => {
+        if (cancelled) return
+        void refetch().then(() => {
+          if (!cancelled) {
+            arm()
+          }
+        })
+      }, delaySeconds * 1000)
+    }
+
+    arm()
+
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [issueId, metadata, refetch])
 
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
   const coverWidthCapVh = COVER_HEIGHT_CAP_VH * coverAspectRatio
@@ -358,6 +404,49 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
             )}
             </details>
           </>
+        )}
+
+        {/* Creator credits status when no creators are available */}
+        {metadata.creators.length === 0 && metadata.metadata_status && (
+          <div className="pl-6 pr-2 pb-2 border-l border-[var(--theme-border)]">
+            {(() => {
+              const status = metadata.metadata_status
+              const retryAfter = metadata.refresh_retry_after_seconds
+
+              switch (status) {
+                case 'not_deep_fetched':
+                case 'refresh_pending':
+                case 'refresh_running':
+                  return (
+                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-fetching">
+                      Creator credits being fetched…
+                    </p>
+                  );
+                case 'refresh_deferred':
+                  return (
+                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-deferred">
+                      {retryAfter != null && retryAfter > 0
+                        ? `Refresh deferred — retry in ${retryAfter}s`
+                        : 'Refresh deferred'}
+                    </p>
+                  );
+                case 'refresh_failed':
+                  return (
+                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-failed">
+                      Refresh failed
+                    </p>
+                  );
+                case 'deep_fetched_no_credits':
+                  return (
+                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-no-credits">
+                      Credits not available
+                    </p>
+                  );
+                default:
+                  return null;
+              }
+            })()}
+          </div>
         )}
 
         {metadata.story_arcs.length > 0 && (

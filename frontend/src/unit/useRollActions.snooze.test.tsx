@@ -47,13 +47,21 @@ interface HarnessOptions {
   bootstrap?: RollBootstrapResponse
   selectedThreadId?: number
   snoozeImpl?: () => Promise<SnoozeSessionResponse>
+  refreshed?: boolean
+  refreshError?: unknown
 }
 
 function renderActionSheet(options: HarnessOptions = {}) {
-  const { bootstrap = bootstrapWith(), snoozeImpl } = options
+  const { bootstrap = bootstrapWith(), snoozeImpl, refreshed = true, refreshError = null } = options
 
   // SAFETY: the hook only awaits the result; the stub stands in for the API's empty 200 body
-  const snoozeMutate = vi.fn(snoozeImpl ?? (() => Promise.resolve(undefined as SnoozeSessionResponse | undefined)))
+  const snoozeResponse = vi.fn(snoozeImpl ?? (() => Promise.resolve(undefined as SnoozeSessionResponse | undefined)))
+  const snoozeMutate = vi.fn(async () => ({
+    response: await snoozeResponse(),
+    refreshed,
+    refreshError,
+  }))
+  const onSnoozeRefreshFailed = vi.fn()
   const unsnoozeMutate = vi.fn(() => Promise.resolve(undefined))
   const refetchBootstrap = vi.fn(() => Promise.resolve(bootstrap))
 
@@ -82,13 +90,14 @@ function renderActionSheet(options: HarnessOptions = {}) {
       enterRatingView: vi.fn(() => Promise.resolve()),
       // SAFETY: the hook only calls setPending; the stub omits the rest of the API surface
       threadsApi: { setPending: vi.fn() } as never,
+      onSnoozeRefreshFailed,
     })
 
     return { state, actions }
   })
 
   // `result` stays live so every assertion reads the latest render's closure.
-  return { result, snoozeMutate, unsnoozeMutate, refetchBootstrap }
+  return { result, snoozeMutate, snoozeResponse, unsnoozeMutate, refetchBootstrap, onSnoozeRefreshFailed }
 }
 
 /** Select the pooled series whose action sheet the reader opened. */
@@ -115,7 +124,24 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
     // The id doubles as `expectedPendingThreadId`; dropping it would disable the
     // hook's auth-failure recovery and ambiguous-failure reconciliation.
     expect(snoozeMutate).toHaveBeenCalledWith(8)
-    expect(refetchBootstrap).toHaveBeenCalled()
+    // Successful snooze must not trigger a second bootstrap refresh.
+    expect(refetchBootstrap).not.toHaveBeenCalled()
+  })
+
+  it('reports an exhausted authoritative refresh after a committed snooze', async () => {
+    const refreshFailure = new Error('bootstrap unavailable')
+    const { result, onSnoozeRefreshFailed } = renderActionSheet({
+      bootstrap: bootstrapWith({ pending_thread_id: 8 }),
+      refreshed: false,
+      refreshError: refreshFailure,
+    })
+    selectThread(result, 8)
+
+    await act(async () => {
+      await result.current.actions.handleAction('snooze')
+    })
+
+    expect(onSnoozeRefreshFailed).toHaveBeenCalledWith(refreshFailure)
   })
 
   it('never snoozes a different series when a pooled series was chosen', async () => {

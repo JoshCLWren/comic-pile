@@ -468,6 +468,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument(
+        "--include-unread",
+        action="store_true",
+        help="Include unread issues in the inventory (confirmed-mapping-only mode).",
+    )
+    parser.add_argument(
+        "--confirmed-only",
+        action="store_true",
+        help="Process only issues with confirmed ComicVine identity mappings; do not remap.",
+    )
     return parser
 
 
@@ -486,9 +496,12 @@ async def _load_read_issues(
     *,
     user_id: int,
     limit: int | None,
+    include_unread: bool = False,
+    confirmed_only: bool = False,
 ) -> list[ReadIssue]:
     """Load read issues with only bounded creator-state and series evidence."""
-    sql = """
+    status_clause = "i.status IN ('read', 'unread')" if include_unread else "i.status = 'read'"
+    sql = f"""
         SELECT
             i.id AS issue_id,
             i.thread_id,
@@ -586,10 +599,11 @@ async def _load_read_issues(
                   sibling_ei.metadata_json::jsonb -> 'raw_provider_payload' -> 'volume' ->> 'id'
               ) IS NOT NULL
         ) sibling_cv ON TRUE
-        WHERE t.user_id = :user_id
-          AND t.is_test IS FALSE
-          AND i.status = 'read'
-        ORDER BY t.queue_position, t.id, i.position, i.id
+         WHERE t.user_id = :user_id
+           AND t.is_test IS FALSE
+           AND {status_clause}
+           {'' if not confirmed_only else 'AND issue_cv.identity_id IS NOT NULL'}
+         ORDER BY t.queue_position, t.id, i.position, i.id
     """
     params: dict[str, object] = {"user_id": user_id}
     if limit is not None:
@@ -1740,6 +1754,7 @@ def _summarize(results: list[BackfillResult]) -> dict[str, object]:
         "processed": len(results),
         "statuses": dict(sorted(statuses.items())),
         "issues_with_creator_credits": sum(r.creator_credits > 0 for r in results),
+        "without_creator_credits": sum(r.creator_credits == 0 for r in results),
         "creator_credit_rows": sum(r.creator_credits for r in results),
         "pending": sorted(
             result.issue_id
@@ -1764,6 +1779,20 @@ def _write_report(path: Path, payload: dict[str, object]) -> None:
 
 
 
+def _filter_confirmed_issues(issues: list[ReadIssue]) -> list[ReadIssue]:
+    """Filter issues to confirmed mappings only and deduplicate by external_identity_id."""
+    seen: set[int] = set()
+    filtered: list[ReadIssue] = []
+    for issue in issues:
+        if issue.identity_id is None or issue.external_id is None:
+            continue
+        if issue.identity_id in seen:
+            continue
+        seen.add(issue.identity_id)
+        filtered.append(issue)
+    return filtered
+
+
 async def _run(args: argparse.Namespace) -> int:
     """Execute the complete local-first, resumable operator pipeline."""
     database_url = _require_database_url(args.database_url)
@@ -1773,6 +1802,10 @@ async def _run(args: argparse.Namespace) -> int:
     dry_run = bool(args.dry_run)
     refresh = bool(args.refresh)
     limit = args.limit
+    include_unread = bool(getattr(args, "include_unread", False))
+    confirmed_only = bool(getattr(args, "confirmed_only", False))
+    if include_unread:
+        confirmed_only = True
     api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
     snapshot = _local_snapshot_from_environment()
     engine = _engine(database_url)
@@ -1781,6 +1814,11 @@ async def _run(args: argparse.Namespace) -> int:
     final_results: list[BackfillResult] = []
     client: ComicVineClient | None = None
     interrupted = False
+    inventory: dict[str, object] = {
+        "issues": 0,
+        "with_creator_credits": 0,
+        "without_creator_credits": 0,
+    }
 
     def checkpoint() -> None:
         """Persist phase progress so an interrupted run remains auditable and resumable."""
@@ -1807,6 +1845,7 @@ async def _run(args: argparse.Namespace) -> int:
                 },
                 "api_key_configured": bool(api_key),
                 "interrupted": interrupted,
+                "inventory": inventory,
                 "phases": phases,
                 "summary": _summarize(current),
                 "issues": [asdict(result) for result in final_results],
@@ -1826,21 +1865,37 @@ async def _run(args: argparse.Namespace) -> int:
                     f"host={host} database={database}; refusing to continue."
                 )
 
-            issues = await _load_read_issues(db, user_id=user_id, limit=limit)
-            print(f"Found {len(issues)} read non-test issues for user_id={user_id}.")
+            issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
+            if confirmed_only:
+                issues = _filter_confirmed_issues(issues)
+            inventory.update(
+                {
+                    "issues": len(issues),
+                    "with_creator_credits": sum(
+                        1 for issue in issues if issue.creator_credit_count > 0
+                    ),
+                    "without_creator_credits": sum(
+                        1 for issue in issues if issue.creator_credit_count == 0
+                    ),
+                }
+            )
+            print(f"Found {len(issues)} {'confirmed' if confirmed_only else 'read'} non-test issues for user_id={user_id}.")
             checkpoint()
 
-            print("=== ComicVine stage 1/4: exhaust local identity evidence ===")
-            local_identity = await _run_local_identity_phase(
-                db,
-                snapshot,
-                user_id=user_id,
-                issues=issues,
-                dry_run=dry_run,
-            )
-            phases.append(_phase_report("local-identity", local_identity, client=client))
-            checkpoint()
-            issues = await _load_read_issues(db, user_id=user_id, limit=limit)
+            if not confirmed_only:
+                print("=== ComicVine stage 1/4: exhaust local identity evidence ===")
+                local_identity = await _run_local_identity_phase(
+                    db,
+                    snapshot,
+                    user_id=user_id,
+                    issues=issues,
+                    dry_run=dry_run,
+                )
+                phases.append(_phase_report("local-identity", local_identity, client=client))
+                checkpoint()
+                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
+            # Confirmed-only mode: the inventory is already confirmed-mapped and deduplicated,
+            # so identity resolution phases are skipped without an extra query.
 
             print("=== ComicVine stage 2/4: exhaust stored/local creator metadata ===")
             local_creators = await _run_local_creator_phase(
@@ -1852,7 +1907,9 @@ async def _run(args: argparse.Namespace) -> int:
             )
             phases.append(_phase_report("local-creators", local_creators, client=client))
             checkpoint()
-            issues = await _load_read_issues(db, user_id=user_id, limit=limit)
+            issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
+            if confirmed_only:
+                issues = _filter_confirmed_issues(issues)
 
             if not dry_run and api_key:
                 client = ComicVineClient(
@@ -1866,17 +1923,20 @@ async def _run(args: argparse.Namespace) -> int:
                     "COMICVINE_API_KEY is not configured; provider-dependent work will remain resumable."
                 )
 
-            print("=== ComicVine stage 3/4: provider-dependent identity leftovers ===")
-            provider_identity = await _run_provider_identity_phase(
-                db,
-                client,
-                user_id=user_id,
-                issues=issues,
-                dry_run=dry_run,
-            )
-            phases.append(_phase_report("provider-identity", provider_identity, client=client))
-            checkpoint()
-            issues = await _load_read_issues(db, user_id=user_id, limit=limit)
+            if not confirmed_only:
+                print("=== ComicVine stage 3/4: provider-dependent identity leftovers ===")
+                provider_identity = await _run_provider_identity_phase(
+                    db,
+                    client,
+                    user_id=user_id,
+                    issues=issues,
+                    dry_run=dry_run,
+                )
+                phases.append(_phase_report("provider-identity", provider_identity, client=client))
+                checkpoint()
+                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
+            # Confirmed-only: the post-creator inventory reload above is already
+            # confirmed-mapped, deduplicated, and needs no identity phase.
 
             print("=== ComicVine stage 4/4: hydrate newly satisfiable creator metadata ===")
             final_results = await _run_provider_creator_phase(
