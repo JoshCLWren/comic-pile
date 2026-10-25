@@ -37,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.momentum import compute_momentum_breakdown
 from app.models import Event, Thread
-from app.services.reading_effort import compute_effort_estimate
+from app.services.reading_effort import compute_effort_estimates_batch
 from comic_pile.recommendation_weights import (
     WeightedCandidate,
     build_candidate_weights,
@@ -189,15 +189,15 @@ async def select_bandwidth_weighted(
     # exactly neutral for light/deep as well (build_candidate_weights treats a
     # missing estimate as weight 1.0).
     if effective_bandwidth in ("light", "deep"):
-        effort_pairs: list[tuple[int, float | None]] = []
-        for thread in threads:
-            estimate = await compute_effort_estimate(
-                db,
-                user_id=user_id,
-                thread_id=thread.id,
-                issue_id=thread.next_unread_issue_id,
-            )
-            effort_pairs.append((thread.id, estimate.minutes))
+        # Build candidate list for batched effort estimation
+        candidate_pairs = [(thread.id, thread.next_unread_issue_id) for thread in threads]
+        effort_map = await compute_effort_estimates_batch(
+            db, user_id=user_id, candidates=candidate_pairs
+        )
+        effort_pairs = [
+            (thread.id, effort_map[(thread.id, thread.next_unread_issue_id)].minutes)
+            for thread in threads
+        ]
     else:
         effort_pairs = [(thread.id, None) for thread in threads]
 

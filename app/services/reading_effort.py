@@ -70,10 +70,9 @@ from app.models import (
     Thread,
     ThreadExternalSeriesMapping,
 )
-from comic_pile.recommendation_version import (
-    CONTROL_MODE_CONTEXTUAL,
-    RECOMMENDATION_ALGORITHM_VERSION,
-)
+
+# Import comic_pile.recommendation_version inside build_recommendation_context
+# to avoid circular import with comic_pile.bandwidth -> app.services.reading_effort
 
 # --- Centralized, documented thresholds -----------------------------------
 #
@@ -531,13 +530,112 @@ async def compute_effort_estimate(
     Returns:
         The resolved EffortEstimate; never raises for missing data.
     """
+    estimates = await compute_effort_estimates_batch(
+        db, user_id=user_id, candidates=[(thread_id, issue_id)]
+    )
+    return estimates.get((thread_id, issue_id), neutral_estimate())
+
+
+async def compute_effort_estimates_batch(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    candidates: list[tuple[int, int | None]],
+) -> dict[tuple[int, int | None], EffortEstimate]:
+    """Compute reading-effort estimates for multiple candidates in one batch.
+
+    This eliminates the N+1 query pattern by:
+    1. Fetching all classified observations for the user ONCE.
+    2. Resolving publication years for all candidates in a SINGLE batched query.
+    3. Computing all estimates in Python from the batched data.
+
+    Args:
+        db: Async database session.
+        user_id: Owner of the reading history.
+        candidates: List of (thread_id, issue_id | None) tuples.
+
+    Returns:
+        Dictionary mapping (thread_id, issue_id | None) to EffortEstimate.
+        Missing candidates get a neutral estimate.
+    """
+    if not candidates:
+        return {}
+
+    # Step 1: Collect all observations for this user ONCE
     observations = await collect_classified_observations(db, user_id)
     by_issue, by_thread = aggregate_observations(observations)
-    issue_aggregate = by_issue.get((thread_id, issue_id)) if issue_id is not None else None
-    thread_aggregate = by_thread.get(thread_id)
-    publication_year = await resolve_publication_year(db, thread_id=thread_id, issue_id=issue_id)
-    era_minutes = era_prior_minutes(publication_year)
-    return resolve_effort_estimate(issue_aggregate, thread_aggregate, era_minutes)
+
+    # Step 2: Resolve publication years for all candidates in a SINGLE batched query
+    # We need unique thread_ids and issue_ids for the batched query
+    unique_thread_ids = list({thread_id for thread_id, _ in candidates})
+    unique_issue_ids = list({issue_id for _, issue_id in candidates if issue_id is not None})
+
+    from app.models import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
+    from sqlalchemy import select
+
+    # Batch query for issue-level publication years
+    issue_year_map: dict[int, int] = {}
+    if unique_issue_ids:
+        stmt = (
+            select(IssueExternalIdentityMapping.issue_id, ExternalIdentity.metadata_json)
+            .join(
+                ExternalIdentity,
+                IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
+            )
+            .where(IssueExternalIdentityMapping.issue_id.in_(unique_issue_ids))
+            .where(IssueExternalIdentityMapping.status == "confirmed")
+            .order_by(IssueExternalIdentityMapping.id)
+        )
+        result = await db.execute(stmt)
+        for issue_id, metadata_json in result.all():
+            if issue_id not in issue_year_map:  # First confirmed mapping wins
+                year = publication_year_from_metadata(
+                    metadata_json if isinstance(metadata_json, dict) else None
+                )
+                if year is not None:
+                    issue_year_map[issue_id] = year
+
+    # Batch query for thread-level (series) publication years
+    thread_year_map: dict[int, int] = {}
+    if unique_thread_ids:
+        stmt = (
+            select(ThreadExternalSeriesMapping.thread_id, ExternalIdentity.metadata_json)
+            .join(
+                ExternalIdentity,
+                ThreadExternalSeriesMapping.external_identity_id == ExternalIdentity.id,
+            )
+            .where(ThreadExternalSeriesMapping.thread_id.in_(unique_thread_ids))
+            .where(ThreadExternalSeriesMapping.status == "confirmed")
+            .order_by(ThreadExternalSeriesMapping.id)
+        )
+        result = await db.execute(stmt)
+        for thread_id, metadata_json in result.all():
+            if thread_id not in thread_year_map:  # First confirmed mapping wins
+                year = publication_year_from_metadata(
+                    metadata_json if isinstance(metadata_json, dict) else None
+                )
+                if year is not None:
+                    thread_year_map[thread_id] = year
+
+    # Step 3: Compute estimates for all candidates from batched data
+    estimates: dict[tuple[int, int | None], EffortEstimate] = {}
+    for thread_id, issue_id in candidates:
+        issue_aggregate = by_issue.get((thread_id, issue_id)) if issue_id is not None else None
+        thread_aggregate = by_thread.get(thread_id)
+
+        # Resolve publication year: issue-level first, then thread-level fallback
+        publication_year = None
+        if issue_id is not None and issue_id in issue_year_map:
+            publication_year = issue_year_map[issue_id]
+        elif thread_id in thread_year_map:
+            publication_year = thread_year_map[thread_id]
+
+        era_minutes = era_prior_minutes(publication_year)
+        estimates[(thread_id, issue_id)] = resolve_effort_estimate(
+            issue_aggregate, thread_aggregate, era_minutes
+        )
+
+    return estimates
 
 
 def build_recommendation_context(
@@ -602,6 +700,11 @@ def build_recommendation_context(
         JSON-serializable context dict tagged with
         ``RECOMMENDATION_CONTEXT_VERSION`` (currently 2).
     """
+    from comic_pile.recommendation_version import (
+        CONTROL_MODE_CONTEXTUAL,
+        RECOMMENDATION_ALGORITHM_VERSION,
+    )
+
     candidate: dict[str, object] = {
         "thread_id": thread_id,
         "issue_id": issue_id,

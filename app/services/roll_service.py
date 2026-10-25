@@ -48,6 +48,7 @@ from app.services.reading_effort import (
     EffortEstimate,
     build_recommendation_context,
     compute_effort_estimate,
+    compute_effort_estimates_batch,
 )
 from app.services.reading_eligibility_service import (
     get_execution_eligibility, project_blocking_explanation,
@@ -694,7 +695,8 @@ class RollService:
                     selected_thread_issue_id = issue.id
                     selected_thread_issue_number = issue.issue_number
 
-        effort_estimates: list[EffortEstimate] = []
+        # Build candidate list for batched effort estimation
+        candidate_pairs: list[tuple[int, int | None]] = []
         for thread, _unread_count, _issue_number in bounded_rows:
             issue_id = (
                 eligibility.threads[thread.id].next_issue_id
@@ -703,13 +705,13 @@ class RollService:
                 if thread.uses_issue_tracking()
                 else None
             )
-            effort_estimate = await compute_effort_estimate(
-                self._db,
-                user_id=user_id,
-                thread_id=thread.id,
-                issue_id=issue_id,
-            )
-            effort_estimates.append(effort_estimate)
+            candidate_pairs.append((thread.id, issue_id))
+
+        # Single batched call replaces N per-candidate queries
+        effort_map = await compute_effort_estimates_batch(
+            self._db, user_id=user_id, candidates=candidate_pairs
+        )
+        effort_estimates = [effort_map[pair] for pair in candidate_pairs]
         selected_effort_estimate = effort_estimates[selected_index]
 
         json_candidate_weights: list[dict[str, object]] | None = None
