@@ -278,6 +278,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             if (!fullyLoadedRef.current) {
               throw new Error('Issues are not fully loaded; save aborted.')
             }
+            // Once create succeeds the old snapshot lacks the new issue.
+            // Keep Save blocked even if both refresh requests reject.
+            fullyLoadedRef.current = false
             const refreshed = await fetchAllIssues()
             const expectedTotal = totalCountRef.current
             if (expectedTotal > 0 && refreshed.length < expectedTotal) {
@@ -289,6 +292,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               throw new Error('Could not load all issues; save aborted.')
             }
             baseIssuesRef.current = refreshed
+            fullyLoadedRef.current = true
           } else {
             baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
           }

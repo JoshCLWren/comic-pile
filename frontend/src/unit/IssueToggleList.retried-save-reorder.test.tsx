@@ -91,7 +91,7 @@ beforeEach(() => {
 })
 
 describe('IssueToggleList retried Save after incomplete create refresh (#4113)', () => {
-  it('keeps pending reorder, blocks stale flush, and recovers after complete reload', async () => {
+  it.each(['incomplete', 'rejected'] as const)('keeps pending reorder after %s refresh and recovers after Retry', async (failure) => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockedIssuesApi.list.mockResolvedValueOnce(
       buildListResponse(FULL_ISSUES, FULL_ISSUES.length),
@@ -111,9 +111,13 @@ describe('IssueToggleList retried Save after incomplete create refresh (#4113)',
     mockedIssuesApi.create.mockResolvedValue(
       buildListResponse([buildIssue(4)], FULL_ISSUES.length + 1),
     )
-    mockedIssuesApi.list.mockResolvedValue(
-      buildListResponse(FULL_ISSUES.slice(0, 2), FULL_ISSUES.length + 1),
-    )
+    if (failure === 'rejected') {
+      mockedIssuesApi.list.mockRejectedValue(new Error('refresh unavailable'))
+    } else {
+      mockedIssuesApi.list.mockResolvedValue(
+        buildListResponse(FULL_ISSUES.slice(0, 2), FULL_ISSUES.length + 1),
+      )
+    }
 
     await act(async () => {
       await expect(ref.current?.flush()).rejects.toThrow(/save aborted|resync failed/i)
@@ -163,7 +167,7 @@ describe('IssueToggleList retried Save after incomplete create refresh (#4113)',
     errorSpy.mockRestore()
   })
 
-  it('allows Save again after a successful complete refresh without hiding Retry forever', async () => {
+  it('allows Save after automatic catch-path recovery without manual Retry', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockedIssuesApi.list.mockResolvedValueOnce(
       buildListResponse(FULL_ISSUES, FULL_ISSUES.length),
@@ -180,28 +184,21 @@ describe('IssueToggleList retried Save after incomplete create refresh (#4113)',
     mockedIssuesApi.create.mockResolvedValue(
       buildListResponse([buildIssue(4)], FULL_ISSUES.length + 1),
     )
-    // First flush: incomplete. Retry load: complete.
+    // Post-create refresh fails; automatic catch-path resync is complete.
     mockedIssuesApi.list
-      .mockResolvedValueOnce(
-        buildListResponse(FULL_ISSUES.slice(0, 2), FULL_ISSUES.length + 1),
-      )
-      .mockResolvedValueOnce(
-        buildListResponse(FULL_ISSUES.slice(0, 2), FULL_ISSUES.length + 1),
-      )
+      .mockRejectedValueOnce(new Error('refresh unavailable'))
       .mockResolvedValue(
         buildListResponse(WITH_NEW_ISSUE, WITH_NEW_ISSUE.length),
       )
 
     await act(async () => {
-      await expect(ref.current?.flush()).rejects.toThrow(/save aborted|resync failed/i)
+      await expect(ref.current?.flush()).rejects.toThrow(/refresh unavailable/i)
     })
-    expect(screen.getByTestId('issue-load-retry')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByTestId('issue-load-retry'))
     expect(await screen.findByTestId('issue-reorder-row-4')).toBeInTheDocument()
     // Retry must not remain after a complete reload, or Save looks permanently blocked.
     expect(screen.queryByTestId('issue-load-retry')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('issue-action-error')).not.toBeInTheDocument()
+    // The failed Save remains reported until the next successful Save.
+    expect(screen.getByTestId('issue-action-error')).toHaveTextContent('refresh unavailable')
 
     await act(async () => {
       await ref.current?.flush()
