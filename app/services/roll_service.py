@@ -617,6 +617,28 @@ class RollService:
             selection_bandwidth, selection_intent, control_mode
         )
 
+        # One set-based effort projection serves both weighting and the
+        # persisted recommendation audit; selection never re-queries it.
+        candidate_pairs: list[tuple[int, int | None]] = []
+        for thread, _unread_count, _issue_number in bounded_rows:
+            issue_id = (
+                eligibility.threads[thread.id].next_issue_id
+                if eligibility is not None
+                else thread.next_unread_issue_id
+                if thread.uses_issue_tracking()
+                else None
+            )
+            candidate_pairs.append((thread.id, issue_id))
+
+        effort_map = await compute_effort_estimates_batch(
+            self._db, user_id=user_id, candidates=candidate_pairs
+        )
+        effort_estimates = [effort_map[pair] for pair in candidate_pairs]
+        effort_minutes_by_thread = {
+            thread_id: effort_map[(thread_id, issue_id)].minutes
+            for thread_id, issue_id in candidate_pairs
+        }
+
         weights_applied = False
         candidate_weights: list = []
         if resolved_mode is SelectionMode.FORCED_LEGACY:
@@ -660,6 +682,7 @@ class RollService:
                 bandwidth=selection_bandwidth,
                 intent=selection_intent,
                 now=datetime.now(UTC),
+                effort_minutes_by_thread=effort_minutes_by_thread,
             )
             selected_index = selected.selected_index
             candidate_weights = selected.weights
@@ -695,23 +718,6 @@ class RollService:
                     selected_thread_issue_id = issue.id
                     selected_thread_issue_number = issue.issue_number
 
-        # Build candidate list for batched effort estimation
-        candidate_pairs: list[tuple[int, int | None]] = []
-        for thread, _unread_count, _issue_number in bounded_rows:
-            issue_id = (
-                eligibility.threads[thread.id].next_issue_id
-                if eligibility is not None
-                else thread.next_unread_issue_id
-                if thread.uses_issue_tracking()
-                else None
-            )
-            candidate_pairs.append((thread.id, issue_id))
-
-        # Single batched call replaces N per-candidate queries
-        effort_map = await compute_effort_estimates_batch(
-            self._db, user_id=user_id, candidates=candidate_pairs
-        )
-        effort_estimates = [effort_map[pair] for pair in candidate_pairs]
         selected_effort_estimate = effort_estimates[selected_index]
 
         json_candidate_weights: list[dict[str, object]] | None = None

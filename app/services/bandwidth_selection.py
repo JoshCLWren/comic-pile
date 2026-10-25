@@ -28,7 +28,7 @@ Product rules implemented here:
 from __future__ import annotations
 
 import random
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
@@ -109,6 +109,7 @@ async def select_bandwidth_weighted(
     bandwidth: str | None = None,
     intent: str | None = None,
     now: datetime | None = None,
+    effort_minutes_by_thread: Mapping[int, float | None] | None = None,
 ) -> BandwidthSelection:
     """Select one index inside the bounded pool using bandwidth weighting.
 
@@ -120,6 +121,10 @@ async def select_bandwidth_weighted(
         bandwidth: Active session bandwidth; ``None`` means balanced.
         intent: Active reading intent; ``random`` bypasses weighting.
         now: Reference timestamp; defaults to current UTC.
+        effort_minutes_by_thread: Already-resolved effort minutes keyed by
+            thread id. When provided, light/deep selection reuses this batch
+            instead of issuing another effort read; ``None`` keeps the
+            standalone-call behavior of resolving effort inside this service.
 
     Returns:
         A :class:`BandwidthSelection` recording the chosen index, the resolved
@@ -189,15 +194,26 @@ async def select_bandwidth_weighted(
     # exactly neutral for light/deep as well (build_candidate_weights treats a
     # missing estimate as weight 1.0).
     if effective_bandwidth in ("light", "deep"):
-        # Build candidate list for batched effort estimation
-        candidate_pairs = [(thread.id, thread.next_unread_issue_id) for thread in threads]
-        effort_map = await compute_effort_estimates_batch(
-            db, user_id=user_id, candidates=candidate_pairs
-        )
-        effort_pairs = [
-            (thread.id, effort_map[(thread.id, thread.next_unread_issue_id)].minutes)
-            for thread in threads
-        ]
+        if effort_minutes_by_thread is not None:
+            # Reuse the caller's single resolved batch so a Roll request never
+            # repeats the effort read for the same bounded pool.
+            effort_pairs = [
+                (thread.id, effort_minutes_by_thread.get(thread.id))
+                for thread in threads
+            ]
+        else:
+            # Standalone callers (tests, service consumers) still get one
+            # batched read instead of one read per candidate.
+            candidate_pairs = [
+                (thread.id, thread.next_unread_issue_id) for thread in threads
+            ]
+            effort_map = await compute_effort_estimates_batch(
+                db, user_id=user_id, candidates=candidate_pairs
+            )
+            effort_pairs = [
+                (thread.id, effort_map[(thread.id, thread.next_unread_issue_id)].minutes)
+                for thread in threads
+            ]
     else:
         effort_pairs = [(thread.id, None) for thread in threads]
 

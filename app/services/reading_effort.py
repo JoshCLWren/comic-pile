@@ -59,16 +59,13 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Final
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
-from app.models import (
-    Event,
-    ExternalIdentity,
-    IssueExternalIdentityMapping,
-    Thread,
-    ThreadExternalSeriesMapping,
+from app.repositories.reading_effort_repository import (
+    PublicationMetadataRow,
+    fetch_confirmed_issue_publication_metadata,
+    fetch_confirmed_thread_publication_metadata,
+    fetch_linked_roll_rate_rows,
 )
 
 # Import comic_pile.recommendation_version inside build_recommendation_context
@@ -425,33 +422,21 @@ async def collect_classified_observations(
     Returns:
         Classified observations in deterministic (rate id) order.
     """
-    roll_event = aliased(Event)
-    stmt = (
-        select(roll_event, Event)
-        .join(roll_event, Event.source_roll_event_id == roll_event.id)
-        .join(Thread, Event.thread_id == Thread.id)
-        .where(Event.type == "rate")
-        .where(roll_event.type == "roll")
-        .where(roll_event.selected_thread_id == Event.thread_id)
-        .where(Thread.user_id == user_id)
-        .order_by(Event.id)
-    )
-    result = await db.execute(stmt)
-    rows = result.all()
+    rows = await fetch_linked_roll_rate_rows(db, user_id=user_id)
 
     observations: list[ClassifiedObservation] = []
-    for roll_row, rate_row in rows:
-        roll_timestamp: datetime | None = roll_row.timestamp
-        rate_timestamp: datetime | None = rate_row.timestamp
+    for row in rows:
+        roll_timestamp: datetime | None = row.roll_timestamp
+        rate_timestamp: datetime | None = row.rate_timestamp
         elapsed: float | None = None
         if roll_timestamp is not None and rate_timestamp is not None:
             elapsed = (rate_timestamp - roll_timestamp).total_seconds()
         observation = DurationObservation(
-            roll_event_id=roll_row.id,
-            rate_event_id=rate_row.id,
-            session_id=rate_row.session_id,
-            thread_id=rate_row.thread_id if rate_row.thread_id is not None else -1,
-            issue_id=rate_row.issue_id,
+            roll_event_id=row.roll_event_id,
+            rate_event_id=row.rate_event_id,
+            session_id=row.session_id,
+            thread_id=row.thread_id,
+            issue_id=row.issue_id,
             elapsed_seconds=elapsed,
         )
         valid, reason = classify_observation(observation.elapsed_seconds)
@@ -477,37 +462,19 @@ async def resolve_publication_year(
         Publication year, or None when no confirmed metadata exists.
     """
     if issue_id is not None:
-        result = await db.execute(
-            select(ExternalIdentity.metadata_json)
-            .join(
-                IssueExternalIdentityMapping,
-                IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
-            )
-            .where(IssueExternalIdentityMapping.issue_id == issue_id)
-            .where(IssueExternalIdentityMapping.status == "confirmed")
-            .order_by(IssueExternalIdentityMapping.id)
+        issue_rows = await fetch_confirmed_issue_publication_metadata(
+            db, issue_ids=(issue_id,)
         )
-        for (metadata_json,) in result.all():
-            year = publication_year_from_metadata(
-                metadata_json if isinstance(metadata_json, dict) else None
-            )
+        for row in issue_rows:
+            year = publication_year_from_metadata(row.metadata_json)
             if year is not None:
                 return year
 
-    result = await db.execute(
-        select(ExternalIdentity.metadata_json)
-        .join(
-            ThreadExternalSeriesMapping,
-            ThreadExternalSeriesMapping.external_identity_id == ExternalIdentity.id,
-        )
-        .where(ThreadExternalSeriesMapping.thread_id == thread_id)
-        .where(ThreadExternalSeriesMapping.status == "confirmed")
-        .order_by(ThreadExternalSeriesMapping.id)
+    thread_rows = await fetch_confirmed_thread_publication_metadata(
+        db, thread_ids=(thread_id,)
     )
-    for (metadata_json,) in result.all():
-        year = publication_year_from_metadata(
-            metadata_json if isinstance(metadata_json, dict) else None
-        )
+    for row in thread_rows:
+        year = publication_year_from_metadata(row.metadata_json)
         if year is not None:
             return year
     return None
@@ -546,7 +513,8 @@ async def compute_effort_estimates_batch(
 
     This eliminates the N+1 query pattern by:
     1. Fetching all classified observations for the user ONCE.
-    2. Resolving publication years for all candidates in a SINGLE batched query.
+    2. Resolving publication years for all candidates in one batched read per
+       identity level (issue and thread).
     3. Computing all estimates in Python from the batched data.
 
     Args:
@@ -561,63 +529,23 @@ async def compute_effort_estimates_batch(
     if not candidates:
         return {}
 
-    # Step 1: Collect all observations for this user ONCE
     observations = await collect_classified_observations(db, user_id)
     by_issue, by_thread = aggregate_observations(observations)
 
-    # Step 2: Resolve publication years for all candidates in a SINGLE batched query
-    # We need unique thread_ids and issue_ids for the batched query
-    unique_thread_ids = list({thread_id for thread_id, _ in candidates})
-    unique_issue_ids = list({issue_id for _, issue_id in candidates if issue_id is not None})
+    unique_thread_ids = tuple({thread_id for thread_id, _ in candidates})
+    unique_issue_ids = tuple(
+        {issue_id for _, issue_id in candidates if issue_id is not None}
+    )
 
-    from app.models import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
-    from sqlalchemy import select
-
-    # Batch query for issue-level publication years
-    issue_year_map: dict[int, int] = {}
-    if unique_issue_ids:
-        stmt = (
-            select(IssueExternalIdentityMapping.issue_id, ExternalIdentity.metadata_json)
-            .join(
-                ExternalIdentity,
-                IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
-            )
-            .where(IssueExternalIdentityMapping.issue_id.in_(unique_issue_ids))
-            .where(IssueExternalIdentityMapping.status == "confirmed")
-            .order_by(IssueExternalIdentityMapping.id)
+    issue_year_map = _first_publication_year_by_target(
+        await fetch_confirmed_issue_publication_metadata(db, issue_ids=unique_issue_ids)
+    )
+    thread_year_map = _first_publication_year_by_target(
+        await fetch_confirmed_thread_publication_metadata(
+            db, thread_ids=unique_thread_ids
         )
-        result = await db.execute(stmt)
-        for issue_id, metadata_json in result.all():
-            if issue_id not in issue_year_map:  # First confirmed mapping wins
-                year = publication_year_from_metadata(
-                    metadata_json if isinstance(metadata_json, dict) else None
-                )
-                if year is not None:
-                    issue_year_map[issue_id] = year
+    )
 
-    # Batch query for thread-level (series) publication years
-    thread_year_map: dict[int, int] = {}
-    if unique_thread_ids:
-        stmt = (
-            select(ThreadExternalSeriesMapping.thread_id, ExternalIdentity.metadata_json)
-            .join(
-                ExternalIdentity,
-                ThreadExternalSeriesMapping.external_identity_id == ExternalIdentity.id,
-            )
-            .where(ThreadExternalSeriesMapping.thread_id.in_(unique_thread_ids))
-            .where(ThreadExternalSeriesMapping.status == "confirmed")
-            .order_by(ThreadExternalSeriesMapping.id)
-        )
-        result = await db.execute(stmt)
-        for thread_id, metadata_json in result.all():
-            if thread_id not in thread_year_map:  # First confirmed mapping wins
-                year = publication_year_from_metadata(
-                    metadata_json if isinstance(metadata_json, dict) else None
-                )
-                if year is not None:
-                    thread_year_map[thread_id] = year
-
-    # Step 3: Compute estimates for all candidates from batched data
     estimates: dict[tuple[int, int | None], EffortEstimate] = {}
     for thread_id, issue_id in candidates:
         issue_aggregate = by_issue.get((thread_id, issue_id)) if issue_id is not None else None
@@ -636,6 +564,27 @@ async def compute_effort_estimates_batch(
         )
 
     return estimates
+
+
+def _first_publication_year_by_target(
+    rows: Sequence[PublicationMetadataRow],
+) -> dict[int, int]:
+    """Map each issue/thread id to its first confirmed, year-bearing metadata.
+
+    Args:
+        rows: Confirmed metadata rows in mapping-id order.
+
+    Returns:
+        Mapping of issue or thread id to the first publication year found.
+    """
+    years: dict[int, int] = {}
+    for row in rows:
+        if row.target_id in years:
+            continue
+        year = publication_year_from_metadata(row.metadata_json)
+        if year is not None:
+            years[row.target_id] = year
+    return years
 
 
 def build_recommendation_context(
