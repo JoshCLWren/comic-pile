@@ -43,7 +43,11 @@ _identity_serial = 0
 
 
 @contextmanager
-def _captured_selects(db_engine: AsyncEngine) -> Iterator[list[str]]:
+def _captured_selects(
+    db_engine: AsyncEngine,
+    *,
+    row_counts: list[int] | None = None,
+) -> Iterator[list[str]]:
     """Yield a list that records SELECT statements executed on the engine."""
     select_statements: list[str] = []
 
@@ -58,11 +62,26 @@ def _captured_selects(db_engine: AsyncEngine) -> Iterator[list[str]]:
         if statement.lstrip().upper().startswith(("SELECT", "WITH")):
             select_statements.append(statement)
 
+    def _count_rows(
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        if row_counts is not None and statement.lstrip().upper().startswith(("SELECT", "WITH")):
+            count = getattr(cursor, "rowcount", -1)
+            assert isinstance(count, int)
+            row_counts.append(count)
+
     event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
+    event.listen(db_engine.sync_engine, "after_cursor_execute", _count_rows)
     try:
         yield select_statements
     finally:
         event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
+        event.remove(db_engine.sync_engine, "after_cursor_execute", _count_rows)
 
 
 def _provider_issue_result(issue_number: int, person_ids: list[int]) -> dict[str, object]:
@@ -452,16 +471,20 @@ async def test_summary_projection_bounds_transferred_rows(
         await async_db.execute(text(f"ANALYZE {table}"))
     baseline_profile = cProfile.Profile()
     started = time.perf_counter()
+    baseline_row_counts: list[int] = []
     baseline_profile.enable()
-    baseline = await load_creator_summary_inputs(async_db, default_user.id)
+    with _captured_selects(db_engine, row_counts=baseline_row_counts) as baseline_queries:
+        baseline = await load_creator_summary_inputs(async_db, default_user.id)
     baseline_profile.disable()
+    assert len(baseline_queries) == 4
     baseline_ms = (time.perf_counter() - started) * 1000
     for key_count in (1, 2, 5, 20):
         ids = set(range(402, 402 + key_count))
         profile = cProfile.Profile()
         started = time.perf_counter()
         profile.enable()
-        with _captured_selects(db_engine) as queries:
+        row_counts: list[int] = []
+        with _captured_selects(db_engine, row_counts=row_counts) as queries:
             projected = await load_creator_summary_inputs_for_creators(
                 async_db,
                 default_user.id,
@@ -478,13 +501,17 @@ async def test_summary_projection_bounds_transferred_rows(
         assert set(projected.owned_issues) == set(expected)
         assert set(projected.effective_ratings) == set(expected)
         assert projected.coverage_counts == (library_size, library_size, 0, 0, 0, 0)
-        # One thread-only manual-credit read, one aggregate, one filtered read.
-        assert len(queries) == 3
+        # One thread-only manual-credit read and one combined filtered/coverage read.
+        assert len(queries) == 2
         expected_rows = (library_size // 20) * ((key_count + 1) // 2)
         assert len(projected.owned_issues) == expected_rows
+        assert row_counts[-1] == (library_size // 20) * key_count
+        assert sum(row_counts) < sum(baseline_row_counts)
+
         print(
             f"library={library_size} keys={key_count} old_issue_rows={len(baseline.owned_issues)} "
             f"requested_issue_rows={len(projected.owned_issues)} "
+            f"baseline_db_rows={sum(baseline_row_counts)} db_rows={sum(row_counts)} "
             f"baseline_ms={baseline_ms:.2f} projected_ms={elapsed_ms:.2f} "
             f"baseline_profile_calls={sum(e.callcount for e in baseline_profile.getstats())} "
             f"profile_calls={sum(entry.callcount for entry in profile.getstats())}"

@@ -491,7 +491,23 @@ async def load_creator_summary_inputs_for_creators(
         .cte("owned_creator_issues")
         .prefix_with("NOT MATERIALIZED")
     )
-    raw_credits = cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)
+    arrays = (
+        select(
+            owned.c.id.label("issue_id"),
+            cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB).label("credits"),
+        )
+        .select_from(owned)
+        .join(IssueExternalIdentityMapping, IssueExternalIdentityMapping.issue_id == owned.c.id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(IssueExternalIdentityMapping.status == "confirmed")
+        .where(ExternalIdentity.provider == COMICVINE_PROVIDER)
+        .cte("creator_credit_arrays")
+        .prefix_with("MATERIALIZED")
+    )
+    raw_credits = arrays.c.credits
     elements = (
         func.jsonb_array_elements(
             case(
@@ -510,46 +526,15 @@ async def load_creator_summary_inputs_for_creators(
         else_=None,
     )
     valid_credits = (
-        select(owned.c.id.label("issue_id"), value.label("credit"), creator_id.label("creator_id"))
-        .select_from(owned)
-        .join(IssueExternalIdentityMapping, IssueExternalIdentityMapping.issue_id == owned.c.id)
-        .join(
-            ExternalIdentity,
-            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
-        )
+        select(arrays.c.issue_id, value.label("credit"), creator_id.label("creator_id"))
+        .select_from(arrays)
         .join(elements, true())
-        .where(IssueExternalIdentityMapping.status == "confirmed")
-        .where(ExternalIdentity.provider == COMICVINE_PROVIDER)
         .where(creator_id.is_not(None))
         .where(func.jsonb_typeof(value["name"]) == "string")
         .where(func.btrim(value["name"].astext) != "")
         .cte("usable_creator_credits")
-        .prefix_with("NOT MATERIALIZED")
     )
-    # Coverage is an existence check, so it never emits one row per credit.
-    # Reuse the same guarded extraction rules as the requested projection.
-    has_usable_credit = (
-        select(literal(1))
-        .select_from(elements)
-        .where(creator_id.is_not(None))
-        .where(func.jsonb_typeof(value["name"]) == "string")
-        .where(func.btrim(value["name"].astext) != "")
-        .correlate(ExternalIdentity)
-        .exists()
-    )
-    confirmed = (
-        select(IssueExternalIdentityMapping.issue_id)
-        .join(owned, owned.c.id == IssueExternalIdentityMapping.issue_id)
-        .join(
-            ExternalIdentity,
-            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
-        )
-        .where(IssueExternalIdentityMapping.status == "confirmed")
-        .where(ExternalIdentity.provider == COMICVINE_PROVIDER)
-        .where(has_usable_credit)
-        .distinct()
-        .cte("confirmed_creator_issues")
-    )
+    confirmed = select(valid_credits.c.issue_id).distinct().cte("confirmed_creator_issues")
     latest = (
         select(Event.issue_id, Event.rating)
         .join(owned, owned.c.id == Event.issue_id)
@@ -563,39 +548,33 @@ async def load_creator_summary_inputs_for_creators(
     rated = latest.c.rating.is_not(None)
     read_unrated = (owned.c.status == "read") & ~rated
     unread = owned.c.status == "unread"
-    counts = await db.execute(
+    coverage = (
         select(
             *[
-                func.count().filter(predicate)
-                for predicate in (
-                    rated,
-                    rated & covered,
-                    read_unrated,
-                    read_unrated & covered,
-                    unread,
-                    unread & covered,
+                func.count().filter(predicate).label(f"count_{index}")
+                for index, predicate in enumerate(
+                    (
+                        rated,
+                        rated & covered,
+                        read_unrated,
+                        read_unrated & covered,
+                        unread,
+                        unread & covered,
+                    )
                 )
             ]
         )
         .select_from(owned)
         .outerjoin(confirmed, confirmed.c.issue_id == owned.c.id)
         .outerjoin(latest, latest.c.issue_id == owned.c.id)
-    )
-    count_row = counts.one()
-    coverage_counts = (
-        int(count_row[0]),
-        int(count_row[1]),
-        int(count_row[2]),
-        int(count_row[3]),
-        int(count_row[4]),
-        int(count_row[5]),
+        .cte("creator_coverage")
     )
     requested = (
         select(valid_credits.c.issue_id, valid_credits.c.credit)
         .where(valid_credits.c.creator_id.in_(requested_creator_ids))
         .cte("requested_creator_credits")
     )
-    rows = await db.execute(
+    matching = (
         select(owned.c.id, owned.c.status, owned.c.thread_id, requested.c.credit, latest.c.rating)
         .select_from(owned)
         .outerjoin(confirmed, confirmed.c.issue_id == owned.c.id)
@@ -607,12 +586,36 @@ async def load_creator_summary_inputs_for_creators(
                 confirmed.c.issue_id.is_(None) & owned.c.thread_id.in_(requested_manual_threads),
             )
         )
-        .order_by(owned.c.id)
+        .cte("matching_creator_issues")
     )
+    # Share extracted credit arrays between attribution and coverage. Reading
+    # the large source JSON twice was slower than the old Python aggregation.
+    rows = await db.execute(
+        select(matching, coverage)
+        .select_from(coverage)
+        .outerjoin(matching, true())
+        .order_by(matching.c.id)
+    )
+    coverage_counts = None
     statuses: dict[int, str] = {}
     ratings: dict[int, float] = {}
     credits_by_issue: dict[int, dict[tuple[int, tuple[str, ...]], CreatorCredit]] = {}
-    for issue_id, status, thread_id, raw_credit, rating in rows.all():
+    for row in rows.all():
+        coverage_counts = (
+            int(row[5]),
+            int(row[6]),
+            int(row[7]),
+            int(row[8]),
+            int(row[9]),
+            int(row[10]),
+        )
+        if row[0] is None:
+            continue
+        issue_id = int(row[0])
+        status = str(row[1])
+        thread_id = int(row[2])
+        raw_credit = row[3]
+        rating = row[4]
         statuses[issue_id] = status
         if rating is not None:
             ratings[issue_id] = float(rating)
