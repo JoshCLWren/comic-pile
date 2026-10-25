@@ -43,12 +43,28 @@ export function BulkTagToolbar({ selectedIds, onClearSelection, onDone }: BulkTa
         mode === 'add'
           ? await bulkAssign.mutateAsync({ id: picked.id, data })
           : await bulkUnassign.mutateAsync({ id: picked.id, data })
-      const verb = mode === 'add' ? 'tagged' : 'untagged'
+      const stillInheritedIds = new Set(result.still_inherited_ids ?? [])
+      const alreadyUntaggedCount = result.already_ids.filter(
+        (issueId) => !stillInheritedIds.has(issueId),
+      ).length
+      const selectedCount = result.requested_ids.length
+      const selectedNoun = selectedCount === 1 ? 'issue' : 'issues'
+      const stillInheritedCount = stillInheritedIds.size
       const summary =
-        `${verb} “${picked.name}” on ${result.affected_ids.length} of ` +
-        `${result.requested_ids.length} selected issues` +
-        (result.already_ids.length > 0 ? ` (${result.already_ids.length} already ${mode === 'add' ? 'tagged' : 'untagged'})` : '') +
-        '.'
+        mode === 'add'
+          ? `Tagged “${picked.name}” on ${result.affected_ids.length} of ` +
+            `${selectedCount} selected ${selectedNoun}` +
+            (result.already_ids.length > 0
+              ? ` (${result.already_ids.length} already tagged)`
+              : '') +
+            '.'
+          : `Removed direct “${picked.name}” tag from ${result.affected_ids.length} of ` +
+            `${selectedCount} selected ${selectedNoun}` +
+            (stillInheritedCount > 0
+              ? ` (${stillInheritedCount} ${stillInheritedCount === 1 ? 'issue still inherits' : 'issues still inherit'} it)`
+              : '') +
+            (alreadyUntaggedCount > 0 ? ` (${alreadyUntaggedCount} already untagged)` : '') +
+            '.'
       onDone?.(summary)
       onClearSelection()
     } catch (error) {
@@ -67,18 +83,20 @@ export function BulkTagToolbar({ selectedIds, onClearSelection, onDone }: BulkTa
           {selectedIds.length} selected
         </p>
         {picked && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--theme-border)] px-2.5 py-1 text-xs font-semibold text-[var(--theme-text-primary)]">
+          <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--theme-border)] px-2.5 py-1 text-xs font-semibold text-[var(--theme-text-primary)]">
             <span
               aria-hidden="true"
-              className="inline-block h-2 w-2 rounded-full"
+              className="inline-block h-2 w-2 shrink-0 rounded-full"
               style={{ backgroundColor: picked.color }}
             />
-            {picked.name}
+            <span className="min-w-0 truncate" title={picked.name}>
+              {picked.name}
+            </span>
             <button
               type="button"
               onClick={() => setPicked(null)}
               aria-label="Clear picked tag"
-              className="rounded-full px-1 text-[var(--theme-text-muted)] hover:text-[var(--theme-danger)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              className="shrink-0 rounded-full px-1 text-[var(--theme-text-muted)] hover:text-[var(--theme-danger)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             >
               ×
             </button>
@@ -110,21 +128,23 @@ export function BulkTagToolbar({ selectedIds, onClearSelection, onDone }: BulkTa
           ) : (
             <ul className="flex max-w-full flex-wrap gap-1.5" aria-label="Matching tags">
               {(usable.data?.tags ?? []).slice(0, 12).map((tag) => (
-                <li key={tag.id}>
+                <li key={tag.id} className="min-w-0 max-w-full">
                   <button
                     type="button"
                     onClick={() => {
                       setPicked(tag)
                       setFailure(null)
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--theme-border)] px-2.5 py-1 text-xs font-semibold text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--theme-border)] px-2.5 py-1 text-xs font-semibold text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                   >
                     <span
                       aria-hidden="true"
-                      className="inline-block h-2 w-2 rounded-full"
+                      className="inline-block h-2 w-2 shrink-0 rounded-full"
                       style={{ backgroundColor: tag.color || TAG_COLOR_HEX.red }}
                     />
-                    {tag.name}
+                    <span className="min-w-0 truncate" title={tag.name}>
+                      {tag.name}
+                    </span>
                   </button>
                 </li>
               ))}

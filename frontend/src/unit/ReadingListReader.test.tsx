@@ -153,5 +153,5 @@ it('shows inherited tags and lets readers inspect their source', async () => {
   expect(await screen.findByText('Physical')).toBeVisible()
   expect(screen.getByText('Inherited')).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Show sources for inherited tag Physical' }))
-  expect(screen.getByRole('link', { name: 'Thread The Dead Remembered' })).toHaveAttribute('href', '/thread/1')
+  expect(screen.getByRole('link', { name: 'Thread: The Dead Remembered' })).toHaveAttribute('href', '/thread/1')
 })

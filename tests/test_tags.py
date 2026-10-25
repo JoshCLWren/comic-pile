@@ -1598,6 +1598,27 @@ class TestBulkTagAssignment:
         assert rows[0].tag_id == other_tag.id
         assert rows[0].target_id == first_issue.id
 
+    async def test_bulk_unassign_reports_issues_that_still_inherit_tag(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Bulk-remove distinguishes inherited tags from already-untagged issues."""
+        thread, first_issue, _plan = await _create_target_entities(
+            async_db, non_admin_user
+        )
+        extra = await _create_extra_issues(async_db, thread, ["2"], 2)
+        service = TagService(async_db)
+        tag_id = (await service.create_tag(non_admin_user, "Inherited", color="red")).tag.id
+        await service.assign_tag(non_admin_user, tag_id, "Thread", thread.id)
+        await service.assign_tag(non_admin_user, tag_id, "Issue", first_issue.id)
+
+        result = await service.bulk_unassign_tag(
+            non_admin_user, tag_id, "Issue", [first_issue.id, extra[0].id]
+        )
+
+        assert result.affected_ids == [first_issue.id]
+        assert result.already_ids == [extra[0].id]
+        assert result.still_inherited_ids == [first_issue.id, extra[0].id]
+
     async def test_bulk_assign_via_api(
         self,
         user_auth_client: AsyncClient,

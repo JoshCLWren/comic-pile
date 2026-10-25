@@ -255,6 +255,7 @@ describe('tag mutations', () => {
       requested_ids: [1, 2],
       affected_ids: [1],
       already_ids: [2],
+      still_inherited_ids: [],
     })
     mockedTagsApi.bulkUnassign.mockResolvedValue({
       tag_id: 8,
@@ -262,6 +263,7 @@ describe('tag mutations', () => {
       requested_ids: [1, 2],
       affected_ids: [1],
       already_ids: [2],
+      still_inherited_ids: [],
     })
 
     const { result: bulkAssign } = renderHook(() => useBulkAssignTag())

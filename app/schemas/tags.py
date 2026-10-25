@@ -181,6 +181,11 @@ class TagBulkAssignmentResponse(BaseModel):
             assigned for bulk-add, newly removed for bulk-remove).
         already_ids: Targets already in the desired state (already assigned
             for bulk-add, already unassigned for bulk-remove).
+        still_inherited_ids: Requested issues that keep the tag through
+            inheritance after a bulk removal (issue #3433). An issue
+            whose thread or containing Reading Plan still holds the tag keeps
+            showing it even though it has no direct assignment. Always empty
+            for bulk adds and for target types that cannot inherit in v1.
     """
 
     tag_id: int
@@ -188,6 +193,7 @@ class TagBulkAssignmentResponse(BaseModel):
     requested_ids: list[int]
     affected_ids: list[int]
     already_ids: list[int]
+    still_inherited_ids: list[int] = Field(default_factory=list)
 
 
 class TagUsageResponse(BaseModel):

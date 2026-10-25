@@ -74,6 +74,7 @@ export interface BulkAssignResponse {
   requested_ids: number[]
   affected_ids: number[]
   already_ids: number[]
+  still_inherited_ids: number[]
 }
 
 export interface TagUsage {

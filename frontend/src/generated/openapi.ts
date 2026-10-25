@@ -15698,6 +15698,11 @@ export interface components {
          *             assigned for bulk-add, newly removed for bulk-remove).
          *         already_ids: Targets already in the desired state (already assigned
          *             for bulk-add, already unassigned for bulk-remove).
+         *         still_inherited_ids: Requested issues that keep the tag through
+         *             inheritance after a bulk removal (issue #3433). An issue
+         *             whose thread or containing Reading Plan still holds the tag keeps
+         *             showing it even though it has no direct assignment. Always empty
+         *             for bulk adds and for target types that cannot inherit in v1.
          */
         TagBulkAssignmentResponse: {
             /** Affected Ids */
@@ -15706,6 +15711,8 @@ export interface components {
             already_ids: number[];
             /** Requested Ids */
             requested_ids: number[];
+            /** Still Inherited Ids */
+            still_inherited_ids?: number[];
             /** Tag Id */
             tag_id: number;
             /** Target Type */
