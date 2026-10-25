@@ -795,6 +795,9 @@ async def test_confirmed_only_deduplication_filters_unmapped_and_duplicates(
         available = False
         path = None
 
+        def get_issue(self, issue_id: int):
+            return None
+
     # Mock session factory to use the real committed test database
     session_factory = sqlalchemy_sessionmaker(
         bind=db_engine,
@@ -843,7 +846,7 @@ async def test_confirmed_only_deduplication_filters_unmapped_and_duplicates(
     provider_creators_phase = next(p for p in report["phases"] if p["name"] == "provider-creators")
     assert provider_creators_phase["processed"] == 1
     assert provider_creators_phase["results"][0]["issue_id"] == issue_a.id
-    assert provider_creators_phase["results"][0]["status"] == "complete"
+    assert provider_creators_phase["results"][0]["status"] == "planned-provider"
     
     # Verify summary shows correct counts
     assert report["summary"]["processed"] == 1
@@ -901,6 +904,9 @@ async def test_run_confirmed_only_mode_with_explicit_flags(
     class Snapshot:
         available = False
         path = None
+
+        def get_issue(self, issue_id: int):
+            return None
 
     # Configure _run to use real database with mocked external dependencies
     session_factory = sqlalchemy_sessionmaker(
