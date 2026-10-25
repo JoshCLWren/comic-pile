@@ -54,7 +54,7 @@ export function useSkip(deps: RollMutationDeps = {}) {
   const refreshAuthoritativeState = useCallback(async (): Promise<RefreshOutcome> => {
     if (refreshRequest.current) return refreshRequest.current
 
-    const request = (async (): Promise<RefreshOutcome> => {
+    refreshRequest.current = (async (): Promise<RefreshOutcome> => {
       for (let attempt = 1; attempt <= SKIP_REFRESH_ATTEMPTS; attempt += 1) {
         try {
           await fetchAndPublishRollBootstrap(rollBootstrap)
@@ -70,9 +70,8 @@ export function useSkip(deps: RollMutationDeps = {}) {
       return { refreshed: false, error: null }
     })()
 
-    refreshRequest.current = request
     try {
-      return await request
+      return await refreshRequest.current
     } finally {
       refreshRequest.current = null
     }
@@ -99,13 +98,15 @@ export function useSkip(deps: RollMutationDeps = {}) {
     setIsError(false)
     setRefreshError(null)
 
-    const request: Promise<SkipMutationOutcome> = (async () => {
+    inFlightRequest.current = (async (): Promise<SkipMutationOutcome> => {
       try {
         const result = await protectedRollApi.skip()
         await invalidateSessionCache(queryClient)
         const refresh = await refreshAuthoritativeState()
         return { response: result, refreshed: refresh.refreshed, refreshError: refresh.error }
       } catch (error: unknown) {
+        let committed = false
+        
         if (
           expectedPendingThreadId !== undefined
           && isAuthenticationMutationFailure(error)
@@ -133,10 +134,11 @@ export function useSkip(deps: RollMutationDeps = {}) {
 
         if (isAmbiguousNetworkFailure(error)) {
           try {
-            const { committed } = await reconcileAmbiguousRollMutation(
+            const reconciliation = await reconcileAmbiguousRollMutation(
               expectedPendingThreadId,
               rollBootstrap,
             )
+            committed = reconciliation.committed
             if (committed) {
               // The reconciliation already fetched and published authoritative
               // bootstrap state, so no further refresh is needed here.
@@ -147,15 +149,19 @@ export function useSkip(deps: RollMutationDeps = {}) {
           }
         }
 
+        if (committed) {
+          // The reconciliation already fetched and published authoritative
+          // bootstrap state, so no further refresh is needed here.
+          return { response: undefined, refreshed: true, refreshError: null }
+        }
+
         setIsError(true)
         throw error
       }
     })()
 
-    inFlightRequest.current = request
-
     try {
-      return await request
+      return await inFlightRequest.current
     } finally {
       inFlightRequest.current = null
       setIsPending(false)
