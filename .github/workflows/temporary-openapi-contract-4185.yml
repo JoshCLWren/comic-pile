@@ -40,7 +40,7 @@ jobs:
 
   publish-contract:
     needs: generated-contract
-    if: "${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore(api): regenerate v2 schema') }}"
+    if: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}"
     runs-on: ubuntu-latest
     permissions:
       contents: write
