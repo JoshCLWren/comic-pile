@@ -44,6 +44,7 @@ export interface CreatorDetailState {
   seriesGroupsTotal: number
   seriesGroupsComplete: boolean
   ratedIssues: CreatorIssueRow[]
+  headlineRoles: string[]
   readUnratedIssues: CreatorIssueRow[]
   upcomingIssues: CreatorIssueRow[]
   isPending: boolean
@@ -98,6 +99,7 @@ export function useCreatorDetail(
     seriesGroupsTotal: firstPage?.series_groups_total ?? 0,
     seriesGroupsComplete: firstPage?.series_groups_complete ?? true,
     ratedIssues,
+    headlineRoles: firstPage?.headline_roles ?? [],
     readUnratedIssues,
     upcomingIssues,
     isPending: query.isPending,

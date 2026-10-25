@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
+import { useCreatorSeriesIssues } from '../hooks/useCreatorSeriesIssues'
 import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
@@ -59,7 +60,55 @@ function IssueRow({ row, showRating }: { row: CreatorIssueRow; showRating: boole
   )
 }
 
-function SeriesGroupRow({ group }: { group: CreatorSeriesGroup }) {
+function SeriesGroupDrilldown({
+  creatorKey,
+  group,
+}: {
+  creatorKey: string
+  group: CreatorSeriesGroup
+}) {
+  const { data, isPending, isError } = useCreatorSeriesIssues(creatorKey, group.series_key)
+
+  if (isPending) {
+    return (
+      <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+        Loading the issues behind this average…
+      </p>
+    )
+  }
+
+  if (isError || !data) {
+    return (
+      <p className="mt-2 text-xs" role="alert" style={{ color: 'var(--theme-error)' }}>
+        Could not load the issues behind this average.
+      </p>
+    )
+  }
+
+  return (
+    <>
+      <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+        All verified credits. {data.total} rated {data.total === 1 ? 'issue' : 'issues'} back
+        this average; each issue counts once even when several roles are credited.
+      </p>
+      <ul className="mt-2 space-y-2">
+        {data.issues.map((row) => (
+          <IssueRow key={row.issue_id} row={row} showRating />
+        ))}
+      </ul>
+      {data.next_cursor != null && (
+        <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          Showing the first {data.issues.length} of {data.total}. Open the series to browse the
+          rest.
+        </p>
+      )}
+    </>
+  )
+}
+
+function SeriesGroupRow({ group, creatorKey }: { group: CreatorSeriesGroup; creatorKey: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const panelId = `creator-series-issues-${group.thread_id}`
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
       <Link
@@ -75,8 +124,34 @@ function SeriesGroupRow({ group }: { group: CreatorSeriesGroup }) {
             <RatingValue value={group.average_rating} label={`Average ${group.average_rating} out of 5`} />
           )}
           {group.roles.length > 0 && <span className="break-words">{group.roles.join(', ')}</span>}
+          <span>
+            {group.population_scope === 'all_verified_credits'
+              ? 'All verified credits'
+              : group.population_scope}
+          </span>
         </span>
       </Link>
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        className="mt-2 inline-flex items-center rounded-lg border px-2 py-1 text-xs font-semibold hover:bg-[var(--theme-bg-page)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+        style={{ borderColor: 'var(--theme-border)', color: 'var(--theme-text-muted)' }}
+      >
+        {expanded
+          ? 'Hide issues behind this average'
+          : `Show ${group.rated_issue_count} ${group.rated_issue_count === 1 ? 'issue' : 'issues'} behind this average`}
+      </button>
+      {expanded && (
+        <div
+          id={panelId}
+          className="mt-2 border-t pt-2"
+          style={{ borderColor: 'var(--theme-border)' }}
+        >
+          <SeriesGroupDrilldown creatorKey={creatorKey} group={group} />
+        </div>
+      )}
     </li>
   )
 }
@@ -145,6 +220,7 @@ export default function CreatorDetailPage() {
     seriesGroupsTotal,
     seriesGroupsComplete,
     ratedIssues,
+    headlineRoles,
     readUnratedIssues,
     upcomingIssues,
     isPending,
@@ -273,7 +349,7 @@ export default function CreatorDetailPage() {
           </div>
           <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
             <div>
-              <dt className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Rated</dt>
+              <dt className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Rated (headline roles)</dt>
               <dd className="font-bold" style={{ color: 'var(--theme-text-primary)' }}>{summary.ratings_count}</dd>
             </div>
             <div>
@@ -486,6 +562,10 @@ export default function CreatorDetailPage() {
           <SectionHeading id="creator-series-heading">
             Series{seriesGroupsTotal > 0 ? ` (${seriesGroupsTotal})` : ''}
           </SectionHeading>
+          <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            All verified credits, including roles outside the headline set. Series counts and
+            averages can exceed the headline-only Rated list.
+          </p>
           {!seriesGroupsComplete && (
             <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
               Partial list: showing the most-rated series first. Counts shown are lower bounds.
@@ -493,7 +573,11 @@ export default function CreatorDetailPage() {
           )}
           <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {seriesGroups.map((group) => (
-              <SeriesGroupRow key={group.series_key} group={group} />
+              <SeriesGroupRow
+                key={group.series_key}
+                group={group}
+                creatorKey={summary.canonical_creator_key}
+              />
             ))}
           </ul>
         </section>
@@ -504,6 +588,12 @@ export default function CreatorDetailPage() {
           <SectionHeading id="creator-rated-heading">
             Rated{summary.ratings_count > 0 ? ` (${summary.ratings_count})` : ''}
           </SectionHeading>
+          <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            Headline roles only
+            {headlineRoles.length > 0 ? `: ${headlineRoles.join(', ')}` : ''}. Each issue counts
+            once in this list and the rating distribution, so a non-headline credit can appear in
+            a series group without appearing here.
+          </p>
           {ratingsPartial && (
             <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
               Partial list: some rated issues are still missing creator metadata.

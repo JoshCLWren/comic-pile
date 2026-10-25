@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.schemas.creator_summary import CreatorSummaryCoverage, CreatorSummaryItem
+
+#: Population labels used by creator analytics (issue #3579).
+#:
+#: The headline ``Rated`` list/denominator only counts issues where the creator
+#: held a headline-eligible role. Series groups deliberately include every
+#: verified credited role, so their counts may exceed the headline population.
+HeadlinePopulationScope = Literal["headline_roles_only"]
+AllCreditsPopulationScope = Literal["all_verified_credits"]
 
 
 class CreatorRoleStat(BaseModel):
@@ -170,9 +179,11 @@ class CreatorSeriesGroup(BaseModel):
         description="Stable final tie-breaker for the deterministic group ordering "
         "(most-rated first, then title, then this key).",
     )
-    population_scope: str = Field(
+    population_scope: AllCreditsPopulationScope = Field(
         default="all_verified_credits",
-        description="Population used for this aggregate. Series groups are computed over all verified creator credits in the thread, not just headline roles, so their counts/averages may differ from the headline-only Rated list.",
+        description="Population used for this aggregate. Series groups cover every verified "
+        "creator credit in the thread, not only headline roles, so their counts/averages "
+        "may differ from the headline-only Rated list.",
     )
 
 
@@ -207,6 +218,11 @@ class CreatorSeriesIssueListResponse(BaseModel):
         ...,
         description="False when some issues in this thread still lack confirmed creator "
         "metadata, making this group's counts lower bounds.",
+    )
+    population_scope: AllCreditsPopulationScope = Field(
+        default="all_verified_credits",
+        description="Population backing this drill-down. Rows include every verified creator "
+        "credit in the thread, matching the parent series group exactly.",
     )
     issues: list[CreatorIssueRow] = Field(
         default_factory=list,
@@ -387,7 +403,19 @@ class CreatorDetailResponse(BaseModel):
     )
     rated_issues: list[CreatorIssueRow] = Field(
         default_factory=list,
-        description="Bounded list of rated issues, recent-first.",
+        description="Bounded list of headline-eligible rated issues, recent-first.",
+    )
+    rated_population_scope: HeadlinePopulationScope = Field(
+        default="headline_roles_only",
+        description="Population used by the headline summary and the Rated list. Only issues "
+        "where the creator held a headline role count, matching the Rated heading and "
+        "rating distribution denominator.",
+    )
+    headline_roles: list[str] = Field(
+        default_factory=list,
+        description="The explicit role set that makes an issue headline-eligible. A credited "
+        "role outside this set is visible in role stats and series groups but never in the "
+        "headline Rated list.",
     )
     read_unrated_issues: list[CreatorIssueRow] = Field(
         default_factory=list,

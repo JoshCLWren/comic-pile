@@ -9059,6 +9059,11 @@ export interface components {
         CreatorDetailResponse: {
             /** @description Metadata coverage state (from #2028). */
             coverage: components["schemas"]["CreatorSummaryCoverage"];
+            /**
+             * Headline Roles
+             * @description The explicit role set that makes an issue headline-eligible. A credited role outside this set is visible in role stats and series groups but never in the headline Rated list.
+             */
+            headline_roles?: string[];
             /** @description Evidence-backed strongest/weakest/most-read highlights (issue #3092). ``null`` when the creator has no headline-eligible ratings. */
             insights?: components["schemas"]["CreatorInsights"] | null;
             /**
@@ -9068,9 +9073,15 @@ export interface components {
             next_cursor?: string | null;
             /**
              * Rated Issues
-             * @description Bounded list of rated issues, recent-first.
+             * @description Bounded list of headline-eligible rated issues, recent-first.
              */
             rated_issues?: components["schemas"]["CreatorIssueRow"][];
+            /**
+             * Rated Population Scope
+             * @description Population used by the headline summary and the Rated list. Only issues where the creator held a headline role count, matching the Rated heading and rating distribution denominator.
+             * @default headline_roles_only
+             */
+            rated_population_scope: "headline_roles_only";
             /** @description Headline-eligible rating distribution (half-star buckets, median, range, mean, sample count). ``null`` when the creator has no eligible ratings. */
             rating_distribution?: components["schemas"]["CreatorRatingDistribution"] | null;
             /**
@@ -9986,6 +9997,12 @@ export interface components {
              */
             metadata_complete: boolean;
             /**
+             * Population Scope
+             * @description Population used for this aggregate. Series groups cover every verified creator credit in the thread, not only headline roles, so their counts/averages may differ from the headline-only Rated list.
+             * @default all_verified_credits
+             */
+            population_scope: "all_verified_credits";
+            /**
              * Rated Issue Count
              * @description Attributed issues in this thread with an effective rating. Equals the number of rows the drill-down can return for this group.
              */
@@ -10131,6 +10148,12 @@ export interface components {
              * @description Echoed page offset.
              */
             offset: number;
+            /**
+             * Population Scope
+             * @description Population backing this drill-down. Rows include every verified creator credit in the thread, matching the parent series group exactly.
+             * @default all_verified_credits
+             */
+            population_scope: "all_verified_credits";
             /**
              * Rated Issue Count
              * @description Total attributed rated issues backing this group.
