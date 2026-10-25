@@ -143,6 +143,9 @@ async function openCorrections(): Promise<HTMLElement> {
 describe('Roll correction controls move behind a quiet overflow menu (#3008)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // A mocked issue name survives clearAllMocks, so each test must start with
+    // an incomplete series again (greptile PRRT_kwDOQxSQh86v_K9t).
+    getIssueIntelligenceSpy.mockResolvedValue(null)
     searchSeriesSpy.mockResolvedValue({ query: '', results: [mockSeries], total_available: 1 })
     getSeriesIssuesSpy.mockResolvedValue({
       comicvine_volume_id: 42,
@@ -278,6 +281,7 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
       candidate_mappings: [],
       has_unresolved: false,
     })
+    // SAFETY: mock payload supplies only the fields this test asserts
     getIssueIntelligenceSpy.mockResolvedValue({
       name: 'The Dark Side',
     } as never)
