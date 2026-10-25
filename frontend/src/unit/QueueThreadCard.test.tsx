@@ -401,7 +401,6 @@ describe('QueueThreadCard', () => {
     expect(detail).toHaveTextContent(
       'Read & Rate unlocks once the active reading requirements are satisfied.',
     )
-    expect(detail).toHaveTextContent(/Read & Rate unlocks once the active reading requirements are satisfied/i)
 
     const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
     const readButton = within(actionsGroup).getByRole('button', { name: 'Read & Rate' })
