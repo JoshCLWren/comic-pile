@@ -130,9 +130,10 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
     expect(onShowContext).not.toHaveBeenCalled()
   })
 
-  it('renders prerequisite edges from exact reader-context data when boundaries are open', () => {
+  it('renders canonical blockers independently of reader-context associations', () => {
     renderWithToast(ratingView({
       readingBoundariesRequested: true,
+      readingBoundary: { thread_id: 1, state: 'blocked', summary: 'Waiting', blockers: [{ kind: 'prerequisite', origin: 'reader_prerequisite', reason: 'Finish the previous issue first.', editor: { kind: 'prerequisite', thread_id: 1, label: 'Saga prerequisites' } }] },
       readerContext: makeContext([
         {
           id: 1,
@@ -151,18 +152,19 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
       ]),
     }))
     expect(screen.getByTestId('reading-boundaries-content')).toBeInTheDocument()
-    expect(screen.getByText('Before this issue')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Edit Saga prerequisites' })).toHaveAttribute('href', '/thread/1?prerequisites=1')
     expect(screen.getByText('Finish the previous issue first.')).toBeInTheDocument()
     expect(screen.queryByTestId('reading-context-content')).not.toBeInTheDocument()
   })
 
-  it('renders a truthful empty note when no boundary edges exist', () => {
+  it('renders canonical availability independently of empty context edges', () => {
     renderWithToast(ratingView({
       readingBoundariesRequested: true,
+      readingBoundary: { thread_id: 1, state: 'available', summary: 'Available now' },
       readerContext: makeContext([], 'Saga'),
     }))
     expect(
-      screen.getByText('No prerequisites or continuity boundaries are recorded for this issue.'),
+      screen.getByText('Available now'),
     ).toBeInTheDocument()
   })
 
@@ -201,7 +203,38 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
       ]),
     }))
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.getByText('Crossover order')).toBeInTheDocument()
+    expect(screen.queryByText('Crossover order')).not.toBeInTheDocument()
+    expect(screen.getByText('Reading boundaries are unavailable.')).toBeInTheDocument()
+  })
+
+  it('offers a retry when the canonical boundaries request fails', async () => {
+    const user = userEvent.setup()
+    const onRetryBoundaries = vi.fn()
+    renderWithToast(ratingView({
+      readingBoundariesRequested: false,
+      readingBoundaryError: true,
+      onRetryBoundaries,
+    }))
+
+    await user.click(screen.getByTestId('reading-boundaries-button'))
+    expect(screen.getByRole('alert')).toHaveTextContent('Reading boundaries could not be loaded.')
+    await user.click(screen.getByRole('button', { name: 'Retry reading boundaries' }))
+    expect(onRetryBoundaries).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not request the boundary scope again when closing an open card', async () => {
+    const user = userEvent.setup()
+    const onShowBoundaries = vi.fn()
+    renderWithToast(ratingView({
+      readingBoundariesRequested: true,
+      readingBoundary: { thread_id: 1, state: 'available', summary: 'Available now' },
+      onShowBoundaries,
+    }))
+
+    expect(screen.getByTestId('reading-boundaries-content')).toBeInTheDocument()
+    await user.click(screen.getByTestId('reading-boundaries-button'))
+    expect(onShowBoundaries).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('reading-boundaries-content')).not.toBeInTheDocument()
   })
 
   it('still renders comic and decision regions and rating actions', () => {

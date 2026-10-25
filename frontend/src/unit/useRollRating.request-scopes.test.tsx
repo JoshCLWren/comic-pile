@@ -169,7 +169,7 @@ it('requesting Reading Boundaries alone fetches no reading orders and no connect
 
   expect(result.current.readingBoundariesRequested).toBe(true)
   expect(result.current.readingContextRequested).toBe(false)
-  expect(result.current.readerContextRequested).toBe(true)
+  expect(result.current.readerContextRequested).toBe(false)
 
   await act(async () => { await Promise.resolve() })
   expect(getForThread).not.toHaveBeenCalled()

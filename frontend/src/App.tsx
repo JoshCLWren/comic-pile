@@ -61,6 +61,7 @@ const CrossoverDetailPage = lazyRoute('crossoverDetail')
 const ContinuityPlannerPage = lazyRoute('continuityPlanner')
 const ContinuityPlansIndexPage = lazyRoute('continuityPlansIndex')
 const ReadingPlanDetailPage = lazyRoute('readingPlanDetail')
+const ReadingListEditorPage = lazyRoute('readingListEditor')
 const CblBrowserPage = lazyRoute('cblBrowser')
 const HelpPage = lazyRoute('glossary')
 const WhatsNewPage = lazyRoute('whatsNew')
@@ -675,6 +676,15 @@ function AppRoutes() {
             <ServiceUnavailableWrapper>
               <AuthenticatedLayout onBugReportSubmit={submit}>
                 <ReadingPlanDetailPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/reading-lists/:id" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <ReadingListEditorPage />
               </AuthenticatedLayout>
             </ServiceUnavailableWrapper>
           </ProtectedRoute>

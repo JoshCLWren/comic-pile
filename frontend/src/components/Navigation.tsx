@@ -226,10 +226,9 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   }, [isMoreOpen])
 
   const isActive = (path: string) =>
-    location.pathname === path || (path !== '/' && location.pathname.startsWith(`${path}/`))
-  const isMoreRoute = visibleSecondaryNavItems.some((item) =>
-    location.pathname === item.path || location.pathname.startsWith(`${item.path}/`),
-  )
+    location.pathname === path || (path !== '/' && location.pathname.startsWith(`${path}/`)) ||
+    (path === '/continuity-plans' && location.pathname.startsWith('/reading-lists/'))
+  const isMoreRoute = visibleSecondaryNavItems.some((item) => isActive(item.path))
 
   const toggleMoreMenu = () => {
     if (!isMoreOpen) {

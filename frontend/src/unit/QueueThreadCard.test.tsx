@@ -250,6 +250,114 @@ describe('QueueThreadCard', () => {
     expect(screen.queryByRole('button', { name: /View dependencies for/ })).not.toBeInTheDocument()
   })
 
+  it('renders canonical blockers and their editors instead of legacy dependency copy', () => {
+    renderCard(createMockThread(), {
+      isBlocked: true,
+      readingBoundary: {
+        thread_id: 1,
+        state: 'blocked',
+        summary: 'Saga #6 is waiting on 1 live requirement.',
+        blockers: [
+          {
+            kind: 'hold',
+            origin: 'reading_list',
+            reason: 'Hold in Ultimate: waiting on One Year In #1',
+            waiting_on: [
+              {
+                issue_id: 9,
+                thread_id: 2,
+                thread_title: 'One Year In',
+                issue_number: '1',
+                label: 'One Year In #1',
+                volume_label: 'One Year In (2025)',
+              },
+            ],
+            editor: { kind: 'reading_list', list_id: 4, label: 'Ultimate' },
+          },
+        ],
+      },
+    })
+
+    expect(screen.getByTestId('canonical-reading-boundary')).toBeInTheDocument()
+    expect(screen.getByText('Saga #6 is waiting on 1 live requirement.')).toBeInTheDocument()
+    expect(screen.getByText('Hold in Ultimate: waiting on One Year In #1')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toHaveAttribute(
+      'href',
+      '/thread/2?issue=9#issue-9',
+    )
+    expect(screen.getByRole('link', { name: 'Edit Ultimate' })).toHaveAttribute('href', '/reading-lists/4')
+    // The legacy fallback only exists for deployments without canonical data.
+    expect(screen.queryByTestId('eligibility-explanation')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /View dependencies for/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps the legacy blocker explanation when canonical boundaries are unavailable', () => {
+    renderCard(createMockThread({ blocking_reasons: ['Waiting on Prequel Thread #3'] }), {
+      isBlocked: true,
+      blockingDependencies: [
+        { thread_id: 42, thread_title: 'Prequel Thread', issue_number: '3', label: 'Needs Prequel Thread: #3' },
+      ],
+      readingBoundary: {
+        thread_id: 1,
+        state: 'unavailable',
+        summary: 'Option E is not active for Test Thread.',
+      },
+    })
+
+    expect(screen.queryByTestId('canonical-reading-boundary')).not.toBeInTheDocument()
+    expect(screen.getByTestId('eligibility-explanation')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open Prequel Thread' })).toHaveAttribute('href', '/thread/42')
+    expect(screen.getByText('Waiting on Prequel Thread #3')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View dependencies for Test Thread' })).toBeInTheDocument()
+  })
+
+  it('expands historical associations without opening Thread Detail', async () => {
+    const user = userEvent.setup()
+    const onCardClick = vi.fn()
+    renderCard(createMockThread(), {
+      onCardClick,
+      readingBoundary: {
+        thread_id: 1,
+        state: 'available',
+        summary: 'Saga #6 is available next.',
+        historical: [
+          {
+            kind: 'legacy_dependency',
+            label: 'Prequel → Saga',
+            detail: 'Historical association; not an active reading requirement.',
+            editor: { kind: 'prerequisite', thread_id: 1, label: 'Saga prerequisites' },
+          },
+        ],
+      },
+    })
+
+    await user.click(screen.getByText('Historical associations — not active blockers'))
+
+    expect(onCardClick).not.toHaveBeenCalled()
+  })
+
+  it('shows historical-only associations without inventing a blocked state', () => {
+    renderCard(createMockThread(), {
+      isBlocked: false,
+      readingBoundary: {
+        thread_id: 1,
+        state: 'available',
+        summary: 'Saga #6 is available next.',
+        historical: [
+          {
+            kind: 'converted_prerequisite',
+            label: 'Prequel → Saga',
+            detail: 'Converted generated association; not an active reading requirement.',
+          },
+        ],
+      },
+    })
+
+    expect(screen.getByText('Saga #6 is available next.')).toBeInTheDocument()
+    expect(screen.queryByText(/Read & Rate unlocks/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Historical associations — not active blockers')).toBeInTheDocument()
+  })
+
   it('distinguishes blocked Queue cards with continuity styling instead of danger-red', () => {
     const { unmount } = renderCard(createMockThread())
     const unblocked = screen.getByTestId('queue-thread-item')
@@ -291,9 +399,8 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Secondary actions are in the menu. Read & Rate unlocks once the blocker above is cleared.',
+      'Read & Rate unlocks once the active reading requirements are satisfied.',
     )
-    expect(detail).toHaveTextContent(/Read & Rate unlocks once the blocker above is cleared/i)
 
     const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
     const readButton = within(actionsGroup).getByRole('button', { name: 'Read & Rate' })
@@ -320,7 +427,7 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Secondary actions are in the menu. Read & Rate unlocks once the blocker above is cleared.',
+      'Read & Rate unlocks once the active reading requirements are satisfied.',
     )
   })
 
@@ -334,7 +441,7 @@ describe('QueueThreadCard', () => {
     })
 
     expect(screen.queryByTestId('queue-thread-blocked-detail')).not.toBeInTheDocument()
-    expect(screen.queryByText(/Read & Rate unlocks once the blocker/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Read & Rate unlocks/i)).not.toBeInTheDocument()
 
     const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
     expect(within(actionsGroup).getByRole('button', { name: 'Read & Rate' })).not.toBeDisabled()

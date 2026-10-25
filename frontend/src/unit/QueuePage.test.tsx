@@ -19,6 +19,7 @@ import {
 } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
+import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useToast } from '../contexts/useToast'
 import { threadsApi } from '../services/api-threads'
@@ -57,6 +58,14 @@ vi.mock('../hooks/useSnooze', () => ({
 
 vi.mock('../hooks/useQueueBlockingInfo', () => ({
   useQueueBlockingInfo: vi.fn(() => ({})),
+}))
+
+// The Queue renders canonical reading boundaries for every visible row. These
+// page tests exercise queue behaviour, so the batch answer is stubbed instead of
+// reaching the network; the default mirrors a deployment without the canonical
+// evaluator, which keeps the legacy blocking fallback in play.
+vi.mock('../hooks/useReadingBoundaries', () => ({
+  useReadingBoundaries: vi.fn(),
 }))
 
 vi.mock('../services/api-threads', () => ({
@@ -114,6 +123,8 @@ const mockedUseSession = vi.mocked(useSession) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseReadingBoundaries = vi.mocked(useReadingBoundaries) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
@@ -150,6 +161,12 @@ beforeEach(() => {
   })
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: { threads: {} },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })
   mockedUseBugReportRestore.mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
@@ -562,6 +579,92 @@ describe('Keyboard Accessibility', () => {
   ).toBeInTheDocument()
   await user.click(screen.getByTestId('queue-empty-add-series'))
   expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
+})
+
+it('uses canonical boundary blockers for queue rows instead of legacy dependencies', () => {
+  mockedUseQueueThreads.mockReturnValue({
+    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] }],
+    isPending: false,
+    refetch: vi.fn(),
+  })
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: {
+      threads: {
+        1: {
+          thread_id: 1,
+          state: 'blocked',
+          summary: 'Saga #5 is waiting on 1 live requirement.',
+          blockers: [
+            {
+              kind: 'hold',
+              origin: 'reading_list',
+              reason: 'Hold in Ultimate: waiting on One Year In #1',
+              waiting_on: [
+                { issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1' },
+              ],
+              editor: { kind: 'reading_list', list_id: 4, label: 'Ultimate' },
+            },
+          ],
+        },
+      },
+    },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+
+  const readButton = screen.getByLabelText('Read & Rate')
+  expect(readButton).toBeDisabled()
+  expect(readButton).toHaveAttribute('title', expect.stringContaining('Hold in Ultimate'))
+  expect(screen.getByTestId('canonical-reading-boundary')).toBeInTheDocument()
+  // A canonical answer suppresses the legacy batch read, so rows never pay for
+  // two sources of blocking truth.
+  expect(mockedUseQueueBlockingInfo).toHaveBeenLastCalledWith([])
+})
+
+it('follows canonical availability over a stale legacy blocked flag', () => {
+  mockedUseQueueThreads.mockReturnValue({
+    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: true, blocking_reasons: ['Blocked by: Prequel'] }],
+    isPending: false,
+    refetch: vi.fn(),
+  })
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: {
+      threads: {
+        1: { thread_id: 1, state: 'available', summary: 'Saga #5 is available now.' },
+      },
+    },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+
+  expect(screen.getByLabelText('Read & Rate')).not.toBeDisabled()
+  expect(screen.queryByLabelText('Blocked series')).not.toBeInTheDocument()
+  expect(mockedUseQueueBlockingInfo).toHaveBeenLastCalledWith([])
+})
+
+it('shows one shared boundary failure notice and retries the batch', async () => {
+  const refetch = vi.fn()
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isError: true,
+    refetch,
+  })
+  const user = userEvent.setup()
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+
+  // Unblocked rows alone must still surface the failure, exactly once.
+  expect(screen.getAllByRole('alert')).toHaveLength(1)
+  expect(
+    screen.getByText(/Reading boundaries could not be loaded/),
+  ).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'Retry reading boundaries' }))
+  expect(refetch).toHaveBeenCalledTimes(1)
 })
 
   it('prevents reading blocked threads and reports delete failures', async () => {

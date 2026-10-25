@@ -32,6 +32,7 @@ Disallow: /creators
 Disallow: /history
 Disallow: /sessions/
 Disallow: /crossovers
+Disallow: /reading-lists/
 Disallow: /continuity-plans
 Disallow: /cbl-sources
 Disallow: /whats-new

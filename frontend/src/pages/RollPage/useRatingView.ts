@@ -1,4 +1,6 @@
 import { useReaderContext } from '../../hooks/useReaderContext'
+import { useReadingBoundaries } from '../../hooks/useReadingBoundaries'
+import type { ReadingBoundaryExplanation } from '../../services/api-reading-boundaries'
 import { computePredictedDie } from './utils'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
@@ -55,6 +57,10 @@ export interface RatingViewData {
   onCancel: () => void
   onRefreshThread: () => void
   readerContext: ReaderContextResponse | null
+  readingBoundary?: ReadingBoundaryExplanation
+  readingBoundaryPending?: boolean
+  readingBoundaryError?: boolean
+  onRetryBoundaries?: () => void
   isReaderContextLoading: boolean
   readerContextError: Error | null
   ratingViewTopRef: React.RefObject<HTMLDivElement | null> | null
@@ -119,6 +125,7 @@ export function useRatingView({
 
   const ratingIssueId =
     activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id ?? null
+  const boundaryQuery = useReadingBoundaries(activeRatingThread ? [activeRatingThread.id] : [], readingBoundariesRequested)
 
   const {
     context: readerContext,
@@ -149,6 +156,10 @@ export function useRatingView({
     onCancel: rating.handleCancelRating,
     onRefreshThread: rating.handleRefreshThread,
     readerContext,
+    readingBoundary: activeRatingThread ? boundaryQuery.data?.threads[activeRatingThread.id] : undefined,
+    readingBoundaryPending: readingBoundariesRequested && boundaryQuery.isPending,
+    readingBoundaryError: boundaryQuery.isError,
+    onRetryBoundaries: () => { void boundaryQuery.refetch() },
     isReaderContextLoading,
     readerContextError: readerContextError ?? null,
     ratingViewTopRef,

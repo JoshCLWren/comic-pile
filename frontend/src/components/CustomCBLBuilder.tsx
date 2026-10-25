@@ -31,7 +31,8 @@ import {
 } from '../utils/readingListAuthoring'
 
 interface CustomCBLBuilderProps {
-  planId: number
+  planId?: number
+  initialListId?: number
   disabled?: boolean
   onApplied?: (plan: ContinuityPlan) => void
   onPendingChange?: (pending: boolean) => void
@@ -271,6 +272,7 @@ function waitDescription(
 
 export default function CustomCBLBuilder({
   planId,
+  initialListId,
   disabled = false,
   onApplied,
   onPendingChange,
@@ -279,8 +281,8 @@ export default function CustomCBLBuilder({
   const issueSearchInput = useRef<HTMLInputElement>(null)
   const issueSearchResults = useRef<HTMLDivElement>(null)
   const [readerOpen, setReaderOpen] = useState(false)
-  const [open, setOpen] = useState(false)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [open, setOpen] = useState(initialListId !== undefined)
+  const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
   const [loadedListId, setLoadedListId] = useState<number | null>(null)
   const [newName, setNewName] = useState('')
   const [name, setName] = useState('')
@@ -404,6 +406,7 @@ export default function CustomCBLBuilder({
   const applyMutation = useMutation({
     mutationFn: () => {
       if (!selectedId) throw new Error('Choose a custom CBL first.')
+      if (!planId) throw new Error('Choose a Reading Plan before applying this list.')
       return customCBLApi.apply(selectedId, planId)
     },
     onSuccess: async (result) => {
@@ -913,7 +916,7 @@ export default function CustomCBLBuilder({
               <p className="text-xs text-[var(--theme-text-muted)]">Skipping an issue here ignores it only in this list. It stays in your collection and other lists. Use your collection exclusions to remove a comic everywhere.</p>
 
               <button type="button" onClick={() => setReaderOpen((value) => !value)} aria-expanded={readerOpen} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-semibold text-[var(--theme-text-primary)]">{readerOpen ? 'Close list reader' : 'Read this list'}</button>
-              {readerOpen && selectedId && <ReadingListReader key={selectedId} listId={selectedId} backTo={`/continuity-plans/${planId}`} />}
+              {readerOpen && selectedId && <ReadingListReader key={selectedId} listId={selectedId} backTo={planId ? `/continuity-plans/${planId}` : `/reading-lists/${selectedId}`} />}
 
               <div className="space-y-3 rounded-xl border border-[var(--theme-border)] p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1083,7 +1086,7 @@ export default function CustomCBLBuilder({
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => saveMutation.mutate(null)} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
-                <button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>
+                {planId && (<button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>)}
                 <button type="button" onClick={() => void exportList()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Export .cbl</button>
                 <button type="button" onClick={() => { if (selectedId && window.confirm(`Delete custom CBL “${persisted.name}”?`)) deleteMutation.mutate(selectedId) }} disabled={disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)] disabled:opacity-50">Delete</button>
               </div>

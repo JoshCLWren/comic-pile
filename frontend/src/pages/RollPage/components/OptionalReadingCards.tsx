@@ -6,6 +6,8 @@ import { rollUtilityActionClass } from '../actionClasses'
 import { SeriesPanel } from './SeriesPanel'
 import { CrossoverAnalytics } from './CrossoverAnalytics'
 import type { RatingThread } from '../types'
+import type { ReadingBoundaryExplanation as BoundaryExplanation } from '../../../services/api-reading-boundaries'
+import { ReadingBoundaryExplanation } from '../../../components/ReadingBoundaryExplanation'
 
 interface OptionalReadingCardsProps {
   activeRatingThread: RatingThread | null
@@ -14,6 +16,10 @@ interface OptionalReadingCardsProps {
   readerContextError: Error | null
   readingContextRequested: boolean
   readingBoundariesRequested: boolean
+  readingBoundary?: BoundaryExplanation
+  readingBoundaryPending?: boolean
+  readingBoundaryError?: boolean
+  onRetryBoundaries?: () => void
   readingOrders: ReadingOrder[]
   readingOrdersIsLoading: boolean
   readingOrdersError: Error | null
@@ -320,105 +326,6 @@ function ReadingContextContent({
   )
 }
 
-function ReadingBoundariesContent({
-  readerContext,
-}: {
-  readerContext: ReaderContextResponse | null
-}) {
-  const navigate = useNavigate()
-  const currentIssueId = readerContext?.issue_id ?? null
-  const edges = readerContext?.local_chain.edges ?? []
-  const prerequisites = edges.filter((edge) => edge.target_issue_id === currentIssueId)
-  const downstream = edges.filter(
-    (edge) => edge.source_issue_id === currentIssueId && edge.target_issue_id !== currentIssueId,
-  )
-  const related = edges.filter(
-    (edge) =>
-      edge.source_issue_id !== currentIssueId && edge.target_issue_id !== currentIssueId,
-  )
-
-  if (!readerContext || edges.length === 0) {
-    return (
-      <p className="min-w-0 break-words text-[11px] italic leading-relaxed text-stone-400">
-        No prerequisites or continuity boundaries are recorded for this issue.
-      </p>
-    )
-  }
-
-  const groups: { heading: string; items: typeof edges }[] = []
-  if (prerequisites.length > 0) groups.push({ heading: 'Before this issue', items: prerequisites })
-  if (downstream.length > 0) groups.push({ heading: 'After this issue', items: downstream })
-  if (related.length > 0) groups.push({ heading: 'Related continuity', items: related })
-
-  return (
-    <div className="min-w-0 space-y-3">
-      {groups.map((group) => (
-        <section key={group.heading} aria-label={group.heading} className="min-w-0 space-y-1.5">
-          <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-stone-500">
-            {group.heading}
-          </h4>
-          <ul className="min-w-0 space-y-1.5">
-            {group.items.map((edge) => {
-              const copy = edge.explanation ?? edge.note
-              const sourceThreadId = edge.source_thread_id
-              const targetThreadId = edge.target_thread_id
-              return (
-                <li
-                  key={`${edge.kind}-${edge.id}`}
-                  className="min-w-0 space-y-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2"
-                >
-                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
-                    {sourceThreadId !== null ? (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/thread/${sourceThreadId}`)}
-                        aria-label={`Open series for ${edge.source_label ?? 'the earlier issue'}`}
-                        className="inline-flex min-h-6 min-w-0 items-center break-words text-left font-mono text-[var(--theme-text-primary)] underline decoration-dotted underline-offset-2"
-                      >
-                        <span className="min-w-0 break-words">
-                          {edge.source_label ?? `#${edge.source_issue_id}`}
-                        </span>
-                      </button>
-                    ) : (
-                      <span className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]">
-                        {edge.source_label ?? `#${edge.source_issue_id}`}
-                      </span>
-                    )}
-                    <span className="shrink-0 text-[var(--theme-text-muted)]" aria-hidden="true">
-                      {edge.kind === 'dependency' ? '→' : '↝'}
-                    </span>
-                    {targetThreadId !== null ? (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/thread/${targetThreadId}`)}
-                        aria-label={`Open series for ${edge.target_label ?? 'the later issue'}`}
-                        className="inline-flex min-h-6 min-w-0 items-center break-words text-left font-mono text-[var(--theme-text-primary)] underline decoration-dotted underline-offset-2"
-                      >
-                        <span className="min-w-0 break-words">
-                          {edge.target_label ?? `#${edge.target_issue_id}`}
-                        </span>
-                      </button>
-                    ) : (
-                      <span className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]">
-                        {edge.target_label ?? `#${edge.target_issue_id}`}
-                      </span>
-                    )}
-                  </div>
-                  {copy ? (
-                    <p className="min-w-0 break-words text-[11px] italic leading-relaxed text-stone-400">
-                      {copy}
-                    </p>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
-        </section>
-      ))}
-    </div>
-  )
-}
-
 /**
  * The two compact optional cards restored below the Roll decision (issue
  * #2764). They consume the split request scopes from #2767: opening one card
@@ -434,6 +341,10 @@ export function OptionalReadingCards({
   readerContextError,
   readingContextRequested,
   readingBoundariesRequested,
+  readingBoundary,
+  readingBoundaryPending,
+  readingBoundaryError,
+  onRetryBoundaries,
   readingOrders,
   readingOrdersIsLoading,
   readingOrdersError,
@@ -454,16 +365,12 @@ export function OptionalReadingCards({
   const contextLoading =
     readingContextRequested &&
     (isReaderContextLoading || readingOrdersIsLoading || connectedThreadsIsLoading)
-  const boundariesLoading = readingBoundariesRequested && isReaderContextLoading
 
   const contextErrors = [
     errorMessage(readerContextError),
     errorMessage(readingOrdersError),
     errorMessage(connectedThreadsError),
   ].filter((message): message is string => message !== null)
-  const boundariesErrors = [errorMessage(readerContextError)].filter(
-    (message): message is string => message !== null,
-  )
 
   return (
     <div data-testid="rating-region-reading-optional" className="w-full min-w-0 space-y-3">
@@ -502,7 +409,7 @@ export function OptionalReadingCards({
         buttonTestId="reading-boundaries-button"
         contentTestId="reading-boundaries-content"
         label="Reading Boundaries (optional)"
-        copy="Review recorded prerequisites and continuity edges around this issue."
+        copy="See what can be read next and which live requirements are waiting."
         icon={<BoundaryIcon />}
         open={boundariesOpen}
         expandedLabel="Boundaries"
@@ -511,16 +418,7 @@ export function OptionalReadingCards({
           setBoundariesOpen(!boundariesOpen)
         }}
       >
-        {boundariesLoading ? (
-          <OptionalLoading testId="reading-boundaries-loading" label="Loading reading boundaries" />
-        ) : (
-          <>
-            {boundariesErrors.length > 0 ? (
-              <OptionalError testId="reading-boundaries-error" messages={boundariesErrors} />
-            ) : null}
-            <ReadingBoundariesContent readerContext={readerContext} />
-          </>
-        )}
+        <ReadingBoundaryExplanation explanation={readingBoundary} isPending={readingBoundaryPending} isError={readingBoundaryError} onRetry={onRetryBoundaries} />
       </OptionalCardShell>
     </div>
   )
