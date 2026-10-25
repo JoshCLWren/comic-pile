@@ -29,7 +29,7 @@ async def test_create_bug_report_description_only(auth_client: AsyncClient) -> N
         mock_get_settings.return_value = mock_settings
 
         with patch(
-            "app.api.bug_report.create_bug_report_issue", new_callable=AsyncMock
+            "app.services.github_issue_rate_limit.create_bug_report_issue", new_callable=AsyncMock
         ) as mock_create:
             mock_create.return_value = mock_issue_url
 
@@ -129,7 +129,7 @@ async def test_create_bug_report_with_diagnostics(auth_client: AsyncClient) -> N
         mock_get_settings.return_value = mock_settings
 
         with patch(
-            "app.api.bug_report.create_bug_report_issue", new_callable=AsyncMock
+            "app.services.github_issue_rate_limit.create_bug_report_issue", new_callable=AsyncMock
         ) as mock_create:
             mock_create.return_value = mock_issue_url
 
@@ -172,7 +172,7 @@ async def test_create_bug_report_without_diagnostics(auth_client: AsyncClient) -
         mock_get_settings.return_value = mock_settings
 
         with patch(
-            "app.api.bug_report.create_bug_report_issue", new_callable=AsyncMock
+            "app.services.github_issue_rate_limit.create_bug_report_issue", new_callable=AsyncMock
         ) as mock_create:
             mock_create.return_value = mock_issue_url
 

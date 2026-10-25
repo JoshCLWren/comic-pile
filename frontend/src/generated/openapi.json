@@ -22201,7 +22201,7 @@
     },
     "/api/v1/bug-reports/": {
       "post": {
-        "description": "Create a bug report or feature request issue on GitHub.\n\nArgs:\n    body: Report type, title, description, and optional diagnostics.\n    current_user: The authenticated user.\n\nReturns:\n    Created GitHub issue URL.\n\nRaises:\n    HTTPException: If validation fails or GitHub integration is unavailable.",
+        "description": "Create a bug report or feature request issue on GitHub.\n\nNon-admin users are limited to one successfully created issue per rolling\nhour; admins bypass the limit. The limit is enforced server-side by\n``submit_github_issue`` before GitHub is called.\n\nArgs:\n    body: Report type, title, description, and optional diagnostics.\n    current_user: The authenticated user.\n    db: Database session that owns the durable rate-limit state.\n\nReturns:\n    Created GitHub issue URL.\n\nRaises:\n    HTTPException: If validation fails, GitHub integration is unavailable,\n        the non-admin hourly limit is reached, or GitHub rejects the issue.",
         "operationId": "create_bug_report_api_v1_bug_reports__post",
         "requestBody": {
           "content": {

@@ -22,6 +22,7 @@ from app.models.external_identity import (
     ThreadExternalSeriesMapping,
 )
 from app.models.failed_login_attempt import FailedLoginAttempt
+from app.models.github_issue_submission_limit import GithubIssueSubmissionLimit
 from app.models.issue import Issue
 from app.models.metadata_correction import IssueMetadataCorrection
 from app.models.password_reset_token import PasswordResetToken
@@ -70,6 +71,7 @@ __all__ = [
     "ExternalIdentity",
     "RecommendationContext",
     "FailedLoginAttempt",
+    "GithubIssueSubmissionLimit",
     "Issue",
     "IssueExternalIdentityMapping",
     "IssueMetadataCorrection",

@@ -70,7 +70,7 @@ async def test_create_feature_request_routes_selected_type(
 
     with (
         patch("app.api.bug_report.get_github_settings", return_value=mock_settings),
-        patch("app.api.bug_report.create_bug_report_issue", mock_create),
+        patch("app.services.github_issue_rate_limit.create_bug_report_issue", mock_create),
     ):
         response = await auth_client.post(
             "/api/bug-reports/",
@@ -102,7 +102,7 @@ async def test_create_report_defaults_to_bug(
 
     with (
         patch("app.api.bug_report.get_github_settings", return_value=mock_settings),
-        patch("app.api.bug_report.create_bug_report_issue", mock_create),
+        patch("app.services.github_issue_rate_limit.create_bug_report_issue", mock_create),
     ):
         response = await auth_client.post(
             "/api/bug-reports/",

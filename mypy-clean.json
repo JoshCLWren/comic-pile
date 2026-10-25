@@ -191,5 +191,6 @@
   "scripts/mypy_baseline.py",
   "tests/test_factory_dispatch_workflow.py",
   "tests/test_factory_runtime_evidence_workflow.py",
-  "tests/test_mypy_baseline.py"
+  "tests/test_mypy_baseline.py",
+  "app/repositories/github_issue_rate_limit_repository.py"
 ]
