@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import type { RatingThread } from '../pages/RollPage/types'
 
-const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy } =
+const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, getIssueIntelligenceSpy } =
   vi.hoisted(() => ({
     // SAFETY: mock payload supplies only the fields this test asserts
     confirmIdentitySpy: vi.fn().mockResolvedValue({} as never),
@@ -13,13 +13,14 @@ const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssues
     searchSeriesSpy: vi.fn(),
     getSeriesIssuesSpy: vi.fn(),
     getIssueIdentitySpy: vi.fn(),
+    getIssueIntelligenceSpy: vi.fn().mockResolvedValue(null),
   }))
 
 vi.mock('../services/api-comicvine', () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     getSeriesIssues: getSeriesIssuesSpy,
-    getIssueIntelligence: vi.fn().mockResolvedValue(null),
+    getIssueIntelligence: getIssueIntelligenceSpy,
     getIssueIdentity: getIssueIdentitySpy,
     confirmIdentity: confirmIdentitySpy,
     replaceIdentity: replaceIdentitySpy,
@@ -262,9 +263,32 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     const menu = await openCorrections()
     expect(within(menu).getByRole('menuitem', { name: 'Fix issue number' })).toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: 'Wrong series?' })).toBeInTheDocument()
-    // Map series button is not shown for already linked series
-    expect(within(menu).queryByRole('menuitem', { name: 'Map series' })).toBeNull()
+    // A linked series still missing its story title keeps the direct Map series
+    // repair path instead of forcing readers to Queue or Wrong series?.
+    expect(within(menu).getByRole('menuitem', { name: 'Map series' })).toBeInTheDocument()
     // A confirmed mapping does not also offer the first-time match action.
+    expect(within(menu).queryByRole('menuitem', { name: 'Find ComicVine match' })).toBeNull()
+  })
+
+  it('hides Map series for a linked series whose story title is already known', async () => {
+    getIssueIdentitySpy.mockResolvedValue({
+      has_confirmed_identity: true,
+      comicvine_issue_id: null,
+      confirmed_mappings: [{ comicvine_id: 36956 }],
+      candidate_mappings: [],
+      has_unresolved: false,
+    })
+    getIssueIntelligenceSpy.mockResolvedValue({
+      name: 'The Dark Side',
+    } as never)
+
+    renderPillar()
+
+    const menu = await openCorrections()
+    expect(within(menu).getByRole('menuitem', { name: 'Fix issue number' })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Wrong series?' })).toBeInTheDocument()
+    // A complete series offers no first-time mapping action.
+    expect(within(menu).queryByRole('menuitem', { name: 'Map series' })).toBeNull()
     expect(within(menu).queryByRole('menuitem', { name: 'Find ComicVine match' })).toBeNull()
   })
 

@@ -134,9 +134,9 @@ export function ComicPillar({
       })
     }
 
-    // Show "Map series" for linked issues that still lack series details (missing story title)
+    // Show "Map series" for issues whose series still lack details (missing story title)
     const seriesIsComplete = storyTitle != null
-    if (activeRatingThread?.id && issueId && !isLinked && !seriesIsComplete) {
+    if (activeRatingThread?.id && issueId && !seriesIsComplete) {
       entries.push({
         key: 'map-series',
         label: 'Map series',
@@ -198,6 +198,7 @@ export function ComicPillar({
     issueId,
     issueNumber,
     needsIdentity,
+    storyTitle,
     threadTitle,
     fetchIdentity,
     handleIdentityConfirmed,
