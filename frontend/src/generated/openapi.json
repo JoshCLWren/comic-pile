@@ -12559,8 +12559,51 @@
         "title": "PublicReleaseResponse",
         "type": "object"
       },
+      "QueueSeriesMetadata": {
+        "description": "Confirmed provider series metadata projected for one Queue row.\n\nValues come only from the reader-owned Thread's own confirmed provider\nseries identity. A value that is not stored stays ``None`` instead of being\ninferred from the display title or a provider numeric id.",
+        "properties": {
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confirmed publisher name",
+            "title": "Publisher"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confirmed provider run/volume name when it adds identification beyond the thread title. Never a fabricated numeric volume.",
+            "title": "Volume"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confirmed publication/start year.",
+            "title": "Year"
+          }
+        },
+        "title": "QueueSeriesMetadata",
+        "type": "object"
+      },
       "QueueThreadListItem": {
-        "description": "Schema for a single thread in the list/queue view.\n\nA deliberate subset of ThreadResponse. The list view does not need\ndetail-only fields like last_rating, is_test, or reading_progress,\nwhich reduces payload size for large lists.",
+        "description": "Schema for a single thread in the list/queue view.\n\nA deliberate subset of ThreadResponse. The list view does not need\ndetail-only fields like last_rating, is_test, or reading_progress,\nwhich reduces payload size for large lists. Queue rows additionally carry\nseries metadata projected only from the thread's own confirmed provider\nidentity, so readers can tell same-titled runs apart (issue #3605).",
         "properties": {
           "blocking_reasons": {
             "default": [],
@@ -12663,6 +12706,17 @@
           "queue_position": {
             "title": "Queue Position",
             "type": "integer"
+          },
+          "series_metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueueSeriesMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confirmed provider series metadata for this thread. ``None`` means the reader-owned thread has no confirmed series identity (unmapped series)."
           },
           "status": {
             "title": "Status",

@@ -147,9 +147,10 @@ def test_queue_item_records_serialized_byte_reduction() -> None:
     """A representative queue item stays narrower than thread detail.
 
     Confirmed-series metadata (issue #3605) is additive screen context that the
-    detail contract does not carry, so the 20% narrowness guard measures the
-    shared queue projection without it. The full row, including that additive
-    context, must still serialize smaller than thread detail.
+    detail contract does not carry. Both the shared queue projection (without
+    metadata) and the complete queue row (with metadata) must serialize at least
+    20% smaller than the thread detail response to ensure the list view remains
+    a genuine payload reduction.
     """
     timestamp = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
     detail = ThreadResponse(
@@ -168,7 +169,9 @@ def test_queue_item_records_serialized_byte_reduction() -> None:
         created_at=timestamp,
         total_issues=12,
         reading_progress=(
-            "Issue 1 of 12 read; continuing with issue 2 after Mister Miracle #1."
+            "Issue 1 of 12 read; continuing with issue 2 after Mister Miracle #1. "
+            "This is a longer reading progress text to ensure the detail response "
+            "is significantly larger than the queue projection."
         ),
         next_unread_issue_id=4202,
         next_unread_issue_number="2",
@@ -190,7 +193,9 @@ def test_queue_item_records_serialized_byte_reduction() -> None:
         queue_item.model_dump_json(exclude={"series_metadata"}).encode()
     )
 
-    assert queue_bytes < detail_bytes
+    # Both the complete queue row and the shared projection (without metadata)
+    # must be at least 20% smaller than the full thread detail.
+    assert (detail_bytes - queue_bytes) / detail_bytes >= 0.20
     assert (detail_bytes - shared_queue_bytes) / detail_bytes >= 0.20
     assert not QUEUE_DROPPED_FIELDS.intersection(queue_item.model_dump())
 

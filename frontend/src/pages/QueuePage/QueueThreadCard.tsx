@@ -188,6 +188,52 @@ export default function QueueThreadCard({
             )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {thread.series_metadata != null ? (
+              <>
+                {thread.series_metadata.year != null && (
+                  <span className="text-xs text-[var(--theme-text-muted)]">
+                    {thread.series_metadata.year}
+                  </span>
+                )}
+                {thread.series_metadata.volume != null && (
+                  <>
+                    {thread.series_metadata.year != null && (
+                      <span className="text-xs text-[var(--theme-text-muted)]" aria-hidden="true">
+                        {' · '}
+                      </span>
+                    )}
+                    <span className="text-xs text-[var(--theme-text-muted)]">
+                      {thread.series_metadata.volume}
+                    </span>
+                  </>
+                )}
+                {thread.series_metadata.publisher != null && (
+                  <>
+                    {(thread.series_metadata.year != null || thread.series_metadata.volume != null) && (
+                      <span className="text-xs text-[var(--theme-text-muted)]" aria-hidden="true">
+                        {' · '}
+                      </span>
+                    )}
+                    <span className="text-xs text-[var(--theme-text-muted)]">
+                      {thread.series_metadata.publisher}
+                    </span>
+                  </>
+                )}
+                {thread.series_metadata.year == null &&
+                  thread.series_metadata.volume == null &&
+                  thread.series_metadata.publisher == null && (
+                  <span className="text-xs text-[var(--theme-text-dim)]">
+                    No confirmed metadata
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-xs text-[var(--theme-text-dim)]" data-testid="series-unmapped">
+                Unmapped series
+              </span>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
               {thread.format}
             </span>
