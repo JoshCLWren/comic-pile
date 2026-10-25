@@ -34,6 +34,7 @@ test.describe('Issue #3761: Pending selection regression', () => {
     
     // 2. Start rating but don't save
     await page.locator('#rating-input').evaluate((el, value) => {
+      // SAFETY: Playwright passes a generic Element; the rating input is an <input>.
       (el as HTMLInputElement).value = value
       el.dispatchEvent(new Event('input', { bubbles: true }))
       el.dispatchEvent(new Event('change', { bubbles: true }))
