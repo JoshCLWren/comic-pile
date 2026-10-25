@@ -497,6 +497,7 @@ async def _load_read_issues(
     user_id: int,
     limit: int | None,
     include_unread: bool = False,
+    confirmed_only: bool = False,
 ) -> list[ReadIssue]:
     """Load read issues with only bounded creator-state and series evidence."""
     status_clause = "i.status IN ('read', 'unread')" if include_unread else "i.status = 'read'"
@@ -598,10 +599,11 @@ async def _load_read_issues(
                   sibling_ei.metadata_json::jsonb -> 'raw_provider_payload' -> 'volume' ->> 'id'
               ) IS NOT NULL
         ) sibling_cv ON TRUE
-        WHERE t.user_id = :user_id
-          AND t.is_test IS FALSE
-          AND {status_clause}
-        ORDER BY t.queue_position, t.id, i.position, i.id
+         WHERE t.user_id = :user_id
+           AND t.is_test IS FALSE
+           AND {status_clause}
+           {'' if not confirmed_only else 'AND issue_cv.identity_id IS NOT NULL'}
+         ORDER BY t.queue_position, t.id, i.position, i.id
     """
     params: dict[str, object] = {"user_id": user_id}
     if limit is not None:
@@ -1786,7 +1788,9 @@ async def _run(args: argparse.Namespace) -> int:
     refresh = bool(args.refresh)
     limit = args.limit
     include_unread = bool(getattr(args, "include_unread", False))
-    confirmed_only = bool(getattr(args, "confirmed_only", True))
+    confirmed_only = bool(getattr(args, "confirmed_only", False))
+    if include_unread:
+        confirmed_only = True
     api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
     snapshot = _local_snapshot_from_environment()
     engine = _engine(database_url)
@@ -1840,7 +1844,7 @@ async def _run(args: argparse.Namespace) -> int:
                     f"host={host} database={database}; refusing to continue."
                 )
 
-            issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
+            issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
             if confirmed_only:
                 # Filter to confirmed mappings only and deduplicate by external identity
                 seen = {}
@@ -1867,21 +1871,10 @@ async def _run(args: argparse.Namespace) -> int:
                 )
                 phases.append(_phase_report("local-identity", local_identity, client=client))
                 checkpoint()
-                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
-                if confirmed_only:
-                    seen = {}
-                    filtered = []
-                    for issue in issues:
-                        if issue.identity_id is None or issue.external_id is None:
-                            continue
-                        if issue.identity_id in seen:
-                            continue
-                        seen[issue.identity_id] = True
-                        filtered.append(issue)
-                    issues = filtered
+                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
             else:
                 # Confirmed-only mode: skip identity resolution phases
-                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
+                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
                 seen = {}
                 filtered = []
                 for issue in issues:
@@ -1903,7 +1896,7 @@ async def _run(args: argparse.Namespace) -> int:
             )
             phases.append(_phase_report("local-creators", local_creators, client=client))
             checkpoint()
-            issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
+            issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
             if confirmed_only:
                 seen = {}
                 filtered = []
@@ -1939,21 +1932,10 @@ async def _run(args: argparse.Namespace) -> int:
                 )
                 phases.append(_phase_report("provider-identity", provider_identity, client=client))
                 checkpoint()
-                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
-                if confirmed_only:
-                    seen = {}
-                    filtered = []
-                    for issue in issues:
-                        if issue.identity_id is None or issue.external_id is None:
-                            continue
-                        if issue.identity_id in seen:
-                            continue
-                        seen[issue.identity_id] = True
-                        filtered.append(issue)
-                    issues = filtered
+                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
             else:
                 # Confirmed-only: reload and filter, skip identity phase
-                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
+                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
                 seen = {}
                 filtered = []
                 for issue in issues:
