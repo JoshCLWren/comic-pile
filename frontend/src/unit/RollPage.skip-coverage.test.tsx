@@ -120,7 +120,7 @@ describe('RollPage skip coverage', () => {
       result: 5,
       die_size: 6,
     }
-    spies.skip.mockResolvedValue(nextRoll)
+    spies.skip.mockResolvedValue({ response: nextRoll, refreshed: true, refreshError: null })
     const user = userEvent.setup()
     render(<RollPage />)
     await waitFor(() => expect(screen.getByTestId('skip-roll')).toBeInTheDocument())
@@ -128,11 +128,13 @@ describe('RollPage skip coverage', () => {
     expect(spies.skip).not.toHaveBeenCalled()
     await user.click(screen.getByTestId('skip-confirm'))
     await waitFor(() => expect(spies.skip).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(spies.refetch).toHaveBeenCalled())
+    // The skip mutation owns the authoritative refresh; the page must not
+    // start a second bootstrap request after a successful skip (#4142).
+    expect(spies.refetch).not.toHaveBeenCalled()
   })
 
   it('handles skip returning null without entering error state', async () => {
-    spies.skip.mockResolvedValue(undefined)
+    spies.skip.mockResolvedValue({ response: undefined, refreshed: true, refreshError: null })
     const user = userEvent.setup()
     render(<RollPage />)
     await waitFor(() => expect(screen.getByTestId('skip-roll')).toBeInTheDocument())
@@ -181,7 +183,7 @@ describe('RollPage skip coverage', () => {
       result: null,
       die_size: 6,
     }
-    spies.skip.mockResolvedValue(sparseRoll)
+    spies.skip.mockResolvedValue({ response: sparseRoll, refreshed: true, refreshError: null })
     const user = userEvent.setup()
     render(<RollPage />)
     await waitFor(() => expect(screen.getByTestId('skip-roll')).toBeInTheDocument())
@@ -189,6 +191,6 @@ describe('RollPage skip coverage', () => {
     expect(spies.skip).not.toHaveBeenCalled()
     await user.click(screen.getByTestId('skip-confirm'))
     await waitFor(() => expect(spies.skip).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(spies.refetch).toHaveBeenCalled())
+    expect(spies.refetch).not.toHaveBeenCalled()
   })
 })
