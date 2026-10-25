@@ -743,10 +743,14 @@ async def test_read_unread_issues_in_multiple_threads(
         async_db, default_user, title="Thread B", issue_count=1, queue_position=2, read_through=0
     )
     await _confirm_identity(
-        async_db, issues_a[0], creators=[{"id": 555, "name": "Cross-Thread Creator", "role": "writer"}]
+        async_db,
+        issues_a[0],
+        creators=[{"id": 555, "name": "Cross-Thread Creator", "role": "writer"}],
     )
     await _confirm_identity(
-        async_db, issues_b[0], creators=[{"id": 555, "name": "Cross-Thread Creator", "role": "writer"}]
+        async_db,
+        issues_b[0],
+        creators=[{"id": 555, "name": "Cross-Thread Creator", "role": "writer"}],
     )
     await _rate(async_db, issues_a[0], rating=4.0, timestamp=D1)
     # issues_b[0] remains unread
@@ -769,20 +773,26 @@ async def test_malformed_credits_do_not_break_summaries(
 ) -> None:
     """Malformed creator_credits (non-array values) do not break the summary request."""
     thread, issues = await _make_thread(
-        async_db, default_user, title="Malformed Test", issue_count=2, queue_position=1, read_through=2
+        async_db,
+        default_user,
+        title="Malformed Test",
+        issue_count=2,
+        queue_position=1,
+        read_through=2,
     )
-    
+
     # First issue has valid credits
     await _confirm_identity(
         async_db, issues[0], creators=[{"id": 777, "name": "Valid Creator", "role": "writer"}]
     )
-    
+
     # Second issue has malformed credits (string instead of array)
     await _confirm_identity(
-        async_db, issues[1],
-        metadata={"creator_credits": "this is not an array", "volume_id": "test"}
+        async_db,
+        issues[1],
+        metadata={"creator_credits": "this is not an array", "volume_id": "test"},
     )
-    
+
     await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
     await _rate(async_db, issues[1], rating=3.0, timestamp=D2)
 
@@ -795,7 +805,7 @@ async def test_malformed_credits_do_not_break_summaries(
     summary = body["summaries"]["creator:777"]
     assert summary["ratings_count"] == 1
     assert summary["average_rating"] == pytest.approx(4.0)
-    
+
     # Coverage should include both issues (global coverage not affected by malformed credits)
     coverage = body["coverage"]
     assert coverage["rated_issues_total"] == 2
@@ -811,9 +821,14 @@ async def test_small_requests_only_fetch_requested_creators(
 ) -> None:
     """Small requests fetch only data for requested creators, not the entire library."""
     thread, issues = await _make_thread(
-        async_db, default_user, title="Large Library", issue_count=3, queue_position=1, read_through=3
+        async_db,
+        default_user,
+        title="Large Library",
+        issue_count=3,
+        queue_position=1,
+        read_through=3,
     )
-    
+
     # Create issues with different creators
     await _confirm_identity(
         async_db, issues[0], creators=[{"id": 1001, "name": "Creator A", "role": "writer"}]
@@ -824,7 +839,7 @@ async def test_small_requests_only_fetch_requested_creators(
     await _confirm_identity(
         async_db, issues[2], creators=[{"id": 1003, "name": "Creator C", "role": "writer"}]
     )
-    
+
     await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
     await _rate(async_db, issues[1], rating=3.0, timestamp=D2)
     await _rate(async_db, issues[2], rating=5.0, timestamp=D3)
@@ -834,18 +849,18 @@ async def test_small_requests_only_fetch_requested_creators(
 
     assert response.status_code == 200
     body = response.json()
-    
+
     # Should only contain the requested creator
     assert set(body["summaries"]) == {"creator:1001"}
     assert "creator:1002" not in body["summaries"]
     assert "creator:1003" not in body["summaries"]
-    
+
     # Coverage should reflect the entire library (global coverage)
     coverage = body["coverage"]
     assert coverage["rated_issues_total"] == 3
     assert coverage["rated_issues_with_creator_metadata"] == 3
     assert coverage["ratings_complete"] is True
-    
+
     # Summary for requested creator should be correct
     summary = body["summaries"]["creator:1001"]
     assert summary["display_name"] == "Creator A"
@@ -861,9 +876,14 @@ async def test_global_coverage_not_affected_by_requested_keys(
 ) -> None:
     """Global coverage totals include all issues with creator metadata, not just requested ones."""
     thread, issues = await _make_thread(
-        async_db, default_user, title="Coverage Test", issue_count=3, queue_position=1, read_through=3
+        async_db,
+        default_user,
+        title="Coverage Test",
+        issue_count=3,
+        queue_position=1,
+        read_through=3,
     )
-    
+
     # Issues with different creators
     await _confirm_identity(
         async_db, issues[0], creators=[{"id": 2001, "name": "Creator X", "role": "writer"}]
@@ -874,7 +894,7 @@ async def test_global_coverage_not_affected_by_requested_keys(
     await _confirm_identity(
         async_db, issues[2], creators=[{"id": 2003, "name": "Creator Z", "role": "writer"}]
     )
-    
+
     await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
     await _rate(async_db, issues[1], rating=3.0, timestamp=D2)
     await _rate(async_db, issues[2], rating=5.0, timestamp=D3)
@@ -884,14 +904,83 @@ async def test_global_coverage_not_affected_by_requested_keys(
 
     assert response.status_code == 200
     body = response.json()
-    
+
     # Coverage should reflect all issues with creator metadata
     coverage = body["coverage"]
     assert coverage["rated_issues_total"] == 3
     assert coverage["rated_issues_with_creator_metadata"] == 3
     assert coverage["ratings_complete"] is True
-    
+
     # Only requested creator should have summary data
     assert "creator:2001" in body["summaries"]
     assert "creator:2002" not in body["summaries"]
     assert "creator:2003" not in body["summaries"]
+
+
+@pytest.mark.asyncio
+async def test_subset_projection_matches_full_library_with_manual_fallback(
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Subset SQL preserves global coverage and confirmed/manual precedence."""
+    from app.repositories.creator_summary import (
+        load_creator_summary_inputs,
+        load_creator_summary_inputs_for_creators,
+        manual_creator_id,
+    )
+    from app.services import creator_summary as service
+
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Subset parity",
+        issue_count=5,
+        queue_position=1,
+        read_through=3,
+    )
+    thread.manual_creator_credits = [{"name": "Manual Writer", "roles": ["writer"]}]
+    await _confirm_identity(
+        async_db,
+        issues[0],
+        creators=[{"id": 3001, "name": "Requested", "role": "writer"}],
+    )
+    await _confirm_identity(
+        async_db,
+        issues[1],
+        creators=[{"id": 3002, "name": "Other", "role": "writer"}],
+    )
+    await _confirm_identity(async_db, issues[2], creators=[])
+    await _confirm_identity(async_db, issues[3], creators=[{"id": "bad", "name": "Invalid"}])
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=3.0, timestamp=D1)
+    await _rate(async_db, issues[2], rating=5.0, timestamp=D1)
+    manual_id = manual_creator_id("Manual Writer")
+    requests = [{3001}, {manual_id}, {3001, 3002, manual_id}, set()]
+    actual = [
+        await service.get_creator_summaries(
+            async_db, default_user.id, [f"creator:{cid}" for cid in ids]
+        )
+        for ids in requests
+    ]
+    full = await load_creator_summary_inputs(async_db, default_user.id)
+
+    async def baseline(
+        db: AsyncSession,
+        user_id: int,
+        requested_creator_ids: set[int],
+    ) -> object:
+        return full
+
+    monkeypatch.setattr(service, "load_creator_summary_inputs_for_creators", baseline)
+    expected = [
+        await service.get_creator_summaries(
+            async_db, default_user.id, [f"creator:{cid}" for cid in ids]
+        )
+        for ids in requests
+    ]
+    assert actual == expected
+    projected = await load_creator_summary_inputs_for_creators(async_db, default_user.id, {3001})
+    assert set(projected.owned_issues) == {issues[0].id}
+    assert set(projected.effective_ratings) == {issues[0].id}
+    assert projected.coverage_counts == (3, 3, 0, 0, 2, 2)
