@@ -512,11 +512,20 @@ async def load_creator_summary_inputs_for_creators(
     # Use JSONB array expansion to filter credits at the database level
     # Cast to jsonb since the column is JSON type
     # Guard against malformed values that are not arrays (G3)
+    # Use CASE to return empty array when creator_credits is not an array
     metadata_result = await db.execute(
         select(
             Issue.id,
             func.jsonb_array_elements(
-                cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)
+                func.case(
+                    [
+                        (
+                            func.jsonb_typeof(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY]) == "array",
+                            cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)
+                        )
+                    ],
+                    else_=cast("[]", JSONB)
+                )
             ).label("credit")
         )
         .join(Thread, Thread.id == Issue.thread_id)
@@ -537,12 +546,34 @@ async def load_creator_summary_inputs_for_creators(
     per_issue_credits: dict[int, dict[tuple[int, tuple[str, ...]], CreatorCredit]] = {}
     # Track all issues with usable confirmed credits for global coverage, not just requested creators
     issues_with_creator_metadata: set[int] = set()
+    
+    # First pass: collect all issues with any creator metadata for global coverage
+    all_metadata_result = await db.execute(
+        select(Issue.id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .join(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.issue_id == Issue.id,
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(Thread.user_id == user_id)
+        .where(IssueExternalIdentityMapping.status == "confirmed")
+        .where(ExternalIdentity.provider == COMICVINE_PROVIDER)
+        .where(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY].is_not(None))
+    )
+    for issue_id, in all_metadata_result.all():
+        issues_with_creator_metadata.add(int(issue_id))
+    
+    # Second pass: filter to requested creators for per-issue credits
     for issue_id, credit_elem in metadata_result.all():
         # credit_elem is a JSON object from jsonb_array_elements
         if not isinstance(credit_elem, dict):
             continue
         creator_id = _coerce_creator_id(credit_elem.get("id"))
-        # G1: Filter by requested creator IDs at the database level
+        # G1: Filter by requested creator IDs
         if creator_id is None or creator_id not in requested_creator_ids:
             continue
         name = credit_elem.get("name")
@@ -554,8 +585,6 @@ async def load_creator_summary_inputs_for_creators(
             parsed = {part.strip() for part in str(role_value).split(",") if part.strip()}
             roles = tuple(sorted(parsed))
         owned_issue_id = int(issue_id)
-        # Track all issues with usable confirmed credits (not just requested)
-        issues_with_creator_metadata.add(owned_issue_id)
         by_key = per_issue_credits.setdefault(owned_issue_id, {})
         credit = CreatorCredit(
             external_id=creator_id,
