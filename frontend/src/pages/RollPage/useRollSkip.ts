@@ -39,6 +39,11 @@ interface UseRollSkipParams {
  * Unskip is different: `useUnskip` does not reconcile bootstrap state, so the
  * unskip path keeps exactly one explicit refresh. Skipped membership is never
  * served from a pre-unskip snapshot.
+ *
+ * When the mutation's bounded refresh is exhausted the published snapshot still
+ * names the thread this skip consumed. The consumed id is recorded in
+ * `ignoredPendingThreadIdRef` so pending hydration cannot reopen that thread
+ * before authoritative state actually arrives (#4142).
  */
 export function useRollSkip({
   state,
@@ -51,6 +56,7 @@ export function useRollSkip({
 }: UseRollSkipParams) {
   const {
     suppressPendingAutoOpenRef,
+    ignoredPendingThreadIdRef,
     setRolledResult,
     setErrorMessage,
   } = state
@@ -88,6 +94,14 @@ export function useRollSkip({
         next_issue_id: response.next_issue_id ?? null,
         next_issue_number: response.next_issue_number ?? null,
         last_rolled_result: response.result ?? null,
+      }
+      // The mutation owns the authoritative refresh. Until it succeeds the
+      // bootstrap snapshot still names the series this skip just consumed, and
+      // `enterRatingView` releases the pending auto-open suppression, so that
+      // stale id must be ignored explicitly or the next render would reopen
+      // the skipped thread (#4142).
+      if (!outcome.refreshed && expectedPendingThreadId !== undefined) {
+        ignoredPendingThreadIdRef.current = expectedPendingThreadId
       }
       suppressPendingAutoOpenRef.current = true
       await enterRatingView(response.thread_id, response.result ?? null, threadMetadata)

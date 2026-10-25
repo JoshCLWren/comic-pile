@@ -18,6 +18,7 @@ interface UseRollPendingSessionParams {
 export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPendingSessionParams): void {
   const {
     suppressPendingAutoOpenRef,
+    ignoredPendingThreadIdRef,
     selectedThreadId,
     activeRatingThread,
     isRatingView,
@@ -35,9 +36,21 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
   useEffect(() => {
     if (suppressPendingAutoOpenRef.current) return
     const pendingThreadId = bootstrap?.pending_thread_id
-    if (!pendingThreadId) return
+    if (!pendingThreadId) {
+      // No pending read means the snapshot can no longer name a thread the
+      // reader already left, so the consumed-id guard has served its purpose.
+      ignoredPendingThreadIdRef.current = null
+      return
+    }
 
     const pendingId = Number(pendingThreadId)
+    // A committed Skip consumed this pending read, but its authoritative
+    // refresh failed, so `bootstrap` is still the pre-skip snapshot. Hydrating
+    // it here would reopen the series the reader just skipped (#4142). Ignore
+    // that exact id until a newer snapshot reports a different pending read.
+    if (ignoredPendingThreadIdRef.current === pendingId) return
+    ignoredPendingThreadIdRef.current = null
+
     const isCurrentPendingSelection = Number(selectedThreadId) === pendingId
     const hasHydratedPendingMetadata = Boolean(activeRatingThread?.title)
 
@@ -108,6 +121,7 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
     isRatingView,
     selectedThreadId,
     suppressPendingAutoOpenRef,
+    ignoredPendingThreadIdRef,
     setSelectedThreadId,
     setRolledResult,
     setActiveRatingThread,

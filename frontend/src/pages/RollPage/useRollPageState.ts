@@ -33,6 +33,14 @@ export interface RollPageState {
   rating: number
   errorMessage: string
   suppressPendingAutoOpenRef: React.MutableRefObject<boolean>
+  /**
+   * Pending thread id from the last authoritative snapshot that a committed
+   * Skip already consumed while its follow-up bootstrap refresh failed.
+   * `useRollPendingSession` must ignore that id, because the snapshot on
+   * screen still names the series the reader just skipped. The guard clears
+   * itself as soon as a newer snapshot reports a different pending read.
+   */
+  ignoredPendingThreadIdRef: React.MutableRefObject<number | null>
   rollIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>
   rollTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>
 }
@@ -99,6 +107,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [errorMessage, setErrorMessage] = useState('')
 
   const suppressPendingAutoOpenRef = useRef(false)
+  const ignoredPendingThreadIdRef = useRef<number | null>(null)
   const rollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const rollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -160,6 +169,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     errorMessage,
     setErrorMessage,
     suppressPendingAutoOpenRef,
+    ignoredPendingThreadIdRef,
     rollIntervalRef,
     rollTimeoutRef,
   }

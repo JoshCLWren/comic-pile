@@ -3,9 +3,16 @@
  * `GET /api/v1/roll/bootstrap`. These tests compose the real skip mutation,
  * the real bootstrap query hook, and each Roll caller (rating view and pool
  * action sheet) so the assertion counts actual API `get` calls instead of a
- * stubbed `refetchBootstrap`. Completion is delayed across a timer turn so the
- * zero-delay `justReconciledRef` window in `useRollBootstrap` has expired and a
- * caller-driven refresh can no longer hide behind it.
+ * stubbed `refetchBootstrap`.
+ *
+ * The transport count alone cannot prove the caller stopped refreshing:
+ * publishing a fresh snapshot opens a zero-delay `justReconciledRef` window in
+ * `useRollBootstrap`, so a caller-driven `await refetchBootstrap()` that runs
+ * before the mutation's promise resolves is answered from the cache and never
+ * reaches the transport. Every harness therefore also wraps the
+ * `refetchBootstrap` callback it passes to the caller in a spy and asserts the
+ * caller never invokes it, which is what makes a returning redundant refresh
+ * fail these tests.
  */
 import { type ReactNode } from 'react'
 import { act, renderHook, waitFor } from '@testing-library/react'
@@ -15,6 +22,8 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import { useSkip, useUnskip } from '../hooks/useSkip'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
+import { useRollPendingSession } from '../pages/RollPage/useRollPendingSession'
+import { useRollRating } from '../pages/RollPage/useRollRating'
 import { useRollSkip } from '../pages/RollPage/useRollSkip'
 import { useRollActions } from '../pages/RollPage/useRollActions'
 import { threadsApi } from '../services/api-threads'
@@ -22,6 +31,8 @@ import type { RollResponse } from '../types'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
 
 const PENDING_THREAD_ID = 8
+/** Replacement pending read returned by a committed skip of the original one. */
+const REPLACEMENT_THREAD_ID = 9
 
 function bootstrapState(
   pendingThreadId: number | null,
@@ -122,18 +133,26 @@ function renderRatingSkipFlow(apis: Apis) {
   const wrapper = makeWrapper()
   const onRefreshFailed = vi.fn()
   const enterRatingView = vi.fn().mockResolvedValue(undefined)
+  // The spy is stable across renders on purpose: a per-render spy would hide a
+  // caller refresh behind whichever instance the assertion happened to read.
+  // Spying on the callback the caller is given is the only way to observe a
+  // redundant refresh, because `useRollBootstrap` answers it from the
+  // reconciliation window without a transport call (see the file header).
+  let refetchImpl: () => Promise<RollBootstrapResponse> = () => Promise.reject(new Error('bootstrap not loaded'))
+  const refetchBootstrap = vi.fn(() => refetchImpl())
 
   const rendered = renderHook(() => {
     const state = useRollPageState()
     const bootstrap = useRollBootstrap(apis.bootstrapApi)
     const skipMutation = useSkip(apis)
     const unskipMutation = useUnskip(apis)
+    refetchImpl = bootstrap.refetch
 
     const skip = useRollSkip({
       state,
       skipMutation,
       unskipMutation,
-      refetchBootstrap: bootstrap.refetch,
+      refetchBootstrap,
       enterRatingView,
       expectedPendingThreadId: bootstrap.data?.pending_thread_id ?? undefined,
       onRefreshFailed,
@@ -142,18 +161,24 @@ function renderRatingSkipFlow(apis: Apis) {
     return { state, skip, bootstrap }
   }, { wrapper })
 
-  return { rendered, onRefreshFailed, enterRatingView }
+  return { rendered, onRefreshFailed, enterRatingView, refetchBootstrap }
 }
 
 function renderActionSheetFlow(apis: Apis) {
   const wrapper = makeWrapper()
   const onSkipRefreshFailed = vi.fn()
+  const enterRatingView = vi.fn().mockResolvedValue(undefined)
+  // See `renderRatingSkipFlow`: the callback spy catches a caller-driven
+  // refresh that the reconciliation window would otherwise mask.
+  let refetchImpl: () => Promise<RollBootstrapResponse> = () => Promise.reject(new Error('bootstrap not loaded'))
+  const refetchBootstrap = vi.fn(() => refetchImpl())
 
   const rendered = renderHook(() => {
     const state = useRollPageState()
     const bootstrap = useRollBootstrap(apis.bootstrapApi)
     const skipMutation = useSkip(apis)
     const unskipMutation = useUnskip(apis)
+    refetchImpl = bootstrap.refetch
 
     const actions = useRollActions({
       state,
@@ -173,8 +198,8 @@ function renderActionSheetFlow(apis: Apis) {
         moveToBackMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         shuffleQueueMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
       },
-      refetchBootstrap: bootstrap.refetch,
-      enterRatingView: vi.fn().mockResolvedValue(undefined),
+      refetchBootstrap,
+      enterRatingView,
       threadsApi,
       onSkipRefreshFailed,
     })
@@ -182,7 +207,54 @@ function renderActionSheetFlow(apis: Apis) {
     return { state, actions, bootstrap }
   }, { wrapper })
 
-  return { rendered, onSkipRefreshFailed }
+  return { rendered, onSkipRefreshFailed, refetchBootstrap }
+}
+
+/**
+ * Composes the real `useRollRating.enterRatingView` and the real
+ * `useRollPendingSession` so a stale snapshot has every chance to reopen the
+ * thread a skip just consumed, exactly as it does on the Roll page.
+ */
+function renderPendingSessionSkipFlow(apis: Apis) {
+  const wrapper = makeWrapper()
+  const onRefreshFailed = vi.fn()
+  // See `renderRatingSkipFlow`: one stable callback spy for the whole flow.
+  let refetchImpl: () => Promise<RollBootstrapResponse> = () => Promise.reject(new Error('bootstrap not loaded'))
+  const refetchBootstrap = vi.fn(() => refetchImpl())
+
+  const rendered = renderHook(() => {
+    const state = useRollPageState()
+    const bootstrap = useRollBootstrap(apis.bootstrapApi)
+    const skipMutation = useSkip(apis)
+    const unskipMutation = useUnskip(apis)
+    refetchImpl = bootstrap.refetch
+    const rating = useRollRating({
+      state,
+      bootstrap: bootstrap.data,
+      rateMutation: { mutate: vi.fn(), isPending: false },
+      dismissPendingMutation: { mutate: vi.fn(), isPending: false },
+      refetchBootstrap,
+    })
+    useRollPendingSession({
+      state,
+      bootstrap: bootstrap.data,
+      rollPool: bootstrap.data?.roll_pool ?? [],
+    })
+
+    const skip = useRollSkip({
+      state,
+      skipMutation,
+      unskipMutation,
+      refetchBootstrap,
+      enterRatingView: rating.enterRatingView,
+      expectedPendingThreadId: bootstrap.data?.pending_thread_id ?? undefined,
+      onRefreshFailed,
+    })
+
+    return { state, skip, bootstrap }
+  }, { wrapper })
+
+  return { rendered, onRefreshFailed, refetchBootstrap }
 }
 
 async function settleInitialBootstrap(
@@ -199,7 +271,7 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
     const apis = makeApis()
     apis.bootstrapApi.get.mockImplementation(() => afterMacrotask(bootstrapState(PENDING_THREAD_ID)))
     apis.protectedApi.skip.mockImplementation(() => afterMacrotask(skipResponse(PENDING_THREAD_ID)))
-    const { rendered, enterRatingView } = renderRatingSkipFlow(apis)
+    const { rendered, enterRatingView, refetchBootstrap } = renderRatingSkipFlow(apis)
     await settleInitialBootstrap(apis, rendered)
     apis.bootstrapApi.get.mockImplementation(() => afterMacrotask(bootstrapState(null)))
 
@@ -216,6 +288,9 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
 
     expect(apis.protectedApi.skip).toHaveBeenCalledTimes(1)
     expect(apis.bootstrapApi.get).toHaveBeenCalledTimes(1)
+    // A reintroduced caller refresh may be answered from the reconciliation
+    // window instead of the transport, so the callback must stay untouched.
+    expect(refetchBootstrap).not.toHaveBeenCalled()
     expect(enterRatingView).toHaveBeenCalledWith(
       PENDING_THREAD_ID,
       4,
@@ -230,7 +305,7 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
     const apis = makeApis()
     apis.bootstrapApi.get.mockImplementation(() => afterMacrotask(bootstrapState(PENDING_THREAD_ID)))
     apis.protectedApi.skip.mockImplementation(() => afterMacrotask(skipResponse(PENDING_THREAD_ID)))
-    const { rendered } = renderActionSheetFlow(apis)
+    const { rendered, refetchBootstrap } = renderActionSheetFlow(apis)
     await settleInitialBootstrap(apis, rendered)
 
     act(() => {
@@ -246,6 +321,9 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
 
     expect(apis.protectedApi.skip).toHaveBeenCalledTimes(1)
     expect(apis.bootstrapApi.get).toHaveBeenCalledTimes(1)
+    // See the rating-view test: the callback spy is what detects a duplicate
+    // caller refresh inside the reconciliation window.
+    expect(refetchBootstrap).not.toHaveBeenCalled()
   })
 
   it('rating view: an exhausted refresh is reported without a caller retry', async () => {
@@ -253,7 +331,7 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
     const refreshFailure = new Error('bootstrap unavailable')
     apis.bootstrapApi.get.mockImplementation(() => afterMacrotask(bootstrapState(PENDING_THREAD_ID)))
     apis.protectedApi.skip.mockImplementation(() => afterMacrotask(skipResponse(PENDING_THREAD_ID)))
-    const { rendered, onRefreshFailed, enterRatingView } = renderRatingSkipFlow(apis)
+    const { rendered, onRefreshFailed, enterRatingView, refetchBootstrap } = renderRatingSkipFlow(apis)
     await settleInitialBootstrap(apis, rendered)
     apis.bootstrapApi.get.mockImplementation(() => Promise.reject(refreshFailure))
 
@@ -271,6 +349,7 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
     expect(apis.protectedApi.skip).toHaveBeenCalledTimes(1)
     // The bounded refresh (two attempts) is the only refresh the skip owns.
     expect(apis.bootstrapApi.get).toHaveBeenCalledTimes(2)
+    expect(refetchBootstrap).not.toHaveBeenCalled()
     expect(onRefreshFailed).toHaveBeenCalledWith(refreshFailure)
     // The committed skip still advances the rating view from its response.
     expect(enterRatingView).toHaveBeenCalledTimes(1)
@@ -281,7 +360,7 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
     const refreshFailure = new Error('bootstrap unavailable')
     apis.bootstrapApi.get.mockImplementation(() => afterMacrotask(bootstrapState(PENDING_THREAD_ID)))
     apis.protectedApi.skip.mockImplementation(() => afterMacrotask(skipResponse(PENDING_THREAD_ID)))
-    const { rendered, onSkipRefreshFailed } = renderActionSheetFlow(apis)
+    const { rendered, onSkipRefreshFailed, refetchBootstrap } = renderActionSheetFlow(apis)
     await settleInitialBootstrap(apis, rendered)
     apis.bootstrapApi.get.mockImplementation(() => Promise.reject(refreshFailure))
 
@@ -298,14 +377,87 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
 
     expect(apis.protectedApi.skip).toHaveBeenCalledTimes(1)
     expect(apis.bootstrapApi.get).toHaveBeenCalledTimes(2)
+    expect(refetchBootstrap).not.toHaveBeenCalled()
     expect(onSkipRefreshFailed).toHaveBeenCalledWith(refreshFailure)
+  })
+
+  it('an exhausted post-skip refresh never reopens the skipped thread', async () => {
+    const apis = makeApis()
+    const staleSnapshot = {
+      ...bootstrapState(PENDING_THREAD_ID),
+      roll_pool: [pooledThread(PENDING_THREAD_ID), pooledThread(REPLACEMENT_THREAD_ID)],
+    }
+    apis.bootstrapApi.get.mockImplementation(() => afterMacrotask(staleSnapshot))
+    apis.protectedApi.skip.mockImplementation(() => afterMacrotask(skipResponse(REPLACEMENT_THREAD_ID)))
+    const { rendered, refetchBootstrap } = renderPendingSessionSkipFlow(apis)
+    await settleInitialBootstrap(apis, rendered)
+    apis.bootstrapApi.get.mockImplementation(() => Promise.reject(new Error('bootstrap unavailable')))
+
+    // The pending-session hook hydrated the original pending read, so the
+    // reader is rating the series this skip is about to consume.
+    await waitFor(() => {
+      expect(rendered.result.current.state.selectedThreadId).toBe(PENDING_THREAD_ID)
+    })
+    expect(rendered.result.current.state.isRatingView).toBe(true)
+
+    await act(async () => {
+      await rendered.result.current.skip.handleSkip()
+    })
+    await act(async () => {
+      await afterMacrotask(null)
+    })
+
+    expect(apis.protectedApi.skip).toHaveBeenCalledTimes(1)
+    // Both bounded refresh attempts failed, so the pre-skip snapshot — whose
+    // pending id is the thread the skip just consumed — is still published.
+    expect(apis.bootstrapApi.get).toHaveBeenCalledTimes(2)
+    expect(rendered.result.current.bootstrap.data?.pending_thread_id).toBe(PENDING_THREAD_ID)
+    expect(refetchBootstrap).not.toHaveBeenCalled()
+    // The stale pending id must not steal the rating view from the replacement.
+    expect(rendered.result.current.state.selectedThreadId).toBe(REPLACEMENT_THREAD_ID)
+    expect(rendered.result.current.state.activeRatingThread?.id).toBe(REPLACEMENT_THREAD_ID)
+    expect(rendered.result.current.state.isRatingView).toBe(true)
+  })
+
+  it('a successful post-skip refresh releases the stale-pending guard', async () => {
+    const apis = makeApis()
+    const firstSnapshot = {
+      ...bootstrapState(PENDING_THREAD_ID),
+      roll_pool: [pooledThread(PENDING_THREAD_ID), pooledThread(REPLACEMENT_THREAD_ID)],
+    }
+    apis.bootstrapApi.get.mockImplementation(() => afterMacrotask(firstSnapshot))
+    apis.protectedApi.skip.mockImplementation(() => afterMacrotask(skipResponse(REPLACEMENT_THREAD_ID)))
+    const { rendered, refetchBootstrap } = renderPendingSessionSkipFlow(apis)
+    await settleInitialBootstrap(apis, rendered)
+    await waitFor(() => {
+      expect(rendered.result.current.state.selectedThreadId).toBe(PENDING_THREAD_ID)
+    })
+
+    // The mutation's own refresh publishes the replacement as the pending read.
+    apis.bootstrapApi.get.mockImplementation(() => afterMacrotask({
+      ...bootstrapState(REPLACEMENT_THREAD_ID),
+      roll_pool: [pooledThread(PENDING_THREAD_ID), pooledThread(REPLACEMENT_THREAD_ID)],
+    }))
+
+    await act(async () => {
+      await rendered.result.current.skip.handleSkip()
+    })
+    await act(async () => {
+      await afterMacrotask(null)
+    })
+
+    expect(apis.bootstrapApi.get).toHaveBeenCalledTimes(1)
+    expect(refetchBootstrap).not.toHaveBeenCalled()
+    expect(rendered.result.current.bootstrap.data?.pending_thread_id).toBe(REPLACEMENT_THREAD_ID)
+    expect(rendered.result.current.state.selectedThreadId).toBe(REPLACEMENT_THREAD_ID)
+    expect(rendered.result.current.state.activeRatingThread?.id).toBe(REPLACEMENT_THREAD_ID)
   })
 
   it('unskip from the rating view refreshes once and drops skipped membership', async () => {
     const apis = makeApis()
     apis.bootstrapApi.get.mockImplementation(() => afterMacrotask(bootstrapState(PENDING_THREAD_ID, [PENDING_THREAD_ID])))
     apis.skipApi.unskip.mockResolvedValue(undefined)
-    const { rendered } = renderRatingSkipFlow(apis)
+    const { rendered, refetchBootstrap } = renderRatingSkipFlow(apis)
     await settleInitialBootstrap(apis, rendered)
 
     apis.bootstrapApi.get.mockImplementation(() => afterMacrotask(bootstrapState(PENDING_THREAD_ID, [])))
@@ -314,6 +466,7 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
     })
 
     expect(apis.skipApi.unskip).toHaveBeenCalledWith(PENDING_THREAD_ID)
+    expect(refetchBootstrap).toHaveBeenCalledTimes(1)
     expect(apis.bootstrapApi.get).toHaveBeenCalledTimes(1)
     await waitFor(() => {
       expect(rendered.result.current.bootstrap.data?.skipped_thread_ids).toEqual([])
@@ -324,7 +477,7 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
     const apis = makeApis()
     apis.bootstrapApi.get.mockImplementation(() => afterMacrotask(bootstrapState(PENDING_THREAD_ID, [PENDING_THREAD_ID])))
     apis.skipApi.unskip.mockResolvedValue(undefined)
-    const { rendered } = renderActionSheetFlow(apis)
+    const { rendered, refetchBootstrap } = renderActionSheetFlow(apis)
     await settleInitialBootstrap(apis, rendered)
 
     act(() => {
@@ -337,6 +490,7 @@ describe('successful Roll skip issues one authoritative bootstrap refresh', () =
     })
 
     expect(apis.skipApi.unskip).toHaveBeenCalledWith(PENDING_THREAD_ID)
+    expect(refetchBootstrap).toHaveBeenCalledTimes(1)
     expect(apis.bootstrapApi.get).toHaveBeenCalledTimes(1)
     await waitFor(() => {
       expect(rendered.result.current.bootstrap.data?.skipped_thread_ids).toEqual([])

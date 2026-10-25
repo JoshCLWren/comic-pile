@@ -82,6 +82,7 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     rating: 3.0,
     errorMessage: '',
     suppressPendingAutoOpenRef: { current: false },
+    ignoredPendingThreadIdRef: { current: null },
     rollIntervalRef: { current: null },
     rollTimeoutRef: { current: null },
     setIsRolling: vi.fn(),
