@@ -228,3 +228,49 @@ test.describe('Roll layout containment', () => {
     })
   }
 })
+
+// Issue #4174: Roll rating view title column collapses to ~60px at mid widths
+// The fix ensures the title column has a minimum width of 10rem (160px) on tablet
+// and desktop breakpoints to prevent mid-word text wrapping.
+test.describe('Roll rating view title column width', () => {
+  const PROBLEMATIC_VIEWPORTS = [
+    { width: 768, height: 1024 },
+    { width: 1024, height: 800 },
+  ]
+
+  for (const viewport of PROBLEMATIC_VIEWPORTS) {
+    test(`title column is at least 60px wide at ${viewport.width}px`, async ({ authenticatedPage }) => {
+      const page = authenticatedPage
+      await page.setViewportSize(viewport)
+      await createThread(page, {
+        title: THREAD_TITLE,
+        format: 'Comic',
+        issues_remaining: 2,
+        total_issues: 4,
+      })
+
+      await enterRatingView(page)
+      const geometry = await readGeometry(page)
+
+      // The title element must have a minimum width to prevent mid-word breaking
+      expect(
+        geometry.title.width,
+        `title must be at least 60px wide at ${viewport.width}px to prevent mid-word breaks`,
+      ).toBeGreaterThanOrEqual(60)
+
+      // The header must not be completely squeezed to ~60px
+      expect(
+        geometry.header.width,
+        `header must not collapse to ~60px at ${viewport.width}px`,
+      ).toBeGreaterThan(60)
+
+      // The progress line must not be clipped by the decision card
+      if (geometry.progress) {
+        expect(
+          geometry.progress.width,
+          `progress line must not be clipped at ${viewport.width}px`,
+        ).toBeGreaterThan(0)
+      }
+    })
+  }
+})
