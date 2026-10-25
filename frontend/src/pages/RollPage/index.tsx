@@ -39,7 +39,7 @@ import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
-import { invalidateAfterUndo } from '../../query/cacheEffects'
+import { invalidateAfterUndo, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
@@ -117,17 +117,13 @@ export default function RollPage() {
   const handleBackToQueue = useCallback(() => {
     // Leaving for the queue is navigation, not resolution (issue #3761): the
     // pending read stays server-side, so the unresolved selection is still
-    // there when the reader comes back. Refresh the bootstrap cache in the
-    // background because a roll does not rewrite it — returning inside the
-    // query's stale window would otherwise replay a snapshot captured before
-    // the roll, whose `pending_thread_id: null` hides the selection that was
-    // preserved.
-    void refetchBootstrap().catch(() => {
-      // Background refresh failure is non-blocking: navigation is the
-      // primary action, and the bootstrap will refresh on the next visit.
-    })
+    // there when the reader comes back. Mark the bootstrap cache stale so the
+    // next active use (returning to Roll) refetches instead of replaying a
+    // snapshot captured before the roll. This avoids an eager HTTP request on
+    // navigation while preserving the no-stale-pending guarantee.
+    void invalidateRollBootstrapOnNavigation(queryClient)
     navigate('/queue')
-  }, [navigate, refetchBootstrap])
+  }, [navigate, queryClient])
 
   const handleCorrectionSubmit = useCallback(
     async (_choiceId: CorrectionChoiceId, patch: SessionModeUpdateRequest) => {

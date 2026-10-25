@@ -754,6 +754,23 @@ export async function invalidateAfterSessionModeUpdate(
 }
 
 /**
+ * Mark the roll bootstrap query stale when navigating away from Roll
+ * (e.g., Roll -> Queue). This avoids an eager HTTP request on navigation
+ * while preserving the #3761 pending-roll correctness guarantee: the query
+ * will refetch on the next active use (returning to Roll) instead of
+ * replaying a stale snapshot with `pending_thread_id: null`.
+ */
+export async function invalidateRollBootstrapOnNavigation(
+  client: QueryClient,
+): Promise<void> {
+  await client.invalidateQueries({
+    queryKey: queryKeys.roll.bootstrap(),
+    exact: true,
+    refetchType: 'none',
+  })
+}
+
+/**
  * Refresh every surface a tag mutation rewrites (issue #3032).
  *
  * Tag creates/updates/deletes and (bulk) assignment changes rewrite the tag
