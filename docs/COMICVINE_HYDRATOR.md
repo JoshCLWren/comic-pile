@@ -27,14 +27,14 @@ identity and creator work. The command never falls back to test or local databas
 Preview the same four stages without writes or provider calls:
 
 ```bash
-DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \\
+DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \
   --user-id 1 --dry-run
 ```
 
 Run or resume the live pipeline:
 
 ```bash
-COMICVINE_API_KEY=... DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \\
+COMICVINE_API_KEY=... DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \
   --user-id 1 --report .cache/comicvine-read-backfill.json
 ```
 
@@ -57,12 +57,12 @@ single backfill result.
 
 ```bash
 # Inventory only: no writes, no provider calls.
-DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \\
+DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \
   --user-id 1 --confirmed-only --include-unread --dry-run
 
 # Bounded repair of already mapped issues.
-COMICVINE_API_KEY=... DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \\
-  --user-id 1 --confirmed-only --include-unread --limit 50 \\
+COMICVINE_API_KEY=... DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \
+  --user-id 1 --confirmed-only --include-unread --limit 50 \
   --report .cache/comicvine-confirmed-repair.json
 ```
 
