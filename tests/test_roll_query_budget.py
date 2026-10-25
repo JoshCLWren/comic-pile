@@ -260,7 +260,8 @@ async def test_roll_emits_one_sql_vs_non_sql_stage_breakdown(
     import logging
 
     await _seed_library(async_db, default_user, size=6)
-    with caplog.at_level(logging.INFO, logger="app.api.roll"):
+    # Production's default log threshold is WARNING. This must still emit.
+    with caplog.at_level(logging.WARNING, logger="app.api.roll"):
         response = await auth_client.post(
             "/api/v1/roll/",
             json={"bandwidth": "balanced", "intent": "balanced"},
@@ -273,6 +274,8 @@ async def test_roll_emits_one_sql_vs_non_sql_stage_breakdown(
         and record.getMessage().startswith("roll.phase_timing")
     ]
     assert len(messages) == 1
+    assert any(record.levelno == logging.WARNING and record.getMessage() == messages[0]
+               for record in caplog.records)
     summary = messages[0]
     for field in (
         "total_ms=",
