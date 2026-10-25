@@ -13531,6 +13531,23 @@
         "title": "ReadingBoundaryBatchResponse",
         "type": "object"
       },
+      "ReadingBoundaryBatchResponseV2": {
+        "description": "Only canonical reading requirements for the requested owned series.",
+        "properties": {
+          "threads": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReadingBoundaryExplanationV2"
+            },
+            "title": "Threads",
+            "type": "object"
+          }
+        },
+        "required": [
+          "threads"
+        ],
+        "title": "ReadingBoundaryBatchResponseV2",
+        "type": "object"
+      },
       "ReadingBoundaryBlocker": {
         "description": "One live Option E requirement that currently blocks the next Issue.",
         "properties": {
@@ -13634,6 +13651,53 @@
           "summary"
         ],
         "title": "ReadingBoundaryExplanation",
+        "type": "object"
+      },
+      "ReadingBoundaryExplanationV2": {
+        "description": "Canonical reading boundary without retired dependency associations.",
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingBoundaryBlocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadingBoundaryNext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "blocked",
+              "available",
+              "complete",
+              "unavailable"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "state",
+          "summary"
+        ],
+        "title": "ReadingBoundaryExplanationV2",
         "type": "object"
       },
       "ReadingBoundaryHistorical": {
@@ -35086,6 +35150,161 @@
         "tags": [
           "taste-signals",
           "taste-signals"
+        ]
+      }
+    },
+    "/api/v2/reading-boundaries": {
+      "post": {
+        "description": "Return canonical blockers for owned series, without legacy auditing.",
+        "operationId": "get_reading_boundary_batch_v2_api_v2_reading_boundaries_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingBoundaryBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingBoundaryBatchResponseV2"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reading Boundary Batch V2",
+        "tags": [
+          "reading-boundaries-v2",
+          "reading-boundaries-v2"
+        ]
+      }
+    },
+    "/api/v2/reading-boundaries/{thread_id}": {
+      "get": {
+        "description": "Explain live canonical constraints without querying historical rows.",
+        "operationId": "get_reading_boundary_v2_api_v2_reading_boundaries__thread_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingBoundaryExplanationV2"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reading Boundary V2",
+        "tags": [
+          "reading-boundaries-v2",
+          "reading-boundaries-v2"
+        ]
+      }
+    },
+    "/api/v2/roll/bootstrap": {
+      "get": {
+        "description": "Return v2 bootstrap data for the Roll initial render.\n\nThis is a breaking sibling of the existing bootstrap with no unversioned alias.\nIt provides a superset response replacing roll_pool with rollable[] and adding\nnullable session-scoped last_read while preserving all v1 semantics.\n\nArgs:\n    current_user: The authenticated user.\n    db: Async database session.\n    timezone: Optional browser-resolved IANA timezone identifier captured once\n        per active reading session. Invalid or unusable values leave the field\n        unset and never break the roll.\n\nReturns:\n    RollV2BootstrapResponse with v2 contract including rollable and last_read.",
+        "operationId": "roll_v2_bootstrap_api_v2_roll_bootstrap_get",
+        "parameters": [
+          {
+            "description": "Browser IANA timezone identifier",
+            "in": "query",
+            "name": "timezone",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Browser IANA timezone identifier",
+              "title": "Timezone"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollV2BootstrapResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Roll V2 Bootstrap",
+        "tags": [
+          "roll",
+          "roll"
         ]
       }
     },

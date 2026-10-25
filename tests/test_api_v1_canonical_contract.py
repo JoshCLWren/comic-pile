@@ -70,8 +70,15 @@ REQUIRED_V1_FAMILIES = frozenset(
 
 
 # The generated client surface (issue #1741) must reference no bare domain
-# paths at all; ``/api/ping`` is the single documented exemption.
+# paths at all; versioned v1/v2 resources and /api/ping are allowed.
 CLIENT_EXEMPT_BARE_PATHS = frozenset({"/api/ping"})
+CLIENT_VERSIONED_PREFIXES = ("/api/v1/", "/api/v2/")
+
+
+def _is_versioned_client_path(path: str) -> bool:
+    """Recognize supported v1/v2 route prefixes, not arbitrary /api/vN paths."""
+    return path.startswith(CLIENT_VERSIONED_PREFIXES)
+
 
 
 def _load_schema() -> dict:
@@ -164,7 +171,7 @@ def test_legacy_api_aliases_are_explicit_allowlist() -> None:
     for path in schema.get("paths", {}):
         if not path.startswith("/api/"):
             continue
-        if path.startswith("/api/v1/"):
+        if _is_versioned_client_path(path):
             continue
         segment = path[len("/api/") :].split("/")[0]
         if segment not in allowed_legacy:
@@ -178,12 +185,12 @@ def test_legacy_api_aliases_are_explicit_allowlist() -> None:
 
 
 def test_generated_client_has_zero_bare_domain_path_references() -> None:
-    """The committed generated client must be v1-only plus the ping exemption.
+    """The generated client must use versioned paths plus the ping exemption.
 
     Issue #1741 acceptance: ``frontend/src/generated/openapi.ts`` has zero
     bare domain-path references. The schema that feeds that generated client
-    therefore keeps only infrastructure paths, canonical ``/api/v1`` routes,
-    and the exempt ``/api/ping`` heartbeat path.
+    keeps infrastructure paths, canonical v1/v2 routes, and the exempt
+    ``/api/ping`` heartbeat path.
     """
     schema = _load_schema()
     paths = list(schema.get("paths", {}))
@@ -193,18 +200,54 @@ def test_generated_client_has_zero_bare_domain_path_references() -> None:
         for path in paths
         if path.startswith("/api/")
         and path not in CLIENT_EXEMPT_BARE_PATHS
-        and not path.startswith("/api/v1/")
+        and not _is_versioned_client_path(path)
     ]
     assert not violations, (
         "Generated client schema contains bare domain-path references "
-        f"(issue #1741): {violations}. Regenerate with "
-        "`python scripts/generate_openapi_types.py` after adding /api/v1 twins."
+        f"(issue #1741): {violations}. Use a supported versioned API "
+        "path or explicitly document an infrastructure exemption."
     )
 
     assert any(path.startswith("/api/v1/") for path in paths), (
         "Generated client schema lost all canonical /api/v1 routes."
     )
     assert "/api/ping" in paths, "Ping heartbeat path missing from client schema."
+
+
+@pytest.mark.parametrize(
+    "invalid_path",
+    [
+        "/api/reading-boundaries",
+        "/api/roll/bootstrap",
+        "/api/v3/reading-boundaries",
+        "/api/v20/roll/bootstrap",
+        "/api/unknown-resource",
+    ],
+)
+def test_unversioned_and_unsupported_versions_remain_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_path: str,
+) -> None:
+    """Accept v2 explicitly, not every new-looking route or bare alias."""
+    schema = _load_schema()
+    schema["paths"][invalid_path] = {"get": {"operationId": "fixture_get"}}
+    monkeypatch.setattr(sys.modules[__name__], "_load_schema", lambda: schema)
+    # The legacy allowlist permits existing bare aliases with v1 twins.
+    # They are still prohibited from the generated frontend client.
+    if invalid_path.startswith("/api/v") or invalid_path == "/api/unknown-resource":
+        with pytest.raises(AssertionError, match="Bare /api routes"):
+            test_legacy_api_aliases_are_explicit_allowlist()
+    with pytest.raises(AssertionError, match="bare domain-path references"):
+        test_generated_client_has_zero_bare_domain_path_references()
+
+
+def test_known_v2_routes_are_versioned_client_paths() -> None:
+    """Both the existing Roll v2 and new Reading Boundaries v2 are canonical."""
+    assert _is_versioned_client_path("/api/v2/roll/bootstrap")
+    assert _is_versioned_client_path("/api/v2/reading-boundaries")
+    assert _is_versioned_client_path("/api/v2/reading-boundaries/42")
+    assert not _is_versioned_client_path("/api/v3/roll/bootstrap")
+    assert not _is_versioned_client_path("/api/roll/bootstrap")
 
 
 @pytest.mark.parametrize("surface", ["path", "schema", "operation"])

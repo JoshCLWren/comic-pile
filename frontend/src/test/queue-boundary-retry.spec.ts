@@ -8,11 +8,11 @@ for (const width of [390, 1280]) {
     const thread = await createThread(page, { title: 'Boundary retry series', format: 'Issue', issues_remaining: 2, total_issues: 2 })
     let failing = true
     allowExpectedBrowserFailures.allow({ category: 'console', message: '503 (Service Unavailable)' })
-    await page.route('**/api/v1/reading-boundaries', async route => {
+    await page.route('**/api/v2/reading-boundaries', async route => {
       await route.fulfill({
         status: failing ? 503 : 200,
         json: failing ? { detail: 'Boundary test failure' } : { threads: {
-          [thread.id]: { thread_id: thread.id, state: 'available', summary: 'Ready to read.', blockers: [], historical: [] },
+          [thread.id]: { thread_id: thread.id, state: 'available', summary: 'Ready to read.', blockers: [] },
         } },
       })
     })
@@ -21,7 +21,7 @@ for (const width of [390, 1280]) {
     await expect(retry).toBeVisible()
     await expect(page.getByRole('alert').filter({ hasText: 'Rows fall back' })).toHaveCount(1)
     failing = false
-    const response = page.waitForResponse(r => r.url().endsWith('/api/v1/reading-boundaries') && r.status() === 200)
+    const response = page.waitForResponse(r => r.url().endsWith('/api/v2/reading-boundaries') && r.status() === 200)
     await retry.click()
     await response
     await expect(retry).toHaveCount(0)

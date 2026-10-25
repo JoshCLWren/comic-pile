@@ -187,7 +187,15 @@ def _historical_rows(
         if owner_thread_id == thread_id
     }
     rows: list[ReadingBoundaryHistorical] = []
-    for prerequisite_id, row in sorted(labels.prerequisites.items()):
+    if labels.prerequisite_ids_by_thread:
+        incident = (
+            (edge_id, labels.prerequisites[edge_id])
+            for edge_id in labels.prerequisite_ids_by_thread.get(thread_id, ())
+        )
+    else:
+        # Detached test fixtures without an index retain the original semantics.
+        incident = iter(sorted(labels.prerequisites.items()))
+    for prerequisite_id, row in incident:
         if prerequisite_id in snapshot.active_prerequisite_ids:
             continue
         if (
@@ -242,6 +250,8 @@ def project_boundary_explanation(
     snapshot: ReadingEligibilitySnapshot,
     labels: BoundaryShadowLabels,
     thread_id: int,
+    *,
+    include_historical: bool = True,
 ) -> ReadingBoundaryExplanation:
     """Project one Thread's canonical evaluator result into an explanation.
 
@@ -249,6 +259,7 @@ def project_boundary_explanation(
         snapshot: The same validated Option E result used by Roll and Queue.
         labels: Owner-scoped reader-facing labels.
         thread_id: Owned Thread to explain.
+        include_historical: Include retired associations only for the v1 API.
 
     Returns:
         One explanation whose blockers exactly match the evaluator's blockers.
@@ -265,7 +276,7 @@ def project_boundary_explanation(
         if state is not None
         else []
     )
-    historical = _historical_rows(snapshot, labels, thread_id)
+    historical = _historical_rows(snapshot, labels, thread_id) if include_historical else []
     if state is None:
         boundary_state = "unavailable"
     elif next_issue is None:
@@ -297,7 +308,7 @@ def project_boundary_explanation(
 
 
 async def get_reading_boundary_explanation(
-    db: AsyncSession, *, user_id: int, thread_id: int
+    db: AsyncSession, *, user_id: int, thread_id: int, include_historical: bool = True
 ) -> ReadingBoundaryExplanation:
     """Explain one owned Thread using the current canonical Option E result.
 
@@ -305,6 +316,7 @@ async def get_reading_boundary_explanation(
         db: Request transaction.
         user_id: Authenticated reader.
         thread_id: Owned Thread to explain.
+        include_historical: Include retired associations only for the v1 API.
 
     Raises:
         NotFoundError: When the Thread does not exist or belongs to another reader.
@@ -312,7 +324,9 @@ async def get_reading_boundary_explanation(
     Returns:
         The reader-facing boundary explanation.
     """
-    labels = await boundary_repository.load_boundary_labels(db, user_id)
+    labels = await boundary_repository.load_boundary_labels(
+        db, user_id, requested_thread_ids={thread_id}, include_historical=include_historical
+    )
     if thread_id not in labels.threads:
         raise NotFoundError(f"Thread {thread_id} not found")
     snapshot = await get_execution_eligibility(db, user_id)
@@ -326,11 +340,17 @@ async def get_reading_boundary_explanation(
             blockers=[],
             historical=[],
         )
-    return project_boundary_explanation(snapshot, labels, thread_id)
+    return project_boundary_explanation(
+        snapshot, labels, thread_id, include_historical=include_historical
+    )
 
 
 async def get_reading_boundary_explanations(
-    db: AsyncSession, *, user_id: int, thread_ids: Collection[int]
+    db: AsyncSession,
+    *,
+    user_id: int,
+    thread_ids: Collection[int],
+    include_historical: bool = True,
 ) -> ReadingBoundaryBatchResponse:
     """Explain several owned Threads from one shared eligibility snapshot.
 
@@ -338,6 +358,7 @@ async def get_reading_boundary_explanations(
         db: Request transaction.
         user_id: Authenticated reader.
         thread_ids: Owned Thread identifiers to explain.
+        include_historical: Include retired associations only for the v1 API.
 
     Raises:
         NotFoundError: When any requested Thread is absent or foreign.
@@ -345,7 +366,9 @@ async def get_reading_boundary_explanations(
     Returns:
         Explanations keyed by Thread identifier.
     """
-    labels = await boundary_repository.load_boundary_labels(db, user_id)
+    labels = await boundary_repository.load_boundary_labels(
+        db, user_id, requested_thread_ids=set(thread_ids), include_historical=include_historical
+    )
     missing = [thread_id for thread_id in thread_ids if thread_id not in labels.threads]
     if missing:
         raise NotFoundError(f"Thread {missing[0]} not found")
@@ -365,7 +388,9 @@ async def get_reading_boundary_explanations(
         return ReadingBoundaryBatchResponse(threads=threads)
     return ReadingBoundaryBatchResponse(
         threads={
-            thread_id: project_boundary_explanation(snapshot, labels, thread_id)
+            thread_id: project_boundary_explanation(
+                snapshot, labels, thread_id, include_historical=include_historical
+            )
             for thread_id in thread_ids
         }
     )

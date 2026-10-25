@@ -69,7 +69,7 @@ describe('ReadingBoundaryExplanation', () => {
     expect(screen.getByText('Reading boundaries are unavailable.')).toBeInTheDocument()
   })
 
-  it('renders multiple live blockers separately from historical associations', () => {
+  it('renders multiple canonical blockers without legacy associations', () => {
     renderExplanation({
       explanation: explanation({
         state: 'blocked',
@@ -87,19 +87,6 @@ describe('ReadingBoundaryExplanation', () => {
             origin: 'reader_prerequisite',
             reason: 'Finish the previous issue first.',
             editor: { kind: 'prerequisite', thread_id: 1, label: 'Saga prerequisites' },
-          },
-        ],
-        historical: [
-          {
-            kind: 'legacy_dependency',
-            label: 'Prequel → Saga',
-            detail: 'Historical association; not an active reading requirement.',
-            editor: { kind: 'prerequisite', thread_id: 1, label: 'Saga prerequisites' },
-          },
-          {
-            kind: 'converted_prerequisite',
-            label: 'Converted → Saga',
-            detail: 'Converted generated association.',
           },
         ],
       }),
@@ -120,9 +107,7 @@ describe('ReadingBoundaryExplanation', () => {
       'href',
       '/thread/1?prerequisites=1',
     )
-    // Only the historical row carries the legacy copy; live blockers never do.
-    expect(screen.getByText('Historical associations — not active blockers')).toBeInTheDocument()
-    expect(screen.getByText('Converted generated association.')).toBeInTheDocument()
+    expect(screen.queryByText('Historical associations — not active blockers')).not.toBeInTheDocument()
   })
 
   it('links the next issue to its editor target when the server supplies one', () => {

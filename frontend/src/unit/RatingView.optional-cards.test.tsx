@@ -147,7 +147,6 @@ function blockedBoundary(): ReadingBoundaryExplanation {
       waiting_on: [{ issue_id: 99, thread_id: 1, thread_title: 'Saga', issue_number: '2', label: 'Saga #2' }],
       editor: { kind: 'prerequisite', thread_id: 1, label: 'prerequisites' },
     }],
-    historical: [{ kind: 'legacy_dependency', label: 'Recorded continuity', detail: 'Historical only.' }],
   }
 }
 
@@ -265,7 +264,7 @@ describe('Roll optional reading cards interaction (#2764)', () => {
     expect(screen.getByRole('list', { name: 'Active reading blockers' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open Saga issue #2' })).toHaveAttribute('href', '/thread/1?issue=99#issue-99')
     expect(screen.getByRole('link', { name: 'Edit prerequisites' })).toHaveAttribute('href', '/thread/1?prerequisites=1')
-    expect(screen.getByText('Historical associations — not active blockers')).toBeInTheDocument()
+    expect(screen.queryByText('Historical associations — not active blockers')).not.toBeInTheDocument()
     expect(screen.getByText('Finish the previous issue first.')).toBeInTheDocument()
     expect(screen.queryByTestId('reading-context-content')).not.toBeInTheDocument()
   })

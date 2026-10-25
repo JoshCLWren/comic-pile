@@ -311,51 +311,19 @@ describe('QueueThreadCard', () => {
     expect(screen.getByRole('button', { name: 'View dependencies for Test Thread' })).toBeInTheDocument()
   })
 
-  it('expands historical associations without opening Thread Detail', async () => {
-    const user = userEvent.setup()
-    const onCardClick = vi.fn()
-    renderCard(createMockThread(), {
-      onCardClick,
-      readingBoundary: {
-        thread_id: 1,
-        state: 'available',
-        summary: 'Saga #6 is available next.',
-        historical: [
-          {
-            kind: 'legacy_dependency',
-            label: 'Prequel → Saga',
-            detail: 'Historical association; not an active reading requirement.',
-            editor: { kind: 'prerequisite', thread_id: 1, label: 'Saga prerequisites' },
-          },
-        ],
-      },
-    })
-
-    await user.click(screen.getByText('Historical associations — not active blockers'))
-
-    expect(onCardClick).not.toHaveBeenCalled()
-  })
-
-  it('shows historical-only associations without inventing a blocked state', () => {
+  it('does not show retired history when canonical boundaries are available', () => {
     renderCard(createMockThread(), {
       isBlocked: false,
       readingBoundary: {
         thread_id: 1,
         state: 'available',
         summary: 'Saga #6 is available next.',
-        historical: [
-          {
-            kind: 'converted_prerequisite',
-            label: 'Prequel → Saga',
-            detail: 'Converted generated association; not an active reading requirement.',
-          },
-        ],
       },
     })
 
-    expect(screen.getByText('Saga #6 is available next.')).toBeInTheDocument()
+    expect(screen.queryByTestId('queue-thread-blocked-detail')).not.toBeInTheDocument()
+    expect(screen.queryByText('Historical associations — not active blockers')).not.toBeInTheDocument()
     expect(screen.queryByText(/Read & Rate unlocks/i)).not.toBeInTheDocument()
-    expect(screen.getByText('Historical associations — not active blockers')).toBeInTheDocument()
   })
 
   it('distinguishes blocked Queue cards with continuity styling instead of danger-red', () => {

@@ -5,6 +5,8 @@ from dataclasses import replace
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_reading_execution_settings
@@ -309,6 +311,84 @@ async def _owned_series(
 
 
 @pytest.mark.asyncio
+async def test_scoped_boundary_labels_keep_both_directions_and_skip_unrelated_edges(
+    async_db: AsyncSession,
+) -> None:
+    """Only incident owner-owned dependencies may enter a requested explanation."""
+    owner = User(username="boundary_scope_owner", password_hash="unused")
+    foreign = User(username="boundary_scope_foreign", password_hash="unused")
+    async_db.add_all([owner, foreign])
+    await async_db.flush()
+    requested, a_issues = await _owned_series(async_db, owner.id, "Requested", 1)
+    related, b_issues = await _owned_series(async_db, owner.id, "Related", 2)
+    unrelated, c_issues = await _owned_series(async_db, owner.id, "Unrelated", 3)
+    _, foreign_issues = await _owned_series(async_db, foreign.id, "Foreign", 1)
+    outbound = Dependency(
+        source_issue_id=a_issues[0].id, target_issue_id=b_issues[0].id,
+        note="historical outbound",
+    )
+    inbound = Dependency(
+        source_issue_id=b_issues[1].id, target_issue_id=a_issues[1].id,
+        origin="converted", classification="C", provenance="historical inbound",
+    )
+    internal = Dependency(
+        source_issue_id=a_issues[0].id, target_issue_id=a_issues[1].id,
+        note="historical internal",
+    )
+    other = Dependency(
+        source_issue_id=b_issues[0].id, target_issue_id=c_issues[0].id,
+        note="unrelated historical edge",
+    )
+    cross_owner = Dependency(
+        source_issue_id=foreign_issues[0].id,
+        target_issue_id=a_issues[0].id,
+        note="foreign data must not leak",
+    )
+    async_db.add_all([outbound, inbound, internal, other, cross_owner])
+    await async_db.commit()
+
+    statements: list[tuple[str, object]] = []
+
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        if "FROM dependencies" in statement:
+            statements.append((statement, parameters))
+
+    event.listen(Engine, "before_cursor_execute", capture)
+    try:
+        labels = await load_boundary_labels(
+            async_db, owner.id, requested_thread_ids={requested.id}
+        )
+    finally:
+        event.remove(Engine, "before_cursor_execute", capture)
+
+    assert set(labels.prerequisites) == {outbound.id, inbound.id, internal.id}
+    assert labels.prerequisite_ids_by_thread[requested.id] == tuple(
+        sorted((outbound.id, inbound.id, internal.id))
+    )
+    assert len(statements) == 2
+    # The requested Thread restriction must be in the executed SQL, not
+    # applied later to 75k retrieved Dependency objects in Python.
+    assert any("boundary_source_issue.thread_id IN (" in sql for sql, _ in statements)
+    assert any("boundary_target_issue.thread_id IN (" in sql for sql, _ in statements)
+    for sql, params in statements:
+        assert "WHERE" in sql.upper()
+        if isinstance(params, dict):
+            values = tuple(str(value) for value in params.values())
+        elif isinstance(params, (tuple, list)):
+            values = tuple(str(value) for value in params)
+        else:
+            pytest.fail("Unexpected database parameter representation")
+        assert str(requested.id) in values
+
+    both = await load_boundary_labels(
+        async_db, owner.id, requested_thread_ids={requested.id, related.id}
+    )
+    assert set(both.prerequisites) == {outbound.id, inbound.id, internal.id, other.id}
+    assert all(edge_id not in both.prerequisite_ids_by_thread[unrelated.id]
+               for edge_id in (outbound.id, inbound.id, internal.id))
+
+
+@pytest.mark.asyncio
 async def test_api_returns_named_live_blocker_and_excludes_history(
     option_e: None,
     auth_client: AsyncClient,
@@ -353,6 +433,50 @@ async def test_api_returns_named_live_blocker_and_excludes_history(
     assert len(body["historical"]) == 1
     assert body["historical"][0]["kind"] == "legacy_dependency"
     assert "not an active reading requirement" in body["historical"][0]["detail"]
+
+    # V2 is a clean versioned contract: no retired field or historical SELECT.
+    dependency_sql: list[tuple[str, tuple[str, ...]]] = []
+
+    def capture_v2(conn, cursor, statement, parameters, context, executemany):
+        if "FROM dependencies" in statement:
+            if isinstance(parameters, dict):
+                binds = tuple(str(value) for value in parameters.values())
+            elif isinstance(parameters, (list, tuple)):
+                binds = tuple(str(value) for value in parameters)
+            else:
+                binds = ()
+            dependency_sql.append((statement, binds))
+
+    event.listen(Engine, "before_cursor_execute", capture_v2)
+    try:
+        canonical_response = await auth_client.get(
+            f"/api/v2/reading-boundaries/{miracle_id}"
+        )
+        canonical_batch = await auth_client.post(
+            "/api/v2/reading-boundaries",
+            json={"thread_ids": [fourth.id, miracle_id]},
+        )
+    finally:
+        event.remove(Engine, "before_cursor_execute", capture_v2)
+
+    assert canonical_response.status_code == 200, canonical_response.text
+    canonical = canonical_response.json()
+    assert "historical" not in canonical
+    assert canonical["state"] == body["state"]
+    assert canonical["blockers"] == body["blockers"]
+    assert canonical["next"] == body["next"]
+    assert canonical_batch.status_code == 200, canonical_batch.text
+    assert set(canonical_batch.json()["threads"]) == {str(fourth.id), str(miracle_id)}
+    assert all(
+        "historical" not in explanation
+        for explanation in canonical_batch.json()["threads"].values()
+    )
+    # Only get_execution_eligibility's explicit reader-origin query is allowed.
+    # The boundary label loader must never fetch converted or unclassified rows.
+    assert all("DEPENDENCIES.ORIGIN =" in query.upper().split("WHERE", 1)[1]
+               for query, _ in dependency_sql)
+    assert all("reader" in binds for _, binds in dependency_sql)
+    assert len(dependency_sql) <= 2
 
     hidden = await auth_client.get(f"/api/v1/reading-boundaries/{foreign_id}")
     assert hidden.status_code == 404

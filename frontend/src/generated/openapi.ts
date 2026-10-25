@@ -6421,6 +6421,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/reading-boundaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Reading Boundary Batch V2
+         * @description Return canonical blockers for owned series, without legacy auditing.
+         */
+        post: operations["get_reading_boundary_batch_v2_api_v2_reading_boundaries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-boundaries/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reading Boundary V2
+         * @description Explain live canonical constraints without querying historical rows.
+         */
+        get: operations["get_reading_boundary_v2_api_v2_reading_boundaries__thread_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/roll/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Roll V2 Bootstrap
+         * @description Return v2 bootstrap data for the Roll initial render.
+         *
+         *     This is a breaking sibling of the existing bootstrap with no unversioned alias.
+         *     It provides a superset response replacing roll_pool with rollable[] and adding
+         *     nullable session-scoped last_read while preserving all v1 semantics.
+         *
+         *     Args:
+         *         current_user: The authenticated user.
+         *         db: Async database session.
+         *         timezone: Optional browser-resolved IANA timezone identifier captured once
+         *             per active reading session. Invalid or unusable values leave the field
+         *             unset and never break the roll.
+         *
+         *     Returns:
+         *         RollV2BootstrapResponse with v2 contract including rollable and last_read.
+         */
+        get: operations["roll_v2_bootstrap_api_v2_roll_bootstrap_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -13063,6 +13137,16 @@ export interface components {
             };
         };
         /**
+         * ReadingBoundaryBatchResponseV2
+         * @description Only canonical reading requirements for the requested owned series.
+         */
+        ReadingBoundaryBatchResponseV2: {
+            /** Threads */
+            threads: {
+                [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
+            };
+        };
+        /**
          * ReadingBoundaryBlocker
          * @description One live Option E requirement that currently blocks the next Issue.
          */
@@ -13092,6 +13176,24 @@ export interface components {
             blockers?: components["schemas"]["ReadingBoundaryBlocker"][];
             /** Historical */
             historical?: components["schemas"]["ReadingBoundaryHistorical"][];
+            next?: components["schemas"]["ReadingBoundaryNext"] | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "blocked" | "available" | "complete" | "unavailable";
+            /** Summary */
+            summary: string;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * ReadingBoundaryExplanationV2
+         * @description Canonical reading boundary without retired dependency associations.
+         */
+        ReadingBoundaryExplanationV2: {
+            /** Blockers */
+            blockers?: components["schemas"]["ReadingBoundaryBlocker"][];
             next?: components["schemas"]["ReadingBoundaryNext"] | null;
             /**
              * State
@@ -24476,6 +24578,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TasteSignalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reading_boundary_batch_v2_api_v2_reading_boundaries_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingBoundaryBatchResponseV2"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reading_boundary_v2_api_v2_reading_boundaries__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingBoundaryExplanationV2"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    roll_v2_bootstrap_api_v2_roll_bootstrap_get: {
+        parameters: {
+            query?: {
+                /** @description Browser IANA timezone identifier */
+                timezone?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollV2BootstrapResponse"];
                 };
             };
             /** @description Validation Error */

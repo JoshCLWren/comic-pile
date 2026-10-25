@@ -36,7 +36,10 @@ def is_client_schema_path(path: str) -> bool:
         return True
     if path in CLIENT_EXEMPT_BARE_PATHS:
         return True
-    return path == "/api/v1" or path.startswith("/api/v1/")
+    return (
+        path in {"/api/v1", "/api/v2"}
+        or path.startswith(("/api/v1/", "/api/v2/"))
+    )
 
 
 def prune_legacy_bare_paths(schema: dict[str, Any]) -> dict[str, Any]:

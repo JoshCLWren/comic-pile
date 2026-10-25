@@ -6,7 +6,7 @@ the service can describe live blockers and historical associations without
 re-querying the evaluator or exposing storage identifiers.
 """
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
@@ -85,6 +85,7 @@ class BoundaryShadowLabels:
     issues: Mapping[int, BoundaryIssueLabels]
     lists: Mapping[int, BoundaryListLabels]
     prerequisites: Mapping[int, BoundaryPrerequisiteLabels]
+    prerequisite_ids_by_thread: Mapping[int, tuple[int, ...]] = field(default_factory=dict)
 
 
 def _volume_label(row: ExternalIdentity | None) -> str | None:
@@ -149,13 +150,19 @@ async def _volume_labels_by_thread(
 
 
 async def load_boundary_labels(
-    db: AsyncSession, user_id: int
+    db: AsyncSession,
+    user_id: int,
+    *,
+    requested_thread_ids: Collection[int] | None = None,
+    include_historical: bool = True,
 ) -> BoundaryShadowLabels:
     """Resolve reader-facing labels for every owned Issue, list and prerequisite.
 
     Args:
         db: Current read transaction.
         user_id: Owner whose labels are resolved.
+        requested_thread_ids: Narrow historical edges to these owned series, when given.
+        include_historical: Whether to load retired associations for the v1 audit contract.
 
     Returns:
         Immutable labels keyed by Thread, Issue, list and prerequisite identifiers.
@@ -216,15 +223,25 @@ async def load_boundary_labels(
     else:
         active_list_ids = set()
 
-    if thread_ids:
-        source_thread = Thread.__table__.alias("boundary_source_thread")
-        target_thread = Thread.__table__.alias("boundary_target_thread")
+    if include_historical and thread_ids:
         source_issue = Issue.__table__.alias("boundary_source_issue")
         target_issue = Issue.__table__.alias("boundary_target_issue")
-        prerequisite_rows = list(
-            (
-                await db.scalars(
-                    select(Dependency)
+        # Scalar projections avoid hydrating thousands of inactive ORM records.
+        dependency_columns = (
+            Dependency.id,
+            Dependency.source_issue_id,
+            Dependency.target_issue_id,
+            Dependency.origin,
+            Dependency.classification,
+            Dependency.provenance,
+        )
+        if requested_thread_ids is None:
+            # Explicit diagnostics keep the complete reader-owned census.
+            source_thread = Thread.__table__.alias("boundary_source_thread")
+            target_thread = Thread.__table__.alias("boundary_target_thread")
+            prerequisite_rows = (
+                await db.execute(
+                    select(*dependency_columns)
                     .join(source_issue, source_issue.c.id == Dependency.source_issue_id)
                     .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
                     .join(target_issue, target_issue.c.id == Dependency.target_issue_id)
@@ -236,7 +253,43 @@ async def load_boundary_labels(
                     .order_by(Dependency.id)
                 )
             ).all()
-        )
+        else:
+            # Two indexed directions, scoped to requested owned series.
+            requested = thread_ids.intersection(requested_thread_ids)
+            if requested:
+                source_thread = Thread.__table__.alias("boundary_source_thread")
+                target_thread = Thread.__table__.alias("boundary_target_thread")
+                outbound = (
+                    await db.execute(
+                        select(*dependency_columns)
+                        .join(source_issue, source_issue.c.id == Dependency.source_issue_id)
+                        .join(target_issue, target_issue.c.id == Dependency.target_issue_id)
+                        .join(target_thread, target_issue.c.thread_id == target_thread.c.id)
+                        .where(
+                            source_issue.c.thread_id.in_(requested),
+                            target_thread.c.user_id == user_id,
+                        )
+                    )
+                ).all()
+                inbound = (
+                    await db.execute(
+                        select(*dependency_columns)
+                        .join(target_issue, target_issue.c.id == Dependency.target_issue_id)
+                        .join(source_issue, source_issue.c.id == Dependency.source_issue_id)
+                        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
+                        .where(
+                            target_issue.c.thread_id.in_(requested),
+                            source_thread.c.user_id == user_id,
+                        )
+                    )
+                ).all()
+                # Deduplicate edges between two requested series.
+                prerequisite_rows = sorted(
+                    {row.id: row for row in (*outbound, *inbound)}.values(),
+                    key=lambda row: row.id,
+                )
+            else:
+                prerequisite_rows = []
     else:
         prerequisite_rows = []
 
@@ -293,9 +346,21 @@ async def load_boundary_labels(
             ),
         )
 
+    # Index incident edges once rather than scanning all edges for each batch item.
+    incident_ids: dict[int, set[int]] = {}
+    for row in prerequisite_rows:
+        source = issue_labels[row.source_issue_id].thread_id
+        target = issue_labels[row.target_issue_id].thread_id
+        incident_ids.setdefault(source, set()).add(row.id)
+        incident_ids.setdefault(target, set()).add(row.id)
+
     return BoundaryShadowLabels(
         threads=thread_labels,
         issues=issue_labels,
         lists=lists,
         prerequisites=prerequisites,
+        prerequisite_ids_by_thread={
+            thread_id: tuple(sorted(ids))
+            for thread_id, ids in incident_ids.items()
+        },
     )

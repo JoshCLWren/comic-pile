@@ -100,3 +100,18 @@ class ReadingBoundaryBatchResponse(BaseModel):
     """Canonical explanations keyed by Thread ID."""
 
     threads: dict[int, ReadingBoundaryExplanation]
+
+class ReadingBoundaryExplanationV2(BaseModel):
+    """Canonical reading boundary without retired dependency associations."""
+
+    thread_id: int
+    state: Literal["blocked", "available", "complete", "unavailable"]
+    summary: str
+    next: ReadingBoundaryNext | None = None
+    blockers: list[ReadingBoundaryBlocker] = Field(default_factory=list)
+
+
+class ReadingBoundaryBatchResponseV2(BaseModel):
+    """Only canonical reading requirements for the requested owned series."""
+
+    threads: dict[int, ReadingBoundaryExplanationV2]

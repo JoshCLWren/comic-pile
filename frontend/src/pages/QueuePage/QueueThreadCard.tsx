@@ -100,8 +100,7 @@ export default function QueueThreadCard({
       ? canonicalBlockerLabels
       : blockingDependencies.map((dependency) => dependency.label)
 
-  // `summary` is interactive chrome inside the card: toggling the historical
-  // associations must expand them instead of opening Thread Detail.
+  // Interactive controls inside a Queue card must not open Thread Detail.
   const isInteractiveTarget = (target: EventTarget | null, card: HTMLDivElement) => {
     const interactive = target instanceof Element
       ? target.closest('button, a, input, select, textarea, summary, [role="button"], [role="link"]')
@@ -220,7 +219,7 @@ export default function QueueThreadCard({
               <CrossoverTags groups={crossoverGroups} label={`Crossovers for ${thread.title}`} />
             )}
           </div>
-          {(isBlocked || (readingBoundary?.historical?.length ?? 0) > 0) && (
+          {isBlocked && (
             <div
               data-testid="queue-thread-blocked-detail"
               className="mt-2 w-full rounded-lg border border-[var(--theme-continuity-accent)]/20 bg-[var(--theme-continuity-accent)]/10 px-3 py-2 text-left text-xs text-[var(--theme-text-muted)]"
