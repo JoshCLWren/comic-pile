@@ -79,7 +79,7 @@ async function installRatingRoutes(page: Page): Promise<void> {
         series_id: 105477,
         issue_number: '3',
         name: 'Safety In Numbers',
-        description: null,
+        description: 'A long summary description that contains many characters to test text width.',
         image_url: COVER_DATA_URI,
         cover_date: '2006-06-21',
         store_date: '2006-06-21',
