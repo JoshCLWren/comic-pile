@@ -8,7 +8,8 @@ import {
 } from '../../components/snoozeAvailability'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
-import type { RollResponse, SnoozeSessionResponse } from '../../types'
+import type { RollResponse } from '../../types'
+import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 
@@ -16,7 +17,11 @@ interface RollMutations {
   setDieMutation: { mutate: (die: number) => Promise<void>; isPending: boolean }
   clearManualDieMutation: { mutate: () => Promise<void>; isPending: boolean }
   rollMutation: { mutate: () => Promise<RollResponse>; isPending: boolean }
-  snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<SnoozeSessionResponse | undefined>; isPending: boolean }
+  snoozeMutation: {
+    mutate: (expectedPendingThreadId?: number) => Promise<SnoozeMutationOutcome>
+    isPending: boolean
+    retryRefresh?: () => Promise<boolean>
+  }
   unsnoozeMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
   skipMutation: { mutate: (expectedPendingThreadId?: number) => Promise<RollResponse | undefined>; isPending: boolean }
   unskipMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
@@ -38,6 +43,12 @@ interface UseRollActionsParams {
     metadata?: ThreadMetadata | null,
   ) => Promise<void>
   threadsApi: typeof import('../../services/api-threads').threadsApi
+  /**
+   * Reports that the committed snooze could not refresh authoritative Roll
+   * state. The action sheet has already closed by then, so the page owns the
+   * visible recovery surface (a toast with a refresh-only retry).
+   */
+  onSnoozeRefreshFailed?: (refreshError: unknown) => void
 }
 
 /**
@@ -54,6 +65,7 @@ export function useRollActions({
   mutations,
   refetchBootstrap,
   enterRatingView,
+  onSnoozeRefreshFailed,
 }: UseRollActionsParams) {
   const {
     isRolling,
@@ -198,8 +210,16 @@ export function useRollActions({
           }
           // The id doubles as `expectedPendingThreadId`, which is what lets the
           // snooze hook recover an auth failure and reconcile an ambiguous one.
-          await snoozeMutation.mutate(selectedThread!.id)
-          await refetchBootstrap()
+          // The mutation owns the single authoritative refresh; this handler
+          // only reports its outcome so a stale pool is never silent.
+          const outcome = await snoozeMutation.mutate(selectedThread!.id)
+          if (!outcome.refreshed) {
+            if (onSnoozeRefreshFailed) {
+              onSnoozeRefreshFailed(outcome.refreshError)
+            } else {
+              setErrorMessage(getApiErrorDetail(outcome.refreshError))
+            }
+          }
           break
         }
         case 'skip':

@@ -150,6 +150,24 @@ export default function RollPage() {
   const { showToast } = useToast()
   const undo = useUndo()
 
+  // A committed snooze closes the rating view and the action sheet, so an
+  // exhausted authoritative refresh can only be reported from the page. The
+  // toast carries the refresh-only retry, which reloads Roll state without
+  // repeating the snooze.
+  const retrySnoozeRefresh = snoozeMutation.retryRefresh
+  const reportSnoozeRefreshFailed = useCallback((refreshError: unknown) => {
+    showToast(
+      `Snoozed, but the Roll pool did not refresh. ${getApiErrorDetail(refreshError)}`,
+      'error',
+      {
+        label: 'Retry refresh',
+        onClick: () => {
+          void retrySnoozeRefresh()
+        },
+      },
+    )
+  }, [showToast, retrySnoozeRefresh])
+
   useRollBootstrapSync({
     state,
     bootstrap,
@@ -209,6 +227,7 @@ export default function RollPage() {
     unsnoozeMutation,
     refetchBootstrap,
     onClarificationSuggested: handleCorrectionSuggested,
+    onRefreshFailed: reportSnoozeRefreshFailed,
   })
 
   const skip = {
@@ -244,6 +263,7 @@ export default function RollPage() {
     refetchBootstrap,
     enterRatingView: rating.enterRatingView,
     threadsApi,
+    onSnoozeRefreshFailed: reportSnoozeRefreshFailed,
   })
 
   const modals = useRollModals({
