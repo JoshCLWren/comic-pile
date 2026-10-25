@@ -259,6 +259,7 @@ def project_boundary_explanation(
         snapshot: The same validated Option E result used by Roll and Queue.
         labels: Owner-scoped reader-facing labels.
         thread_id: Owned Thread to explain.
+        include_historical: Include retired associations only for the v1 API.
 
     Returns:
         One explanation whose blockers exactly match the evaluator's blockers.
@@ -315,6 +316,7 @@ async def get_reading_boundary_explanation(
         db: Request transaction.
         user_id: Authenticated reader.
         thread_id: Owned Thread to explain.
+        include_historical: Include retired associations only for the v1 API.
 
     Raises:
         NotFoundError: When the Thread does not exist or belongs to another reader.
@@ -356,6 +358,7 @@ async def get_reading_boundary_explanations(
         db: Request transaction.
         user_id: Authenticated reader.
         thread_ids: Owned Thread identifiers to explain.
+        include_historical: Include retired associations only for the v1 API.
 
     Raises:
         NotFoundError: When any requested Thread is absent or foreign.
