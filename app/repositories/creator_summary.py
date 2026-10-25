@@ -16,7 +16,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import select, func, cast
+from sqlalchemy import select, func, cast, case
 from sqlalchemy.dialects.postgresql import distinct_on, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -517,13 +517,11 @@ async def load_creator_summary_inputs_for_creators(
         select(
             Issue.id,
             func.jsonb_array_elements(
-                func.case(
-                    [
-                        (
-                            func.jsonb_typeof(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY]) == "array",
-                            cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)
-                        )
-                    ],
+                case(
+                    (
+                        func.jsonb_typeof(cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)) == "array",
+                        cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)
+                    ),
                     else_=cast("[]", JSONB)
                 )
             ).label("credit")
@@ -547,7 +545,9 @@ async def load_creator_summary_inputs_for_creators(
     # Track all issues with usable confirmed credits for global coverage, not just requested creators
     issues_with_creator_metadata: set[int] = set()
     
-    # First pass: collect all issues with any creator metadata for global coverage
+    # First pass: collect all issues with usable confirmed credits for global coverage
+    # Only count issues where creator_credits is an array with at least one valid entry
+    # (non-empty name and coercible id) to avoid overstating coverage and suppressing manual credits
     all_metadata_result = await db.execute(
         select(Issue.id)
         .join(Thread, Thread.id == Issue.thread_id)
@@ -563,6 +563,10 @@ async def load_creator_summary_inputs_for_creators(
         .where(IssueExternalIdentityMapping.status == "confirmed")
         .where(ExternalIdentity.provider == COMICVINE_PROVIDER)
         .where(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY].is_not(None))
+        .where(func.jsonb_typeof(cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)) == "array")
+        .where(
+            func.jsonb_array_length(cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)) > 0
+        )
     )
     for issue_id, in all_metadata_result.all():
         issues_with_creator_metadata.add(int(issue_id))
