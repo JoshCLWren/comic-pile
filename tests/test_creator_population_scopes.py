@@ -309,6 +309,32 @@ async def test_known_report_shapes_regress_without_rating_writes(
         )
         await _rate(async_db, issue, rating=rating, timestamp=D1)
 
+    # Milgrom report shape: one headline credit, one non-headline credit.
+    milgrom = 1673
+    daredevil_thread, daredevil_issues = await _make_thread(
+        async_db, default_user, title="Daredevil", issue_count=1, queue_position=4, read_through=1
+    )
+    spectacular_thread, spectacular_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Peter Parker, The Spectacular Spider-Man",
+        issue_count=1,
+        queue_position=5,
+        read_through=1,
+    )
+    await _confirm_identity(
+        async_db,
+        daredevil_issues[0],
+        creators=[{"id": milgrom, "name": "Al Milgrom", "role": "writer"}],
+    )
+    await _confirm_identity(
+        async_db,
+        spectacular_issues[0],
+        creators=[{"id": milgrom, "name": "Al Milgrom", "role": "cover"}],
+    )
+    await _rate(async_db, daredevil_issues[0], rating=4.0, timestamp=D2)
+    await _rate(async_db, spectacular_issues[0], rating=3.0, timestamp=D2)
+
     event_count_before = (
         await async_db.execute(select(func.count(Event.id)).where(Event.type == "rate"))
     ).scalar_one()
@@ -340,32 +366,6 @@ async def test_known_report_shapes_regress_without_rating_writes(
     assert set(war_rows) == {issue.id for issue in war_issues}
     assert len([row for row in war_rows.values() if "cover" in row["roles"]]) == 2
     assert len([row for row in war_rows.values() if "writer" in row["roles"]]) == 3
-
-    # Milgrom report shape: one headline credit, one non-headline credit.
-    milgrom = 1673
-    daredevil_thread, daredevil_issues = await _make_thread(
-        async_db, default_user, title="Daredevil", issue_count=1, queue_position=4, read_through=1
-    )
-    spectacular_thread, spectacular_issues = await _make_thread(
-        async_db,
-        default_user,
-        title="Peter Parker, The Spectacular Spider-Man",
-        issue_count=1,
-        queue_position=5,
-        read_through=1,
-    )
-    await _confirm_identity(
-        async_db,
-        daredevil_issues[0],
-        creators=[{"id": milgrom, "name": "Al Milgrom", "role": "writer"}],
-    )
-    await _confirm_identity(
-        async_db,
-        spectacular_issues[0],
-        creators=[{"id": milgrom, "name": "Al Milgrom", "role": "cover"}],
-    )
-    await _rate(async_db, daredevil_issues[0], rating=4.0, timestamp=D2)
-    await _rate(async_db, spectacular_issues[0], rating=3.0, timestamp=D2)
 
     milgrom_body = (await auth_client.get(f"/api/v1/creators/creator:{milgrom}")).json()
     milgrom_groups = await _group_by_thread(milgrom_body)
