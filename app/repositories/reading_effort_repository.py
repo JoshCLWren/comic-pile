@@ -22,6 +22,7 @@ from sqlalchemy.orm import aliased
 from app.models import (
     Event,
     ExternalIdentity,
+    Issue,
     IssueExternalIdentityMapping,
     Thread,
     ThreadExternalSeriesMapping,
@@ -123,12 +124,14 @@ async def fetch_confirmed_issue_publication_metadata(
     db: AsyncSession,
     *,
     issue_ids: Sequence[int],
+    user_id: int | None = None,
 ) -> list[PublicationMetadataRow]:
     """Return confirmed issue-identity metadata for the requested issues.
 
     Args:
         db: Async database session.
         issue_ids: Issue ids whose confirmed identity metadata should be read.
+        user_id: Restrict candidate metadata to this owner when provided.
 
     Returns:
         Metadata rows ordered by mapping id so callers can apply the first
@@ -146,6 +149,10 @@ async def fetch_confirmed_issue_publication_metadata(
         .where(IssueExternalIdentityMapping.status == "confirmed")
         .order_by(IssueExternalIdentityMapping.id)
     )
+    if user_id is not None:
+        statement = statement.join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id).join(
+            Thread, Thread.id == Issue.thread_id,
+        ).where(Thread.user_id == user_id)
     rows = (await db.execute(statement)).all()
     return [
         PublicationMetadataRow(
@@ -160,12 +167,14 @@ async def fetch_confirmed_thread_publication_metadata(
     db: AsyncSession,
     *,
     thread_ids: Sequence[int],
+    user_id: int | None = None,
 ) -> list[PublicationMetadataRow]:
     """Return confirmed thread/series identity metadata for the requested threads.
 
     Args:
         db: Async database session.
         thread_ids: Thread ids whose confirmed series metadata should be read.
+        user_id: Restrict candidate metadata to this owner when provided.
 
     Returns:
         Metadata rows ordered by mapping id so callers can apply the first
@@ -183,6 +192,10 @@ async def fetch_confirmed_thread_publication_metadata(
         .where(ThreadExternalSeriesMapping.status == "confirmed")
         .order_by(ThreadExternalSeriesMapping.id)
     )
+    if user_id is not None:
+        statement = statement.join(
+            Thread, Thread.id == ThreadExternalSeriesMapping.thread_id,
+        ).where(Thread.user_id == user_id)
     rows = (await db.execute(statement)).all()
     return [
         PublicationMetadataRow(

@@ -21,7 +21,7 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, ExternalIdentity, Issue, ReadingSession, Thread, User
-from app.models.external_identity import ThreadExternalSeriesMapping
+from app.models.external_identity import IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 
 #: Hard ceiling for one representative successful roll, including auth,
 #: selection, recommendation persistence, and response assembly. The issue's
@@ -109,6 +109,7 @@ async def _add_observed_effort(
     *,
     minutes: float,
     count: int,
+    issue_id: int | None = None,
 ) -> None:
     """Seed linked roll-to-rate observations for a populated-history case."""
     base = datetime.now(UTC) - timedelta(days=10)
@@ -128,6 +129,7 @@ async def _add_observed_effort(
             Event(
                 type="rate",
                 thread_id=thread.id,
+                issue_id=issue_id,
                 source_roll_event_id=roll_event.id,
                 rating=4.0,
                 issues_read=1,
@@ -295,6 +297,25 @@ async def test_batch_effort_matches_reference_with_constant_reads(
     threads = list((await async_db.scalars(
         select(Thread).where(Thread.user_id == default_user.id).order_by(Thread.id)
     )).all())
+    # Conflicting issue/thread history must retain issue-first precedence.
+    await _add_observed_effort(
+        async_db, threads[0], minutes=30, count=3, issue_id=threads[0].next_unread_issue_id,
+    )
+    identity = ExternalIdentity(
+        provider="comicvine", entity_type="issue", external_id="batch-era-fixture",
+        metadata_json={"cover_date": "1990-01-01"}, updated_at=datetime.now(UTC),
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    async_db.add(IssueExternalIdentityMapping(
+        issue_id=threads[-1].next_unread_issue_id, external_identity_id=identity.id,
+        status="confirmed",
+    ))
+    no_data = await _add_thread(
+        async_db, default_user.id, title="No history or metadata", queue_position=LIBRARY_SIZE + 1,
+    )
+    threads.append(no_data)
+    await async_db.flush()
     candidates = [(thread.id, thread.next_unread_issue_id) for thread in threads]
     # Include issue-less legacy and missing candidates without losing order.
     candidates.extend([(threads[0].id, None), (threads[-1].id, None)])
@@ -327,3 +348,29 @@ async def test_batch_effort_matches_reference_with_constant_reads(
         assert all(statement.lstrip().upper().startswith("SELECT") for statement in statements)
         assert list(result) == list(dict.fromkeys(selected))
         assert result == {key: reference[key] for key in selected}
+
+
+@pytest.mark.asyncio
+async def test_batch_effort_never_uses_another_readers_metadata(
+    async_db: AsyncSession, default_user: User, sample_user2: User,
+) -> None:
+    """Foreign candidate IDs cannot expose their publication-era estimates."""
+    from app.services.reading_effort import compute_effort_estimates_batch, neutral_estimate
+
+    foreign = await _add_thread(async_db, sample_user2.id, title="Foreign", queue_position=1)
+    await _confirm_series_era(async_db, foreign, cover_date="1965-01-01")
+    identity = ExternalIdentity(
+        provider="comicvine", entity_type="issue", external_id="foreign-batch-era",
+        metadata_json={"cover_date": "1965-01-01"}, updated_at=datetime.now(UTC),
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    async_db.add(IssueExternalIdentityMapping(
+        issue_id=foreign.next_unread_issue_id, external_identity_id=identity.id, status="confirmed",
+    ))
+    await async_db.flush()
+    candidate = (foreign.id, foreign.next_unread_issue_id)
+    result = await compute_effort_estimates_batch(
+        async_db, user_id=default_user.id, candidates=[candidate],
+    )
+    assert result[candidate] == neutral_estimate()

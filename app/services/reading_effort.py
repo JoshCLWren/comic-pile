@@ -538,11 +538,13 @@ async def compute_effort_estimates_batch(
     )
 
     issue_year_map = _first_publication_year_by_target(
-        await fetch_confirmed_issue_publication_metadata(db, issue_ids=unique_issue_ids)
+        await fetch_confirmed_issue_publication_metadata(
+            db, issue_ids=unique_issue_ids, user_id=user_id
+        )
     )
     thread_year_map = _first_publication_year_by_target(
         await fetch_confirmed_thread_publication_metadata(
-            db, thread_ids=unique_thread_ids
+            db, thread_ids=unique_thread_ids, user_id=user_id
         )
     )
 
