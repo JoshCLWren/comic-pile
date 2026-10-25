@@ -67,6 +67,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   onOpenDependencies?: () => void
   onIssueChanged?: () => void
   onLoad?: () => void
+  /**
+   * Reports whether this list still has draft mutations awaiting Save.
+   * Edit Series uses it to warn before discarding unsaved issue changes.
+   */
+  onPendingMutationsChange?: (hasPending: boolean) => void
   /** Injectable issue API; defaults to the production issuesApi. */
   issuesApi?: IssueToggleListApi
   /** Injectable dependency API; defaults to the production issueDependenciesApi. */
@@ -82,6 +87,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   onOpenDependencies,
   onIssueChanged,
   onLoad,
+  onPendingMutationsChange,
   issuesApi: issuesService = issuesApi,
   dependenciesApi = issueDependenciesApi,
   deferred = false,
@@ -107,6 +113,13 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
   const nextMutationIdRef = useRef(1)
+  const onPendingMutationsChangeRef = useRef(onPendingMutationsChange)
+  useEffect(() => {
+    onPendingMutationsChangeRef.current = onPendingMutationsChange
+  })
+  const notifyPendingMutations = useCallback(() => {
+    onPendingMutationsChangeRef.current?.(pendingMutationsRef.current.length > 0)
+  }, [])
   const loadGenerationRef = useRef(0)
   const totalCountRef = useRef(0)
   const fullyLoadedRef = useRef(false)
@@ -349,6 +362,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             (mutation) => mutation.id !== currentMutation.id
           )
           syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
+          notifyPendingMutations()
         }
       }
     } finally {
@@ -357,7 +371,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         onIssueChanged?.()
       }
     }
-  }, [fetchAllIssues, runIssueMutation, syncOptimisticIssues, onIssueChanged])
+  }, [fetchAllIssues, runIssueMutation, syncOptimisticIssues, onIssueChanged, notifyPendingMutations])
 
   const enqueueIssueMutation = useCallback((mutation: QueuedIssueMutation) => {
     // SAFETY: spreading the queued mutation and adding the sequential id satisfies the IssueMutation contract.
@@ -368,6 +382,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
 
     pendingMutationsRef.current = [...pendingMutationsRef.current, queuedMutation]
     syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
+    notifyPendingMutations()
     if (!deferred) {
       // Immediate mode has no caller awaiting the queue, so a failed flush
       // must not escape as an unhandled rejection. The inline action error
@@ -375,7 +390,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       // stay queued for the next attempt.
       void processIssueMutations().catch(() => undefined)
     }
-  }, [processIssueMutations, syncOptimisticIssues, deferred])
+  }, [processIssueMutations, syncOptimisticIssues, deferred, notifyPendingMutations])
 
   // Imperative handle for deferred mode: flush on save, discard on unmount.
   useImperativeHandle(ref, () => ({
@@ -994,6 +1009,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         issue={deleteDialogIssue}
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
+        deferred={deferred}
       />
     </div>
   )

@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
@@ -7,6 +7,7 @@ import MigrationDialog from '../../components/MigrationDialog'
 import AddSeriesFromComicVineDialog from '../../components/AddSeriesFromComicVineDialog'
 import { IssueToggleList, type IssueToggleListHandle } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
+import { getManualCreatorCreditList } from '../../types'
 import type { Thread, ThreadListItem } from '../../types'
 import type { QueueFormState, ManualCreatorCredit } from './types'
 import type { ParsedTokenBreakdown } from '../../utils/issueParser'
@@ -300,6 +301,34 @@ export function QueueModals({
   // Ref for the Edit dialog's deferred issue list: flush queued issue
   // mutations when Save is clicked; closing without saving discards them.
   const editIssueListRef = useRef<IssueToggleListHandle>(null)
+  const [hasPendingIssueEdits, setHasPendingIssueEdits] = useState(false)
+  const [showDiscardPrompt, setShowDiscardPrompt] = useState(false)
+
+  useEffect(() => {
+    if (openModal !== 'edit') {
+      setHasPendingIssueEdits(false)
+      setShowDiscardPrompt(false)
+    }
+  }, [openModal])
+
+  const initialCredits = editingThread ? getManualCreatorCreditList(editingThread) : []
+  const editFormIsDirty =
+    editingThread != null &&
+    (editForm.title !== editingThread.title ||
+      editForm.format !== editingThread.format ||
+      editForm.notes !== (editingThread.notes ?? '') ||
+      (editingThread.total_issues == null &&
+        editForm.issuesRemaining !== editingThread.issues_remaining) ||
+      JSON.stringify(editForm.manualCreatorCredits) !== JSON.stringify(initialCredits))
+  const editHasUnsavedChanges = editFormIsDirty || hasPendingIssueEdits
+
+  const handleEditClose = () => {
+    if (editHasUnsavedChanges) {
+      setShowDiscardPrompt(true)
+      return
+    }
+    onCloseEdit()
+  }
 
   const handleEditSubmit = async (event: FormEvent) => {
     // Cancel the native submit synchronously. The form's default action is a
@@ -506,7 +535,7 @@ export function QueueModals({
       <Modal
         isOpen={openModal === 'edit'}
         title="Edit Series"
-        onClose={onCloseEdit}
+        onClose={handleEditClose}
         overlayClassName="edit-modal__overlay"
       >
         <div className="space-y-4">
@@ -619,17 +648,59 @@ export function QueueModals({
               onOpenDependencies={onOpenDependencies}
               onIssueChanged={onIssueChanged}
               onLoad={onIssuesLoaded}
+              onPendingMutationsChange={setHasPendingIssueEdits}
             />
           )}
 
-          <button
-            type="submit"
-            form="edit-thread-form"
-            disabled={isPendingEdit || isIssuesLoading || editTitleError}
-            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
-          >
-            {isIssuesLoading ? 'Loading issues...' : isPendingEdit ? 'Saving...' : 'Save Changes'}
-          </button>
+          <div className="flex flex-col-reverse sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={onCloseEdit}
+              className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="edit-thread-form"
+              disabled={isPendingEdit || isIssuesLoading || editTitleError}
+              className="flex-1 py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
+            >
+              {isIssuesLoading ? 'Loading issues...' : isPendingEdit ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showDiscardPrompt}
+        title="Discard changes?"
+        onClose={() => setShowDiscardPrompt(false)}
+        data-testid="discard-edit-changes-dialog"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Your unsaved title, format, notes, creator, or issue changes will be discarded.
+          </p>
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setShowDiscardPrompt(false)}
+              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+            >
+              Keep editing
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowDiscardPrompt(false)
+                onCloseEdit()
+              }}
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
+            >
+              Discard changes
+            </button>
+          </div>
         </div>
       </Modal>
 

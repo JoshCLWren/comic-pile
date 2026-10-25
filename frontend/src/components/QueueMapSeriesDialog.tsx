@@ -17,6 +17,7 @@ import type {
   SeriesMappingPreviewRow,
 } from '../services/api-series-mapping'
 import { getApiErrorDetail, isIndeterminateApiOutcome } from '../utils/apiError'
+import { formatIssueCount } from '../utils/formatIssueCount'
 
 /**
  * Why a series could not be mapped in this pass, or why its outcome is
@@ -103,7 +104,7 @@ function seriesMetaText(series: ComicVineSeriesResult): string {
   const parts = [
     series.publisher,
     series.start_year ? `${series.start_year}` : null,
-    series.issue_count ? `${series.issue_count} issues` : null,
+    series.issue_count ? formatIssueCount(series.issue_count) : null,
   ].filter((part): part is string => part !== null)
   return parts.join(' · ')
 }

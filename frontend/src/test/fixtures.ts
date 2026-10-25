@@ -431,9 +431,6 @@ export const test = base.extend<TestFixtures>({
   },
 
    authenticatedPage: async ({ page, request }, use) => {
-     // Clear any existing auth state first for clean test isolation
-     await page.addInitScript(() => localStorage.clear());
-
      const counter = ++fixtureUserCounter;
      const timestamp = Date.now();
      const workerId = process.pid ?? 0;
@@ -445,7 +442,11 @@ export const test = base.extend<TestFixtures>({
 
      const { accessToken } = await registerWithRetry(request, testUser);
 
+     // Keep clearing and installing the token in one script: Playwright does
+     // not guarantee the execution order of separately registered init scripts.
      await page.addInitScript((token: string) => {
+       if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') return;
+       localStorage.clear();
        localStorage.setItem('auth_token', token);
        // SAFETY: the api client reads this global token slot, which the test sets and clears directly
        (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
@@ -459,12 +460,10 @@ export const test = base.extend<TestFixtures>({
 
      await use(page);
 
-    // Cleanup: clear localStorage and attempt logout
-    await page.evaluate(() => {
-      localStorage.clear();
-      // SAFETY: the api client reads this global token slot, which the test sets and clears directly
-      delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
-    });
+    // Stop the app before revoking authentication. Otherwise background query
+    // requests race logout and report teardown-only 401s as browser failures.
+    // The per-test browser context owns and discards its localStorage.
+    await page.goto('about:blank');
     try {
       await request.post('/api/auth/logout', {
         headers: {

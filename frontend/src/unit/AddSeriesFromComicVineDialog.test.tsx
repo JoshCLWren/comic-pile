@@ -445,7 +445,7 @@ describe('AddSeriesFromComicVineDialog confirm and add', () => {
 
     expect(screen.getByTestId('add-series-confirm-card')).toHaveTextContent('Stormwatch')
     expect(
-      screen.getByText('This will create a new series in your queue with all 12 issues from the ComicVine volume.'),
+      screen.getByText('This will create a new series in your queue with 12 issues from the ComicVine volume.'),
     ).toBeInTheDocument()
     expect(screen.queryByPlaceholderText('Search series title (e.g., Batman, Saga, One Piece)')).not.toBeInTheDocument()
     // Provider facts are supplied, so no manual title/issue-count entry is shown.
@@ -490,21 +490,28 @@ describe('AddSeriesFromComicVineDialog confirm and add', () => {
     )
   })
 
-  it('clamps the already-read count to the selected volume issue count', async () => {
+  it('rejects invalid read counts and allows a corrected valid submission', async () => {
     render(<AddSeriesFromComicVineDialog {...defaultProps()} />)
     await selectStormwatch()
-
     const alreadyRead = screen.getByLabelText('Issues already read (optional)')
+    const submit = screen.getByRole('button', { name: 'Add Series to ComicPile' })
     expect(alreadyRead).toHaveAttribute('max', '12')
-
-    fireEvent.change(alreadyRead, { target: { value: '99' } })
-    await waitFor(() => expect(alreadyRead).toHaveValue(12))
-
-    fireEvent.change(alreadyRead, { target: { value: '-5' } })
-    await waitFor(() => expect(alreadyRead).toHaveValue(0))
-
+    for (const value of ['99', '-5', '1.5']) {
+      fireEvent.change(alreadyRead, { target: { value } })
+      expect(alreadyRead).toHaveValue(Number(value))
+      expect(alreadyRead).toHaveAttribute('aria-invalid', 'true')
+      expect(submit).toBeDisabled()
+      fireEvent.click(submit)
+      expect(importSeriesSpy).not.toHaveBeenCalled()
+    }
     fireEvent.change(alreadyRead, { target: { value: '' } })
-    await waitFor(() => expect(alreadyRead).toHaveValue(0))
+    expect(submit).toBeEnabled()
+    fireEvent.change(alreadyRead, { target: { value: '12' } })
+    expect(submit).toBeEnabled()
+    fireEvent.click(submit)
+    await waitFor(() => expect(importSeriesSpy).toHaveBeenCalledWith({
+      comicvine_volume_id: 42, already_read_count: 12,
+    }))
   })
 
   it('hides the already-read control when the provider reports no issue count', async () => {
@@ -518,7 +525,7 @@ describe('AddSeriesFromComicVineDialog confirm and add', () => {
     await waitFor(() => expect(screen.getByTestId('add-series-confirm-card')).toBeInTheDocument())
     expect(screen.queryByLabelText('Issues already read (optional)')).not.toBeInTheDocument()
     expect(
-      screen.getByText('This will create a new series in your queue with all ? issues from the ComicVine volume.'),
+      screen.getByText('This will create a new series in your queue with all issues from the ComicVine volume.'),
     ).toBeInTheDocument()
   })
 

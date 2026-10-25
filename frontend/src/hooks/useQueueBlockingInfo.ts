@@ -38,7 +38,8 @@ export function useQueueBlockingInfo(
 
   const query = useQuery({
     queryKey: queryKeys.dependencies.blockingBatch(sortedIds),
-    queryFn: () => api.getBatchBlockingInfo(sortedIds).then(toBlockingMap),
+    queryFn: () => api.getBatchBlockingInfo(sortedIds),
+    select: toBlockingMap,
     enabled: sortedIds.length > 0,
     staleTime: 30_000,
     retry: false,

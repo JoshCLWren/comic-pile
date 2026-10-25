@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import type { RatingThread } from '../pages/RollPage/types'
 
-const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy } =
+const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, getIssueIntelligenceSpy } =
   vi.hoisted(() => ({
     // SAFETY: mock payload supplies only the fields this test asserts
     confirmIdentitySpy: vi.fn().mockResolvedValue({} as never),
@@ -13,13 +13,14 @@ const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssues
     searchSeriesSpy: vi.fn(),
     getSeriesIssuesSpy: vi.fn(),
     getIssueIdentitySpy: vi.fn(),
+    getIssueIntelligenceSpy: vi.fn().mockResolvedValue(null),
   }))
 
 vi.mock('../services/api-comicvine', () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     getSeriesIssues: getSeriesIssuesSpy,
-    getIssueIntelligence: vi.fn().mockResolvedValue(null),
+    getIssueIntelligence: getIssueIntelligenceSpy,
     getIssueIdentity: getIssueIdentitySpy,
     confirmIdentity: confirmIdentitySpy,
     replaceIdentity: replaceIdentitySpy,
@@ -142,6 +143,9 @@ async function openCorrections(): Promise<HTMLElement> {
 describe('Roll correction controls move behind a quiet overflow menu (#3008)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // A mocked issue name survives clearAllMocks, so each test must start with
+    // an incomplete series again (greptile PRRT_kwDOQxSQh86v_K9t).
+    getIssueIntelligenceSpy.mockResolvedValue(null)
     searchSeriesSpy.mockResolvedValue({ query: '', results: [mockSeries], total_available: 1 })
     getSeriesIssuesSpy.mockResolvedValue({
       comicvine_volume_id: 42,
@@ -248,7 +252,7 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     expect(screen.queryByRole('button', { name: 'Find ComicVine match' })).toBeNull()
   })
 
-  it('retains every correction action inside the overflow menu', async () => {
+  it('retains every correction action inside the overflow menu for linked series', async () => {
     getIssueIdentitySpy.mockResolvedValue({
       has_confirmed_identity: true,
       comicvine_issue_id: null,
@@ -262,14 +266,39 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     const menu = await openCorrections()
     expect(within(menu).getByRole('menuitem', { name: 'Fix issue number' })).toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: 'Wrong series?' })).toBeInTheDocument()
+    // A linked series still missing its story title keeps the direct Map series
+    // repair path instead of forcing readers to Queue or Wrong series?.
     expect(within(menu).getByRole('menuitem', { name: 'Map series' })).toBeInTheDocument()
     // A confirmed mapping does not also offer the first-time match action.
     expect(within(menu).queryByRole('menuitem', { name: 'Find ComicVine match' })).toBeNull()
   })
 
-  it('opens series mapping directly for a linked issue and refreshes identity after an update', async () => {
-    getIssueIdentitySpy.mockResolvedValue({ has_confirmed_identity: true,
-      comicvine_issue_id: '36956', confirmed_mappings: [{ comicvine_id: 36956 }],
+  it('hides Map series for a linked series whose story title is already known', async () => {
+    getIssueIdentitySpy.mockResolvedValue({
+      has_confirmed_identity: true,
+      comicvine_issue_id: null,
+      confirmed_mappings: [{ comicvine_id: 36956 }],
+      candidate_mappings: [],
+      has_unresolved: false,
+    })
+    // SAFETY: mock payload supplies only the fields this test asserts
+    getIssueIntelligenceSpy.mockResolvedValue({
+      name: 'The Dark Side',
+    } as never)
+
+    renderPillar()
+
+    const menu = await openCorrections()
+    expect(within(menu).getByRole('menuitem', { name: 'Fix issue number' })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Wrong series?' })).toBeInTheDocument()
+    // A complete series offers no first-time mapping action.
+    expect(within(menu).queryByRole('menuitem', { name: 'Map series' })).toBeNull()
+    expect(within(menu).queryByRole('menuitem', { name: 'Find ComicVine match' })).toBeNull()
+  })
+
+  it('opens series mapping for an unlinked issue', async () => {
+    getIssueIdentitySpy.mockResolvedValue({ has_confirmed_identity: false,
+      comicvine_issue_id: null, confirmed_mappings: [],
       candidate_mappings: [], has_unresolved: false })
     renderPillar()
     const menu = await openCorrections()

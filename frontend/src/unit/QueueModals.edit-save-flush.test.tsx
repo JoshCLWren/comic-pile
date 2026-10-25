@@ -1,6 +1,7 @@
-import { forwardRef, useImperativeHandle } from 'react'
-import type { FormEvent, ReactNode } from 'react'
-import { act, render } from '@testing-library/react'
+import { forwardRef, useImperativeHandle, useState } from 'react'
+import type { FormEvent } from 'react'
+import { act, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { QueueModals } from '../pages/QueuePage/QueueModals'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
@@ -19,18 +20,6 @@ import type { IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
  * too late to stop the reload that aborted the queued requests.
  */
 
-vi.mock('../components/Modal', () => ({
-  default: ({
-    isOpen,
-    title,
-    children,
-  }: {
-    isOpen: boolean
-    title: string
-    children: ReactNode
-  }) => (isOpen ? <section aria-label={title}>{children}</section> : null),
-}))
-
 vi.mock('../components/PositionSlider', () => ({ default: () => null }))
 vi.mock('../components/DependencyBuilder', () => ({ default: () => null }))
 vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
@@ -38,7 +27,7 @@ vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
 const flushCalls: string[] = []
 
 vi.mock('../pages/QueuePage/IssueToggleList', () => ({
-  IssueToggleList: forwardRef<IssueToggleListHandle>((_props, ref) => {
+  IssueToggleList: forwardRef<IssueToggleListHandle, { onPendingMutationsChange?: (pending: boolean) => void }>((props, ref) => {
     useImperativeHandle(ref, () => ({
       flush: async () => {
         flushCalls.push('flush')
@@ -48,7 +37,7 @@ vi.mock('../pages/QueuePage/IssueToggleList', () => ({
       },
       hasPendingMutations: () => true,
     }))
-    return <div data-testid="issue-toggle-list" />
+    return <button type="button" onClick={() => props.onPendingMutationsChange?.(true)}>Queue issue edit</button>
   }),
 }))
 
@@ -76,16 +65,20 @@ const EDITING_THREAD = {
   status: 'active',
 } as ThreadListItem
 
-function Harness({ onEditSubmit }: { onEditSubmit: (event: FormEvent) => Promise<void> }) {
-  const editForm: QueueFormState = { ...DEFAULT_CREATE_STATE, title: 'Test Series' }
+function Harness({ onEditSubmit, onCloseEdit = () => undefined }: {
+  onEditSubmit: (event: FormEvent) => Promise<void>
+  onCloseEdit?: () => void
+}) {
+  const [editForm, setEditForm] = useState<QueueFormState>({ ...DEFAULT_CREATE_STATE, title: 'Test Series' })
+  const [isOpen, setIsOpen] = useState(true)
 
   return (
     <QueueModals
-      openModal="edit"
+      openModal={isOpen ? 'edit' : null}
       createForm={DEFAULT_CREATE_STATE}
       editForm={editForm}
       setCreateForm={vi.fn()}
-      setEditForm={vi.fn()}
+      setEditForm={setEditForm}
       issuePreview={null}
       issueParseError={null}
       issueParseWarnings={[]}
@@ -108,7 +101,7 @@ function Harness({ onEditSubmit }: { onEditSubmit: (event: FormEvent) => Promise
       onRepositionConfirm={vi.fn()}
       onDependencyChanged={vi.fn(async () => undefined)}
       onCloseCreate={vi.fn()}
-      onCloseEdit={vi.fn()}
+      onCloseEdit={() => { onCloseEdit(); setIsOpen(false) }}
       onCloseReactivate={vi.fn()}
       onCloseReposition={vi.fn()}
       onCloseDependency={vi.fn()}
@@ -154,5 +147,46 @@ describe('Edit Series Save and deferred issue flush (#3309)', () => {
     expect(flushCalls).toEqual(['flush', 'flushed'])
     expect(defaultPreventedWhenFlushStarted).toBe(true)
     expect(onEditSubmit).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Edit Series discard confirmation', () => {
+  it('closes an unchanged form without prompting', async () => {
+    const user = userEvent.setup()
+    const close = vi.fn()
+    render(<Harness onEditSubmit={vi.fn()} onCloseEdit={close} />)
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it.each(['Title', 'Notes'])('warns for dirty %s and keeps the draft when editing continues', async (field) => {
+    const user = userEvent.setup()
+    const close = vi.fn()
+    render(<Harness onEditSubmit={vi.fn()} onCloseEdit={close} />)
+    await user.type(screen.getByLabelText(field), ' updated')
+    await user.keyboard('{Escape}')
+    const prompt = screen.getByRole('dialog', { name: 'Discard changes?' })
+    expect(prompt).toBeInTheDocument()
+    expect(close).not.toHaveBeenCalled()
+    await user.click(within(prompt).getByRole('button', { name: 'Keep editing' }))
+    expect(screen.queryByRole('dialog', { name: 'Discard changes?' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText(field)).toHaveValue(field === 'Title' ? 'Test Series updated' : ' updated')
+    expect(close).not.toHaveBeenCalled()
+  })
+
+  it('warns for queued issue edits alone and discards only after confirmation', async () => {
+    const user = userEvent.setup()
+    const close = vi.fn()
+    const save = vi.fn()
+    render(<Harness onEditSubmit={save} onCloseEdit={close} />)
+    await user.click(screen.getByRole('button', { name: 'Queue issue edit' }))
+    await user.keyboard('{Escape}')
+    const prompt = screen.getByRole('dialog', { name: 'Discard changes?' })
+    expect(close).not.toHaveBeenCalled()
+    await user.click(within(prompt).getByRole('button', { name: 'Discard changes' }))
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(save).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

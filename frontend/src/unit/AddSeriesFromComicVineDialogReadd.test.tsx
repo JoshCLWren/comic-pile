@@ -54,7 +54,7 @@ const saga = {
   image_url: null,
 }
 
-const NEW_SERIES_COPY = 'This will create a new series in your queue with all 3 issues from the ComicVine volume.'
+const NEW_SERIES_COPY = 'This will create a new series in your queue with 3 issues from the ComicVine volume.'
 const IMPORTED_COPY_FRAGMENT = '"Saga" is already in your queue'
 
 describe('AddSeriesFromComicVineDialog same-session re-add copy (#3854)', () => {
