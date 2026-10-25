@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.comicvine_hydration import DEEP_METADATA_REFRESHED_AT_KEY
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.services import comicvine_fallback
@@ -79,6 +80,51 @@ def test_metadata_freshness_distinguishes_deep_basic_and_stale_rows() -> None:
     assert metadata_needs_hydration(fresh, now=now) is False
     assert metadata_needs_hydration(basic, now=now) is True
     assert metadata_needs_hydration(stale, now=now) is True
+
+
+def test_metadata_freshness_uses_deep_refresh_marker_not_provider_edit_date() -> None:
+    """A just-fetched deep payload stays fresh even when ComicVine edited it long ago."""
+    now = datetime(2026, 8, 11, tzinfo=UTC)
+    deep_payload = _deep_raw_payload()
+    identity = _identity(
+        metadata={
+            "raw_provider_payload": deep_payload,
+            DEEP_METADATA_REFRESHED_AT_KEY: (now - timedelta(days=1)).isoformat(),
+        },
+        updated_at=now - timedelta(days=1),
+    )
+    identity.provider_updated_at = now - timedelta(days=365)
+
+    assert metadata_needs_hydration(identity, now=now) is False
+
+
+def test_metadata_freshness_refreshes_when_deep_refresh_marker_is_stale() -> None:
+    """Age is measured from the application deep fetch, not the provider edit date."""
+    now = datetime(2026, 8, 11, tzinfo=UTC)
+    identity = _identity(
+        metadata={
+            "raw_provider_payload": _deep_raw_payload(),
+            DEEP_METADATA_REFRESHED_AT_KEY: (now - timedelta(days=31)).isoformat(),
+        },
+        updated_at=now,
+    )
+    identity.provider_updated_at = now
+
+    assert metadata_needs_hydration(identity, now=now) is True
+
+
+def test_legacy_deep_row_refreshes_when_provider_revision_outruns_payload() -> None:
+    """A roster write advancing the provider revision invalidates stored deep credits."""
+    now = datetime(2026, 8, 11, tzinfo=UTC)
+    identity = _identity(
+        metadata={"raw_provider_payload": _deep_raw_payload()},
+        updated_at=now - timedelta(days=1),
+    )
+    # Raw payload's date_last_updated is 2026-08-01; a roster write advanced the
+    # identity's provider revision without refreshing the deep payload.
+    identity.provider_updated_at = now - timedelta(days=2)
+
+    assert metadata_needs_hydration(identity, now=now) is True
 
 
 class _FakeResult:
@@ -216,11 +262,16 @@ async def test_background_refresh_scheduler_is_bounded_and_deduped(
         _pending_metadata_refreshes.clear()
 
 
-def test_background_refresh_scheduler_never_raises_without_a_loop() -> None:
+def test_background_refresh_scheduler_never_raises_without_a_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Scheduling outside a running loop is declined, never raised."""
     from app.services.comicvine_fallback import schedule_issue_metadata_refresh
 
+    refresh = AsyncMock()
+    monkeypatch.setattr(comicvine_fallback, "refresh_issue_metadata", refresh)
     assert schedule_issue_metadata_refresh(78) is False
+    refresh.assert_not_called()
 
 
 @pytest.mark.asyncio
