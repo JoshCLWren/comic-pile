@@ -262,11 +262,16 @@ async def test_background_refresh_scheduler_is_bounded_and_deduped(
         _pending_metadata_refreshes.clear()
 
 
-def test_background_refresh_scheduler_never_raises_without_a_loop() -> None:
+def test_background_refresh_scheduler_never_raises_without_a_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Scheduling outside a running loop is declined, never raised."""
     from app.services.comicvine_fallback import schedule_issue_metadata_refresh
 
+    refresh = AsyncMock()
+    monkeypatch.setattr(comicvine_fallback, "refresh_issue_metadata", refresh)
     assert schedule_issue_metadata_refresh(78) is False
+    refresh.assert_not_called()
 
 
 @pytest.mark.asyncio

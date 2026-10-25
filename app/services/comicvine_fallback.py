@@ -326,7 +326,8 @@ def schedule_issue_metadata_refresh(identity_id: int) -> bool:
     if pending is not None and not pending.done():
         return False
     try:
-        task = asyncio.create_task(
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(
             refresh_issue_metadata(identity_id),
             name=f"comicvine-metadata-refresh-{identity_id}",
         )

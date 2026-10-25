@@ -967,6 +967,18 @@ async def test_batch_apply_refuses_reader_fact_drift_before_mutation(
         plan_name="Drift Family",
         reader_order_dependency_ids=(reader_order.id,),
     )
+    # Synthetic identities must not inherit production Step 14 classifications.
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index", lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: ({reader_order.id: "reading_plan_order"}, {}),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
     snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True, snapshot["errors"]
     snapshot = {**snapshot, "status": "safe-to-migrate"}
