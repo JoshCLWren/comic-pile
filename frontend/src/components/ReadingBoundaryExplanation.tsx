@@ -58,7 +58,7 @@ export function ReadingBoundaryExplanation({ explanation, isPending, isError, on
         </ul>
       )}
       {(explanation.historical?.length ?? 0) > 0 && (
-        <details><summary className="cursor-pointer">Historical associations — not active blockers</summary>
+        <details><summary className="cursor-pointer" onClick={(e) => e.stopPropagation()}>Historical associations — not active blockers</summary>
           <ul className="mt-2 space-y-2" aria-label="Historical reading associations">
             {explanation.historical?.map((item, index) => <li key={`${item.kind}-${index}`}><p>{item.label}</p><p>{item.detail}</p><EditorLink editor={item.editor} /></li>)}
           </ul>
