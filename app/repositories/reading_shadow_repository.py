@@ -56,7 +56,9 @@ class ShadowReadingInputs:
     legacy_enforced_targets: frozenset[int] | None = None
 
 
-async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInputs:
+async def load_shadow_inputs(
+    db: AsyncSession, user_id: int, *, include_legacy_diagnostics: bool = True
+) -> ShadowReadingInputs:
     """Read owner-scoped evidence in a constant number of bulk queries.
 
     Callers needing a durable census must use a repeatable-read, read-only
@@ -67,6 +69,7 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
     Args:
         db: Current read transaction.
         user_id: Reader whose authored constraints are being compared.
+        include_legacy_diagnostics: Include historical dependency data only for reports.
 
     Returns:
         Immutable inputs for the pure shadow diagnostic.
