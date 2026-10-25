@@ -1,6 +1,6 @@
 """Database evidence for read-only, owner-scoped shadow loading and reporting."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 
 import pytest
 from sqlalchemy import event, select, text
@@ -145,12 +145,18 @@ async def test_live_loader_reads_only_reader_dependencies_without_legacy_census(
     )
     await async_db.commit()
 
-    dependency_statements: list[tuple[str, object]] = []
+    dependency_statements: list[tuple[str, tuple[str, ...]]] = []
 
     def capture_binds(conn, cursor, statement, parameters, context, executemany):
         """Capture executed SQL and real DBAPI binds, not formatted query text."""
         if "FROM dependencies" in statement:
-            dependency_statements.append((statement, parameters))
+            if isinstance(parameters, Mapping):
+                binds = tuple(str(value) for value in parameters.values())
+            elif parameters is None:
+                binds = ()
+            else:
+                binds = tuple(str(value) for value in parameters)
+            dependency_statements.append((statement, binds))
 
     event.listen(Engine, "before_cursor_execute", capture_binds)
     try:
@@ -165,12 +171,11 @@ async def test_live_loader_reads_only_reader_dependencies_without_legacy_census(
     assert live.prerequisites[0].target_issue_id == issues[2].id
     assert live.inert_dependency_count == 0
     assert len(dependency_statements) == 1
-    query, parameters = dependency_statements[0]
+    query, bound_values = dependency_statements[0]
     assert "COUNT" not in query.upper()
     assert "WHERE" in query.upper()
     where_clause = query.upper().split("WHERE", 1)[1]
     assert "DEPENDENCIES.ORIGIN =" in where_clause
-    bound_values = parameters.values() if isinstance(parameters, dict) else parameters
     assert "reader" in bound_values
 
     historical = await load_shadow_inputs(async_db, user.id)
