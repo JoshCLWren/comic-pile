@@ -10,6 +10,7 @@ for (const width of [390, 1280]) {
     const fourth = await createThread(page, { title: 'Fourth World', format: 'Issue', issues_remaining: 2, total_issues: 2 })
     const requested: number[][] = []
     await page.route('**/api/v1/reading-boundaries', async route => {
+      // SAFETY: this intercept targets the batch client, which posts its typed thread_ids array.
       const body = route.request().postDataJSON() as { thread_ids: number[] }
       requested.push(body.thread_ids)
       await route.fulfill({ json: { threads: {
