@@ -589,8 +589,10 @@ async def get_roll_pool_rows(
             (
                 thread,
                 eligibility.unread_counts.get(thread.id, 0),
-                eligibility.issue_numbers.get(
-                    eligibility.threads[thread.id].next_issue_id
+                (
+                    eligibility.issue_numbers.get(next_id)
+                    if (next_id := eligibility.threads[thread.id].next_issue_id) is not None
+                    else None
                 ),
             )
             for thread in threads
