@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - perf/reading-boundaries-scoped-historical-20261025
+  pull_request:
+    branches:
+      - main
 permissions:
   contents: read
 jobs:
