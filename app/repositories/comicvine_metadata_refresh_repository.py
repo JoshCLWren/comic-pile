@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.comicvine_metadata_refresh import ComicVineMetadataRefreshRequest
+from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +49,41 @@ def _due_predicate(now: datetime):
             ),
         ),
     )
+
+
+async def get_confirmed_identity_with_repair(
+    db: AsyncSession, issue_id: int,
+) -> tuple[ExternalIdentity, ComicVineMetadataRefreshRequest | None] | None:
+    """Load a mapped issue and optional repair state in one database read.
+
+    Args:
+        db: Async database session.
+        issue_id: Local issue identifier.
+
+    Returns:
+        Confirmed identity and optional repair request, or None without a mapping.
+    """
+    result = await db.execute(
+        select(ExternalIdentity, ComicVineMetadataRefreshRequest)
+        .join(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
+        )
+        .outerjoin(
+            ComicVineMetadataRefreshRequest,
+            ComicVineMetadataRefreshRequest.external_identity_id == ExternalIdentity.id,
+        )
+        .where(
+            IssueExternalIdentityMapping.issue_id == issue_id,
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "issue",
+        )
+        .order_by(IssueExternalIdentityMapping.confidence.desc().nullslast(), ExternalIdentity.id)
+        .limit(1)
+    )
+    row = result.one_or_none()
+    return (row[0], row[1]) if row is not None else None
 
 
 async def get_request(

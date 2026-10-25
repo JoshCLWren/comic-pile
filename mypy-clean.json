@@ -65,6 +65,7 @@
   "app/repositories/cbl_source_repository.py",
   "app/repositories/collection_exclusion_repository.py",
   "app/repositories/collection_guard_repository.py",
+  "app/repositories/comicvine_metadata_refresh_repository.py",
   "app/repositories/continuity_repository.py",
   "app/repositories/creator_comparison.py",
   "app/repositories/creator_detail.py",

@@ -8091,8 +8091,15 @@ export interface components {
             image_url?: string | null;
             /** Issue Number */
             issue_number?: string | null;
+            /**
+             * Metadata Status
+             * @default not_deep_fetched
+             */
+            metadata_status: string;
             /** Name */
             name?: string | null;
+            /** Refresh Retry After Seconds */
+            refresh_retry_after_seconds?: number | null;
             /** Series Id */
             series_id?: number | null;
             /** Series Name */

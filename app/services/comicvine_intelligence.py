@@ -8,10 +8,9 @@ import json
 import logging
 from typing import cast
 
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.repositories import comicvine_metadata_refresh_repository as refresh_repository
 from app.repositories import issue_repository
 from app.schemas.comicvine import (
@@ -160,25 +159,6 @@ def _creators(metadata: dict[str, object]) -> list[ComicVineCreator]:
 
 def _arc_references(metadata: dict[str, object]) -> list[dict[str, object]]:
     return _reference_list(metadata, "story_arc_credits", "story_arcs")
-
-
-async def _confirmed_identity(db: AsyncSession, issue_id: int) -> ExternalIdentity | None:
-    result = await db.execute(
-        select(ExternalIdentity)
-        .join(
-            IssueExternalIdentityMapping,
-            IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
-        )
-        .where(
-            IssueExternalIdentityMapping.issue_id == issue_id,
-            IssueExternalIdentityMapping.status == "confirmed",
-            ExternalIdentity.provider == COMICVINE_PROVIDER,
-            ExternalIdentity.entity_type == "issue",
-        )
-        .order_by(IssueExternalIdentityMapping.confidence.desc().nullslast(), ExternalIdentity.id)
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
 
 
 async def _related_external_rows(
@@ -356,18 +336,18 @@ async def get_issue_intelligence(
     Returns:
         Curated ComicVine intelligence, or ``None`` when no confirmed mapping exists.
     """
-    identity = await _confirmed_identity(db, issue_id)
-    if identity is None:
+    mapped = await refresh_repository.get_confirmed_identity_with_repair(db, issue_id)
+    if mapped is None:
         await schedule_series_issue_resolution(db, issue_id, user_id)
         return None
 
+    identity, stored_request = mapped
     repair_request: MetadataRepairState | None = None
     if metadata_needs_hydration(identity):
         repair_request = await request_issue_metadata_repair(db, identity.id)
         schedule_metadata_repair_drain()
         schedule_issue_metadata_refresh(identity.id)
     else:
-        stored_request = await refresh_repository.get_request(db, identity.id)
         if stored_request is not None:
             repair_request = MetadataRepairState(
                 state=stored_request.state,
@@ -511,5 +491,11 @@ def schedule_issue_metadata_refresh(identity_id: int) -> bool:
     Durable repair requests now use ``request_issue_metadata_repair`` plus
     ``schedule_metadata_repair_drain``. This shim preserves the historical
     callable surface without launching a detached provider task.
+
+    Args:
+        identity_id: Historical identity identifier retained for compatibility.
+
+    Returns:
+        True to acknowledge the compatibility call.
     """
     return True

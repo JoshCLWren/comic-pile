@@ -543,6 +543,9 @@ def schedule_metadata_repair_drain() -> bool:
     task is not data loss: the next read, cron invocation, or lease expiry
     resumes the work.
 
+    Args:
+        None.
+
     Returns:
         True when a new drain task was scheduled, False when one is already
         running or no event loop is available.
@@ -551,7 +554,8 @@ def schedule_metadata_repair_drain() -> bool:
     if _drain_task is not None and not _drain_task.done():
         return False
     try:
-        task = asyncio.create_task(
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(
             drain_due_metadata_repairs(),
             name="comicvine-metadata-repair-drain",
         )
