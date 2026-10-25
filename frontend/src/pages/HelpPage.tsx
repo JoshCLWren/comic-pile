@@ -196,8 +196,8 @@ function GlossaryPermalink({
           data-status={copyStatus}
           className={`whitespace-nowrap text-[11px] font-semibold ${
             copyStatus === 'copied'
-              ? 'text-[var(--theme-success)]'
-              : 'text-[var(--theme-error)]'
+              ? 'text-emerald-700'
+              : 'text-red-700'
           }`}
         >
           {copyStatus === 'copied' ? 'Copied!' : 'Copy failed'}
