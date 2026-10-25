@@ -119,13 +119,19 @@ availability. With execution disabled, unread entries are labeled `legacy`; open
 the reader never activates stored strict modes or gates. Ownership is checked
 before loading eligibility. These reads do not repair pointers or mutate progress.
 
-`GET /api/v1/reading-boundaries/{thread_id}` and `POST /api/v1/reading-boundaries`
-project that same canonical evaluator result for one owned series or a bounded
-batch. They name the next Issue, every live blocker's waiting Issues, the owned
-Reading List or authored prerequisite responsible, and an editor target. Inactive
-legacy and converted associations appear only in `historical`; they never become
-live blockers and are not repaired or deleted. The endpoints are versioned-only
-and require an authenticated owner.
+`GET /api/v2/reading-boundaries/{thread_id}` and `POST /api/v2/reading-boundaries`
+are the canonical UI endpoints. They project the current Option E result for one
+owned series or a bounded batch, including the next Issue, live blockers, and
+current editor targets. **V2 has no `historical` response field, and never runs
+the legacy dependency query.** Only `origin=reader` prerequisites are loaded
+by the canonical eligibility evaluator.
+
+The original `/api/v1/reading-boundaries` endpoints remain isolated for
+compatibility with clients expecting the historic `historical` field. They
+never activate old edges, and their optional historical lookup is constrained
+to the requested owned series rather than the entire collection. V1 is
+deprecated for the app's live Roll/Queue traffic. Historical data is retained
+in storage without being loaded by the canonical UI.
 
 The custom CBL editor's **Read this list** control opens this current-list reader.
 Available issues can be marked read directly, and read issues can be marked unread.
