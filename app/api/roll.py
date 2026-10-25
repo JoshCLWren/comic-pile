@@ -24,6 +24,7 @@ from app.services.reading_effort import (
 )
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.services.roll_service import RollService
+from app.services.roll_phase_trace import RollPhaseTrace
 from app.services.session_response import (
     build_ladder_path,
     build_session_response,
@@ -142,6 +143,7 @@ async def _select_pending_thread(
     selection_intent: str,
     selection_method_override: str | None,
     empty_pool_detail: str = "No active threads available to roll",
+    trace: RollPhaseTrace | None = None,
 ) -> _SelectionArtifacts:
     """Run the weighted bounded-pool selection shared by roll and skip endpoints.
 
@@ -158,6 +160,7 @@ async def _select_pending_thread(
         selection_intent=selection_intent,
         selection_method_override=selection_method_override,
         empty_pool_detail=empty_pool_detail,
+        trace=trace,
     )
     return _SelectionArtifacts(
         selected_thread=artifacts["selected_thread"],
@@ -278,8 +281,10 @@ async def roll_dice(
     Raises:
         HTTPException: If no active threads available.
     """
+    trace = RollPhaseTrace()
     user_id = current_user.id
     current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
+    trace.mark("session")
 
     if current_session.pending_thread_id is not None:
         pending_thread_result = await db.execute(
@@ -308,6 +313,7 @@ async def roll_dice(
         session_snoozed_ids=snoozed_ids,
         session_skipped_ids=skipped_ids,
     )
+    trace.mark("die_exclusions")
 
     selection_bandwidth = (
         roll_request.bandwidth
@@ -329,10 +335,12 @@ async def roll_dice(
         selection_bandwidth=selection_bandwidth,
         selection_intent=selection_intent,
         selection_method_override=None,
+        trace=trace,
     )
 
     db.add(artifacts.event)
     await db.flush()
+    trace.mark("event_flush")
     rec_context = RecommendationContext(
         event_id=artifacts.event.id,
         schema_version=artifacts.rec_context_create.schema_version,
@@ -358,8 +366,9 @@ async def roll_dice(
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
+    trace.mark("commit")
 
-    return await RollService(db).build_roll_response(
+    response = await RollService(db).build_roll_response(
         selected_thread=artifacts.selected_thread,
         current_die=current_die,
         selected_index=artifacts.selected_index,
@@ -371,6 +380,9 @@ async def roll_dice(
         next_issue_number=artifacts.selected_thread_issue_number,
         recommendation_reason_codes=artifacts.recommendation_reason_codes,
     )
+    trace.mark("response")
+    trace.emit(logger)
+    return response
 
 
 @router.post("/dismiss-pending", status_code=status.HTTP_204_NO_CONTENT)
