@@ -1225,6 +1225,19 @@ async def import_comicvine_series(
             status_code=400,
         )
 
+    # Personal progress is a count inside the provider roster, so it must not
+    # be silently clamped to a different number than the reader entered
+    # (#3451). Reject the request before any thread or issue is created.
+    if request.already_read_count > len(issues_rows):
+        raise SeriesImportError(
+            "invalid_already_read_count",
+            (
+                "already_read_count cannot exceed the series issue count "
+                f"({len(issues_rows)})"
+            ),
+            status_code=400,
+        )
+
     # Validate reading order if provided
     order: ReadingOrder | None = None
     if request.reading_order_id is not None:

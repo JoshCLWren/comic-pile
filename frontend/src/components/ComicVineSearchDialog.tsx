@@ -11,6 +11,7 @@ import ImageWithLoading from './ImageWithLoading'
 import SiblingSeriesMappingOffer from './SiblingSeriesMappingOffer'
 import { optimizedImageSrcSet, optimizedImageUrl } from '../services/imageDelivery'
 import { LatestRequestGuard, type LoadPhase, type RequestTicket } from '../utils/latestRequest'
+import { formatIssueCount } from '../utils/formatIssueCount'
 
 interface ComicVineSearchDialogProps {
   isOpen: boolean
@@ -65,7 +66,7 @@ function seriesMetaParts(series: ComicVineSeriesResult): string[] {
   return [
     series.publisher,
     series.start_year ? `${series.start_year}` : null,
-    series.issue_count ? `${series.issue_count} issues` : null,
+    series.issue_count ? formatIssueCount(series.issue_count) : null,
   ].filter((part): part is string => part !== null)
 }
 

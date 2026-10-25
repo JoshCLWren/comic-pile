@@ -275,12 +275,12 @@ async def test_already_read_count_is_applied_as_personal_state(
 
 
 @pytest.mark.asyncio
-async def test_already_read_count_beyond_roster_completes_series(
+async def test_already_read_count_beyond_roster_is_rejected(
     auth_client: AsyncClient,
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An over-reported read count cannot exceed the roster or corrupt the counters."""
+    """A count outside 0..roster size is refused instead of silently clamped (#3451)."""
     _install_client(monkeypatch, _StubClient(_issue_rows(401, 402)))
 
     response = await auth_client.post(
@@ -288,14 +288,12 @@ async def test_already_read_count_beyond_roster_completes_series(
         json={"comicvine_volume_id": VOLUME_ID, "already_read_count": 99},
     )
 
-    assert response.status_code == 201
-    body = response.json()
-    thread = await async_db.get(Thread, body["thread_id"])
-    assert thread is not None
-    assert thread.total_issues == 2
-    assert thread.issues_remaining == 0
-    assert thread.status == "completed"
-    assert thread.next_unread_issue_id is None
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "invalid_already_read_count"
+    imported = (
+        await async_db.execute(select(Thread).where(Thread.title == "Test Series"))
+    ).scalars().all()
+    assert imported == []
 
 
 @pytest.mark.asyncio

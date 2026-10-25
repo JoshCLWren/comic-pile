@@ -48,6 +48,17 @@ function QueueControlsInner({
 }: QueueControlsProps) {
   const [localValue, setLocalValue] = useState(searchQuery)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  const clearSearch = () => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+    setLocalValue('')
+    onSearchChange('')
+    searchInputRef.current?.focus()
+  }
 
   useEffect(() => {
     setLocalValue(searchQuery)
@@ -137,32 +148,55 @@ function QueueControlsInner({
             </button>
           ))}
         </div>
-        <input
-          type="text"
-          value={localValue}
-          onChange={(e) => {
-            const next = e.target.value
-            setLocalValue(next)
-            if (debounceRef.current) clearTimeout(debounceRef.current)
-            debounceRef.current = setTimeout(() => onSearchChange(next), SEARCH_DEBOUNCE_MS)
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              // SAFETY: clearTimeout tolerates an undefined/number timer handle; the cast unifies the ref's null initial value.
-              clearTimeout(debounceRef.current as ReturnType<typeof setTimeout> | undefined)
-              onSearchChange(localValue)
-            }
-          }}
-          onBlur={() => {
-            if (localValue !== searchQuery) {
-              // SAFETY: clearTimeout tolerates an undefined/number timer handle; the cast unifies the ref's null initial value.
-              clearTimeout(debounceRef.current as ReturnType<typeof setTimeout> | undefined)
-              onSearchChange(localValue)
-            }
-          }}
-          placeholder="Search..."
-          className="h-9 px-3 rounded-lg text-xs form-control w-full md:w-auto"
-        />
+        <div className="relative w-full md:w-auto">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={localValue}
+            aria-label="Search series"
+            onChange={(e) => {
+              const next = e.target.value
+              setLocalValue(next)
+              if (debounceRef.current) clearTimeout(debounceRef.current)
+              debounceRef.current = setTimeout(() => onSearchChange(next), SEARCH_DEBOUNCE_MS)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                // SAFETY: clearTimeout tolerates an undefined/number timer handle; the cast unifies the ref's null initial value.
+                clearTimeout(debounceRef.current as ReturnType<typeof setTimeout> | undefined)
+                onSearchChange(localValue)
+              } else if (e.key === 'Escape' && (localValue !== '' || searchQuery !== '')) {
+                // #3539: Escape belongs to the search field while focus is in
+                // it. Clear immediately (no debounce) and keep focus here so
+                // the reader can type a new query without reaching for
+                // the pointer.
+                e.preventDefault()
+                clearSearch()
+              }
+            }}
+            onBlur={() => {
+              if (localValue !== searchQuery) {
+                // SAFETY: clearTimeout tolerates an undefined/number timer handle; the cast unifies the ref's null initial value.
+                clearTimeout(debounceRef.current as ReturnType<typeof setTimeout> | undefined)
+                onSearchChange(localValue)
+              }
+            }}
+            placeholder="Search..."
+            className={`h-9 pl-3 rounded-lg text-xs form-control w-full md:w-64 ${localValue ? 'pr-9' : 'pr-3'}`}
+          />
+          {localValue && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              title="Clear search"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={clearSearch}
+              className="absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-lg text-stone-400 hover:text-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            >
+              <span aria-hidden="true" className="text-base leading-none">×</span>
+            </button>
+          )}
+        </div>
       </div>
       <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>
     </header>

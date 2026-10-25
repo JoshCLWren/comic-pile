@@ -5,6 +5,12 @@ interface DeleteIssueDialogProps {
   issue: Issue | null
   onConfirm: () => void
   onCancel: () => void
+  /**
+   * True when the containing Edit Series dialog stages the removal locally and
+   * commits only on Save (#3451). The copy must not claim an immediate,
+   * irreversible deletion in that mode.
+   */
+  deferred?: boolean
 }
 
 /**
@@ -22,6 +28,7 @@ export default function DeleteIssueDialog({
   issue,
   onConfirm,
   onCancel,
+  deferred = false,
 }: DeleteIssueDialogProps) {
   return (
     <Modal
@@ -33,7 +40,9 @@ export default function DeleteIssueDialog({
       {issue && (
         <div className="space-y-4">
           <p className="text-sm text-[var(--theme-text-muted)]">
-            Are you sure you want to delete issue #{issue.issue_number}? This cannot be undone.
+            {deferred
+              ? `Issue #${issue.issue_number} will be removed when you save this series. Closing without saving keeps it.`
+              : `Are you sure you want to delete issue #${issue.issue_number}? This cannot be undone.`}
           </p>
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <button
@@ -49,7 +58,7 @@ export default function DeleteIssueDialog({
               data-testid="confirm-delete-issue"
               className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
             >
-              Delete Issue
+              {deferred ? 'Remove from series' : 'Delete Issue'}
             </button>
           </div>
         </div>

@@ -18,6 +18,7 @@ import { useToast } from '../contexts/useToast'
 import { queryClient } from '../query/queryClient'
 import { invalidateAfterQueueMutation, invalidateComicVineImportStatus } from '../query/cacheEffects'
 import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
+import { formatIssueCount } from '../utils/formatIssueCount'
 import { queryKeys } from '../query/queryKeys'
 
 interface AddSeriesFromComicVineDialogProps {
@@ -60,7 +61,7 @@ function seriesMetaParts(series: ComicVineSeriesResult): string[] {
   return [
     series.publisher,
     series.start_year ? `${series.start_year}` : null,
-    series.issue_count ? `${series.issue_count} issues` : null,
+    series.issue_count ? formatIssueCount(series.issue_count) : null,
   ].filter((part): part is string => part !== null)
 }
 
@@ -143,8 +144,8 @@ function importSuccessMessage({ seriesName, issuesAdopted, threadCreated }: Impo
     return `"${seriesName}" is already up to date`
   }
   return threadCreated
-    ? `Added "${seriesName}" to ComicPile (${issuesAdopted} issues)`
-    : `Added ${issuesAdopted} more issues to "${seriesName}"`
+    ? `Added "${seriesName}" to ComicPile (${formatIssueCount(issuesAdopted)})`
+    : `Added ${issuesAdopted} more ${issuesAdopted === 1 ? 'issue' : 'issues'} to "${seriesName}"`
 }
 
 /**
@@ -183,7 +184,10 @@ export default function AddSeriesFromComicVineDialog({
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [unknownOutcome, setUnknownOutcome] = useState<string | null>(null)
-  const [alreadyReadCount, setAlreadyReadCount] = useState(0)
+  // Keep the draft as text so a fractional or negative entry can be reported
+  // instead of silently truncated/clamped (#3451). The API only accepts whole
+  // counts from 0 through the selected volume's issue count.
+  const [alreadyReadInput, setAlreadyReadInput] = useState('0')
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Only the newest provider search may repaint the result list, so every keystroke,
@@ -231,7 +235,7 @@ export default function AddSeriesFromComicVineDialog({
       setSearchPhase('idle')
       setError(null)
       setUnknownOutcome(null)
-      setAlreadyReadCount(0)
+      setAlreadyReadInput('0')
     }
   }, [isOpen])
 
@@ -363,7 +367,7 @@ export default function AddSeriesFromComicVineDialog({
     // Personal read progress belongs to one specific series. Selecting a
     // different run must not carry the previous volume's already-read count
     // into the new confirmation, where it would exceed the new issue count.
-    setAlreadyReadCount(0)
+    setAlreadyReadInput('0')
     // The list the reader picked from is settled, so a paging failure stops here instead of
     // following them onto the confirmation, where no retry could act on it (#3448).
     requestsRef.current.abandon()
@@ -402,8 +406,16 @@ export default function AddSeriesFromComicVineDialog({
     [onAdded, onClose, showToast],
   )
 
+  const maxAlreadyRead = selectedSeries?.issue_count ?? 0
+  const trimmedAlreadyRead = alreadyReadInput.trim()
+  // An untouched/cleared field means "no prior reading", not an invalid entry.
+  const alreadyReadCount = trimmedAlreadyRead === '' ? 0 : Number(trimmedAlreadyRead)
+  const alreadyReadIsInteger = /^\d+$/.test(trimmedAlreadyRead || '0')
+  const alreadyReadIsValid =
+    alreadyReadIsInteger && alreadyReadCount >= 0 && alreadyReadCount <= maxAlreadyRead
+
   const handleAdd = useCallback(async () => {
-    if (!selectedSeries) return
+    if (!selectedSeries || !alreadyReadIsValid) return
     const volumeId = selectedSeries.comicvine_volume_id
     const seriesName = selectedSeries.name
     setIsAdding(true)
@@ -458,7 +470,7 @@ export default function AddSeriesFromComicVineDialog({
     } finally {
       setIsAdding(false)
     }
-  }, [alreadyReadCount, finishAdd, selectedSeries])
+  }, [alreadyReadCount, alreadyReadIsValid, finishAdd, selectedSeries])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -473,7 +485,6 @@ export default function AddSeriesFromComicVineDialog({
     [step, query, handleSearch],
   )
 
-  const maxAlreadyRead = selectedSeries?.issue_count ?? 0
   const showSearchRetry = error !== null && step === 'search' && searchPhase === 'error'
   const showResults = seriesResults.length > 0
   const showIdleHint = searchPhase === 'idle' && !query.trim() && !showResults
@@ -617,7 +628,7 @@ export default function AddSeriesFromComicVineDialog({
               <p className="text-xs text-stone-400">
                 {existingSeries
                   ? `"${existingSeries.series_name ?? selectedSeries.name}" is already in your queue. Adding it again will not create a new series or duplicate issues — only missing issues are added to the existing series.`
-                  : `This will create a new series in your queue with all ${selectedSeries.issue_count ?? '?'} issues from the ComicVine volume.`}
+                  : `This will create a new series in your queue with ${selectedSeries.issue_count == null ? 'all issues' : formatIssueCount(selectedSeries.issue_count)} from the ComicVine volume.`}
               </p>
             </div>
             {maxAlreadyRead > 0 && (
@@ -633,24 +644,37 @@ export default function AddSeriesFromComicVineDialog({
                   type="number"
                   min="0"
                   max={maxAlreadyRead}
-                  value={alreadyReadCount}
-                  onChange={(e) => {
-                    const value = Math.max(0, Math.min(Number.parseInt(e.target.value, 10) || 0, maxAlreadyRead))
-                    setAlreadyReadCount(value)
-                  }}
+                  step="1"
+                  inputMode="numeric"
+                  value={alreadyReadInput}
+                  onChange={(e) => setAlreadyReadInput(e.target.value)}
+                  aria-invalid={!alreadyReadIsValid}
+                  aria-describedby={
+                    alreadyReadIsValid ? 'already-read-hint' : 'already-read-error'
+                  }
                   className="w-full rounded-xl px-3 py-2 text-sm form-control"
                 />
-                <p className="text-xs text-stone-400">
-                  {alreadyReadCount > 0
-                    ? `First ${alreadyReadCount} of ${maxAlreadyRead} issues will be marked as read`
-                    : `Enter how many issues you've already read from the start of the series (max ${maxAlreadyRead})`}
-                </p>
+                {alreadyReadIsValid ? (
+                  <p id="already-read-hint" className="text-xs text-stone-400">
+                    {alreadyReadCount > 0
+                      ? `First ${alreadyReadCount} of ${formatIssueCount(maxAlreadyRead)} will be marked as read`
+                      : `Enter how many issues you've already read from the start of the series (max ${formatIssueCount(maxAlreadyRead)})`}
+                  </p>
+                ) : (
+                  <p
+                    id="already-read-error"
+                    role="alert"
+                    className="text-xs text-[var(--theme-danger)]"
+                  >
+                    Enter a whole number from 0 to {maxAlreadyRead}.
+                  </p>
+                )}
               </div>
             )}
             <button
               type="button"
               onClick={handleAdd}
-              disabled={isAdding}
+              disabled={isAdding || !alreadyReadIsValid}
               className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-900 bg-amber-500 hover:bg-amber-400 transition disabled:opacity-50"
             >
               {isAdding ? 'Adding...' : 'Add Series to ComicPile'}

@@ -22,6 +22,7 @@ import {
 } from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
 import { evaluateReadingProgress } from '../utils/readingProgress'
+import { formatIssueCount } from '../utils/formatIssueCount'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getManualCreatorCreditList } from '../types'
 import type { ManualCreatorCredit, Thread } from '../types'
@@ -376,7 +377,7 @@ export default function ThreadDetailView() {
                   />
                 </div>
                 <p className="text-xs text-stone-400">
-                  {progress.readCount} of {progress.totalIssues} issues read
+                  {progress.readCount} of {formatIssueCount(progress.totalIssues)} read
                 </p>
               </>
             ) : (
