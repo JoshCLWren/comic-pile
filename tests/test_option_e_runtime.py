@@ -1422,17 +1422,43 @@ async def test_roll_precommit_projection_does_not_ack_failed_commit(
     )
     await async_db.commit()
 
-    from typing import Any
-
+    from app.schemas.roll import RollResponse
     from app.services.roll_service import RollService
 
     response_projected = False
     original_projection = RollService.build_roll_response
 
-    async def record_projection(service: RollService, **kwargs: Any) -> Any:
+    async def record_projection(
+        service: RollService,
+        *,
+        selected_thread: Thread | None = None,
+        thread_attrs: dict[str, object] | None = None,
+        current_die: int,
+        selected_index: int,
+        unread_count: int,
+        snoozed_count: int,
+        issue_id: int | None = None,
+        issue_number: str | None = None,
+        next_issue_id: int | None = None,
+        next_issue_number: str | None = None,
+        recommendation_reason_codes: list[str] | None = None,
+    ) -> RollResponse:
         nonlocal response_projected
         response_projected = True
-        return await original_projection(service, **kwargs)
+        return await original_projection(
+            service,
+            selected_thread=selected_thread,
+            thread_attrs=thread_attrs,
+            current_die=current_die,
+            selected_index=selected_index,
+            unread_count=unread_count,
+            snoozed_count=snoozed_count,
+            issue_id=issue_id,
+            issue_number=issue_number,
+            next_issue_id=next_issue_id,
+            next_issue_number=next_issue_number,
+            recommendation_reason_codes=recommendation_reason_codes,
+        )
 
     async def fail_commit() -> None:
         assert response_projected, "Failure must target the final commit, not initialization"
