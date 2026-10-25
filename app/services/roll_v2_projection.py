@@ -126,8 +126,13 @@ def build_cover_url(source: str | None) -> str | None:
     """
     if not source:
         return None
-    parsed = urlsplit(source)
-    if parsed.scheme.lower() not in ("https", "http") or not parsed.hostname:
+    try:
+        parsed = urlsplit(source)
+        hostname = parsed.hostname
+    except ValueError:
+        # Corrupt legacy metadata must not break the whole Roll bootstrap.
+        return None
+    if parsed.scheme.lower() not in ("https", "http") or not hostname:
         return None
     if parsed.username or parsed.password:
         return None

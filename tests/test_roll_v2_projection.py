@@ -211,6 +211,7 @@ class TestPureHelpers:
         assert build_cover_url("data:image/png;base64,AAA") is None
         assert build_cover_url("/api/v1/images/optimize?url=bad") is None
         assert build_cover_url("https://user:pass@comicvine.gamespot.com/a.jpg") is None
+        assert build_cover_url("https://[broken/cover.jpg") is None
 
     def test_extract_cover_source_prefers_direct_then_image_dict(self) -> None:
         """Cover extraction never fabricates a URL from missing metadata."""

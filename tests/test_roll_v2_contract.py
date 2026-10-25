@@ -1,8 +1,8 @@
 """Contract tests for Roll v2 bootstrap and rate response schemas."""
 
-import pytest
-
 from datetime import UTC, datetime
+
+import pytest
 
 from app.schemas.roll import RollRecoveryInfo
 from app.schemas.roll_v2 import (

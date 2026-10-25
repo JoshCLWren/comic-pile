@@ -129,6 +129,7 @@ def test_stored_cover_preserves_original_provider_cdn_url() -> None:
 
     assert primary_image == "https://static.comicvine.com/uploads/original/50/453414_hulk.jpg"
 
+
 @pytest.mark.asyncio
 async def test_persist_issue_result_uses_provider_independent_identity(
     monkeypatch: pytest.MonkeyPatch,
