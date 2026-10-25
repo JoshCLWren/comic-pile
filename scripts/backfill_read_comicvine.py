@@ -1754,6 +1754,7 @@ def _summarize(results: list[BackfillResult]) -> dict[str, object]:
         "processed": len(results),
         "statuses": dict(sorted(statuses.items())),
         "issues_with_creator_credits": sum(r.creator_credits > 0 for r in results),
+        "without_creator_credits": sum(r.creator_credits == 0 for r in results),
         "creator_credit_rows": sum(r.creator_credits for r in results),
         "pending": sorted(
             result.issue_id
@@ -1813,6 +1814,11 @@ async def _run(args: argparse.Namespace) -> int:
     final_results: list[BackfillResult] = []
     client: ComicVineClient | None = None
     interrupted = False
+    inventory: dict[str, object] = {
+        "issues": 0,
+        "with_creator_credits": 0,
+        "without_creator_credits": 0,
+    }
 
     def checkpoint() -> None:
         """Persist phase progress so an interrupted run remains auditable and resumable."""
@@ -1839,6 +1845,7 @@ async def _run(args: argparse.Namespace) -> int:
                 },
                 "api_key_configured": bool(api_key),
                 "interrupted": interrupted,
+                "inventory": inventory,
                 "phases": phases,
                 "summary": _summarize(current),
                 "issues": [asdict(result) for result in final_results],
@@ -1861,6 +1868,17 @@ async def _run(args: argparse.Namespace) -> int:
             issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
             if confirmed_only:
                 issues = _filter_confirmed_issues(issues)
+            inventory.update(
+                {
+                    "issues": len(issues),
+                    "with_creator_credits": sum(
+                        1 for issue in issues if issue.creator_credit_count > 0
+                    ),
+                    "without_creator_credits": sum(
+                        1 for issue in issues if issue.creator_credit_count == 0
+                    ),
+                }
+            )
             print(f"Found {len(issues)} {'confirmed' if confirmed_only else 'read'} non-test issues for user_id={user_id}.")
             checkpoint()
 
@@ -1876,10 +1894,8 @@ async def _run(args: argparse.Namespace) -> int:
                 phases.append(_phase_report("local-identity", local_identity, client=client))
                 checkpoint()
                 issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
-            else:
-                # Confirmed-only mode: skip identity resolution phases
-                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
-                issues = _filter_confirmed_issues(issues)
+            # Confirmed-only mode: the inventory is already confirmed-mapped and deduplicated,
+            # so identity resolution phases are skipped without an extra query.
 
             print("=== ComicVine stage 2/4: exhaust stored/local creator metadata ===")
             local_creators = await _run_local_creator_phase(
@@ -1919,10 +1935,8 @@ async def _run(args: argparse.Namespace) -> int:
                 phases.append(_phase_report("provider-identity", provider_identity, client=client))
                 checkpoint()
                 issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
-            else:
-                # Confirmed-only: reload and filter, skip identity phase
-                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
-                issues = _filter_confirmed_issues(issues)
+            # Confirmed-only: the post-creator inventory reload above is already
+            # confirmed-mapped, deduplicated, and needs no identity phase.
 
             print("=== ComicVine stage 4/4: hydrate newly satisfiable creator metadata ===")
             final_results = await _run_provider_creator_phase(
