@@ -86,37 +86,44 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     }
   }, [metadata])
 
-  // Bounded refetch while metadata repair is in progress
-  // Only refetch once per response while the status indicates pending/running repair.
-  // Pending/running repairs return null retry_after, so we use a bounded fallback
-  // to ensure they eventually refresh without high-frequency polling.
+  // Bounded refetch while metadata repair is in progress.
+  // Re-arms after every refetch while repair remains active, so a server that
+  // returns unchanged metadata (React Query keeps the existing reference) still
+  // gets a subsequent refresh instead of leaving credits hidden until a manual
+  // reload. The timer is cancelled on unmount and whenever the effect re-runs
+  // because the metadata moved out of a pending/running repair status.
   useEffect(() => {
     if (!issueId || !metadata) return
 
-    // Guard against stale repair state from a previously rolled issue: only
-    // schedule work for the metadata currently bound to this issue.
     const status = metadata.metadata_status
     const retryAfter = metadata.refresh_retry_after_seconds
 
     if (status !== 'refresh_pending' && status !== 'refresh_running') return
 
-    // Use a bounded fallback delay for pending/running repairs since the server
-    // returns null retry_after for these states. This ensures active repairs
-    // refresh eventually without high-frequency polling.
     let delaySeconds: number
     if (retryAfter == null || retryAfter <= 0) {
-      // Server returns null or non-positive for pending/running repairs — use bounded fallback
       delaySeconds = METADATA_REFRESH_FALLBACK_SECONDS
     } else {
-      // Server declared a positive retry delay — honor it
       delaySeconds = retryAfter
     }
 
-    const timeoutId = setTimeout(() => {
-      refetch()
-    }, delaySeconds * 1000)
+    let cancelled = false
 
-    return () => clearTimeout(timeoutId)
+    const arm = () => {
+      const timeoutId = setTimeout(() => {
+        if (cancelled) return
+        refetch()
+        if (!cancelled) {
+          arm()
+        }
+      }, delaySeconds * 1000)
+      return () => {
+        cancelled = true
+        clearTimeout(timeoutId)
+      }
+    }
+
+    return arm()
   }, [issueId, metadata, refetch])
 
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK

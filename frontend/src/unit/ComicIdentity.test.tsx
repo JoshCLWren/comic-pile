@@ -1462,4 +1462,51 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     expect(screen.getByTestId('creator-status-no-credits')).toBeInTheDocument()
     expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
   })
+
+  it('re-arms and refetches when a pending repair returns unchanged metadata, then shows credits', async () => {
+    const pending = intelligenceResponse({
+      comicvine_issue_id: '2000',
+      metadata_status: 'refresh_pending',
+      refresh_retry_after_seconds: null,
+      creators: [],
+    })
+    getIntelligence
+      .mockResolvedValueOnce(pending) // initial load
+      .mockResolvedValueOnce(pending) // first refresh returns unchanged metadata
+      .mockResolvedValue(
+        intelligenceResponse({
+          comicvine_issue_id: '2000',
+          metadata_status: 'complete',
+          creators: [{ name: 'Finally Writer', roles: ['writer'] }],
+        }),
+      )
+
+    vi.useFakeTimers()
+    const { unmount } = renderIdentity()
+    await flushInitialLoad()
+
+    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    // First bounded refetch fires but returns unchanged metadata. Without a
+    // re-arm the timer would stop here and credits would stay hidden.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+    })
+    await flushInitialLoad()
+    expect(getIntelligence).toHaveBeenCalledTimes(2)
+    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
+
+    // Second bounded refetch fires after the re-arm and now returns credits.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+    })
+    await flushInitialLoad()
+    expect(getIntelligence).toHaveBeenCalledTimes(3)
+
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+    expect(screen.getByText('Finally Writer')).toBeInTheDocument()
+
+    unmount()
+  })
 })
