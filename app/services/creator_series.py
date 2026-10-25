@@ -244,6 +244,7 @@ def build_series_group(aggregate: SeriesAggregate) -> CreatorSeriesGroup:
         read_unrated_issue_count=aggregate.read_unrated_issue_count,
         metadata_complete=aggregate.metadata_complete,
         sort_key=f"{aggregate.thread_id:012d}",
+        population_scope="all_verified_credits",
     )
 
 

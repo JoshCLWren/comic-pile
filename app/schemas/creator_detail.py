@@ -170,6 +170,10 @@ class CreatorSeriesGroup(BaseModel):
         description="Stable final tie-breaker for the deterministic group ordering "
         "(most-rated first, then title, then this key).",
     )
+    population_scope: str = Field(
+        default="all_verified_credits",
+        description="Population used for this aggregate. Series groups are computed over all verified creator credits in the thread, not just headline roles, so their counts/averages may differ from the headline-only Rated list.",
+    )
 
 
 class CreatorSeriesIssueListResponse(BaseModel):
