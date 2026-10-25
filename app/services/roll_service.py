@@ -44,6 +44,7 @@ from app.repositories.roll_repository import (
 )
 from app.services.dependency_service import get_blocking_details
 from app.services.queue_display import display_position
+from app.services.roll_phase_trace import RollPhaseTrace
 from app.services.reading_effort import (
     EffortEstimate,
     build_recommendation_context,
@@ -591,6 +592,7 @@ class RollService:
         selection_intent: str,
         selection_method_override: str | None = None,
         empty_pool_detail: str = "No active threads available to roll",
+        trace: RollPhaseTrace | None = None,
     ) -> _SelectionArtifacts:
         """Run the weighted bounded-pool selection shared by roll and skip.
 
@@ -602,9 +604,13 @@ class RollService:
         from comic_pile.queue import get_bounded_roll_pool_rows
 
         eligibility = await get_execution_eligibility(self._db, user_id)
+        if trace is not None:
+            trace.mark("eligibility")
         bounded_rows = await get_bounded_roll_pool_rows(
             user_id, self._db, current_die, excluded_ids,
         )
+        if trace is not None:
+            trace.mark("candidate_pool")
         if not bounded_rows:
             raise HTTPException(status_code=400, detail=empty_pool_detail)
 
@@ -633,6 +639,8 @@ class RollService:
         effort_map = await compute_effort_estimates_batch(
             self._db, user_id=user_id, candidates=candidate_pairs
         )
+        if trace is not None:
+            trace.mark("effort_estimates")
         effort_estimates = [effort_map[pair] for pair in candidate_pairs]
         effort_minutes_by_thread: dict[int, float | None] = {}
         for thread_id, issue_id in candidate_pairs:
@@ -691,6 +699,8 @@ class RollService:
             candidate_weights = selected.weights
             weights_applied = selected.weights_applied
 
+        if trace is not None:
+            trace.mark("weighting")
         mode_selection_method, recommendation_reason_codes = derive_recorded_selection_method(
             resolved_mode=resolved_mode,
             selection_bandwidth=selection_bandwidth,
@@ -836,6 +846,8 @@ class RollService:
             effort_sample_count=selected_effort_estimate.sample_count,
         )
 
+        if trace is not None:
+            trace.mark("selection_artifacts")
         return {
             "selected_thread": selected_thread,
             "unread_count": unread_count,
