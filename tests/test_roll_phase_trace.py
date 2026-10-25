@@ -28,7 +28,7 @@ def test_phase_trace_reports_sql_and_non_sql_wall_separately(
             trace.mark("eligibility")
             record_database_query(4.0)
             trace.mark("candidate_pool")
-            with caplog.at_level(logging.INFO, logger="app.api.roll"):
+            with caplog.at_level(logging.WARNING, logger="app.api.roll"):
                 trace.emit(logging.getLogger("app.api.roll"))
     finally:
         end_request_diagnostics(token)
@@ -42,6 +42,8 @@ def test_phase_trace_reports_sql_and_non_sql_wall_separately(
     assert "eligibility:5.00/2.00/1" in summary
     assert "candidate_pool:6.00/4.00/1" in summary
     assert "user_id=" not in summary
+    assert any(record.levelno == logging.WARNING and "roll.phase_timing" in record.getMessage()
+               for record in caplog.records)
 
 
 def test_phase_trace_has_no_sql_without_request_context(
@@ -50,7 +52,7 @@ def test_phase_trace_has_no_sql_without_request_context(
     """Missing diagnostics simply yields zero queries, never an exception."""
     trace = RollPhaseTrace()
     trace.mark("session")
-    with caplog.at_level(logging.INFO, logger="app.api.roll"):
+    with caplog.at_level(logging.WARNING, logger="app.api.roll"):
         trace.emit(logging.getLogger("app.api.roll"))
     assert "queries=0" in caplog.text
     assert "sql_ms=0.00" in caplog.text
