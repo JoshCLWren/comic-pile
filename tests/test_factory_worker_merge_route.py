@@ -412,7 +412,7 @@ BRANCH=factory/87-4081-opencode-free
 WORKER={worker}
 MODEL=test-model
 EXPECTED_HEAD={HEAD}
-machine_merge_gates_pass() {{ return "${{FAKE_MACHINE_GATE_STATUS:-0}}"; }}
+
 log() {{ printf 'log %s\\n' "$*" >> "$CALL_LOG"; }}
 release_pr_and_issue() {{ printf 'release %s\\n' "$*" >> "$CALL_LOG"; }}
 factory_dispatch_production_deploy() {{ printf 'dispatch %s\\n' "$*" >> "$CALL_LOG"; }}
@@ -444,7 +444,7 @@ def test_primitives_call_site_runs_the_canonical_route_and_never_raw_closes() ->
     block = _worker_merge_call_site()
     assert "factory_merge_with_canonical_gates" in block
     assert "gh issue close" not in block
-    assert "machine_merge_gates_pass" in block
+    assert "machine_merge_gates_pass" not in block
     assert "stage_trusted_review_controller" not in block
 
 

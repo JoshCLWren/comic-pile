@@ -968,8 +968,7 @@ while (( $(remaining) > 480 )); do
 
   current="$(git rev-parse HEAD)"
   if [[ "$SOURCE" != 'kilo-auto' ]] && \
-    grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && \
-    machine_merge_gates_pass "$NUMBER" "$current"; then
+    grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log"; then
     # Merge only through the canonical exact-head route: the trusted controller
     # gates (issue acceptance, exact-commit review/CI, substantive delivery and a
     # fresh declared/native dependency check) must return JSON decision "pass",
