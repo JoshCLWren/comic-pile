@@ -1314,3 +1314,163 @@ async def test_option_e_roll_pool_never_reaggregates_unread_issues(
     assert "from issues" not in sql
     assert "count(" not in sql
 
+
+
+async def test_roll_response_reuses_precommit_snapshot_without_postcommit_reads(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Successful Roll returns a dense Queue ordinal without a post-commit reload."""
+    import logging
+    import re
+
+    from app.services.queue_display import display_positions
+
+    user = await get_or_create_user_async(async_db)
+    first, first_issues = await _series(async_db, user.id, "First", 3, count=1)
+    second, second_issues = await _series(async_db, user.id, "Second", 19, count=1)
+    async_db.add(
+        ReadingSession(
+            user_id=user.id,
+            start_die=6,
+            manual_die=6,
+            active_bandwidth="balanced",
+            bandwidth_source="manual",
+            active_intent="balanced",
+            intent_source="manual",
+        )
+    )
+    await async_db.commit()
+
+    did_commit = False
+    after_commit_queries: list[str] = []
+
+    def record_commit(session: object) -> None:
+        nonlocal did_commit
+        if session is async_db.sync_session:
+            did_commit = True
+
+    def record_query(
+        conn: object, cursor: object, statement: str,
+        parameters: object, context: object, executemany: bool,
+    ) -> None:
+        if did_commit:
+            after_commit_queries.append(statement)
+
+    event.listen(async_db.sync_session, "after_commit", record_commit)
+    event.listen(db_engine.sync_engine, "before_cursor_execute", record_query)
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.api.roll"):
+            response = await auth_client.post("/api/v1/roll/")
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", record_query)
+        event.remove(async_db.sync_session, "after_commit", record_commit)
+
+    assert response.status_code == 200, response.text
+    assert did_commit, "Roll must persist its selection before replying"
+    assert after_commit_queries == [], (
+        "A committed Roll must not launch a new transaction to hydrate the response: "
+        f"{after_commit_queries}"
+    )
+    body = response.json()
+    expected_issue_ids = {
+        first.id: first_issues[0].id,
+        second.id: second_issues[0].id,
+    }
+    assert body["issue_id"] == expected_issue_ids[body["thread_id"]]
+    positions = await display_positions(async_db, user.id)
+    assert body["queue_position"] == positions[body["thread_id"]]
+    assert set(positions.values()) == {1, 2}
+
+    summaries = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.api.roll"
+        and record.getMessage().startswith("roll.phase_timing")
+    ]
+    assert len(summaries) == 1
+    stage = re.search(r"(?:^|,)response:[0-9.]+/[0-9.]+/([0-9]+)", summaries[0])
+    assert stage is not None, summaries[0]
+    assert int(stage.group(1)) <= 3, (
+        "Response projection must not reload the multi-query Option E snapshot: "
+        f"{summaries[0]}"
+    )
+
+
+async def test_roll_precommit_projection_does_not_ack_failed_commit(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A DTO built before commit is never returned when persistence fails."""
+    user = await get_or_create_user_async(async_db)
+    await _series(async_db, user.id, "Commit guard", 1, count=1)
+    async_db.add(
+        ReadingSession(
+            user_id=user.id,
+            start_die=6,
+            manual_die=6,
+            active_bandwidth="balanced",
+            bandwidth_source="manual",
+            active_intent="balanced",
+            intent_source="manual",
+        )
+    )
+    await async_db.commit()
+
+    from app.schemas.roll import RollResponse
+    from app.services.roll_service import RollService
+
+    response_projected = False
+    original_projection = RollService.build_roll_response
+
+    async def record_projection(
+        service: RollService,
+        *,
+        selected_thread: Thread | None = None,
+        thread_attrs: dict[str, object] | None = None,
+        current_die: int,
+        selected_index: int,
+        unread_count: int,
+        snoozed_count: int,
+        issue_id: int | None = None,
+        issue_number: str | None = None,
+        next_issue_id: int | None = None,
+        next_issue_number: str | None = None,
+        recommendation_reason_codes: list[str] | None = None,
+    ) -> RollResponse:
+        nonlocal response_projected
+        response_projected = True
+        return await original_projection(
+            service,
+            selected_thread=selected_thread,
+            thread_attrs=thread_attrs,
+            current_die=current_die,
+            selected_index=selected_index,
+            unread_count=unread_count,
+            snoozed_count=snoozed_count,
+            issue_id=issue_id,
+            issue_number=issue_number,
+            next_issue_id=next_issue_id,
+            next_issue_number=next_issue_number,
+            recommendation_reason_codes=recommendation_reason_codes,
+        )
+
+    async def fail_commit() -> None:
+        assert response_projected, "Failure must target the final commit, not initialization"
+        raise RuntimeError("synthetic commit failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(RollService, "build_roll_response", record_projection)
+        patch.setattr(async_db, "commit", fail_commit)
+        with pytest.raises(RuntimeError, match="synthetic commit failure"):
+            await auth_client.post("/api/v1/roll/")
+    assert response_projected
+    await async_db.rollback()
+    assert await async_db.scalar(
+        select(Event.id).where(Event.type == "roll", Event.session_id.is_not(None))
+    ) is None

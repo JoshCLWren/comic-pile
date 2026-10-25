@@ -365,9 +365,9 @@ async def roll_dice(
     current_session.pending_thread_id = artifacts.selected_thread.id
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
-    await db.commit()
-    trace.mark("commit")
-
+    # Project before commit so the Queue ordinal reuses this transaction's
+    # canonical Option E snapshot. A post-commit projection reloaded all
+    # eligibility inputs solely to populate the response's queue_position.
     response = await RollService(db).build_roll_response(
         selected_thread=artifacts.selected_thread,
         current_die=current_die,
@@ -381,6 +381,11 @@ async def roll_dice(
         recommendation_reason_codes=artifacts.recommendation_reason_codes,
     )
     trace.mark("response")
+
+    # Only expose the prepared response after the event, recommendation
+    # context, and pending pointer have committed successfully.
+    await db.commit()
+    trace.mark("commit")
     trace.emit(logger)
     return response
 
