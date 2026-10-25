@@ -24,6 +24,67 @@ it('renders empty history state', () => {
   expect(screen.getByText('No sessions yet')).toBeInTheDocument()
 })
 
+it('shows no Export Summary control or internal export link in the empty state (issue #3572)', () => {
+  render(
+    <MemoryRouter>
+      <HistoryPage />
+    </MemoryRouter>
+  )
+
+  // The owner-approved removal takes the dead reader-facing export out of the
+  // empty branch too, while the header copy and empty-state navigation stay.
+  expect(screen.getByText('History')).toBeInTheDocument()
+  expect(screen.getByText('Your reading session history')).toBeInTheDocument()
+  expect(screen.getByText('No sessions yet')).toBeInTheDocument()
+
+  expect(screen.queryByRole('link', { name: /export summary/i })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /export summary/i })).not.toBeInTheDocument()
+  expect(screen.queryByText(/export summary/i)).not.toBeInTheDocument()
+
+  const hrefs = Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href'))
+  expect(hrefs).not.toContain('/admin/export/summary/')
+  expect(hrefs).not.toContain('/api/admin/export/summary/')
+  expect(hrefs.filter((href) => (href ?? '').includes('/export/'))).toEqual([])
+})
+
+it('keeps sessions and navigation without any Export Summary control or internal export link (issue #3572)', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [{
+      id: 31,
+      started_at: '2024-01-01T10:00:00Z',
+      ended_at: '2024-01-01T10:30:00Z',
+      ladder_path: '6',
+      active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 2, last_rating: 4.5 },
+      last_rolled_result: 4,
+      current_die: 6,
+      snapshot_count: 1,
+    }],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+  })
+
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+
+  // Normal history rendering and navigation are untouched by the removal.
+  expect(screen.getByText('History')).toBeInTheDocument()
+  expect(screen.getByText('Saga')).toBeInTheDocument()
+  expect(screen.getByRole('list')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /view full session/i })).toHaveAttribute('href', '/sessions/31')
+  expect(screen.getByText('Snapshots (1)')).toBeInTheDocument()
+
+  expect(screen.queryByRole('link', { name: /export summary/i })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /export summary/i })).not.toBeInTheDocument()
+  expect(screen.queryByText(/export summary/i)).not.toBeInTheDocument()
+
+  const hrefs = Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href'))
+  expect(hrefs).not.toContain('/admin/export/summary/')
+  expect(hrefs).not.toContain('/api/admin/export/summary/')
+  expect(hrefs.filter((href) => (href ?? '').includes('/export/'))).toEqual([])
+})
+
 it('labels an empty session as No issue selected', () => {
   mockedUseSessions.mockReturnValue({
     data: [{
