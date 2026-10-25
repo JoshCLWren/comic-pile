@@ -70,13 +70,6 @@ export default function HistoryPage() {
             <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
             <p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
           </div>
-          <a
-            href="/admin/export/summary/"
-            download
-            className="py-1 text-sm font-medium text-stone-500 hover:text-stone-300 underline decoration-dotted underline-offset-4"
-          >
-            Export Summary
-          </a>
         </header>
         <div className="text-center text-stone-500">No sessions yet</div>
       </div>
@@ -181,13 +174,6 @@ export default function HistoryPage() {
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
           <p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
         </div>
-        <a
-          href="/admin/export/summary/"
-          download
-          className="py-1 text-sm font-medium text-stone-500 hover:text-stone-300 underline decoration-dotted underline-offset-4"
-        >
-          Export Summary
-        </a>
       </header>
 
       <div id="sessions-list" className="border-y border-[var(--theme-border)] divide-y divide-[var(--theme-border)]" role="list" aria-label="Session history">
