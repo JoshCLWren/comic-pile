@@ -2,26 +2,37 @@ import { describe, expect, it } from 'vitest'
 import { parseIssueRange, parseIssueRangeDetailed } from '../utils/issueParser'
 
 describe('parseIssueRangeDetailed', () => {
-  it('warns about unrecognized literal tokens instead of silently accepting them (#3262)', () => {
+  it('flags tokens that are not acceptable issue identifiers without promising creation (#3262/#4161)', () => {
     const detail = parseIssueRangeDetailed('xyz')
 
     expect(detail.total).toBe(1)
     expect(detail.issues).toEqual(['xyz'])
-    expect(detail.warnings).toEqual([
-      "Couldn't parse 'xyz' — it will be created as a literal issue name",
-    ])
+    expect(detail.warnings).toEqual(["Couldn't parse 'xyz'"])
     expect(detail.breakdown).toEqual([
       { token: 'xyz', type: 'unrecognized-literal', parsedIssues: ['xyz'] },
     ])
   })
 
-  it('warns about decimals that are not valid issue identifiers (#3262)', () => {
+  it('does not warn for numbered labels that carry an issue number, such as "2b" (#4161)', () => {
+    const detail = parseIssueRangeDetailed('2b')
+
+    expect(detail.warnings).toEqual([])
+    expect(detail.issues).toEqual(['2b'])
+    expect(detail.breakdown[0].type).toBe('recognized-literal')
+  })
+
+  it('does not warn for decimal numbered labels such as "1.5" (#4161)', () => {
     const detail = parseIssueRangeDetailed('1.5')
 
-    expect(detail.total).toBe(1)
-    expect(detail.warnings).toHaveLength(1)
-    expect(detail.warnings[0]).toContain("Couldn't parse '1.5'")
-    expect(detail.breakdown[0].type).toBe('unrecognized-literal')
+    expect(detail.warnings).toEqual([])
+    expect(detail.breakdown[0].type).toBe('recognized-literal')
+  })
+
+  it('does not warn for dashed numbered labels such as "1-Annual" (#4161)', () => {
+    const detail = parseIssueRangeDetailed('1-Annual')
+
+    expect(detail.warnings).toEqual([])
+    expect(detail.breakdown[0].type).toBe('recognized-literal')
   })
 
   it('does not warn for plain numbers, ranges, or known comic naming (#3262)', () => {
@@ -39,17 +50,17 @@ describe('parseIssueRangeDetailed', () => {
     ])
   })
 
-  it('warns about a dashed token that is not a valid integer range (#3262)', () => {
-    const detail = parseIssueRangeDetailed('5a-7b')
+  it('flags negative numbers and half-written ranges without a creation promise', () => {
+    const negative = parseIssueRangeDetailed('-3')
+    expect(negative.warnings).toEqual(["Couldn't parse '-3'"])
+    expect(negative.breakdown[0].type).toBe('unrecognized-literal')
 
-    expect(detail.total).toBe(1)
-    expect(detail.warnings).toEqual([
-      "Couldn't parse '5a-7b' — it will be created as a literal issue name",
-    ])
-    expect(detail.breakdown[0].type).toBe('unrecognized-literal')
+    const halfWritten = parseIssueRangeDetailed('19-')
+    expect(halfWritten.warnings).toEqual(["Couldn't parse '19-'"])
+    expect(halfWritten.breakdown[0].type).toBe('unrecognized-literal')
   })
 
-  it('reports one warning per unrecognized token and expands ranges in the breakdown (#3262)', () => {
+  it('reports one warning per unrecognized token and expands ranges in the breakdown', () => {
     const detail = parseIssueRangeDetailed('oops, 1-2, wat')
 
     expect(detail.warnings).toHaveLength(2)
@@ -85,6 +96,8 @@ describe('parseIssueRangeDetailed', () => {
   })
 
   it('still accepts a single oversized issue number as a literal', () => {
-    expect(parseIssueRangeDetailed('9007199254740992').issues).toEqual(['9007199254740992'])
+    expect(parseIssueRangeDetailed('9007199254740992').issues).toEqual([
+      '9007199254740992',
+    ])
   })
 })
