@@ -16,7 +16,7 @@ interface RollMutations {
   setDieMutation: { mutate: (die: number) => Promise<void>; isPending: boolean }
   clearManualDieMutation: { mutate: () => Promise<void>; isPending: boolean }
   rollMutation: { mutate: () => Promise<RollResponse>; isPending: boolean }
-  snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<SnoozeSessionResponse | undefined>; isPending: boolean }
+  snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<SnoozeSessionResponse | undefined>; isPending: boolean; hasRefreshError?: boolean; refreshError?: unknown; retryRefresh?: () => Promise<boolean> }
   unsnoozeMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
   skipMutation: { mutate: (expectedPendingThreadId?: number) => Promise<RollResponse | undefined>; isPending: boolean }
   unskipMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
@@ -199,6 +199,11 @@ export function useRollActions({
           // The id doubles as `expectedPendingThreadId`, which is what lets the
           // snooze hook recover an auth failure and reconcile an ambiguous one.
           await snoozeMutation.mutate(selectedThread!.id)
+          // Surface an exhausted authoritative refresh instead of silently
+          // leaving the action sheet's success looking current.
+          if (snoozeMutation.hasRefreshError) {
+            setErrorMessage(getApiErrorDetail(snoozeMutation.refreshError))
+          }
           break
         }
         case 'skip':

@@ -7,6 +7,9 @@ interface UseRollSnoozeParams {
   state: RollPageState & RollPageStateSetters
   snoozeMutation: {
     mutate: (expectedPendingThreadId?: number) => Promise<{ correction?: SnoozeCorrectionInfo | null } | undefined>
+    hasRefreshError?: boolean
+    refreshError?: unknown
+    retryRefresh?: () => Promise<boolean>
   }
   unsnoozeMutation: { mutate: (threadId: number) => Promise<void> }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
@@ -59,6 +62,13 @@ export function useRollSnooze({
       if (correction?.suggest_clarification) {
         onClarificationSuggested?.(correction)
       }
+      // The successful mutation owns the authoritative bootstrap refresh. If
+      // that refresh is exhausted, surface its failure instead of pretending the
+      // pool/pending state is current; retryRefresh (exposed by the mutation)
+      // can reload it without repeating the snooze.
+      if (snoozeMutation.hasRefreshError) {
+        setErrorMessage(getApiErrorDetail(snoozeMutation.refreshError))
+      }
     } catch (error: unknown) {
       const errorDetail = getApiErrorDetail(error)
       if (errorDetail.includes('No pending thread to snooze')) {
@@ -75,5 +85,11 @@ export function useRollSnooze({
     }
   }
 
-  return { handleUnsnooze, handleSnooze }
+  return {
+    handleUnsnooze,
+    handleSnooze,
+    retryRefresh: snoozeMutation.retryRefresh,
+    hasRefreshError: snoozeMutation.hasRefreshError ?? false,
+    refreshError: snoozeMutation.refreshError,
+  }
 }
