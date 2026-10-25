@@ -23,6 +23,7 @@ import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api-threads'
 import type { ReadingModeState, SessionModeUpdateRequest, SnoozeCorrectionInfo, CorrectionChoiceId } from '../../types'
+import { mergeBlockingDependencies, toBlockedPoolRow } from './rollExclusionRows'
 import { FEATURES } from '../../config/features'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
@@ -396,26 +397,15 @@ export default function RollPage() {
   // the same deterministic slice plus dependency details for every loaded row.
   const blockedThreads = useMemo(() => {
     if (blockedExclusions.items.length === 0) return blockedPreview
-    return blockedExclusions.items.map((item) => ({
-      id: item.thread_id ?? 0,
-      title: item.title,
-      format: item.format,
-      blocking_reasons: item.blocking_reasons ?? [],
-      last_activity_at: item.last_activity_at ?? null,
-    }))
+    return blockedExclusions.items.map(toBlockedPoolRow)
   }, [blockedExclusions.items, blockedPreview])
   const inactiveThreads = inactiveExclusions.items.length > 0
     ? inactiveExclusions.items
     : inactivePreview
-  const blockingDependencyMap = useMemo(() => {
-    const merged = { ...state.blockingDependencyMap }
-    for (const item of blockedExclusions.items) {
-      if (item.thread_id && item.blocking_dependencies && item.blocking_dependencies.length > 0) {
-        merged[item.thread_id] = item.blocking_dependencies
-      }
-    }
-    return merged
-  }, [blockedExclusions.items, state.blockingDependencyMap])
+  const blockingDependencyMap = useMemo(
+    () => mergeBlockingDependencies(state.blockingDependencyMap, blockedExclusions.items),
+    [blockedExclusions.items, state.blockingDependencyMap],
+  )
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
