@@ -6,6 +6,7 @@ from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.catalog import CatalogIssue, CatalogSeries
 from app.models.catalog_commit_receipt import CatalogCommitReceipt
 from app.models.collection_exclusion import CollectionExclusion
+from app.models.comicvine_metadata_refresh import ComicVineMetadataRefreshRequest
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
@@ -53,6 +54,7 @@ __all__ = [
     "CatalogIssue",
     "CatalogSeries",
     "CollectionExclusion",
+    "ComicVineMetadataRefreshRequest",
     "ContinuityPlan",
     "ContinuityRule",
     "ContinuityRuleSelectedMember",

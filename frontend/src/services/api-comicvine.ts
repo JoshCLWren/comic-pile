@@ -122,6 +122,8 @@ export interface ComicVineIssueIntelligence {
   store_date: string | null
   creators: ComicVineCreator[]
   story_arcs: ComicVineStoryArc[]
+  metadata_status?: string
+  refresh_retry_after_seconds?: number | null
 }
 
 export interface ComicVineSeriesResult {

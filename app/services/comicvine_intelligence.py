@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import logging
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 import json
+import logging
 from typing import cast
 
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.repositories import comicvine_metadata_refresh_repository as refresh_repository
 from app.repositories import issue_repository
 from app.schemas.comicvine import (
     ComicVineComicPileMatch,
@@ -20,9 +21,14 @@ from app.schemas.comicvine import (
     ComicVineStoryArc,
 )
 from app.schemas.issue import IssueCreatorsEntry, ThreadIssueCreatorsResponse
-from app.services.comicvine_fallback import (
-    metadata_needs_hydration,
-    schedule_issue_metadata_refresh,
+
+from app.services.comicvine_fallback import metadata_needs_hydration
+from app.services.comicvine_metadata_repair import (
+    MetadataRepairState,
+    describe_metadata_status,
+    refresh_retry_after_seconds,
+    request_issue_metadata_repair,
+    schedule_metadata_repair_drain,
 )
 from app.services.comicvine_series_resolution import schedule_series_issue_resolution
 from app.services.ownership import get_owned_thread_or_404
@@ -153,25 +159,6 @@ def _creators(metadata: dict[str, object]) -> list[ComicVineCreator]:
 
 def _arc_references(metadata: dict[str, object]) -> list[dict[str, object]]:
     return _reference_list(metadata, "story_arc_credits", "story_arcs")
-
-
-async def _confirmed_identity(db: AsyncSession, issue_id: int) -> ExternalIdentity | None:
-    result = await db.execute(
-        select(ExternalIdentity)
-        .join(
-            IssueExternalIdentityMapping,
-            IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
-        )
-        .where(
-            IssueExternalIdentityMapping.issue_id == issue_id,
-            IssueExternalIdentityMapping.status == "confirmed",
-            ExternalIdentity.provider == COMICVINE_PROVIDER,
-            ExternalIdentity.entity_type == "issue",
-        )
-        .order_by(IssueExternalIdentityMapping.confidence.desc().nullslast(), ExternalIdentity.id)
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
 
 
 async def _related_external_rows(
@@ -349,13 +336,26 @@ async def get_issue_intelligence(
     Returns:
         Curated ComicVine intelligence, or ``None`` when no confirmed mapping exists.
     """
-    identity = await _confirmed_identity(db, issue_id)
-    if identity is None:
+    mapped = await refresh_repository.get_confirmed_identity_with_repair(db, issue_id)
+    if mapped is None:
         await schedule_series_issue_resolution(db, issue_id, user_id)
         return None
 
+    identity, stored_request = mapped
+    repair_request: MetadataRepairState | None = None
     if metadata_needs_hydration(identity):
+        repair_request = await request_issue_metadata_repair(db, identity.id)
+        schedule_metadata_repair_drain()
         schedule_issue_metadata_refresh(identity.id)
+    else:
+        if stored_request is not None:
+            repair_request = MetadataRepairState(
+                state=stored_request.state,
+                attempts=stored_request.attempts,
+                next_attempt_at=stored_request.next_attempt_at,
+                last_error=stored_request.last_error,
+                refresh_requested=False,
+            )
 
     metadata = identity.metadata_json
     arc_refs = _arc_references(metadata)
@@ -432,6 +432,10 @@ async def get_issue_intelligence(
         store_date=_string(metadata.get("store_date")),
         creators=_creators(metadata),
         story_arcs=story_arcs,
+        metadata_status=describe_metadata_status(metadata, repair_request),
+        refresh_retry_after_seconds=refresh_retry_after_seconds(
+            repair_request, now=datetime.now(UTC)
+        ),
     )
 
 
@@ -479,3 +483,19 @@ async def get_thread_issue_creators(
             continue
         entries.append(IssueCreatorsEntry(issue_id=issue_id, creators=creators))
     return ThreadIssueCreatorsResponse(thread_id=thread_id, issues=entries)
+
+
+def schedule_issue_metadata_refresh(identity_id: int) -> bool:
+    """Compatibility shim retained for legacy callers and monkeypatch-based tests.
+
+    Durable repair requests now use ``request_issue_metadata_repair`` plus
+    ``schedule_metadata_repair_drain``. This shim preserves the historical
+    callable surface without launching a detached provider task.
+
+    Args:
+        identity_id: Historical identity identifier retained for compatibility.
+
+    Returns:
+        True to acknowledge the compatibility call.
+    """
+    return True

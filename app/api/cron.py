@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.access_control import require_cron_secret
 from app.database import get_db
+from app.schemas.comicvine import MetadataRepairDrainResponse
 from app.schemas.reading_plan_sync import (
     ScheduledSyncReport,
     ScheduledSyncResponse,
@@ -19,6 +20,7 @@ from app.services.reading_plan_sync_service import (
     ScheduledSyncReport as ServiceScheduledReport,
 )
 from app.services.reading_plan_sync_service import run_scheduled_release_sync
+from app.services.comicvine_metadata_repair import drain_due_metadata_repairs
 
 router = APIRouter(
     tags=["cron"],
@@ -127,3 +129,35 @@ async def release_sync_cron(
     )
     await db.commit()
     return payload
+
+
+@router.get(
+    "/cron/comicvine-metadata-repair",
+    include_in_schema=False,
+)
+async def comicvine_metadata_repair_cron(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    response: Response,
+) -> MetadataRepairDrainResponse:
+    """Run one bounded drain of durable metadata repair requests.
+
+    Authorization is enforced by the router-level ``require_cron_secret``
+    dependency.
+
+    Args:
+        db: Async database session delegated to the service.
+        response: HTTP response carrying no-store headers.
+
+    Returns:
+        Counts for this bounded repair drain.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    report = await drain_due_metadata_repairs(db=db)
+    return MetadataRepairDrainResponse(
+        claimed=report.claimed,
+        completed=report.completed,
+        no_credits=report.no_credits,
+        deferred=report.deferred,
+        failed=report.failed,
+        provider_configured=report.provider_configured,
+    )

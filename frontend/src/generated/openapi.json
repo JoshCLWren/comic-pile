@@ -3143,6 +3143,11 @@
             ],
             "title": "Issue Number"
           },
+          "metadata_status": {
+            "default": "not_deep_fetched",
+            "title": "Metadata Status",
+            "type": "string"
+          },
           "name": {
             "anyOf": [
               {
@@ -3153,6 +3158,17 @@
               }
             ],
             "title": "Name"
+          },
+          "refresh_retry_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Retry After Seconds"
           },
           "series_id": {
             "anyOf": [
