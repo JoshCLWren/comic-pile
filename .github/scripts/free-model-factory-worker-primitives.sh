@@ -985,16 +985,28 @@ while (( $(remaining) > 480 )); do
           # Leave the issue open with the durable closure reason instead of
           # treating the merge as feature acceptance.
           log "merged PR #${NUMBER}, but post-merge closure did not complete (${FACTORY_CLOSURE_STATUS}: ${FACTORY_CLOSURE_OUTCOME}); issue left open"
+          # The merge landed, so the PR is closed; skip it anyway so this
+          # session never re-enters the merge route for the same target.
+          SKIP_PRS+=("$NUMBER")
           ;;
         2)
           log "merge command failed for PR #${NUMBER} at ${current}; leaving it open for another route"
+          # The PR is still open and still leased to this worker. Without the
+          # skip, choose_existing_pr would immediately hand it back for another
+          # full agent run instead of selecting other work.
+          SKIP_PRS+=("$NUMBER")
           ;;
         *)
           log "trusted controller gates for PR #${NUMBER} decision=${FACTORY_MERGE_GATE_DECISION:-empty}; not merging (reason: ${FACTORY_MERGE_GATE_REASON:-no reason})"
-          # Do not merge: release lease and select other work
+          # Do not merge: release lease and select other work. A retry decision
+          # (for example pending required CI) is not a reason to run this PR
+          # again in the same session, and the released lease lets
+          # choose_unowned_pr hand it straight back. Record it in SKIP_PRS so
+          # the session spends its budget on other targets instead.
           if [[ "$SOURCE" != 'kilo-auto' ]]; then
             release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'gate-denied'
           fi
+          SKIP_PRS+=("$NUMBER")
           ;;
       esac
     fi
