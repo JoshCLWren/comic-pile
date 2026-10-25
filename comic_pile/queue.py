@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import logging
 import random
 from typing import Any, NamedTuple
-from sqlalchemy import and_, func, select, text, true
+from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -603,7 +603,6 @@ async def get_roll_pool_rows(
     unread_counts = (
         select(Issue.thread_id.label("thread_id"), func.count(Issue.id).label("unread_count"))
         .where(Issue.status == "unread")
-        .where(Issue.id.not_in(eligibility.excluded_issue_ids) if eligibility else true())
         .group_by(Issue.thread_id)
         .subquery()
     )
