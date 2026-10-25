@@ -1,12 +1,13 @@
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { SnoozeCorrectionInfo } from '../../types'
+import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 
 interface UseRollSnoozeParams {
   state: RollPageState & RollPageStateSetters
   snoozeMutation: {
-    mutate: (expectedPendingThreadId?: number) => Promise<{ correction?: SnoozeCorrectionInfo | null } | undefined>
+    mutate: (expectedPendingThreadId?: number) => Promise<SnoozeMutationOutcome>
     hasRefreshError?: boolean
     refreshError?: unknown
     retryRefresh?: () => Promise<boolean>
@@ -14,15 +15,23 @@ interface UseRollSnoozeParams {
   unsnoozeMutation: { mutate: (threadId: number) => Promise<void> }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
   onClarificationSuggested?: (correction: SnoozeCorrectionInfo) => void
+  /**
+   * Reports that the committed snooze could not refresh authoritative Roll
+   * state. The page owns a visible recovery surface (a toast with a
+   * refresh-only retry), because the rating view closes as soon as the snooze
+   * commits and can no longer show its own error line.
+   */
+  onRefreshFailed?: (refreshError: unknown) => void
 }
 
 /**
  * Owns the retained snooze feature. Snoozing from the rating view closes the
  * rating session, while unsnoozing from the pool restores an eligible thread.
- * Both refresh the bounded bootstrap once, keeping the snoozed set truthful
- * without broad refetches. When the backend flags a repeated/contradictory
- * mismatch (`suggest_clarification`) the flow surfaces that correction so the
- * page can offer the reading-mode quiz without forcing it.
+ * The successful snooze mutation is the single owner of the authoritative
+ * bootstrap refresh, so this hook never issues a second network refresh for the
+ * same success. When the backend flags a repeated/contradictory mismatch
+ * (`suggest_clarification`) the flow surfaces that correction so the page can
+ * offer the reading-mode quiz without forcing it.
  */
 export function useRollSnooze({
   state,
@@ -30,6 +39,7 @@ export function useRollSnooze({
   unsnoozeMutation,
   refetchBootstrap,
   onClarificationSuggested,
+  onRefreshFailed,
 }: UseRollSnoozeParams) {
   const {
     setIsRolling,
@@ -52,22 +62,27 @@ export function useRollSnooze({
   async function handleSnooze() {
     try {
       const expectedId = state.activeRatingThread?.id
-      const response = await snoozeMutation.mutate(expectedId)
+      const outcome = await snoozeMutation.mutate(expectedId)
       setIsRolling(false)
       setIsRatingView(false)
       setRolledResult(null)
       setSelectedThreadId(null)
       setActiveRatingThread(null)
-      const correction = response?.correction
+      const correction = outcome.response?.correction
       if (correction?.suggest_clarification) {
         onClarificationSuggested?.(correction)
       }
-      // The successful mutation owns the authoritative bootstrap refresh. If
-      // that refresh is exhausted, surface its failure instead of pretending the
-      // pool/pending state is current; retryRefresh (exposed by the mutation)
-      // can reload it without repeating the snooze.
-      if (snoozeMutation.hasRefreshError) {
-        setErrorMessage(getApiErrorDetail(snoozeMutation.refreshError))
+      // The mutation already published authoritative state when its bounded
+      // refresh succeeded. When it exhausted those attempts the reader would
+      // otherwise be looking at a closed rating view over a stale pool, so the
+      // failure is surfaced with a refresh-only retry instead of a second
+      // network refresh from this caller.
+      if (!outcome.refreshed) {
+        if (onRefreshFailed) {
+          onRefreshFailed(outcome.refreshError)
+        } else {
+          setErrorMessage(getApiErrorDetail(outcome.refreshError))
+        }
       }
     } catch (error: unknown) {
       const errorDetail = getApiErrorDetail(error)
