@@ -296,6 +296,9 @@ export const queryKeys = {
   cblSources: {
     all: ['cblSources'] as const,
     search: (query: string) => ['cblSources', 'search', normalizedSearch(query)] as const,
+    /** One folder/search page of the shared catalog, addressed by stable params. */
+    browse: (folder: string, query: string, page: number) =>
+      ['cblSources', 'browse', folder, normalizedSearch(query), page] as const,
     detail: (listId: number, limit: number) =>
       ['cblSources', 'detail', listId, limit] as const,
     comicvineIssue: (comicvineIssueId: string) =>

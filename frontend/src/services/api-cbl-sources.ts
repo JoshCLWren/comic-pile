@@ -11,6 +11,52 @@ export interface CBLSourceListDiscoveryItem {
   revision_sha: string
 }
 
+/**
+ * One source list row inside the shared catalog. Structurally identical to the
+ * Add-material discovery item, but produced by the folder/search catalog
+ * endpoints so a browse page can be addressed by folder and page number.
+ */
+export type CBLCatalogListItem = CBLSourceListDiscoveryItem
+
+/** One immediate child folder of a shared catalog folder. */
+export interface CBLSourceFolder {
+  name: string
+  path: string
+  direct_list_count: number
+  total_list_count: number
+}
+
+/** One step in the root-through-folder breadcrumb trail. */
+export interface CBLBreadcrumb {
+  name: string
+  path: string
+}
+
+/** One page of folder contents or catalog-wide search results. */
+export interface CBLCatalogBrowsePage {
+  scope: 'folder' | 'search'
+  folder: string
+  query: string | null
+  breadcrumbs: CBLBreadcrumb[]
+  folders: CBLSourceFolder[]
+  items: CBLCatalogListItem[]
+  page: number
+  page_size: number
+  total: number
+  total_pages: number
+  has_next: boolean
+  has_previous: boolean
+}
+
+/** Immediate subfolders of one catalog folder, with breadcrumbs and counts. */
+export interface CBLFolderListing {
+  folder: string
+  breadcrumbs: CBLBreadcrumb[]
+  folders: CBLSourceFolder[]
+  direct_list_count: number
+  total_list_count: number
+}
+
 export interface CBLSourceEntryDetail {
   position: number
   series_name: string
@@ -255,6 +301,26 @@ export function createCblSourcesApi(client: HttpClient) {
       client.get<CBLSourceListDiscoveryItem[]>('/v1/issue-identity/cbl-sources', {
         params: { q: query, limit },
       }),
+    /**
+     * Read one page of the shared CBL catalog.
+     *
+     * A blank query browses the immediate contents of `folder` (root when
+     * omitted). A non-blank query searches names and source paths across the
+     * whole catalog, ignoring folder scope. Pages are one-based and bounded by
+     * the API at 100 items, while `total` and `total_pages` describe the whole
+     * matching set so the browser can page beyond the first 100 sources.
+     */
+    browse: (options: { folder?: string; query?: string; page?: number; pageSize?: number }) => {
+      const query = options.query?.trim()
+      return client.get<CBLCatalogBrowsePage>('/v1/issue-identity/cbl-sources/browse', {
+        params: {
+          folder: options.folder ?? '',
+          q: query ? query : undefined,
+          page: options.page ?? 1,
+          page_size: options.pageSize,
+        },
+      })
+    },
     /** Read one shared source list and its ordered occurrences (read-only). */
     detail: (listId: number, options?: { offset?: number; limit?: number }) =>
       client.get<CBLSourceListDetail>(`/v1/issue-identity/cbl-sources/${listId}`, {

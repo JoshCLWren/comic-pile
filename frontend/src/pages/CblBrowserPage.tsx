@@ -1,7 +1,7 @@
 import axios from 'axios'
-import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { FormEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Modal from '../components/Modal'
 import ReadingGraphOverlapDialog from '../components/ReadingGraphOverlapDialog'
 import ReadingGraphSummary from '../components/ReadingGraphSummary'
@@ -43,6 +43,61 @@ import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
 
 /** Shown when a source list declares neither a readable title nor a usable path. */
 const FALLBACK_SOURCE_TITLE = 'CBL source'
+
+/**
+ * One catalog page. The API caps pages at 100; 50 keeps a folder's folders and
+ * sources above the fold on a phone without hiding the total result count.
+ */
+const PAGE_SIZE = 50
+
+interface CatalogErrorState {
+  message: string
+  recover: 'browse-root' | 'retry'
+}
+
+/** Translate a browse failure into reader-facing copy and a recovery action. */
+function catalogErrorState(error: Error): CatalogErrorState {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status
+    if (status === 404) {
+      return {
+        message: 'This folder is no longer in the shared CBL catalog.',
+        recover: 'browse-root',
+      }
+    }
+    if (status === 400) {
+      return {
+        message: 'That CBL folder path is not valid. Browse the catalog from the top.',
+        recover: 'browse-root',
+      }
+    }
+    if (status === 503) {
+      return {
+        message: 'The shared CBL catalog is temporarily unavailable. Try again in a moment.',
+        recover: 'retry',
+      }
+    }
+  }
+  return {
+    message: errorMessage(error, 'Unable to load the shared CBL catalog.'),
+    recover: 'retry',
+  }
+}
+
+/** Count sources without inventing a plural. */
+function sourceCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'source' : 'sources'}`
+}
+
+/** Build the in-app URL for one browse position, excluding any open preview. */
+function browseHref(folder: string, query: string, page: number): string {
+  const params = new URLSearchParams()
+  if (folder) params.set('folder', folder)
+  if (query) params.set('q', query)
+  if (page > 1) params.set('page', String(page))
+  const search = params.toString()
+  return search ? `/cbl-sources?${search}` : '/cbl-sources'
+}
 
 function statusLabel(entry: CBLAdoptionPreviewEntry): string {
   switch (entry.adoption_decision) {
@@ -113,12 +168,23 @@ async function recoverAdoptedPlan(source: CBLSourceListDiscoveryItem) {
  */
 export default function CblBrowserPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [query, setQuery] = useState('')
-  const [submittedQuery, setSubmittedQuery] = useState('')
-  const [hasSearched, setHasSearched] = useState(false)
-  const [selectedSource, setSelectedSource] = useState<CBLSourceListDiscoveryItem | null>(null)
+
+  // The browse position lives in the URL so preview opens in place and Back
+  // restores the same folder, search, and page.
+  const folder = searchParams.get('folder')?.trim() ?? ''
+  const submittedQuery = searchParams.get('q')?.trim() ?? ''
+  const requestedPage = Number.parseInt(searchParams.get('page') ?? '', 10)
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
+  // A `list` query parameter opens one shared source list in place, so a
+  // comparison result can link straight to the source detail it names.
+  const requestedListId = searchParams.get('list')
+  const parsedListId = requestedListId ? Number.parseInt(requestedListId, 10) : Number.NaN
+  const deepLinkedListId = Number.isInteger(parsedListId) && parsedListId > 0 ? parsedListId : null
+
+  const [queryDraft, setQueryDraft] = useState(submittedQuery)
   const [customizing, setCustomizing] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [seriesDecisions, setSeriesDecisions] = useState<Record<string, boolean>>({})
@@ -154,19 +220,73 @@ export default function CblBrowserPage() {
   const [graphDialogOpen, setGraphDialogOpen] = useState(false)
   /** Whether finishing the questionnaire should continue into the add confirmation. */
   const [graphDialogContinuesAdd, setGraphDialogContinuesAdd] = useState(false)
+  /**
+   * Source id of the current or most recent commit attempt. Commit callbacks
+   * compare it with the viewed source so a settled Add never rewrites another
+   * source's view, and a stale settled result gets discarded.
+   */
+  const [commitSourceId, setCommitSourceId] = useState<number | null>(null)
+  /** The deep-linked source currently on screen, read by late-settling commit callbacks. */
+  const viewedSourceIdRef = useRef<number | null>(null)
   const graphPreviewRef = useRef<ReadingGraphPreview | null>(null)
+  const commitMutationRef = useRef<{ isPending: boolean; reset: () => void } | null>(null)
 
-  // A `list` query parameter opens one shared source list in place, so a
-  // comparison result can link straight to the source detail it names.
-  const requestedListId = searchParams.get('list')
-  const parsedListId = requestedListId ? Number.parseInt(requestedListId, 10) : Number.NaN
-  const deepLinkedListId = Number.isInteger(parsedListId) && parsedListId > 0 ? parsedListId : null
+  // Keep the visible search field aligned with the URL, including browser Back.
+  useEffect(() => {
+    setQueryDraft(submittedQuery)
+  }, [submittedQuery])
 
-  const sourcesQuery = useQuery({
-    queryKey: queryKeys.cblSources.search(submittedQuery),
-    queryFn: () => cblSourcesApi.discover(submittedQuery),
-    enabled: hasSearched,
+  // Late-settling commit callbacks read this mirror instead of a stale closure
+  // so they can tell whether the reader still looks at the source they added.
+  // Assign during render rather than in an effect: a request can settle between
+  // a Back/Forward render and its effects, and the callbacks must already see
+  // the new view then.
+  viewedSourceIdRef.current = deepLinkedListId
+
+  useEffect(() => {
+    setCustomizing(false)
+    setConfirmOpen(false)
+    setSeriesDecisions({})
+    setEntryDecisions({})
+    setExpandedGroups({})
+    setStaleReview(false)
+    setAmbiguousCommit(false)
+    setOverlapChoices({})
+    setGraphDialogOpen(false)
+    setGraphDialogContinuesAdd(false)
+    // Restore the checklist saved for the source the URL now shows (#4014),
+    // after the reset above, so Back/Forward and the results list both return
+    // the reader to the choices they already made.
+    if (deepLinkedListId !== null) {
+      const saved = sourceDecisionsRef.current[deepLinkedListId]
+      if (saved) {
+        setSeriesDecisions(saved.series)
+        setEntryDecisions(saved.entries)
+      }
+    }
+    // A commit still running belongs to the reader, not to whichever source
+    // Back/Forward just re-opened: keep it tracked so the pending Add stays
+    // blocked, and only discard a settled result (its callbacks check the
+    // view before they navigate or surface errors).
+    const mutation = commitMutationRef.current
+    if (mutation && !mutation.isPending) mutation.reset()
+  }, [deepLinkedListId])
+
+  /**
+   * Browse the shared catalog immediately: entering the page shows the root
+   * folders and sources without requiring a search submission.
+   */
+  const browseQuery = useQuery({
+    queryKey: queryKeys.cblSources.browse(folder, submittedQuery, page),
+    queryFn: () =>
+      cblSourcesApi.browse({ folder, query: submittedQuery, page, pageSize: PAGE_SIZE }),
+    placeholderData: keepPreviousData,
   })
+  const browsePage = browseQuery.data ?? null
+  const selectedSource =
+    deepLinkedListId !== null
+      ? (browsePage?.items.find((item) => item.id === deepLinkedListId) ?? null)
+      : null
 
   const previewQuery = useQuery({
     queryKey: selectedSource
@@ -192,31 +312,61 @@ export default function CblBrowserPage() {
         entry_decisions: entryDecisions,
         overlap_decisions: overlapChoicePayload(graphQuery.data ?? null, overlapChoices),
       }),
-    onSuccess: async (committed) => {
-      setAmbiguousCommit(false)
+    onSuccess: async (committed, variables) => {
+      // The write is real no matter which source the view shows, so the
+      // caches must learn the committed plan. The reader's next step, instead,
+      // belongs to the view they were on: pressing Back or Forward while the
+      // request ran must not be hijacked when it completes. Compare after the
+      // cache work too, because Back can land while that await is pending.
       await applyCommittedReadingPlan(queryClient, committed)
-      navigate(`/continuity-plans/${committed.id}`)
+      if (viewedSourceIdRef.current === variables.source.id) {
+        setAmbiguousCommit(false)
+        navigate(`/continuity-plans/${committed.id}`)
+      }
     },
     onError: async (commitError, variables) => {
+      // A lost response can still mean the write settled on the server, so run
+      // recovery and teach the cache about it whatever source the view now
+      // shows. Only surface messages or navigate for the view that made the
+      // request: pressing Back while an Add is in flight must not hijack the
+      // reader's new view or surface stale messages there.
       if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
-        setStaleReview(true)
+        if (viewedSourceIdRef.current === variables.source.id) setStaleReview(true)
         return
       }
       if (!isAmbiguousNetworkFailure(commitError)) return
       try {
         const recovered = await recoverAdoptedPlan(variables.source)
         if (recovered) {
-          setAmbiguousCommit(false)
           await applyCommittedReadingPlan(queryClient, recovered)
-          navigate(`/continuity-plans/${recovered.id}`)
+          // Re-read the view after recovery and cache writes: the reader may
+          // have pressed Back during either await.
+          if (viewedSourceIdRef.current === variables.source.id) {
+            setAmbiguousCommit(false)
+            navigate(`/continuity-plans/${recovered.id}`)
+          }
           return
         }
       } catch {
-        // Surface the timeout guidance below when recovery cannot confirm a plan.
+        // Recovery cannot confirm whether the plan was created.
       }
-      setAmbiguousCommit(true)
+      if (viewedSourceIdRef.current === variables.source.id) setAmbiguousCommit(true)
     },
   })
+
+  // The source-change effect reads the latest mutation without reacting to its state.
+  commitMutationRef.current = commitMutation
+
+  // Discard a settled commit that belongs to a different source than the one
+  // on screen: its callbacks no longer own this view, and a stale result must
+  // not linger into the next Add.
+  const { isPending: commitIsPending, reset: resetCommitMutation } = commitMutation
+  useEffect(() => {
+    if (!commitIsPending && commitSourceId !== null && commitSourceId !== deepLinkedListId) {
+      resetCommitMutation()
+      setCommitSourceId(null)
+    }
+  }, [commitSourceId, deepLinkedListId, commitIsPending, resetCommitMutation])
 
   // Persist the reader's choices per source so returning to a reviewed source
   // restores them instead of resetting the checklist (#4014). The source's
@@ -252,9 +402,9 @@ export default function CblBrowserPage() {
     setSeriesDecisions({})
     setEntryDecisions({})
     setStaleReview(true)
+    setConfirmOpen(false)
   }, [selectedSource, previewQuery.data])
 
-  const sources = sourcesQuery.data ?? []
   const hasChoices =
     Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
   const preview = useMemo(
@@ -266,7 +416,6 @@ export default function CblBrowserPage() {
     },
     [previewQuery.data, seriesDecisions, entryDecisions, hasChoices],
   )
-  const isSearching = sourcesQuery.isFetching
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
   const seriesGroups = useMemo(() => (preview ? buildCblSeriesGroups(preview) : []), [preview])
@@ -351,24 +500,37 @@ export default function CblBrowserPage() {
   const pendingOverlapNames = pendingOverlaps
     .map((overlap) => readingGraphSeriesLabel(overlap.waiting_series))
     .join(', ')
-  const listError = previewQuery.error ?? sourcesQuery.error
+  const catalogError = browseQuery.isError ? catalogErrorState(browseQuery.error) : null
   const commitError = staleReview
     ? 'This source changed after you reviewed it. Refresh the preview before adding it.'
     : ambiguousCommit
       ? 'ComicPile did not confirm the new plan in time. Check Reading Plans before adding again.'
-      : commitMutation.error && !isAmbiguousNetworkFailure(commitMutation.error)
+      : commitMutation.error &&
+          commitSourceId === deepLinkedListId &&
+          !isAmbiguousNetworkFailure(commitMutation.error)
         ? errorMessage(commitMutation.error, 'Unable to complete the CBL workflow.')
         : null
-  const pageError = listError
-    ? errorMessage(listError, 'Unable to complete the CBL workflow.')
+  const previewError = previewQuery.error
+    ? errorMessage(previewQuery.error, 'Unable to load this CBL source.')
     : null
 
-  const search = (event?: FormEvent) => {
-    event?.preventDefault()
-    if (isCommitting) return
-    setHasSearched(true)
-    setSubmittedQuery(query.trim())
-    setSelectedSource(null)
+  /** Move the browser to one folder/search/page position without a preview. */
+  const applyBrowseState = (next: {
+    folder: string
+    query: string
+    page: number
+    list?: number | null
+  }) => {
+    const params = new URLSearchParams()
+    if (next.folder) params.set('folder', next.folder)
+    if (next.query) params.set('q', next.query)
+    if (next.page > 1) params.set('page', String(next.page))
+    if (next.list) params.set('list', String(next.list))
+    setSearchParams(params)
+  }
+
+  /** Clear preview-only decisions when the selected source changes. */
+  const resetSelectionState = () => {
     setCustomizing(false)
     setConfirmOpen(false)
     setSeriesDecisions({})
@@ -379,50 +541,50 @@ export default function CblBrowserPage() {
     setOverlapChoices({})
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
-    commitMutation.reset()
-    // A new search leaves the deep-linked source detail behind.
-    setSearchParams({}, { replace: true })
+    // Only a settled mutation is safe to discard; an in-flight commit stays
+    // tracked so no second Add can start while the write is still running.
+    if (!commitMutation.isPending) commitMutation.reset()
   }
 
-  const loadPreview = (source: CBLSourceListDiscoveryItem) => {
+  const search = (event?: FormEvent) => {
+    event?.preventDefault()
     if (isCommitting) return
+    resetSelectionState()
+    applyBrowseState({ folder, query: queryDraft.trim(), page: 1 })
+  }
+
+  const clearSearch = () => {
+    if (isCommitting) return
+    setQueryDraft('')
+    resetSelectionState()
+    applyBrowseState({ folder, query: '', page: 1 })
+  }
+
+  const openFolder = (path: string) => {
+    if (isCommitting) return
+    resetSelectionState()
+    applyBrowseState({ folder: path, query: '', page: 1 })
+  }
+
+  const openPage = (nextPage: number) => {
+    if (isCommitting) return
+    applyBrowseState({ folder, query: submittedQuery, page: nextPage })
+  }
+
+  const openSource = (source: CBLSourceListDiscoveryItem) => {
+    if (isCommitting) return
+    resetSelectionState()
+    // Restore the reader's checklist for a source they already reviewed
+    // (#4014). The fetched preview re-verifies the saved content hash once it
+    // arrives, so a changed source cannot silently apply stale entry overrides.
     const saved = sourceDecisions[source.id]
-    setSelectedSource(source)
-    setCustomizing(false)
-    setConfirmOpen(false)
     if (saved) {
-      // Compare against the fetched preview for this source, not the search
-      // result's content_hash. The search result may be stale (Greptile finding).
-      // The effect at lines 240-253 will re-verify once the fresh preview arrives.
-      const previewData = previewQuery.data
-      const previewMatchesSource =
-        previewData && previewData.source.source_list_id === source.id
-      if (previewMatchesSource && previewData.source.content_hash !== saved.content_hash) {
-        // Fetched preview for this exact source confirms content changed
-        setSeriesDecisions({})
-        setEntryDecisions({})
-        setStaleReview(true)
-      } else {
-        // Either no preview yet (will be verified by effect) or content matches
-        setSeriesDecisions(saved.series)
-        setEntryDecisions(saved.entries)
-      }
-    } else {
-      setSeriesDecisions({})
-      setEntryDecisions({})
+      setSeriesDecisions(saved.series)
+      setEntryDecisions(saved.entries)
     }
-    setExpandedGroups({})
-    // Only clear staleReview when the content_hash matches; otherwise
-    // the stale-detection effect (or the warning below) will keep it set.
-    if (!saved || source.content_hash === saved.content_hash) {
-      setStaleReview(false)
-    }
-    setAmbiguousCommit(false)
-    setOverlapChoices({})
-    setGraphDialogOpen(false)
-    setGraphDialogContinuesAdd(false)
-    commitMutation.reset()
-    // Refetch preview when re-selecting the same source to ensure fresh data
+    applyBrowseState({ folder, query: submittedQuery, page, list: source.id })
+    // Re-selecting the source already on screen keeps the same URL, so ask for
+    // fresh preview data explicitly instead of trusting the cached copy.
     if (selectedSource?.id === source.id) void previewQuery.refetch()
   }
 
@@ -529,6 +691,14 @@ export default function CblBrowserPage() {
       FALLBACK_SOURCE_TITLE)
     : null
 
+  const firstShown =
+    browsePage && browsePage.items.length > 0
+      ? (browsePage.page - 1) * browsePage.page_size + 1
+      : 0
+  const lastShown = browsePage
+    ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
+    : 0
+
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
     if (pendingOverlaps.length > 0) {
@@ -540,8 +710,9 @@ export default function CblBrowserPage() {
   }
 
   const confirmCommit = () => {
-    if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || pendingOverlaps.length > 0) return
+    if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || pendingOverlaps.length > 0 || staleReview) return
     setConfirmOpen(false)
+    setCommitSourceId(selectedSource.id)
     commitMutation.mutate({ source: selectedSource, preview })
   }
 
@@ -557,18 +728,14 @@ export default function CblBrowserPage() {
         </p>
       </header>
 
-      {deepLinkedListId !== null && (
-        <CblSourceDetailPanel listId={deepLinkedListId} />
-      )}
-
       <form onSubmit={search} className="flex flex-col gap-2 sm:flex-row">
         <label className="sr-only" htmlFor="cbl-browser-search">
           Search source lists
         </label>
         <input
           id="cbl-browser-search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          value={queryDraft}
+          onChange={(event) => setQueryDraft(event.target.value)}
           placeholder="Search source lists"
           maxLength={200}
           disabled={isCommitting}
@@ -576,74 +743,48 @@ export default function CblBrowserPage() {
         />
         <button
           type="submit"
-          disabled={isSearching || isCommitting}
+          disabled={isCommitting}
           className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
         >
-          {isSearching ? 'Searching…' : 'Search'}
+          Search
         </button>
       </form>
 
-      {pageError && (
-        <p role="alert" className="text-sm text-[var(--theme-danger)]">
-          {pageError}
-        </p>
-      )}
+      {deepLinkedListId !== null ? (
+        <div className="space-y-4">
+          <CblSourceDetailPanel
+            listId={deepLinkedListId}
+            {...(isObject(location.state) && isString(location.state.from)
+              ? {}
+              : {
+                  backHref: browseHref(folder, submittedQuery, page),
+                  // `CblSourceDetailPanel` already prefixes "Back to", so the
+                  // label is the destination only — at the root too.
+                  backLabel: 'results',
+                })}
+          />
 
-      {!isSearching && hasSearched && sources.length === 0 && !pageError && (
-        <p className="text-sm text-[var(--theme-text-muted)]">No matching source lists found.</p>
-      )}
+          {previewError && (
+            <p role="alert" className="text-sm text-[var(--theme-danger)]">
+              {previewError}
+            </p>
+          )}
 
-      {sources.length > 0 && (
-        <div className="grid gap-2" aria-label="Source candidates">
-          {sources.map((source) => {
-            const publicRepo = displayCblRepository(source.source_repository)
-            const title =
-              displayCblSourceTitle(source.name, source.source_path) ?? FALLBACK_SOURCE_TITLE
-            const meta = [
-              publicRepo,
-              source.declared_issue_count !== null ? `${source.declared_issue_count} issues` : null,
-            ].filter(Boolean)
-            return (
-              <button
-                key={source.id}
-                type="button"
-                onClick={() => loadPreview(source)}
-                disabled={isCommitting}
-                className={`rounded-xl border p-3 text-left disabled:opacity-50 ${
-                  selectedSource?.id === source.id
-                    ? 'border-[var(--theme-continuity-accent)]'
-                    : 'border-[var(--theme-border)]'
-                } hover:bg-white/5`}
-              >
-                <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
-                  {title}
-                </span>
-                {meta.length > 0 && (
-                  <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">
-                    {meta.join(' · ')}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      )}
+          {staleReview && selectedSource && (
+            <button
+              type="button"
+              disabled={isCommitting}
+              onClick={() => {
+                setStaleReview(false)
+                void previewQuery.refetch()
+              }}
+              className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+            >
+              Refresh preview
+            </button>
+          )}
 
-      {staleReview && selectedSource && (
-        <button
-          type="button"
-          disabled={isCommitting}
-          onClick={() => {
-            setStaleReview(false)
-            void previewQuery.refetch()
-          }}
-          className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
-        >
-          Refresh preview
-        </button>
-      )}
-
-      {selectedSource && selectedSourceTitle && (
+          {selectedSource && selectedSourceTitle && (
         <section
           className="space-y-4 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4"
           aria-labelledby="cbl-preview-heading"
@@ -941,6 +1082,192 @@ export default function CblBrowserPage() {
             </div>
           )}
         </section>
+      )}
+        </div>
+      ) : (
+        <>
+          {submittedQuery && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--theme-text-muted)]">
+              <span>Searching every shared CBL for “{submittedQuery}”.</span>
+              <button
+                type="button"
+                onClick={clearSearch}
+                disabled={isCommitting}
+                className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+              >
+                Clear search
+              </button>
+            </div>
+          )}
+
+          {catalogError && (
+            <div role="alert" className="space-y-2 text-sm text-[var(--theme-error)]">
+              <p>{catalogError.message}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (catalogError.recover === 'browse-root') {
+                    resetSelectionState()
+                    applyBrowseState({ folder: '', query: '', page: 1 })
+                    return
+                  }
+                  void browseQuery.refetch()
+                }}
+                className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+              >
+                {catalogError.recover === 'browse-root' ? 'Browse all CBLs' : 'Try again'}
+              </button>
+            </div>
+          )}
+
+          {browseQuery.isPending && (
+            <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+              Loading the shared CBL catalog…
+            </p>
+          )}
+
+          {browsePage && !catalogError && (
+            <div className="space-y-4" data-testid="cbl-browse-results">
+              {browsePage.scope === 'folder' && (
+                <nav aria-label="CBL folder path" className="flex flex-wrap items-center gap-1 text-xs">
+                  {browsePage.breadcrumbs.map((crumb, index) => {
+                    const isCurrent = index === browsePage.breadcrumbs.length - 1
+                    return (
+                      <Fragment key={crumb.path || 'root'}>
+                        {index > 0 && (
+                          <span aria-hidden="true" className="text-[var(--theme-text-dim)]">
+                            /
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          disabled={isCommitting}
+                          onClick={() => openFolder(crumb.path)}
+                          aria-current={isCurrent ? 'page' : undefined}
+                          className={`min-h-9 rounded-lg px-2 font-bold disabled:opacity-50 ${
+                            isCurrent
+                              ? 'text-[var(--theme-text-primary)]'
+                              : 'text-[var(--theme-continuity-accent)] hover:bg-white/5'
+                          }`}
+                        >
+                          {crumb.name}
+                        </button>
+                      </Fragment>
+                    )
+                  })}
+                </nav>
+              )}
+
+              {browsePage.folders.length > 0 && (
+                <ul className="grid gap-2 sm:grid-cols-2" aria-label="CBL folders">
+                  {browsePage.folders.map((child) => (
+                    <li key={child.path}>
+                      <button
+                        type="button"
+                        disabled={isCommitting || browseQuery.isPlaceholderData}
+                        onClick={() => openFolder(child.path)}
+                        className="w-full rounded-xl border border-[var(--theme-border)] p-3 text-left hover:bg-white/5 disabled:opacity-50"
+                      >
+                        <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
+                          {child.name}
+                        </span>
+                        <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">
+                          {sourceCountLabel(child.total_list_count)}
+                          {child.direct_list_count !== child.total_list_count
+                            ? ` · ${sourceCountLabel(child.direct_list_count)} here`
+                            : ''}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {browsePage.items.length > 0 && (
+                <ul className="grid gap-2" aria-label="Source candidates">
+                  {browsePage.items.map((source) => {
+                    const publicRepo = displayCblRepository(source.source_repository)
+                    const title =
+                      displayCblSourceTitle(source.name, source.source_path) ??
+                      FALLBACK_SOURCE_TITLE
+                    const meta = [
+                      publicRepo,
+                      source.declared_issue_count !== null
+                        ? `${source.declared_issue_count} issues`
+                        : null,
+                    ].filter(Boolean)
+                    return (
+                      <li key={source.id}>
+                        <button
+                          type="button"
+                          onClick={() => openSource(source)}
+                          disabled={isCommitting || browseQuery.isPlaceholderData}
+                          className="w-full rounded-xl border border-[var(--theme-border)] p-3 text-left hover:bg-white/5 disabled:opacity-50"
+                        >
+                          <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
+                            {title}
+                          </span>
+                          {meta.length > 0 && (
+                            <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">
+                              {meta.join(' · ')}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+
+              {browsePage.items.length === 0 && browsePage.folders.length === 0 && (
+                <p className="text-sm text-[var(--theme-text-muted)]">
+                  {browsePage.scope === 'search'
+                    ? 'No matching source lists found.'
+                    : browsePage.folder
+                      ? 'No CBL sources in this folder.'
+                      : 'No shared CBL sources are available yet.'}
+                </p>
+              )}
+
+              {browsePage.items.length === 0 && browsePage.total > 0 && (
+                <p className="text-sm text-[var(--theme-text-muted)]">
+                  No sources on page {browsePage.page} of {Math.max(browsePage.total_pages, 1)}.
+                </p>
+              )}
+
+              {browsePage.total > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {browsePage.items.length > 0 && (
+                    <p role="status" className="text-xs text-[var(--theme-text-muted)]">
+                      Showing {firstShown}–{lastShown} of {sourceCountLabel(browsePage.total)}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openPage(page - 1)}
+                      disabled={!browsePage.has_previous || isCommitting || browseQuery.isPlaceholderData}
+                      className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+                    >
+                      Previous page
+                    </button>
+                    <span className="text-xs text-[var(--theme-text-muted)]">
+                      Page {browsePage.page} of {Math.max(browsePage.total_pages, 1)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openPage(page + 1)}
+                      disabled={!browsePage.has_next || isCommitting || browseQuery.isPlaceholderData}
+                      className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+                    >
+                      Next page
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {graph && (
