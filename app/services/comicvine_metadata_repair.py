@@ -491,7 +491,6 @@ async def drain_due_metadata_repairs(
     now: datetime | None = None,
     db: AsyncSession | None = None,
     client: ComicVineClient | None = None,
-    client_factory: object | None = None,
 ) -> MetadataRepairDrainReport:
     """Run one bounded worker drain of due durable repair requests.
 
@@ -501,13 +500,10 @@ async def drain_due_metadata_repairs(
         db: Optional caller-owned session; a dedicated session is opened when
             omitted.
         client: Optional preconfigured provider client used by tests.
-        client_factory: Optional zero-argument callable returning a provider
-            client or ``None``; used by tests.
 
     Returns:
         Bounded outcome counts for the drain.
     """
-    del client_factory  # Reserved for dependency injection in focused tests.
     bounded_limit = max(1, min(limit, COMICVINE_REPAIR_MAX_DRAIN_LIMIT))
     current_time = now or datetime.now(UTC)
     resolved_client = client if client is not None else _build_comicvine_client()

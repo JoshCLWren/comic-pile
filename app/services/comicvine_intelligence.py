@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 import json
+import logging
 from typing import cast
-from datetime import UTC, datetime
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
