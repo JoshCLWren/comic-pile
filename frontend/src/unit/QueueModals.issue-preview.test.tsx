@@ -7,7 +7,7 @@ import {
   DEFAULT_CREATE_STATE,
   type QueueFormState,
 } from '../pages/QueuePage/types'
-import { parseIssueRangeDetailed } from '../utils/issueParser'
+import { parseIssueRangeDetailed, validateIssueRangeForStaging } from '../utils/issueParser'
 vi.mock('../components/Modal', () => ({
   default: ({
     isOpen,
@@ -59,8 +59,12 @@ function Harness({ issues }: { issues: string }) {
   })
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
 
-  const parsed = parseIssueRangeDetailed(issues)
-  const hasPreview = issues.trim().length > 0
+  // Mirror the production preview gate in useQueueModals (#4161): the preview
+  // only renders for staging-valid input and surfaces the validation error for
+  // anything the Save path would block.
+  const validation = validateIssueRangeForStaging(issues)
+  const hasPreview = issues.trim().length > 0 && validation.valid
+  const parsed = hasPreview ? parseIssueRangeDetailed(issues) : null
 
   return (
     <QueueModals
@@ -69,10 +73,10 @@ function Harness({ issues }: { issues: string }) {
       editForm={editForm}
       setCreateForm={setCreateForm}
       setEditForm={setEditForm}
-      issuePreview={hasPreview ? parsed.total : null}
-      issueParseError={null}
-      issueParseWarnings={hasPreview ? parsed.warnings : []}
-      issueParseBreakdown={hasPreview ? parsed.breakdown : []}
+      issuePreview={hasPreview && parsed ? parsed.total : null}
+      issueParseError={hasPreview && parsed ? null : validation.error}
+      issueParseWarnings={hasPreview && parsed ? parsed.warnings : []}
+      issueParseBreakdown={hasPreview && parsed ? parsed.breakdown : []}
       editingThread={null}
       repositioningThread={null}
       dependencyThread={null}
@@ -111,22 +115,29 @@ function Harness({ issues }: { issues: string }) {
 }
 
 describe('Add Series issue input preview', () => {
-  it('warns that garbage input becomes a literal issue name instead of accepting it silently (#3262)', async () => {
-    render(<Harness issues="xyz" />)
+  it('previews numbered labels such as "2b" without a parse warning (#4161)', () => {
+    render(<Harness issues="2b" />)
 
     expect(screen.getByText('Will create 1 issue')).toBeInTheDocument()
-    expect(
-      screen.getByText("Couldn't parse 'xyz' — it will be created as a literal issue name"),
-    ).toBeInTheDocument()
-    expect(screen.getByTestId('issue-parse-warnings')).toBeInTheDocument()
+    expect(screen.queryByTestId('issue-parse-warnings')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Couldn't parse/)).not.toBeInTheDocument()
   })
 
-  it('warns about decimal input the user reported as a literal issue (#3262)', () => {
-    render(<Harness issues="1.5" />)
+  it('does not promise creation or count invalid tokens toward the preview (#4161)', () => {
+    render(<Harness issues="abc" />)
 
-    expect(
-      screen.getByText("Couldn't parse '1.5' — it will be created as a literal issue name"),
-    ).toBeInTheDocument()
+    expect(screen.queryByText(/Will create/)).not.toBeInTheDocument()
+    expect(screen.getByText(/is not a valid issue number/)).toBeInTheDocument()
+    expect(screen.queryByText(/will be created as a literal issue/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /create series/i })).toBeDisabled()
+  })
+
+  it('surfaces the staging error instead of promising literal issue creation (#3262/#4161)', () => {
+    render(<Harness issues="xyz" />)
+
+    expect(screen.getByText(/is not a valid issue number/)).toBeInTheDocument()
+    expect(screen.queryByText(/Will create/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Couldn't parse/)).not.toBeInTheDocument()
   })
 
   it('does not warn for recognized numbers, ranges, or named issues (#3262)', () => {
@@ -136,17 +147,17 @@ describe('Add Series issue input preview', () => {
     expect(screen.queryByTestId('issue-parse-warnings')).not.toBeInTheDocument()
   })
 
-  it('exposes a breakdown of every parsed token so typos are visible (#3262)', async () => {
+  it('exposes a breakdown of every parsed token so labeled issues are visible (#3262)', async () => {
     const user = userEvent.setup()
-    render(<Harness issues="oops, 1-2" />)
+    render(<Harness issues="1-3, Annual 1" />)
 
     const breakdown = screen.getByTestId('issue-parse-breakdown')
     expect(breakdown).toBeInTheDocument()
-    expect(screen.getByText('oops:')).toBeInTheDocument()
-    expect(screen.getByText('1-2:')).toBeInTheDocument()
+    expect(screen.getByText('1-3:')).toBeInTheDocument()
+    expect(screen.getByText('Annual 1:')).toBeInTheDocument()
 
     await user.click(screen.getByText('Show issue breakdown'))
     expect(screen.getByText('1')).toBeInTheDocument()
-    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
   })
 })

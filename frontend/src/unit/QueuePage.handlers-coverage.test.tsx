@@ -253,17 +253,18 @@ describe('QueuePage callback coverage', () => {
     await waitFor(() => expect(screen.getByText(/issue identifier too long/i)).toBeInTheDocument())
   })
 
-  it('warns that unparseable issues input becomes a literal issue name (#3262)', async () => {
+  it('surfaces the staging error instead of promising literal issue creation (#3262/#4161)', async () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Garbage')
     await user.type(screen.getByLabelText('Issues'), 'xyz')
-    await waitFor(() => expect(screen.getByText(/Will create 1 issue/)).toBeInTheDocument())
-    expect(
-      screen.getByText("Couldn't parse 'xyz' — it will be created as a literal issue name"),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /create series/i })).toBeEnabled()
+    await waitFor(() => expect(screen.getByText(/is not a valid issue number/)).toBeInTheDocument())
+    expect(screen.queryByText(/Will create/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/will be created as a literal issue/)).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /create series/i })).toBeDisabled(),
+    )
   })
 
   it('disables create submit while the issue range is invalid', async () => {
