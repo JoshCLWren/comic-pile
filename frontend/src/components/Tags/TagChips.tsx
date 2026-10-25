@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type {
   EffectiveTag,
   EffectiveTagsResponse,
   InheritanceSource,
   Tag,
 } from '../../services/api-tags'
+import { sourceLabel } from './sourceLabels'
 
 /**
  * Destination route for an inheritance source (issue #3032).
@@ -37,15 +38,26 @@ function ColorDot({ color, label }: { color: string; label: string }) {
   )
 }
 
+/**
+ * Source list for inherited tags (issues #3032, #3428, #3431, #3557).
+ *
+ * Each entry carries a reader-facing label. A source whose destination is the
+ * page currently on screen is rendered as plain text: an issue editor opened
+ * from its thread page must not offer a link back to that same page, which
+ * looked like a no-op. Genuine other-thread and Reading-Plan sources keep
+ * their navigation. Labels use human nouns, never backend type names.
+ */
 function SourcesList({ tagName, sources }: { tagName: string; sources: InheritanceSource[] }) {
+  const location = useLocation()
   return (
     <ul className="mt-1 flex flex-wrap gap-1 pl-2" aria-label={`Sources for ${tagName}`}>
       {sources.map((source) => {
         const route = sourceRoute(source)
-        const label = `${source.target_type} ${source.display_name}`
+        const label = sourceLabel(source)
+        const isCurrentPage = route !== null && route === location.pathname
         return (
           <li key={`${source.target_type}:${source.target_id}`}>
-            {route ? (
+            {route && !isCurrentPage ? (
               <Link
                 to={route}
                 className="block max-w-full truncate rounded-lg border border-[var(--theme-border)] px-2 py-0.5 text-[11px] font-semibold text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
@@ -93,7 +105,10 @@ function DirectChip({ tag, canEdit, onRemove, extraSources }: DirectChipProps) {
   return (
     <li className="min-w-0 max-w-full">
       <div className="flex max-w-full flex-wrap items-center gap-1">
-        <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2.5 py-1 text-sm font-bold text-[var(--theme-text-primary)]">
+        <span
+          title={tag.name}
+          className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2.5 py-1 text-sm font-bold text-[var(--theme-text-primary)]"
+        >
           <ColorDot color={tag.color} label={tag.name} />
           <span className="min-w-0 truncate">{tag.name}</span>
           {canEdit && onRemove && (
@@ -156,7 +171,10 @@ function InheritedChip({ entry }: InheritedChipProps) {
   return (
     <li className="min-w-0 max-w-full">
       <div className="flex max-w-full flex-wrap items-center gap-1">
-        <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-dashed border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2.5 py-1 text-sm font-bold text-[var(--theme-text-primary)]">
+        <span
+          title={tag.name}
+          className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-dashed border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2.5 py-1 text-sm font-bold text-[var(--theme-text-primary)]"
+        >
           <ColorDot color={tag.color} label={tag.name} />
           <span className="min-w-0 truncate">{tag.name}</span>
         </span>

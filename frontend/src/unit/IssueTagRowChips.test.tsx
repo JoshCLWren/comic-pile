@@ -87,7 +87,7 @@ describe('IssueTagRowChips (issue #3422)', () => {
 
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: /sources for inherited tag/ }))
-    expect(screen.getByText('Thread B.P.R.D.')).toBeInTheDocument()
+    expect(screen.getByText('Thread: B.P.R.D.')).toBeInTheDocument()
   })
 
   it('renders nothing for untagged issues so rows stay compact', () => {

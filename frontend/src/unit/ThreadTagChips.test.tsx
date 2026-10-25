@@ -60,6 +60,20 @@ describe('ThreadTagChips', () => {
     expect(pill.parentElement).toHaveClass('max-w-full')
   })
 
+  it('gives a typical 20-character name the whole pill with the full value in its tooltip', () => {
+    const name = 'Ultimate Collection'
+    expect(name).toHaveLength(19)
+    render(<ThreadTagChips tags={[tag({ name })]} label="Tags for Nova" />)
+
+    const pill = screen.getByText(name).parentElement
+    // The Roll chip carries the tag identity only — no inheritance or source
+    // decoration can squeeze a typical name (issue #3428).
+    expect(pill?.textContent).toBe(name)
+    expect(pill).toHaveAttribute('title', name)
+    expect(pill).toHaveClass('max-w-full')
+    expect(screen.getByText(name)).toHaveClass('min-w-0', 'truncate')
+  })
+
   it('exposes chips as non-interactive so the surrounding row stays the only control', () => {
     render(<ThreadTagChips tags={[tag()]} label="Tags for Nova" />)
 

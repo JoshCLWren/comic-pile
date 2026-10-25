@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Modal from '../Modal'
 import { useDebounce } from '../../hooks/useDebounce'
+import { radioGroupNavigationTarget } from '../../utils/radioGroupKeyboard'
 import {
   useAssignTag,
   useCreateTag,
@@ -91,6 +93,33 @@ export function TagEditor({
   const normalizedTypedName = newName.trim().toLowerCase()
   const debouncedNormalizedName = debouncedNewName.trim().toLowerCase()
   const [newColor, setNewColor] = useState<string>(DEFAULT_TAG_COLOR_NAME)
+  // Roving tab stop for the 32-swatch palette (issues #3432, #3557). The
+  // palette is a custom radio group built from buttons, so it must implement
+  // the native keyboard contract itself: one tab stop, arrow keys move focus
+  // and selection with wraparound, Home/End jump to the ends.
+  const colorRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  /**
+   * Move the color selection with the radio-group keys.
+   *
+   * Arrow movement selects as it focuses (standard single-select radio
+   * behavior), wraps at both ends, and Home/End jump to the palette edges.
+   * Tab is untouched, so the group remains a single tab stop.
+   */
+  const handleColorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const focusedIndex = colorRefs.current.findIndex(
+      (option) => option != null && option === document.activeElement,
+    )
+    const targetIndex = radioGroupNavigationTarget(
+      event.key,
+      focusedIndex,
+      TAG_COLOR_NAMES.length,
+    )
+    if (targetIndex === null) return
+    event.preventDefault()
+    colorRefs.current[targetIndex]?.focus()
+    setNewColor(TAG_COLOR_NAMES[targetIndex])
+  }
   const [pendingNearMatches, setPendingNearMatches] = useState<NearMatch[] | null>(null)
   // The private tag the first creation pass already persisted while it paused
   // on similar global names. Creating a tag is not a preview: the row exists,
@@ -390,12 +419,20 @@ export function TagEditor({
   async function handleManageSave() {
     if (!managingTag) return
     clearFeedback()
+    const requestedName = manageName.trim()
     try {
       await update.mutateAsync({
         id: managingTag.id,
-        data: { name: manageName.trim() || undefined, color: manageColor || undefined },
+        data: { name: requestedName || undefined, color: manageColor || undefined },
       })
-      setNotice(`Updated “${managingTag.name}”.`)
+      // `managingTag` still holds the name from before this save, so the
+      // confirmation must name what the viewer just submitted. A name change
+      // gets explicit old → new wording (issue #3433).
+      setNotice(
+        requestedName && requestedName !== managingTag.name
+          ? `Renamed “${managingTag.name}” to “${requestedName}”.`
+          : `Updated “${requestedName || managingTag.name}”.`,
+      )
       setManagingTag(null)
     } catch (error) {
       setFailure(tagErrorMessage(error, `Could not update “${managingTag.name}”.`))
@@ -411,7 +448,9 @@ export function TagEditor({
         .map(([consumer, count]) => `${count} ${consumer}`)
         .join(', ')
       setNotice(
-        `Deleted “${managingTag.name}” (${result.assignments_removed} assignments${consumerRefs ? `, ${consumerRefs} references` : ''}).`,
+        `Deleted “${managingTag.name}” (${result.assignments_removed} ` +
+          `${result.assignments_removed === 1 ? 'assignment' : 'assignments'}` +
+          `${consumerRefs ? `, ${consumerRefs} references` : ''}).`,
       )
       setManagingTag(null)
       setConfirmingDelete(false)
@@ -445,12 +484,18 @@ export function TagEditor({
     <Modal isOpen={isOpen} onClose={onClose} title={`Tags · ${targetLabel}`} size="large">
       <div className="flex flex-col gap-4 p-3 md:p-4">
         {failure && (
-          <p role="alert" className="text-sm font-semibold text-[var(--theme-danger)]">
+          <p
+            role="alert"
+            className="min-w-0 break-words text-sm font-semibold text-[var(--theme-danger)]"
+          >
             {failure}
           </p>
         )}
         {notice && (
-          <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+          <p
+            role="status"
+            className="min-w-0 break-words text-sm text-[var(--theme-text-muted)]"
+          >
             {notice}
           </p>
         )}
@@ -512,7 +557,10 @@ export function TagEditor({
                           className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                           style={{ backgroundColor: tag.color }}
                         />
-                        <span className="min-w-0 truncate font-bold text-[var(--theme-text-primary)]">
+                        <span
+                          title={tag.name}
+                          className="min-w-0 truncate font-bold text-[var(--theme-text-primary)]"
+                        >
                           {tag.name}
                         </span>
                         {tag.scope === 'global' && (
@@ -583,15 +631,20 @@ export function TagEditor({
               role="radiogroup"
               aria-label="Tag color"
               className="flex max-w-full flex-wrap gap-1.5"
+              onKeyDown={handleColorKeyDown}
             >
-              {TAG_COLOR_NAMES.map((color) => (
+              {TAG_COLOR_NAMES.map((color, index) => (
                 <button
                   key={color}
+                  ref={(element) => {
+                    colorRefs.current[index] = element
+                  }}
                   type="button"
                   role="radio"
                   aria-checked={newColor === color}
                   aria-label={`Color ${color}`}
                   title={color}
+                  tabIndex={newColor === color ? 0 : -1}
                   onClick={() => setNewColor(color)}
                   className={`h-6 w-6 rounded-full border-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
                     newColor === color
@@ -683,7 +736,11 @@ export function TagEditor({
             aria-label={`Manage tag ${managingTag.name}`}
             className="min-w-0 rounded-xl border border-[var(--theme-border)] p-3"
           >
-            <SectionTitle>Manage “{managingTag.name}”</SectionTitle>
+            <SectionTitle>
+              <span className="block max-w-full truncate" title={managingTag.name}>
+                Manage “{managingTag.name}”
+              </span>
+            </SectionTitle>
             {managingTag.scope === 'global' && !isAdmin ? (
               <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
                 Global tags are managed by admins.
@@ -707,7 +764,7 @@ export function TagEditor({
                   </p>
                 ) : (
                   <>
-                    <p className="text-sm text-[var(--theme-text-primary)]">
+                    <p className="min-w-0 break-words text-sm text-[var(--theme-text-primary)]">
                       Delete “{managingTag.name}”? It is assigned to{' '}
                       <strong>{usageTotal}</strong>{' '}
                       {usageTotal === 1 ? 'place' : 'places'}

@@ -316,6 +316,60 @@ describe('TagEditor (issue #3032)', () => {
     )
   })
 
+  it('moves focus and selection with the radio-group keys (issue #3432)', async () => {
+    const user = userEvent.setup()
+    renderEditor()
+
+    const group = screen.getByRole('radiogroup', { name: 'Tag color' })
+    const red = within(group).getByRole('radio', { name: 'Color red' })
+    const orange = within(group).getByRole('radio', { name: 'Color orange' })
+    const magenta = within(group).getByRole('radio', { name: 'Color magenta' })
+
+    // Exactly one roving tab stop, on the selected swatch.
+    const tabbable = within(group)
+      .getAllByRole('radio')
+      .filter((radio) => radio.getAttribute('tabindex') === '0')
+    expect(tabbable).toEqual([red])
+    expect(red).toHaveAttribute('aria-checked', 'true')
+    expect(orange).toHaveAttribute('tabindex', '-1')
+
+    red.focus()
+    await user.keyboard('{ArrowRight}')
+    expect(orange).toHaveAttribute('aria-checked', 'true')
+    expect(orange).toHaveAttribute('tabindex', '0')
+    expect(document.activeElement).toBe(orange)
+
+    // Wrap past the first swatch to the last one.
+    await user.keyboard('{ArrowLeft}')
+    await user.keyboard('{ArrowLeft}')
+    expect(magenta).toHaveAttribute('aria-checked', 'true')
+    expect(document.activeElement).toBe(magenta)
+
+    await user.keyboard('{Home}')
+    expect(red).toHaveAttribute('aria-checked', 'true')
+    await user.keyboard('{End}')
+    expect(magenta).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('keeps a 100-character tag name inside the editor with a full-value tooltip (issue #3434)', async () => {
+    const user = userEvent.setup()
+    const longName = 'L'.repeat(100)
+    const longTag: Tag = { ...makeTag(1), name: longName, normalized_name: 'l'.repeat(100) }
+    mockedTagsApi.list.mockResolvedValue({ tags: [longTag] })
+
+    renderEditor()
+
+    const name = await screen.findByText(longName)
+    expect(name).toHaveClass('min-w-0', 'truncate')
+    expect(name).toHaveAttribute('title', longName)
+
+    await user.click(screen.getByRole('button', { name: `Manage tag ${longName}` }))
+    const manage = screen.getByRole('region', { name: `Manage tag ${longName}` })
+    const heading = within(manage).getByText(`Manage “${longName}”`)
+    expect(heading).toHaveClass('truncate')
+    expect(heading).toHaveAttribute('title', longName)
+  })
+
   it('reuses a matching global tag instead of duplicating it', async () => {
     const user = userEvent.setup()
     mockedTagsApi.create.mockResolvedValue({
@@ -814,7 +868,9 @@ describe('TagEditor (issue #3032)', () => {
     await user.click(within(manage).getByRole('button', { name: 'Save changes' }))
 
     expect(mockedTagsApi.update).toHaveBeenCalledWith(1, { name: 'Physical', color: 'blue' })
-    expect(await screen.findByRole('status')).toHaveTextContent('Updated “Private 1”.')
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Renamed “Private 1” to “Physical”.',
+    )
   })
 
   it('omits cleared fields when saving a tag', async () => {
@@ -934,7 +990,7 @@ describe('TagEditor (issue #3032)', () => {
 
     expect(mockedTagsApi.delete).toHaveBeenCalledWith(1)
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Deleted “Private 1” (1 assignments, 2 ContentReference references).',
+      'Deleted “Private 1” (1 assignment, 2 ContentReference references).',
     )
   })
 
@@ -993,7 +1049,7 @@ describe('TagEditor (issue #3032)', () => {
       /It is assigned to 1 place/,
     )
     await user.click(within(confirm).getByRole('button', { name: 'Delete tag' }))
-    expect(await screen.findByRole('status')).toHaveTextContent('Deleted “Private 1” (1 assignments).')
+    expect(await screen.findByRole('status')).toHaveTextContent('Deleted “Private 1” (1 assignment).')
   })
 
   it('omits the consumer clause when nothing references the tag', async () => {
@@ -1316,7 +1372,7 @@ describe('BulkTagToolbar (issue #3032)', () => {
       target_ids: [1, 2],
     })
     expect(onDone).toHaveBeenCalledWith(
-      'tagged “Private 1” on 1 of 2 selected issues (1 already tagged).',
+      'Tagged “Private 1” on 1 of 2 selected issues (1 already tagged).',
     )
     expect(onClearSelection).toHaveBeenCalled()
   })
@@ -1375,7 +1431,69 @@ describe('BulkTagToolbar (issue #3032)', () => {
     await user.click(screen.getByRole('button', { name: 'Remove tag from 3' }))
 
     expect(onDone).toHaveBeenCalledWith(
-      'removed direct “Private 1” tag from 1 of 3 selected issues (2 issues still inherit it) (1 already untagged).',
+      'Removed direct “Private 1” tag from 1 of 3 selected issues (2 issues still inherit it) (1 already untagged).',
+    )
+  })
+
+  it('uses singular grammar for a single selected issue (issue #3433)', async () => {
+    const user = userEvent.setup()
+    const onDone = vi.fn()
+    mockedTagsApi.list.mockResolvedValue({ tags: [makeTag(1)] })
+    mockedTagsApi.bulkAssign.mockResolvedValue({
+      tag_id: 1,
+      target_type: 'Issue',
+      requested_ids: [1],
+      affected_ids: [1],
+      already_ids: [],
+      still_inherited_ids: [],
+    })
+
+    render(
+      <MemoryRouter>
+        <BulkTagToolbar
+          selectedIds={[1]}
+          onClearSelection={vi.fn()}
+          onDone={onDone}
+        />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: /Private 1/ }))
+    await user.click(screen.getByRole('button', { name: 'Add tag to 1' }))
+
+    expect(onDone).toHaveBeenCalledWith(
+      'Tagged “Private 1” on 1 of 1 selected issue.',
+    )
+  })
+
+  it('uses singular grammar for a single selected issue on removal (issue #3433)', async () => {
+    const user = userEvent.setup()
+    const onDone = vi.fn()
+    mockedTagsApi.list.mockResolvedValue({ tags: [makeTag(1)] })
+    mockedTagsApi.bulkUnassign.mockResolvedValue({
+      tag_id: 1,
+      target_type: 'Issue',
+      requested_ids: [1],
+      affected_ids: [1],
+      already_ids: [],
+      still_inherited_ids: [1],
+    })
+
+    render(
+      <MemoryRouter>
+        <BulkTagToolbar
+          selectedIds={[1]}
+          onClearSelection={vi.fn()}
+          onDone={onDone}
+        />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: /Private 1/ }))
+    await user.click(screen.getByRole('button', { name: 'Remove tag from 1' }))
+
+    expect(onDone).toHaveBeenCalledWith(
+      'Removed direct “Private 1” tag from 1 of 1 selected issue (1 issue still inherits it).',
     )
   })
 

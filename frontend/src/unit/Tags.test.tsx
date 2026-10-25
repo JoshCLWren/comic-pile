@@ -12,6 +12,7 @@ import {
 import { queryKeys } from '../query/queryKeys'
 import { tagErrorMessage } from '../components/Tags/tagErrors'
 import { sourceRoute, TagChips } from '../components/Tags/TagChips'
+import { sourceLabel } from '../components/Tags/sourceLabels'
 import type { EffectiveTagsResponse } from '../services/api-tags'
 
 describe('tag palette (issue #3032)', () => {
@@ -376,4 +377,183 @@ describe('inheritance source navigation (issue #3032)', () => {
   it('renders issue-typed sources as text because v1 never inherits across issues', () => {
     expect(sourceRoute({ target_type: 'Issue', target_id: 1, display_name: '#1' })).toBeNull()
   })
+})
+
+describe('inheritance source labels (issues #3431, #3557)', () => {
+  it('labels every supported source type with a reader-facing noun', () => {
+    expect(
+      sourceLabel({ target_type: 'Thread', target_id: 3, display_name: 'Saga' }),
+    ).toBe('Thread: Saga')
+    expect(
+      sourceLabel({
+        target_type: 'ContinuityPlan',
+        target_id: 9,
+        display_name: 'Mignolaverse',
+      }),
+    ).toBe('Reading plan: Mignolaverse')
+    expect(
+      sourceLabel({ target_type: 'Issue', target_id: 11, display_name: '#11' }),
+    ).toBe('Issue #11')
+  })
+
+  it('falls back safely for an unmapped type and an empty display name', () => {
+    // A future backend type must never leak into the source chooser.
+    expect(
+      sourceLabel({ target_type: 'FutureThing', target_id: 4, display_name: 'Mystery box' }),
+    ).toBe('Source: Mystery box')
+    expect(
+      sourceLabel({ target_type: 'ContinuityPlan', target_id: 4, display_name: '   ' }),
+    ).toBe('Reading plan: #4')
+  })
+
+  it('renders Reading Plan sources with a human label instead of the backend type', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <TagChips data={chipData()} />
+      </MemoryRouter>,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /show sources for inherited tag horror/i }),
+    )
+
+    const sources = screen.getByRole('list', { name: /sources for horror/i })
+    expect(within(sources).getByText('Thread: B.P.R.D.')).toBeInTheDocument()
+    expect(within(sources).getByText('Reading plan: Mignolaverse')).toBeInTheDocument()
+    expect(within(sources).queryByText(/ContinuityPlan/)).toBeNull()
+  })
+})
+
+describe('inheritance source self-links (issue #3428, #3557)', () => {
+  it('renders a source pointing at the current page as text, never a dead link', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/thread/3']}>
+        <TagChips data={chipData()} />
+      </MemoryRouter>,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /show sources for inherited tag horror/i }),
+    )
+
+    const sources = screen.getByRole('list', { name: /sources for horror/i })
+    // The issue editor was opened from thread 3, so navigating "to" that
+    // thread would have no visible effect.
+    expect(within(sources).getByText('Thread: B.P.R.D.')).toBeInTheDocument()
+    expect(within(sources).queryByRole('link', { name: /thread: b\.p\.r\.d\./i })).toBeNull()
+    // Genuine other-object sources still navigate.
+    expect(
+      within(sources).getByRole('link', { name: /reading plan: mignolaverse/i }),
+    ).toHaveAttribute('href', '/continuity-plans/9')
+  })
+
+  it('keeps the thread source a link off that thread page', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/queue']}>
+        <TagChips data={chipData()} />
+      </MemoryRouter>,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /show sources for inherited tag horror/i }),
+    )
+
+    expect(
+      within(screen.getByRole('list', { name: /sources for horror/i })).getByRole('link', {
+        name: /thread: b\.p\.r\.d\./i,
+      }),
+    ).toHaveAttribute('href', '/thread/3')
+  })
+})
+
+describe('long tag names in chips (issue #3434, #3557)', () => {
+  it('bounds a 100-character inherited name and keeps it in the tooltip', () => {
+    const longName = 'A'.repeat(100)
+    const data = chipData()
+    const horror = data.effective_tags[1]
+    const longData: EffectiveTagsResponse = {
+      ...data,
+      effective_tags: [
+        data.effective_tags[0],
+        { ...horror, tag: { ...horror.tag, name: longName } },
+      ],
+    }
+
+    render(
+      <MemoryRouter>
+        <TagChips data={longData} />
+      </MemoryRouter>,
+    )
+
+    const name = screen.getByText(longName)
+    expect(name).toHaveClass('min-w-0', 'truncate')
+    // The pill carries the untruncated value for hover and the name stays in
+    // the DOM, so assistive technology reads the complete tag name.
+    expect(name.parentElement).toHaveAttribute('title', longName)
+  })
+
+  it('bounds a 100-character direct name without widening the chip row', () => {
+    const longName = 'B'.repeat(100)
+    const data = chipData()
+    const physical = data.direct_tags[0]
+    const longData: EffectiveTagsResponse = {
+      ...data,
+      direct_tags: [{ ...physical, name: longName }],
+      effective_tags: [
+        {
+          ...data.effective_tags[0],
+          tag: { ...physical, name: longName },
+        },
+      ],
+    }
+
+    render(
+      <MemoryRouter>
+        <TagChips data={longData} />
+      </MemoryRouter>,
+    )
+
+    const name = screen.getByText(longName)
+    expect(name).toHaveClass('min-w-0', 'truncate')
+    expect(name.parentElement).toHaveAttribute('title', longName)
+    expect(name.parentElement).toHaveClass('max-w-full')
+  })
+})
+
+describe('Roll tag layout (issue #3428, #3557)', () => {
+  const name = 'Uncanny X-Men Vol. 2'
+
+  for (const width of [375, 1280]) {
+    it(`keeps a 20-character name legible in the rolled issue chip at ${width}px`, () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+      const data = chipData()
+      const horror = data.effective_tags[1]
+      const narrowData: EffectiveTagsResponse = {
+        ...data,
+        effective_tags: [
+          data.effective_tags[0],
+          { ...horror, tag: { ...horror.tag, name } },
+        ],
+      }
+
+      render(
+        <MemoryRouter>
+          <TagChips data={narrowData} />
+        </MemoryRouter>,
+      )
+
+      expect(name).toHaveLength(20)
+      const pill = screen.getByText(name).parentElement
+      // The pill is the tag identity only, so the source decoration can never
+      // take width away from the name.
+      expect(pill?.textContent).toBe(name)
+      expect(pill).toHaveAttribute('title', name)
+      expect(pill).toHaveClass('max-w-full')
+      expect(screen.getByText('Inherited')).not.toBe(pill)
+      expect(screen.getByText('Inherited').closest('li')).toBe(pill?.closest('li'))
+    })
+  }
 })
