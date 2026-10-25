@@ -134,7 +134,9 @@ export function ComicPillar({
       })
     }
 
-    if (activeRatingThread?.id && issueId && !isLinked) {
+    // Show "Map series" for linked issues that still lack series details (missing story title)
+    const seriesIsComplete = storyTitle != null
+    if (activeRatingThread?.id && issueId && !isLinked && !seriesIsComplete) {
       entries.push({
         key: 'map-series',
         label: 'Map series',
