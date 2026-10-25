@@ -7,7 +7,7 @@ from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.external_identities import upsert_external_identity
+from app.external_identities import MetadataMerger, upsert_external_identity
 from app.models.external_identity import ExternalIdentity
 from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
 
@@ -42,7 +42,9 @@ ComicVine's ``date_last_updated`` (stored as ``provider_updated_at``) records wh
 provider last edited the issue, not when this application last fetched its deep payload.
 Freshness checks must use this application-side timestamp so an issue ComicVine has not
 edited in over 30 days is not re-fetched on every read. Roster writes merge into stored
-metadata and therefore never advance this marker (#4147).
+metadata and therefore never advance this marker. A deep payload the provider served from
+its local cache is not proof of a recent fetch either, so it never advances it either;
+only a live singular response does (#4147).
 """
 
 
@@ -162,6 +164,33 @@ def merge_sparse_issue_metadata(
     return merged
 
 
+def merge_cached_deep_metadata(
+    existing: dict[str, object],
+    incoming: dict[str, object],
+) -> dict[str, object]:
+    """Persist a cache-served deep payload without advancing the deep-refresh clock.
+
+    ComicVine can serve a deep singular payload from the local cache (adoption cache
+    reuse, or a live request that fell back to cache after throttling), and that payload
+    can be arbitrarily old. Writing it with ``deep_metadata_refreshed_at = now`` would
+    hide stale credits for another full refresh window, so the stored clock survives the
+    write; a row without one stays legacy and is re-evaluated by
+    ``metadata_needs_hydration`` (#4147).
+
+    Args:
+        existing: Metadata already stored on the external identity.
+        incoming: Metadata normalized from a cache-served deep issue response.
+
+    Returns:
+        The incoming deep payload with any stored refresh clock carried forward.
+    """
+    merged = dict(incoming)
+    marker = existing.get(DEEP_METADATA_REFRESHED_AT_KEY)
+    if isinstance(marker, str) and marker:
+        merged[DEEP_METADATA_REFRESHED_AT_KEY] = marker
+    return merged
+
+
 def normalize_issue(result: dict[str, object]) -> dict[str, object]:
     """Normalize useful singular issue metadata while retaining the complete raw provider row.
 
@@ -228,6 +257,7 @@ async def persist_issue_result(
     result: dict[str, object],
     *,
     roster_row: bool = False,
+    from_cache: bool = False,
 ) -> ExternalIdentity:
     """Upsert one ComicVine issue result into the provider-independent identity store.
 
@@ -239,6 +269,9 @@ async def persist_issue_result(
             are merged into stored metadata rather than replacing it wholesale.
             Results that omit any deep singular-issue field are treated the same
             way even when this flag is not set.
+        from_cache: True when the provider client served ``result`` from its local
+            cache instead of a live request. A cached deep payload can be old, so it
+            is persisted but never advances the deep-refresh clock.
 
     Returns:
         Persisted issue identity.
@@ -251,11 +284,21 @@ async def persist_issue_result(
         raise ComicVineError("ComicVine issue result is missing an integer id")
     sparse_result = roster_row or not is_deep_issue_result(result)
     metadata = normalize_issue(result)
+    metadata_merger: MetadataMerger | None = (
+        merge_sparse_issue_metadata if sparse_result else None
+    )
     if not sparse_result:
-        # Record when this application fetched the deep payload. ComicVine's own
-        # ``date_last_updated`` is a provider edit date and must not double as the
-        # refresh clock, or an unedited issue would be re-fetched on every read.
-        metadata[DEEP_METADATA_REFRESHED_AT_KEY] = datetime.now(UTC).isoformat()
+        if from_cache:
+            # The payload came from cache (adoption reuse or a throttled live request
+            # that fell back to cache), so it may be arbitrarily old. Persist it without
+            # moving the refresh clock, or stale credits would look fresh for another
+            # window and the retry that follows the throttle would be skipped.
+            metadata_merger = merge_cached_deep_metadata
+        else:
+            # Record when this application fetched the deep payload. ComicVine's own
+            # ``date_last_updated`` is a provider edit date and must not double as the
+            # refresh clock, or an unedited issue would be re-fetched on every read.
+            metadata[DEEP_METADATA_REFRESHED_AT_KEY] = datetime.now(UTC).isoformat()
     return await upsert_external_identity(
         db,
         provider=COMICVINE_PROVIDER,
@@ -264,7 +307,7 @@ async def persist_issue_result(
         external_url=_external_url(result.get("site_detail_url")),
         metadata_json=metadata,
         provider_updated_at=_provider_timestamp(result.get("date_last_updated")),
-        metadata_merger=merge_sparse_issue_metadata if sparse_result else None,
+        metadata_merger=metadata_merger,
     )
 
 
@@ -311,6 +354,10 @@ async def hydrate_issue(
     successfully persisted issue metadata; callers can commit the returned identity and retry the
     missing cached resource later.
 
+    Cache provenance is forwarded to :func:`persist_issue_result`, so a payload the provider
+    served from its local cache updates stored evidence without advancing the deep-refresh
+    clock (#4147).
+
     Args:
         db: Async database session.
         client: Configured ComicVine provider client.
@@ -322,7 +369,7 @@ async def hydrate_issue(
     """
     response = await client.fetch_issue(issue_id, refresh=refresh)
     result = _result_object(response.payload)
-    identity = await persist_issue_result(db, result)
+    identity = await persist_issue_result(db, result, from_cache=response.from_cache)
     arcs = result.get("story_arc_credits")
     if isinstance(arcs, list):
         seen: set[int] = set()

@@ -221,8 +221,13 @@ async def test_persist_volume_result_requires_stable_integer_id(
 class FakeClient:
     """Provider-client stand-in that records endpoint hydration requests."""
 
-    def __init__(self) -> None:
-        """Initialize an empty story-arc request ledger."""
+    def __init__(self, *, issue_from_cache: bool = False) -> None:
+        """Configure cache provenance for the returned deep issue fixture.
+
+        Args:
+            issue_from_cache: Whether ``fetch_issue`` reports a cached response.
+        """
+        self.issue_from_cache = issue_from_cache
         self.story_arcs: list[int] = []
 
     async def fetch_issue(self, issue_id: int, *, refresh: bool = False) -> ComicVineResponse:
@@ -239,7 +244,7 @@ class FakeClient:
                     ],
                 },
             },
-            False,
+            self.issue_from_cache,
             "issue",
         )
 
@@ -277,7 +282,7 @@ async def test_hydrate_issue_deduplicates_story_arc_fetches(
     """Deep hydration should cache each discovered story arc once per issue response."""
     client = FakeClient()
 
-    async def fake_persist(db: object, result: dict[str, object]) -> FakeIdentity:
+    async def fake_persist(db: object, result: dict[str, object], **kwargs: object) -> FakeIdentity:
         return FakeIdentity(str(result["id"]), result)
 
     monkeypatch.setattr(hydration, "persist_issue_result", fake_persist)
@@ -297,7 +302,7 @@ async def test_hydrate_issue_keeps_success_when_story_arc_fetch_fails(
     async def failing_arc(arc_id: int, *, refresh: bool = False) -> ComicVineResponse:
         raise ComicVineError("transient")
 
-    async def fake_persist(db: object, result: dict[str, object]) -> FakeIdentity:
+    async def fake_persist(db: object, result: dict[str, object], **kwargs: object) -> FakeIdentity:
         return FakeIdentity(str(result["id"]), result)
 
     monkeypatch.setattr(client, "fetch_story_arc", failing_arc)
@@ -598,3 +603,89 @@ async def test_hydrate_volume_roster_does_not_erase_deep_issue(async_db: AsyncSe
         {"id": 1, "name": "Writer", "role": "writer"}
     ]
     assert issue.metadata_json["story_arcs"] == [{"id": 4, "name": "Arc"}]
+
+
+@pytest.mark.asyncio
+async def test_hydrate_issue_forwards_cache_provenance_to_persist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hydration must tell persistence when the provider served a cached payload."""
+    observed: dict[str, object] = {}
+
+    async def fake_persist(db: object, result: dict[str, object], **kwargs: object) -> FakeIdentity:
+        observed.clear()
+        observed.update(kwargs)
+        return FakeIdentity(str(result["id"]), result)
+
+    monkeypatch.setattr(hydration, "persist_issue_result", fake_persist)
+
+    await hydration.hydrate_issue(
+        cast(object, None), cast(object, FakeClient(issue_from_cache=True)), 42
+    )
+    assert observed["from_cache"] is True
+
+    await hydration.hydrate_issue(cast(object, None), cast(object, FakeClient()), 42)
+    assert observed["from_cache"] is False
+
+
+@pytest.mark.asyncio
+async def test_cached_deep_response_keeps_stored_refresh_clock(async_db: AsyncSession) -> None:
+    """A cache-served deep payload persists evidence but never moves the clock (#4147)."""
+    identity = await hydration.persist_issue_result(async_db, _deep_issue_result())
+    marker = identity.metadata_json[hydration.DEEP_METADATA_REFRESHED_AT_KEY]
+    assert isinstance(marker, str)
+
+    cached = await hydration.persist_issue_result(
+        async_db, _deep_issue_result(name="Cached Title"), from_cache=True
+    )
+
+    assert cached.id == identity.id
+    assert cached.metadata_json[hydration.DEEP_METADATA_REFRESHED_AT_KEY] == marker
+    assert cached.metadata_json["name"] == "Cached Title"
+    assert cached.metadata_json["creator_credits"] == [
+        {"id": 1, "name": "Writer", "role": "writer"}
+    ]
+    assert metadata_needs_hydration(cached) is False
+
+
+@pytest.mark.asyncio
+async def test_cached_deep_response_does_not_make_stale_credits_look_fresh(
+    async_db: AsyncSession,
+) -> None:
+    """Old credits served from cache stay stale so the throttle-cleared retry still runs."""
+    identity = await hydration.persist_issue_result(
+        async_db, _deep_issue_result(date_last_updated="2020-01-01T00:00:00Z")
+    )
+    stale_metadata = dict(identity.metadata_json)
+    stale_metadata[hydration.DEEP_METADATA_REFRESHED_AT_KEY] = "2020-01-01T00:00:00+00:00"
+    identity.metadata_json = stale_metadata
+    await async_db.commit()
+    assert metadata_needs_hydration(identity) is True
+
+    cached = await hydration.persist_issue_result(
+        async_db, _deep_issue_result(date_last_updated="2020-01-01T00:00:00Z"), from_cache=True
+    )
+
+    assert cached.metadata_json[hydration.DEEP_METADATA_REFRESHED_AT_KEY] == (
+        "2020-01-01T00:00:00+00:00"
+    )
+    assert metadata_needs_hydration(cached) is True
+
+
+@pytest.mark.asyncio
+async def test_cached_deep_response_can_still_enrich_a_sparse_row(async_db: AsyncSession) -> None:
+    """A cache-served deep payload still enriches stored sparse evidence."""
+    sparse = await hydration.persist_issue_result(
+        async_db, _sparse_roster_row(), roster_row=True
+    )
+    assert sparse.metadata_json["creator_credits"] == []
+
+    cached = await hydration.persist_issue_result(
+        async_db, _deep_issue_result(), from_cache=True
+    )
+
+    assert cached.id == sparse.id
+    assert cached.metadata_json["creator_credits"] == [
+        {"id": 1, "name": "Writer", "role": "writer"}
+    ]
+    assert hydration.DEEP_METADATA_REFRESHED_AT_KEY not in cached.metadata_json
