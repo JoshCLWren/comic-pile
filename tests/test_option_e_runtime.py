@@ -1382,7 +1382,7 @@ async def test_roll_response_reuses_precommit_snapshot_without_postcommit_reads(
         and record.getMessage().startswith("roll.phase_timing")
     ]
     assert len(summaries) == 1
-    stage = re.search(r"(?:^|,)response:[0-9.]+/[0-9.]+/(\\d+)", summaries[0])
+    stage = re.search(r"(?:^|,)response:[0-9.]+/[0-9.]+/([0-9]+)", summaries[0])
     assert stage is not None, summaries[0]
     assert int(stage.group(1)) <= 3, (
         "Response projection must not reload the multi-query Option E snapshot: "
