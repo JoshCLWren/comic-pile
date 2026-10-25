@@ -32,6 +32,7 @@ const RELATED_ISSUES_PER_ARC_LIMIT = 5
 const COVER_HEIGHT_CAP_VH = 45
 const COVER_RATIO_FALLBACK = 2 / 3
 const SUMMARY_LONG_THRESHOLD = 280
+const METADATA_REFRESH_FALLBACK_SECONDS = 10
 
 function formatRating(value: number): string {
   const normalized = parseFloat(value.toFixed(2))
@@ -85,22 +86,30 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     }
   }, [metadata])
 
-  // Bounded refetch when metadata repair is in progress
-  // Only refetch once when status indicates pending/running repair with a retry delay
+  // Bounded refetch while metadata repair is in progress
+  // Only refetch once per response while the status indicates pending/running repair.
+  // Pending/running repairs return null retry_after (only deferred/failed carry a
+  // declared delay), so fall back to a bounded delay instead of never refreshing.
   useEffect(() => {
     if (!metadata) return
     
     const status = metadata.metadata_status
     const retryAfter = metadata.refresh_retry_after_seconds
     
-    // Only refetch for pending/running states with a valid retry delay
-    if ((status === 'refresh_pending' || status === 'refresh_running') && retryAfter != null && retryAfter > 0) {
-      const timeoutId = setTimeout(() => {
-        refetch()
-      }, retryAfter * 1000)
-      
-      return () => clearTimeout(timeoutId)
-    }
+    if (status !== 'refresh_pending' && status !== 'refresh_running') return
+    
+    // Honor a declared retry delay when the server provides one; otherwise use a
+    // bounded fallback so active repairs do refresh without high-frequency polling.
+    const delaySeconds =
+      retryAfter != null && retryAfter > 0
+        ? retryAfter
+        : METADATA_REFRESH_FALLBACK_SECONDS
+    
+    const timeoutId = setTimeout(() => {
+      refetch()
+    }, delaySeconds * 1000)
+    
+    return () => clearTimeout(timeoutId)
   }, [metadata, refetch])
 
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
@@ -380,7 +389,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
         {/* Creator credits status when no creators are available */}
         {metadata.creators.length === 0 && metadata.metadata_status && (
-          <div className="pl-6 pr-2 pb-2 border-l border-white/10">
+          <div className="pl-6 pr-2 pb-2 border-l border-[var(--theme-border)]">
             {(() => {
               const status = metadata.metadata_status;
               const retryAfter = metadata.refresh_retry_after_seconds;
@@ -390,13 +399,13 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 case 'refresh_pending':
                 case 'refresh_running':
                   return (
-                    <p className="text-[11px] text-stone-400 italic" data-testid="creator-status-fetching">
+                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-fetching">
                       Creator credits being fetched…
                     </p>
                   );
                 case 'refresh_deferred':
                   return (
-                    <p className="text-[11px] text-stone-400 italic" data-testid="creator-status-deferred">
+                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-deferred">
                       {retryAfter != null && retryAfter > 0
                         ? `Refresh deferred — retry in ${retryAfter}s`
                         : 'Refresh deferred'}
@@ -404,13 +413,13 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                   );
                 case 'refresh_failed':
                   return (
-                    <p className="text-[11px] text-stone-400 italic" data-testid="creator-status-failed">
+                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-failed">
                       Refresh failed
                     </p>
                   );
                 case 'deep_fetched_no_credits':
                   return (
-                    <p className="text-[11px] text-stone-400 italic" data-testid="creator-status-no-credits">
+                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-no-credits">
                       Credits not available
                     </p>
                   );

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
@@ -925,6 +925,40 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     return waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
   }
 
+  function intelligenceResponse(overrides: Partial<ComicVineIssueIntelligence> = {}) {
+    return {
+      comicvine_issue_id: '100',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      ...overrides,
+    }
+  }
+
+  // Server contract (app/services/comicvine_metadata_repair.py): pending/running
+  // repairs return refresh_retry_after_seconds: null; only deferred/failed carry
+  // a declared delay. Tests for active repairs must use those responses.
+  const FALLBACK_REFRESH_MS = 10_000 // METADATA_REFRESH_FALLBACK_SECONDS * 1000 (component constant)
+
+  function flushInitialLoad() {
+    return act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+
   it('shows "Creator credits being fetched" when metadata_status is not_deep_fetched', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '100',
@@ -965,7 +999,8 @@ describe('ComicIdentity creator status (issue #4149)', () => {
       creators: [],
       story_arcs: [],
       metadata_status: 'refresh_pending',
-      refresh_retry_after_seconds: 30,
+      // Server returns null for pending/running repairs
+      refresh_retry_after_seconds: null,
     })
 
     renderIdentity()
@@ -990,7 +1025,8 @@ describe('ComicIdentity creator status (issue #4149)', () => {
       creators: [],
       story_arcs: [],
       metadata_status: 'refresh_running',
-      refresh_retry_after_seconds: 45,
+      // Server returns null for pending/running repairs
+      refresh_retry_after_seconds: null,
     })
 
     renderIdentity()
@@ -1150,93 +1186,145 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
   })
 
-  it('refetches once after retry_after_seconds when status is refresh_pending', async () => {
-    getIntelligence.mockResolvedValue({
-      comicvine_issue_id: '1000',
-      comicvine_url: null,
-      series_name: 'Test Series',
-      series_id: 1,
-      issue_number: '1',
-      name: 'Test Issue',
-      description: null,
-      image_url: null,
-      cover_date: null,
-      store_date: null,
-      creators: [],
-      story_arcs: [],
-      metadata_status: 'refresh_pending',
-      refresh_retry_after_seconds: 1, // 1 second for fast test
-    })
+  it('refetches after the bounded fallback when a pending repair returns no retry delay', async () => {
+    getIntelligence
+      .mockResolvedValueOnce(
+        intelligenceResponse({
+          comicvine_issue_id: '1000',
+          metadata_status: 'refresh_pending',
+          refresh_retry_after_seconds: null,
+        }),
+      )
+      .mockResolvedValue(
+        intelligenceResponse({
+          comicvine_issue_id: '1000',
+          metadata_status: 'complete',
+          creators: [{ name: 'Fetched Writer', roles: ['writer'] }],
+        }),
+      )
 
+    vi.useFakeTimers()
     const { unmount } = renderIdentity()
-    await waitForLoaded()
+    await flushInitialLoad()
 
+    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
     expect(getIntelligence).toHaveBeenCalledTimes(1)
 
-    // Wait for the refetch timeout (1 second + buffer)
-    await waitFor(() => {
-      expect(getIntelligence).toHaveBeenCalledTimes(2)
-    }, { timeout: 3000 })
+    // Just before the bounded fallback delay expires: no refetch yet
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS - 1)
+    })
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    // Beyond the bounded fallback delay: exactly one bounded refetch fired
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
+    })
+    await flushInitialLoad()
+    expect(getIntelligence).toHaveBeenCalledTimes(2)
+
+    // Hydrated credits replace the fetching message without a manual reload
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+    expect(screen.getByText('Fetched Writer')).toBeInTheDocument()
 
     unmount()
   })
 
-  it('refetches once after retry_after_seconds when status is refresh_running', async () => {
-    getIntelligence.mockResolvedValue({
-      comicvine_issue_id: '1100',
-      comicvine_url: null,
-      series_name: 'Test Series',
-      series_id: 1,
-      issue_number: '1',
-      name: 'Test Issue',
-      description: null,
-      image_url: null,
-      cover_date: null,
-      store_date: null,
-      creators: [],
-      story_arcs: [],
-      metadata_status: 'refresh_running',
-      refresh_retry_after_seconds: 1,
-    })
+  it('refetches after the bounded fallback when a running repair returns no retry delay, then shows hydrated credits', async () => {
+    getIntelligence
+      .mockResolvedValueOnce(
+        intelligenceResponse({
+          comicvine_issue_id: '1100',
+          metadata_status: 'refresh_running',
+          refresh_retry_after_seconds: null,
+        }),
+      )
+      .mockResolvedValue(
+        intelligenceResponse({
+          comicvine_issue_id: '1100',
+          metadata_status: 'complete',
+          creators: [{ name: 'Hydrated Artist', roles: ['penciler'] }],
+        }),
+      )
 
+    vi.useFakeTimers()
     const { unmount } = renderIdentity()
-    await waitForLoaded()
+    await flushInitialLoad()
+
+    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
+    })
+    await flushInitialLoad()
+    expect(getIntelligence).toHaveBeenCalledTimes(2)
+
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+    expect(screen.getByText('Hydrated Artist')).toBeInTheDocument()
+
+    unmount()
+  })
+
+  it('honors a declared retry delay when the server provides one', async () => {
+    getIntelligence
+      .mockResolvedValueOnce(
+        intelligenceResponse({
+          comicvine_issue_id: '1150',
+          metadata_status: 'refresh_pending',
+          refresh_retry_after_seconds: 60,
+        }),
+      )
+      .mockResolvedValue(
+        intelligenceResponse({
+          comicvine_issue_id: '1150',
+          metadata_status: 'complete',
+          creators: [{ name: 'Deferred Writer', roles: ['writer'] }],
+        }),
+      )
+
+    vi.useFakeTimers()
+    const { unmount } = renderIdentity()
+    await flushInitialLoad()
 
     expect(getIntelligence).toHaveBeenCalledTimes(1)
 
-    // Wait for the refetch timeout
-    await waitFor(() => {
-      expect(getIntelligence).toHaveBeenCalledTimes(2)
-    }, { timeout: 3000 })
+    // 60 seconds is longer than the 10s fallback: do not refetch early
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
+    })
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45_000)
+    })
+    await flushInitialLoad()
+    expect(getIntelligence).toHaveBeenCalledTimes(2)
+
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+    expect(screen.getByText('Deferred Writer')).toBeInTheDocument()
 
     unmount()
   })
 
   it('does not refetch when status is refresh_deferred', async () => {
-    getIntelligence.mockResolvedValue({
-      comicvine_issue_id: '1200',
-      comicvine_url: null,
-      series_name: 'Test Series',
-      series_id: 1,
-      issue_number: '1',
-      name: 'Test Issue',
-      description: null,
-      image_url: null,
-      cover_date: null,
-      store_date: null,
-      creators: [],
-      story_arcs: [],
-      metadata_status: 'refresh_deferred',
-      refresh_retry_after_seconds: 1,
-    })
+    getIntelligence.mockResolvedValue(
+      intelligenceResponse({
+        comicvine_issue_id: '1200',
+        metadata_status: 'refresh_deferred',
+        refresh_retry_after_seconds: 1,
+      }),
+    )
 
+    vi.useFakeTimers()
     const { unmount } = renderIdentity()
-    await waitForLoaded()
+    await flushInitialLoad()
 
     expect(getIntelligence).toHaveBeenCalledTimes(1)
 
-    // Wait longer than retry_after to ensure no refetch
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
+    })
 
     expect(getIntelligence).toHaveBeenCalledTimes(1)
 
@@ -1244,66 +1332,85 @@ describe('ComicIdentity creator status (issue #4149)', () => {
   })
 
   it('does not refetch when status is deep_fetched_no_credits', async () => {
-    getIntelligence.mockResolvedValue({
-      comicvine_issue_id: '1300',
-      comicvine_url: null,
-      series_name: 'Test Series',
-      series_id: 1,
-      issue_number: '1',
-      name: 'Test Issue',
-      description: null,
-      image_url: null,
-      cover_date: null,
-      store_date: null,
-      creators: [],
-      story_arcs: [],
-      metadata_status: 'deep_fetched_no_credits',
-      refresh_retry_after_seconds: 1,
-    })
+    getIntelligence.mockResolvedValue(
+      intelligenceResponse({
+        comicvine_issue_id: '1300',
+        metadata_status: 'deep_fetched_no_credits',
+        refresh_retry_after_seconds: 1,
+      }),
+    )
 
+    vi.useFakeTimers()
     const { unmount } = renderIdentity()
-    await waitForLoaded()
+    await flushInitialLoad()
 
     expect(getIntelligence).toHaveBeenCalledTimes(1)
 
-    // Wait longer than retry_after to ensure no refetch
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
+    })
 
     expect(getIntelligence).toHaveBeenCalledTimes(1)
 
     unmount()
   })
 
-  it('clears refetch timeout on unmount', async () => {
-    getIntelligence.mockResolvedValue({
-      comicvine_issue_id: '1400',
-      comicvine_url: null,
-      series_name: 'Test Series',
-      series_id: 1,
-      issue_number: '1',
-      name: 'Test Issue',
-      description: null,
-      image_url: null,
-      cover_date: null,
-      store_date: null,
-      creators: [],
-      story_arcs: [],
-      metadata_status: 'refresh_pending',
-      refresh_retry_after_seconds: 10, // Long delay
-    })
+  it('clears the refetch timeout on unmount so no late refetch fires', async () => {
+    getIntelligence.mockResolvedValue(
+      intelligenceResponse({
+        comicvine_issue_id: '1400',
+        metadata_status: 'refresh_pending',
+        refresh_retry_after_seconds: null,
+      }),
+    )
 
+    vi.useFakeTimers()
     const { unmount } = renderIdentity()
-    await waitForLoaded()
+    await flushInitialLoad()
 
     expect(getIntelligence).toHaveBeenCalledTimes(1)
 
-    // Unmount before timeout
+    // Unmount before the timeout, then advance well beyond the full fallback delay
     unmount()
 
-    // Wait longer than the original timeout would have been
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
+    })
 
-    // Should not have refetched because component was unmounted
+    // Should not have refetched because the component was unmounted
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not double-fire the refetch across repeated mounts', async () => {
+    getIntelligence.mockResolvedValue(
+      intelligenceResponse({
+        comicvine_issue_id: '1600',
+        metadata_status: 'refresh_pending',
+        refresh_retry_after_seconds: null,
+      }),
+    )
+
+    vi.useFakeTimers()
+    const first = renderIdentity()
+    await flushInitialLoad()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+    first.unmount()
+
+    // Remounting with the same issueId serves the cached entry; no provider
+    // request is made merely by remounting, and a fresh bounded timer is armed.
+    const second = renderIdentity()
+    await flushInitialLoad()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
+    second.unmount()
+
+    // Both timers must have been cleared with their mounts
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
+    })
+
     expect(getIntelligence).toHaveBeenCalledTimes(1)
   })
 
@@ -1322,7 +1429,8 @@ describe('ComicIdentity creator status (issue #4149)', () => {
       creators: [],
       story_arcs: [],
       metadata_status: 'refresh_pending',
-      refresh_retry_after_seconds: 30,
+      // Server returns null for pending/running repairs
+      refresh_retry_after_seconds: null,
     })
 
     const { rerender } = renderIdentity(1)
