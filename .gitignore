@@ -226,3 +226,6 @@ benchmarks/control-environment*.json
 # Stale root-level OpenAPI export (canonical is frontend/src/generated/openapi.json)
 openapi.json
 // CI trigger
+
+# Factory Greptile outcome file (generated, never committed)
+.factory-greptile-outcomes.json

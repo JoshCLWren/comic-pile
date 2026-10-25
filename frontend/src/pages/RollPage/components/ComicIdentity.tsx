@@ -91,13 +91,15 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   // Pending/running repairs return null retry_after, so we use a bounded fallback
   // to ensure they eventually refresh without high-frequency polling.
   useEffect(() => {
-    if (!metadata) return
-    
+    if (!issueId || !metadata) return
+
+    // Guard against stale repair state from a previously rolled issue: only
+    // schedule work for the metadata currently bound to this issue.
     const status = metadata.metadata_status
     const retryAfter = metadata.refresh_retry_after_seconds
-    
+
     if (status !== 'refresh_pending' && status !== 'refresh_running') return
-    
+
     // Use a bounded fallback delay for pending/running repairs since the server
     // returns null retry_after for these states. This ensures active repairs
     // refresh eventually without high-frequency polling.
@@ -109,13 +111,13 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       // Server declared a positive retry delay — honor it
       delaySeconds = retryAfter
     }
-    
+
     const timeoutId = setTimeout(() => {
       refetch()
     }, delaySeconds * 1000)
-    
+
     return () => clearTimeout(timeoutId)
-  }, [metadata, refetch])
+  }, [issueId, metadata, refetch])
 
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
   const coverWidthCapVh = COVER_HEIGHT_CAP_VH * coverAspectRatio
