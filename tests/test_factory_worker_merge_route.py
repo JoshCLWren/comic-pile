@@ -487,8 +487,13 @@ def test_worker_call_site_blocked_closure_does_not_report_acceptance(tmp_path: P
 
 
 def test_worker_call_site_merge_failure_does_not_repeat_the_same_pr(tmp_path: Path) -> None:
-    """A failed merge leaves the PR leased, so skip it instead of re-running it."""
+    """A failed merge leaves the PR leased, so release it and skip it instead of re-running it."""
     calls, _ = _run_call_site(tmp_path, FAKE_MERGE_EXIT="1")
     assert _merge_calls(calls)
     assert _closure_calls(calls) == []
+    # Release the lease before skipping so a peer can retry without waiting
+    # for this session to end (Greptile P1: failed merges stay reserved).
+    assert [call for call in calls if call.startswith("release ")] == [
+        f"release {PR} factory/87-4081-opencode-free factory:review merge-failed"
+    ]
     assert f"skip {PR}" in calls

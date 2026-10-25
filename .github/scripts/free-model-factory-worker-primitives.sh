@@ -991,9 +991,13 @@ while (( $(remaining) > 480 )); do
           ;;
         2)
           log "merge command failed for PR #${NUMBER} at ${current}; leaving it open for another route"
-          # The PR is still open and still leased to this worker. Without the
-          # skip, choose_existing_pr would immediately hand it back for another
-          # full agent run instead of selecting other work.
+          # The PR is still open and still leased to this worker. Release the
+          # lease first so a peer can retry without waiting for this session to
+          # end, then skip it so choose_existing_pr does not hand it straight
+          # back for another full agent run.
+          if [[ "$SOURCE" != 'kilo-auto' ]]; then
+            release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'merge-failed'
+          fi
           SKIP_PRS+=("$NUMBER")
           ;;
         *)
