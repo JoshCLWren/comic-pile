@@ -88,6 +88,7 @@
   "app/repositories/rate_repository.py",
   "app/repositories/read_without_rating_audit.py",
   "app/repositories/reading_boundary_repository.py",
+  "app/repositories/reading_effort_repository.py",
   "app/repositories/reading_eligibility_queries.py",
   "app/repositories/reading_graph_preview_repository.py",
   "app/repositories/reading_list_authoring_repository.py",
