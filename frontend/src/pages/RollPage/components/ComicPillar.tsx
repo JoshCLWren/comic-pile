@@ -52,18 +52,13 @@ export function ComicPillar({
   const progress = getProgressPercentage(activeRatingThread)
   const { metadata } = useComicVineIssueIntelligence(issueId)
   const storyTitle = metadata?.name ?? null
-  // Issue #3450: `issue_number` is the canonical number (which may be 40 while
-  // the series has only 8 tracked issues), so it must never be printed as
-  // "N of M". Pair it with the ordinal position within the tracked series.
-  const issueOrdinal =
-    totalIssues != null
-      ? Math.min(Math.max(totalIssues - issuesRemaining + 1, 1), totalIssues)
-      : null
+  // Read counts cannot identify an issue's ordinal when later issues are read.
+  // Keep the canonical number until the actual tracked position is available.
   // The publication date is rendered once, beside the cover in ComicIdentity.
   // Repeating it here only produced two dates for the same issue.
   const progressItems = [
     ...(issueNumber != null && totalIssues != null
-      ? [`Issue #${issueNumber} (${issueOrdinal} of ${totalIssues})`]
+      ? [`Issue #${issueNumber}`]
       : []),
     `${progress}% complete`,
     `${issuesRemaining} left`,

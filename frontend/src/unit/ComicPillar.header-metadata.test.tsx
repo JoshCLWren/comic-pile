@@ -135,7 +135,7 @@ describe('Roll header metadata hierarchy (#3011)', () => {
 
     // Only the three progress facts are shown; separators sit strictly between
     // them, never before the first or after the last item.
-    expect(progressLine.textContent).toBe('Issue 43 of 12\u00a0· 58% complete\u00a0· 5 left')
+    expect(progressLine.textContent).toBe('Issue #43\u00a0· 58% complete\u00a0· 5 left')
     expect(separatorTexts(progressLine)).toEqual(['\u00a0· ', '\u00a0· '])
 
     // A non-breaking space binds the separator to the item it follows, so a
@@ -151,6 +151,16 @@ describe('Roll header metadata hierarchy (#3011)', () => {
         expect(item).toHaveClass('whitespace-nowrap')
       }
     }
+  })
+
+  it('does not infer position from read counts when later issues were read first', async () => {
+    getIssueIntelligenceSpy.mockResolvedValue(intelligenceMetadata())
+    renderPillar({ ...linkedThread, issue_number: '1', next_issue_number: '1',
+      total_issues: 3, issues_remaining: 2 })
+    await waitFor(() => expect(screen.getByTestId('comic-progress-line')).toBeInTheDocument())
+    const line = screen.getByTestId('comic-progress-line')
+    expect(line).toHaveTextContent('Issue #1')
+    expect(line).not.toHaveTextContent('2 of 3')
   })
 
   it('drops the issue item and its separator when the running total is unknown', async () => {

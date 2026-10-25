@@ -173,7 +173,7 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
       }
     })
 
-    const comicVineLink = page.locator('a[aria-label="Open on ComicVine"]')
+    const comicVineLink = page.getByRole('link', { name: 'View issue on ComicVine' })
     await expect(comicVineLink).toBeVisible()
     await expect(comicVineLink).toHaveAttribute('href', 'https://comicvine.example/100')
   })
@@ -199,7 +199,7 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
       }
     })
 
-    const comicVineLink = page.locator('a[aria-label="Open on ComicVine"]')
+    const comicVineLink = page.getByRole('link', { name: 'View issue on ComicVine' })
     await expect(comicVineLink).not.toBeVisible()
   })
 
@@ -525,10 +525,13 @@ test.describe('issue #2768: responsive and edge cases', () => {
       }
     })
 
+    const identity = page.getByRole('region', { name: 'Issue One', exact: true })
+    await expect(identity).toBeVisible()
+
     // No empty cards/gaps - description, creators, and story arcs sections should not render
-    await expect(page.getByText('Summary')).not.toBeVisible()
-    await expect(page.getByText('Creators')).not.toBeVisible()
-    await expect(page.getByText('Story arcs')).not.toBeVisible()
-    await expect(page.getByText('View issue on ComicVine')).not.toBeVisible()
+    await expect(identity.getByText('Summary')).not.toBeVisible()
+    await expect(identity.getByText('Creators')).not.toBeVisible()
+    await expect(identity.getByText('Story arcs')).not.toBeVisible()
+    await expect(identity.getByText('View issue on ComicVine')).not.toBeVisible()
   })
 })
