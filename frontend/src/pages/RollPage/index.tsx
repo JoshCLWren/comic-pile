@@ -397,7 +397,7 @@ export default function RollPage() {
   const blockedThreads = useMemo(() => {
     if (blockedExclusions.items.length === 0) return blockedPreview
     return blockedExclusions.items.map((item) => ({
-      id: item.thread_id,
+      id: item.thread_id ?? 0,
       title: item.title,
       format: item.format,
       blocking_reasons: item.blocking_reasons ?? [],
@@ -410,7 +410,7 @@ export default function RollPage() {
   const blockingDependencyMap = useMemo(() => {
     const merged = { ...state.blockingDependencyMap }
     for (const item of blockedExclusions.items) {
-      if (item.blocking_dependencies && item.blocking_dependencies.length > 0) {
+      if (item.thread_id && item.blocking_dependencies && item.blocking_dependencies.length > 0) {
         merged[item.thread_id] = item.blocking_dependencies
       }
     }

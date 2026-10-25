@@ -25,7 +25,7 @@ export interface RollBootstrapThread {
 
 /** One series excluded from the roll pool, with the reason the user can understand. */
 export interface ThreadExclusionReason {
-  thread_id: number
+  thread_id?: number
   title: string
   format: string
   reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue"
