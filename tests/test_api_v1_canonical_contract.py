@@ -221,6 +221,7 @@ def test_generated_client_has_zero_bare_domain_path_references() -> None:
         "/api/roll/bootstrap",
         "/api/v3/reading-boundaries",
         "/api/v20/roll/bootstrap",
+        "/api/unknown-resource",
     ],
 )
 def test_unversioned_and_unsupported_versions_remain_rejected(
@@ -231,8 +232,11 @@ def test_unversioned_and_unsupported_versions_remain_rejected(
     schema = _load_schema()
     schema["paths"][invalid_path] = {"get": {"operationId": "fixture_get"}}
     monkeypatch.setattr(sys.modules[__name__], "_load_schema", lambda: schema)
-    with pytest.raises(AssertionError, match="Bare /api routes"):
-        test_legacy_api_aliases_are_explicit_allowlist()
+    # The legacy allowlist permits existing bare aliases with v1 twins.
+    # They are still prohibited from the generated frontend client.
+    if invalid_path.startswith("/api/v") or invalid_path == "/api/unknown-resource":
+        with pytest.raises(AssertionError, match="Bare /api routes"):
+            test_legacy_api_aliases_are_explicit_allowlist()
     with pytest.raises(AssertionError, match="bare domain-path references"):
         test_generated_client_has_zero_bare_domain_path_references()
 
