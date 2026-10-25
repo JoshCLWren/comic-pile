@@ -374,15 +374,19 @@ def _migration_path() -> Path:
 
 
 def test_rate_limit_migration_chains_onto_main_head() -> None:
-    """The submission-limit migration extends main's head without forking it."""
+    """The submission-limit migration extends the base head without forking it.
+
+    The parent must resolve on the checkout under test. A conditional
+    single-head assertion would let the test pass while the revision graph is
+    dangling, which is the failure mode this test exists to catch.
+    """
     root = Path(__file__).parents[1]
     script = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
     revision = script.get_revision(MIGRATION_ID)
-    parent_present = script.get_revision(MIGRATION_PARENT) is not None
     assert revision is not None
     assert revision.down_revision == MIGRATION_PARENT
-    if parent_present:
-        assert script.get_heads() == [MIGRATION_ID]
+    assert script.get_revision(MIGRATION_PARENT) is not None
+    assert script.get_heads() == [MIGRATION_ID]
 
 
 @pytest.mark.asyncio
