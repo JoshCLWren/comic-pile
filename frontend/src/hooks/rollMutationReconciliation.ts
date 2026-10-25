@@ -62,18 +62,24 @@ export async function fetchAndPublishRollBootstrap(
   return state
 }
 
+export interface AmbiguousRollMutationReconciliation {
+  committed: boolean
+  /** Authoritative state fetched and published while reconciling. */
+  bootstrap: RollBootstrapResponse
+}
+
 export async function reconcileAmbiguousRollMutation(
   expectedPendingThreadId?: number,
   bootstrapApi: RollBootstrapApi = rollBootstrapApi,
-): Promise<boolean> {
+): Promise<AmbiguousRollMutationReconciliation> {
   const state = await fetchAndPublishRollBootstrap(bootstrapApi)
   const pendingThreadId = normalizePendingThreadId(state.pending_thread_id)
 
-  if (expectedPendingThreadId === undefined) {
-    return pendingThreadId === null
-  }
+  const committed = expectedPendingThreadId === undefined
+    ? pendingThreadId === null
+    : pendingThreadId !== expectedPendingThreadId
 
-  return pendingThreadId !== expectedPendingThreadId
+  return { committed, bootstrap: state }
 }
 
 function delay(ms: number): Promise<void> {

@@ -90,11 +90,11 @@ describe('Roll mutation reconciliation', () => {
         pending_thread_id: cast<number>('invalid'),
       })
 
-    await expect(reconcileAmbiguousRollMutation()).resolves.toBe(true)
-    await expect(reconcileAmbiguousRollMutation()).resolves.toBe(false)
-    await expect(reconcileAmbiguousRollMutation(7)).resolves.toBe(false)
-    await expect(reconcileAmbiguousRollMutation(7)).resolves.toBe(true)
-    await expect(reconcileAmbiguousRollMutation()).resolves.toBe(true)
+    await expect(reconcileAmbiguousRollMutation()).resolves.toMatchObject({ committed: true })
+    await expect(reconcileAmbiguousRollMutation()).resolves.toMatchObject({ committed: false })
+    await expect(reconcileAmbiguousRollMutation(7)).resolves.toMatchObject({ committed: false })
+    await expect(reconcileAmbiguousRollMutation(7)).resolves.toMatchObject({ committed: true })
+    await expect(reconcileAmbiguousRollMutation()).resolves.toMatchObject({ committed: true })
     expect(mockedBootstrap).toHaveBeenCalledTimes(5)
   })
 
