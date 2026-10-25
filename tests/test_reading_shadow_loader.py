@@ -116,7 +116,6 @@ async def test_actual_lists_not_shorter_plan_memberships_drive_snapshot(
 
 async def test_live_loader_reads_only_reader_dependencies_without_legacy_census(
     async_db: AsyncSession,
-    statements: list[str],
 ) -> None:
     """Live eligibility must not load or count historical dependency rows."""
     user = await _owner(async_db, "live_reader_only")
@@ -146,20 +145,33 @@ async def test_live_loader_reads_only_reader_dependencies_without_legacy_census(
     )
     await async_db.commit()
 
-    statements.clear()
-    live = await load_shadow_inputs(
-        async_db, user.id, include_legacy_diagnostics=False
-    )
+    dependency_statements: list[tuple[str, object]] = []
+
+    def capture_binds(conn, cursor, statement, parameters, context, executemany):
+        """Capture executed SQL and real DBAPI binds, not formatted query text."""
+        if "FROM dependencies" in statement:
+            dependency_statements.append((statement, parameters))
+
+    event.listen(Engine, "before_cursor_execute", capture_binds)
+    try:
+        live = await load_shadow_inputs(
+            async_db, user.id, include_legacy_diagnostics=False
+        )
+    finally:
+        event.remove(Engine, "before_cursor_execute", capture_binds)
+
     assert len(live.prerequisites) == 1
     assert live.prerequisites[0].source_issue_id == issues[1].id
     assert live.prerequisites[0].target_issue_id == issues[2].id
     assert live.inert_dependency_count == 0
-    dependency_selects = [
-        statement for statement in statements if "FROM dependencies" in statement
-    ]
-    assert len(dependency_selects) == 1
-    assert "COUNT" not in dependency_selects[0].upper()
-    assert "origin" in dependency_selects[0].lower()
+    assert len(dependency_statements) == 1
+    query, parameters = dependency_statements[0]
+    assert "COUNT" not in query.upper()
+    assert "WHERE" in query.upper()
+    where_clause = query.upper().split("WHERE", 1)[1]
+    assert "DEPENDENCIES.ORIGIN =" in where_clause
+    bound_values = parameters.values() if isinstance(parameters, dict) else parameters
+    assert "reader" in bound_values
 
     historical = await load_shadow_inputs(async_db, user.id)
     assert len(historical.prerequisites) == 1
