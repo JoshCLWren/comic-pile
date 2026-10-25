@@ -566,6 +566,37 @@ async def get_roll_pool_rows(
     # Index justification: unread_counts uses Issue.status + Issue.thread_id,
     # covered by existing index `ix_issue_thread_is_read` (`thread_id`, `status`).
     eligibility = await get_execution_eligibility(db, user_id)
+    if eligibility is not None:
+        # Option E has already evaluated every unread count and frontier.
+        # Joining Issue and aggregating every unread Issue across all readers
+        # would re-run work whose SQL results are discarded by this branch.
+        query = (
+            select(Thread)
+            .where(
+                Thread.user_id == user_id,
+                Thread.status == "active",
+                Thread.queue_position >= 1,
+                candidate_predicate(eligibility),
+            )
+            .order_by(Thread.queue_position)
+        )
+        if snoozed_ids:
+            query = query.where(Thread.id.not_in(snoozed_ids))
+        if skipped_ids:
+            query = query.where(Thread.id.not_in(skipped_ids))
+        threads = (await db.scalars(query)).all()
+        return [
+            (
+                thread,
+                eligibility.unread_counts.get(thread.id, 0),
+                eligibility.issue_numbers.get(
+                    eligibility.threads[thread.id].next_issue_id
+                ),
+            )
+            for thread in threads
+        ]
+
+    # Legacy mode continues to use persisted frontier and SQL unread counts.
     frontier = frontier_expression(eligibility)
     unread_counts = (
         select(Issue.thread_id.label("thread_id"), func.count(Issue.id).label("unread_count"))
