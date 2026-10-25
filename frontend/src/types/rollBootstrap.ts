@@ -25,6 +25,13 @@ export interface RollBootstrapThread {
 
 /** One series excluded from the roll pool, with the reason the user can understand. */
 export interface ThreadExclusionReason {
+  /**
+   * Stable Thread id for the row.
+   *
+   * The server always sends it, but the UI treats it as optional so a
+   * contract-violating row renders honest plain text instead of linking to a
+   * speculative `/thread/undefined` route.
+   */
   thread_id?: number
   title: string
   format: string

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
+import type { BlockingDependency } from '../types'
 import type { RollBootstrapThread, ThreadExclusionReason } from '../types/rollBootstrap'
 
 function RouteProbe() {
@@ -20,6 +21,7 @@ function renderPool(overrides: {
   inactiveExpanded?: boolean
   blockedThreads?: RollBootstrapThread[]
   blockedExpanded?: boolean
+  blockingDependencyMap?: Record<number, BlockingDependency[]>
   onToggleInactive?: () => void
   onThreadClick?: () => void
   onShuffle?: () => void
@@ -29,6 +31,7 @@ function renderPool(overrides: {
     inactiveExpanded = false,
     blockedThreads = [],
     blockedExpanded = false,
+    blockingDependencyMap = {},
     onToggleInactive = vi.fn(),
     onThreadClick = vi.fn(),
     onShuffle = vi.fn(),
@@ -43,7 +46,7 @@ function renderPool(overrides: {
             <ThreadPool
               pool={[]}
               blockedThreads={blockedThreads}
-              blockingDependencyMap={{}}
+              blockingDependencyMap={blockingDependencyMap}
               dieSize={6}
               isRatingView={false}
               selectedThreadId={null}
@@ -210,6 +213,70 @@ describe('ThreadPool exclusion transparency', () => {
     expect(screen.getByRole('link', { name: 'Monstress' })).toHaveAttribute('href', '/thread/7')
     expect(screen.queryByRole('link', { name: 'No Identifier' })).not.toBeInTheDocument()
     expect(screen.getByText('No Identifier').closest('a')).toBeNull()
+  })
+
+  it('reaches a blocked Thread with Tab + Enter and shows visible focus', async () => {
+    const user = userEvent.setup()
+
+    renderPool({
+      blockedExpanded: true,
+      blockedThreads: [{ id: 41, title: 'Monstress', format: 'Comic' }],
+    })
+
+    const link = screen.getByRole('link', { name: 'Monstress' })
+    expect(link.className).toContain('focus-visible:ring-2')
+    // The row title stays inside the row column instead of overflowing.
+    expect(link.className).toContain('truncate')
+
+    for (let step = 0; step < 3 && document.activeElement !== link; step += 1) {
+      await user.tab()
+    }
+    expect(link).toHaveFocus()
+
+    await user.keyboard('{Enter}')
+
+    expect(screen.getByTestId('route')).toHaveTextContent('/thread/41')
+    expect(screen.getByTestId('thread-content')).toHaveTextContent('Thread 41 content')
+  })
+
+  it('keeps blocker links outside the row link and opens the dependency Thread', async () => {
+    const user = userEvent.setup()
+
+    renderPool({
+      blockedExpanded: true,
+      blockedThreads: [
+        {
+          id: 41,
+          title: 'Monstress',
+          format: 'Comic',
+          blocking_reasons: ['Read Saga #1 first'],
+        },
+      ],
+      blockingDependencyMap: {
+        41: [
+          {
+            thread_id: 77,
+            thread_title: 'Saga',
+            issue_id: 5,
+            issue_number: '1',
+            label: 'Read Saga #1 first',
+          },
+        ],
+      },
+    })
+
+    const rowLink = screen.getByRole('link', { name: 'Monstress' })
+    const blockerLink = screen.getByRole('link', { name: 'Open Saga issue #1' })
+    // The dependency link is a sibling of the row link, never nested inside it.
+    expect(rowLink.contains(blockerLink)).toBe(false)
+    expect(rowLink.closest('a')).toBe(rowLink)
+    expect(blockerLink.closest('a')).toBe(blockerLink)
+    expect(blockerLink).toHaveAttribute('href', '/thread/77?issue=5#issue-5')
+
+    await user.click(blockerLink)
+
+    expect(screen.getByTestId('route')).toHaveTextContent('/thread/77')
+    expect(screen.getByTestId('thread-content')).toHaveTextContent('Thread 77 content')
   })
 
   it('keeps the Superman regression rows linked to their own Threads', () => {

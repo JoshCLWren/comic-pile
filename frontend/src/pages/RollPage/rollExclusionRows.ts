@@ -26,7 +26,7 @@ export function toBlockedPoolRow(item: ThreadExclusionReason): RollBootstrapThre
 export function mergeBlockingDependencies(
   base: Record<number, BlockingDependency[]>,
   items: ThreadExclusionReason[],
-): Record<number, BlockingDependency[]> {
+) {
   const merged = { ...base }
   for (const item of items) {
     if (item.thread_id && item.blocking_dependencies && item.blocking_dependencies.length > 0) {
