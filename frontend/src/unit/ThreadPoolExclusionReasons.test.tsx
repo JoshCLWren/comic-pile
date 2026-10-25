@@ -151,4 +151,22 @@ describe('ThreadPool exclusion transparency', () => {
     expect(screen.queryByText(/Nothing to roll yet/i)).not.toBeInTheDocument()
     expect(screen.getByText(/No series in play right now/i)).toBeInTheDocument()
   })
+
+  it('renders an expanded out-of-pool row without thread_id as plain text, not a link', () => {
+    renderPool({
+      inactiveThreads: [
+        { thread_id: 2, title: 'Saga', format: 'Comic', reason: 'completed', detail: 'Read the full series' },
+        { title: 'Orphaned Series', format: 'Comic', reason: 'not_in_queue', detail: 'No resolvable thread' },
+      ],
+      inactiveExpanded: true,
+    })
+
+    expect(screen.getByText('Orphaned Series')).toBeInTheDocument()
+    expect(screen.getByText('No resolvable thread')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Orphaned Series' })).not.toBeInTheDocument()
+    expect(screen.getByText('Orphaned Series').closest('a')).not.toBeInTheDocument()
+
+    // Rows that still have a thread_id remain navigable links.
+    expect(screen.getByRole('link', { name: 'Saga' })).toHaveAttribute('href', '/thread/2')
+  })
 })
