@@ -1107,12 +1107,22 @@ class RollService:
         now = datetime.now(UTC)
         await update_session_pending_thread(self._db, current_session.id, selected_thread.id, now)
 
+        # Extract thread info before commit to avoid MissingGreenlet
+        queue_position = await display_position(self._db, selected_thread)
+        thread_attrs = {
+            "thread_id": selected_thread.id,
+            "title": selected_thread.title,
+            "format": normalize_format_value(selected_thread.format),
+            "queue_position": queue_position,
+            "total_issues": selected_thread.total_issues,
+            "reading_progress": selected_thread.reading_progress,
+        }
         await self._db.commit()
 
         selected_index: int = artifacts["selected_index"]
         unread_count: int = artifacts["unread_count"]
         return await self.build_roll_response(
-            selected_thread=selected_thread,
+            thread_attrs=thread_attrs,
             current_die=current_die,
             selected_index=selected_index,
             unread_count=unread_count,
@@ -1188,12 +1198,22 @@ class RollService:
         now = datetime.now(UTC)
         await update_session_pending_thread(self._db, current_session.id, selected_thread.id, now)
 
+        # Extract thread info before commit to avoid MissingGreenlet
+        queue_position = await display_position(self._db, selected_thread)
+        thread_attrs = {
+            "thread_id": selected_thread.id,
+            "title": selected_thread.title,
+            "format": normalize_format_value(selected_thread.format),
+            "queue_position": queue_position,
+            "total_issues": selected_thread.total_issues,
+            "reading_progress": selected_thread.reading_progress,
+        }
         await self._db.commit()
 
         selected_index: int = artifacts["selected_index"]
         unread_count: int = artifacts["unread_count"]
         return await self.build_roll_response(
-            selected_thread=selected_thread,
+            thread_attrs=thread_attrs,
             current_die=current_die,
             selected_index=selected_index,
             unread_count=unread_count,
