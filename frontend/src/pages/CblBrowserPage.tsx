@@ -50,11 +50,13 @@ const FALLBACK_SOURCE_TITLE = 'CBL source'
  */
 const PAGE_SIZE = 50
 
-/** Translate a browse failure into reader-facing copy and a recovery action. */
-function catalogErrorState(error: Error): {
+interface CatalogErrorState {
   message: string
   recover: 'browse-root' | 'retry'
-} {
+}
+
+/** Translate a browse failure into reader-facing copy and a recovery action. */
+function catalogErrorState(error: Error): CatalogErrorState {
   if (axios.isAxiosError(error)) {
     const status = error.response?.status
     if (status === 404) {
@@ -227,6 +229,7 @@ export default function CblBrowserPage() {
   /** The deep-linked source currently on screen, read by late-settling commit callbacks. */
   const viewedSourceIdRef = useRef<number | null>(null)
   const graphPreviewRef = useRef<ReadingGraphPreview | null>(null)
+  const commitMutationRef = useRef<{ isPending: boolean; reset: () => void } | null>(null)
 
   // Keep the visible search field aligned with the URL, including browser Back.
   useEffect(() => {
@@ -265,8 +268,8 @@ export default function CblBrowserPage() {
     // Back/Forward just re-opened: keep it tracked so the pending Add stays
     // blocked, and only discard a settled result (its callbacks check the
     // view before they navigate or surface errors).
-    if (!commitMutation.isPending) commitMutation.reset()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const mutation = commitMutationRef.current
+    if (mutation && !mutation.isPending) mutation.reset()
   }, [deepLinkedListId])
 
   /**
@@ -350,6 +353,9 @@ export default function CblBrowserPage() {
       if (viewedSourceIdRef.current === variables.source.id) setAmbiguousCommit(true)
     },
   })
+
+  // The source-change effect reads the latest mutation without reacting to its state.
+  commitMutationRef.current = commitMutation
 
   // Discard a settled commit that belongs to a different source than the one
   // on screen: its callbacks no longer own this view, and a stale result must
@@ -748,7 +754,7 @@ export default function CblBrowserPage() {
         <div className="space-y-4">
           <CblSourceDetailPanel
             listId={deepLinkedListId}
-            {...(isObject(location.state) && isString((location.state as Record<string, unknown>).from)
+            {...(isObject(location.state) && isString(location.state.from)
               ? {}
               : {
                   backHref: browseHref(folder, submittedQuery, page),
@@ -1231,9 +1237,11 @@ export default function CblBrowserPage() {
 
               {browsePage.total > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p role="status" className="text-xs text-[var(--theme-text-muted)]">
-                    Showing {firstShown}–{lastShown} of {sourceCountLabel(browsePage.total)}
-                  </p>
+                  {browsePage.items.length > 0 && (
+                    <p role="status" className="text-xs text-[var(--theme-text-muted)]">
+                      Showing {firstShown}–{lastShown} of {sourceCountLabel(browsePage.total)}
+                    </p>
+                  )}
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
