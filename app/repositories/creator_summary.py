@@ -511,10 +511,13 @@ async def load_creator_summary_inputs_for_creators(
     # 3. Confirmed creator credits per owned issue (ComicVine) - PROJECTED for requested creators only
     # Use JSONB array expansion to filter credits at the database level
     # Cast to jsonb since the column is JSON type
+    # Guard against malformed values that are not arrays (G3)
     metadata_result = await db.execute(
         select(
             Issue.id,
-            func.jsonb_array_elements(cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)).label("credit")
+            func.jsonb_array_elements(
+                cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB)
+            ).label("credit")
         )
         .join(Thread, Thread.id == Issue.thread_id)
         .join(
@@ -532,12 +535,14 @@ async def load_creator_summary_inputs_for_creators(
     )
     
     per_issue_credits: dict[int, dict[tuple[int, tuple[str, ...]], CreatorCredit]] = {}
+    # Track all issues with usable confirmed credits for global coverage, not just requested creators
     issues_with_creator_metadata: set[int] = set()
     for issue_id, credit_elem in metadata_result.all():
         # credit_elem is a JSON object from jsonb_array_elements
         if not isinstance(credit_elem, dict):
             continue
         creator_id = _coerce_creator_id(credit_elem.get("id"))
+        # G1: Filter by requested creator IDs at the database level
         if creator_id is None or creator_id not in requested_creator_ids:
             continue
         name = credit_elem.get("name")
@@ -549,8 +554,8 @@ async def load_creator_summary_inputs_for_creators(
             parsed = {part.strip() for part in str(role_value).split(",") if part.strip()}
             roles = tuple(sorted(parsed))
         owned_issue_id = int(issue_id)
-        if owned_issue_id not in issues_with_creator_metadata:
-            issues_with_creator_metadata.add(owned_issue_id)
+        # Track all issues with usable confirmed credits (not just requested)
+        issues_with_creator_metadata.add(owned_issue_id)
         by_key = per_issue_credits.setdefault(owned_issue_id, {})
         credit = CreatorCredit(
             external_id=creator_id,
