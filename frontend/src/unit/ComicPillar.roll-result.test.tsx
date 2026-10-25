@@ -113,6 +113,13 @@ describe('Roll result provenance on the result card (#3126)', () => {
     expect(result.textContent).not.toContain('queue')
   })
 
+  it.each([0, 5])('labels a manual pick without inventing a die roll (queue %s)', async (position) => {
+    renderResultCard(rolledThread({ last_rolled_result: 0, queue_position: position }), 6)
+    const result = await screen.findByTestId('comic-roll-result')
+    expect(result).toHaveTextContent(position > 0 ? 'Picked manually · #5 in queue' : 'Picked manually')
+    expect(result).not.toHaveTextContent('Rolled')
+  })
+
   it('stays silent when the card was not produced by a roll', async () => {
     renderResultCard(rolledThread({ last_rolled_result: null }), 6)
 

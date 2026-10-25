@@ -686,7 +686,7 @@ export function QueueModals({
             <button
               type="button"
               onClick={() => setShowDiscardPrompt(false)}
-              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
             >
               Keep editing
             </button>
@@ -696,7 +696,7 @@ export function QueueModals({
                 setShowDiscardPrompt(false)
                 onCloseEdit()
               }}
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
             >
               Discard changes
             </button>

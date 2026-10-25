@@ -191,7 +191,7 @@ function QueueControlsInner({
               title="Clear search"
               onMouseDown={(e) => e.preventDefault()}
               onClick={clearSearch}
-              className="absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-lg text-stone-400 hover:text-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              className="absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-lg text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             >
               <span aria-hidden="true" className="text-base leading-none">×</span>
             </button>

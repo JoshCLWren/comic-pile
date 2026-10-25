@@ -3,6 +3,7 @@ import type { PropsWithChildren } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useThreadBlockingInfo } from '../hooks/useDependencies'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import type { QueueBlockingInfoApi } from '../hooks/useQueueBlockingInfo'
 import type { BatchBlockingInfoResponse } from '../types'
@@ -11,10 +12,9 @@ const getBatchBlockingInfo = vi.fn<QueueBlockingInfoApi['getBatchBlockingInfo']>
 
 const api: QueueBlockingInfoApi = { getBatchBlockingInfo }
 
-function createWrapper() {
-  const client = new QueryClient({
+function createWrapper(client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  })
+  })) {
   return function Wrapper({ children }: PropsWithChildren) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>
   }
@@ -63,4 +63,21 @@ describe('useQueueBlockingInfo', () => {
     await waitFor(() => expect(result.current).toEqual({}))
     expect(getBatchBlockingInfo).toHaveBeenCalledTimes(1)
   })
+})
+
+
+it('shares the raw batch response when navigating from Queue to thread details', async () => {
+  const response: BatchBlockingInfoResponse = {
+    threads: { 7: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } },
+  }
+  getBatchBlockingInfo.mockResolvedValue(response)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
+  const wrapper = createWrapper(client)
+  const queue = renderHook(() => useQueueBlockingInfo([7], api), { wrapper })
+  await waitFor(() => expect(queue.result.current[7]).toEqual([]))
+  queue.unmount()
+  const detail = renderHook(() => useThreadBlockingInfo(7), { wrapper })
+  expect(detail.result.current.data).toEqual(response)
+  expect(detail.result.current.data?.threads[7]?.is_blocked).toBe(false)
+  expect(getBatchBlockingInfo).toHaveBeenCalledTimes(1)
 })

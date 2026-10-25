@@ -401,7 +401,7 @@ export function ComicPillar({
               type="button"
               onClick={() => setIsRemoveMappingDialogOpen(false)}
               disabled={isRemovingMapping}
-              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
@@ -409,7 +409,7 @@ export function ComicPillar({
               type="button"
               onClick={() => void handleRemoveMapping()}
               disabled={isRemovingMapping}
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
             >
               {isRemovingMapping ? 'Removing…' : 'Remove mapping'}
             </button>

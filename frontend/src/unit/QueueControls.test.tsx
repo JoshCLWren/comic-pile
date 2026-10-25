@@ -212,4 +212,35 @@ describe('QueueControls', () => {
     const addButton = screen.getByTestId('queue-add-thread-desktop')
     expect(addButton).toHaveClass('items-center')
   })
+
+  it('Escape clears an in-flight search and cancels its old debounce', async () => {
+    const user = userEvent.setup()
+    render(<QueueControls {...baseProps} />)
+    const input = screen.getByPlaceholderText('Search...')
+    await user.type(input, 'stale search')
+    await user.keyboard('{Escape}')
+    expect(input).toHaveValue('')
+    expect(input).toHaveFocus()
+    expect(baseProps.onSearchChange).toHaveBeenCalledExactlyOnceWith('')
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(baseProps.onSearchChange).toHaveBeenCalledTimes(1)
+    await user.type(input, 'new search')
+    await waitFor(() => expect(baseProps.onSearchChange).toHaveBeenLastCalledWith('new search'))
+  })
+
+  it('the labeled clear button clears a committed search and preserves input focus', async () => {
+    const user = userEvent.setup()
+    render(<QueueControls {...baseProps} searchQuery="Batman" />)
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(screen.getByPlaceholderText('Search...')).toHaveValue('')
+    expect(screen.getByPlaceholderText('Search...')).toHaveFocus()
+    expect(baseProps.onSearchChange).toHaveBeenCalledExactlyOnceWith('')
+  })
+
+  it('Escape on an empty search leaves the filter unchanged', () => {
+    render(<QueueControls {...baseProps} />)
+    fireEvent.keyDown(screen.getByPlaceholderText('Search...'), { key: 'Escape' })
+    expect(baseProps.onSearchChange).not.toHaveBeenCalled()
+  })
+
 })
