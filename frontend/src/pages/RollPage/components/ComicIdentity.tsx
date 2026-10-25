@@ -88,8 +88,8 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
   // Bounded refetch while metadata repair is in progress
   // Only refetch once per response while the status indicates pending/running repair.
-  // Pending/running repairs return null retry_after (only deferred/failed carry a
-  // declared delay), so fall back to a bounded delay instead of never refreshing.
+  // Pending/running repairs return null retry_after, so we use a bounded fallback
+  // to ensure they eventually refresh without high-frequency polling.
   useEffect(() => {
     if (!metadata) return
     
@@ -98,20 +98,16 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     
     if (status !== 'refresh_pending' && status !== 'refresh_running') return
     
-    // Honor a declared retry delay when the server provides a positive value;
-    // otherwise use a bounded fallback so active repairs refresh without
-    // high-frequency polling. The server returns null for pending/running
-    // repairs, so the fallback ensures they eventually refresh.
+    // Use a bounded fallback delay for pending/running repairs since the server
+    // returns null retry_after for these states. This ensures active repairs
+    // refresh eventually without high-frequency polling.
     let delaySeconds: number
-    if (retryAfter == null) {
-      // Server returns null for pending/running repairs — use bounded fallback
+    if (retryAfter == null || retryAfter <= 0) {
+      // Server returns null or non-positive for pending/running repairs — use bounded fallback
       delaySeconds = METADATA_REFRESH_FALLBACK_SECONDS
-    } else if (retryAfter > 0) {
-      // Server declared a retry delay — honor it
-      delaySeconds = retryAfter
     } else {
-      // Server declared a non-positive delay (e.g. 0) — use bounded fallback
-      delaySeconds = METADATA_REFRESH_FALLBACK_SECONDS
+      // Server declared a positive retry delay — honor it
+      delaySeconds = retryAfter
     }
     
     const timeoutId = setTimeout(() => {

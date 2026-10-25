@@ -1439,7 +1439,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
 
     // Change to deep_fetched_no_credits
-    getIntelligence.mockResolvedValue({
+    getIntelligence.mockResolvedValueOnce({
       comicvine_issue_id: '1501',
       comicvine_url: null,
       series_name: 'Test Series',
