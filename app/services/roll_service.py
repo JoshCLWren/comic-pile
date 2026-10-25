@@ -634,10 +634,13 @@ class RollService:
             self._db, user_id=user_id, candidates=candidate_pairs
         )
         effort_estimates = [effort_map[pair] for pair in candidate_pairs]
-        effort_minutes_by_thread = {
-            thread_id: effort_map[(thread_id, issue_id)].minutes
-            for thread_id, issue_id in candidate_pairs
-        }
+        effort_minutes_by_thread: dict[int, float | None] = {}
+        for thread_id, issue_id in candidate_pairs:
+            pair = (thread_id, issue_id)
+            if thread_id in effort_minutes_by_thread:
+                # Defensive: avoid silent loss if duplicates ever appear.
+                continue
+            effort_minutes_by_thread[thread_id] = effort_map[pair].minutes
 
         weights_applied = False
         candidate_weights: list = []

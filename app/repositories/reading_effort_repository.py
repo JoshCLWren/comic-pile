@@ -94,18 +94,29 @@ async def fetch_linked_roll_rate_rows(
         .order_by(Event.id)
     )
     rows = (await db.execute(statement)).all()
-    return [
-        LinkedRollRateRow(
-            roll_event_id=roll_row.id,
-            rate_event_id=rate_row.id,
-            session_id=rate_row.session_id,
-            thread_id=rate_row.thread_id if rate_row.thread_id is not None else -1,
-            issue_id=rate_row.issue_id,
-            roll_timestamp=roll_row.timestamp,
-            rate_timestamp=rate_row.timestamp,
+    results: list[LinkedRollRateRow] = []
+    for roll_row, rate_row in rows:
+        # Extract attributes while the row objects are still bound to avoid
+        # potential MissingGreenlet expiration in future call patterns.
+        roll_event_id = int(roll_row.id)
+        rate_event_id = int(rate_row.id)
+        session_id = rate_row.session_id
+        thread_id = rate_row.thread_id
+        issue_id = rate_row.issue_id
+        roll_timestamp = roll_row.timestamp
+        rate_timestamp = rate_row.timestamp
+        results.append(
+            LinkedRollRateRow(
+                roll_event_id=roll_event_id,
+                rate_event_id=rate_event_id,
+                session_id=session_id,
+                thread_id=thread_id if thread_id is not None else -1,
+                issue_id=issue_id,
+                roll_timestamp=roll_timestamp,
+                rate_timestamp=rate_timestamp,
+            )
         )
-        for roll_row, rate_row in rows
-    ]
+    return results
 
 
 async def fetch_confirmed_issue_publication_metadata(
