@@ -105,7 +105,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
 
         if (isAmbiguousNetworkFailure(error)) {
           try {
-            const committed = await reconcileAmbiguousRollMutation(
+            const { committed } = await reconcileAmbiguousRollMutation(
               expectedPendingThreadId,
               rollBootstrap,
             )

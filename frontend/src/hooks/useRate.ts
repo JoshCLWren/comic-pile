@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi } from '../services/apiTypes'
+import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
-import type { RatePayload } from '../types'
+import type { RatePayload, Thread } from '../types'
 import {
   fetchAndPublishRollBootstrap,
   isAmbiguousNetworkFailure,
@@ -12,7 +13,19 @@ import {
   recoverProtectedRollMutation,
 } from './rollMutationReconciliation'
 
-type RateResult = Awaited<ReturnType<typeof protectedRollMutationApi.rate>> | undefined
+/**
+ * Result of one successful Rate mutation.
+ *
+ * `bootstrap` is the authoritative Roll state that this mutation already
+ * fetched and published, or `null` when that follow-up refresh failed. Callers
+ * must use this published snapshot instead of refetching bootstrap: the
+ * network request has already happened, and a second one would both duplicate
+ * traffic and depend on the zero-delay reconciliation window still being open.
+ */
+export interface RateMutationOutcome {
+  rate: Thread | undefined
+  bootstrap: RollBootstrapResponse | null
+}
 
 export interface RateDeps {
   protectedApi?: ProtectedRollMutationApi
@@ -29,21 +42,22 @@ export function useRate(deps: RateDeps = {}) {
   const client = queryClientInstance ?? queryClient
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
-  const inFlightRequest = useRef<Promise<RateResult> | null>(null)
+  const inFlightRequest = useRef<Promise<RateMutationOutcome> | null>(null)
 
-  const mutate = async (data: RatePayload): Promise<RateResult> => {
+  const mutate = async (data: RatePayload): Promise<RateMutationOutcome> => {
     if (inFlightRequest.current) return inFlightRequest.current
 
     setIsPending(true)
     setIsError(false)
 
-    const request: Promise<RateResult> = (async () => {
+    const request: Promise<RateMutationOutcome> = (async () => {
       try {
         const result = await protectedRollApi.rate(data)
         await applyCache(client, result)
 
+        let bootstrap: RollBootstrapResponse | null = null
         try {
-          await fetchAndPublishRollBootstrap(rollBootstrap)
+          bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap)
         } catch (reconciliationError: unknown) {
           console.error(
             'Rating saved but authoritative Roll state failed to refresh:',
@@ -51,7 +65,7 @@ export function useRate(deps: RateDeps = {}) {
           )
         }
 
-        return result
+        return { rate: result, bootstrap }
       } catch (error: unknown) {
         if (isAuthenticationMutationFailure(error)) {
           try {
@@ -63,8 +77,16 @@ export function useRate(deps: RateDeps = {}) {
             )
             if (recovery.status === 'retried') {
               await applyCache(client, recovery.value)
-              await fetchAndPublishRollBootstrap(rollBootstrap)
-              return recovery.value
+              let bootstrap: RollBootstrapResponse | null = null
+              try {
+                bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap)
+              } catch (reconciliationError: unknown) {
+                console.error(
+                  'Rating saved but authoritative Roll state failed to refresh:',
+                  reconciliationError,
+                )
+              }
+              return { rate: recovery.value, bootstrap }
             }
           } catch (recoveryError: unknown) {
             console.error(
@@ -76,11 +98,13 @@ export function useRate(deps: RateDeps = {}) {
 
         if (isAmbiguousNetworkFailure(error)) {
           try {
-            const committed = await reconcileAmbiguousRollMutation(
+            const reconciliation = await reconcileAmbiguousRollMutation(
               data.thread_id,
               rollBootstrap,
             )
-            if (committed) return undefined
+            if (reconciliation.committed) {
+              return { rate: undefined, bootstrap: reconciliation.bootstrap }
+            }
           } catch (reconciliationError: unknown) {
             console.error(
               'Failed to reconcile ambiguous rating result:',

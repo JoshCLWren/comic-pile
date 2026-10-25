@@ -6,12 +6,13 @@ import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import type { PostRateReference } from './components/PostRateCopyPrompt'
+import type { RateMutationOutcome } from '../../hooks/useRate'
 import { RATING_THRESHOLD, buildRatingThread, createExplosion } from './utils'
 
 interface UseRollRatingParams {
   state: RollPageState & RollPageStateSetters
   bootstrap?: RollBootstrapResponse | null
-  rateMutation: { mutate: (payload: RatePayload) => Promise<Thread | undefined>; isPending: boolean }
+  rateMutation: { mutate: (payload: RatePayload) => Promise<RateMutationOutcome>; isPending: boolean }
   dismissPendingMutation: { mutate: () => Promise<void>; isPending: boolean }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
 }
@@ -163,10 +164,9 @@ export function useRollRating({
 
   const handleSimpleMigrationComplete = useCallback(
     (issueNumber: string) => {
-      // Rating a stale thread moves it out of the stale set, so refresh the stale
-      // data (via bootstrap) only when the rated thread was already rendered as
-      // stale. This preserves stale indicators without a bootstrap refetch on
-      // every rating.
+      // Rating a stale thread moves it out of the stale set. The Rate mutation
+      // already fetches and publishes authoritative Roll state, so this handler
+      // consumes that snapshot instead of issuing a second bootstrap request.
       const wasStale = bootstrap?.stale_thread?.id === activeRatingThread!.id
       setShowSimpleMigration(false)
       rateMutation
@@ -176,7 +176,8 @@ export function useRollRating({
           finish_session: false,
           issue_number: issueNumber,
         })
-        .then(async (rateResponse) => {
+        .then((outcome) => {
+          const rateResponse = outcome.rate
           if (rateResponse && activeRatingThread) {
             setActiveRatingThread({
               ...activeRatingThread,
@@ -198,8 +199,8 @@ export function useRollRating({
           setSelectedThreadId(null)
           setActiveRatingThread(null)
           setErrorMessage('')
-          if (wasStale) {
-            await refetchBootstrap()
+          if (wasStale && !outcome.bootstrap) {
+            setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
           }
         })
         .catch((error: unknown) => {
@@ -210,7 +211,6 @@ export function useRollRating({
       activeRatingThread,
       rating,
       rateMutation,
-      refetchBootstrap,
       bootstrap,
       setShowSimpleMigration,
       suppressPendingAutoOpenRef,
@@ -248,17 +248,19 @@ export function useRollRating({
     if (!activeRatingThread) return
 
     // Capture stale-set membership before the mutation: a rated thread leaves the
-    // stale set, so refresh stale data (via bootstrap) only when it was rendered
-    // as stale. This avoids a bootstrap round trip on every rating.
+    // stale set. The Rate mutation publishes authoritative Roll state for every
+    // successful rating, so the stale counters and next roll come from that
+    // snapshot rather than from a page-level bootstrap refetch.
     const wasStale = bootstrap?.stale_thread?.id === activeRatingThread.id
 
     try {
-      const rateResponse = await rateMutation.mutate({
+      const outcome = await rateMutation.mutate({
         thread_id: activeRatingThread.id,
         rating,
         finish_session: finishSession,
         issue_number: activeRatingThread.issue_number || undefined,
       })
+      const rateResponse = outcome.rate
 
       if (rateResponse) {
         setActiveRatingThread({
@@ -273,13 +275,9 @@ export function useRollRating({
         })
       }
 
-      if (wasStale) {
-        try {
-          await refetchBootstrap()
-        } catch {
-          setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
-          return
-        }
+      if (wasStale && !outcome.bootstrap) {
+        setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
+        return
       }
 
       // Capture the just-rated comic reference before the thread state is cleared
