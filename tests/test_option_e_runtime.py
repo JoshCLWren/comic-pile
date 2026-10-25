@@ -1332,7 +1332,17 @@ async def test_roll_response_reuses_precommit_snapshot_without_postcommit_reads(
     user = await get_or_create_user_async(async_db)
     first, first_issues = await _series(async_db, user.id, "First", 3, count=1)
     second, second_issues = await _series(async_db, user.id, "Second", 19, count=1)
-    async_db.add(ReadingSession(user_id=user.id, start_die=6, manual_die=6))
+    async_db.add(
+        ReadingSession(
+            user_id=user.id,
+            start_die=6,
+            manual_die=6,
+            active_bandwidth="balanced",
+            bandwidth_source="manual",
+            active_intent="balanced",
+            intent_source="manual",
+        )
+    )
     await async_db.commit()
 
     did_commit = False
@@ -1399,16 +1409,41 @@ async def test_roll_precommit_projection_does_not_ack_failed_commit(
     """A DTO built before commit is never returned when persistence fails."""
     user = await get_or_create_user_async(async_db)
     await _series(async_db, user.id, "Commit guard", 1, count=1)
-    async_db.add(ReadingSession(user_id=user.id, start_die=6, manual_die=6))
+    async_db.add(
+        ReadingSession(
+            user_id=user.id,
+            start_die=6,
+            manual_die=6,
+            active_bandwidth="balanced",
+            bandwidth_source="manual",
+            active_intent="balanced",
+            intent_source="manual",
+        )
+    )
     await async_db.commit()
 
+    from typing import Any
+
+    from app.services.roll_service import RollService
+
+    response_projected = False
+    original_projection = RollService.build_roll_response
+
+    async def record_projection(service: RollService, **kwargs: Any) -> Any:
+        nonlocal response_projected
+        response_projected = True
+        return await original_projection(service, **kwargs)
+
     async def fail_commit() -> None:
+        assert response_projected, "Failure must target the final commit, not initialization"
         raise RuntimeError("synthetic commit failure")
 
     with monkeypatch.context() as patch:
+        patch.setattr(RollService, "build_roll_response", record_projection)
         patch.setattr(async_db, "commit", fail_commit)
         with pytest.raises(RuntimeError, match="synthetic commit failure"):
             await auth_client.post("/api/v1/roll/")
+    assert response_projected
     await async_db.rollback()
     assert await async_db.scalar(
         select(Event.id).where(Event.type == "roll", Event.session_id.is_not(None))
