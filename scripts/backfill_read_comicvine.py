@@ -468,6 +468,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument(
+        "--include-unread",
+        action="store_true",
+        help="Include unread issues in the inventory (confirmed-mapping-only mode).",
+    )
+    parser.add_argument(
+        "--confirmed-only",
+        action="store_true",
+        help="Process only issues with confirmed ComicVine identity mappings; do not remap.",
+    )
     return parser
 
 
@@ -486,9 +496,11 @@ async def _load_read_issues(
     *,
     user_id: int,
     limit: int | None,
+    include_unread: bool = False,
 ) -> list[ReadIssue]:
     """Load read issues with only bounded creator-state and series evidence."""
-    sql = """
+    status_clause = "i.status IN ('read', 'unread')" if include_unread else "i.status = 'read'"
+    sql = f"""
         SELECT
             i.id AS issue_id,
             i.thread_id,
@@ -588,7 +600,7 @@ async def _load_read_issues(
         ) sibling_cv ON TRUE
         WHERE t.user_id = :user_id
           AND t.is_test IS FALSE
-          AND i.status = 'read'
+          AND {status_clause}
         ORDER BY t.queue_position, t.id, i.position, i.id
     """
     params: dict[str, object] = {"user_id": user_id}
@@ -1773,6 +1785,8 @@ async def _run(args: argparse.Namespace) -> int:
     dry_run = bool(args.dry_run)
     refresh = bool(args.refresh)
     limit = args.limit
+    include_unread = bool(getattr(args, "include_unread", False))
+    confirmed_only = bool(getattr(args, "confirmed_only", True))
     api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
     snapshot = _local_snapshot_from_environment()
     engine = _engine(database_url)
@@ -1826,21 +1840,58 @@ async def _run(args: argparse.Namespace) -> int:
                     f"host={host} database={database}; refusing to continue."
                 )
 
-            issues = await _load_read_issues(db, user_id=user_id, limit=limit)
-            print(f"Found {len(issues)} read non-test issues for user_id={user_id}.")
+            issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
+            if confirmed_only:
+                # Filter to confirmed mappings only and deduplicate by external identity
+                seen = {}
+                filtered = []
+                for issue in issues:
+                    if issue.identity_id is None or issue.external_id is None:
+                        continue
+                    if issue.identity_id in seen:
+                        continue
+                    seen[issue.identity_id] = True
+                    filtered.append(issue)
+                issues = filtered
+            print(f"Found {len(issues)} {'confirmed' if confirmed_only else 'read'} non-test issues for user_id={user_id}.")
             checkpoint()
 
-            print("=== ComicVine stage 1/4: exhaust local identity evidence ===")
-            local_identity = await _run_local_identity_phase(
-                db,
-                snapshot,
-                user_id=user_id,
-                issues=issues,
-                dry_run=dry_run,
-            )
-            phases.append(_phase_report("local-identity", local_identity, client=client))
-            checkpoint()
-            issues = await _load_read_issues(db, user_id=user_id, limit=limit)
+            if not confirmed_only:
+                print("=== ComicVine stage 1/4: exhaust local identity evidence ===")
+                local_identity = await _run_local_identity_phase(
+                    db,
+                    snapshot,
+                    user_id=user_id,
+                    issues=issues,
+                    dry_run=dry_run,
+                )
+                phases.append(_phase_report("local-identity", local_identity, client=client))
+                checkpoint()
+                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
+                if confirmed_only:
+                    seen = {}
+                    filtered = []
+                    for issue in issues:
+                        if issue.identity_id is None or issue.external_id is None:
+                            continue
+                        if issue.identity_id in seen:
+                            continue
+                        seen[issue.identity_id] = True
+                        filtered.append(issue)
+                    issues = filtered
+            else:
+                # Confirmed-only mode: skip identity resolution phases
+                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
+                seen = {}
+                filtered = []
+                for issue in issues:
+                    if issue.identity_id is None or issue.external_id is None:
+                        continue
+                    if issue.identity_id in seen:
+                        continue
+                    seen[issue.identity_id] = True
+                    filtered.append(issue)
+                issues = filtered
 
             print("=== ComicVine stage 2/4: exhaust stored/local creator metadata ===")
             local_creators = await _run_local_creator_phase(
@@ -1852,7 +1903,18 @@ async def _run(args: argparse.Namespace) -> int:
             )
             phases.append(_phase_report("local-creators", local_creators, client=client))
             checkpoint()
-            issues = await _load_read_issues(db, user_id=user_id, limit=limit)
+            issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
+            if confirmed_only:
+                seen = {}
+                filtered = []
+                for issue in issues:
+                    if issue.identity_id is None or issue.external_id is None:
+                        continue
+                    if issue.identity_id in seen:
+                        continue
+                    seen[issue.identity_id] = True
+                    filtered.append(issue)
+                issues = filtered
 
             if not dry_run and api_key:
                 client = ComicVineClient(
@@ -1866,17 +1928,42 @@ async def _run(args: argparse.Namespace) -> int:
                     "COMICVINE_API_KEY is not configured; provider-dependent work will remain resumable."
                 )
 
-            print("=== ComicVine stage 3/4: provider-dependent identity leftovers ===")
-            provider_identity = await _run_provider_identity_phase(
-                db,
-                client,
-                user_id=user_id,
-                issues=issues,
-                dry_run=dry_run,
-            )
-            phases.append(_phase_report("provider-identity", provider_identity, client=client))
-            checkpoint()
-            issues = await _load_read_issues(db, user_id=user_id, limit=limit)
+            if not confirmed_only:
+                print("=== ComicVine stage 3/4: provider-dependent identity leftovers ===")
+                provider_identity = await _run_provider_identity_phase(
+                    db,
+                    client,
+                    user_id=user_id,
+                    issues=issues,
+                    dry_run=dry_run,
+                )
+                phases.append(_phase_report("provider-identity", provider_identity, client=client))
+                checkpoint()
+                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
+                if confirmed_only:
+                    seen = {}
+                    filtered = []
+                    for issue in issues:
+                        if issue.identity_id is None or issue.external_id is None:
+                            continue
+                        if issue.identity_id in seen:
+                            continue
+                        seen[issue.identity_id] = True
+                        filtered.append(issue)
+                    issues = filtered
+            else:
+                # Confirmed-only: reload and filter, skip identity phase
+                issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread)
+                seen = {}
+                filtered = []
+                for issue in issues:
+                    if issue.identity_id is None or issue.external_id is None:
+                        continue
+                    if issue.identity_id in seen:
+                        continue
+                    seen[issue.identity_id] = True
+                    filtered.append(issue)
+                issues = filtered
 
             print("=== ComicVine stage 4/4: hydrate newly satisfiable creator metadata ===")
             final_results = await _run_provider_creator_phase(

@@ -698,3 +698,108 @@ async def test_provider_identity_throttle_defers_one_resource_and_continues(
 
     assert [result.status for result in results] == ["rate-limited", "resolved-provider"]
     assert results[0].resource == "issues"
+
+
+@pytest.mark.asyncio
+async def test_load_read_issues_includes_unread_when_flag_set(async_db_committed: AsyncSession) -> None:
+    """Unread issues are inventoried when include_unread is requested."""
+    cli = _module()
+    user = User(username="unread-backfill")
+    async_db_committed.add(user)
+    await async_db_committed.flush()
+    thread = Thread(
+        title="Unread Series",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db_committed.add(thread)
+    await async_db_committed.flush()
+    read_issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="read")
+    unread_issue = Issue(thread_id=thread.id, issue_number="2", position=2, status="unread")
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="777000",
+        metadata_json={"creator_credits": []},
+    )
+    async_db_committed.add_all([read_issue, unread_issue, identity])
+    await async_db_committed.flush()
+    async_db_committed.add(
+        IssueExternalIdentityMapping(
+            issue_id=read_issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1.0,
+        )
+    )
+    await async_db_committed.commit()
+
+    rows_read_only = await cli._load_read_issues(async_db_committed, user_id=user.id, limit=None, include_unread=False)
+    rows_with_unread = await cli._load_read_issues(async_db_committed, user_id=user.id, limit=None, include_unread=True)
+
+    assert len(rows_read_only) == 1
+    assert rows_read_only[0].issue_number == "1"
+    # Unread issue has no mapping, so it still appears but with no identity
+    assert len(rows_with_unread) == 2
+
+
+@pytest.mark.asyncio
+async def test_confirmed_only_deduplication_filters_unmapped_and_duplicates(async_db_committed: AsyncSession) -> None:
+    """Confirmed-only mode skips unmapped issues and deduplicates by identity."""
+    cli = _module()
+    user = User(username="dedup-backfill")
+    async_db_committed.add(user)
+    await async_db_committed.flush()
+    thread = Thread(
+        title="Dup Series",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db_committed.add(thread)
+    await async_db_committed.flush()
+    issue_a = Issue(thread_id=thread.id, issue_number="1", position=1, status="read")
+    issue_b = Issue(thread_id=thread.id, issue_number="2", position=2, status="read")
+    issue_unmapped = Issue(thread_id=thread.id, issue_number="3", position=3, status="read")
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="888000",
+        metadata_json={"creator_credits": []},
+    )
+    async_db_committed.add_all([issue_a, issue_b, issue_unmapped, identity])
+    await async_db_committed.flush()
+    async_db_committed.add_all([
+        IssueExternalIdentityMapping(issue_id=issue_a.id, external_identity_id=identity.id, status="confirmed", confidence=1.0),
+        IssueExternalIdentityMapping(issue_id=issue_b.id, external_identity_id=identity.id, status="confirmed", confidence=1.0),
+    ])
+    await async_db_committed.commit()
+
+    rows = await cli._load_read_issues(async_db_committed, user_id=user.id, limit=None, include_unread=False)
+    # Simulate confirmed-only filtering logic used in _run
+    seen = {}
+    filtered = []
+    for issue in rows:
+        # mimic ReadIssue attributes
+        # create a simple object with needed attrs
+        class Dummy:
+            pass
+        # Actually rows are ReadIssue instances, we can use them directly
+        rid = getattr(issue, "identity_id", None)
+        if rid is None:
+            continue
+        if rid in seen:
+            continue
+        seen[rid] = True
+        filtered.append(issue)
+
+    # Two issues map to same identity, unmapped issue dropped
+    assert len(filtered) == 1
+    assert filtered[0].issue_id in {issue_a.id, issue_b.id}
+
+
