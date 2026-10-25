@@ -9,7 +9,6 @@ import type {
 } from '../services/api-comicvine'
 import ImageWithLoading from './ImageWithLoading'
 import SiblingSeriesMappingOffer from './SiblingSeriesMappingOffer'
-import { optimizedImageSrcSet, optimizedImageUrl } from '../services/imageDelivery'
 import { LatestRequestGuard, type LoadPhase, type RequestTicket } from '../utils/latestRequest'
 import { formatIssueCount } from '../utils/formatIssueCount'
 
@@ -587,9 +586,7 @@ export default function ComicVineSearchDialog({
                     <div className="flex items-start gap-3">
                       {series.image_url && (
                         <ImageWithLoading
-                          src={optimizedImageUrl(series.image_url, 240) ?? series.image_url}
-                          srcSet={optimizedImageSrcSet(series.image_url, [96, 240]) ?? undefined}
-                          sizes="40px"
+                          src={series.image_url}
                           alt=""
                           className="w-10 h-14 object-cover rounded-lg shrink-0"
                         />
@@ -689,9 +686,7 @@ export default function ComicVineSearchDialog({
                     <div className="flex items-center gap-3">
                       {issue.image_url && (
                         <ImageWithLoading
-                          src={optimizedImageUrl(issue.image_url, 240) ?? issue.image_url}
-                          srcSet={optimizedImageSrcSet(issue.image_url, [96, 240]) ?? undefined}
-                          sizes="32px"
+                          src={issue.image_url}
                           alt=""
                           className="w-8 h-11 object-cover rounded shrink-0"
                         />
@@ -741,9 +736,7 @@ export default function ComicVineSearchDialog({
               <div className="flex items-start gap-3">
                 {confirmIssue.image_url && (
                   <ImageWithLoading
-                    src={optimizedImageUrl(confirmIssue.image_url, 240) ?? confirmIssue.image_url}
-                    srcSet={optimizedImageSrcSet(confirmIssue.image_url, [96, 240]) ?? undefined}
-                    sizes="64px"
+                    src={confirmIssue.image_url}
                     alt=""
                     className="w-16 h-22 object-cover rounded-lg shrink-0"
                   />

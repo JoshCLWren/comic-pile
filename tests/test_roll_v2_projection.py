@@ -203,15 +203,14 @@ class TestPureHelpers:
         assert extract_volume(None) == (None, None)
         assert extract_volume({}) == (None, None)
 
-    def test_cover_url_is_same_origin_proxy_only(self) -> None:
-        """Covers are proxied; raw or non-remote sources yield nulls."""
-        proxied = build_cover_url("https://comicvine.gamespot.com/a.jpg")
-        assert proxied is not None
-        assert proxied.startswith("/api/v1/images/optimize?url=")
-        assert "comicvine.gamespot.com" not in proxied.split("?", 1)[0]
-        assert "https://" not in proxied.split("?", 1)[0]
+    def test_cover_url_is_direct_provider_url(self) -> None:
+        """Roll returns stored CDN URLs directly without a ComicPile image hop."""
+        source = "https://comicvine.gamespot.com/a.jpg"
+        assert build_cover_url(source) == source
         assert build_cover_url(None) is None
         assert build_cover_url("data:image/png;base64,AAA") is None
+        assert build_cover_url("/api/v1/images/optimize?url=bad") is None
+        assert build_cover_url("https://user:pass@comicvine.gamespot.com/a.jpg") is None
 
     def test_extract_cover_source_prefers_direct_then_image_dict(self) -> None:
         """Cover extraction never fabricates a URL from missing metadata."""
@@ -625,8 +624,7 @@ async def test_cover_is_same_origin_proxy_only(
     by_title = {item.thread.title: item for item in items}
     cover = by_title["Cover"].issue.cover_url
     assert cover is not None
-    assert cover.startswith("/api/v1/images/optimize?url=")
-    assert "comicvine.gamespot.com" not in cover.split("?", 1)[0]
+    assert cover == "https://comicvine.gamespot.com/a/uploads/scale_large/0/1/cover.jpg"
     assert by_title["Bare"].issue.cover_url is None
 
 

@@ -3,7 +3,7 @@
 The Vercel function registers only the lightweight ping/metrics/keepalive routes
 at cold start and completes the rest of the API surface lazily. Importing every
 router on the first real request cost 1.5-1.7 s on the measured cold wake, so a
-``/api/v1/snooze`` tap pulled in catalog, images and delivery even though the
+``/api/v1/snooze`` tap pulled in catalog and delivery even though the
 snooze handler never touches them.
 
 This module names one :class:`RouterMount` per router registration unit. Each
@@ -374,12 +374,6 @@ def _register_performance_metrics(app: FastAPI) -> None:
     )
 
 
-def _register_images(app: FastAPI) -> None:
-    """Register the edge-cacheable remote cover image optimizer."""
-    from app.api import images
-
-    app.include_router(images.router, tags=["images"])
-
 
 def _register_debug(app: FastAPI) -> None:
     """Register the non-production debug router."""
@@ -468,7 +462,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("issue-identity", frozenset({"issue-identity"}), _register_issue_identity),
     RouterMount("cbl-adoption", frozenset({"cbl"}), _register_cbl_adoption),
     RouterMount("performance-metrics", frozenset({"performance-metrics"}), _register_performance_metrics),
-    RouterMount("images", frozenset({"images"}), _register_images),
 )
 
 

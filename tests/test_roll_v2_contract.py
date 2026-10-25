@@ -1,5 +1,7 @@
 """Contract tests for Roll v2 bootstrap and rate response schemas."""
 
+import pytest
+
 from datetime import UTC, datetime
 
 from app.schemas.roll import RollRecoveryInfo
@@ -217,22 +219,21 @@ class TestNullabilityContracts:
         )
         assert issue.cover_url is None
 
-    def test_cover_url_rejects_raw_provider_urls(self):
-        """Raw provider image URLs must never satisfy the Roll contract."""
-        try:
-            RollableIssue(id=1, number="1", cover_url="https://comicvine.gamespot.com/a.jpg")
-        except ValueError:
-            return
-        raise AssertionError("Raw ComicVine cover URL was accepted")
+    def test_cover_url_accepts_direct_provider_image(self):
+        """Provider-hosted image URLs are valid, with no proxy involved."""
+        url = "https://comicvine.gamespot.com/a/uploads/original/1/cover.jpg"
+        assert RollableIssue(id=1, number="1", cover_url=url).cover_url == url
 
-    def test_cover_url_accepts_same_origin_optimized(self):
-        """Same-origin optimized covers are the only non-null form."""
-        issue = RollableIssue(
-            id=1,
-            number="1",
-            cover_url="/api/v1/images/optimize?src=test",
-        )
-        assert issue.cover_url is not None
+    def test_cover_url_rejects_removed_proxy_and_unsafe_urls(self):
+        """Old optimizer, embedded credentials and unsafe schemes must be rejected."""
+        for url in (
+            "/api/v1/images/optimize?url=https://comicvine.gamespot.com/a.jpg",
+            "javascript:alert(1)",
+            "data:image/png;base64,AAA",
+            "https://user:pass@comicvine.gamespot.com/a.jpg",
+        ):
+            with pytest.raises(ValueError):
+                RollableIssue(id=1, number="1", cover_url=url)
 
     def test_canonical_series_id_nullable(self):
         """Test that canonical_series_id is nullable."""

@@ -25,7 +25,6 @@
   "app/api/dependency_group_batch.py",
   "app/api/health.py",
   "app/api/identity_inbox.py",
-  "app/api/images.py",
   "app/api/issue.py",
   "app/api/issue_dependency_batch.py",
   "app/api/issue_identity.py",

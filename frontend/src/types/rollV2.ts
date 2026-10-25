@@ -33,7 +33,7 @@ export interface RollV2Issue {
   id: number
   number: string
   canonical_series_title?: string | null
-  /** Same-origin `/api/v1/images/optimize?...` URL only, else null. */
+  /** Direct provider-hosted HTTP(S) cover URL, or null. */
   cover_url?: string | null
 }
 

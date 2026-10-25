@@ -7,7 +7,7 @@ see. These guards exercise the deferred registry instead:
 
 * every eager ``/api/*`` route is reachable after selecting mounts for its own
   path (the route-coverage guard promised by ``app.router_mounts``);
-* a snooze request registers only the snooze mount, not catalog/images/delivery;
+* a snooze request registers only the snooze mount, not catalog/delivery;
 * ``POST /api/v1/roll/switch-prerequisite`` (composed into the dependency mount)
   answers on the first request instead of falling through to the fallback; and
 * ``import api.index`` stays inside the cold-start import budget.
@@ -38,12 +38,11 @@ IMPORT_BUDGET_MS = 600
 #: measured about 3.5x that floor; the deferred entry path costs about 2x.
 IMPORT_FRAMEWORK_RATIO = 3.0
 #: Modules a cold ``api.index`` must not pay to import (#3479). The eager
-#: catalog, images, and delivery routers and their backends (comicvine, httpx,
+#: catalog and delivery routers and their backends (comicvine, httpx,
 #: PyGithub) belong behind the per-resource deferred mounts.
 FORBIDDEN_COLD_IMPORTS: tuple[str, ...] = (
     "app.api.catalog",
     "app.services.comicvine_provider",
-    "app.api.images",
     "httpx",
     "app.api.delivery",
     "github",
@@ -149,7 +148,7 @@ def test_every_eager_api_route_is_reachable_from_its_selected_mounts() -> None:
 
 @pytest.mark.asyncio
 async def test_first_snooze_request_registers_only_the_snooze_mount() -> None:
-    """A cold snooze request must not import catalog, images or delivery."""
+    """A cold snooze request must not import catalog or delivery."""
     eager_paths = set(_route_paths(create_app(serve_frontend=False)))
     snooze_paths = {path for path in eager_paths if request_segment(path) == "snooze"}
 
@@ -167,7 +166,8 @@ async def test_first_snooze_request_registers_only_the_snooze_mount() -> None:
     loaded_paths = set(_route_paths(app)) - cold_paths - {API_FALLBACK_PATH}
     assert loaded_paths
     assert loaded_paths <= snooze_paths
-    for heavy_path in ("/api/v1/catalog/series", "/api/v1/images/optimize", "/api/v1/delivery"):
+    assert "/api/v1/images/optimize" not in eager_paths
+    for heavy_path in ("/api/v1/catalog/series", "/api/v1/delivery"):
         assert heavy_path not in cold_paths | loaded_paths
 
 

@@ -78,16 +78,11 @@ describe('ComicIdentity', () => {
     await waitForLoaded()
 
     // Cover image should be visible immediately (not in a collapsed card) and
-    // served through the edge-cacheable optimizer with the canonical source.
+    // loaded directly from the provider CDN, never via the ComicPile API.
     const cover = await screen.findByAltText('')
     expect(cover).toBeInTheDocument()
-    expect(cover).toHaveAttribute(
-      'src',
-      '/api/v1/images/optimize?url=https%3A%2F%2Fimages.example%2F100.jpg&width=720',
-    )
-    const srcSet = cover.getAttribute('srcset') ?? ''
-    expect(srcSet).toContain('/api/v1/images/optimize?url=https%3A%2F%2Fimages.example%2F100.jpg&width=240')
-    expect(srcSet).toContain('720w')
+    expect(cover).toHaveAttribute('src', 'https://images.example/100.jpg')
+    expect(cover).not.toHaveAttribute('srcset')
 
     // Cover/store date
     expect(screen.getByText('Jan 1, 2026')).toBeInTheDocument()

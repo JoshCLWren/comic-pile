@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import app.comicvine_hydration as hydration
 from app.models.external_identity import ExternalIdentity
 from app.services.comicvine_fallback import metadata_needs_hydration
-from app.services.image_delivery import canonicalize_source_url, validate_source_url
 from comic_pile.comicvine_provider import ComicVineError, ComicVineResponse
 
 
@@ -104,17 +103,8 @@ def test_provider_timestamp_is_tolerant(value: object, expected: str | None) -> 
     assert (parsed.isoformat() if parsed else None) == expected
 
 
-def test_stored_cover_from_a_real_provider_row_is_deliverable() -> None:
-    """The cover ComicVine returns must survive ComicPile's image delivery gate.
-
-    ``comicvine.gamespot.com/api`` exposes each rendition under a ``_url`` key and
-    publishes the value as a ``static*.comicvine.com`` alias, so that is what gets
-    stored in ``ExternalIdentity.metadata_json`` and what the Roll card asks the
-    image optimizer to fetch. If the delivery layer cannot resolve that alias the
-    request fails, the card reports a failed image load, and a mapped issue renders
-    the generic COMIC COVER placeholder while its creators and story title still
-    render. Regression for #3158.
-    """
+def test_stored_cover_preserves_original_provider_cdn_url() -> None:
+    """Keep ComicVine CDN assets unchanged for direct browser rendering."""
     raw: dict[str, object] = {
         "id": 453414,
         "name": "Who Shot the Hulk Part 3",
@@ -137,11 +127,7 @@ def test_stored_cover_from_a_real_provider_row_is_deliverable() -> None:
 
     primary_image = hydration.normalize_issue(raw)["primary_image"]
 
-    assert isinstance(primary_image, str)
-    assert validate_source_url(canonicalize_source_url(primary_image)) == (
-        "https://comicvine.gamespot.com/a/uploads/original/50/453414_hulk.jpg"
-    )
-
+    assert primary_image == "https://static.comicvine.com/uploads/original/50/453414_hulk.jpg"
 
 @pytest.mark.asyncio
 async def test_persist_issue_result_uses_provider_independent_identity(

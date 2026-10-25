@@ -13,7 +13,6 @@ import ImageWithLoading from './ImageWithLoading'
 // Declared before the query-effect and error-helper imports so main's concurrent
 // #3854 series-status imports stay in a separate hunk and merge cleanly (#3872).
 import { LatestRequestGuard, type LoadPhase } from '../utils/latestRequest'
-import { optimizedImageUrl, optimizedImageSrcSet } from '../services/imageDelivery'
 import { useToast } from '../contexts/useToast'
 import { queryClient } from '../query/queryClient'
 import { invalidateAfterQueueMutation, invalidateComicVineImportStatus } from '../query/cacheEffects'
@@ -554,9 +553,7 @@ export default function AddSeriesFromComicVineDialog({
                     <div className="flex items-start gap-3">
                       {series.image_url && (
                         <ImageWithLoading
-                          src={optimizedImageUrl(series.image_url, 240) ?? series.image_url}
-                          srcSet={optimizedImageSrcSet(series.image_url, [96, 240]) ?? undefined}
-                          sizes="40px"
+                          src={series.image_url}
                           alt=""
                           className="w-10 h-14 object-cover rounded-lg shrink-0"
                         />
@@ -611,9 +608,7 @@ export default function AddSeriesFromComicVineDialog({
               <div className="flex items-start gap-3">
                 {selectedSeries.image_url && (
                   <ImageWithLoading
-                    src={optimizedImageUrl(selectedSeries.image_url, 240) ?? selectedSeries.image_url}
-                    srcSet={optimizedImageSrcSet(selectedSeries.image_url, [96, 240]) ?? undefined}
-                    sizes="64px"
+                    src={selectedSeries.image_url}
                     alt=""
                     className="w-16 h-22 object-cover rounded-lg shrink-0"
                   />

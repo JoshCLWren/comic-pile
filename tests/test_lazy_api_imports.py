@@ -226,7 +226,6 @@ async def test_cold_ping_defers_core_routers_and_next_request_loads_only_its_mou
     assert set(completed_paths) < set(eager_paths)
     for unrelated_path in (
         "/api/v1/catalog/series",
-        "/api/v1/images/optimize",
         "/api/v1/delivery",
         "/api/v1/snooze/",
     ):
