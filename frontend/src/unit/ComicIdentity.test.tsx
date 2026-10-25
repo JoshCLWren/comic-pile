@@ -910,3 +910,448 @@ describe('ComicIdentity', () => {
     })
   })
 })
+
+describe('ComicIdentity creator status (issue #4149)', () => {
+  beforeEach(() => {
+    getIntelligence.mockReset()
+    importIssue.mockReset()
+  })
+
+  function renderIdentity(issueId = 1) {
+    return renderWithToast(<ComicIdentity issueId={issueId} />)
+  }
+
+  function waitForLoaded() {
+    return waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
+  }
+
+  it('shows "Creator credits being fetched" when metadata_status is not_deep_fetched', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '100',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'not_deep_fetched',
+      refresh_retry_after_seconds: null,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
+    expect(screen.getByTestId('creator-status-fetching')).toHaveTextContent('Creator credits being fetched…')
+  })
+
+  it('shows "Creator credits being fetched" when metadata_status is refresh_pending', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '200',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_pending',
+      refresh_retry_after_seconds: 30,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
+    expect(screen.getByTestId('creator-status-fetching')).toHaveTextContent('Creator credits being fetched…')
+  })
+
+  it('shows "Creator credits being fetched" when metadata_status is refresh_running', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '300',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_running',
+      refresh_retry_after_seconds: 45,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
+    expect(screen.getByTestId('creator-status-fetching')).toHaveTextContent('Creator credits being fetched…')
+  })
+
+  it('shows "Refresh deferred — retry in Ns" when metadata_status is refresh_deferred with retry_after', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '400',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_deferred',
+      refresh_retry_after_seconds: 60,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-deferred')).toBeInTheDocument()
+    expect(screen.getByTestId('creator-status-deferred')).toHaveTextContent('Refresh deferred — retry in 60s')
+  })
+
+  it('shows "Refresh deferred" when metadata_status is refresh_deferred without retry_after', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '500',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_deferred',
+      refresh_retry_after_seconds: null,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-deferred')).toBeInTheDocument()
+    expect(screen.getByTestId('creator-status-deferred')).toHaveTextContent('Refresh deferred')
+  })
+
+  it('shows "Refresh failed" when metadata_status is refresh_failed', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '600',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_failed',
+      refresh_retry_after_seconds: null,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-failed')).toBeInTheDocument()
+    expect(screen.getByTestId('creator-status-failed')).toHaveTextContent('Refresh failed')
+  })
+
+  it('shows "Credits not available" when metadata_status is deep_fetched_no_credits', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '700',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'deep_fetched_no_credits',
+      refresh_retry_after_seconds: null,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-no-credits')).toBeInTheDocument()
+    expect(screen.getByTestId('creator-status-no-credits')).toHaveTextContent('Credits not available')
+  })
+
+  it('does not show status when creators array is not empty', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '800',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [{ name: 'Test Creator', roles: ['writer'] }],
+      story_arcs: [],
+      metadata_status: 'not_deep_fetched',
+      refresh_retry_after_seconds: null,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('creator-status-deferred')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('creator-status-failed')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('creator-status-no-credits')).not.toBeInTheDocument()
+  })
+
+  it('does not show status when metadata_status is not provided', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '900',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      // metadata_status not provided (defaults to 'not_deep_fetched' in schema but we test undefined)
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+  })
+
+  it('refetches once after retry_after_seconds when status is refresh_pending', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '1000',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_pending',
+      refresh_retry_after_seconds: 1, // 1 second for fast test
+    })
+
+    const { unmount } = renderIdentity()
+    await waitForLoaded()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    // Wait for the refetch timeout (1 second + buffer)
+    await waitFor(() => {
+      expect(getIntelligence).toHaveBeenCalledTimes(2)
+    }, { timeout: 3000 })
+
+    unmount()
+  })
+
+  it('refetches once after retry_after_seconds when status is refresh_running', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '1100',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_running',
+      refresh_retry_after_seconds: 1,
+    })
+
+    const { unmount } = renderIdentity()
+    await waitForLoaded()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    // Wait for the refetch timeout
+    await waitFor(() => {
+      expect(getIntelligence).toHaveBeenCalledTimes(2)
+    }, { timeout: 3000 })
+
+    unmount()
+  })
+
+  it('does not refetch when status is refresh_deferred', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '1200',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_deferred',
+      refresh_retry_after_seconds: 1,
+    })
+
+    const { unmount } = renderIdentity()
+    await waitForLoaded()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    // Wait longer than retry_after to ensure no refetch
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    unmount()
+  })
+
+  it('does not refetch when status is deep_fetched_no_credits', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '1300',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'deep_fetched_no_credits',
+      refresh_retry_after_seconds: 1,
+    })
+
+    const { unmount } = renderIdentity()
+    await waitForLoaded()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    // Wait longer than retry_after to ensure no refetch
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    unmount()
+  })
+
+  it('clears refetch timeout on unmount', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '1400',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_pending',
+      refresh_retry_after_seconds: 10, // Long delay
+    })
+
+    const { unmount } = renderIdentity()
+    await waitForLoaded()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    // Unmount before timeout
+    unmount()
+
+    // Wait longer than the original timeout would have been
+    await new Promise((resolve) => setTimeout(resolve, 200))
+
+    // Should not have refetched because component was unmounted
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows correct status when issueId changes', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '1500',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_pending',
+      refresh_retry_after_seconds: 30,
+    })
+
+    const { rerender } = renderIdentity(1)
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
+
+    // Change to deep_fetched_no_credits
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '1501',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '2',
+      name: 'Test Issue 2',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'deep_fetched_no_credits',
+      refresh_retry_after_seconds: null,
+    })
+
+    rerender(<ComicIdentity issueId={2} />)
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-no-credits')).toBeInTheDocument()
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+  })
+})

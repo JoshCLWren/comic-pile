@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { canonicalCreatorKey, useCreatorSummaries } from '../../../hooks/useCreatorSummaries'
-import type { ComicVineRelatedIssue } from '../../../services/api-comicvine'
+import type { ComicVineRelatedIssue, ComicVineIssueIntelligence } from '../../../services/api-comicvine'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
@@ -84,6 +84,24 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       storyArcsDetailsRef.current.open = true
     }
   }, [metadata])
+
+  // Bounded refetch when metadata repair is in progress
+  // Only refetch once when status indicates pending/running repair with a retry delay
+  useEffect(() => {
+    if (!metadata) return
+    
+    const status = metadata.metadata_status
+    const retryAfter = metadata.refresh_retry_after_seconds
+    
+    // Only refetch for pending/running states with a valid retry delay
+    if ((status === 'refresh_pending' || status === 'refresh_running') && retryAfter != null && retryAfter > 0) {
+      const timeoutId = setTimeout(() => {
+        refetch()
+      }, retryAfter * 1000)
+      
+      return () => clearTimeout(timeoutId)
+    }
+  }, [metadata, refetch])
 
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
   const coverWidthCapVh = COVER_HEIGHT_CAP_VH * coverAspectRatio
@@ -358,6 +376,49 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
             )}
             </details>
           </>
+        )}
+
+        {/* Creator credits status when no creators are available */}
+        {metadata.creators.length === 0 && metadata.metadata_status && (
+          <div className="pl-6 pr-2 pb-2 border-l border-white/10">
+            {(() => {
+              const status = metadata.metadata_status;
+              const retryAfter = metadata.refresh_retry_after_seconds;
+              
+              switch (status) {
+                case 'not_deep_fetched':
+                case 'refresh_pending':
+                case 'refresh_running':
+                  return (
+                    <p className="text-[11px] text-stone-400 italic" data-testid="creator-status-fetching">
+                      Creator credits being fetched…
+                    </p>
+                  );
+                case 'refresh_deferred':
+                  return (
+                    <p className="text-[11px] text-stone-400 italic" data-testid="creator-status-deferred">
+                      {retryAfter != null && retryAfter > 0
+                        ? `Refresh deferred — retry in ${retryAfter}s`
+                        : 'Refresh deferred'}
+                    </p>
+                  );
+                case 'refresh_failed':
+                  return (
+                    <p className="text-[11px] text-stone-400 italic" data-testid="creator-status-failed">
+                      Refresh failed
+                    </p>
+                  );
+                case 'deep_fetched_no_credits':
+                  return (
+                    <p className="text-[11px] text-stone-400 italic" data-testid="creator-status-no-credits">
+                      Credits not available
+                    </p>
+                  );
+                default:
+                  return null;
+              }
+            })()}
+          </div>
         )}
 
         {metadata.story_arcs.length > 0 && (
