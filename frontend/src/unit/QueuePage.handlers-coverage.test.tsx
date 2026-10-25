@@ -254,17 +254,35 @@ describe('QueuePage callback coverage', () => {
     await waitFor(() => expect(screen.getByText(/issue identifier too long/i)).toBeInTheDocument())
   })
 
-  it('warns that unparseable issues input becomes a literal issue name (#3262)', async () => {
+  it('surfaces the staging error instead of promising literal issue creation (#3262/#4161)', async () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Garbage')
     await user.type(screen.getByLabelText('Issues'), 'xyz')
-    await waitFor(() => expect(screen.getByText(/Will create 1 issue/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/is not a valid issue number/)).toBeInTheDocument())
+    expect(screen.queryByText(/Will create/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/will be created as a literal issue/)).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /create series/i })).toBeDisabled(),
+    )
+  })
+
+  it('previews valid numbered labels such as "2b" without warnings and keeps submit enabled (#4161)', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
+    await user.type(screen.getByLabelText('Title'), 'Numbered labels')
+    await user.type(screen.getByLabelText('Issues'), '1-3, 2b')
+    await waitFor(() => expect(screen.getByText('Will create 4 issues')).toBeInTheDocument())
+    expect(screen.queryByTestId('issue-parse-warnings')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Couldn't parse/)).not.toBeInTheDocument()
     expect(
-      screen.getByText("Couldn't parse 'xyz' — it will be created as a literal issue name"),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /create series/i })).toBeEnabled()
+      screen.queryByText(/will be created as a literal issue/),
+    ).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /create series/i })).toBeEnabled(),
+    )
   })
 
   it('disables create submit while the issue range is invalid', async () => {

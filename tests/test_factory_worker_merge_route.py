@@ -412,16 +412,19 @@ BRANCH=factory/87-4081-opencode-free
 WORKER={worker}
 MODEL=test-model
 EXPECTED_HEAD={HEAD}
-machine_merge_gates_pass() {{ return "${{FAKE_MACHINE_GATE_STATUS:-0}}"; }}
+
 log() {{ printf 'log %s\\n' "$*" >> "$CALL_LOG"; }}
 release_pr_and_issue() {{ printf 'release %s\\n' "$*" >> "$CALL_LOG"; }}
 factory_dispatch_production_deploy() {{ printf 'dispatch %s\\n' "$*" >> "$CALL_LOG"; }}
+SKIP_PRS=()
 run_once=0
 while (( run_once == 0 )); do
   run_once=1
 {block}
 done
 printf 'after-block\\n' >> "$CALL_LOG"
+# A blocked PR must not be handed straight back to this same session.
+printf 'skip %s\\n' "${{SKIP_PRS[*]:-}}" >> "$CALL_LOG"
 """
     try:
         result = subprocess.run(
@@ -444,7 +447,7 @@ def test_primitives_call_site_runs_the_canonical_route_and_never_raw_closes() ->
     block = _worker_merge_call_site()
     assert "factory_merge_with_canonical_gates" in block
     assert "gh issue close" not in block
-    assert "machine_merge_gates_pass" in block
+    assert "machine_merge_gates_pass" not in block
     assert "stage_trusted_review_controller" not in block
 
 
@@ -456,6 +459,9 @@ def test_worker_call_site_gate_denial_releases_without_merging(tmp_path: Path) -
         f"release {PR} factory/87-4081-opencode-free factory:review gate-denied"
     ]
     assert any("decision=retry" in call for call in calls if call.startswith("log "))
+    # Pending CI reaches this branch on every attempt; the released lease must
+    # not let choose_unowned_pr hand the same unchanged PR back in this session.
+    assert f"skip {PR}" in calls
 
 
 def test_worker_call_site_merges_then_closes_through_trusted_policy(tmp_path: Path) -> None:
@@ -467,6 +473,7 @@ def test_worker_call_site_merges_then_closes_through_trusted_policy(tmp_path: Pa
     assert not [call for call in calls if call.startswith("gh issue close")]
     assert not [call for call in calls if call.startswith("release ")]
     assert any("post-merge closure closed" in call for call in calls if call.startswith("log "))
+    assert calls[-1] == "skip "
 
 
 def test_worker_call_site_blocked_closure_does_not_report_acceptance(tmp_path: Path) -> None:
@@ -476,3 +483,17 @@ def test_worker_call_site_blocked_closure_does_not_report_acceptance(tmp_path: P
     assert any("open-dependency: #4016" in call for call in calls if call.startswith("log "))
     assert not [call for call in calls if "ralph-status:done" in call]
     assert not [call for call in calls if call.startswith("gh issue close")]
+    assert f"skip {PR}" in calls
+
+
+def test_worker_call_site_merge_failure_does_not_repeat_the_same_pr(tmp_path: Path) -> None:
+    """A failed merge leaves the PR leased, so release it and skip it instead of re-running it."""
+    calls, _ = _run_call_site(tmp_path, FAKE_MERGE_EXIT="1")
+    assert _merge_calls(calls)
+    assert _closure_calls(calls) == []
+    # Release the lease before skipping so a peer can retry without waiting
+    # for this session to end (Greptile P1: failed merges stay reserved).
+    assert [call for call in calls if call.startswith("release ")] == [
+        f"release {PR} factory/87-4081-opencode-free factory:review merge-failed"
+    ]
+    assert f"skip {PR}" in calls

@@ -27,6 +27,27 @@ function isRecognizedLiteral(literal: string): boolean {
 }
 
 /**
+ * Whether a token that failed integer-range parsing is an acceptable issue
+ * identifier: a recognized comic naming pattern or a numbered label that still
+ * carries an issue number (e.g. "2b", "1.5", "1-Annual").
+ *
+ * This mirrors the staging-validation token rules so the preview and the Save
+ * gate can never disagree about which tokens are issues (#4161).
+ */
+function isAcceptedIssueToken(token: string): boolean {
+  if (isRecognizedLiteral(token)) {
+    return true;
+  }
+  // Negative numbers and half-written ranges never identify an issue.
+  if (token.startsWith('-') || token.endsWith('-')) {
+    return false;
+  }
+  // Any other token that still carries a digit is treated as a numbered label
+  // that identifies an issue.
+  return /\d/.test(token);
+}
+
+/**
  * Characters that carry no visible identity: zero-width spaces, joiners, bidi
  * controls, and similar formatting characters. An identifier built only from
  * these renders as an empty issue number ("#"), which is how a phantom chip
@@ -86,9 +107,13 @@ export interface ParsedTokenBreakdown {
  * If that fails, the whole token is kept as a literal identifier.
  *
  * Issue expansion, dedupe, limits, and thrown messages must stay in sync with
- * app/utils/issue_parser.py. The recognized-literal heuristic behind `warnings`
+ * app/utils/issue_parser.py. The literal-acceptance heuristic behind `warnings`
  * and `breakdown` is a preview-only affordance (#3262): it never changes what is
- * submitted, and the backend still accepts any literal identifier.
+ * submitted, and the backend still accepts any literal identifier. Tokens that
+ * are accepted (recognized names or numbered labels carrying an issue number) do
+ * not warn; tokens that are not accepted are flagged here and surfaced through
+ * the staging validation error instead of promising a literal-issue creation
+ * (#4161).
  *
  * One deliberate divergence: a range endpoint above `Number.MAX_SAFE_INTEGER`
  * is rejected here, because JavaScript cannot expand it without looping
@@ -170,14 +195,14 @@ export function parseIssueRangeDetailed(input: string): ParsedIssueRangeDetail {
         if (trimmedPart.length > MAX_LITERAL_LENGTH) {
           throw new Error(`Issue identifier too long (max ${MAX_LITERAL_LENGTH} chars)`);
         }
-        const recognized = isRecognizedLiteral(trimmedPart);
-        if (!recognized) {
-          warnings.push(`Couldn't parse '${trimmedPart}' — it will be created as a literal issue name`);
+        const accepted = isAcceptedIssueToken(trimmedPart);
+        if (!accepted) {
+          warnings.push(`Couldn't parse '${trimmedPart}'`);
         }
         result.push(trimmedPart);
         breakdown.push({
           token: trimmedPart,
-          type: recognized ? 'recognized-literal' : 'unrecognized-literal',
+          type: accepted ? 'recognized-literal' : 'unrecognized-literal',
           parsedIssues: [trimmedPart],
         });
       }
@@ -187,17 +212,17 @@ export function parseIssueRangeDetailed(input: string): ParsedIssueRangeDetail {
         throw new Error(`Issue identifier too long (max ${MAX_LITERAL_LENGTH} chars)`);
       }
       const isNumber = /^\d+$/.test(trimmedPart);
-      let recognized = false;
+      let accepted = isNumber;
       if (!isNumber) {
-        recognized = isRecognizedLiteral(trimmedPart);
-        if (!recognized) {
-          warnings.push(`Couldn't parse '${trimmedPart}' — it will be created as a literal issue name`);
+        accepted = isAcceptedIssueToken(trimmedPart);
+        if (!accepted) {
+          warnings.push(`Couldn't parse '${trimmedPart}'`);
         }
       }
       result.push(trimmedPart);
       breakdown.push({
         token: trimmedPart,
-        type: isNumber ? 'number' : recognized ? 'recognized-literal' : 'unrecognized-literal',
+        type: isNumber ? 'number' : accepted ? 'recognized-literal' : 'unrecognized-literal',
         parsedIssues: [trimmedPart],
       });
     }

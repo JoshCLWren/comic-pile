@@ -12,7 +12,8 @@ from typing import Protocol
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import async_sessionmaker as sqlalchemy_sessionmaker
 
 from app.models import Issue, Thread, User
 from app.models.external_identity import (
@@ -698,3 +699,264 @@ async def test_provider_identity_throttle_defers_one_resource_and_continues(
 
     assert [result.status for result in results] == ["rate-limited", "resolved-provider"]
     assert results[0].resource == "issues"
+
+
+@pytest.mark.asyncio
+async def test_load_read_issues_includes_unread_when_flag_set(async_db_committed: AsyncSession) -> None:
+    """Unread issues are inventoried when include_unread is requested."""
+    cli = _module()
+    user = User(username="unread-backfill")
+    async_db_committed.add(user)
+    await async_db_committed.flush()
+    thread = Thread(
+        title="Unread Series",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db_committed.add(thread)
+    await async_db_committed.flush()
+    read_issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="read")
+    unread_issue = Issue(thread_id=thread.id, issue_number="2", position=2, status="unread")
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="777000",
+        metadata_json={"creator_credits": []},
+    )
+    async_db_committed.add_all([read_issue, unread_issue, identity])
+    await async_db_committed.flush()
+    async_db_committed.add(
+        IssueExternalIdentityMapping(
+            issue_id=read_issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1.0,
+        )
+    )
+    await async_db_committed.commit()
+
+    rows_read_only = await cli._load_read_issues(async_db_committed, user_id=user.id, limit=None, include_unread=False)
+    rows_with_unread = await cli._load_read_issues(async_db_committed, user_id=user.id, limit=None, include_unread=True)
+
+    assert len(rows_read_only) == 1
+    assert rows_read_only[0].issue_number == "1"
+    # Unread issue has no mapping, so it still appears but with no identity
+    assert len(rows_with_unread) == 2
+
+
+@pytest.mark.asyncio
+async def test_confirmed_only_deduplication_filters_unmapped_and_duplicates(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    async_db_committed: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Exercise ``_run`` with confirmed_only=True to test deduplication and skipped identity phases."""
+    cli = _module()
+    user = User(username="dedup-backfill")
+    async_db_committed.add(user)
+    await async_db_committed.flush()
+    thread = Thread(
+        title="Dup Series",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db_committed.add(thread)
+    await async_db_committed.flush()
+    issue_a = Issue(thread_id=thread.id, issue_number="1", position=1, status="read")
+    issue_b = Issue(thread_id=thread.id, issue_number="2", position=2, status="read")
+    issue_unmapped = Issue(thread_id=thread.id, issue_number="3", position=3, status="read")
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="888000",
+        metadata_json={"person_credits": []},
+    )
+    async_db_committed.add_all([issue_a, issue_b, issue_unmapped, identity])
+    await async_db_committed.flush()
+    async_db_committed.add_all([
+        IssueExternalIdentityMapping(issue_id=issue_a.id, external_identity_id=identity.id, status="confirmed", confidence=1.0),
+        IssueExternalIdentityMapping(issue_id=issue_b.id, external_identity_id=identity.id, status="confirmed", confidence=1.0),
+    ])
+    await async_db_committed.commit()
+
+    # Mock the external API calls to avoid hitting ComicVine during testing
+    class MockComicVineClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class Snapshot:
+        available = False
+        path = None
+
+        def get_issue(self, issue_id: int):
+            return None
+
+    # Mock session factory to use the real committed test database
+    session_factory = sqlalchemy_sessionmaker(
+        bind=db_engine,
+        expire_on_commit=False,
+        class_=AsyncSession,
+    )
+
+    # Configure ``_run`` to use the real test database and mock external dependencies
+    monkeypatch.setattr(cli, "_local_snapshot_from_environment", lambda: Snapshot())
+    monkeypatch.setattr(cli, "_user_exists", AsyncMock(return_value=True))
+    monkeypatch.setattr(cli, "_engine", lambda database_url: db_engine)
+    monkeypatch.setattr(cli, "async_sessionmaker", lambda *args, **kwargs: session_factory)
+    monkeypatch.setattr(cli, "ComicVineClient", MockComicVineClient)
+
+    args = argparse.Namespace(
+        user_id=user.id,
+        database_url="postgresql://owner:secret@example.invalid/neondb",
+        dry_run=True,
+        refresh=False,
+        limit=None,
+        report=tmp_path / "report.json",
+        include_unread=False,
+        confirmed_only=True,
+    )
+    exit_code = await cli._run(args)
+
+    assert exit_code == 0
+    
+    # Read the actual report to verify real behavior
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    
+    # Verify confirmed-only filtering worked: only 1 issue processed (deduplicated)
+    assert report["inventory"] == {
+        "issues": 1,
+        "with_creator_credits": 0,
+        "without_creator_credits": 1,
+    }
+    
+    # Verify identity phases were skipped in confirmed-only mode
+    assert [phase["name"] for phase in report["phases"]] == [
+        "local-creators",
+        "provider-creators",
+    ]
+    
+    # Verify the correct issue was selected (issue_a, not issue_b or issue_unmapped)
+    provider_creators_phase = next(p for p in report["phases"] if p["name"] == "provider-creators")
+    assert provider_creators_phase["processed"] == 1
+    assert provider_creators_phase["results"][0]["issue_id"] == issue_a.id
+    assert provider_creators_phase["results"][0]["status"] == "planned-provider"
+    
+    # Verify summary shows correct counts
+    assert report["summary"]["processed"] == 1
+    assert report["summary"]["issues_with_creator_credits"] == 0
+    assert report["summary"]["without_creator_credits"] == 1
+
+
+@pytest.mark.asyncio
+async def test_run_confirmed_only_mode_with_explicit_flags(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    async_db_committed: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """``_run`` with confirmed_only=True exercises the real filtering and phase-skipping logic."""
+    cli = _module()
+    user = User(username="confirmed-only-test")
+    async_db_committed.add(user)
+    await async_db_committed.flush()
+    thread = Thread(
+        title="Confirmed Test Series",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db_committed.add(thread)
+    await async_db_committed.flush()
+    
+    # Create test data: confirmed mapping, duplicate mappings, and unmapped issue
+    issue_confirmed = Issue(thread_id=thread.id, issue_number="1", position=1, status="read")
+    issue_duplicate = Issue(thread_id=thread.id, issue_number="2", position=2, status="read")
+    issue_unmapped = Issue(thread_id=thread.id, issue_number="3", position=3, status="read")
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="test123",
+        metadata_json={"person_credits": []},
+    )
+    async_db_committed.add_all([issue_confirmed, issue_duplicate, issue_unmapped, identity])
+    await async_db_committed.flush()
+    
+    async_db_committed.add_all([
+        IssueExternalIdentityMapping(issue_id=issue_confirmed.id, external_identity_id=identity.id, status="confirmed", confidence=1.0),
+        IssueExternalIdentityMapping(issue_id=issue_duplicate.id, external_identity_id=identity.id, status="confirmed", confidence=1.0),
+    ])
+    await async_db_committed.commit()
+
+    # Mock external dependencies to focus on testing _run logic
+    class MockComicVineClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class Snapshot:
+        available = False
+        path = None
+
+        def get_issue(self, issue_id: int):
+            return None
+
+    # Configure _run to use real database with mocked external dependencies
+    session_factory = sqlalchemy_sessionmaker(
+        bind=db_engine,
+        expire_on_commit=False,
+        class_=AsyncSession,
+    )
+    
+    monkeypatch.setattr(cli, "_local_snapshot_from_environment", lambda: Snapshot())
+    monkeypatch.setattr(cli, "_user_exists", AsyncMock(return_value=True))
+    monkeypatch.setattr(cli, "_engine", lambda database_url: db_engine)
+    monkeypatch.setattr(cli, "async_sessionmaker", lambda *args, **kwargs: session_factory)
+    monkeypatch.setattr(cli, "ComicVineClient", MockComicVineClient)
+
+    # Call _run with confirmed_only=True to test the real filtering logic
+    args = argparse.Namespace(
+        user_id=user.id,
+        database_url="postgresql://owner:secret@example.invalid/neondb",
+        dry_run=True,
+        refresh=False,
+        limit=None,
+        report=tmp_path / "confirmed_only_report.json",
+        include_unread=False,
+        confirmed_only=True,
+    )
+    exit_code = await cli._run(args)
+
+    assert exit_code == 0
+    
+    # Verify the actual _run behavior through the report
+    report = json.loads((tmp_path / "confirmed_only_report.json").read_text(encoding="utf-8"))
+    
+    # Test 1: confirmed_only filtering worked - only 1 issue processed (deduplicated)
+    assert report["inventory"]["issues"] == 1
+    assert report["inventory"]["without_creator_credits"] == 1
+    
+    # Test 2: Identity phases were skipped (confirmed_only mode)
+    phase_names = [phase["name"] for phase in report["phases"]]
+    assert "local-identity" not in phase_names
+    assert "provider-identity" not in phase_names
+    assert "local-creators" in phase_names
+    assert "provider-creators" in phase_names
+    
+    # Test 3: Correct issue was selected (first confirmed issue, not duplicate or unmapped)
+    provider_creators_phase = next(p for p in report["phases"] if p["name"] == "provider-creators")
+    assert provider_creators_phase["processed"] == 1
+    assert provider_creators_phase["results"][0]["issue_id"] == issue_confirmed.id
+    
+    # Test 4: Summary reflects deduplicated results
+    assert report["summary"]["processed"] == 1
+    assert report["summary"]["without_creator_credits"] == 1
+
+
