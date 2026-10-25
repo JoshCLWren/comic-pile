@@ -49,12 +49,13 @@ async def create_bug_report(
     """Create a bug report or feature request issue on GitHub.
 
     Non-admin users are limited to one successfully created issue per rolling
-    hour. Admins bypass the limit.
+    hour; admins bypass the limit. The limit is enforced server-side by
+    ``submit_github_issue`` before GitHub is called.
 
     Args:
         body: Report type, title, description, and optional diagnostics.
         current_user: The authenticated user.
-        db: Database session used for the durable rate-limit state.
+        db: Database session that owns the durable rate-limit state.
 
     Returns:
         Created GitHub issue URL.
