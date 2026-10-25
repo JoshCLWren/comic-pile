@@ -94,6 +94,7 @@ def test_prune_legacy_bare_paths_drops_aliases_and_tooling() -> None:
         "/api/ping",
         "/api/threads/",
         "/api/v1/threads/",
+        "/api/v2/reading-boundaries",
         "/health",
     ]
 
