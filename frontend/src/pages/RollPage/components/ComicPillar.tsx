@@ -235,7 +235,7 @@ export function ComicPillar({
     <div className="w-full space-y-4">
       {/* Cover rail beside issue identity/details composition. The cover track grows only when
           the outer Roll shell has room for it, so the header can never spill into DecisionCard. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(9rem,11rem)_minmax(10rem,1fr)] xl:grid-cols-[minmax(10rem,17rem)_minmax(10rem,1fr)] gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,11rem)_minmax(10rem,1fr)] xl:grid-cols-[minmax(0,17rem)_minmax(10rem,1fr)] gap-4 items-start">
         {/* Cover rail */}
         <div className="flex-shrink-0 w-full lg:w-auto">
           <ComicIdentity issueId={issueId} />

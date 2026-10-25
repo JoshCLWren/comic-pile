@@ -236,10 +236,11 @@ test.describe('Roll rating view title column width', () => {
   const PROBLEMATIC_VIEWPORTS = [
     { width: 768, height: 1024 },
     { width: 1024, height: 800 },
+    { width: 1280, height: 800 },
   ]
 
   for (const viewport of PROBLEMATIC_VIEWPORTS) {
-    test(`title column is at least 60px wide at ${viewport.width}px`, async ({ authenticatedPage }) => {
+    test(`title column is at least 160px wide at ${viewport.width}px`, async ({ authenticatedPage }) => {
       const page = authenticatedPage
       await page.setViewportSize(viewport)
       await createThread(page, {
@@ -253,16 +254,17 @@ test.describe('Roll rating view title column width', () => {
       const geometry = await readGeometry(page)
 
       // The title element must have a minimum width to prevent mid-word breaking
+      // (10rem = 160px, with a small rounding tolerance for sub-pixel layout).
       expect(
         geometry.title.width,
-        `title must be at least 60px wide at ${viewport.width}px to prevent mid-word breaks`,
-      ).toBeGreaterThanOrEqual(60)
+        `title must be at least 160px wide at ${viewport.width}px to prevent mid-word breaks`,
+      ).toBeGreaterThanOrEqual(160 - GEOMETRY_TOLERANCE_PX)
 
       // The header must not be completely squeezed to ~60px
       expect(
         geometry.header.width,
         `header must not collapse to ~60px at ${viewport.width}px`,
-      ).toBeGreaterThan(60)
+      ).toBeGreaterThanOrEqual(160 - GEOMETRY_TOLERANCE_PX)
 
       // The progress line must not be clipped by the decision card
       if (geometry.progress) {
