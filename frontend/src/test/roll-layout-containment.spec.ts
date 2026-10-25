@@ -229,6 +229,46 @@ test.describe('Roll layout containment', () => {
   }
 })
 
+// Issue #4187: cover rail and Summary must not collapse at ~1024px (lg breakpoint)
+// The cover must not be narrower than ~11rem (176px) to prevent Summary from
+// wrapping one word per line. The Summary text inside the cover must have
+// at least ~20 characters per line without breaking.
+test.describe('Roll rating view cover rail and Summary width', () => {
+  const COVER_RAIL_VIEWPORTS = [
+    { width: 1024, height: 800 },
+    { width: 1280, height: 800 },
+  ]
+
+  for (const viewport of COVER_RAIL_VIEWPORTS) {
+    test(`cover rail is readable and Summary fits at ${viewport.width}px`, async ({ authenticatedPage }) => {
+      const page = authenticatedPage
+      await page.setViewportSize(viewport)
+      await createThread(page, {
+        title: THREAD_TITLE,
+        format: 'Comic',
+        issues_remaining: 2,
+        total_issues: 4,
+      })
+
+      await enterRatingView(page)
+      const geometry = await readGeometry(page)
+
+      // Cover rail must be at least 11rem (176px) wide to prevent Summary
+      // from wrapping one word per line (issue #4187)
+      expect(
+        geometry.cover.width,
+        `cover rail must be at least 11rem (176px) wide at ${viewport.width}px`,
+      ).toBeGreaterThanOrEqual(11 * 16 - GEOMETRY_TOLERANCE_PX)
+
+      // Summary text must have at least ~20 characters of width available
+      expect(
+        geometry.comic.right - geometry.cover.right,
+        `Summary text must have at least ~20ch width at ${viewport.width}px`,
+      ).toBeGreaterThanOrEqual(20 * 0.6 * 16 - GEOMETRY_TOLERANCE_PX)
+    })
+  }
+})
+
 // Issue #4174: Roll rating view title column collapses to ~60px at mid widths
 // The fix ensures the title column has a minimum width of 10rem (160px) on tablet
 // and desktop breakpoints to prevent mid-word text wrapping.

@@ -25,9 +25,13 @@ export const ROLL_WORKSPACE_MAX_WIDTH = 'lg:mx-auto lg:max-w-4xl'
  * Decision region. Underscore separators only; a top-level comma in an
  * arbitrary `grid-cols-[...]` value emits invalid CSS and silently collapses
  * the grid to one column (#2952, guarded by #2992).
+ *
+ * Minimum cover rail width of 11rem prevents the cover from collapsing to
+ * ~50px at lg breakpoints, which causes Summary text to wrap one word per
+ * line (issue #4187).
  */
 export const ROLL_WORKSPACE_TRACKS =
-  'lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)] xl:grid-cols-[minmax(0,32rem)_minmax(18rem,24rem)]'
+  'lg:grid-cols-[minmax(11rem,24rem)_minmax(18rem,24rem)] xl:grid-cols-[minmax(17rem,32rem)_minmax(18rem,24rem)]'
 
 /** Compact intentional gutter between the two regions. */
 export const ROLL_WORKSPACE_GUTTER = 'gap-4 lg:gap-6'
