@@ -62,9 +62,9 @@ describe('useCreatorSeriesIssues', () => {
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
-    expect(getSeriesIssues).toHaveBeenCalledWith('creator:7', 'thread:7')
-    expect(result.current.data?.total).toBe(1)
-    expect(result.current.data?.population_scope).toBe('all_verified_credits')
+    expect(getSeriesIssues).toHaveBeenCalledWith('creator:7', 'thread:7', { offset: 0 })
+    expect(result.current.data?.pages?.[0]?.total).toBe(1)
+    expect(result.current.data?.pages?.[0]?.population_scope).toBe('all_verified_credits')
   })
 
   it('does not fetch until the caller enables the drill-down', async () => {

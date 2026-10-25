@@ -1,11 +1,10 @@
 import { Link, useParams } from 'react-router-dom'
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import { useCreatorSeriesIssues } from '../hooks/useCreatorSeriesIssues'
 import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
-import { creatorsApi } from '../services/api-creators'
 import type { CreatorIssueInsight, CreatorIssueRow, CreatorSeriesGroup, CreatorSeriesInsight } from '../services/api-creators'
 import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 import Breadcrumbs from '../components/Breadcrumbs'
@@ -68,34 +67,8 @@ function SeriesGroupDrilldown({
   creatorKey: string
   group: CreatorSeriesGroup
 }) {
-  const { data: initialData, isPending, isError } = useCreatorSeriesIssues(creatorKey, group.series_key)
-  const [issues, setIssues] = useState<CreatorIssueRow[]>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [total, setTotal] = useState<number>(0)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-
-  useEffect(() => {
-    if (initialData) {
-      setIssues(initialData.issues)
-      setNextCursor(initialData.next_cursor)
-      setTotal(initialData.total)
-    }
-  }, [initialData])
-
-  const handleLoadMore = async () => {
-    if (!nextCursor || isLoadingMore) return
-    setIsLoadingMore(true)
-    try {
-      const offset = parseInt(nextCursor, 10)
-      const response = await creatorsApi.getSeriesIssues(creatorKey, group.series_key, { offset })
-      setIssues(prev => [...prev, ...response.issues])
-      setNextCursor(response.next_cursor)
-    } catch {
-      // Loading error is non-blocking; leave current list visible
-    } finally {
-      setIsLoadingMore(false)
-    }
-  }
+  const { issues, total, isPending, isError, isFetchingMore, hasMore, loadMore } =
+    useCreatorSeriesIssues(creatorKey, group.series_key)
 
   if (isPending) {
     return (
@@ -105,7 +78,7 @@ function SeriesGroupDrilldown({
     )
   }
 
-  if (isError || !initialData) {
+  if (isError) {
     return (
       <p className="mt-2 text-xs" role="alert" style={{ color: 'var(--theme-error)' }}>
         Could not load the issues behind this average.
@@ -124,15 +97,15 @@ function SeriesGroupDrilldown({
           <IssueRow key={row.issue_id} row={row} showRating />
         ))}
       </ul>
-      {nextCursor != null && (
+      {hasMore && (
         <button
           type="button"
-          onClick={handleLoadMore}
-          disabled={isLoadingMore}
+          onClick={loadMore}
+          disabled={isFetchingMore}
           className="mt-2 inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-[var(--theme-bg-page)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-60"
           style={{ borderColor: 'var(--theme-border)', color: 'var(--theme-text-muted)' }}
         >
-          {isLoadingMore ? 'Loading…' : `Load more issues (${issues.length} of ${total})`}
+          {isFetchingMore ? 'Loading…' : `Load more issues (${issues.length} of ${total})`}
         </button>
       )}
     </>

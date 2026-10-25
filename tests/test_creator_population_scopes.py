@@ -12,12 +12,11 @@ module inspects the local persisted identities and ratings and never asserts
 unavailable production provider ids.
 """
 
-from typing import Any
-
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import TypedDict
 
 from app.models import Event, User
 from tests.test_creator_detail_api import D1, D2, D3, _confirm_identity, _make_thread, _rate
@@ -25,7 +24,49 @@ from tests.test_creator_detail_api import D1, D2, D3, _confirm_identity, _make_t
 HEADLINE_ROLES = {"writer", "artist", "penciler", "inker", "colorist", "letterer"}
 
 
-async def _group_by_thread(body: dict[str, Any]) -> dict[int, dict[str, Any]]:
+class _CreatorIssueRow(TypedDict, total=False):
+    issue_id: int
+    thread_id: int
+    thread_title: str
+    effective_rating: float | None
+    roles: list[str]
+    sort_key: str
+
+
+class _CreatorSeriesGroup(TypedDict, total=False):
+    thread_id: int
+    series_key: str
+    thread_title: str
+    rated_issue_count: int
+    average_rating: float | None
+    lowest_rating: float | None
+    highest_rating: float | None
+    read_unrated_issue_count: int
+    roles: list[str]
+    population_scope: str
+
+
+class _CreatorSummary(TypedDict, total=False):
+    ratings_count: int
+    average_rating: float | None
+
+
+class _CreatorRatingDistribution(TypedDict, total=False):
+    sample_count: int
+
+
+class _CreatorDetailBody(TypedDict, total=False):
+    rated_population_scope: str
+    headline_roles: list[str]
+    summary: _CreatorSummary
+    rating_distribution: _CreatorRatingDistribution
+    rated_issues: list[_CreatorIssueRow]
+    series_groups: list[_CreatorSeriesGroup]
+
+
+async def _group_by_thread(
+    body: _CreatorDetailBody,
+) -> dict[int, _CreatorSeriesGroup]:
     """Index the detail response's series groups by their stable thread id."""
     return {group["thread_id"]: group for group in body["series_groups"]}
 
