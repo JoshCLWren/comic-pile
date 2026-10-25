@@ -240,35 +240,6 @@ export default function CblBrowserPage() {
   // the new view then.
   viewedSourceIdRef.current = deepLinkedListId
 
-  useEffect(() => {
-    setCustomizing(false)
-    setConfirmOpen(false)
-    setSeriesDecisions({})
-    setEntryDecisions({})
-    setExpandedGroups({})
-    setStaleReview(false)
-    setAmbiguousCommit(false)
-    setOverlapChoices({})
-    setGraphDialogOpen(false)
-    setGraphDialogContinuesAdd(false)
-    // Restore the checklist saved for the source the URL now shows (#4014),
-    // after the reset above, so Back/Forward and the results list both return
-    // the reader to the choices they already made.
-    if (deepLinkedListId !== null) {
-      const saved = sourceDecisionsRef.current[deepLinkedListId]
-      if (saved) {
-        setSeriesDecisions(saved.series)
-        setEntryDecisions(saved.entries)
-      }
-    }
-    // A commit still running belongs to the reader, not to whichever source
-    // Back/Forward just re-opened: keep it tracked so the pending Add stays
-    // blocked, and only discard a settled result (its callbacks check the
-    // view before they navigate or surface errors).
-    if (!commitMutation.isPending) commitMutation.reset()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepLinkedListId])
-
   /**
    * Browse the shared catalog immediately: entering the page shows the root
    * folders and sources without requiring a search submission.
@@ -355,12 +326,39 @@ export default function CblBrowserPage() {
   // on screen: its callbacks no longer own this view, and a stale result must
   // not linger into the next Add.
   const { isPending: commitIsPending, reset: resetCommitMutation } = commitMutation
+  // Mirror commitMutation through a ref so the deep-link reset effect below
+  // does not have to list it as a dependency (its identity is not stable).
+  const commitMutationRef = useRef(commitMutation)
+  commitMutationRef.current = commitMutation
   useEffect(() => {
     if (!commitIsPending && commitSourceId !== null && commitSourceId !== deepLinkedListId) {
       resetCommitMutation()
       setCommitSourceId(null)
     }
   }, [commitSourceId, deepLinkedListId, commitIsPending, resetCommitMutation])
+
+  // Reset the in-page editing state whenever the deep-linked source changes
+  // (Back/Forward, or picking another source). Keep a pending commit tracked.
+  useEffect(() => {
+    setCustomizing(false)
+    setConfirmOpen(false)
+    setSeriesDecisions({})
+    setEntryDecisions({})
+    setExpandedGroups({})
+    setStaleReview(false)
+    setAmbiguousCommit(false)
+    setOverlapChoices({})
+    setGraphDialogOpen(false)
+    setGraphDialogContinuesAdd(false)
+    if (deepLinkedListId !== null) {
+      const saved = sourceDecisionsRef.current[deepLinkedListId]
+      if (saved) {
+        setSeriesDecisions(saved.series)
+        setEntryDecisions(saved.entries)
+      }
+    }
+    if (!commitMutationRef.current.isPending) commitMutationRef.current.reset()
+  }, [deepLinkedListId])
 
   // Persist the reader's choices per source so returning to a reviewed source
   // restores them instead of resetting the checklist (#4014). The source's
@@ -1231,9 +1229,11 @@ export default function CblBrowserPage() {
 
               {browsePage.total > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p role="status" className="text-xs text-[var(--theme-text-muted)]">
-                    Showing {firstShown}–{lastShown} of {sourceCountLabel(browsePage.total)}
-                  </p>
+                  {browsePage.items.length > 0 && (
+                    <p role="status" className="text-xs text-[var(--theme-text-muted)]">
+                      Showing {firstShown}–{lastShown} of {sourceCountLabel(browsePage.total)}
+                    </p>
+                  )}
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
