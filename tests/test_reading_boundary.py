@@ -372,8 +372,13 @@ async def test_scoped_boundary_labels_keep_both_directions_and_skip_unrelated_ed
     assert any("boundary_target_issue.thread_id IN (" in sql for sql, _ in statements)
     for sql, params in statements:
         assert "WHERE" in sql.upper()
-        values = params.values() if isinstance(params, dict) else params
-        assert requested.id in values
+        if isinstance(params, dict):
+            values = tuple(str(value) for value in params.values())
+        elif isinstance(params, (tuple, list)):
+            values = tuple(str(value) for value in params)
+        else:
+            pytest.fail("Unexpected database parameter representation")
+        assert str(requested.id) in values
 
     both = await load_boundary_labels(
         async_db, owner.id, requested_thread_ids={requested.id, related.id}
