@@ -984,3 +984,41 @@ async def test_subset_projection_matches_full_library_with_manual_fallback(
     assert set(projected.owned_issues) == {issues[0].id}
     assert set(projected.effective_ratings) == {issues[0].id}
     assert projected.coverage_counts == (3, 3, 0, 0, 2, 2)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad_credit",
+    [
+        {"id": "-7", "name": "Invalid ID"},
+        {"id": 123, "name": "\t\n\r"},
+        {"id": 123, "name": "\u2003\u00a0"},
+        {"id": 123, "name": ""},
+        {"id": 1.5, "name": "Fractional ID"},
+    ],
+)
+async def test_unusable_confirmed_credit_keeps_manual_fallback(
+    async_db: AsyncSession,
+    default_user: User,
+    bad_credit: dict[str, object],
+) -> None:
+    """SQL credit validation must not suppress manual attribution for invalid credits."""
+    from app.repositories.creator_summary import manual_creator_id
+    from app.services.creator_summary import get_creator_summaries
+
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Fallback",
+        issue_count=1,
+        queue_position=1,
+        read_through=1,
+    )
+    thread.manual_creator_credits = [{"name": "Manual Writer", "roles": ["writer"]}]
+    await _confirm_identity(async_db, issues[0], creators=[bad_credit])
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    key = f"creator:{manual_creator_id('Manual Writer')}"
+    response = await get_creator_summaries(async_db, default_user.id, [key])
+    assert response.summaries[key].ratings_count == 1
+    assert response.summaries[key].average_rating == 4.0
+    assert response.coverage.rated_issues_with_creator_metadata == 1

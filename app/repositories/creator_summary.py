@@ -31,6 +31,14 @@ COMICVINE_PROVIDER = "comicvine"
 #: Named so the SQL projection and the Python extractor cannot drift apart.
 CREATOR_CREDITS_KEY = "creator_credits"
 
+# Match Python str.strip(), including Unicode spaces that PostgreSQL's POSIX
+# character class does not recognize (for example NBSP).
+_CREATOR_NAME_WHITESPACE = (
+    "\t\n\v\f\r\x1c\x1d\x1e\x1f \x85\xa0\u1680"
+    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+    "\u2028\u2029\u202f\u205f\u3000"
+)
+
 
 @dataclass(frozen=True)
 class CreatorCredit:
@@ -521,17 +529,18 @@ async def load_creator_summary_inputs_for_creators(
     value = cast(elements.c.value, JSONB)
     creator_id_text = value["id"].astext
     # CASE protects the numeric cast even when the planner reorders predicates.
-    creator_id = case(
-        (creator_id_text.op("~")(r"^-?[0-9]+$"), cast(creator_id_text, Numeric)),
-        else_=None,
+    numeric_id = or_(
+        (func.jsonb_typeof(value["id"]) == "number") & creator_id_text.op("~")(r"^-?[0-9]+$"),
+        (func.jsonb_typeof(value["id"]) == "string") & creator_id_text.op("~")(r"^[0-9]+$"),
     )
+    creator_id = case((numeric_id, cast(creator_id_text, Numeric)), else_=None)
     valid_credits = (
         select(arrays.c.issue_id, value.label("credit"), creator_id.label("creator_id"))
         .select_from(arrays)
         .join(elements, true())
         .where(creator_id.is_not(None))
         .where(func.jsonb_typeof(value["name"]) == "string")
-        .where(func.btrim(value["name"].astext) != "")
+        .where(func.btrim(value["name"].astext, _CREATOR_NAME_WHITESPACE) != "")
         .cte("usable_creator_credits")
     )
     confirmed = select(valid_credits.c.issue_id).distinct().cte("confirmed_creator_issues")
