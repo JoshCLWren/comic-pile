@@ -1,6 +1,6 @@
 """Database evidence for read-only, owner-scoped shadow loading and reporting."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 
 import pytest
 from sqlalchemy import event, select, text
@@ -112,6 +112,75 @@ async def test_actual_lists_not_shorter_plan_memberships_drive_snapshot(
     assert not async_db.dirty
     assert not async_db.new
     assert not async_db.deleted
+
+
+async def test_live_loader_reads_only_reader_dependencies_without_legacy_census(
+    async_db: AsyncSession,
+) -> None:
+    """Live eligibility must not load or count historical dependency rows."""
+    user = await _owner(async_db, "live_reader_only")
+    _, issues = await _series(async_db, user, "Canonical series", 3)
+    async_db.add_all(
+        [
+            Dependency(
+                source_issue_id=issues[0].id,
+                target_issue_id=issues[1].id,
+                note="cbl-order: historical only",
+            ),
+            Dependency(
+                source_issue_id=issues[0].id,
+                target_issue_id=issues[2].id,
+                origin="converted",
+                classification="C",
+                provenance="Historical conversion",
+            ),
+            Dependency(
+                source_issue_id=issues[1].id,
+                target_issue_id=issues[2].id,
+                origin="reader",
+                classification="A",
+                provenance="Explicit reader requirement",
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    dependency_statements: list[tuple[str, tuple[str, ...]]] = []
+
+    def capture_binds(conn, cursor, statement, parameters, context, executemany):
+        """Capture executed SQL and real DBAPI binds, not formatted query text."""
+        if "FROM dependencies" in statement:
+            if isinstance(parameters, Mapping):
+                binds = tuple(str(value) for value in parameters.values())
+            elif parameters is None:
+                binds = ()
+            else:
+                binds = tuple(str(value) for value in parameters)
+            dependency_statements.append((statement, binds))
+
+    event.listen(Engine, "before_cursor_execute", capture_binds)
+    try:
+        live = await load_shadow_inputs(
+            async_db, user.id, include_legacy_diagnostics=False
+        )
+    finally:
+        event.remove(Engine, "before_cursor_execute", capture_binds)
+
+    assert len(live.prerequisites) == 1
+    assert live.prerequisites[0].source_issue_id == issues[1].id
+    assert live.prerequisites[0].target_issue_id == issues[2].id
+    assert live.inert_dependency_count == 0
+    assert len(dependency_statements) == 1
+    query, bound_values = dependency_statements[0]
+    assert "COUNT" not in query.upper()
+    assert "WHERE" in query.upper()
+    where_clause = query.upper().split("WHERE", 1)[1]
+    assert "DEPENDENCIES.ORIGIN =" in where_clause
+    assert "reader" in bound_values
+
+    historical = await load_shadow_inputs(async_db, user.id)
+    assert len(historical.prerequisites) == 1
+    assert historical.inert_dependency_count == 2
 
 
 async def test_jli_informational_edges_stay_inert_and_local_skip_is_not_exclusion(

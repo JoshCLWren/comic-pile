@@ -56,7 +56,9 @@ class ShadowReadingInputs:
     legacy_enforced_targets: frozenset[int] | None = None
 
 
-async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInputs:
+async def load_shadow_inputs(
+    db: AsyncSession, user_id: int, *, include_legacy_diagnostics: bool = True
+) -> ShadowReadingInputs:
     """Read owner-scoped evidence in a constant number of bulk queries.
 
     Callers needing a durable census must use a repeatable-read, read-only
@@ -67,6 +69,7 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
     Args:
         db: Current read transaction.
         user_id: Reader whose authored constraints are being compared.
+        include_legacy_diagnostics: Include historical dependency data only for reports.
 
     Returns:
         Immutable inputs for the pure shadow diagnostic.
@@ -83,28 +86,42 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
             .where(Thread.user_id == user_id)
         )
         touching = or_(Dependency.source_issue_id.in_(owned), Dependency.target_issue_id.in_(owned))
-        enforced = or_(
-            Dependency.origin.is_not(None),
-            Dependency.note.is_(None),
-            Dependency.note.not_like("cbl-order:%"),
-        )
-        dependencies = list(
-            (
-                await db.scalars(
-                    select(Dependency).where(touching, enforced).order_by(Dependency.id)
-                )
-            ).all()
-        )
-        inert_count = int(
-            (
-                await db.scalar(
-                    select(func.count(Dependency.id)).where(
-                        touching, Dependency.origin.is_(None), Dependency.note.like("cbl-order:%")
+        if include_legacy_diagnostics:
+            # Preserve historical comparisons only for explicit diagnostics.
+            enforced = or_(
+                Dependency.origin.is_not(None),
+                Dependency.note.is_(None),
+                Dependency.note.not_like("cbl-order:%"),
+            )
+            dependencies = list(
+                (
+                    await db.scalars(
+                        select(Dependency).where(touching, enforced).order_by(Dependency.id)
+                    )
+                ).all()
+            )
+            inert_count = int(
+                (
+                    await db.scalar(
+                        select(func.count(Dependency.id)).where(
+                            touching, Dependency.origin.is_(None), Dependency.note.like("cbl-order:%")
+                        )
                     )
                 )
+                or 0
             )
-            or 0
-        )
+        else:
+            # Canonical Roll/Queue fetches only reader-approved requirements.
+            dependencies = list(
+                (
+                    await db.scalars(
+                        select(Dependency)
+                        .where(touching, Dependency.origin == "reader")
+                        .order_by(Dependency.id)
+                    )
+                ).all()
+            )
+            inert_count = 0
         issue_ids = {issue.id for issue in issues}
         issue_status = {issue.id: issue.status for issue in issues}
         unresolved: list[UnresolvedReadingReference] = []

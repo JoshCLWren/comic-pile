@@ -122,7 +122,7 @@ async def load_eligibility_snapshot(db: AsyncSession, user_id: int) -> ReadingEl
     Returns:
         Validated detached eligibility for this request.
     """
-    inputs = await load_shadow_inputs(db, user_id)
+    inputs = await load_shadow_inputs(db, user_id, include_legacy_diagnostics=False)
     if inputs.unresolved:
         raise ValueError("Reading eligibility contains unresolved references")
     snapshot = ReadingSnapshot(
