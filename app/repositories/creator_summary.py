@@ -16,8 +16,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import distinct_on
+from sqlalchemy import Numeric, case, cast, func, literal, or_, select, true
+from sqlalchemy.dialects.postgresql import distinct_on, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event
@@ -30,6 +30,14 @@ COMICVINE_PROVIDER = "comicvine"
 #: Key inside normalized issue metadata that holds provider creator credits.
 #: Named so the SQL projection and the Python extractor cannot drift apart.
 CREATOR_CREDITS_KEY = "creator_credits"
+
+# Match Python str.strip(), including Unicode spaces that PostgreSQL's POSIX
+# character class does not recognize (for example NBSP).
+_CREATOR_NAME_WHITESPACE = (
+    "\t\n\v\f\r\x1c\x1d\x1e\x1f \x85\xa0\u1680"
+    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+    "\u2028\u2029\u202f\u205f\u3000"
+)
 
 
 @dataclass(frozen=True)
@@ -69,6 +77,8 @@ class CreatorSummaryInputs:
     """Plain, user-scoped inputs for the creator summary aggregation.
 
     Attributes:
+        coverage_counts: Optional SQL aggregate counts for rated/covered,
+            read-unrated/covered, and unread/covered issues across the entire library.
         owned_issues: Mapping of owned issue id to its ``read``/``unread`` status.
         owned_issue_series: Mapping of owned issue id to its stable local
             thread/series identity (issue #3088).
@@ -81,6 +91,7 @@ class CreatorSummaryInputs:
             ``rate`` event timestamp (latest event by timestamp/id wins).
     """
 
+    coverage_counts: tuple[int, int, int, int, int, int] | None = None
     owned_issues: dict[int, str] = field(default_factory=dict)
     owned_issue_series: dict[int, OwnedIssueSeries] = field(default_factory=dict)
     issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = field(default_factory=dict)
@@ -443,6 +454,203 @@ async def load_creator_summary_inputs(
     )
 
 
+async def load_creator_summary_inputs_for_creators(
+    db: AsyncSession,
+    user_id: int,
+    requested_creator_ids: set[int],
+) -> CreatorSummaryInputs:
+    """Load user-scoped inputs for creator summary, filtered to requested creator IDs.
+
+    This variant uses SQLAlchemy Core / PostgreSQL set-based reads to project only
+    the requested creator credits, avoiding full-library hydration in Python.
+    The query count stays constant regardless of library size; fetched rows scale
+    with the number of requested creators and their attributed issues.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated user whose library is aggregated.
+        requested_creator_ids: Set of external person IDs to include.
+
+    Returns:
+        User-scoped :class:`CreatorSummaryInputs` containing only data for the
+        requested creators (plus global coverage totals).
+    """
+    # Manual names use the existing stable hash in Python. Read each stored
+    # thread credit list once, never once per issue, then bind matching threads.
+    manual_result = await db.execute(
+        select(Thread.id, Thread.manual_creator_credits)
+        .where(Thread.user_id == user_id)
+        .where(Thread.manual_creator_credits.is_not(None))
+    )
+    manual_by_thread = {
+        int(thread_id): tuple(extract_manual_creator_credits(raw or []))
+        for thread_id, raw in manual_result.all()
+    }
+    covered_manual_threads = [tid for tid, credits in manual_by_thread.items() if credits]
+    requested_manual_threads = [
+        tid
+        for tid, credits in manual_by_thread.items()
+        if any(c.external_id in requested_creator_ids for c in credits)
+    ]
+    owned = (
+        select(Issue.id, Issue.status, Issue.thread_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Thread.user_id == user_id)
+        .cte("owned_creator_issues")
+        .prefix_with("NOT MATERIALIZED")
+    )
+    arrays = (
+        select(
+            owned.c.id.label("issue_id"),
+            cast(ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY], JSONB).label("credits"),
+        )
+        .select_from(owned)
+        .join(IssueExternalIdentityMapping, IssueExternalIdentityMapping.issue_id == owned.c.id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(IssueExternalIdentityMapping.status == "confirmed")
+        .where(ExternalIdentity.provider == COMICVINE_PROVIDER)
+        .cte("creator_credit_arrays")
+        .prefix_with("MATERIALIZED")
+    )
+    raw_credits = arrays.c.credits
+    elements = (
+        func.jsonb_array_elements(
+            case(
+                (func.jsonb_typeof(raw_credits) == "array", raw_credits),
+                else_=cast(literal([], type_=JSONB), JSONB),
+            )
+        )
+        .table_valued("value")
+        .lateral()
+    )
+    value = cast(elements.c.value, JSONB)
+    creator_id_text = value["id"].astext
+    # CASE protects the numeric cast even when the planner reorders predicates.
+    numeric_id = or_(
+        (func.jsonb_typeof(value["id"]) == "number") & creator_id_text.op("~")(r"^-?[0-9]+$"),
+        (func.jsonb_typeof(value["id"]) == "string") & creator_id_text.op("~")(r"^[0-9]+$"),
+    )
+    creator_id = case((numeric_id, cast(creator_id_text, Numeric)), else_=None)
+    valid_credits = (
+        select(arrays.c.issue_id, value.label("credit"), creator_id.label("creator_id"))
+        .select_from(arrays)
+        .join(elements, true())
+        .where(creator_id.is_not(None))
+        .where(func.jsonb_typeof(value["name"]) == "string")
+        .where(func.btrim(value["name"].astext, _CREATOR_NAME_WHITESPACE) != "")
+        .cte("usable_creator_credits")
+    )
+    confirmed = select(valid_credits.c.issue_id).distinct().cte("confirmed_creator_issues")
+    latest = (
+        select(Event.issue_id, Event.rating)
+        .join(owned, owned.c.id == Event.issue_id)
+        .where(Event.type == "rate", Event.rating.is_not(None))
+        .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
+        .ext(distinct_on(Event.issue_id))
+        .cte("latest_creator_ratings")
+        .prefix_with("NOT MATERIALIZED")
+    )
+    covered = or_(confirmed.c.issue_id.is_not(None), owned.c.thread_id.in_(covered_manual_threads))
+    rated = latest.c.rating.is_not(None)
+    read_unrated = (owned.c.status == "read") & ~rated
+    unread = owned.c.status == "unread"
+    coverage = (
+        select(
+            *[
+                func.count().filter(predicate).label(f"count_{index}")
+                for index, predicate in enumerate(
+                    (
+                        rated,
+                        rated & covered,
+                        read_unrated,
+                        read_unrated & covered,
+                        unread,
+                        unread & covered,
+                    )
+                )
+            ]
+        )
+        .select_from(owned)
+        .outerjoin(confirmed, confirmed.c.issue_id == owned.c.id)
+        .outerjoin(latest, latest.c.issue_id == owned.c.id)
+        .cte("creator_coverage")
+    )
+    requested = (
+        select(valid_credits.c.issue_id, valid_credits.c.credit)
+        .where(valid_credits.c.creator_id.in_(requested_creator_ids))
+        .cte("requested_creator_credits")
+    )
+    matching = (
+        select(owned.c.id, owned.c.status, owned.c.thread_id, requested.c.credit, latest.c.rating)
+        .select_from(owned)
+        .outerjoin(confirmed, confirmed.c.issue_id == owned.c.id)
+        .outerjoin(requested, requested.c.issue_id == owned.c.id)
+        .outerjoin(latest, latest.c.issue_id == owned.c.id)
+        .where(
+            or_(
+                requested.c.issue_id.is_not(None),
+                confirmed.c.issue_id.is_(None) & owned.c.thread_id.in_(requested_manual_threads),
+            )
+        )
+        .cte("matching_creator_issues")
+    )
+    # Share extracted credit arrays between attribution and coverage. Reading
+    # the large source JSON twice was slower than the old Python aggregation.
+    rows = await db.execute(
+        select(matching, coverage)
+        .select_from(coverage)
+        .outerjoin(matching, true())
+        .order_by(matching.c.id)
+    )
+    coverage_counts = None
+    statuses: dict[int, str] = {}
+    ratings: dict[int, float] = {}
+    credits_by_issue: dict[int, dict[tuple[int, tuple[str, ...]], CreatorCredit]] = {}
+    for row in rows.all():
+        coverage_counts = (
+            int(row[5]),
+            int(row[6]),
+            int(row[7]),
+            int(row[8]),
+            int(row[9]),
+            int(row[10]),
+        )
+        if row[0] is None:
+            continue
+        issue_id = int(row[0])
+        status = str(row[1])
+        thread_id = int(row[2])
+        raw_credit = row[3]
+        rating = row[4]
+        statuses[issue_id] = status
+        if rating is not None:
+            ratings[issue_id] = float(rating)
+        credits = (
+            extract_creator_credit_list([raw_credit])
+            if raw_credit is not None
+            else [
+                c
+                for c in manual_by_thread.get(thread_id, ())
+                if c.external_id in requested_creator_ids
+            ]
+        )
+        by_key = credits_by_issue.setdefault(issue_id, {})
+        for credit in credits:
+            by_key.setdefault((credit.external_id, credit.roles), credit)
+    return CreatorSummaryInputs(
+        coverage_counts=coverage_counts,
+        owned_issues=statuses,
+        issue_creator_credits={
+            iid: tuple(sorted(cs.values(), key=lambda credit: (credit.external_id, credit.roles)))
+            for iid, cs in credits_by_issue.items()
+        },
+        effective_ratings=ratings,
+    )
+
+
 __all__ = [
     "COMICVINE_PROVIDER",
     "CREATOR_CREDITS_KEY",
@@ -454,5 +662,6 @@ __all__ = [
     "extract_creator_credits",
     "extract_manual_creator_credits",
     "load_creator_summary_inputs",
+    "load_creator_summary_inputs_for_creators",
     "manual_creator_id",
 ]

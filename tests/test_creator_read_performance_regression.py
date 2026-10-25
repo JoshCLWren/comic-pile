@@ -25,7 +25,7 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import event, select
+from sqlalchemy import event, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.comicvine_hydration import normalize_issue
@@ -43,7 +43,11 @@ _identity_serial = 0
 
 
 @contextmanager
-def _captured_selects(db_engine: AsyncEngine) -> Iterator[list[str]]:
+def _captured_selects(
+    db_engine: AsyncEngine,
+    *,
+    row_counts: list[int] | None = None,
+) -> Iterator[list[str]]:
     """Yield a list that records SELECT statements executed on the engine."""
     select_statements: list[str] = []
 
@@ -55,14 +59,29 @@ def _captured_selects(db_engine: AsyncEngine) -> Iterator[list[str]]:
         context: object,
         executemany: bool,
     ) -> None:
-        if statement.lstrip().upper().startswith("SELECT"):
+        if statement.lstrip().upper().startswith(("SELECT", "WITH")):
             select_statements.append(statement)
 
+    def _count_rows(
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        if row_counts is not None and statement.lstrip().upper().startswith(("SELECT", "WITH")):
+            count = getattr(cursor, "rowcount", -1)
+            assert isinstance(count, int)
+            row_counts.append(count)
+
     event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
+    event.listen(db_engine.sync_engine, "after_cursor_execute", _count_rows)
     try:
         yield select_statements
     finally:
         event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
+        event.remove(db_engine.sync_engine, "after_cursor_execute", _count_rows)
 
 
 def _provider_issue_result(issue_number: int, person_ids: list[int]) -> dict[str, object]:
@@ -95,9 +114,7 @@ def _provider_issue_result(issue_number: int, person_ids: list[int]) -> dict[str
                 "id": person_id,
                 "name": f"Creator {person_id}",
                 "api_detail_url": f"https://comicvine.gamespot.com/api/person/1-{person_id}/",
-                "site_detail_url": (
-                    f"https://comicvine.gamespot.com/person/4000-{person_id}/"
-                ),
+                "site_detail_url": (f"https://comicvine.gamespot.com/person/4000-{person_id}/"),
                 "role": role,
             }
             for person_id, role in zip(person_ids, ("writer", "penciler"), strict=False)
@@ -302,15 +319,11 @@ async def test_projected_read_matches_full_metadata_creator_semantics(
     assert body["coverage"]["rated_issues_total"] == len(issues)
     assert body["coverage"]["ratings_complete"] is True
 
-    expected_keys = {
-        f"creator:{person_id}" for person_id in range(402, 402 + thread_count * 2)
-    }
+    expected_keys = {f"creator:{person_id}" for person_id in range(402, 402 + thread_count * 2)}
     assert {row["canonical_creator_key"] for row in body["items"]} == expected_keys
 
     stored_rows = await async_db.execute(
-        select(ExternalIdentity.metadata_json).where(
-            ExternalIdentity.external_id.like("perf-%")
-        )
+        select(ExternalIdentity.metadata_json).where(ExternalIdentity.external_id.like("perf-%"))
     )
     checked = 0
     for (metadata,) in stored_rows.all():
@@ -420,3 +433,86 @@ def test_extract_creator_credits_reads_the_named_key() -> None:
     raw = [{"id": 3, "name": "Three", "role": "writer"}]
     assert extract_creator_credits({CREATOR_CREDITS_KEY: raw}) == extract_creator_credit_list(raw)
     assert extract_creator_credits({"other": raw}) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("library_size", [100, 1000])
+async def test_summary_projection_bounds_transferred_rows(
+    async_db: AsyncSession,
+    default_user: User,
+    db_engine: AsyncEngine,
+    library_size: int,
+) -> None:
+    """Requested summaries transfer relevant issues plus one global aggregate."""
+    import cProfile
+    import time
+
+    from app.repositories.creator_summary import (
+        load_creator_summary_inputs,
+        load_creator_summary_inputs_for_creators,
+    )
+
+    await _seed_full_payload_library(
+        async_db,
+        default_user,
+        thread_count=20,
+        issues_per_thread=library_size // 20,
+    )
+    await async_db.flush()
+    # Uncommitted benchmark fixtures cannot be analyzed by autovacuum. Give
+    # PostgreSQL the table statistics a populated production library has.
+    for table in (
+        "issues",
+        "threads",
+        "events",
+        "external_identities",
+        "issue_external_identity_mappings",
+    ):
+        await async_db.execute(text(f"ANALYZE {table}"))
+    baseline_profile = cProfile.Profile()
+    started = time.perf_counter()
+    baseline_row_counts: list[int] = []
+    baseline_profile.enable()
+    with _captured_selects(db_engine, row_counts=baseline_row_counts) as baseline_queries:
+        baseline = await load_creator_summary_inputs(async_db, default_user.id)
+    baseline_profile.disable()
+    assert len(baseline_queries) == 4
+    baseline_ms = (time.perf_counter() - started) * 1000
+    for key_count in (1, 2, 5, 20):
+        ids = set(range(402, 402 + key_count))
+        profile = cProfile.Profile()
+        started = time.perf_counter()
+        profile.enable()
+        row_counts: list[int] = []
+        with _captured_selects(db_engine, row_counts=row_counts) as queries:
+            projected = await load_creator_summary_inputs_for_creators(
+                async_db,
+                default_user.id,
+                ids,
+            )
+        profile.disable()
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        expected = {
+            iid: tuple(c for c in credits if c.external_id in ids)
+            for iid, credits in baseline.issue_creator_credits.items()
+            if any(c.external_id in ids for c in credits)
+        }
+        assert projected.issue_creator_credits == expected
+        assert set(projected.owned_issues) == set(expected)
+        assert set(projected.effective_ratings) == set(expected)
+        assert projected.coverage_counts == (library_size, library_size, 0, 0, 0, 0)
+        # One thread-only manual-credit read and one combined filtered/coverage read.
+        assert len(queries) == 2
+        expected_rows = (library_size // 20) * ((key_count + 1) // 2)
+        assert len(projected.owned_issues) == expected_rows
+        assert row_counts[-1] == (library_size // 20) * key_count
+        assert sum(row_counts) < sum(baseline_row_counts)
+
+        print(
+            f"library={library_size} keys={key_count} old_issue_rows={len(baseline.owned_issues)} "
+            f"requested_issue_rows={len(projected.owned_issues)} "
+            f"baseline_db_rows={sum(baseline_row_counts)} db_rows={sum(row_counts)} "
+            f"baseline_ms={baseline_ms:.2f} projected_ms={elapsed_ms:.2f} "
+            f"baseline_profile_calls={sum(e.callcount for e in baseline_profile.getstats())} "
+            f"profile_calls={sum(entry.callcount for entry in profile.getstats())}"
+        )
