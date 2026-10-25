@@ -98,12 +98,21 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     
     if (status !== 'refresh_pending' && status !== 'refresh_running') return
     
-    // Honor a declared retry delay when the server provides one; otherwise use a
-    // bounded fallback so active repairs do refresh without high-frequency polling.
-    const delaySeconds =
-      retryAfter != null && retryAfter > 0
-        ? retryAfter
-        : METADATA_REFRESH_FALLBACK_SECONDS
+    // Honor a declared retry delay when the server provides a positive value;
+    // otherwise use a bounded fallback so active repairs refresh without
+    // high-frequency polling. The server returns null for pending/running
+    // repairs, so the fallback ensures they eventually refresh.
+    let delaySeconds: number
+    if (retryAfter == null) {
+      // Server returns null for pending/running repairs — use bounded fallback
+      delaySeconds = METADATA_REFRESH_FALLBACK_SECONDS
+    } else if (retryAfter > 0) {
+      // Server declared a retry delay — honor it
+      delaySeconds = retryAfter
+    } else {
+      // Server declared a non-positive delay (e.g. 0) — use bounded fallback
+      delaySeconds = METADATA_REFRESH_FALLBACK_SECONDS
+    }
     
     const timeoutId = setTimeout(() => {
       refetch()
