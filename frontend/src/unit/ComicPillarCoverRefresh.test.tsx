@@ -190,7 +190,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
 
     // initial stale cover should appear
     const staleImg = await screen.findByAltText('')
-    expect(staleImg.getAttribute('src')).toContain(encodeURIComponent('https://images.example/old-cover.jpg'))
+    expect(staleImg.getAttribute('src')).toBe('https://images.example/old-cover.jpg')
     expect(getIntelligenceSpy).toHaveBeenCalledTimes(1)
     expect(getIntelligenceSpy).toHaveBeenCalledWith(77)
 
@@ -221,7 +221,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
 
     // Optimistic update makes new image appear immediately, refetch confirms it
     const updatedImg = await screen.findByAltText('')
-    expect(updatedImg.getAttribute('src')).toContain(encodeURIComponent('https://images.example/new-cover.jpg'))
+    expect(updatedImg.getAttribute('src')).toBe('https://images.example/new-cover.jpg')
 
     // Ensure we did NOT globally clear unrelated caches (queue pages should stay untouched)
     // The only invalidation is for the specific issueId query; verify cache updated not cleared globally

@@ -2655,35 +2655,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/images/optimize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api Optimize Remote Image
-         * @description Fetch, optimize, and serve an allowlisted remote cover image.
-         *
-         *     Args:
-         *         url: Canonical external image URL from persisted ComicPile data.
-         *         width: Desired rendered width; snapped to a supported variant bucket.
-         *
-         *     Returns:
-         *         A binary image response with long-lived shared-cache headers, or an
-         *         error response that must never be cached when the source is unsafe or
-         *         unavailable.
-         */
-        get: operations["api_optimize_remote_image_api_v1_images_optimize_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/issue-identity/anomalies": {
         parameters: {
             query?: never;
@@ -19980,40 +19951,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_optimize_remote_image_api_v1_images_optimize_get: {
-        parameters: {
-            query: {
-                /** @description Canonical external image URL */
-                url: string;
-                /** @description Desired rendered width in pixels */
-                width: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

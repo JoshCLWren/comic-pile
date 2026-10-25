@@ -9,6 +9,7 @@ null canonical-series stats per #1401, never a thread-title substitution).
 from datetime import datetime
 from enum import StrEnum
 from typing import ClassVar, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -59,25 +60,16 @@ class RollableIssue(BaseModel):
 
     @field_validator("cover_url")
     @classmethod
-    def cover_must_be_same_origin(cls, value: str | None) -> str | None:
-        """Enforce the frozen cover contract: same-origin optimized URLs only.
-
-        Args:
-            value: Candidate cover URL.
-
-        Returns:
-            The value unchanged when null or same-origin.
-
-        Raises:
-            ValueError: If a non-null cover is not a same-origin
-                ``/api/v1/images/optimize?...`` URL.
-        """
+    def cover_must_be_remote_image(cls, value: str | None) -> str | None:
+        """Accept only direct, absolute provider image URLs, never a local proxy."""
         if value is None:
             return None
-        if value.startswith("/api/v1/images/optimize"):
-            return value
-        raise ValueError("Roll v2 covers must be same-origin /api/v1/images/optimize URLs")
-
+        parts = urlsplit(value)
+        if parts.scheme.lower() not in ("https", "http") or not parts.hostname:
+            raise ValueError("Roll v2 covers must be direct HTTP(S) image URLs")
+        if parts.username or parts.password:
+            raise ValueError("Roll v2 covers must not embed credentials")
+        return value
 
 class RollableIdentity(BaseModel):
     """Identity information for rollable items."""

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
-from urllib.parse import quote
+from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,7 +38,6 @@ from app.schemas.roll_v2 import (
     RouteKind,
 )
 
-COVER_WIDTH = 480
 MAX_ROUTES = 3
 
 
@@ -121,24 +120,24 @@ def extract_cover_source(metadata: dict[str, object] | None) -> str | None:
 
 
 def build_cover_url(source: str | None) -> str | None:
-    """Build the same-origin optimized cover URL for a stored source.
+    """Return the stored provider cover URL without proxying or resizing it.
 
-    Raw provider URLs are never exposed as the Roll contract; remote http(s)
-    sources are routed through the edge-cacheable image proxy. Non-remote or
-    missing sources yield nulls, not bootstrap failure.
-
-    Args:
-        source: Stored canonical image URL.
-
-    Returns:
-        Same-origin ``/api/v1/images/optimize?...`` URL, or None.
+    The browser fetches ComicVine artwork directly. Roll does no image I/O.
     """
     if not source:
         return None
-    lowered = source.lower()
-    if not (lowered.startswith("https://") or lowered.startswith("http://")):
+    try:
+        parsed = urlsplit(source)
+        hostname = parsed.hostname
+    except ValueError:
+        # Corrupt legacy metadata must not break the whole Roll bootstrap.
         return None
-    return f"/api/v1/images/optimize?url={quote(source, safe='')}&width={COVER_WIDTH}"
+    if parsed.scheme.lower() not in ("https", "http") or not hostname:
+        return None
+    if parsed.username or parsed.password:
+        return None
+    return source
+
 
 
 def derive_identity_state(

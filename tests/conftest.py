@@ -793,12 +793,3 @@ def clear_config_cache() -> Iterator[None]:
     yield
     clear_settings_cache()
 
-
-@pytest.fixture(scope="function", autouse=True)
-def clear_image_delivery_caches() -> Iterator[None]:
-    """Clear image delivery caches before and after each test to prevent test pollution."""
-    from app.services.image_delivery import clear_caches
-
-    clear_caches()
-    yield
-    clear_caches()

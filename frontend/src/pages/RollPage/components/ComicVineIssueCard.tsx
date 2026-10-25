@@ -5,7 +5,6 @@ import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
 import { CreatorName } from './CreatorName'
-import { optimizedImageSrcSet, optimizedImageUrl } from '../../../services/imageDelivery'
 
 interface ComicVineIssueCardProps {
   issueId: number | null | undefined
@@ -75,9 +74,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
       <summary className="min-h-16 p-3 flex items-center gap-3 cursor-pointer list-none focus:ring-2 focus:ring-amber-500">
         {metadata.image_url && metadata.image_url !== failedImageUrl && (
           <ImageWithLoading
-            src={optimizedImageUrl(metadata.image_url, 240) ?? metadata.image_url}
-            srcSet={optimizedImageSrcSet(metadata.image_url, [96, 240]) ?? undefined}
-            sizes="44px"
+            src={metadata.image_url}
             alt=""
             loading="lazy"
             className="w-11 h-16 object-cover rounded-md bg-stone-900 shrink-0"

@@ -27414,65 +27414,6 @@
         ]
       }
     },
-    "/api/v1/images/optimize": {
-      "get": {
-        "description": "Fetch, optimize, and serve an allowlisted remote cover image.\n\nArgs:\n    url: Canonical external image URL from persisted ComicPile data.\n    width: Desired rendered width; snapped to a supported variant bucket.\n\nReturns:\n    A binary image response with long-lived shared-cache headers, or an\n    error response that must never be cached when the source is unsafe or\n    unavailable.",
-        "operationId": "api_optimize_remote_image_api_v1_images_optimize_get",
-        "parameters": [
-          {
-            "description": "Canonical external image URL",
-            "in": "query",
-            "name": "url",
-            "required": true,
-            "schema": {
-              "description": "Canonical external image URL",
-              "maxLength": 2048,
-              "minLength": 1,
-              "title": "Url",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Desired rendered width in pixels",
-            "in": "query",
-            "name": "width",
-            "required": true,
-            "schema": {
-              "description": "Desired rendered width in pixels",
-              "maximum": 10000,
-              "minimum": 16,
-              "title": "Width",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Api Optimize Remote Image",
-        "tags": [
-          "images",
-          "images"
-        ]
-      }
-    },
     "/api/v1/issue-identity/anomalies": {
       "get": {
         "description": "List duplicate physical-issue anomalies for the authenticated user.\n\nArgs:\n    current_user: Authenticated owner.\n    db: Async database session.\n    page: Page number (starting from 1).\n    size: Number of items per page (maximum 100).\n\nReturns:\n    Paginated list of duplicated ComicVine identities.",

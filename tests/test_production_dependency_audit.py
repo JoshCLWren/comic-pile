@@ -91,6 +91,7 @@ def test_pytest_xdist_is_not_a_production_dependency() -> None:
 def test_server_tooling_is_out_of_the_vercel_runtime() -> None:
     """Uvicorn must live in the server group plus dev, not project deps."""
     project_names = _project_dependency_names()
+    assert "pillow" not in project_names, "The retired image optimizer must not pull in Pillow"
     assert "uvicorn" not in project_names
     assert "uvicorn" in _group_dependency_names("server")
     assert "uvicorn" in _group_dependency_names("dev")
@@ -124,7 +125,6 @@ def test_request_path_dependencies_are_retained() -> None:
         "fastapi",
         "sqlalchemy",
         "asyncpg",
-        "pillow",
         "pydantic",
         "pydantic-settings",
         "python-multipart",

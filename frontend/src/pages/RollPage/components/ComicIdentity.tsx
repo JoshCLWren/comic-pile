@@ -7,7 +7,6 @@ import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
 import Modal from '../../../components/Modal'
 import { CreatorName } from './CreatorName'
-import { optimizedImageSrcSet, optimizedImageUrl } from '../../../services/imageDelivery'
 import { useResponsive } from '../../../utils/responsive'
 
 interface ComicIdentityProps {
@@ -232,9 +231,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         {metadata.image_url && metadata.image_url !== failedImageUrl ? (
           <>
             <ImageWithLoading
-              src={optimizedImageUrl(metadata.image_url, 720) ?? metadata.image_url}
-              srcSet={optimizedImageSrcSet(metadata.image_url, [240, 480, 720]) ?? undefined}
-              sizes="(min-width: 1024px) 30vh, calc((45vh * 2) / 3)"
+              src={metadata.image_url}
               alt=""
               loading="eager"
               className="h-full w-full object-contain"
@@ -593,9 +590,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     >
       {metadata.image_url && (
         <img
-          src={optimizedImageUrl(metadata.image_url, 1200) ?? metadata.image_url}
-          srcSet={optimizedImageSrcSet(metadata.image_url, [480, 720, 1200]) ?? undefined}
-          sizes="(min-width: 1024px) 80vw, 90vw"
+          src={metadata.image_url}
           alt={metadata.name ?? 'Comic cover'}
           className="w-full rounded-lg"
         />
