@@ -134,7 +134,7 @@ export function ComicPillar({
       })
     }
 
-    if (activeRatingThread?.id && issueId) {
+    if (activeRatingThread?.id && issueId && !isLinked) {
       entries.push({
         key: 'map-series',
         label: 'Map series',

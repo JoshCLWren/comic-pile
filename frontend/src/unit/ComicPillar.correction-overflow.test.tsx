@@ -248,7 +248,7 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     expect(screen.queryByRole('button', { name: 'Find ComicVine match' })).toBeNull()
   })
 
-  it('retains every correction action inside the overflow menu', async () => {
+  it('retains every correction action inside the overflow menu for linked series', async () => {
     getIssueIdentitySpy.mockResolvedValue({
       has_confirmed_identity: true,
       comicvine_issue_id: null,
@@ -262,14 +262,15 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     const menu = await openCorrections()
     expect(within(menu).getByRole('menuitem', { name: 'Fix issue number' })).toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: 'Wrong series?' })).toBeInTheDocument()
-    expect(within(menu).getByRole('menuitem', { name: 'Map series' })).toBeInTheDocument()
+    // Map series button is not shown for already linked series
+    expect(within(menu).queryByRole('menuitem', { name: 'Map series' })).toBeNull()
     // A confirmed mapping does not also offer the first-time match action.
     expect(within(menu).queryByRole('menuitem', { name: 'Find ComicVine match' })).toBeNull()
   })
 
-  it('opens series mapping directly for a linked issue and refreshes identity after an update', async () => {
-    getIssueIdentitySpy.mockResolvedValue({ has_confirmed_identity: true,
-      comicvine_issue_id: '36956', confirmed_mappings: [{ comicvine_id: 36956 }],
+  it('opens series mapping for an unlinked issue', async () => {
+    getIssueIdentitySpy.mockResolvedValue({ has_confirmed_identity: false,
+      comicvine_issue_id: null, confirmed_mappings: [],
       candidate_mappings: [], has_unresolved: false })
     renderPillar()
     const menu = await openCorrections()
