@@ -5,8 +5,8 @@ from collections.abc import Iterator
 import pytest
 from httpx import AsyncClient
 from pydantic import ValidationError
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import event, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.config import ReadingExecutionSettings, get_reading_execution_settings
 from app.models import Dependency, Event, Issue, ReadingSession, Snapshot, Thread, User
@@ -1265,3 +1265,52 @@ async def test_unclassified_legacy_dependency_is_not_reader_approval(
     assert {row["id"] for row in bootstrap.json()["roll_pool"]} == {
         prerequisite_id, dependent_id,
     }
+
+
+async def test_option_e_roll_pool_never_reaggregates_unread_issues(
+    option_e: None,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Canonical pool uses the snapshot's counts/frontiers without an Issue SQL join."""
+    user = await get_or_create_user_async(async_db)
+    waiting, waiting_issues = await _series(async_db, user.id, "Waiting", 2)
+    ahead, ahead_issues = await _series(async_db, user.id, "Ahead", 1, blocked=True)
+    snoozed, _ = await _series(async_db, user.id, "Snoozed", 3)
+    async_db.add(
+        CollectionExclusion(user_id=user.id, issue_id=waiting_issues[0].id)
+    )
+    await async_db.flush()
+    # Deliberately stale saved counters and flags must not determine the offer.
+    ahead.issues_remaining = 0
+    ahead.is_blocked = True
+    waiting.next_unread_issue_id = waiting_issues[0].id
+    await async_db.commit()
+
+    snapshot = await get_execution_eligibility(async_db, user.id)
+    assert snapshot is not None
+    assert snapshot.threads[waiting.id].next_issue_id == waiting_issues[1].id
+    statements: list[str] = []
+
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        pool = await get_bounded_roll_pool_rows(
+            user.id, async_db, 10, snoozed_ids=[snoozed.id]
+        )
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", capture)
+
+    assert [(row.id, count, number) for row, count, number in pool] == [
+        (ahead.id, 2, ahead_issues[0].issue_number),
+        (waiting.id, 1, waiting_issues[1].issue_number),
+    ]
+    assert len(statements) == 1
+    sql = statements[0].lower()
+    assert " from threads" in sql or " from threads " in sql
+    assert "join issues" not in sql
+    assert "from issues" not in sql
+    assert "count(" not in sql
+
