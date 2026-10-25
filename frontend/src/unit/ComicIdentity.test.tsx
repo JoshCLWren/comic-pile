@@ -954,6 +954,16 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     })
   }
 
+  // TanStack Query batches observer notifications onto `setTimeout(..., 0)`.
+  // Advancing by exactly 0 does not run a timer scheduled during that same
+  // tick, so a refetch triggered at the end of an advance needs one extra
+  // millisecond before its hydrated data is rendered.
+  function flushQueryNotification() {
+    return act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+  }
+
   afterEach(() => {
     vi.useRealTimers()
   })
@@ -1186,6 +1196,56 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
   })
 
+  it('shows no status for an unrecognized metadata status instead of guessing', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '950',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'some_future_status',
+      refresh_retry_after_seconds: null,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('creator-status-no-credits')).not.toBeInTheDocument()
+  })
+
+  it('shows plain deferred copy when the server delay has already elapsed', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '975',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'refresh_deferred',
+      refresh_retry_after_seconds: 0,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-deferred')).toHaveTextContent('Refresh deferred')
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+  })
+
   it('refetches after the bounded fallback when a pending repair returns no retry delay', async () => {
     getIntelligence
       .mockResolvedValueOnce(
@@ -1220,7 +1280,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
     })
-    await flushInitialLoad()
+    await flushQueryNotification()
     expect(getIntelligence).toHaveBeenCalledTimes(2)
 
     // Hydrated credits replace the fetching message without a manual reload
@@ -1257,7 +1317,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
     })
-    await flushInitialLoad()
+    await flushQueryNotification()
     expect(getIntelligence).toHaveBeenCalledTimes(2)
 
     expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
@@ -1298,7 +1358,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(45_000)
     })
-    await flushInitialLoad()
+    await flushQueryNotification()
     expect(getIntelligence).toHaveBeenCalledTimes(2)
 
     expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
@@ -1501,11 +1561,69 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
     })
-    await flushInitialLoad()
+    await flushQueryNotification()
     expect(getIntelligence).toHaveBeenCalledTimes(3)
 
     expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
     expect(screen.getByText('Finally Writer')).toBeInTheDocument()
+
+    unmount()
+  })
+
+  it('does not overlap refetches while a slow repair response is still in flight', async () => {
+    const pending = intelligenceResponse({
+      comicvine_issue_id: '2100',
+      metadata_status: 'refresh_pending',
+      refresh_retry_after_seconds: null,
+    })
+    let resolveSecond: ((value: ComicVineIssueIntelligence) => void) | null = null
+    const secondFetch = new Promise<ComicVineIssueIntelligence>((resolve) => {
+      resolveSecond = resolve
+    })
+
+    getIntelligence
+      .mockResolvedValueOnce(pending)
+      .mockReturnValueOnce(secondFetch)
+      .mockResolvedValue(
+        intelligenceResponse({
+          comicvine_issue_id: '2100',
+          metadata_status: 'complete',
+          creators: [{ name: 'Settled Writer', roles: ['writer'] }],
+        }),
+      )
+
+    vi.useFakeTimers()
+    const { unmount } = renderIdentity()
+    await flushInitialLoad()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    // The first bounded refetch starts and stays in flight longer than the delay.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+    })
+    expect(getIntelligence).toHaveBeenCalledTimes(2)
+
+    // Further delays pass while that request is unresolved: no overlap, and
+    // therefore no cancellation of the in-flight repair response.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
+    })
+    expect(getIntelligence).toHaveBeenCalledTimes(2)
+
+    // Once it settles, the next bounded refetch is armed a full delay later.
+    await act(async () => {
+      resolveSecond?.(pending)
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+    })
+    await flushQueryNotification()
+    expect(getIntelligence).toHaveBeenCalledTimes(3)
+
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+    expect(screen.getByText('Settled Writer')).toBeInTheDocument()
 
     unmount()
   })

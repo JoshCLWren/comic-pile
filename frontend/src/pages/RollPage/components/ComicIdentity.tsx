@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { canonicalCreatorKey, useCreatorSummaries } from '../../../hooks/useCreatorSummaries'
-import type { ComicVineRelatedIssue, ComicVineIssueIntelligence } from '../../../services/api-comicvine'
+import type { ComicVineRelatedIssue } from '../../../services/api-comicvine'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
@@ -108,22 +108,27 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     }
 
     let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout>
 
+    // Wait for each refetch to settle before arming the next one so a provider
+    // response slower than the delay cannot overlap (and cancel) the next poll.
     const arm = () => {
-      const timeoutId = setTimeout(() => {
+      timeoutId = setTimeout(() => {
         if (cancelled) return
-        refetch()
-        if (!cancelled) {
-          arm()
-        }
+        void refetch().then(() => {
+          if (!cancelled) {
+            arm()
+          }
+        })
       }, delaySeconds * 1000)
-      return () => {
-        cancelled = true
-        clearTimeout(timeoutId)
-      }
     }
 
-    return arm()
+    arm()
+
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+    }
   }, [issueId, metadata, refetch])
 
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
@@ -405,9 +410,9 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         {metadata.creators.length === 0 && metadata.metadata_status && (
           <div className="pl-6 pr-2 pb-2 border-l border-[var(--theme-border)]">
             {(() => {
-              const status = metadata.metadata_status;
-              const retryAfter = metadata.refresh_retry_after_seconds;
-              
+              const status = metadata.metadata_status
+              const retryAfter = metadata.refresh_retry_after_seconds
+
               switch (status) {
                 case 'not_deep_fetched':
                 case 'refresh_pending':

@@ -7,7 +7,7 @@ import { queryKeys } from '../query/queryKeys'
 interface ComicVineIssueIntelligenceState {
   metadata: ComicVineIssueIntelligence | null
   isLoading: boolean
-  refetch: () => void
+  refetch: () => Promise<void>
 }
 
 export function useComicVineIssueIntelligence(
@@ -21,8 +21,11 @@ export function useComicVineIssueIntelligence(
     enabled,
   })
 
-  const refetch = useCallback(() => {
-    void queryRefetch()
+  // Expose an awaitable refetch: callers that re-arm a bounded timer need to
+  // know when the in-flight request settled, otherwise a slow provider response
+  // overlaps with the next scheduled refetch and React Query cancels it.
+  const refetch = useCallback(async () => {
+    await queryRefetch()
   }, [queryRefetch])
 
   return {
