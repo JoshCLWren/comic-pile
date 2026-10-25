@@ -150,7 +150,11 @@ async def _volume_labels_by_thread(
 
 
 async def load_boundary_labels(
-    db: AsyncSession, user_id: int, *, requested_thread_ids: Collection[int] | None = None
+    db: AsyncSession,
+    user_id: int,
+    *,
+    requested_thread_ids: Collection[int] | None = None,
+    include_historical: bool = True,
 ) -> BoundaryShadowLabels:
     """Resolve reader-facing labels for every owned Issue, list and prerequisite.
 
@@ -158,6 +162,7 @@ async def load_boundary_labels(
         db: Current read transaction.
         user_id: Owner whose labels are resolved.
         requested_thread_ids: Narrow historical edges to these owned series, when given.
+        include_historical: Whether to load retired associations for the v1 audit contract.
 
     Returns:
         Immutable labels keyed by Thread, Issue, list and prerequisite identifiers.
@@ -218,7 +223,7 @@ async def load_boundary_labels(
     else:
         active_list_ids = set()
 
-    if thread_ids:
+    if include_historical and thread_ids:
         source_issue = Issue.__table__.alias("boundary_source_issue")
         target_issue = Issue.__table__.alias("boundary_target_issue")
         # Scalar projections avoid hydrating thousands of inactive ORM records.
