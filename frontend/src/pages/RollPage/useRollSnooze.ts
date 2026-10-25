@@ -50,7 +50,6 @@ export function useRollSnooze({
     try {
       const expectedId = state.activeRatingThread?.id
       const response = await snoozeMutation.mutate(expectedId)
-      await refetchBootstrap()
       setIsRolling(false)
       setIsRatingView(false)
       setRolledResult(null)

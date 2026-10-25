@@ -199,7 +199,6 @@ export function useRollActions({
           // The id doubles as `expectedPendingThreadId`, which is what lets the
           // snooze hook recover an auth failure and reconcile an ambiguous one.
           await snoozeMutation.mutate(selectedThread!.id)
-          await refetchBootstrap()
           break
         }
         case 'skip':
