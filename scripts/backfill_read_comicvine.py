@@ -1778,6 +1778,20 @@ def _write_report(path: Path, payload: dict[str, object]) -> None:
 
 
 
+def _filter_confirmed_issues(issues: list[ReadIssue]) -> list[ReadIssue]:
+    """Filter issues to confirmed mappings only and deduplicate by external_identity_id."""
+    seen: set[int] = set()
+    filtered: list[ReadIssue] = []
+    for issue in issues:
+        if issue.identity_id is None or issue.external_id is None:
+            continue
+        if issue.identity_id in seen:
+            continue
+        seen.add(issue.identity_id)
+        filtered.append(issue)
+    return filtered
+
+
 async def _run(args: argparse.Namespace) -> int:
     """Execute the complete local-first, resumable operator pipeline."""
     database_url = _require_database_url(args.database_url)
@@ -1846,17 +1860,7 @@ async def _run(args: argparse.Namespace) -> int:
 
             issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
             if confirmed_only:
-                # Filter to confirmed mappings only and deduplicate by external identity
-                seen = {}
-                filtered = []
-                for issue in issues:
-                    if issue.identity_id is None or issue.external_id is None:
-                        continue
-                    if issue.identity_id in seen:
-                        continue
-                    seen[issue.identity_id] = True
-                    filtered.append(issue)
-                issues = filtered
+                issues = _filter_confirmed_issues(issues)
             print(f"Found {len(issues)} {'confirmed' if confirmed_only else 'read'} non-test issues for user_id={user_id}.")
             checkpoint()
 
@@ -1875,16 +1879,7 @@ async def _run(args: argparse.Namespace) -> int:
             else:
                 # Confirmed-only mode: skip identity resolution phases
                 issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
-                seen = {}
-                filtered = []
-                for issue in issues:
-                    if issue.identity_id is None or issue.external_id is None:
-                        continue
-                    if issue.identity_id in seen:
-                        continue
-                    seen[issue.identity_id] = True
-                    filtered.append(issue)
-                issues = filtered
+                issues = _filter_confirmed_issues(issues)
 
             print("=== ComicVine stage 2/4: exhaust stored/local creator metadata ===")
             local_creators = await _run_local_creator_phase(
@@ -1898,16 +1893,7 @@ async def _run(args: argparse.Namespace) -> int:
             checkpoint()
             issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
             if confirmed_only:
-                seen = {}
-                filtered = []
-                for issue in issues:
-                    if issue.identity_id is None or issue.external_id is None:
-                        continue
-                    if issue.identity_id in seen:
-                        continue
-                    seen[issue.identity_id] = True
-                    filtered.append(issue)
-                issues = filtered
+                issues = _filter_confirmed_issues(issues)
 
             if not dry_run and api_key:
                 client = ComicVineClient(
@@ -1936,16 +1922,7 @@ async def _run(args: argparse.Namespace) -> int:
             else:
                 # Confirmed-only: reload and filter, skip identity phase
                 issues = await _load_read_issues(db, user_id=user_id, limit=limit, include_unread=include_unread, confirmed_only=confirmed_only)
-                seen = {}
-                filtered = []
-                for issue in issues:
-                    if issue.identity_id is None or issue.external_id is None:
-                        continue
-                    if issue.identity_id in seen:
-                        continue
-                    seen[issue.identity_id] = True
-                    filtered.append(issue)
-                issues = filtered
+                issues = _filter_confirmed_issues(issues)
 
             print("=== ComicVine stage 4/4: hydrate newly satisfiable creator metadata ===")
             final_results = await _run_provider_creator_phase(

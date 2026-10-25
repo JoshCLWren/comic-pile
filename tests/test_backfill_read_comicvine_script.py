@@ -747,8 +747,12 @@ async def test_load_read_issues_includes_unread_when_flag_set(async_db_committed
 
 
 @pytest.mark.asyncio
-async def test_confirmed_only_deduplication_filters_unmapped_and_duplicates(async_db_committed: AsyncSession) -> None:
-    """Confirmed-only mode skips unmapped issues and deduplicates by identity."""
+async def test_confirmed_only_deduplication_filters_unmapped_and_duplicates(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    async_db_committed: AsyncSession,
+) -> None:
+    """Confirmed-only mode skips unmapped issues, deduplicates by identity, and skips identity phases."""
     cli = _module()
     user = User(username="dedup-backfill")
     async_db_committed.add(user)
@@ -780,26 +784,79 @@ async def test_confirmed_only_deduplication_filters_unmapped_and_duplicates(asyn
     ])
     await async_db_committed.commit()
 
-    rows = await cli._load_read_issues(async_db_committed, user_id=user.id, limit=None, include_unread=False)
-    # Simulate confirmed-only filtering logic used in _run
-    seen = {}
-    filtered = []
-    for issue in rows:
-        # mimic ReadIssue attributes
-        # create a simple object with needed attrs
-        class Dummy:
-            pass
-        # Actually rows are ReadIssue instances, we can use them directly
-        rid = getattr(issue, "identity_id", None)
-        if rid is None:
-            continue
-        if rid in seen:
-            continue
-        seen[rid] = True
-        filtered.append(issue)
+    # Track which phases run
+    phases_run: list[str] = []
 
-    # Two issues map to same identity, unmapped issue dropped
-    assert len(filtered) == 1
-    assert filtered[0].issue_id in {issue_a.id, issue_b.id}
+    class Snapshot:
+        available = False
+        path = None
+
+    class Session:
+        async def __aenter__(self) -> Session:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+    class Engine:
+        async def dispose(self) -> None:
+            return None
+
+    async def local_identity(*args: object, **kwargs: object) -> list[object]:
+        phases_run.append("local-identity")
+        return []
+
+    async def local_creators(*args: object, **kwargs: object) -> list[object]:
+        phases_run.append("local-creators")
+        return []
+
+    async def provider_identity(*args: object, **kwargs: object) -> list[object]:
+        phases_run.append("provider-identity")
+        return []
+
+    async def provider_creators(*args: object, **kwargs: object) -> list[object]:
+        phases_run.append("provider-creators")
+        return []
+
+    monkeypatch.setattr(cli, "_local_snapshot_from_environment", lambda: Snapshot())
+    monkeypatch.setattr(cli, "_user_exists", AsyncMock(return_value=True))
+    monkeypatch.setattr(cli, "_engine", lambda database_url: Engine())
+    monkeypatch.setattr(
+        cli,
+        "async_sessionmaker",
+        lambda *args, **kwargs: lambda **session_kwargs: Session(),
+    )
+    monkeypatch.setattr(cli, "_run_local_identity_phase", local_identity)
+    monkeypatch.setattr(cli, "_run_local_creator_phase", local_creators)
+    monkeypatch.setattr(cli, "_run_provider_identity_phase", provider_identity)
+    monkeypatch.setattr(cli, "_run_provider_creator_phase", provider_creators)
+
+    args = argparse.Namespace(
+        user_id=user.id,
+        database_url="postgresql://owner:secret@example.invalid/neondb",
+        dry_run=True,
+        refresh=False,
+        limit=None,
+        report=tmp_path / "report.json",
+        include_unread=False,
+        confirmed_only=True,
+    )
+    exit_code = await cli._run(args)
+
+    assert exit_code == 0
+    # In confirmed-only mode, identity phases should be skipped
+    assert "local-identity" not in phases_run
+    assert "provider-identity" not in phases_run
+    # Creator phases should still run
+    assert "local-creators" in phases_run
+    assert "provider-creators" in phases_run
+    # Report should show only one issue processed (deduplicated)
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    # Find the provider-creators phase results
+    provider_creators_phase = next(p for p in report["phases"] if p["name"] == "provider-creators")
+    assert provider_creators_phase["processed"] == 1
+    # The single processed issue should be one of the two mapped to the same identity
+    result_issue_id = provider_creators_phase["results"][0]["issue_id"]
+    assert result_issue_id in {issue_a.id, issue_b.id}
 
 
