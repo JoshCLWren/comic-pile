@@ -160,6 +160,18 @@ export default function ThreadDetailView() {
       setSelectedIssueIds(new Set())
       setBulkNotice(null)
       setTagEditorIssue(null)
+    } else if (requestedIssueId > 0 && focusedIssueRef.current !== requestedIssueId) {
+      // Same thread, new issue target (e.g. Back/Forward or a pasted link):
+      // expand the list and clear any previous arrival state so the new target
+      // is scrolled to, focused, and highlighted.
+      setIssuesExpanded(true)
+      focusedIssueRef.current = null
+      setDeepLinkedIssueId(null)
+    } else if (requestedIssueId === 0) {
+      // Plain thread navigation: clear arrival tracking without collapsing an
+      // already-expanded list.
+      focusedIssueRef.current = null
+      setDeepLinkedIssueId(null)
     }
   }, [threadId, requestedIssueId])
 
