@@ -3,14 +3,13 @@
 Expected sequences are a separate, reader-intent contract, never captured Roll output.
 """
 
-import json
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, Sequence
 from pathlib import Path
-from typing import Any
 
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
+from pydantic import TypeAdapter
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +22,9 @@ from app.models.collection_exclusion import CollectionExclusion
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.services.reading_eligibility_service import get_execution_eligibility
 from comic_pile.queue import get_bounded_roll_pool_rows
+from tests.production_reading_graph_types import (
+    ProductionGraphFixture, ProductionReadingContract, RowValue,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "production_reading_graph_v1.json"
 CONTRACT = Path(__file__).parent / "fixtures" / "production_reading_expectations_v1.json"
@@ -39,18 +41,20 @@ ENTRY_FIELDS = (
 )
 
 
-def fixture_data() -> dict[str, Any]:
-    """Read the checked-in immutable production data, not computed offers."""
-    return json.loads(FIXTURE.read_text(encoding="utf-8"))
+def fixture_data() -> ProductionGraphFixture:
+    """Validate every production row and its exact compact schema before replay."""
+    return TypeAdapter(ProductionGraphFixture).validate_json(FIXTURE.read_bytes())
 
 
-def review_contract() -> dict[str, Any]:
-    """Read separately authored and reviewed future-reading expectations."""
-    return json.loads(CONTRACT.read_text(encoding="utf-8"))
+def review_contract() -> ProductionReadingContract:
+    """Validate the independently authored future-reading contract."""
+    return TypeAdapter(ProductionReadingContract).validate_json(CONTRACT.read_bytes())
 
 
-def records(rows: list[list[Any]], fields: tuple[str, ...]) -> list[dict[str, Any]]:
-    """Unpack stable compact columns without changing relationship identifiers."""
+def records(
+    rows: Sequence[Sequence[RowValue]], fields: tuple[str, ...],
+) -> list[dict[str, RowValue]]:
+    """Unpack statically typed, runtime-validated columns without changing IDs."""
     return [dict(zip(fields, row, strict=True)) for row in rows]
 
 
@@ -67,7 +71,7 @@ def option_e(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 @pytest_asyncio.fixture
 async def production_graph(
     async_db: AsyncSession, default_user: User, option_e: None,
-) -> AsyncIterator[tuple[int, dict[str, Any]]]:
+) -> AsyncIterator[tuple[int, ProductionGraphFixture]]:
     """Restore a full production-derived graph with foreign keys in test PostgreSQL.
 
     Only the fixture-owned test user is inserted. Production database credentials
@@ -81,6 +85,14 @@ async def production_graph(
     assert data["schema_version"] == 1
     owner = default_user.id
 
+    await restore_production_graph(db, owner, data)
+    yield owner, data
+
+
+async def restore_production_graph(
+    db: AsyncSession, owner: int, data: ProductionGraphFixture,
+) -> None:
+    """Restore validated graph rows and their catalog foreign keys into test PostgreSQL."""
     await db.execute(insert(ExternalIdentity), records(
         data["identities"], ("id", "provider", "entity_type", "external_id"),
     ))
@@ -94,7 +106,9 @@ async def production_graph(
             ("id", "canonical_external_identity_id", "catalog_series_id"),
         ))
     threads = records(data["threads"], THREAD_FIELDS)
-    pointers = [(row["id"], row.pop("next_unread_issue_id")) for row in threads]
+    pointers = [(row[0], row[5]) for row in data["threads"]]
+    for row in threads:
+        row.pop("next_unread_issue_id")
     await db.execute(insert(Thread), [{**row, "user_id": owner} for row in threads])
     await db.execute(insert(Issue), records(data["issues"], ISSUE_FIELDS))
     for thread_id, issue_id in pointers:
@@ -141,7 +155,7 @@ async def production_graph(
             for row in data["overlaps"]
         ])
     await db.flush()
-    yield owner, data
+
 
 
 async def assert_offers(
@@ -173,7 +187,7 @@ async def advance(db: AsyncSession, issue_id: int) -> None:
 
 @pytest.mark.asyncio
 async def test_independent_xmen_future_handoff_sequence(
-    production_graph: tuple[int, dict[str, Any]], async_db: AsyncSession,
+    production_graph: tuple[int, ProductionGraphFixture], async_db: AsyncSession,
 ) -> None:
     """X-Men #80, #1/2, UXM #361, X-Men #81 expose no skipped future gates."""
     owner, _ = production_graph
@@ -188,7 +202,7 @@ async def test_independent_xmen_future_handoff_sequence(
 
 @pytest.mark.asyncio
 async def test_independent_ultimate_named_handoff_not_global_strictness(
-    production_graph: tuple[int, dict[str, Any]], async_db: AsyncSession,
+    production_graph: tuple[int, ProductionGraphFixture], async_db: AsyncSession,
 ) -> None:
     """Ultimate Spider-Man #20 depends on Black Panther #19, not all other titles."""
     owner, _ = production_graph
@@ -208,7 +222,7 @@ async def test_independent_ultimate_named_handoff_not_global_strictness(
 
 @pytest.mark.asyncio
 async def test_real_ff_fantastic_four_multiple_handoffs(
-    production_graph: tuple[int, dict[str, Any]], async_db: AsyncSession,
+    production_graph: tuple[int, ProductionGraphFixture], async_db: AsyncSession,
 ) -> None:
     """Approved FF/Fantastic Four interleaving is enforced beyond the first step."""
     owner, _ = production_graph
@@ -223,7 +237,7 @@ async def test_real_ff_fantastic_four_multiple_handoffs(
 
 @pytest.mark.asyncio
 async def test_actual_roll_queue_selection_and_api_rating(
-    production_graph: tuple[int, dict[str, Any]], async_db: AsyncSession,
+    production_graph: tuple[int, ProductionGraphFixture], async_db: AsyncSession,
     auth_client: AsyncClient,
 ) -> None:
     """Roll override and /rate exercise real code on restored PostgreSQL rows."""
@@ -257,7 +271,7 @@ async def test_actual_roll_queue_selection_and_api_rating(
     "Starlin Cosmic",
 ])
 async def test_strict_plan_future_frontier_respects_list_order(
-    production_graph: tuple[int, dict[str, Any]], async_db: AsyncSession,
+    production_graph: tuple[int, ProductionGraphFixture], async_db: AsyncSession,
     list_name: str,
 ) -> None:
     """Strict source membership is a separate oracle for later latent frontiers."""
@@ -294,7 +308,7 @@ async def test_strict_plan_future_frontier_respects_list_order(
 
 @pytest.mark.asyncio
 async def test_missing_xmen_prerequisite_is_caught_by_independent_oracle(
-    production_graph: tuple[int, dict[str, Any]], async_db: AsyncSession,
+    production_graph: tuple[int, ProductionGraphFixture], async_db: AsyncSession,
 ) -> None:
     """Removing the specific #1/2 handoff must produce a failing expectation.
 
@@ -340,7 +354,7 @@ def test_unresolved_source_reconciliation_fails_parity_signoff() -> None:
 
 @pytest.mark.asyncio
 async def test_real_saved_volume_exclusion_survives_hypothetical_reactivation(
-    production_graph: tuple[int, dict[str, Any]], async_db: AsyncSession,
+    production_graph: tuple[int, ProductionGraphFixture], async_db: AsyncSession,
 ) -> None:
     """A real saved Comic Vine exclusion still applies if its Thread is reactivated.
 
@@ -348,7 +362,7 @@ async def test_real_saved_volume_exclusion_survives_hypothetical_reactivation(
     multiple duplicate Threads. This only changes the rolled-back test copy.
     """
     owner, data = production_graph
-    assert ["comicvine", "162847"] in [row[1:3] for row in data["exclusions"]]
+    assert ("comicvine", "162847") in [row[1:3] for row in data["exclusions"]]
     thread = await async_db.get(Thread, 3156)
     issue = await async_db.get(Issue, 22905)
     assert thread is not None and issue is not None
@@ -359,6 +373,114 @@ async def test_real_saved_volume_exclusion_survives_hypothetical_reactivation(
     assert snapshot is not None
     assert issue.id in snapshot.excluded_issue_ids
     assert thread.id not in snapshot.candidate_ids()
+
+
+
+
+@pytest.mark.parametrize(("census", "is_missing"), [
+    (None, True),
+    ({}, True),
+    ({"strict_partial_membership_needing_classification": 0}, True),
+    ({
+        "strict_partial_membership_needing_classification": 0,
+        "reading_list_vs_reading_plan_discrepancies_needing_classification": 0,
+    }, True),
+    ({
+        "strict_partial_membership_needing_classification": 0,
+        "reading_list_vs_reading_plan_discrepancies_needing_classification": 0,
+        "historical_contradictions": 0,
+    }, False),
+])
+def test_signoff_requires_all_known_zero_census_categories(
+    census: dict[str, int] | None, is_missing: bool,
+) -> None:
+    """Omitting any unresolved category cannot manufacture a signed-off migration."""
+    from scripts.require_production_reading_intent import incomplete_intent_reasons
+
+    contract: dict[str, object] = {
+        "reader_intent_signoff": "approved",
+        "reviewed_source_decisions": [{
+            "source": "independent reading plan",
+            "discrepancy": "reader reviewed",
+            "decision": "classified",
+            "reviewed_by": "test reviewer",
+        }],
+        "fixture_git_blob_sha": review_contract()["fixture_git_blob_sha"],
+    }
+    if census is not None:
+        contract["unresolved_reader_intent"] = census
+    reasons = incomplete_intent_reasons(contract)
+    assert any("Missing unresolved" in reason for reason in reasons) is is_missing
+    if not is_missing:
+        assert reasons == []
+
+
+@pytest.mark.parametrize("invalid_count", [True, "unclassified", None, 1])
+def test_signoff_rejects_ambiguous_or_nonzero_census_counts(
+    invalid_count: bool | str | int | None,
+) -> None:
+    """Only explicit integer zero can sign off every named census category."""
+    from scripts.require_production_reading_intent import incomplete_intent_reasons
+
+    contract: dict[str, object] = {
+        "reader_intent_signoff": "approved",
+        "reviewed_source_decisions": [{
+            "source": "reviewed source",
+            "discrepancy": "reviewed discrepancy",
+            "decision": "reviewed decision",
+            "reviewed_by": "reviewer",
+        }],
+        "fixture_git_blob_sha": "reviewed-test-digest",
+        "unresolved_reader_intent": {
+            "strict_partial_membership_needing_classification": 0,
+            "reading_list_vs_reading_plan_discrepancies_needing_classification": 0,
+            "historical_contradictions": invalid_count,
+        },
+    }
+    assert any(
+        "historical_contradictions" in reason
+        for reason in incomplete_intent_reasons(contract)
+    )
+
+
+@pytest.mark.asyncio
+async def test_catalog_links_are_preserved_by_fixture_loader(
+    async_db: AsyncSession, default_user: User, option_e: None,
+) -> None:
+    """Re-exported catalog links restore as real foreign keys, not silent NULLs."""
+    data = fixture_data()
+    mapping = data["thread_identity_mappings"][0]
+    thread_id, series_identity_id = mapping[1], mapping[2]
+    issue_id = next(row[0] for row in data["issues"] if row[1] == thread_id)
+    series_id = max((row[0] for row in data["catalog_series"]), default=0) + 1
+    catalog_issue_id = max((row[0] for row in data["catalog_issues"]), default=0) + 1
+    issue_identity_id = max(row[0] for row in data["identities"]) + 1
+    data["identities"].append(
+        (issue_identity_id, "comicvine", "issue", f"fixture-issue-{issue_id}")
+    )
+    data["catalog_series"].append((series_id, series_identity_id))
+    data["catalog_issues"].append((catalog_issue_id, issue_identity_id, series_id))
+    data["threads"] = [
+        (r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], series_id)
+        if r[0] == thread_id else r
+        for r in data["threads"]
+    ]
+    data["issues"] = [
+        (r[0], r[1], r[2], r[3], r[4], catalog_issue_id)
+        if r[0] == issue_id else r
+        for r in data["issues"]
+    ]
+    assert async_db.bind is not None and async_db.bind.dialect.name == "postgresql"
+    await restore_production_graph(async_db, default_user.id, data)
+    assert await async_db.scalar(
+        select(Thread.catalog_series_id).where(Thread.id == thread_id)
+    ) == series_id
+    assert await async_db.scalar(
+        select(Issue.catalog_issue_id).where(Issue.id == issue_id)
+    ) == catalog_issue_id
+    assert await async_db.scalar(
+        select(CatalogIssue.catalog_series_id).where(CatalogIssue.id == catalog_issue_id)
+    ) == series_id
 
 
 def test_production_overlap_census_is_explicit_not_invented() -> None:
