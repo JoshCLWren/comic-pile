@@ -41,8 +41,10 @@ def load_statements(sql_path: Path = SQL_PATH) -> list[str]:
         raise ValueError("QA refresh SQL is incomplete; refusing to run")
     if not content.startswith("-- Authorized Torque QA-only"):
         raise ValueError("QA refresh must start with the reviewed script header")
-    if not statements[0].startswith("SELECT pg_advisory_xact_lock(23199)"):
-        raise ValueError("QA refresh must acquire the QA advisory lock first")
+    if not statements[0].startswith("LOCK TABLE"):
+        raise ValueError("QA refresh must serialize graph writes before capturing a snapshot")
+    if not statements[1].startswith("SELECT pg_advisory_xact_lock(23199)"):
+        raise ValueError("QA refresh must acquire the QA advisory lock")
     if not statements[-1].startswith("DO $verify$"):
         raise ValueError("QA refresh must finish with a parity assertion")
     return statements
@@ -113,17 +115,23 @@ async def run(*, apply: bool, database_url: str) -> None:
             await connection.exec_driver_sql("SET LOCAL statement_timeout = '180s'")
             for statement in statements:
                 await connection.exec_driver_sql(statement)
-        # Postflight uses a new read-only transaction and displays no PII.
+            # Capture the committed copy's source census from the SAME snapshot.
+            expected = await counts(connection)
+        # Postflight reads current target state; a later source rating/import
+        # cannot falsely report this completed transaction as a failure.
         async with engine.connect() as connection:
             await connection.exec_driver_sql("SET TRANSACTION READ ONLY")
             current = await counts(connection)
-            if (
-                current["source_threads"] != current["qa_threads"]
-                or current["source_issues"] != current["qa_issues"]
-                or current["source_lists"] != current["qa_lists"]
-                or current["source_plans"] != current["qa_plans"]
+            if any(
+                current[f"qa_{kind}"] != expected[f"source_{kind}"]
+                for kind in ("threads", "issues", "lists", "plans")
             ):
-                raise RuntimeError("Committed QA graph did not pass postflight count parity")
+                raise RuntimeError("Committed QA graph did not pass snapshot census parity")
+            if any(
+                current[f"source_{kind}"] != expected[f"source_{kind}"]
+                for kind in ("threads", "issues", "lists", "plans")
+            ):
+                print("Source reader changed after the mirror snapshot; QA copy is committed")
             print("QA graph refreshed atomically:", current)
             await connection.rollback()
     finally:
