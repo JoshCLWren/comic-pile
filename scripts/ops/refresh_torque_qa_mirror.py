@@ -84,8 +84,14 @@ async def run(*, apply: bool, database_url: str) -> None:
     url = make_url(database_url)
     if not url.drivername.startswith("postgresql"):
         raise ValueError("QA graph mirroring supports only PostgreSQL")
-    # Driver conversion preserves server, database, credentials and options.
-    engine = create_async_engine(url.set(drivername="postgresql+asyncpg"))
+    # Neon/libpq's sslmode and channel_binding parameters are not valid
+    # asyncpg kwargs. Preserve required TLS while removing unsupported keys.
+    query = dict(url.query)
+    query.pop("channel_binding", None)
+    sslmode = query.pop("sslmode", None)
+    if sslmode in {"require", "verify-ca", "verify-full"} or "ssl" not in query:
+        query["ssl"] = "require"
+    engine = create_async_engine(url.set(drivername="postgresql+asyncpg", query=query))
     try:
         # Load and validate the complete script BEFORE any write transaction.
         statements = load_statements()
