@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -340,4 +340,50 @@ describe('ModeSelectorSheet', () => {
     expect(onOpenQuiz).toHaveBeenCalledTimes(1)
     expect(onSubmit).not.toHaveBeenCalled()
   })
+})
+
+
+it('announces saving while preserving radio names and preventing overlapping writes', async () => {
+  const user = userEvent.setup()
+  let complete: (() => void) | undefined
+  const onSubmit = vi.fn(() => new Promise<void>((resolve) => { complete = resolve }))
+  const onClose = vi.fn()
+  render(<ModeSelectorSheet {...defaultProps} onSubmit={onSubmit} onClose={onClose} />)
+  await user.click(within(screen.getByRole('radiogroup', { name: 'Bandwidth' })).getByRole('radio', { name: /Deep/ }))
+  expect(screen.getByRole('status')).toHaveTextContent('Saving…')
+  for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveAccessibleName()
+  await user.click(within(screen.getByRole('radiogroup', { name: 'Intent' })).getByRole('radio', { name: /Random/ }))
+  expect(onSubmit).toHaveBeenCalledTimes(1)
+  expect(onClose).not.toHaveBeenCalled()
+  await act(async () => { complete?.() })
+  expect(onClose).toHaveBeenCalledTimes(1)
+  expect(screen.queryByTestId('mode-selector-saving')).not.toBeInTheDocument()
+})
+
+it('retries the failed selection without claiming an unconfirmed mode was saved', async () => {
+  const user = userEvent.setup()
+  const onSubmit = vi.fn().mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined)
+  const onClose = vi.fn()
+  render(<ModeSelectorSheet {...defaultProps} onSubmit={onSubmit} onClose={onClose} />)
+  await user.click(within(screen.getByRole('radiogroup', { name: 'Intent' })).getByRole('radio', { name: /Random/ }))
+  expect(await screen.findByRole('alert')).toHaveFocus()
+  expect(onClose).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(onSubmit).toHaveBeenNthCalledWith(2, { bandwidth: 'balanced', intent: 'random' })
+  expect(onClose).toHaveBeenCalledTimes(1)
+})
+
+it('does not let an old save close a reopened dialog', async () => {
+  const user = userEvent.setup()
+  let complete: (() => void) | undefined
+  const onSubmit = vi.fn(() => new Promise<void>((resolve) => { complete = resolve }))
+  const onClose = vi.fn()
+  const props = { ...defaultProps, onSubmit, onClose }
+  const view = render(<ModeSelectorSheet {...props} />)
+  await user.click(within(screen.getByRole('radiogroup', { name: 'Bandwidth' })).getByRole('radio', { name: /Deep/ }))
+  view.rerender(<ModeSelectorSheet {...props} isOpen={false} />)
+  view.rerender(<ModeSelectorSheet {...props} isOpen />)
+  await act(async () => { complete?.() })
+  expect(onClose).not.toHaveBeenCalled()
+  expect(screen.getByTestId('mode-selector-sheet')).toBeVisible()
 })

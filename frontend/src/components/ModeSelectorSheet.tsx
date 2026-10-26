@@ -153,6 +153,17 @@ export default function ModeSelectorSheet({
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [lastPatch, setLastPatch] = useState<SessionModeUpdateRequest | null>(null)
   const errorRef = useRef<HTMLParagraphElement>(null)
+  const pendingRef = useRef(false)
+  const mountedRef = useRef(true)
+  const generationRef = useRef(0)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+  useEffect(() => {
+    generationRef.current += 1
+    setSubmitError(null)
+  }, [isOpen])
 
   // SAFETY: currentMode.bandwidth is either a ReadingBandwidth value or undefined; the fallback normalizes it.
   const currentBandwidth = (currentMode?.bandwidth as ReadingBandwidth | null) ?? 'balanced'
@@ -161,16 +172,22 @@ export default function ModeSelectorSheet({
 
   const handleSubmit = useCallback(
     async (patch: SessionModeUpdateRequest) => {
+      if (pendingRef.current) return
+      pendingRef.current = true
+      const generation = generationRef.current
       setSubmitting(true)
       setSubmitError(null)
       setLastPatch(patch)
       try {
         await onSubmit(patch)
-        onClose()
+        if (mountedRef.current && generationRef.current === generation) onClose()
       } catch {
-        setSubmitError('Failed to update reading mode. Please try again.')
+        if (mountedRef.current && generationRef.current === generation) {
+          setSubmitError('Failed to update reading mode. Please try again.')
+        }
       } finally {
-        setSubmitting(false)
+        pendingRef.current = false
+        if (mountedRef.current) setSubmitting(false)
       }
     },
     [onSubmit, onClose],
@@ -216,7 +233,7 @@ export default function ModeSelectorSheet({
             ref={errorRef}
             role="alert"
             tabIndex={-1}
-            className="text-sm text-[var(--theme-danger)]"
+            className="text-sm text-[var(--theme-error)]"
             data-testid="mode-selector-error"
           >
             {submitError}
@@ -225,7 +242,7 @@ export default function ModeSelectorSheet({
             type="button"
             onClick={handleRetry}
             disabled={submitting}
-            className="rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-sm text-[var(--theme-text-primary)] hover:bg-white/10 disabled:opacity-50"
+            className="rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-sm text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)] disabled:opacity-50"
             data-testid="mode-selector-retry"
           >
             Retry

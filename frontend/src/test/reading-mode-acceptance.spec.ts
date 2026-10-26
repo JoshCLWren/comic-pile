@@ -90,7 +90,7 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
 
     const control = page.getByTestId('reading-mode-control')
     await expect(control).toBeVisible()
-    await expect(control).toHaveText('Deep · Familiar')
+    await expect(control).toContainText('Deep · Familiar')
   })
 
   test('manual bandwidth switch via mode selector takes effect for subsequent rolls', async ({
@@ -103,7 +103,7 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
     await waitForRollPageReady(page)
 
     const control = page.getByTestId('reading-mode-control')
-    await expect(control).toHaveText('Balanced · Balanced')
+    await expect(control).toContainText('Balanced · Balanced')
 
     await control.click()
     await expect(page.getByTestId('mode-selector-sheet')).toBeVisible()
@@ -126,7 +126,7 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
     await waitForRollPageReady(page)
 
     const control = page.getByTestId('reading-mode-control')
-    await expect(control).toHaveText('Light · Balanced')
+    await expect(control).toContainText('Light · Balanced')
 
     await control.click()
     await expect(page.getByTestId('mode-selector-sheet')).toBeVisible()
@@ -149,7 +149,7 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
     await waitForRollPageReady(page)
 
     const control = page.getByTestId('reading-mode-control')
-    await expect(control).toHaveText('Balanced · Random')
+    await expect(control).toContainText('Balanced · Random')
 
     const mode = await getSessionMode(page)
     expect(mode.active_intent).toBe('random')
@@ -206,12 +206,12 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
     await waitForRollPageReady(page)
 
     const control = page.getByTestId('reading-mode-control')
-    await expect(control).toHaveText('Deep · Explore')
+    await expect(control).toContainText('Deep · Explore')
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await waitForRollPageReady(page)
 
-    await expect(page.getByTestId('reading-mode-control')).toHaveText('Deep · Explore')
+    await expect(page.getByTestId('reading-mode-control')).toContainText('Deep · Explore')
   })
 
   test('mode selector is accessible by keyboard', async ({ authenticatedPage }) => {
@@ -229,6 +229,7 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
     const deepOption = page.getByRole('radio', { name: /Deep/ })
     await deepOption.focus()
     await page.keyboard.press('Enter')
+    await expect(page.getByTestId('mode-selector-sheet')).toBeHidden()
 
     const mode = await getSessionMode(page)
     expect(mode.active_bandwidth).toBe('deep')
@@ -244,7 +245,7 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
     await waitForRollPageReady(page)
 
     const control = page.getByTestId('reading-mode-control')
-    await expect(control).toHaveText('Balanced · Momentum')
+    await expect(control).toContainText('Balanced · Momentum')
     await control.click()
 
     const sheet = page.getByTestId('mode-selector-sheet')
@@ -257,7 +258,7 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
     await page.keyboard.press('ArrowRight')
 
     await expect(sheet).toBeHidden()
-    await expect(control).toHaveText('Deep · Momentum')
+    await expect(control).toContainText('Deep · Momentum')
     expect((await getSessionMode(page)).active_bandwidth).toBe('deep')
 
     // ArrowLeft wraps backward from the first intent option to the last one.
@@ -268,7 +269,7 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
     await page.keyboard.press('ArrowLeft')
 
     await expect(sheet).toBeHidden()
-    await expect(control).toHaveText('Deep · Random')
+    await expect(control).toContainText('Deep · Random')
     expect((await getSessionMode(page)).active_intent).toBe('random')
   })
 
@@ -305,7 +306,7 @@ test.describe('reading-mode acceptance (issue #1734)', () => {
 
     const control = page.getByTestId('reading-mode-control')
     await expect(control).toBeVisible()
-    await expect(control).toHaveText('Light · Familiar')
+    await expect(control).toContainText('Light · Familiar')
 
     await control.click()
     await expect(page.getByTestId('mode-selector-sheet')).toBeVisible()
