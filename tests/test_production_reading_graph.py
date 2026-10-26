@@ -336,3 +336,31 @@ def test_unresolved_source_reconciliation_fails_parity_signoff() -> None:
     assert any("strict_partial_membership" in reason for reason in reasons)
     assert any("reading_list_vs_reading_plan" in reason for reason in reasons)
     assert any("signoff" in reason.lower() for reason in reasons)
+
+
+@pytest.mark.asyncio
+async def test_real_saved_volume_exclusion_survives_hypothetical_reactivation(
+    production_graph: tuple[int, dict[str, Any]], async_db: AsyncSession,
+) -> None:
+    """A real saved Comic Vine exclusion still applies if its Thread is reactivated.
+
+    The production reader excluded Absolute Flash by canonical volume, across
+    multiple duplicate Threads. This only changes the rolled-back test copy.
+    """
+    owner, data = production_graph
+    assert ["comicvine", "162847"] in [row[1:3] for row in data["exclusions"]]
+    thread = await async_db.get(Thread, 3156)
+    issue = await async_db.get(Issue, 22905)
+    assert thread is not None and issue is not None
+    thread.status = "active"
+    issue.status = "unread"
+    await async_db.flush()
+    snapshot = await get_execution_eligibility(async_db, owner)
+    assert snapshot is not None
+    assert issue.id in snapshot.excluded_issue_ids
+    assert thread.id not in snapshot.candidate_ids()
+
+
+def test_production_overlap_census_is_explicit_not_invented() -> None:
+    """No production-approved overlap choices existed at export time."""
+    assert fixture_data()["overlaps"] == []
