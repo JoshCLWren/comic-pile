@@ -345,8 +345,9 @@ async def test_manual_selection_unsnoozes_in_legacy_mode(
     async_db.add(session)
     await async_db.flush()
 
-    # Snooze the thread in this active session.
+    # Snooze the thread in this active session (via event so replay sees it).
     session.snoozed_thread_ids = [thread.id]
+    async_db.add(Event(type="snooze", session_id=session.id, thread_id=thread.id))
     await async_db.flush()
 
     # Manually select the snoozed thread. This should record an unsnooze event.
