@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.repositories.reading_shadow_repository import load_shadow_inputs
 from app.services.reading_future_parity import HistoricalEdge, audit_future_parity
+from app.services.reading_partial_list_coverage import partial_strict_coverage
 from app.services.reading_list_evaluator import ReadingSnapshot
 
 SQL = """
@@ -53,12 +54,20 @@ async def run(url: str, uid: int) -> dict:
                                        r["target_issue_id"], r["origin"],
                                        r["note"]) for r in rows
                     ))
+                    omitted = partial_strict_coverage(snapshot)
                     return {
                         "user_id": uid,
                         "examined": checked.examined,
                         "implied": checked.implied,
                         "unresolved": [vars_edge(e) for e in checked.missing],
-                        "status": "PASS" if checked.safe_to_certify else "REVIEW_REQUIRED",
+                        "partial_strict_list_omissions": [
+                            {"list_id": list_id, "issue_id": issue_id}
+                            for list_id, issue_id in omitted
+                        ],
+                        "status": (
+                            "PASS" if checked.safe_to_certify and not omitted
+                            else "REVIEW_REQUIRED"
+                        ),
                     }
     finally:
         await engine.dispose()
