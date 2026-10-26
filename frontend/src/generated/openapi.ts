@@ -9080,6 +9080,7 @@ export interface components {
              * Rated Population Scope
              * @description Population used by the headline summary and the Rated list. Only issues where the creator held a headline role count, matching the Rated heading and rating distribution denominator.
              * @default headline_roles_only
+             * @constant
              */
             rated_population_scope: "headline_roles_only";
             /** @description Headline-eligible rating distribution (half-star buckets, median, range, mean, sample count). ``null`` when the creator has no eligible ratings. */
@@ -10000,6 +10001,7 @@ export interface components {
              * Population Scope
              * @description Population used for this aggregate. Series groups cover every verified creator credit in the thread, not only headline roles, so their counts/averages may differ from the headline-only Rated list.
              * @default all_verified_credits
+             * @constant
              */
             population_scope: "all_verified_credits";
             /**
@@ -10152,6 +10154,7 @@ export interface components {
              * Population Scope
              * @description Population backing this drill-down. Rows include every verified creator credit in the thread, matching the parent series group exactly.
              * @default all_verified_credits
+             * @constant
              */
             population_scope: "all_verified_credits";
             /**
