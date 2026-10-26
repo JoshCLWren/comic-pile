@@ -1,6 +1,9 @@
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { rateApi } from '../../services/api-rate'
 import type { Issue } from '../../types'
+import { queryClient } from '../../query/queryClient'
+import { applyRatedThreadCache } from '../../query/cacheEffects'
 
 interface IssueRateButtonProps {
   issue: Issue
@@ -12,26 +15,27 @@ const RATING_VALUES = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
 /** Rate an issue directly from its Thread row without launching Roll (issue #3581). */
 export function IssueRateButton({ issue, threadId }: IssueRateButtonProps) {
   const [open, setOpen] = useState(false)
-  const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function submit(rating: number) {
-    setIsPending(true)
-    setError(null)
-    try {
-      await rateApi.rate({
+  const mutation = useMutation({
+    mutationFn: (rating: number) =>
+      rateApi.rate({
         thread_id: threadId,
         rating,
         direct: true,
         issue_number: issue.issue_number,
-      })
+      }),
+    onMutate: () => {
+      setError(null)
+    },
+    onSuccess: async (thread) => {
+      await applyRatedThreadCache(queryClient, thread)
       setOpen(false)
-    } catch {
+    },
+    onError: () => {
       setError('Failed to rate')
-    } finally {
-      setIsPending(false)
-    }
-  }
+    },
+  })
 
   return (
     <div className="flex items-center gap-2">
@@ -39,7 +43,7 @@ export function IssueRateButton({ issue, threadId }: IssueRateButtonProps) {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        disabled={isPending}
+        disabled={mutation.isPending}
         className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 disabled:opacity-50"
       >
         Rate
@@ -50,8 +54,8 @@ export function IssueRateButton({ issue, threadId }: IssueRateButtonProps) {
             <button
               key={value}
               type="button"
-              onClick={() => void submit(value)}
-              disabled={isPending}
+              onClick={() => mutation.mutate(value)}
+              disabled={mutation.isPending}
               className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 disabled:opacity-50"
             >
               {value}
