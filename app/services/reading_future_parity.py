@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from app.services.reading_effective_snapshot import effective_reading_snapshot
 from app.services.reading_list_cycle_validator import (
     ReadingCycleError,
     validate_reading_constraints,
@@ -31,6 +32,7 @@ class FutureParity:
     examined: int
     implied: int
     missing: tuple[HistoricalEdge, ...]
+    excluded: tuple[HistoricalEdge, ...] = ()
 
     @property
     def safe_to_certify(self) -> bool:
@@ -49,13 +51,20 @@ def audit_future_parity(
     target is not the first unread issue in its Thread.
     """
     validate_reading_constraints(snapshot)
+    effective = effective_reading_snapshot(snapshot)
+    validate_reading_constraints(effective)
     available = {issue.issue_id for issue in snapshot.issues}
-    existing = {p.prerequisite_id for p in snapshot.prerequisites}
+    existing = {p.prerequisite_id for p in effective.prerequisites}
     missing: list[HistoricalEdge] = []
+    excluded: list[HistoricalEdge] = []
     implied = 0
     for old in historical_edges:
         if old.source_issue_id not in available or old.target_issue_id not in available:
             raise ValueError("Historical edge references a foreign/missing Issue")
+        if (old.source_issue_id in snapshot.excluded_issue_ids
+                or old.target_issue_id in snapshot.excluded_issue_ids):
+            excluded.append(old)
+            continue
         if old.source_issue_id == old.target_issue_id:
             missing.append(old)
             continue
@@ -66,7 +75,7 @@ def audit_future_parity(
             synthetic_id, old.target_issue_id, old.source_issue_id, "reader",
         )
         trial = replace(
-            snapshot, prerequisites=(*snapshot.prerequisites, reverse),
+            effective, prerequisites=(*effective.prerequisites, reverse),
         )
         try:
             validate_reading_constraints(trial)
@@ -74,4 +83,4 @@ def audit_future_parity(
             implied += 1
         else:
             missing.append(old)
-    return FutureParity(len(historical_edges), implied, tuple(missing))
+    return FutureParity(len(historical_edges), implied, tuple(missing), tuple(excluded))
