@@ -32,9 +32,9 @@ CONTRACT = Path(__file__).parent / "fixtures" / "production_reading_expectations
 THREAD_FIELDS = (
     "id", "title", "format", "issues_remaining", "total_issues",
     "next_unread_issue_id", "queue_position", "status", "is_blocked",
-    "queue_position_is_manual", "queue_order_key",
+    "queue_position_is_manual", "queue_order_key", "catalog_series_id",
 )
-ISSUE_FIELDS = ("id", "thread_id", "issue_number", "position", "status")
+ISSUE_FIELDS = ("id", "thread_id", "issue_number", "position", "status", "catalog_issue_id")
 ENTRY_FIELDS = (
     "id", "list_id", "issue_id", "position", "gate", "skipped",
     "is_checkpoint", "checkpoint_target_issue_ids",
