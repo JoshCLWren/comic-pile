@@ -13,8 +13,9 @@ from scripts.ops import refresh_torque_qa_mirror as mirror
 def test_sql_manifest_has_scoped_guards_and_parity_verifier() -> None:
     """Every manual refresh includes the audited reader and FK safety checks."""
     statements = mirror.load_statements()
-    assert len(statements) >= 49
-    assert statements[0] == "SELECT pg_advisory_xact_lock(23199)"
+    assert len(statements) >= 50
+    assert statements[0].startswith("LOCK TABLE")
+    assert statements[1] == "SELECT pg_advisory_xact_lock(23199)"
     assert statements[-1].startswith("DO $verify$")
     script = "\n".join(statements)
     assert "crosses reader accounts" in script
@@ -102,7 +103,7 @@ async def test_apply_runs_every_step_inside_one_transaction(
         "SET LOCAL statement_timeout = '180s'",
     ]
     assert actual[3:] == statements + ["SET TRANSACTION READ ONLY"]
-    assert connection.execute.await_count == 1
+    assert connection.execute.await_count == 2
     engine.dispose.assert_awaited_once()
 
 
@@ -129,3 +130,34 @@ async def test_apply_error_exits_transaction_with_exception(
     exception_type = engine.begin.return_value.__aexit__.await_args.args[0]
     assert exception_type is ValueError
     engine.dispose.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_neon_libpq_tls_options_are_normalized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Neon URLs with sslmode/channel_binding must work with asyncpg."""
+    engine, _ = mock_engine()
+    captured: list[object] = []
+
+    def capture_engine(url: object) -> MagicMock:
+        captured.append(url)
+        return engine
+
+    monkeypatch.setattr(mirror, "create_async_engine", capture_engine)
+    await mirror.run(
+        apply=False,
+        database_url=(
+            "postgresql://test:secret@host.example/neondb"
+            "?sslmode=require&channel_binding=require"
+        ),
+    )
+    assert len(captured) == 1
+    url = captured[0]
+    from sqlalchemy.engine import URL
+
+    assert isinstance(url, URL)
+    assert url.drivername == "postgresql+asyncpg"
+    assert "sslmode" not in url.query
+    assert "channel_binding" not in url.query
+    assert url.query["ssl"] == "require"
