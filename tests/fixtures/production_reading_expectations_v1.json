@@ -3,7 +3,7 @@
   "authority": "Reader-approved crossover handoffs and authored strict list source order, not Option E's computed candidates",
   "approved_sequences": {
     "xmen_1998": {
-      "source": "Uncanny X-Men #360 printed next X-Men #80; documented October 26 correction; X-Men #80 then X-Men #1/2 then UXM #361 then X-Men #81",
+      "source": "X-Men/Uncanny X-Men explicit reader crossover order; Hunt for Xavier parts 1-6 (confirmed documented reader handoffs in production). Independent expectations, not recorded roll output.",
       "steps": [
         {
           "read": 1634,
@@ -16,24 +16,85 @@
           ],
           "still_blocked": [
             2029,
-            1635
+            1635,
+            2030,
+            1636
           ]
         },
         {
           "read": 101875,
-          "blocked": [],
           "unblocks": [
             2029
           ],
           "still_blocked": [
-            1635
+            1635,
+            2030,
+            1636
           ]
         },
         {
           "read": 2029,
-          "blocked": [],
           "unblocks": [
             1635
+          ],
+          "still_blocked": [
+            2030,
+            1636
+          ]
+        },
+        {
+          "read": 1635,
+          "unblocks": [
+            2030
+          ],
+          "still_blocked": [
+            1636,
+            2031
+          ]
+        },
+        {
+          "read": 2030,
+          "unblocks": [
+            1636
+          ],
+          "still_blocked": [
+            2031,
+            1637
+          ]
+        },
+        {
+          "read": 1636,
+          "unblocks": [
+            2031
+          ],
+          "still_blocked": [
+            1637,
+            2032
+          ]
+        },
+        {
+          "read": 2031,
+          "unblocks": [
+            1637
+          ],
+          "still_blocked": [
+            2032,
+            1638
+          ]
+        },
+        {
+          "read": 1637,
+          "unblocks": [
+            2032
+          ],
+          "still_blocked": [
+            1638
+          ]
+        },
+        {
+          "read": 2032,
+          "unblocks": [
+            1638
           ],
           "still_blocked": []
         }
@@ -42,40 +103,159 @@
     "ultimate_2025": {
       "source": "Reader-approved specific handoff without global strict enforcement of Ultimate Universe",
       "read": 23559,
-      "target": 23584
+      "target": 23584,
+      "progress_to_handoff": [
+        23551,
+        23552,
+        23553,
+        23554,
+        23555,
+        23556,
+        23557,
+        23558,
+        23559
+      ]
     },
     "fantastic_four": {
-      "source": "Reader's approved #4199 FF/Fantastic Four after_previous gates",
+      "source": "Explicit reader-approved FF/Fantastic Four after_previous steps and single natural-series progress, verified independently with full intervening issues",
       "steps": [
         {
-          "read": 101730,
-          "still_blocked": [
+          "read": 101713,
+          "before_blocked": [
+            101730,
             101718,
             101731
           ],
-          "still_blocked_after": [
+          "unblocks": [
+            101714
+          ],
+          "after_blocked": [
+            101730,
+            101718,
+            101731
+          ]
+        },
+        {
+          "read": 101714,
+          "before_blocked": [
+            101715
+          ],
+          "unblocks": [
+            101715
+          ],
+          "after_blocked": [
+            101730,
+            101718,
+            101731
+          ]
+        },
+        {
+          "read": 101715,
+          "before_blocked": [
+            101716
+          ],
+          "unblocks": [
+            101716
+          ],
+          "after_blocked": [
+            101730,
+            101718,
+            101731
+          ]
+        },
+        {
+          "read": 101716,
+          "before_blocked": [
+            101717
+          ],
+          "unblocks": [
+            101717
+          ],
+          "after_blocked": [
+            101730,
+            101718,
+            101731
+          ]
+        },
+        {
+          "read": 101717,
+          "before_blocked": [
+            101730
+          ],
+          "unblocks": [
+            101730
+          ],
+          "after_blocked": [
+            101718
+          ]
+        },
+        {
+          "read": 101730,
+          "before_blocked": [
+            101718
+          ],
+          "unblocks": [
+            101718
+          ],
+          "after_blocked": [
             101731
           ]
         },
         {
           "read": 101718,
-          "still_blocked": [
-            101731,
-            101719
+          "before_blocked": [
+            101731
           ],
-          "still_blocked_after": [
+          "unblocks": [
+            101731
+          ],
+          "after_blocked": [
             101719
           ]
         },
         {
           "read": 101731,
-          "still_blocked": [
-            101719,
-            101732
+          "before_blocked": [
+            101719
           ],
-          "still_blocked_after": [
+          "unblocks": [
+            101719
+          ],
+          "after_blocked": [
             101732
           ]
+        },
+        {
+          "read": 101719,
+          "before_blocked": [
+            101732
+          ],
+          "unblocks": [
+            101732
+          ],
+          "after_blocked": [
+            101720
+          ]
+        },
+        {
+          "read": 101732,
+          "before_blocked": [
+            101720
+          ],
+          "unblocks": [
+            101720
+          ],
+          "after_blocked": []
+        },
+        {
+          "read": 101720,
+          "before_blocked": [
+            101733
+          ],
+          "unblocks": [
+            101733
+          ],
+          "after_blocked": []
         }
       ]
     }
@@ -84,5 +264,6 @@
     "strict_partial_membership_needing_classification": 163,
     "reading_list_vs_reading_plan_discrepancies_needing_classification": 33,
     "historical_contradictions": "Unresolved converted JLI and other historical constraints must be reviewed, never enabled by default"
-  }
+  },
+  "fixture_git_blob_sha": "7e8866d9efa8c57d24363abb811f0c624b8f639a"
 }
