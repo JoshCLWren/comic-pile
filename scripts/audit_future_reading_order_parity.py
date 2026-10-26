@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.repositories.reading_shadow_repository import load_shadow_inputs
 from app.services.reading_future_parity import HistoricalEdge, audit_future_parity
-from app.services.reading_partial_list_coverage import partial_strict_coverage
 from app.services.reading_list_evaluator import ReadingSnapshot
+from app.services.reading_partial_list_coverage import partial_strict_coverage
 
 SQL = """
 SELECT d.id, d.source_issue_id, d.target_issue_id, d.origin, d.note
@@ -55,13 +55,22 @@ async def run(url: str, uid: int) -> dict:
                                        r["note"]) for r in rows
                     ))
                     omitted = partial_strict_coverage(snapshot)
+                    issue_names = dict(data.issue_labels)
+                    list_names = dict(data.list_labels)
                     return {
                         "user_id": uid,
+                        "scope": "future_unread_historical_edges_and_strict_partial_threads",
                         "examined": checked.examined,
                         "implied": checked.implied,
-                        "unresolved": [vars_edge(e) for e in checked.missing],
+                        "unresolved": [
+                            {**vars_edge(e),
+                             "source_label": issue_names.get(e.source_issue_id),
+                             "target_label": issue_names.get(e.target_issue_id)}
+                            for e in checked.missing
+                        ],
                         "partial_strict_list_omissions": [
-                            {"list_id": list_id, "issue_id": issue_id}
+                            {"list_id": list_id, "list_name": list_names.get(list_id),
+                             "issue_id": issue_id, "issue_label": issue_names.get(issue_id)}
                             for list_id, issue_id in omitted
                         ],
                         "status": (
