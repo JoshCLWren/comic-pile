@@ -326,7 +326,8 @@ async def check_potential_duplicates(
     """Check for potential duplicate threads before creating or renaming.
 
     Compares canonical ComicVine volume identity when available (strong match),
-    and uses title + format similarity as a fallback (weak match).
+    and uses title + format similarity as a fallback (weak match). Confirmed
+    publication years accompany matches as advisory disambiguation context.
 
     Args:
         request: FastAPI request object for rate limiting.

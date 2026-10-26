@@ -683,6 +683,12 @@ export default function AddSeriesFromComicVineDialog({
                                 ? `${match.total_issues} issues`
                                 : `${match.issues_remaining} remaining`}
                             </span>
+                            {match.start_year != null && (
+                              <>
+                                <span>•</span>
+                                <span>Started {match.start_year}</span>
+                              </>
+                            )}
                             <span>•</span>
                             <span>{match.status}</span>
                           </div>

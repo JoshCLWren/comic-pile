@@ -306,6 +306,9 @@ class PotentialDuplicateMatch(BaseModel):
     status: str
     match_type: str  # "strong" (ComicVine volume) or "weak" (title/format)
     comicvine_volume_id: int | None = None
+    start_year: int | None = Field(
+        None, description="Confirmed ComicVine publication year, when known"
+    )
 
 
 class CheckPotentialDuplicatesRequest(BaseModel):

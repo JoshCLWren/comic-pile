@@ -12764,6 +12764,11 @@ export interface components {
             issues_remaining: number;
             /** Match Type */
             match_type: string;
+            /**
+             * Start Year
+             * @description Confirmed ComicVine publication year, when known
+             */
+            start_year?: number | null;
             /** Status */
             status: string;
             /** Thread Id */

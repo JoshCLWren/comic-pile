@@ -4,6 +4,7 @@ All SQLAlchemy access for the ``Thread`` model family lives here. Functions
 return ORM models or plain values; callers (services) own transactions.
 """
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import NotRequired, TypedDict
 
@@ -1033,3 +1034,102 @@ async def find_potential_duplicates_by_title_format(
     fuzzy_matches = list(fuzzy_result.scalars().all())
 
     return exact_matches + fuzzy_matches
+
+
+def _coerce_start_year(metadata: dict[str, object]) -> int | None:
+    """Read a publication start year from stored series metadata.
+
+    Args:
+        metadata: External identity metadata for one ComicVine series.
+
+    Returns:
+        The stored start year as an integer, or None when it is absent or
+        malformed.
+    """
+    value = metadata.get("start_year")
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+async def find_confirmed_series_start_years(
+    db: AsyncSession,
+    user_id: int,
+    thread_ids: Sequence[int],
+) -> dict[int, int]:
+    """Resolve confirmed ComicVine publication years for owned threads.
+
+    Publication year is advisory disambiguation context for a potential
+    duplicate: two same-titled volumes from different years are different
+    editions, so the warning should be able to show when each existing series
+    began. The first confirmed mapping for a thread wins deterministically.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        thread_ids: Threads whose published start year should be resolved.
+
+    Returns:
+        Mapping of thread ID to its confirmed ComicVine series start year.
+        Threads without a confirmed, well-formed year are absent.
+    """
+    if not thread_ids:
+        return {}
+    rows = await db.execute(
+        select(
+            ThreadExternalSeriesMapping.thread_id,
+            ExternalIdentity.metadata_json,
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+        )
+        .join(Thread, Thread.id == ThreadExternalSeriesMapping.thread_id)
+        .where(
+            Thread.user_id == user_id,
+            Thread.id.in_(thread_ids),
+            ThreadExternalSeriesMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "series",
+        )
+        .order_by(ThreadExternalSeriesMapping.id)
+    )
+    years: dict[int, int] = {}
+    for thread_id, metadata in rows.all():
+        if thread_id in years:
+            continue
+        year = _coerce_start_year(metadata)
+        if year is not None:
+            years[thread_id] = year
+    return years
+
+
+async def count_unread_issues_by_thread(
+    db: AsyncSession,
+    thread_ids: Sequence[int],
+) -> dict[int, int]:
+    """Count unread issues for several threads in a single query.
+
+    Args:
+        db: Database session.
+        thread_ids: Threads whose unread issues should be counted.
+
+    Returns:
+        Mapping of thread ID to its unread issue count. Threads without unread
+        issues are absent.
+    """
+    if not thread_ids:
+        return {}
+    rows = await db.execute(
+        select(Issue.thread_id, func.count())
+        .where(Issue.thread_id.in_(thread_ids), Issue.status == "unread")
+        .group_by(Issue.thread_id)
+    )
+    counts: dict[int, int] = {}
+    for thread_id, count in rows.all():
+        counts[thread_id] = count
+    return counts

@@ -148,9 +148,9 @@ describe('QueueModals manual creator editor', () => {
 
 describe('advisory duplicate warnings', () => {
   it.each(['create', 'edit'] as const)('shows both strong and weak matches in %s without merging', (openModal) => {
-    const common = { format: 'Comic', issues_remaining: 3, total_issues: 5, status: 'active', comicvine_volume_id: null }
+    const common = { format: 'Comic', issues_remaining: 3, total_issues: 5, status: 'active', comicvine_volume_id: null, start_year: null }
     render(<Harness openModal={openModal} matches={[
-      { ...common, thread_id: 7, title: 'Verified volume', match_type: 'strong', comicvine_volume_id: 42 },
+      { ...common, thread_id: 7, title: 'Verified volume', match_type: 'strong', comicvine_volume_id: 42, start_year: 2018 },
       { ...common, thread_id: 8, title: 'Possible edition', match_type: 'weak', total_issues: null },
     ]} />)
     expect(screen.getByRole('alert')).toHaveTextContent('Same ComicVine volume already in your library')
@@ -158,6 +158,8 @@ describe('advisory duplicate warnings', () => {
     expect(screen.getByText('Possible edition')).toBeVisible()
     expect(screen.getByText('Same ComicVine Volume')).toBeVisible()
     expect(screen.getByText('Similar Title/Format')).toBeVisible()
+    // Publication year disambiguates same-titled volumes from different years.
+    expect(screen.getByText('Started 2018')).toBeVisible()
   })
   it.each(['create', 'edit'] as const)('reports loading separately in the active %s form', (openModal) => {
     render(<Harness openModal={openModal} checking />)
@@ -165,7 +167,7 @@ describe('advisory duplicate warnings', () => {
     expect(screen.queryByText('Similar series found in your library')).not.toBeInTheDocument()
   })
   it.each(['create', 'edit'] as const)('keeps weak matches advisory in the %s form', (openModal) => {
-    render(<Harness openModal={openModal} matches={[{ thread_id: 8, title: 'Other edition', format: 'Comic', issues_remaining: 1, total_issues: null, status: 'completed', match_type: 'weak', comicvine_volume_id: null }]} />)
+    render(<Harness openModal={openModal} matches={[{ thread_id: 8, title: 'Other edition', format: 'Comic', issues_remaining: 1, total_issues: null, status: 'completed', match_type: 'weak', comicvine_volume_id: null, start_year: null }]} />)
     expect(screen.getByRole('alert')).toHaveTextContent('Similar series found in your library')
     expect(screen.getByText('Other edition')).toBeVisible()
   })

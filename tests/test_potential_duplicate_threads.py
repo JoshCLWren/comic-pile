@@ -93,6 +93,7 @@ async def test_comicvine_volume_match_is_strong_and_links_the_owned_thread(
         provider="comicvine",
         entity_type="series",
         external_id="12345",
+        metadata_json={"start_year": 2018},
     )
     async_db.add(identity)
     await async_db.flush()
@@ -130,6 +131,9 @@ async def test_comicvine_volume_match_is_strong_and_links_the_owned_thread(
     assert matches[0]["match_type"] == "strong"
     assert matches[0]["comicvine_volume_id"] == 12345
     assert matches[0]["title"] == "Spider-Man (2018)"
+    # Publication year is advisory disambiguation context from the confirmed
+    # series identity, not a second identity signal.
+    assert matches[0]["start_year"] == 2018
 
     excluded = await auth_client.post(
         "/api/v1/threads/check-duplicates",
@@ -174,3 +178,81 @@ async def test_duplicate_warnings_never_block_distinct_volumes(
     assert created.status_code == 201
     assert created.json()["id"] != existing.id
     assert created.json()["title"] == "Uncanny X-Men"
+
+
+@pytest.mark.asyncio
+async def test_distinct_volumes_with_same_title_and_different_years_stay_renameable(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Same-title volumes stay distinct: identity wins and rename is never blocked."""
+    first_identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="series",
+        external_id="111",
+        metadata_json={"start_year": "1990"},
+    )
+    second_identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="series",
+        external_id="222",
+        metadata_json={"start_year": 2018},
+    )
+    async_db.add_all([first_identity, second_identity])
+    await async_db.flush()
+    first = Thread(
+        user_id=default_user.id,
+        title="Spider-Man",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+    )
+    second = Thread(
+        user_id=default_user.id,
+        title="Saga",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+    )
+    async_db.add_all([first, second])
+    await async_db.flush()
+    async_db.add_all(
+        [
+            ThreadExternalSeriesMapping(
+                thread_id=first.id,
+                external_identity_id=first_identity.id,
+                status="confirmed",
+            ),
+            ThreadExternalSeriesMapping(
+                thread_id=second.id,
+                external_identity_id=second_identity.id,
+                status="confirmed",
+            ),
+        ]
+    )
+    await async_db.flush()
+
+    checked = await auth_client.post(
+        "/api/v1/threads/check-duplicates",
+        json={
+            "title": "Spider-Man",
+            "format": "Comic",
+            "comicvine_volume_id": 111,
+            "exclude_thread_id": second.id,
+        },
+    )
+    assert checked.status_code == 200
+    matches = checked.json()["matches"]
+    assert [row["thread_id"] for row in matches] == [first.id]
+    assert matches[0]["match_type"] == "strong"
+    assert matches[0]["start_year"] == 1990
+
+    # A distinct volume of the same name may still be renamed; the warning is
+    # advisory context, never an identity merge or a block.
+    renamed = await auth_client.put(
+        f"/api/v1/threads/{second.id}", json={"title": "Spider-Man"}
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "Spider-Man"
+    assert renamed.json()["id"] == second.id

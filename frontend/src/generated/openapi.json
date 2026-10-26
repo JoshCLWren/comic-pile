@@ -12432,6 +12432,18 @@
             "title": "Match Type",
             "type": "string"
           },
+          "start_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confirmed ComicVine publication year, when known",
+            "title": "Start Year"
+          },
           "status": {
             "title": "Status",
             "type": "string"

@@ -86,6 +86,7 @@ export interface PotentialDuplicateMatch {
   status: string;
   match_type: 'strong' | 'weak';
   comicvine_volume_id: number | null;
+  start_year: number | null;
 }
 
 export interface CheckPotentialDuplicatesRequest {

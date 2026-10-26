@@ -652,7 +652,9 @@ async def check_potential_duplicates(
     """Check for potential duplicate threads before creating or renaming.
 
     Compares canonical ComicVine volume identity when available (strong match),
-    and uses title + format similarity as a fallback (weak match).
+    and uses title + format similarity as a fallback (weak match). Confirmed
+    ComicVine publication years are attached as advisory context so same-titled
+    volumes can be told apart; a title alone never establishes identity.
 
     Args:
         db: Database session.
@@ -666,32 +668,19 @@ async def check_potential_duplicates(
         List of potential duplicate matches with match type and thread details.
     """
     normalized_format = normalize_format_value(format_value)
-    matches: list[PotentialDuplicateMatch] = []
 
     # Strong match: same ComicVine volume
+    strong_threads: list[Thread] = []
     if comicvine_volume_id is not None:
-        strong_matches = await thread_repository.find_potential_duplicates_by_comicvine_volume(
+        strong_threads = await thread_repository.find_potential_duplicates_by_comicvine_volume(
             db,
             user_id,
             comicvine_volume_id,
             exclude_thread_id=exclude_thread_id,
         )
-        for thread in strong_matches:
-            matches.append(
-                PotentialDuplicateMatch(
-                    thread_id=thread.id,
-                    title=thread.title,
-                    format=normalize_format_value(thread.format),
-                    issues_remaining=await thread.get_issues_remaining(db),
-                    total_issues=thread.total_issues,
-                    status=thread.status,
-                    match_type="strong",
-                    comicvine_volume_id=comicvine_volume_id,
-                )
-            )
 
     # Weak match: similar title + same format
-    weak_matches = await thread_repository.find_potential_duplicates_by_title_format(
+    weak_threads = await thread_repository.find_potential_duplicates_by_title_format(
         db,
         user_id,
         title,
@@ -699,23 +688,43 @@ async def check_potential_duplicates(
         exclude_thread_id=exclude_thread_id,
         limit=5,
     )
-    for thread in weak_matches:
-        # Avoid duplicates if already matched as strong
-        if not any(m.thread_id == thread.id for m in matches):
-            matches.append(
-                PotentialDuplicateMatch(
-                    thread_id=thread.id,
-                    title=thread.title,
-                    format=normalize_format_value(thread.format),
-                    issues_remaining=await thread.get_issues_remaining(db),
-                    total_issues=thread.total_issues,
-                    status=thread.status,
-                    match_type="weak",
-                    comicvine_volume_id=None,
-                )
-            )
 
-    return matches
+    # A thread reported as a strong match keeps that stronger classification.
+    strong_ids = {thread.id for thread in strong_threads}
+    candidates: list[tuple[Thread, str]] = [
+        (thread, "strong") for thread in strong_threads
+    ] + [(thread, "weak") for thread in weak_threads if thread.id not in strong_ids]
+
+    # Advisory context is fetched in two batched reads rather than per match so
+    # a check with several candidates stays a constant number of queries.
+    start_years = await thread_repository.find_confirmed_series_start_years(
+        db,
+        user_id,
+        [thread.id for thread, _match_type in candidates],
+    )
+    tracked_ids = [
+        thread.id for thread, _match_type in candidates if thread.uses_issue_tracking()
+    ]
+    unread_counts = await thread_repository.count_unread_issues_by_thread(db, tracked_ids)
+
+    return [
+        PotentialDuplicateMatch(
+            thread_id=thread.id,
+            title=thread.title,
+            format=normalize_format_value(thread.format),
+            issues_remaining=(
+                unread_counts.get(thread.id, 0)
+                if thread.uses_issue_tracking()
+                else thread.issues_remaining
+            ),
+            total_issues=thread.total_issues,
+            status=thread.status,
+            match_type=match_type,
+            comicvine_volume_id=comicvine_volume_id if match_type == "strong" else None,
+            start_year=start_years.get(thread.id),
+        )
+        for thread, match_type in candidates
+    ]
 
 
 async def create_thread_with_retry(
