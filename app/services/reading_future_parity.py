@@ -17,6 +17,7 @@ from app.services.reading_list_evaluator import ReadingPrerequisite, ReadingSnap
 
 @dataclass(frozen=True, slots=True)
 class HistoricalEdge:
+    """One historical Issue-to-Issue relationship that might remain relevant."""
     dependency_id: int
     source_issue_id: int
     target_issue_id: int
@@ -26,6 +27,7 @@ class HistoricalEdge:
 
 @dataclass(frozen=True, slots=True)
 class FutureParity:
+    """Audited relations that are implied or missing in canonical execution."""
     examined: int
     implied: int
     missing: tuple[HistoricalEdge, ...]
