@@ -6,7 +6,7 @@ from app.services.reading_list_evaluator import ReadingSnapshot
 def partial_strict_coverage(snapshot: ReadingSnapshot) -> tuple[tuple[int, int], ...]:
     """Identify strict-list omissions; never assume they must be included."""
     lookup = {issue.issue_id: issue.thread_id for issue in snapshot.issues}
-    unread = (
+    unread = tuple(
         issue for issue in snapshot.issues
         if issue.status != "read" and issue.issue_id not in snapshot.excluded_issue_ids
     )
