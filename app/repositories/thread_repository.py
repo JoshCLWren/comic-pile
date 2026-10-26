@@ -1017,7 +1017,6 @@ async def find_potential_duplicates_by_title_format(
         # Title similarity: either contains the other or shares significant words
         or_(
             Thread.title.ilike(f"%{re.escape(normalized_title)}%"),
-            func.strpos(func.lower(Thread.title), normalized_title) > 0,
             *(
                 Thread.title.ilike(f"%{re.escape(word)}%")
                 for word in normalized_title.split()
