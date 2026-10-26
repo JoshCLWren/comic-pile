@@ -125,6 +125,10 @@ export default function ThreadDetailView() {
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set())
   const [bulkNotice, setBulkNotice] = useState<string | null>(null)
+  // The issue the current URL names (`?issue=<id>`), while it still holds focus.
+  // Keeping this in React state lets the arrival highlight follow re-renders and
+  // disappear on blur instead of leaving imperative styles on a detached node.
+  const [deepLinkedIssueId, setDeepLinkedIssueId] = useState<number | null>(null)
 
   const issuesQuery = useThreadIssuePages(threadId, { enabled: issuesExpanded })
   const issues = issuesQuery.issues
@@ -151,6 +155,7 @@ export default function ThreadDetailView() {
       activeThreadIdRef.current = threadId
       setIssuesExpanded(requestedIssueId > 0)
       focusedIssueRef.current = null
+      setDeepLinkedIssueId(null)
       setBulkSelectMode(false)
       setSelectedIssueIds(new Set())
       setBulkNotice(null)
@@ -158,28 +163,30 @@ export default function ThreadDetailView() {
     }
   }, [threadId, requestedIssueId])
 
+  // Deep-link arrival (#3626): jump straight to the exact canonical issue named
+  // by `?issue=<issue_id>`, focus it so keyboard and assistive-technology users
+  // start at the issue the link named, and mark it as the arrival target so it
+  // is visually identifiable. Issue ids are canonical, so identically numbered
+  // comics in other series cannot be targeted by mistake.
   useEffect(() => {
-    if (!issuesExpanded || requestedIssueId <= 0 || focusedIssueRef.current === requestedIssueId) return
-    const row = document.getElementById(`issue-${requestedIssueId}`)
-    if (row) {
-      // Scroll the target issue into view and restore keyboard focus
-      row.scrollIntoView?.({ block: 'center', behavior: 'instant' })
-      row.focus({ preventScroll: true })
-      // Add visible highlight by adding a transient outline
-      row.style.outline = '2px solid var(--theme-personal-accent)'
-      row.style.transition = 'outline 0.4s ease'
-      // Remove the highlight after a brief delay, but only if the row is still focused
-      const cleanup = () => {
-        row.style.outline = ''
-        row.style.transition = ''
-      }
-      setTimeout(cleanup, 400)
-      // If the row gets focus removed before the highlight fades, still clean up
-      row.addEventListener('blur', cleanup, { once: true })
-      focusedIssueRef.current = requestedIssueId
-    } else if (issuesQuery.hasNextPage && !issuesQuery.isFetching && !issuesQuery.isFetchNextPageError) {
-      void issuesQuery.fetchNextPage()
+    if (!issuesExpanded || requestedIssueId <= 0) {
+      setDeepLinkedIssueId(null)
+      return
     }
+    if (focusedIssueRef.current === requestedIssueId) return
+    const row = document.getElementById(`issue-${requestedIssueId}`)
+    if (!row) {
+      if (issuesQuery.hasNextPage && !issuesQuery.isFetching && !issuesQuery.isFetchNextPageError) {
+        void issuesQuery.fetchNextPage()
+      }
+      return
+    }
+    // `instant` skips smooth scrolling so a long issue list lands on the target
+    // immediately; `preventScroll` stops the focus call from scrolling again.
+    row.scrollIntoView?.({ block: 'center', behavior: 'instant' })
+    row.focus({ preventScroll: true })
+    focusedIssueRef.current = requestedIssueId
+    setDeepLinkedIssueId(requestedIssueId)
   }, [issuesExpanded, requestedIssueId, issuesQuery])
 
   function handleToggleBulkSelect() {
@@ -606,11 +613,18 @@ export default function ThreadDetailView() {
                           key={issue.id}
                           id={`issue-${issue.id}`}
                           tabIndex={-1}
+                          role="group"
+                          aria-label={`Issue #${issue.issue_number} in ${thread.title}`}
+                          onBlur={
+                            deepLinkedIssueId === issue.id
+                              ? () => setDeepLinkedIssueId(null)
+                              : undefined
+                          }
                           className={`space-y-1.5 p-2 rounded-lg border ${
                             issue.status === 'read'
                               ? 'bg-green-500/10 border-green-500/20'
                               : 'bg-white/5 border-white/10'
-                          }`}
+                          }${deepLinkedIssueId === issue.id ? ' issue-deep-link-target' : ''}`}
                         >
                           <div className="flex items-center justify-between gap-3">
                             <span className="flex min-w-0 items-center gap-2">

@@ -197,9 +197,7 @@ function IssueInsightCard({ insight }: { insight: CreatorIssueInsight }) {
       <Link
         to={`/thread/${insight.thread_id}?issue=${insight.issue_id}#issue-${insight.issue_id}`}
         className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-        style={{
-          textDecoration: 'none',
-        }}
+        aria-label={`Open ${insight.thread_title} #${insight.issue_number} in its thread`}
       >
         <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
           {insight.thread_title} #{insight.issue_number}

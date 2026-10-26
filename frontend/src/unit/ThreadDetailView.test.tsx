@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -709,6 +709,7 @@ it('does not request legacy availability while canonical boundaries answer', asy
 
 it('opens the exact required issue after loading its later page', async () => {
   locationState.search = '?issue=101'
+  const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView')
   const thread = await threadsApi.get(1)
   mockedThreadsApiGet.mockResolvedValue({ ...thread, total_issues: 2 })
   mockedIssuesApiList.mockResolvedValueOnce({
@@ -720,8 +721,81 @@ it('opens the exact required issue after loading its later page', async () => {
   })
   renderPage()
   await waitFor(() => expect(document.getElementById('issue-101')).toHaveFocus())
+  // #3626: the deep link lands on the exact issue without animating past a long
+  // list, and marks that row as the arrival target.
+  expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center', behavior: 'instant' })
+  expect(document.getElementById('issue-101')).toHaveClass('issue-deep-link-target')
   expect(mockedIssuesApiList).toHaveBeenCalledWith(1, { page_size: 100, page_token: 'next' })
   expect(screen.getByText('#101')).toBeVisible()
+  scrollIntoView.mockRestore()
+})
+
+it('clears the deep-link highlight once focus leaves the target issue', async () => {
+  locationState.search = '?issue=11'
+  const thread = await threadsApi.get(1)
+  mockedThreadsApiGet.mockResolvedValue({ ...thread, total_issues: 2 })
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 11, thread_id: 1, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' },
+      { id: 12, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 2, page_size: 100,
+  })
+  renderPage()
+  const target = await waitFor(() => {
+    const row = document.getElementById('issue-11')
+    expect(row).not.toBeNull()
+    return row as HTMLElement
+  })
+  await waitFor(() => expect(target).toHaveClass('issue-deep-link-target'))
+  // The highlight identifies the target on arrival; it must not linger as drift
+  // once the reader moves on to another control inside or outside the row.
+  fireEvent.focusOut(target)
+  await waitFor(() => expect(target).not.toHaveClass('issue-deep-link-target'))
+})
+
+it('leaves ordinary thread navigation unfocused and unhighlighted', async () => {
+  const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView')
+  const thread = await threadsApi.get(1)
+  mockedThreadsApiGet.mockResolvedValue({ ...thread, total_issues: 1 })
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 11, thread_id: 1, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 1, page_size: 100,
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  await userEvent.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(screen.getByText('#1')).toBeVisible())
+  expect(document.querySelector('.issue-deep-link-target')).toBeNull()
+  expect(document.getElementById('issue-11')).not.toHaveFocus()
+  expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'center', behavior: 'instant' })
+  scrollIntoView.mockRestore()
+})
+
+it('does not retarget an unknown deep-linked issue to another row', async () => {
+  locationState.search = '?issue=999'
+  const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView')
+  const thread = await threadsApi.get(1)
+  mockedThreadsApiGet.mockResolvedValue({ ...thread, total_issues: 2 })
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 11, thread_id: 1, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' },
+      { id: 12, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 2, page_size: 100,
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('#1')).toBeVisible())
+  // Missing/unowned targets fail safely: no arbitrary first or same-number issue
+  // gets focused or highlighted, and no extra page is requested past the end.
+  expect(document.querySelector('.issue-deep-link-target')).toBeNull()
+  expect(document.getElementById('issue-11')).not.toHaveFocus()
+  expect(document.getElementById('issue-12')).not.toHaveFocus()
+  expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'center', behavior: 'instant' })
+  expect(mockedIssuesApiList).toHaveBeenCalledTimes(1)
+  scrollIntoView.mockRestore()
 })
 
 function creatorsResponseFor(

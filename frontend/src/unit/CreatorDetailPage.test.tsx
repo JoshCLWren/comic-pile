@@ -495,6 +495,11 @@ describe('CreatorDetailPage highlights (#3092)', () => {
     expect(screen.getByRole('heading', { name: 'Lowest-rated issues' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Best Run #7/ })).toHaveAttribute('href', '/thread/9?issue=91#issue-91')
     expect(screen.getByRole('link', { name: /Weak Run #2/ })).toHaveAttribute('href', '/thread/11?issue=92#issue-92')
+    // #3626: the card names the issue it opens instead of looking like a
+    // series-only link.
+    expect(screen.getByRole('link', { name: /Best Run #7/ })).toHaveAccessibleName(
+      'Open Best Run #7 in its thread',
+    )
   })
 
   it('explains a thin series sample instead of ranking series', () => {
