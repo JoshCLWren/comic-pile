@@ -200,7 +200,6 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     // verifies the rendered content gap across wide viewports.
     expect(grid!.className).toContain('lg:max-w-4xl')
     expect(grid!.className).toContain('lg:mx-auto')
-    expect(grid!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
     expect(hasNoGridColsArbitraryComma(grid!.className)).toBe(true)
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     // #2712: the workspace geometry is owned once, so the header chrome that

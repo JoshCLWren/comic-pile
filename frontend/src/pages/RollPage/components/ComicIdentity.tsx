@@ -292,7 +292,10 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
               <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">Summary</span>
               <span className="text-stone-500 group-open:rotate-180 transition-transform" aria-hidden="true">⌄</span>
             </summary>
-            <div className="pl-6 pr-2 pb-2 text-xs leading-relaxed text-stone-300 border-l border-white/10">
+            <div
+              data-testid="comic-summary"
+              className="pl-6 pr-2 pb-2 text-xs leading-relaxed text-stone-300 border-l border-white/10"
+            >
               {isLongSummary && !summaryExpanded ? (
                 <>
                   <p>{metadata.description!.slice(0, SUMMARY_LONG_THRESHOLD)}…</p>

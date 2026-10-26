@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { ReadingContextStatusCard } from '../pages/RollPage/components/ReadingContextStatusCard'
+import { ROLL_WORKSPACE_TRACKS } from '../pages/RollPage/workspaceLayout'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import {
   hasReadingContextContent,
@@ -193,7 +194,7 @@ describe('RatingView #2764: restored Reading Context/Boundaries optional cards',
     expect(screen.queryByTestId('rating-region-reading-boundaries')).not.toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
-    expect(grid!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
+    expect(grid!.className).toContain(ROLL_WORKSPACE_TRACKS)
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(grid!.contains(screen.getByTestId('rating-region-comic'))).toBe(true)
     expect(grid!.contains(screen.getByTestId('rating-region-decision'))).toBe(true)

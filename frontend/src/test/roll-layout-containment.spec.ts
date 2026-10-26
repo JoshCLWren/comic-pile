@@ -79,7 +79,7 @@ async function installRatingRoutes(page: Page): Promise<void> {
         series_id: 105477,
         issue_number: '3',
         name: 'Safety In Numbers',
-        description: null,
+        description: 'A long summary description that contains many characters to test text width.',
         image_url: COVER_DATA_URI,
         cover_date: '2006-06-21',
         store_date: '2006-06-21',
@@ -225,6 +225,63 @@ test.describe('Roll layout containment', () => {
           'narrow layout must stack the header below the comic identity rail',
         ).toBeGreaterThanOrEqual(geometry.cover.bottom - GEOMETRY_TOLERANCE_PX)
       }
+    })
+  }
+})
+
+// Issue #4187: cover rail and Summary must not collapse at ~1024px (lg breakpoint)
+// The cover must not be narrower than ~11rem (176px) to prevent Summary from
+// wrapping one word per line, and the Comic region must reserve room for both
+// inner columns (cover + gap + details) so the details can never paint over
+// DecisionCard (#4189). Summary renders under the cover in the same rail, so
+// its own text area is the width that has to stay readable (~20 characters
+// per line), not the gap beside the cover.
+test.describe('Roll rating view cover rail and Summary width', () => {
+  const COVER_RAIL_VIEWPORTS = [
+    { width: 1024, height: 800 },
+    { width: 1280, height: 800 },
+  ]
+
+  for (const viewport of COVER_RAIL_VIEWPORTS) {
+    test(`cover rail is readable and Summary fits at ${viewport.width}px`, async ({ authenticatedPage }) => {
+      const page = authenticatedPage
+      await page.setViewportSize(viewport)
+      await createThread(page, {
+        title: THREAD_TITLE,
+        format: 'Comic',
+        issues_remaining: 2,
+        total_issues: 4,
+      })
+
+      await enterRatingView(page)
+      const geometry = await readGeometry(page)
+
+      // The Comic region reserves both inner columns: 11rem cover + 1rem gap
+      // + 10rem details. Reserving only the cover overflowed the details into
+      // DecisionCard at 1024px with the sidebar expanded (#4189).
+      expect(
+        geometry.comic.width,
+        `comic region must reserve cover + gap + details width at ${viewport.width}px`,
+      ).toBeGreaterThanOrEqual((11 + 1 + 10) * 16 - GEOMETRY_TOLERANCE_PX)
+
+      // Cover rail must be at least 11rem (176px) wide to prevent Summary
+      // from wrapping one word per line (issue #4187)
+      expect(
+        geometry.cover.width,
+        `cover rail must be at least 11rem (176px) wide at ${viewport.width}px`,
+      ).toBeGreaterThanOrEqual(11 * 16 - GEOMETRY_TOLERANCE_PX)
+
+      // Summary renders from a real description in the cover rail, and its
+      // text area (text-xs, ~0.6em average glyph width) must fit ~20
+      // characters per line without collapsing to a narrow column.
+      const summary = page.getByTestId('comic-summary')
+      await expect(summary, `Summary must be visible at ${viewport.width}px`).toBeVisible()
+      const summaryTextBox = await summary.locator('p').first().boundingBox()
+      expect(summaryTextBox, `Summary text must render at ${viewport.width}px`).not.toBeNull()
+      expect(
+        summaryTextBox!.width,
+        `Summary text must have at least ~20ch width at ${viewport.width}px`,
+      ).toBeGreaterThanOrEqual(20 * 0.6 * 12 - GEOMETRY_TOLERANCE_PX)
     })
   }
 })
