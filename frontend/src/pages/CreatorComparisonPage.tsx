@@ -4,8 +4,8 @@ import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
 import type { CreatorComparisonIssueRef, CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
-import Breadcrumbs from '../components/Breadcrumbs'
 import { CreatorMetricDrilldownModal } from '../components/CreatorMetricDrilldownModal'
+import Breadcrumbs from '../components/Breadcrumbs'
 
 interface MetricClickParams {
   role?: string
@@ -587,7 +587,7 @@ export default function CreatorComparisonPage() {
               </>
             )}
           </p>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <Link
               to="/creators"
               className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
@@ -595,6 +595,15 @@ export default function CreatorComparisonPage() {
             >
               Back to Creators
             </Link>
+            {keys.length > 0 && (
+              <Link
+                to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
+                className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+              >
+                Change selection
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -641,7 +650,7 @@ export default function CreatorComparisonPage() {
             Try again
           </button>
         )}
-        <div className="mt-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           <Link
             to="/creators"
             className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
@@ -649,6 +658,15 @@ export default function CreatorComparisonPage() {
           >
             Back to Creators
           </Link>
+          {keys.length > 0 && (
+            <Link
+              to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
+              className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+            >
+              Change selection
+            </Link>
+          )}
         </div>
       </div>
     )
@@ -666,6 +684,10 @@ export default function CreatorComparisonPage() {
   const missingRequestedCount = keys.filter((k: string) => !resolvedKeys.has(k)).length
   const hasMixedResult = missingRequestedCount > 0 && comparisonItems.length > 0
 
+  // Build the change selection URL with the currently resolved creator keys
+  const changeSelectionKeys = Array.from(resolvedKeys).join(',')
+  const changeSelectionUrl = `/creators?keys=${encodeURIComponent(changeSelectionKeys)}`
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
       <Breadcrumbs items={[{ label: 'Creators', to: '/creators' }, { label: 'Compare' }]} />
@@ -673,9 +695,20 @@ export default function CreatorComparisonPage() {
         <h1 className="text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
-        <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          Comparing {comparisonItems.length} creator{comparisonItems.length === 1 ? '' : 's'}
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+            Comparing {comparisonItems.length} creator{comparisonItems.length === 1 ? '' : 's'}
+          </p>
+          {comparisonItems.length > 0 && (
+            <Link
+              to={changeSelectionUrl}
+              className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+            >
+              Change selection
+            </Link>
+          )}
+        </div>
       </header>
 
       {hasMixedResult && (
@@ -746,7 +779,7 @@ export default function CreatorComparisonPage() {
             None of the selected creators are available in your library — the comparison can
             only include creators with issues credited to them in your library.
           </p>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <Link
               to="/creators"
               className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
@@ -754,6 +787,15 @@ export default function CreatorComparisonPage() {
             >
               Back to Creators
             </Link>
+            {keys.length > 0 && (
+              <Link
+                to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
+                className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+              >
+                Change selection
+              </Link>
+            )}
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
 import { useDebounce } from '../hooks/useDebounce'
@@ -67,7 +67,9 @@ function CreatorRow({
   const roles = item.normalized_roles.join(', ')
   const ratingsCount = item.ratings_count
   const average = item.average_rating
-  const canSelect = !isSelected && selectionCount < maxSelection
+  // Selected checkboxes are always enabled (can be unchecked).
+  // Unselected checkboxes are disabled only when at max selection.
+  const canSelect = isSelected || selectionCount < maxSelection
 
   const body = (
     <>
@@ -182,6 +184,32 @@ export default function CreatorsPage() {
   const debouncedSearch = useDebounce(search, SEARCH_DEBOUNCE_MS)
   const activeSearch = debouncedSearch.trim()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Initialize selectedKeys from URL query parameter on mount
+  useEffect(() => {
+    const keysParam = searchParams.get('keys')
+    if (keysParam) {
+      const keys = keysParam.split(',').map((k) => k.trim()).filter(Boolean)
+      // Validate keys against actual creators in the list
+      const validKeys = new Set<string>()
+      // We'll validate after the list loads - for now store all keys
+      // The checkbox rendering will handle invalid keys by not finding them in the list
+      keys.forEach((key) => validKeys.add(key))
+      setSelectedKeys(validKeys)
+    }
+  }, [searchParams])
+
+  // Update URL when selection changes
+  const updateSelectionUrl = useCallback((keys: Set<string>) => {
+    if (keys.size > 0) {
+      const keysArray = Array.from(keys)
+      setSearchParams({ keys: keysArray.join(',') }, { replace: true })
+    } else {
+      // Clear the keys param when no selection
+      setSearchParams({}, { replace: true })
+    }
+  }, [setSearchParams])
 
   const {
     items,
@@ -225,6 +253,11 @@ export default function CreatorsPage() {
       return next
     })
   }
+
+  // Update URL when selectedKeys changes
+  useEffect(() => {
+    updateSelectionUrl(selectedKeys)
+  }, [selectedKeys, updateSelectionUrl])
 
   const handleCompare = () => {
     if (canCompare) {
