@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "authority": "Reader-approved crossover handoffs and authored strict list source order, not Option E's computed candidates",
+  "approved_sequences": {
+    "xmen_1998": {
+      "source": "Uncanny X-Men #360 printed next X-Men #80; documented October 26 correction; X-Men #80 then X-Men #1/2 then UXM #361 then X-Men #81",
+      "steps": [
+        {
+          "read": 1634,
+          "blocked": [
+            2029,
+            1635
+          ],
+          "unblocks": [
+            101875
+          ],
+          "still_blocked": [
+            2029,
+            1635
+          ]
+        },
+        {
+          "read": 101875,
+          "blocked": [],
+          "unblocks": [
+            2029
+          ],
+          "still_blocked": [
+            1635
+          ]
+        },
+        {
+          "read": 2029,
+          "blocked": [],
+          "unblocks": [
+            1635
+          ],
+          "still_blocked": []
+        }
+      ]
+    },
+    "ultimate_2025": {
+      "source": "Reader-approved specific handoff without global strict enforcement of Ultimate Universe",
+      "read": 23559,
+      "target": 23584
+    },
+    "fantastic_four": {
+      "source": "Reader's approved #4199 FF/Fantastic Four after_previous gates",
+      "steps": [
+        {
+          "read": 101730,
+          "still_blocked": [
+            101718,
+            101731
+          ],
+          "still_blocked_after": [
+            101731
+          ]
+        },
+        {
+          "read": 101718,
+          "still_blocked": [
+            101731,
+            101719
+          ],
+          "still_blocked_after": [
+            101719
+          ]
+        },
+        {
+          "read": 101731,
+          "still_blocked": [
+            101719,
+            101732
+          ],
+          "still_blocked_after": [
+            101732
+          ]
+        }
+      ]
+    }
+  },
+  "unresolved_reader_intent": {
+    "strict_partial_membership_needing_classification": 163,
+    "reading_list_vs_reading_plan_discrepancies_needing_classification": 33,
+    "historical_contradictions": "Unresolved converted JLI and other historical constraints must be reviewed, never enabled by default"
+  }
+}
