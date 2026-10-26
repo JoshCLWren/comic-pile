@@ -748,6 +748,7 @@ describe('CreatorDetailPage population scopes (#3579)', () => {
       data: undefined,
       isPending: false,
       isError: true,
+      issues: [],
     } as unknown as ReturnType<typeof useCreatorSeriesIssues>)
     renderAt('creator:7')
 
