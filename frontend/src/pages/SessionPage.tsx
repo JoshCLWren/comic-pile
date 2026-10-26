@@ -55,7 +55,9 @@ function eventLabel(type: string): string {
  * of every snooze action, so it must never be labeled just "Snoozed" (#3707).
  * The wire key stays stable while the reader-facing wording can evolve.
  */
-const NARRATIVE_SECTION_LABELS: Record<string, string> = {
+interface NarrativeSectionLabelMap extends Record<string, string> {}
+
+const NARRATIVE_SECTION_LABELS: NarrativeSectionLabelMap = {
   read: 'Read',
   skipped: 'Skipped',
   snoozed: 'Still snoozed at end',

@@ -159,15 +159,21 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     # session's ordered actions over either base resolves the boundary state
     # without reading today's Queue.
     reading_session = await get_reading_session(db, session_id)
-    if reading_session is not None and reading_session.snoozed_thread_ids is not None:
+    # Read model attributes before later awaits so a future expiry cannot
+    # resurrect them through lazy loads.
+    session_user_id = reading_session.user_id if reading_session is not None else None
+    recorded_snoozed_ids = (
+        reading_session.snoozed_thread_ids if reading_session is not None else None
+    )
+    if session_user_id is not None and recorded_snoozed_ids is not None:
         base_snoozed_ids: list[int] = [
             thread_id
-            for thread_id in reading_session.snoozed_thread_ids
+            for thread_id in recorded_snoozed_ids
             if isinstance(thread_id, int) and not isinstance(thread_id, bool)
         ]
     else:
         start_snapshot = (
-            await first_start_snapshot(db, session_id) if reading_session is not None else None
+            await first_start_snapshot(db, session_id) if session_user_id is not None else None
         )
         base_snoozed_ids = _recorded_start_snoozes(start_snapshot)
 
@@ -185,12 +191,12 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     # Scope state and titles to the reader who owns the session. A malformed
     # event that points at another reader's series must not leak that title or
     # state.
-    if reading_session is not None:
+    if session_user_id is not None:
         still_snoozed_ids = [
             thread_id
             for thread_id in still_snoozed_ids
             if thread_id not in threads_dict
-            or threads_dict[thread_id].user_id == reading_session.user_id
+            or threads_dict[thread_id].user_id == session_user_id
         ]
 
     still_snoozed_titles = {

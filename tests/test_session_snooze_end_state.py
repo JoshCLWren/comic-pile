@@ -355,6 +355,11 @@ async def test_manual_selection_unsnoozes_in_legacy_mode(
 
     await set_pending_thread(async_db, default_user.id, thread.id)
 
+    # The manual selection must clear the live snooze column too, so the
+    # summary's replay-from-start-state path is what this test exercises.
+    await async_db.refresh(session, ["snoozed_thread_ids"])
+    assert session.snoozed_thread_ids == []
+
     # Finish the session.
     session.ended_at = started_at + timedelta(minutes=10)
     await async_db.flush()
