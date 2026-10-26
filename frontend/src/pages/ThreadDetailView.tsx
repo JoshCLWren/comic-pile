@@ -162,8 +162,19 @@ export default function ThreadDetailView() {
     if (!issuesExpanded || requestedIssueId <= 0 || focusedIssueRef.current === requestedIssueId) return
     const row = document.getElementById(`issue-${requestedIssueId}`)
     if (row) {
-      row.scrollIntoView?.({ block: 'center' })
-      row.focus({ preventScroll: true })
+      // Scroll the target issue into view
+      row.scrollIntoView?.({ block: 'center', behavior: 'instant' })
+      // Add visible highlight by adding a transient outline
+      row.style.outline = '2px solid var(--theme-personal-accent)'
+      row.style.transition = 'outline 0.4s ease'
+      // Remove the highlight after a brief delay, but only if the row is still focused
+      const cleanup = () => {
+        row.style.outline = ''
+        row.style.transition = ''
+      }
+      setTimeout(cleanup, 400)
+      // If the row gets focus removed before the highlight fades, still clean up
+      row.addEventListener('blur', cleanup, { once: true })
       focusedIssueRef.current = requestedIssueId
     } else if (issuesQuery.hasNextPage && !issuesQuery.isFetching && !issuesQuery.isFetchNextPageError) {
       void issuesQuery.fetchNextPage()
