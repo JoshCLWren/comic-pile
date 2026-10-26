@@ -99,7 +99,9 @@ export function TagEditor({
   // Usable-tag lookup for the name being typed so an exact normalized match
   // blocks creation and offers reuse instead of a duplicate (issue #3423).
   // An empty typed name reuses the unfiltered list key, so no extra request
-  // fires until the viewer actually types.
+  // fires until the viewer actually types. The server normalizes this search
+  // the same way it normalizes stored keys, so spacing variants still match
+  // (issue #4182); only the cache key differs.
   const nameLookup = useTags(debouncedNewName.trim() ? debouncedNewName : undefined)
   const normalizedTypedName = normalizeTagName(newName)
   const debouncedNormalizedName = normalizeTagName(debouncedNewName)
