@@ -49,6 +49,23 @@ function eventLabel(type: string): string {
   return EVENT_LABELS[type] ?? type.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
 }
 
+/**
+ * Human labels for the historical narrative-summary sections returned by the
+ * session-details API. ``snoozed`` is an end-of-session projection, not a log
+ * of every snooze action, so it must never be labeled just "Snoozed" (#3707).
+ * The wire key stays stable while the reader-facing wording can evolve.
+ */
+const NARRATIVE_SECTION_LABELS: Record<string, string> = {
+  read: 'Read',
+  skipped: 'Skipped',
+  snoozed: 'Still snoozed at end',
+  completed: 'Completed',
+}
+
+function narrativeSectionLabel(key: string): string {
+  return NARRATIVE_SECTION_LABELS[key] ?? key.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
+}
+
 function selectionLabel(event: DisplayEvent): string | null {
   if (event.selection_method == null) return null
   return `Selected by ${event.selection_method.replaceAll('_', ' ')}`
@@ -291,7 +308,7 @@ export default function SessionPage() {
         <div className="grid gap-3 md:gap-4 md:grid-cols-3">
           {Object.entries(details.narrative_summary || {}).map(([key, values]) => (
             <div key={key} className="space-y-2 min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{key}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{narrativeSectionLabel(key)}</p>
               {values && values.length > 0 ? (
                 <ul className="space-y-1 text-xs text-stone-300">
                   {values.map((value) => (
