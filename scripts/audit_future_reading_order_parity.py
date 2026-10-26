@@ -27,6 +27,7 @@ ORDER BY d.id
 
 
 async def run(url: str, uid: int) -> dict:
+    """Load canonical and historical rows in one read-only owner transaction."""
     if not url.startswith("postgresql+asyncpg://") or uid < 1:
         raise ValueError("Specify an asyncpg URL and positive user ID")
     engine = create_async_engine(url, isolation_level="REPEATABLE READ")
@@ -64,6 +65,7 @@ async def run(url: str, uid: int) -> dict:
 
 
 def vars_edge(edge: HistoricalEdge) -> dict:
+    """Serialize one unresolved historical edge without changing it."""
     return {
         "id": edge.dependency_id, "source": edge.source_issue_id,
         "target": edge.target_issue_id, "origin": edge.origin,
@@ -72,6 +74,7 @@ def vars_edge(edge: HistoricalEdge) -> dict:
 
 
 def main() -> int:
+    """Exit nonzero unless the historical unread-edge audit passes."""
     p = argparse.ArgumentParser()
     p.add_argument("--database-url", required=True)
     p.add_argument("--user-id", required=True, type=int)
