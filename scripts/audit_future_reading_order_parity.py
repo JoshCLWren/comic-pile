@@ -28,24 +28,28 @@ ORDER BY d.id
 
 
 async def run(url: str, uid: int) -> dict:
-    """Load canonical and historical rows in one read-only owner transaction.
+    """Run the read-only future-order parity audit for one user.
 
-    This function connects to the PostgreSQL database using an async engine with
-    REPEATABLE READ isolation, executes a read‑only transaction, loads the
-    shadow inputs for the given user, runs the audit of future unread historical
-    edges, and returns a structured JSON report.  The report includes:
+    Connects to the PostgreSQL database using an async engine with
+    REPEATABLE READ isolation, executes a read-only transaction, loads the
+    shadow inputs for the given user, runs the audit of future unread
+    historical edges, and returns a structured JSON report.
 
-    * ``examined`` – total number of historical edges considered (excluding
-      excluded issues).
-    * ``implied`` – number of edges that are implied by the canonical graph.
-    * ``unresolved`` – list of edges that are missing from the canonical graph,
-      each with source and target issue labels.
-    * ``partial_strict_list_omissions`` – details of strict‑list omissions.
-    * ``status`` – ``PASS`` if the audit is safe to certify and there are no
-      partial strict‑list omissions, otherwise ``REVIEW_REQUIRED``.
+    Args:
+        url: Async PostgreSQL connection URL (must start with
+            ``postgresql+asyncpg://``).
+        uid: Positive reader user ID whose edges are audited.
 
-    The function is intended for use by the CLI entry point ``main`` and by
-    automated tests that need PostgreSQL coverage of the production path.
+    Returns:
+        A dictionary with the audit report: ``user_id``, ``scope``,
+        ``examined``, ``implied``, ``excluded``, ``unresolved``,
+        ``partial_strict_list_omissions``, and ``status`` (``PASS`` or
+        ``REVIEW_REQUIRED``). ``examined`` counts every historical edge
+        considered; ``implied`` plus ``unresolved`` plus ``excluded`` totals
+        equal ``examined`` so no examined edge vanishes from the report.
+
+    Raises:
+        ValueError: If the URL is not an asyncpg URL or ``uid`` is not positive.
     """
     if not url.startswith("postgresql+asyncpg://") or uid < 1:
         raise ValueError("Specify an asyncpg URL and positive user ID")
@@ -80,6 +84,12 @@ async def run(url: str, uid: int) -> dict:
                         "scope": "future_unread_historical_edges_and_strict_partial_threads",
                         "examined": checked.examined,
                         "implied": checked.implied,
+                        "excluded": [
+                            {**vars_edge(e),
+                             "reason": _excluded_reason(
+                                 e, snapshot.excluded_issue_ids)}
+                            for e in checked.excluded
+                        ],
                         "unresolved": [
                             {**vars_edge(e),
                              "source_label": issue_names.get(e.source_issue_id),
@@ -103,9 +113,13 @@ async def run(url: str, uid: int) -> dict:
 def vars_edge(edge: HistoricalEdge) -> dict:
     """Serialize one unresolved historical edge without changing it.
 
-    Returns a dictionary with the edge's identifier, source and target issue IDs,
-    origin, and note.  This helper is used by the CLI report to produce JSON
-    output that is easy to parse.
+    Args:
+        edge: The historical edge to serialize.
+
+    Returns:
+        A dictionary with the edge's identifier, source and target issue IDs,
+        origin, and note. Used by the CLI report to produce parseable JSON
+        output.
     """
     return {
         "id": edge.dependency_id, "source": edge.source_issue_id,
@@ -114,13 +128,32 @@ def vars_edge(edge: HistoricalEdge) -> dict:
     }
 
 
+def _excluded_reason(edge: HistoricalEdge, excluded_ids: frozenset[int]) -> str:
+    """Explain why a historical edge with an excluded endpoint is inactive.
+
+    Args:
+        edge: The historical edge being classified as excluded.
+        excluded_ids: Issue IDs the reader has excluded from reading history.
+
+    Returns:
+        A short sentence naming the excluded endpoint so operators can tell an
+        intentional exclusion from a lost result.
+    """
+    if edge.source_issue_id in excluded_ids:
+        return f"source issue {edge.source_issue_id} excluded from reading history"
+    return f"target issue {edge.target_issue_id} excluded from reading history"
+
+
 def main() -> int:
     """Exit nonzero unless the historical unread-edge audit passes.
 
     Parses command-line arguments for ``--database-url`` and ``--user-id``,
     runs the ``run`` coroutine, prints the JSON report, and exits with a
-    status code indicating success (0) or failure (non‑zero).  The exit code
+    status code indicating success (0) or failure (non-zero). The exit code
     is useful for CI pipelines to detect audit failures automatically.
+
+    Returns:
+        0 when the audit status is ``PASS``, non-zero otherwise.
     """
     p = argparse.ArgumentParser()
     p.add_argument("--database-url", required=True)
