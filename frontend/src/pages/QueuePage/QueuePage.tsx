@@ -312,6 +312,9 @@ const {
           onDismissRollNudge={modals.dismissRollNudge}
           onRollNudgeNavigate={modals.rollNudgeNavigate}
           onCloseAddSeriesComicVine={modals.closeAddSeriesComicVineModal}
+          createPotentialDuplicates={modals.createPotentialDuplicates}
+          editPotentialDuplicates={modals.editPotentialDuplicates}
+          isCheckingDuplicates={modals.isCheckingDuplicates}
         />
 
         <DeleteThreadDialog

@@ -98,12 +98,17 @@ _EXPORT_MODULES: dict[str, str] = {
     "ControlModeGroup": "app.schemas.recommendation_diagnostics",
     "CoverageInfo": "app.schemas.recommendation_diagnostics",
     "EffortBandOutcome": "app.schemas.recommendation_diagnostics",
+    "CheckPotentialDuplicatesRequest": "app.schemas.thread",
+    "CheckPotentialDuplicatesResponse": "app.schemas.thread",
+    "PotentialDuplicateMatch": "app.schemas.thread",
 }
 
 __all__ = [
     "ActiveThreadInfo",
     "AnalyticsMetricsResponse",
     "BlockingExplanation",
+    "CheckPotentialDuplicatesRequest",
+    "CheckPotentialDuplicatesResponse",
     "ComicVineMappingHealth",
     "ComicVineMappingStatus",
     "ControlModeGroup",
@@ -133,6 +138,7 @@ __all__ = [
     "PerformanceMetricCreate",
     "PerformanceMetricQuery",
     "PerformanceMetricSummary",
+    "PotentialDuplicateMatch",
     "QueueThreadListItem",
     "QueueThreadListResponse",
     "RateRequest",
@@ -296,8 +302,11 @@ if TYPE_CHECKING:
     )
     from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
     from app.schemas.thread import (
+        CheckPotentialDuplicatesRequest,
+        CheckPotentialDuplicatesResponse,
         ComicVineMappingHealth,
         ComicVineMappingStatus,
+        PotentialDuplicateMatch,
         QueueThreadListItem,
         QueueThreadListResponse,
         ReactivateRequest,

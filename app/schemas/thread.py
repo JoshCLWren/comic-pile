@@ -283,3 +283,33 @@ class QueueThreadListResponse(BaseModel):
     threads: list[QueueThreadListItem]
     next_page_token: str | None = None
     active_count: int = Field(0, ge=0)
+
+
+class PotentialDuplicateMatch(BaseModel):
+    """A thread that potentially duplicates the proposed series."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    thread_id: int
+    title: str
+    format: str
+    issues_remaining: int
+    total_issues: int | None
+    status: str
+    match_type: str  # "strong" (ComicVine volume) or "weak" (title/format)
+    comicvine_volume_id: int | None = None
+
+
+class CheckPotentialDuplicatesRequest(BaseModel):
+    """Request to check for potential duplicate threads."""
+
+    title: str = Field(..., min_length=1, max_length=200)
+    format: str = Field(..., min_length=1)
+    comicvine_volume_id: int | None = Field(None, gt=0, description="ComicVine volume ID for strong matching")
+    exclude_thread_id: int | None = Field(None, gt=0, description="Thread ID to exclude from results (for edit flow)")
+
+
+class CheckPotentialDuplicatesResponse(BaseModel):
+    """Response containing potential duplicate matches."""
+
+    matches: list[PotentialDuplicateMatch] = Field(default_factory=list)

@@ -77,6 +77,28 @@ export interface ThreadUpdatePayload {
   manual_creator_credits?: ManualCreatorCredit[];
 }
 
+export interface PotentialDuplicateMatch {
+  thread_id: number;
+  title: string;
+  format: string;
+  issues_remaining: number;
+  total_issues: number | null;
+  status: string;
+  match_type: 'strong' | 'weak';
+  comicvine_volume_id: number | null;
+}
+
+export interface CheckPotentialDuplicatesRequest {
+  title: string;
+  format: string;
+  comicvine_volume_id?: number;
+  exclude_thread_id?: number;
+}
+
+export interface CheckPotentialDuplicatesResponse {
+  matches: PotentialDuplicateMatch[];
+}
+
 export interface MoveToPositionPayload {
   id: number;
   position: number;

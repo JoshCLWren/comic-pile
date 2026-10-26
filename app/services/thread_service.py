@@ -11,6 +11,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -637,6 +638,102 @@ async def active_threads_html(db: AsyncSession, user_id: int) -> str:
         for thread in threads
     )
     return items or '<p class="text-gray-500 text-center py-4">No active threads available</p>'
+
+
+class PotentialDuplicateMatch(BaseModel):
+    """A thread that potentially duplicates the proposed series."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    thread_id: int
+    title: str
+    format: str
+    issues_remaining: int
+    total_issues: int | None
+    status: str
+    match_type: str  # "strong" (ComicVine volume) or "weak" (title/format)
+    comicvine_volume_id: int | None = None
+
+
+async def check_potential_duplicates(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    title: str,
+    format_value: str,
+    comicvine_volume_id: int | None = None,
+    exclude_thread_id: int | None = None,
+) -> list[PotentialDuplicateMatch]:
+    """Check for potential duplicate threads before creating or renaming.
+
+    Compares canonical ComicVine volume identity when available (strong match),
+    and uses title + format similarity as a fallback (weak match).
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        title: Proposed thread title.
+        format_value: Proposed thread format (will be normalized).
+        comicvine_volume_id: Optional ComicVine volume ID for strong matching.
+        exclude_thread_id: Optional thread ID to exclude (for edit flow).
+
+    Returns:
+        List of potential duplicate matches with match type and thread details.
+    """
+    from app.models.thread import normalize_format_value
+    from app.repositories import thread_repository
+
+    normalized_format = normalize_format_value(format_value)
+    matches: list[PotentialDuplicateMatch] = []
+
+    # Strong match: same ComicVine volume
+    if comicvine_volume_id is not None:
+        strong_matches = await thread_repository.find_potential_duplicates_by_comicvine_volume(
+            db,
+            user_id,
+            comicvine_volume_id,
+            exclude_thread_id=exclude_thread_id,
+        )
+        for thread in strong_matches:
+            matches.append(
+                PotentialDuplicateMatch(
+                    thread_id=thread.id,
+                    title=thread.title,
+                    format=normalize_format_value(thread.format),
+                    issues_remaining=await thread.get_issues_remaining(db),
+                    total_issues=thread.total_issues,
+                    status=thread.status,
+                    match_type="strong",
+                    comicvine_volume_id=comicvine_volume_id,
+                )
+            )
+
+    # Weak match: similar title + same format
+    weak_matches = await thread_repository.find_potential_duplicates_by_title_format(
+        db,
+        user_id,
+        title,
+        normalized_format,
+        exclude_thread_id=exclude_thread_id,
+        limit=5,
+    )
+    for thread in weak_matches:
+        # Avoid duplicates if already matched as strong
+        if not any(m.thread_id == thread.id for m in matches):
+            matches.append(
+                PotentialDuplicateMatch(
+                    thread_id=thread.id,
+                    title=thread.title,
+                    format=normalize_format_value(thread.format),
+                    issues_remaining=await thread.get_issues_remaining(db),
+                    total_issues=thread.total_issues,
+                    status=thread.status,
+                    match_type="weak",
+                    comicvine_volume_id=None,
+                )
+            )
+
+    return matches
 
 
 async def create_thread_with_retry(

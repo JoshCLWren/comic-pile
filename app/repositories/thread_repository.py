@@ -903,3 +903,118 @@ async def owned_title_exists(db: AsyncSession, user_id: int, title: str) -> bool
     return await db.scalar(
         select(Thread.id).where(Thread.user_id == user_id, Thread.title == title).limit(1)
     ) is not None
+
+
+async def find_potential_duplicates_by_comicvine_volume(
+    db: AsyncSession,
+    user_id: int,
+    comicvine_volume_id: int,
+    *,
+    exclude_thread_id: int | None = None,
+) -> list[Thread]:
+    """Find threads owned by the user that are linked to a specific ComicVine volume.
+
+    This is a STRONG match: the same ComicVine volume identity.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        comicvine_volume_id: ComicVine volume ID to match.
+        exclude_thread_id: Optional thread ID to exclude from results (for edit flow).
+
+    Returns:
+        List of matching threads with confirmed ComicVine volume linkage.
+    """
+    from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
+
+    query = (
+        select(Thread)
+        .join(ThreadExternalSeriesMapping, Thread.id == ThreadExternalSeriesMapping.thread_id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+        )
+        .where(
+            Thread.user_id == user_id,
+            ThreadExternalSeriesMapping.status == "confirmed",
+            ExternalIdentity.entity_type == "series",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.external_id == str(comicvine_volume_id),
+        )
+    )
+    if exclude_thread_id is not None:
+        query = query.where(Thread.id != exclude_thread_id)
+
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def find_potential_duplicates_by_title_format(
+    db: AsyncSession,
+    user_id: int,
+    title: str,
+    format_value: str,
+    *,
+    exclude_thread_id: int | None = None,
+    limit: int = 5,
+) -> list[Thread]:
+    """Find threads owned by the user with similar title and same format.
+
+    This is a WEAK match: title similarity + format match. Does not use ComicVine identity.
+
+    Uses PostgreSQL's similarity functions for fuzzy title matching, falling back to
+    ILIKE for broader compatibility.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        title: Proposed title to match against.
+        format_value: Normalized format value to match exactly.
+        exclude_thread_id: Optional thread ID to exclude from results (for edit flow).
+        limit: Maximum number of results to return.
+
+    Returns:
+        List of potentially matching threads, ordered by relevance.
+    """
+    from sqlalchemy import func
+
+    normalized_title = title.strip().lower()
+    normalized_format = format_value.strip()
+
+    # Exact title match (case-insensitive) with same format - highest confidence
+    exact_query = select(Thread).where(
+        Thread.user_id == user_id,
+        func.lower(Thread.title) == normalized_title,
+        Thread.format == normalized_format,
+    )
+    if exclude_thread_id is not None:
+        exact_query = exact_query.where(Thread.id != exclude_thread_id)
+    exact_query = exact_query.limit(limit)
+
+    exact_result = await db.execute(exact_query)
+    exact_matches = list(exact_result.scalars().all())
+
+    if len(exact_matches) >= limit:
+        return exact_matches
+
+    # Fuzzy match: title contains the search term or vice versa, with same format
+    # This catches cases like "Spider-Man" vs "Spider-Man (2018)" or "Amazing Spider-Man"
+    remaining_limit = limit - len(exact_matches)
+    fuzzy_query = select(Thread).where(
+        Thread.user_id == user_id,
+        Thread.format == normalized_format,
+        Thread.id.not_in([t.id for t in exact_matches]) if exact_matches else True,
+        # Title similarity: either contains the other or shares significant words
+        or_(
+            Thread.title.ilike(f"%{normalized_title}%"),
+            func.lower(Thread.title).like(f"%{normalized_title.split()[0]}%") if normalized_title.split() else False,
+        ),
+    )
+    if exclude_thread_id is not None:
+        fuzzy_query = fuzzy_query.where(Thread.id != exclude_thread_id)
+    fuzzy_query = fuzzy_query.limit(remaining_limit)
+
+    fuzzy_result = await db.execute(fuzzy_query)
+    fuzzy_matches = list(fuzzy_result.scalars().all())
+
+    return exact_matches + fuzzy_matches

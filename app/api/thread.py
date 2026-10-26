@@ -27,6 +27,8 @@ from app.schemas import (
     ThreadDetail,
     ThreadResponse,
     ThreadUpdate,
+    CheckPotentialDuplicatesRequest,
+    CheckPotentialDuplicatesResponse,
 )
 from app.schemas.migration import MigrateToIssuesSimpleRequest
 from app.services import thread_service
@@ -311,6 +313,39 @@ async def create_thread(
         ThreadResponse with created thread details.
     """
     return await thread_service.create_thread_with_retry(db, current_user.id, thread_data)
+
+
+@router.post("/check-duplicates", response_model=CheckPotentialDuplicatesResponse)
+@limiter.limit("60/minute")
+async def check_potential_duplicates(
+    request: Request,
+    check_data: CheckPotentialDuplicatesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CheckPotentialDuplicatesResponse:
+    """Check for potential duplicate threads before creating or renaming.
+
+    Compares canonical ComicVine volume identity when available (strong match),
+    and uses title + format similarity as a fallback (weak match).
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        check_data: Title, format, optional ComicVine volume ID, and optional thread ID to exclude.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        List of potential duplicate matches with match type and thread details.
+    """
+    matches = await thread_service.check_potential_duplicates(
+        db,
+        current_user.id,
+        title=check_data.title,
+        format_value=check_data.format,
+        comicvine_volume_id=check_data.comicvine_volume_id,
+        exclude_thread_id=check_data.exclude_thread_id,
+    )
+    return CheckPotentialDuplicatesResponse(matches=matches)
 
 
 @router.get("/{thread_id}", response_model=ThreadDetail)

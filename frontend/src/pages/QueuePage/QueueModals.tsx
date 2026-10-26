@@ -8,7 +8,7 @@ import AddSeriesFromComicVineDialog from '../../components/AddSeriesFromComicVin
 import { IssueToggleList, type IssueToggleListHandle } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import { getManualCreatorCreditList } from '../../types'
-import type { Thread, ThreadListItem } from '../../types'
+import type { Thread, ThreadListItem, PotentialDuplicateMatch } from '../../types'
 import type { QueueFormState, ManualCreatorCredit } from './types'
 import type { ParsedTokenBreakdown } from '../../utils/issueParser'
 
@@ -242,6 +242,9 @@ interface QueueModalsProps {
   onDismissRollNudge: () => void
   onRollNudgeNavigate: () => void
   onCloseAddSeriesComicVine?: () => void
+  createPotentialDuplicates?: PotentialDuplicateMatch[]
+  editPotentialDuplicates?: PotentialDuplicateMatch[]
+  isCheckingDuplicates?: boolean
 }
 
 /**
@@ -297,6 +300,9 @@ export function QueueModals({
   onDismissRollNudge,
   onRollNudgeNavigate,
   onCloseAddSeriesComicVine,
+  createPotentialDuplicates,
+  editPotentialDuplicates,
+  isCheckingDuplicates,
 }: QueueModalsProps) {
   // Ref for the Edit dialog's deferred issue list: flush queued issue
   // mutations when Save is clicked; closing without saving discards them.
@@ -396,6 +402,72 @@ export function QueueModals({
               required
             />
           </div>
+
+          {( (createPotentialDuplicates?.length ?? 0) > 0 || isCheckingDuplicates) && (
+            <div
+              className="space-y-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30"
+              role="alert"
+              aria-live="polite"
+            >
+              {isCheckingDuplicates ? (
+                <div className="flex items-center gap-2 text-sm text-amber-300">
+                  <div className="w-4 h-4 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                  Checking for potential duplicates...
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-amber-300">
+                    {createPotentialDuplicates?.some((m) => m.match_type === 'strong')
+                      ? '⚠ Same ComicVine volume already in your library'
+                      : '⚠ Similar series found in your library'}
+                  </p>
+                  <p className="text-xs text-stone-300">
+                    {createPotentialDuplicates?.some((m) => m.match_type === 'strong')
+                      ? 'This ComicVine volume is already linked to an existing series. Creating another will not duplicate issues.'
+                      : 'A series with a similar title and format already exists. You can still create this series if it\'s a different volume or edition.'}
+                  </p>
+                  <div className="space-y-1.5">
+                    {createPotentialDuplicates?.map((match) => (
+                      <div
+                        key={match.thread_id}
+                        className="p-2 rounded-lg bg-stone-800/50 border border-stone-700/50"
+                      >
+                        <div className="flex items-start gap-2">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              match.match_type === 'strong'
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : 'bg-stone-600/50 text-stone-300'
+                            }`}
+                          >
+                            {match.match_type === 'strong' ? 'Same ComicVine Volume' : 'Similar Title/Format'}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-stone-100 mt-1">{match.title}</p>
+                        <div className="flex flex-wrap gap-2 text-xs text-stone-400 mt-1">
+                          <span>{match.format}</span>
+                          <span>•</span>
+                          <span>
+                            {match.total_issues
+                              ? `${match.total_issues} issues`
+                              : `${match.issues_remaining} remaining`}
+                          </span>
+                          <span>•</span>
+                          <span>{match.status}</span>
+                        </div>
+                        <p className="text-xs text-stone-500 mt-1">
+                          Thread ID: {match.thread_id}
+                          {match.match_type === 'strong' && match.comicvine_volume_id && (
+                            <> • ComicVine Volume: {match.comicvine_volume_id}</>
+                          )}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <label
@@ -577,6 +649,72 @@ export function QueueModals({
                 required
               />
             </div>
+
+            {( (editPotentialDuplicates?.length ?? 0) > 0 || isCheckingDuplicates) && (
+              <div
+                className="space-y-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30"
+                role="alert"
+                aria-live="polite"
+              >
+                {isCheckingDuplicates ? (
+                  <div className="flex items-center gap-2 text-sm text-amber-300">
+                    <div className="w-4 h-4 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                    Checking for potential duplicates...
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-bold text-amber-300">
+                      {editPotentialDuplicates?.some((m) => m.match_type === 'strong')
+                        ? '⚠ Same ComicVine volume already in your library'
+                        : '⚠ Similar series found in your library'}
+                    </p>
+                    <p className="text-xs text-stone-300">
+                      {editPotentialDuplicates?.some((m) => m.match_type === 'strong')
+                        ? 'This ComicVine volume is already linked to an existing series. Renaming to this will not merge the series.'
+                        : 'A series with a similar title and format already exists. You can still rename to this title if it\'s a different volume or edition.'}
+                    </p>
+                    <div className="space-y-1.5">
+                      {editPotentialDuplicates?.map((match) => (
+                        <div
+                          key={match.thread_id}
+                          className="p-2 rounded-lg bg-stone-800/50 border border-stone-700/50"
+                        >
+                          <div className="flex items-start gap-2">
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full ${
+                                match.match_type === 'strong'
+                                  ? 'bg-amber-500/20 text-amber-300'
+                                  : 'bg-stone-600/50 text-stone-300'
+                              }`}
+                            >
+                              {match.match_type === 'strong' ? 'Same ComicVine Volume' : 'Similar Title/Format'}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium text-stone-100 mt-1">{match.title}</p>
+                          <div className="flex flex-wrap gap-2 text-xs text-stone-400 mt-1">
+                            <span>{match.format}</span>
+                            <span>•</span>
+                            <span>
+                              {match.total_issues
+                                ? `${match.total_issues} issues`
+                                : `${match.issues_remaining} remaining`}
+                            </span>
+                            <span>•</span>
+                            <span>{match.status}</span>
+                          </div>
+                          <p className="text-xs text-stone-500 mt-1">
+                            Thread ID: {match.thread_id}
+                            {match.match_type === 'strong' && match.comicvine_volume_id && (
+                              <> • ComicVine Volume: {match.comicvine_volume_id}</>
+                            )}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {editingThread != null && editingThread.total_issues == null && (
               <div className="space-y-2">
