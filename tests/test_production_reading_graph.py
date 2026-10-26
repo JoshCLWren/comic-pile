@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import insert, select, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_reading_execution_settings
@@ -113,6 +113,7 @@ async def production_graph(
         requirements.append({
             "id": dependency_id, "source_issue_id": source_id, "target_issue_id": target_id,
             "origin": origin, "classification": classification,
+            "provenance": "sanitized converted source evidence" if origin == "converted" else None,
             "note": "cbl-order:sanitized" if evidence == "generated" else (
                 None if evidence == "unspecified" else "sanitized historical evidence"
             ),
@@ -191,8 +192,11 @@ async def test_independent_ultimate_named_handoff_not_global_strictness(
     """Ultimate Spider-Man #20 depends on Black Panther #19, not all other titles."""
     owner, _ = production_graph
     contract = review_contract()["approved_sequences"]["ultimate_2025"]
-    await assert_offers(async_db, owner, withheld=(contract["target"],))
-    await advance(async_db, contract["read"])
+    # Progress from the actual Black Panther frontier, not an invented direct
+    # leap to #19. Other Ultimate titles remain independent in this loose list.
+    for source_issue_id in contract["progress_to_handoff"]:
+        await assert_offers(async_db, owner, withheld=(contract["target"],))
+        await advance(async_db, source_issue_id)
     await assert_offers(async_db, owner, offered=(contract["target"],))
     list_row = (await async_db.execute(
         select(CustomCBLList).where(CustomCBLList.name == "Ultimate Universe",
@@ -209,9 +213,11 @@ async def test_real_ff_fantastic_four_multiple_handoffs(
     owner, _ = production_graph
     contract = review_contract()["approved_sequences"]["fantastic_four"]
     for step in contract["steps"]:
-        await assert_offers(async_db, owner, withheld=tuple(step["still_blocked"]))
+        await assert_offers(async_db, owner, offered=(step["read"],),
+                            withheld=tuple(step["before_blocked"]))
         await advance(async_db, step["read"])
-        await assert_offers(async_db, owner, withheld=tuple(step["still_blocked_after"]))
+        await assert_offers(async_db, owner, offered=tuple(step["unblocks"]),
+                            withheld=tuple(step["after_blocked"]))
 
 
 @pytest.mark.asyncio
@@ -284,3 +290,36 @@ async def test_strict_plan_future_frontier_respects_list_order(
         if unread[0] not in offered:
             break
         await advance(async_db, unread.pop(0))
+
+
+@pytest.mark.asyncio
+async def test_missing_xmen_prerequisite_is_caught_by_independent_oracle(
+    production_graph: tuple[int, dict[str, Any]], async_db: AsyncSession,
+) -> None:
+    """Removing the specific #1/2 handoff must produce a failing expectation.
+
+    This deliberately corrupts only the isolated PostgreSQL test transaction.
+    A green current-frontier parity report must never disguise the bad future offer.
+    """
+    owner, _ = production_graph
+    expected = review_contract()["approved_sequences"]["xmen_1998"]["steps"]
+    await advance(async_db, expected[0]["read"])
+    await assert_offers(async_db, owner, withheld=(2029,))
+    await async_db.execute(delete(Dependency).where(
+        Dependency.source_issue_id == 101875,
+        Dependency.target_issue_id == 2029,
+        Dependency.origin == "reader",
+    ))
+    await async_db.flush()
+    with pytest.raises(AssertionError, match="prematurely offered issue 2029"):
+        await assert_offers(async_db, owner, withheld=(2029,))
+
+
+def test_production_graph_matches_pinned_reviewed_fingerprint() -> None:
+    """Any fixture mutation needs a separate contract review and digest update."""
+    import hashlib
+
+    data = FIXTURE.read_bytes()
+    blob = b"blob " + str(len(data)).encode("ascii") + b"\0" + data
+    expected_blob_sha = review_contract()["fixture_git_blob_sha"]
+    assert hashlib.sha1(blob).hexdigest() == expected_blob_sha
