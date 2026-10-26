@@ -67,7 +67,7 @@ Option J is not in the original design note. It is the only stored-table design 
 
 ## Option B+: Slim snapshot plus compact snooze state
 
-**Mechanism.** Option B, narrowed to the columns `evaluate()` actually uses: unread frontier candidates, list entries with status, reader prerequisites with endpoint status, exclusions, overlap decisions, and confirmed volume identity. Separately, persist compact per-thread backoff (`snooze_count` after the reset boundary, latest snooze time, and whether a later unsnooze cleared it). Update that row on snooze, unsnooze, and rate. At selection time, compare it with the count of sessions started after the latest snooze. Current-session snooze and skip stay filters on the session row.
+**Mechanism.** Option B, narrowed to the columns `evaluate()` actually uses: unread frontier candidates, list entries with status, reader prerequisites with endpoint status, exclusions, overlap decisions, and confirmed volume identity. Separately, persist compact per-thread backoff (`snooze_count` after the reset boundary, latest snooze time, and whether a later unsnooze cleared it). Update that row on snooze, unsnooze, rate, undo, and snapshot restore — each of these can change `Thread.last_activity_at`, which is the backoff reset boundary. At selection time, compare it with the count of sessions started after the latest snooze. Current-session snooze and skip stay filters on the session row. Add a shadow check for the snooze → rate → undo sequence: restoring an earlier boundary can revive a streak that the stored row cleared on rating, so the shadow must verify that the compact row and the reconstructed event history agree after any boundary-moving operation.
 
 **Reasons this is the recommendation.**
 
@@ -172,7 +172,7 @@ Any future membership table must prove the Issue belongs to the reader. Two inde
 
 Run these in order against read-only production-shaped data or an isolated dataset. A later slice does not start because an earlier one was merely implemented.
 
-1. **Slim loader, evaluator unchanged.** Eligible Issue IDs match the current oracle. Median Roll wall on a production-shaped reader is under 250 ms. No-go if plan time or payload makes the median worse than 615 ms.
+1. **Slim loader gate (loader only).** The consolidated snapshot fetch alone must achieve median wall time under 250 ms on a production-shaped reader. No-go if the loader median exceeds 615 ms (the post-#4191 baseline). **If the loader lands between 250 ms and 615 ms, the gate is inconclusive: continue to slice 2 but do not treat the combined B+ design as validated.** The combined B+ target (slim loader + compact snooze row + evaluator) remains under 250 ms median.
 2. **Compact snooze row, shadow only.** Excluded Thread IDs match `derive_cross_session_excluded_thread_ids()` across session boundaries. No-go on any mismatch.
 3. **SQL function in shadow.** Identical frontier sets for the named reading orders and one full reader snapshot, with p95 execution under 50 ms. No-go on any ID mismatch or on a function that is not clearly cheaper than slice 1.
 4. **Option J, still not serving.** Roll and Cancel write zero membership rows. Rate and list edits commit the canonical change and the set difference together, or roll both back. Concurrent rate and Roll never observe a partial set or another reader's Issue. No-go on any drift.
