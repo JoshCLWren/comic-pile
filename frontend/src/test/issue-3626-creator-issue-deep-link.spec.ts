@@ -25,13 +25,23 @@ type IssueRow = { id: number; issue_number: string; status: string }
 
 async function listIssues(page: Page, threadId: number): Promise<IssueRow[]> {
   const headers = await authHeaders(page)
-  const response = await page.request.get(`/api/v1/threads/${threadId}/issues?page_size=100`, {
-    headers,
-  })
-  expect(response.ok()).toBeTruthy()
-  // SAFETY: the test reads only the issue fields this spec asserts on.
-  const data = (await response.json()) as { issues: IssueRow[] }
-  return data.issues
+  const allIssues: IssueRow[] = []
+  let pageToken: string | null = null
+  while (true) {
+    const url = pageToken
+      ? `/api/v1/threads/${threadId}/issues?page_size=100&page_token=${encodeURIComponent(pageToken)}`
+      : `/api/v1/threads/${threadId}/issues?page_size=100`
+    const response = await page.request.get(url, { headers })
+    expect(response.ok()).toBeTruthy()
+    const data = (await response.json()) as {
+      issues: IssueRow[]
+      next_page_token: string | null
+    }
+    allIssues.push(...data.issues)
+    if (!data.next_page_token) break
+    pageToken = data.next_page_token
+  }
+  return allIssues
 }
 
 async function issueByNumber(
