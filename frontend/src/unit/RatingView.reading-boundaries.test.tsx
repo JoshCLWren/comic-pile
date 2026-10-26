@@ -6,6 +6,7 @@ import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 import { createRouterHarness } from './routerTestHarness'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import { ROLL_WORKSPACE_TRACKS } from '../pages/RollPage/workspaceLayout'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import type { ReaderContextResponse } from '../types'
 
@@ -176,7 +177,7 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
     expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
-    expect(grid!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
+    expect(grid!.className).toContain(ROLL_WORKSPACE_TRACKS)
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     const cells = Array.from(grid!.querySelectorAll<HTMLElement>(':scope > div'))
     expect(cells.length).toBe(2)

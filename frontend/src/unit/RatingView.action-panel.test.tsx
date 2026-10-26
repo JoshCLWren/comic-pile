@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
+import { ROLL_WORKSPACE_TRACKS } from '../pages/RollPage/workspaceLayout'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import type { ReaderContextResponse } from '../types'
 
@@ -389,7 +390,7 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('grid')
     expect(grid!.className).toContain('items-start')
-    expect(grid!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
+    expect(grid!.className).toContain(ROLL_WORKSPACE_TRACKS)
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(grid!.className).toContain('lg:max-w-4xl')
     // #2764: collapsed optional cards live inside the decision region.
@@ -456,6 +457,6 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
     expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
     expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
     expect(screen.queryByTestId('reading-context-content')).not.toBeInTheDocument()
-    expect(container.querySelector('[data-testid="rating-pillars-grid"]')!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
+    expect(container.querySelector('[data-testid="rating-pillars-grid"]')!.className).toContain(ROLL_WORKSPACE_TRACKS)
   })
 })

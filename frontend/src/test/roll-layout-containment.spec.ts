@@ -231,8 +231,11 @@ test.describe('Roll layout containment', () => {
 
 // Issue #4187: cover rail and Summary must not collapse at ~1024px (lg breakpoint)
 // The cover must not be narrower than ~11rem (176px) to prevent Summary from
-// wrapping one word per line. The Summary text inside the cover must have
-// at least ~20 characters per line without breaking.
+// wrapping one word per line, and the Comic region must reserve room for both
+// inner columns (cover + gap + details) so the details can never paint over
+// DecisionCard (#4189). Summary renders under the cover in the same rail, so
+// its own text area is the width that has to stay readable (~20 characters
+// per line), not the gap beside the cover.
 test.describe('Roll rating view cover rail and Summary width', () => {
   const COVER_RAIL_VIEWPORTS = [
     { width: 1024, height: 800 },
@@ -253,6 +256,14 @@ test.describe('Roll rating view cover rail and Summary width', () => {
       await enterRatingView(page)
       const geometry = await readGeometry(page)
 
+      // The Comic region reserves both inner columns: 11rem cover + 1rem gap
+      // + 10rem details. Reserving only the cover overflowed the details into
+      // DecisionCard at 1024px with the sidebar expanded (#4189).
+      expect(
+        geometry.comic.width,
+        `comic region must reserve cover + gap + details width at ${viewport.width}px`,
+      ).toBeGreaterThanOrEqual((11 + 1 + 10) * 16 - GEOMETRY_TOLERANCE_PX)
+
       // Cover rail must be at least 11rem (176px) wide to prevent Summary
       // from wrapping one word per line (issue #4187)
       expect(
@@ -260,11 +271,17 @@ test.describe('Roll rating view cover rail and Summary width', () => {
         `cover rail must be at least 11rem (176px) wide at ${viewport.width}px`,
       ).toBeGreaterThanOrEqual(11 * 16 - GEOMETRY_TOLERANCE_PX)
 
-      // Summary text must have at least ~20 characters of width available
+      // Summary renders from a real description in the cover rail, and its
+      // text area (text-xs, ~0.6em average glyph width) must fit ~20
+      // characters per line without collapsing to a narrow column.
+      const summary = page.getByTestId('comic-summary')
+      await expect(summary, `Summary must be visible at ${viewport.width}px`).toBeVisible()
+      const summaryTextBox = await summary.locator('p').first().boundingBox()
+      expect(summaryTextBox, `Summary text must render at ${viewport.width}px`).not.toBeNull()
       expect(
-        geometry.comic.right - geometry.cover.right,
+        summaryTextBox!.width,
         `Summary text must have at least ~20ch width at ${viewport.width}px`,
-      ).toBeGreaterThanOrEqual(20 * 0.6 * 16 - GEOMETRY_TOLERANCE_PX)
+      ).toBeGreaterThanOrEqual(20 * 0.6 * 12 - GEOMETRY_TOLERANCE_PX)
     })
   }
 })
