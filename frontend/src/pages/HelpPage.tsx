@@ -99,10 +99,7 @@ async function writePermalinkToClipboard(
  * an already-queued expiry can only retire the confirmation it created. That is
  * what keeps rapid A → B → A activation truthful.
  */
-function useGlossaryPermalinkFeedback(): {
-  feedback: GlossaryPermalinkFeedback | null
-  copyPermalink: (termId: string, term: string, permalink: string) => void
-} {
+function useGlossaryPermalinkFeedback() {
   const [feedback, setFeedback] = useState<GlossaryPermalinkFeedback | null>(null)
   const timeoutRef = useRef<number | null>(null)
   const sequenceRef = useRef(0)
