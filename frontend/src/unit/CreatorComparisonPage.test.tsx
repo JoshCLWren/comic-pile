@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorComparisonPage from '../pages/CreatorComparisonPage'
 import { useCreatorComparison } from '../hooks/useCreatorComparison'
@@ -92,6 +92,30 @@ function renderAt(keysQuery: string | null) {
       </Routes>
     </MemoryRouter>,
   )
+}
+
+/** Surfaces the live URL so tests can assert the durable `keys` contract. */
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+/** Renders compare together with the real `/creators` list destination. */
+function renderWithCreatorsList(keysQuery: string) {
+  return render(
+    <MemoryRouter initialEntries={[`/creators/compare?keys=${keysQuery}`]}>
+      <LocationProbe />
+      <Routes>
+        <Route path="/creators" element={<div>Creators list</div>} />
+        <Route path="/creators/compare" element={<CreatorComparisonPage />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+function currentKeysParam(): string | null {
+  const search = screen.getByTestId('location-search').textContent ?? ''
+  return new URLSearchParams(search).get('keys')
 }
 
 beforeEach(() => {
@@ -1014,5 +1038,74 @@ describe('CreatorComparisonPage metric evidence views (#3460)', () => {
         seriesKey: 'thread:1',
       }),
     )
+  })
+})
+
+describe('CreatorComparisonPage return paths', () => {
+  function renderResolvedComparison() {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({ canonical_creator_key: 'creator:7', display_name: 'Brian K. Vaughan' }),
+            'creator:12': makeItem({ canonical_creator_key: 'creator:12', display_name: 'Steve McNiven' }),
+          },
+        }),
+      }),
+    )
+    return renderWithCreatorsList('creator:7,creator:12')
+  }
+
+  it('carries the current identities back through Change selection', () => {
+    renderResolvedComparison()
+
+    expect(screen.getByRole('link', { name: 'Change selection' })).toHaveAttribute(
+      'href',
+      '/creators?keys=creator%3A7%2Ccreator%3A12',
+    )
+
+    fireEvent.click(screen.getByRole('link', { name: 'Change selection' }))
+
+    expect(screen.getByText('Creators list')).toBeInTheDocument()
+    expect(currentKeysParam()).toBe('creator:7,creator:12')
+  })
+
+  it('carries the current identities back through Back to Creators when nothing resolved', () => {
+    mockedHook.mockReturnValue(baseHook({ data: makeResponse() }))
+    renderWithCreatorsList('creator:7,creator:12')
+
+    fireEvent.click(screen.getByRole('link', { name: 'Back to Creators' }))
+
+    expect(screen.getByText('Creators list')).toBeInTheDocument()
+    expect(currentKeysParam()).toBe('creator:7,creator:12')
+  })
+
+  it('carries the current identities back through the Creators breadcrumb', () => {
+    renderResolvedComparison()
+
+    fireEvent.click(screen.getByRole('link', { name: 'Creators' }))
+
+    expect(screen.getByText('Creators list')).toBeInTheDocument()
+    expect(currentKeysParam()).toBe('creator:7,creator:12')
+  })
+
+  it('keeps the requested identities on the invalid-input return path', () => {
+    renderWithCreatorsList('creator:7')
+
+    fireEvent.click(screen.getByRole('link', { name: 'Back to Creators' }))
+
+    expect(screen.getByText('Creators list')).toBeInTheDocument()
+    expect(currentKeysParam()).toBe('creator:7')
+  })
+
+  it('offers Change selection alongside Back to Creators when the comparison fails', () => {
+    mockedHook.mockReturnValue(baseHook({ isError: true, error: new Error('boom') }))
+
+    renderWithCreatorsList('creator:7,creator:12')
+
+    fireEvent.click(screen.getByRole('link', { name: 'Change selection' }))
+
+    expect(screen.getByText('Creators list')).toBeInTheDocument()
+    expect(currentKeysParam()).toBe('creator:7,creator:12')
   })
 })

@@ -416,3 +416,62 @@ test('3462 - reload retains valid keys', async ({ authenticatedPage }) => {
   await page.reload()
   await expect(page.getByText('Comparing 2 creators')).toBeVisible()
 })
+
+/**
+ * Issue #3624: comparison selection is durable in `?keys=` and survives a
+ * round trip to `/creators/compare`, both through browser history and through
+ * the explicit Change selection control. Selected checkboxes stay enabled so a
+ * single creator can be dropped without rebuilding the set (#3582).
+ */
+test('3624 - browser back from compare restores the selected creators', async ({
+  authenticatedPage,
+}) => {
+  const page = authenticatedPage
+  await installCreatorsList(page)
+  await installCreatorComparison(page, {
+    'creator:7': comparisonItem('creator:7', 'Brian K. Vaughan'),
+    'creator:12': comparisonItem('creator:12', 'Steve McNiven'),
+  })
+
+  await page.goto('/creators')
+  await page.getByLabel('Select Brian K. Vaughan for comparison').check()
+  await page.getByLabel('Select Steve McNiven for comparison').check()
+  await expect(page.getByText('2 of 4 selected for comparison')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Compare' }).click()
+  await expect(page.getByText('Comparing 2 creators')).toBeVisible()
+
+  await page.goBack()
+
+  await expect(page.getByLabel('Select Brian K. Vaughan for comparison')).toBeChecked()
+  await expect(page.getByLabel('Select Steve McNiven for comparison')).toBeChecked()
+  await expect(page.getByRole('button', { name: 'Compare' })).toBeVisible()
+})
+
+test('3624 - Change selection returns with editable restored checkboxes', async ({
+  authenticatedPage,
+}) => {
+  const page = authenticatedPage
+  await installCreatorsList(page)
+  await installCreatorComparison(page, {
+    'creator:7': comparisonItem('creator:7', 'Brian K. Vaughan'),
+    'creator:12': comparisonItem('creator:12', 'Steve McNiven'),
+  })
+
+  await page.goto('/creators?keys=creator:7,creator:12')
+  await expect(page.getByLabel('Select Brian K. Vaughan for comparison')).toBeChecked()
+  await expect(page.getByLabel('Select Steve McNiven for comparison')).toBeChecked()
+
+  await page.getByRole('button', { name: 'Compare' }).click()
+  await expect(page.getByText('Comparing 2 creators')).toBeVisible()
+  await page.getByRole('link', { name: 'Change selection' }).click()
+
+  await expect(page.getByLabel('Select Brian K. Vaughan for comparison')).toBeChecked()
+  await expect(page.getByLabel('Select Steve McNiven for comparison')).toBeChecked()
+  expect(new URL(page.url()).searchParams.get('keys')).toBe('creator:7,creator:12')
+
+  // A restored checkbox stays enabled; dropping one writes the exact new set.
+  await page.getByLabel('Select Brian K. Vaughan for comparison').uncheck()
+  await expect(page.getByText('1 of 4 selected for comparison')).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('keys')).toBe('creator:12')
+})

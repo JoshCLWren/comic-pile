@@ -4,8 +4,8 @@ import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
 import type { CreatorComparisonIssueRef, CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
-import Breadcrumbs from '../components/Breadcrumbs'
 import { CreatorMetricDrilldownModal } from '../components/CreatorMetricDrilldownModal'
+import Breadcrumbs from '../components/Breadcrumbs'
 
 interface MetricClickParams {
   role?: string
@@ -522,6 +522,12 @@ export default function CreatorComparisonPage() {
   // rejected as malformed while the hook would have trimmed it.
   const keys = keysParam ? keysParam.split(',').map((k: string) => k.trim()).filter(Boolean) : []
 
+  // Every in-app route back to the list carries the current identities, so the
+  // reader lands with the same checkboxes selected and can adjust the set
+  // instead of rebuilding it (#3624). The list validates and deduplicates them.
+  const creatorsReturnUrl =
+    keys.length > 0 ? `/creators?keys=${encodeURIComponent(keys.join(','))}` : '/creators'
+
   const { data, isPending, isError, error } = useCreatorComparison(keys.length > 0 ? keys : null)
 
   // Metric evidence view state (issue #3460). Clicking any headline metric,
@@ -571,7 +577,7 @@ export default function CreatorComparisonPage() {
       : null
     return (
       <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
-        <Breadcrumbs items={[{ label: 'Creators', to: '/creators' }, { label: 'Compare' }]} />
+        <Breadcrumbs items={[{ label: 'Creators', to: creatorsReturnUrl }, { label: 'Compare' }]} />
         <h1 className="mt-1 text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
@@ -580,21 +586,30 @@ export default function CreatorComparisonPage() {
             {countExplanation ?? syntaxExplanation ?? (
               <>
                 Select 2 to 4 creators from the{' '}
-                <Link to="/creators" className="underline">
+                <Link to={creatorsReturnUrl} className="underline">
                   Creators page
                 </Link>{' '}
                 to compare them.
               </>
             )}
           </p>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <Link
-              to="/creators"
+              to={creatorsReturnUrl}
               className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               style={{ color: 'var(--theme-text-muted)' }}
             >
               Back to Creators
             </Link>
+            {keys.length > 0 && (
+              <Link
+                to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
+                className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+              >
+                Change selection
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -604,7 +619,7 @@ export default function CreatorComparisonPage() {
   if (isPending) {
     return (
       <div className="mx-auto w-full max-w-5xl px-4 md:px-6" aria-label="Loading creator comparison">
-        <Breadcrumbs items={[{ label: 'Creators', to: '/creators' }, { label: 'Compare' }]} />
+        <Breadcrumbs items={[{ label: 'Creators', to: creatorsReturnUrl }, { label: 'Compare' }]} />
         <h1 className="mt-1 text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
@@ -622,7 +637,7 @@ export default function CreatorComparisonPage() {
     const notFound = status === 404
     return (
       <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
-        <Breadcrumbs items={[{ label: 'Creators', to: '/creators' }, { label: 'Compare' }]} />
+        <Breadcrumbs items={[{ label: 'Creators', to: creatorsReturnUrl }, { label: 'Compare' }]} />
         <h1 className="mt-1 text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           {notFound ? 'Creators not found' : 'Could not load comparison'}
         </h1>
@@ -641,14 +656,23 @@ export default function CreatorComparisonPage() {
             Try again
           </button>
         )}
-        <div className="mt-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           <Link
-            to="/creators"
+            to={creatorsReturnUrl}
             className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             style={{ color: 'var(--theme-text-muted)' }}
           >
             Back to Creators
           </Link>
+          {keys.length > 0 && (
+            <Link
+              to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
+              className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+            >
+              Change selection
+            </Link>
+          )}
         </div>
       </div>
     )
@@ -666,16 +690,31 @@ export default function CreatorComparisonPage() {
   const missingRequestedCount = keys.filter((k: string) => !resolvedKeys.has(k)).length
   const hasMixedResult = missingRequestedCount > 0 && comparisonItems.length > 0
 
+  // Build the change selection URL with the currently resolved creator keys
+  const changeSelectionKeys = Array.from(resolvedKeys).join(',')
+  const changeSelectionUrl = `/creators?keys=${encodeURIComponent(changeSelectionKeys)}`
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
-      <Breadcrumbs items={[{ label: 'Creators', to: '/creators' }, { label: 'Compare' }]} />
+      <Breadcrumbs items={[{ label: 'Creators', to: creatorsReturnUrl }, { label: 'Compare' }]} />
       <header className="mt-4 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
-        <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          Comparing {comparisonItems.length} creator{comparisonItems.length === 1 ? '' : 's'}
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+            Comparing {comparisonItems.length} creator{comparisonItems.length === 1 ? '' : 's'}
+          </p>
+          {comparisonItems.length > 0 && (
+            <Link
+              to={changeSelectionUrl}
+              className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+            >
+              Change selection
+            </Link>
+          )}
+        </div>
       </header>
 
       {hasMixedResult && (
@@ -746,14 +785,23 @@ export default function CreatorComparisonPage() {
             None of the selected creators are available in your library — the comparison can
             only include creators with issues credited to them in your library.
           </p>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <Link
-              to="/creators"
+              to={creatorsReturnUrl}
               className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               style={{ color: 'var(--theme-text-muted)' }}
             >
               Back to Creators
             </Link>
+            {keys.length > 0 && (
+              <Link
+                to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
+                className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+              >
+                Change selection
+              </Link>
+            )}
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useCallback, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
 import { useDebounce } from '../hooks/useDebounce'
@@ -49,6 +49,28 @@ function isCreatorListSort(value: string): value is CreatorListSort {
   return SORT_OPTIONS.some((option) => option.value === value)
 }
 
+/**
+ * Parse the durable `keys` query parameter into the selected creator set.
+ *
+ * The URL is the single source of truth for comparison selection so a browser
+ * Back/forward round trip through `/creators/compare` repopulates the exact
+ * same checkboxes (#3624). Keys are canonical creator identities, never display
+ * names. Malformed keys are dropped, duplicates collapse, and the existing
+ * maximum-selection rule caps the restored set without ever preventing a later
+ * deselect.
+ */
+function parseSelectionKeys(rawKeys: string | null): Set<string> {
+  const keys = new Set<string>()
+  if (!rawKeys) return keys
+  for (const candidate of rawKeys.split(',')) {
+    const key = candidate.trim()
+    if (!key || parseCreatorKey(key) === null) continue
+    keys.add(key)
+    if (keys.size >= MAX_COMPARISON_SELECTION) break
+  }
+  return keys
+}
+
 function CreatorRow({
   item,
   isSelected,
@@ -67,7 +89,9 @@ function CreatorRow({
   const roles = item.normalized_roles.join(', ')
   const ratingsCount = item.ratings_count
   const average = item.average_rating
-  const canSelect = !isSelected && selectionCount < maxSelection
+  // Selected checkboxes are always enabled (can be unchecked).
+  // Unselected checkboxes are disabled only when at max selection.
+  const canSelect = isSelected || selectionCount < maxSelection
 
   const body = (
     <>
@@ -176,12 +200,41 @@ function ViewModeToggle({
 export default function CreatorsPage() {
   const [search, setSearch] = useState<string>('')
   const [sort, setSort] = useState<CreatorListSort>('name')
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [minRatings, setMinRatings] = useState<number>(0)
   const [viewMode, setViewMode] = useState<CreatorsViewMode>('browse')
   const debouncedSearch = useDebounce(search, SEARCH_DEBOUNCE_MS)
   const activeSearch = debouncedSearch.trim()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Restoring from the URL (a `Change selection` link, a browser Back/forward
+  // round trip, or a reload) derives the checkbox set directly from `?keys=`.
+  // Deriving instead of mirroring in state keeps the URL authoritative and
+  // avoids a restore effect that could overwrite a reader's toggle with a
+  // stale URL snapshot.
+  const selectedKeys = useMemo(
+    () => parseSelectionKeys(searchParams.get('keys')),
+    [searchParams],
+  )
+
+  // Rewrite only the `keys` parameter so any other context on the URL survives.
+  const updateSelectionUrl = useCallback(
+    (keys: Set<string>) => {
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous)
+          if (keys.size > 0) {
+            next.set('keys', Array.from(keys).join(','))
+          } else {
+            next.delete('keys')
+          }
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
 
   const {
     items,
@@ -215,15 +268,16 @@ export default function CreatorsPage() {
   const canCompare = selectionCount >= 2
 
   const handleToggleSelection = (key: string) => {
-    setSelectedKeys((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-      } else if (next.size < MAX_COMPARISON_SELECTION) {
-        next.add(key)
-      }
-      return next
-    })
+    const next = new Set(selectedKeys)
+    if (next.has(key)) {
+      // Selected checkboxes always stay enabled so one creator can be dropped.
+      next.delete(key)
+    } else if (next.size < MAX_COMPARISON_SELECTION) {
+      next.add(key)
+    } else {
+      return
+    }
+    updateSelectionUrl(next)
   }
 
   const handleCompare = () => {
@@ -234,7 +288,7 @@ export default function CreatorsPage() {
   }
 
   const handleClearSelection = () => {
-    setSelectedKeys(new Set())
+    updateSelectionUrl(new Set())
   }
 
   return (

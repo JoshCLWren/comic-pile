@@ -1,13 +1,20 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorsPage from '../pages/CreatorsPage'
+import CreatorComparisonPage from '../pages/CreatorComparisonPage'
 import { useCreatorsList } from '../hooks/useCreatorsList'
+import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import type { CreatorListSelection, CreatorsListState } from '../hooks/useCreatorsList'
 import type { CreatorListItem } from '../services/api-creators'
+import type { CreatorComparisonItem } from '../types/index'
 
 vi.mock('../hooks/useCreatorsList', () => ({
   useCreatorsList: vi.fn(),
+}))
+
+vi.mock('../hooks/useCreatorComparison', () => ({
+  useCreatorComparison: vi.fn(),
 }))
 
 vi.mock('../hooks/useDebounce', () => ({
@@ -15,6 +22,7 @@ vi.mock('../hooks/useDebounce', () => ({
 }))
 
 const mockedHook = vi.mocked(useCreatorsList)
+const mockedComparisonHook = vi.mocked(useCreatorComparison)
 
 const COMPLETE_COVERAGE = {
   rated_issues_total: 2,
@@ -59,9 +67,62 @@ function CompareProbe() {
   return <div>Compare page: {params.get('keys')}</div>
 }
 
-function renderPage(extraRoutes?: { path: string; element: React.ReactNode }[]) {
+/** Surfaces the live URL so tests can assert the durable `keys` contract. */
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+/** Browser-style history controls unavailable inside a MemoryRouter. */
+function HistoryControls() {
+  const navigate = useNavigate()
+  return (
+    <div>
+      <button type="button" onClick={() => navigate(-1)}>
+        history back
+      </button>
+      <button type="button" onClick={() => navigate(1)}>
+        history forward
+      </button>
+    </div>
+  )
+}
+
+function currentKeysParam(): string | null {
+  const search = screen.getByTestId('location-search').textContent ?? ''
+  return new URLSearchParams(search).get('keys')
+}
+
+function makeComparisonItem(key: string, displayName: string): CreatorComparisonItem {
+  return {
+    canonical_creator_key: key,
+    display_name: displayName,
+    normalized_roles: ['writer'],
+    average_rating: 4.5,
+    median_rating: 4.5,
+    ratings_count: 4,
+    rating_distribution: { '5': 4 },
+    top_rating_rate: 1,
+    role_stats: [],
+    strongest_series: [],
+    min_rated_issues_per_series: 3,
+    unread_upcoming_count: 0,
+    read_unrated_count: 0,
+    unread_issue_refs: [],
+    read_unrated_issue_refs: [],
+    max_issue_refs_per_group: 5,
+    insufficient_data: false,
+  }
+}
+
+function renderPage(
+  extraRoutes?: { path: string; element: React.ReactNode }[],
+  initialEntry = '/creators',
+) {
   return render(
-    <MemoryRouter initialEntries={['/creators']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <LocationProbe />
+      <HistoryControls />
       <Routes>
         <Route path="/creators" element={<CreatorsPage />} />
         {extraRoutes?.map((route) => (
@@ -72,9 +133,40 @@ function renderPage(extraRoutes?: { path: string; element: React.ReactNode }[]) 
   )
 }
 
+/** The two creators used by the selection round-trip tests. */
+const BRIAN = makeItem({ canonical_creator_key: 'creator:7', display_name: 'Brian K. Vaughan' })
+const STEVE = makeItem({ canonical_creator_key: 'creator:12', display_name: 'Steve McNiven' })
+const FIONA = makeItem({ canonical_creator_key: 'creator:13', display_name: 'Fiona Staples' })
+
+function selectionState() {
+  mockedHook.mockReturnValue(
+    baseState({ items: [BRIAN, STEVE, FIONA], total: 3, hasMore: false }),
+  )
+  mockedComparisonHook.mockImplementation((keys) => {
+    const displayNames = new Map(
+      [BRIAN, STEVE, FIONA].map((item) => [item.canonical_creator_key, item.display_name]),
+    )
+    const comparisons = Object.fromEntries(
+      (keys ?? []).map((key) => [key, makeComparisonItem(key, displayNames.get(key) ?? key)]),
+    )
+    return {
+      data: { comparisons, coverage: COMPLETE_COVERAGE, insufficient_data_keys: [] },
+      isPending: false,
+      isError: false,
+      error: null,
+    }
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockedHook.mockReturnValue(baseState())
+  mockedComparisonHook.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isError: false,
+    error: null,
+  })
 })
 
 describe('CreatorsPage', () => {
@@ -468,5 +560,158 @@ describe('CreatorsPage minimum-rated-sample control', () => {
     renderPage()
 
     expect(screen.getByText('small sample')).toBeTruthy()
+  })
+})
+
+describe('CreatorsPage comparison selection URL contract', () => {
+  it('restores checked creators from a keyed URL and keeps each one uncheckable', () => {
+    selectionState()
+
+    renderPage(undefined, '/creators?keys=creator:7,creator:12')
+
+    const brian = screen.getByLabelText('Select Brian K. Vaughan for comparison')
+    const steve = screen.getByLabelText('Select Steve McNiven for comparison')
+    expect(brian).toBeChecked()
+    expect(steve).toBeChecked()
+    expect(brian).not.toBeDisabled()
+    expect(steve).not.toBeDisabled()
+    expect(screen.getByLabelText('Select Fiona Staples for comparison')).not.toBeChecked()
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Compare' })).toBeInTheDocument()
+  })
+
+  it('drops malformed keys and collapses duplicate keys instead of trusting the URL', () => {
+    selectionState()
+
+    renderPage(
+      undefined,
+      '/creators?keys=creator:7,creator:7,bogus,creator:invalid,creator:12,9',
+    )
+
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+    expect(screen.getByLabelText('Select Brian K. Vaughan for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Steve McNiven for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Fiona Staples for comparison')).not.toBeChecked()
+  })
+
+  it('caps a restored selection at the four-creator maximum', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        items: [1, 2, 3, 4, 5].map((id) =>
+          makeItem({ canonical_creator_key: `creator:${id}`, display_name: `Creator ${id}` }),
+        ),
+        total: 5,
+      }),
+    )
+
+    renderPage(
+      undefined,
+      '/creators?keys=creator:1,creator:2,creator:3,creator:4,creator:5',
+    )
+
+    expect(screen.getByText('4 of 4 selected for comparison')).toBeInTheDocument()
+    for (const id of [1, 2, 3, 4]) {
+      expect(screen.getByLabelText(`Select Creator ${id} for comparison`)).toBeChecked()
+    }
+    expect(screen.getByLabelText('Select Creator 5 for comparison')).not.toBeChecked()
+  })
+
+  it('writes additions and removals back to the URL deterministically', () => {
+    selectionState()
+
+    renderPage(undefined, '/creators?keys=creator:7')
+    expect(currentKeysParam()).toBe('creator:7')
+
+    fireEvent.click(screen.getByLabelText('Select Steve McNiven for comparison'))
+    expect(currentKeysParam()).toBe('creator:7,creator:12')
+
+    fireEvent.click(screen.getByLabelText('Select Brian K. Vaughan for comparison'))
+    expect(currentKeysParam()).toBe('creator:12')
+    expect(screen.getByText('1 of 4 selected for comparison')).toBeInTheDocument()
+  })
+
+  it('preserves unrelated URL parameters when writing the selection', () => {
+    selectionState()
+
+    renderPage(undefined, '/creators?keys=creator:7&theme=ink-gold')
+
+    fireEvent.click(screen.getByLabelText('Select Steve McNiven for comparison'))
+
+    const search = new URLSearchParams(screen.getByTestId('location-search').textContent ?? '')
+    expect(search.get('keys')).toBe('creator:7,creator:12')
+    expect(search.get('theme')).toBe('ink-gold')
+  })
+
+  it('clears the keys parameter when the reader clears the selection', () => {
+    selectionState()
+
+    renderPage(undefined, '/creators?keys=creator:7,creator:12')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
+
+    expect(currentKeysParam()).toBeNull()
+    expect(screen.queryByText(/selected for comparison/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Select Brian K. Vaughan for comparison')).not.toBeChecked()
+  })
+
+  it('keeps restored creators selected through a browser Back/forward round trip to compare', () => {
+    selectionState()
+
+    renderPage(
+      [{ path: '/creators/compare', element: <CompareProbe /> }],
+      '/creators?keys=creator:7,creator:12',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
+    expect(screen.getByText(/Compare page/)).toHaveTextContent('creator:7,creator:12')
+
+    fireEvent.click(screen.getByRole('button', { name: 'history back' }))
+    expect(screen.getByLabelText('Select Brian K. Vaughan for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Steve McNiven for comparison')).toBeChecked()
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'history forward' }))
+    expect(screen.getByText(/Compare page/)).toHaveTextContent('creator:7,creator:12')
+  })
+
+  it('replaces one selected creator with another and re-compares with the exact new set', () => {
+    selectionState()
+
+    renderPage(
+      [{ path: '/creators/compare', element: <CompareProbe /> }],
+      '/creators?keys=creator:7,creator:12',
+    )
+
+    fireEvent.click(screen.getByLabelText('Select Brian K. Vaughan for comparison'))
+    expect(screen.getByText('1 of 4 selected for comparison')).toBeInTheDocument()
+    expect(currentKeysParam()).toBe('creator:12')
+    expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('Select Fiona Staples for comparison'))
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+    expect(currentKeysParam()).toBe('creator:12,creator:13')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
+    expect(screen.getByText(/Compare page/)).toHaveTextContent('creator:12,creator:13')
+  })
+
+  it('returns from the comparison screen through Change selection with the same creators selected', () => {
+    selectionState()
+
+    renderPage(
+      [{ path: '/creators/compare', element: <CreatorComparisonPage /> }],
+      '/creators?keys=creator:7,creator:12',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
+    expect(screen.getByRole('heading', { name: 'Creator Comparison' })).toBeInTheDocument()
+    expect(screen.getByText('Comparing 2 creators')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('link', { name: 'Change selection' }))
+
+    expect(currentKeysParam()).toBe('creator:7,creator:12')
+    expect(screen.getByLabelText('Select Brian K. Vaughan for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Steve McNiven for comparison')).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Compare' })).toBeInTheDocument()
   })
 })
