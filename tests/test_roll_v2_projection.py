@@ -593,10 +593,10 @@ async def test_thread_fallback_progress_without_identity(
 
 
 @pytest.mark.asyncio
-async def test_cover_is_same_origin_proxy_only(
+async def test_cover_is_direct_provider_url(
     async_db: AsyncSession, default_user: User
 ) -> None:
-    """Stored covers surface as proxy URLs; raw URLs never leak."""
+    """Stored covers surface as direct provider URLs; no proxy is synthesized."""
     _, with_cover = await _make_thread(
         async_db, default_user, title="Cover", issue_count=2, queue_position=1, read_through=1
     )
