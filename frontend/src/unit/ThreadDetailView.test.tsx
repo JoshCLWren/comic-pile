@@ -745,6 +745,7 @@ it('clears the deep-link highlight once focus leaves the target issue', async ()
   const target = await waitFor(() => {
     const row = document.getElementById('issue-11')
     expect(row).not.toBeNull()
+    // SAFETY: the preceding assertion guarantees `row` is non-null.
     return row as HTMLElement
   })
   await waitFor(() => expect(target).toHaveClass('issue-deep-link-target'))

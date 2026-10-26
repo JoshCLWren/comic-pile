@@ -33,6 +33,7 @@ async function listIssues(page: Page, threadId: number): Promise<IssueRow[]> {
       : `/api/v1/threads/${threadId}/issues?page_size=100`
     const response = await page.request.get(url, { headers })
     expect(response.ok()).toBeTruthy()
+    // SAFETY: the response body matches the thread issues list contract.
     const data = (await response.json()) as {
       issues: IssueRow[]
       next_page_token: string | null
@@ -52,6 +53,7 @@ async function issueByNumber(
   const issues = await listIssues(page, threadId)
   const issue = issues.find((candidate) => candidate.issue_number === issueNumber)
   expect(issue, `issue #${issueNumber} should exist in thread ${threadId}`).toBeTruthy()
+  // SAFETY: the preceding assertion guarantees `issue` is defined.
   return issue as IssueRow
 }
 
