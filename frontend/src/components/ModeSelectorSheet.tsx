@@ -151,6 +151,7 @@ export default function ModeSelectorSheet({
 }: ModeSelectorSheetProps) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [lastPatch, setLastPatch] = useState<SessionModeUpdateRequest | null>(null)
   const errorRef = useRef<HTMLParagraphElement>(null)
 
   // SAFETY: currentMode.bandwidth is either a ReadingBandwidth value or undefined; the fallback normalizes it.
@@ -162,6 +163,7 @@ export default function ModeSelectorSheet({
     async (patch: SessionModeUpdateRequest) => {
       setSubmitting(true)
       setSubmitError(null)
+      setLastPatch(patch)
       try {
         await onSubmit(patch)
         onClose()
@@ -173,6 +175,12 @@ export default function ModeSelectorSheet({
     },
     [onSubmit, onClose],
   )
+
+  const handleRetry = useCallback(() => {
+    if (lastPatch) {
+      void handleSubmit(lastPatch)
+    }
+  }, [lastPatch, handleSubmit])
 
   // Disabling the focused option during submit drops focus to <body>, which
   // would leave the modal without a focused control. Failed submissions keep
@@ -192,16 +200,37 @@ export default function ModeSelectorSheet({
 
   return (
     <Modal isOpen title="Reading mode" onClose={onClose} data-testid="mode-selector-sheet">
-      {submitError && (
+      {submitting && (
         <p
-          ref={errorRef}
-          role="alert"
-          tabIndex={-1}
-          className="text-sm text-[var(--theme-danger)]"
-          data-testid="mode-selector-error"
+          role="status"
+          aria-live="polite"
+          className="text-sm text-[var(--theme-text-muted)]"
+          data-testid="mode-selector-saving"
         >
-          {submitError}
+          Saving…
         </p>
+      )}
+      {submitError && (
+        <div className="space-y-2">
+          <p
+            ref={errorRef}
+            role="alert"
+            tabIndex={-1}
+            className="text-sm text-[var(--theme-danger)]"
+            data-testid="mode-selector-error"
+          >
+            {submitError}
+          </p>
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={submitting}
+            className="rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-sm text-[var(--theme-text-primary)] hover:bg-white/10 disabled:opacity-50"
+            data-testid="mode-selector-retry"
+          >
+            Retry
+          </button>
+        </div>
       )}
 
       <fieldset disabled={submitting}>
