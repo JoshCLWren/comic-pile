@@ -162,8 +162,9 @@ export default function ThreadDetailView() {
     if (!issuesExpanded || requestedIssueId <= 0 || focusedIssueRef.current === requestedIssueId) return
     const row = document.getElementById(`issue-${requestedIssueId}`)
     if (row) {
-      // Scroll the target issue into view
+      // Scroll the target issue into view and restore keyboard focus
       row.scrollIntoView?.({ block: 'center', behavior: 'instant' })
+      row.focus({ preventScroll: true })
       // Add visible highlight by adding a transient outline
       row.style.outline = '2px solid var(--theme-personal-accent)'
       row.style.transition = 'outline 0.4s ease'
