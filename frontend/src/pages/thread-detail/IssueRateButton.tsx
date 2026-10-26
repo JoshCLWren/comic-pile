@@ -36,7 +36,12 @@ export function IssueRateButton({
 }: IssueRateButtonProps) {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [savedRating, setSavedRating] = useState<number | null>(null)
+  // Use the thread's last_rating from the snapshot as the canonical saved rating.
+  // This ensures the rating persists across page reloads since the server
+  // stores last_rating on the thread model and re-fetches it on reload.
+  const [savedRating, setSavedRating] = useState<number | null>(
+    snapshot.thread.last_rating != null ? snapshot.thread.last_rating : null,
+  )
   // A rating always marks its issue read. Keep the newest snapshot so two rows
   // rated in quick succession both land in the visible issue list.
   const latestSnapshot = useRef(snapshot)
@@ -68,6 +73,8 @@ export function IssueRateButton({
       })
       latestSnapshot.current = nextSnapshot
       onSnapshotChange(nextSnapshot)
+      // Persist the rating in local state so the UI updates immediately,
+      // and the server-provided value will re-hydrate on next render.
       setSavedRating(rating)
       setOpen(false)
     },
