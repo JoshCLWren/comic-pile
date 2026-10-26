@@ -12,6 +12,12 @@ DEFAULT_CONTRACT = Path(__file__).resolve().parents[1] / (
     "tests/fixtures/production_reading_expectations_v1.json"
 )
 
+REQUIRED_INTENT_CATEGORIES = (
+    "strict_partial_membership_needing_classification",
+    "reading_list_vs_reading_plan_discrepancies_needing_classification",
+    "historical_contradictions",
+)
+
 
 def incomplete_intent_reasons(contract: dict[str, object]) -> list[str]:
     """Report unresolved source, coverage and reader-approval evidence.
@@ -29,6 +35,9 @@ def incomplete_intent_reasons(contract: dict[str, object]) -> list[str]:
     unresolved = contract.get("unresolved_reader_intent")
     if not isinstance(unresolved, dict):
         return [*problems, "Missing unresolved-intent census"]
+    for label in REQUIRED_INTENT_CATEGORIES:
+        if label not in unresolved:
+            problems.append(f"Missing unresolved reader intent category: {label}")
     for label, value in unresolved.items():
         if isinstance(value, bool) or not isinstance(value, int) or value != 0:
             problems.append(f"Unresolved reader intent: {label} = {value}")
