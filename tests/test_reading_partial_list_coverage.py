@@ -5,11 +5,13 @@ from app.services.reading_list_evaluator import (
 )
 from app.services.reading_partial_list_coverage import partial_strict_coverage
 
+TEST_READER_ID = 764323
 
-def test_unlisted_future_issue_is_reported():
+
+def test_unlisted_future_issue_is_reported() -> None:
     """Catch the Authority issue-zero bypass before it becomes a frontier."""
     snap = ReadingSnapshot(
-        user_id=1,
+        user_id=TEST_READER_ID,
         threads=(ReadingThread(1),),
         issues=(ReadingIssue(1, 1, 1), ReadingIssue(2, 1, 2)),
         lists=(ReadingList(10, "strict", (ReadingListEntry(2),)),),
@@ -17,10 +19,10 @@ def test_unlisted_future_issue_is_reported():
     assert partial_strict_coverage(snap) == ((10, 1),)
 
 
-def test_independent_loose_and_completed_issues_are_not_gaps():
+def test_independent_loose_and_completed_issues_are_not_gaps() -> None:
     """Neither loose list membership nor read issues need strict coverage."""
     snap = ReadingSnapshot(
-        user_id=1,
+        user_id=TEST_READER_ID,
         threads=(ReadingThread(1),),
         issues=(ReadingIssue(1, 1, 1, "read"), ReadingIssue(2, 1, 2)),
         lists=(ReadingList(10, "loose", (ReadingListEntry(1),)),),
@@ -28,10 +30,10 @@ def test_independent_loose_and_completed_issues_are_not_gaps():
     assert partial_strict_coverage(snap) == ()
 
 
-def test_multiple_strict_lists_each_have_independent_gap():
+def test_multiple_strict_lists_each_have_independent_gap() -> None:
     """Do not exhaust the unread iterator after the first strict list."""
     snap = ReadingSnapshot(
-        user_id=1,
+        user_id=TEST_READER_ID,
         threads=(ReadingThread(1),),
         issues=(ReadingIssue(1, 1, 1), ReadingIssue(2, 1, 2)),
         lists=(
