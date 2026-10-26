@@ -526,7 +526,7 @@ export default function CreatorComparisonPage() {
   // reader lands with the same checkboxes selected and can adjust the set
   // instead of rebuilding it (#3624). The list validates and deduplicates them.
   const creatorsReturnUrl =
-    keys.length > 0 ? `/creators?keys=${keys.join(',')}` : '/creators'
+    keys.length > 0 ? `/creators?keys=${encodeURIComponent(keys.join(','))}` : '/creators'
 
   const { data, isPending, isError, error } = useCreatorComparison(keys.length > 0 ? keys : null)
 
@@ -603,7 +603,7 @@ export default function CreatorComparisonPage() {
             </Link>
             {keys.length > 0 && (
               <Link
-                to={`/creators?keys=${keys.join(',')}`}
+                to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
                 className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                 style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
               >
@@ -666,7 +666,7 @@ export default function CreatorComparisonPage() {
           </Link>
           {keys.length > 0 && (
             <Link
-              to={`/creators?keys=${keys.join(',')}`}
+              to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
               className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
             >
@@ -692,7 +692,7 @@ export default function CreatorComparisonPage() {
 
   // Build the change selection URL with the currently resolved creator keys
   const changeSelectionKeys = Array.from(resolvedKeys).join(',')
-  const changeSelectionUrl = `/creators?keys=${changeSelectionKeys}`
+  const changeSelectionUrl = `/creators?keys=${encodeURIComponent(changeSelectionKeys)}`
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
@@ -795,7 +795,7 @@ export default function CreatorComparisonPage() {
             </Link>
             {keys.length > 0 && (
               <Link
-                to={`/creators?keys=${keys.join(',')}`}
+                to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
                 className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                 style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
               >
