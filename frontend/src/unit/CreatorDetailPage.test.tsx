@@ -157,9 +157,18 @@ describe('CreatorDetailPage', () => {
     expect(screen.getByRole('heading', { name: /Rated/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Upcoming in ComicPile/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Read, not rated/ })).toBeInTheDocument()
-    // Issue rows link into the existing thread route.
-    const ratedLink = screen.getByRole('link', { name: /Series A #1/ })
-    expect(ratedLink.getAttribute('href')).toBe('/thread/1')
+    // Issue rows deep-link to the exact canonical issue inside its thread
+    // (#3626); the accessible name states what the link opens.
+    const ratedLink = screen.getByRole('link', { name: 'Open Series A #1 in its thread' })
+    expect(ratedLink.getAttribute('href')).toBe('/thread/1?issue=11#issue-11')
+    expect(screen.getByRole('link', { name: 'Open Series B #3 in its thread' })).toHaveAttribute(
+      'href',
+      '/thread/2?issue=13#issue-13',
+    )
+    expect(screen.getByRole('link', { name: 'Open Series C #4 in its thread' })).toHaveAttribute(
+      'href',
+      '/thread/3?issue=14#issue-14',
+    )
   })
 
   it('shows a neutral state instead of 0 stars for unrated creators', () => {
@@ -727,7 +736,10 @@ describe('CreatorDetailPage population scopes (#3579)', () => {
         'All verified credits. 2 rated issues back this average; each issue counts once even when several roles are credited.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Series A #2/ })).toHaveAttribute('href', '/thread/1')
+    expect(screen.getByRole('link', { name: 'Open Series A #2 in its thread' })).toHaveAttribute(
+      'href',
+      '/thread/1?issue=12#issue-12',
+    )
     expect(screen.getByLabelText('Rated 4 out of 5')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Hide issues behind this average' })).toHaveAttribute(
       'aria-expanded',

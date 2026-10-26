@@ -42,8 +42,9 @@ function IssueRow({ row, showRating }: { row: CreatorIssueRow; showRating: boole
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
       <Link
-        to={`/thread/${row.thread_id}`}
+        to={`/thread/${row.thread_id}?issue=${row.issue_id}#issue-${row.issue_id}`}
         className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+        aria-label={`Open ${row.thread_title} #${row.issue_number} in its thread`}
       >
         <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
           {row.thread_title} #{row.issue_number}

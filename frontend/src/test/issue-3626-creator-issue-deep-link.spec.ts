@@ -61,12 +61,20 @@ function deepLink(threadId: number, issueId: number): string {
   return `/thread/${threadId}?issue=${issueId}#issue-${issueId}`
 }
 
-function creatorPayload(issue: {
-  issueId: number
-  issueNumber: string
-  threadId: number
-  threadTitle: string
-}) {
+function creatorPayload(
+  issue: {
+    issueId: number
+    issueNumber: string
+    threadId: number
+    threadTitle: string
+  },
+  ratedIssue?: {
+    issueId: number
+    issueNumber: string
+    threadId: number
+    threadTitle: string
+  },
+) {
   return {
     summary: {
       canonical_creator_key: 'creator:1672',
@@ -96,7 +104,21 @@ function creatorPayload(issue: {
     series_groups_complete: true,
     rated_population_scope: 'headline_roles_only',
     headline_roles: ['writer', 'artist'],
-    rated_issues: [],
+    rated_issues: ratedIssue
+      ? [
+          {
+            issue_id: ratedIssue.issueId,
+            issue_number: ratedIssue.issueNumber,
+            thread_id: ratedIssue.threadId,
+            thread_title: ratedIssue.threadTitle,
+            status: 'read',
+            roles: ['writer'],
+            effective_rating: 4.5,
+            rating_timestamp: '2026-01-02T00:00:00Z',
+            sort_key: String(ratedIssue.issueId),
+          },
+        ]
+      : [],
     read_unrated_issues: [],
     upcoming_issues: [],
     next_cursor: null,
@@ -188,6 +210,60 @@ test.describe('Issue #3626: creator issue deep links', () => {
     // with the keyboard clears it.
     await row.press('Tab')
     await expect(row).not.toHaveClass(/issue-deep-link-target/)
+  })
+
+  test('a rated creator issue row opens that exact issue, not the series top', async ({
+    authenticatedPage: page,
+  }) => {
+    const hellboy = await createThread(page, {
+      title: 'Hellboy Rated Row',
+      format: 'Issue',
+      issues_remaining: 120,
+      total_issues: 120,
+    })
+    const target = await issueByNumber(page, hellboy.id, '96')
+    const insightIssue = await issueByNumber(page, hellboy.id, '115')
+
+    await page.route('**/v1/creators/*', (route) =>
+      route.fulfill({
+        json: creatorPayload(
+          {
+            issueId: insightIssue.id,
+            issueNumber: insightIssue.issue_number,
+            threadId: hellboy.id,
+            threadTitle: 'Hellboy Rated Row',
+          },
+          {
+            issueId: target.id,
+            issueNumber: target.issue_number,
+            threadId: hellboy.id,
+            threadTitle: 'Hellboy Rated Row',
+          },
+        ),
+      }),
+    )
+
+    await page.goto('/creators/creator:1672', { waitUntil: 'domcontentloaded' })
+    // This is the exact QA repro from #3626: "click any issue row" in the
+    // creator's Rated list used to land on the series page top.
+    const rowLink = page.getByRole('link', {
+      name: 'Open Hellboy Rated Row #96 in its thread',
+    })
+    await expect(rowLink).toBeVisible()
+    await expect(rowLink).toHaveAttribute(
+      'href',
+      `/thread/${hellboy.id}?issue=${target.id}#issue-${target.id}`,
+    )
+
+    await rowLink.click()
+    await expect(page).toHaveURL(
+      new RegExp(`/thread/${hellboy.id}\\?issue=${target.id}#issue-${target.id}$`),
+    )
+    const row = page.locator(`#issue-${target.id}`)
+    await expect(row).toBeFocused()
+    await expect(row).toBeInViewport()
+    await expect(row).toHaveClass(/issue-deep-link-target/)
+    await expect(row).toHaveAttribute('aria-label', 'Issue #96 in Hellboy Rated Row')
   })
 
   test('identically numbered issues in different series stay distinct targets', async ({
