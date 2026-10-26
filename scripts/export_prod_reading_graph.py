@@ -38,8 +38,8 @@ WITH owned_threads AS MATERIALIZED (
 SELECT jsonb_build_object(
  'schema_version', 1,
  'reader', 'anonymous-production-reader',
- 'threads', (SELECT coalesce(jsonb_agg(jsonb_build_array(id,title,format,issues_remaining,total_issues,next_unread_issue_id,queue_position,status,is_blocked,queue_position_is_manual,queue_order_key) ORDER BY id),'[]'::jsonb) FROM owned_threads),
- 'issues', (SELECT coalesce(jsonb_agg(jsonb_build_array(id,thread_id,issue_number,position,status) ORDER BY id),'[]'::jsonb) FROM owned_issues),
+ 'threads', (SELECT coalesce(jsonb_agg(jsonb_build_array(id,title,format,issues_remaining,total_issues,next_unread_issue_id,queue_position,status,is_blocked,queue_position_is_manual,queue_order_key,catalog_series_id) ORDER BY id),'[]'::jsonb) FROM owned_threads),
+ 'issues', (SELECT coalesce(jsonb_agg(jsonb_build_array(id,thread_id,issue_number,position,status,catalog_issue_id) ORDER BY id),'[]'::jsonb) FROM owned_issues),
  'lists', (SELECT coalesce(jsonb_agg(jsonb_build_array(id,name,mode) ORDER BY id),'[]'::jsonb) FROM owned_lists),
  'entries', (SELECT coalesce(jsonb_agg(jsonb_build_array(e.id,e.list_id,e.issue_id,e.position,e.gate,e.skipped,e.is_checkpoint,e.checkpoint_target_issue_ids) ORDER BY e.list_id,e.position),'[]'::jsonb) FROM custom_cbl_entries e JOIN owned_lists l ON l.id=e.list_id),
  'dependencies', (SELECT coalesce(jsonb_agg(jsonb_build_array(id,source_issue_id,target_issue_id,origin,classification,
