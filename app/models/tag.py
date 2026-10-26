@@ -22,9 +22,10 @@ class Tag(Base):
     Attributes:
         id: Primary key.
         name: The human-readable tag name with original casing preserved.
-        normalized_name: Lowercased, trimmed name used for matching and
-            uniqueness (a private tag cannot reuse a global name, and two
-            private tags owned by the same user cannot share a name).
+        normalized_name: Lowercased name with surrounding and repeated internal
+            whitespace collapsed, used for matching and uniqueness (a private
+            tag cannot reuse a global name, and two private tags owned by the
+            same user cannot share a name).
         scope: Either ``"global"`` (visible to everyone, admin-only CRUD) or
             ``"private"`` (visible only to the owner).
         owner_user_id: Owner of a private tag; ``NULL`` for global tags.

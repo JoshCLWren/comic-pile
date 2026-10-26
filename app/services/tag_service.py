@@ -395,9 +395,10 @@ class TagService:
     def normalize_name(name: str) -> str:
         """Normalize a tag name for matching.
 
-        Trims surrounding whitespace and lowercases the result. The original
-        casing is preserved in the stored ``name`` column and returned as
-        displayed.
+        Trims surrounding whitespace, collapses internal whitespace runs, and
+        lowercases the result, so names that differ only by spacing share one
+        stored key (issue #4182). The original casing and spacing are preserved
+        in the stored ``name`` column and returned as displayed.
 
         Args:
             name: Raw tag name.

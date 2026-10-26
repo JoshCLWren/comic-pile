@@ -75,8 +75,9 @@ class TagCreate(BaseModel):
     """Request to create a tag.
 
     Attributes:
-        name: Raw display name (1-100 characters). Casing is preserved on
-            storage and display; the name is lowercased for matching.
+        name: Raw display name (1-100 characters). Casing and spacing are
+            preserved on storage and display; the matching key is lowercased
+            with repeated internal whitespace collapsed.
         color: Palette name (e.g. ``"red"``) or a hex value matching a palette
             entry. Defaults to ``"red"``.
         scope: ``"global"`` (administrators only) or ``"private"``. Defaults to
@@ -114,9 +115,9 @@ class TagUpdate(BaseModel):
     """Request to update a tag.
 
     Attributes:
-        name: New display name. Casing is preserved; name is
-            lowercased for matching. Refused if it would collide
-            with an existing global tag.
+        name: New display name. Casing and spacing are preserved; the matching
+            key is lowercased with repeated internal whitespace collapsed.
+            Refused if it would collide with an existing global tag.
         color: New palette name or hex value. ``None`` leaves the
             color unchanged.
     """
