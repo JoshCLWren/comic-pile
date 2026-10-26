@@ -11,7 +11,8 @@ DO $guard$ BEGIN
  IF (SELECT username FROM users WHERE id=1) IS DISTINCT FROM 'Josh' OR (SELECT username FROM users WHERE id=23199) IS DISTINCT FROM 'torque' THEN RAISE EXCEPTION 'unexpected source/target accounts'; END IF;
  IF (SELECT count(*) FROM threads WHERE user_id=1) < 800 THEN RAISE EXCEPTION 'source library incomplete'; END IF;
  IF EXISTS (SELECT 1 FROM dependencies d JOIN issues a ON a.id=d.source_issue_id JOIN threads ta ON ta.id=a.thread_id JOIN issues b ON b.id=d.target_issue_id JOIN threads tb ON tb.id=b.thread_id WHERE (ta.user_id=23199 AND tb.user_id<>23199) OR (tb.user_id=23199 AND ta.user_id<>23199)) THEN RAISE EXCEPTION 'QA dependency crosses reader accounts'; END IF;
- IF EXISTS(SELECT 1 FROM events e JOIN sessions se ON se.id=e.session_id WHERE se.user_id<>23199 AND (e.thread_id IN (SELECT id FROM threads WHERE user_id=23199) OR e.issue_id IN (SELECT i.id FROM issues i JOIN threads t ON t.id=i.thread_id WHERE t.user_id=23199))) THEN RAISE EXCEPTION 'foreign session references QA library'; END IF;
+ IF EXISTS(SELECT 1 FROM events e JOIN sessions se ON se.id=e.session_id WHERE se.user_id<>23199 AND (e.thread_id IN (SELECT id FROM threads WHERE user_id=23199) OR e.selected_thread_id IN (SELECT id FROM threads WHERE user_id=23199) OR e.issue_id IN (SELECT i.id FROM issues i JOIN threads t ON t.id=i.thread_id WHERE t.user_id=23199))) THEN RAISE EXCEPTION 'foreign session references QA library'; END IF;
+ IF EXISTS(SELECT 1 FROM tag_assignments a JOIN tags owner_tag ON owner_tag.id=a.tag_id WHERE owner_tag.owner_user_id IS DISTINCT FROM 23199 AND ((a.target_type IN ('thread','series') AND a.target_id IN (SELECT id FROM threads WHERE user_id=23199)) OR (a.target_type='issue' AND a.target_id IN (SELECT i.id FROM issues i JOIN threads t ON t.id=i.thread_id WHERE t.user_id=23199)))) THEN RAISE EXCEPTION 'other reader owns tag assignment to QA records'; END IF;
  END $guard$
 -- NEXT_STATEMENT
 DELETE FROM snapshots WHERE session_id IN (SELECT id FROM sessions WHERE user_id=23199)
@@ -19,6 +20,10 @@ DELETE FROM snapshots WHERE session_id IN (SELECT id FROM sessions WHERE user_id
 DELETE FROM events WHERE session_id IN (SELECT id FROM sessions WHERE user_id=23199) OR thread_id IN (SELECT id FROM threads WHERE user_id=23199) OR selected_thread_id IN (SELECT id FROM threads WHERE user_id=23199) OR issue_id IN (SELECT i.id FROM issues i JOIN threads t ON t.id=i.thread_id WHERE t.user_id=23199)
 -- NEXT_STATEMENT
 DELETE FROM sessions WHERE user_id=23199
+-- NEXT_STATEMENT
+DELETE FROM catalog_commit_receipts WHERE user_id=23199
+-- NEXT_STATEMENT
+DELETE FROM taste_signals WHERE user_id=23199
 -- NEXT_STATEMENT
 DELETE FROM reading_order_items WHERE reading_order_id IN (SELECT id FROM reading_orders WHERE user_id=23199)
 -- NEXT_STATEMENT
