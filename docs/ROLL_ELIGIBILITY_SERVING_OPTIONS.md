@@ -34,7 +34,7 @@ These are observations, not design preferences.
 | Rank | Option | Verdict |
 | --- | --- | --- |
 | 1 | B+ | Build this. Slim read, existing evaluator, compact snooze state. |
-| 2 | G | Shadow only, and only if B+ misses the latency budget. |
+| 2 | G | Shadow only after a combined B+ profile shows the Python walk is the remaining cost. |
 | 3 | J | Last resort. Python writes current membership. A trigger only marks the reader dirty. |
 | 4 | A | Remains the correctness oracle. |
 | 5 | F | Reject for now. The favorite in the design note, and the wrong maintenance mechanism. |
@@ -79,7 +79,7 @@ Option J is not in the original design note. It is the only stored-table design 
 
 **Reasons to doubt it.** The Python walk still runs on every Roll. If a production-shaped reader shows that the walk or the slim payload, rather than the current loader and snooze scan, is the remaining cost, B+ is the wrong final form. That is a measurement question, not a reason to skip B+.
 
-**Verdict.** Build and measure this first. The adoption go is the combined design in measurement slice 3: eligible Issue IDs match today's oracle and median Roll wall on a production-shaped reader is under 250 ms. A loader-only result under 250 ms is not required, and a loader-only result between 250 and 615 ms does not decide this verdict. No-go for the combined design if its median is worse than the post-#4191 615 ms sample.
+**Verdict.** Build and measure this first. The adoption go is the combined design in measurement slice 3: eligible Issue IDs match today's oracle and median Roll wall on a production-shaped reader is under 250 ms. A loader-only result between 250 and 615 ms does not decide this verdict. A combined result in that same band stays on B+ and gets a profile. It does not start Option G or Option J. No-go for the combined design if its median is worse than the post-#4191 615 ms sample.
 
 ## Option C: Versioned per-Thread frontier records
 
@@ -126,7 +126,7 @@ Option J is not in the original design note. It is the only stored-table design 
 - `REFERENCES users(id)` plus `REFERENCES issues(id)` does not prove ownership. Issues belong to readers through Threads.
 - The accepted ADR forbids a stored frontier as authority. Shipping F requires an ADR amendment and a parity proof. It does not require them before the slim-read experiment.
 
-**Verdict.** Reject as the next architecture. Revisit only as Option J, after B+ and a shadowed Option G miss their gates.
+**Verdict.** Reject as the next architecture. Revisit only as Option J, and only after a combined B+ profile justifies the SQL shadow and that shadow misses its gate.
 
 ## Option G: SQL function or view
 
@@ -136,7 +136,7 @@ Option J is not in the original design note. It is the only stored-table design 
 
 **Reasons to wait.** The function is still a second implementation until it replaces the Python evaluator outright. List order, holds, and overlap exceptions are sequential walks. They can be written with window functions, and they are exactly the part most likely to disagree with `evaluate()`. One round trip does not imply a short execution. The production samples do not show the in-memory walk as the dominant cost.
 
-**Verdict.** The right experiment after B+, not instead of it. Shadow the function against the Python oracle on Julix strict order, JLI/JLE overlap, X-Men `after_previous`, Ultimate/Absolute holds, the Starman to JSA prerequisite, and one full reader snapshot. Promote it only on identical frontier sets and a p95 execution under 50 ms. If it wins, delete the Python walk. Do not leave both as writers.
+**Verdict.** Shadow this only after a combined B+ profile shows the Python walk is most of the remaining wall time. A combined median from 250 through 615 ms, by itself, does not start the shadow. When the shadow does run, compare it with the Python oracle on Julix strict order, JLI/JLE overlap, X-Men `after_previous`, Ultimate/Absolute holds, the Starman to JSA prerequisite, and one full reader snapshot. Promote it only on identical frontier sets and a p95 execution under 50 ms. If it wins, delete the Python walk. Do not leave both as writers.
 
 ## Option H: Materialized view or async projection
 
@@ -174,9 +174,12 @@ Run these in order against read-only production-shaped data or an isolated datas
 
 1. **Slim loader, evaluator unchanged.** Eligible Issue IDs match the current oracle. Record median Roll wall time while snooze reconstruction stays as it is today. No-go if that median is worse than the post-#4191 615 ms sample. A median from 250 ms through 615 ms continues to slice 2. It means the loader is not a regression, and it does not validate B+. The loader is not required to land under 250 ms before slice 2 starts.
 2. **Compact snooze row, shadow only.** Excluded Thread IDs match `derive_cross_session_excluded_thread_ids()` across session boundaries. The shadow must include snooze, then rate, then undo, and a snapshot restore that writes an earlier `Thread.last_activity_at`. Restoring that boundary can revive a streak the stored row cleared on rating, so the compact row and the event-history derivation have to agree after the restore. No-go on any mismatch.
-3. **Combined B+.** Slim loader, compact snooze row, and the unchanged evaluator together. Go when eligible Issue IDs still match and median Roll wall on a production-shaped reader is under 250 ms. A combined median from 250 ms through 615 ms is not a pass and does not authorize Option G or Option J. No-go when the combined median is worse than 615 ms.
-4. **SQL function in shadow.** Start only when slice 3 misses its go. Identical frontier sets for the named reading orders and one full reader snapshot, with p95 execution under 50 ms. No-go on any ID mismatch or on a function that is not clearly cheaper than the combined B+ measurement.
-5. **Option J, still not serving.** Start only when slice 4 also misses its gate. Roll and Cancel write zero membership rows. Rate and list edits commit the canonical change and the set difference together, or roll both back. Concurrent rate and Roll never observe a partial set or another reader's Issue. No-go on any drift.
+3. **Combined B+.** Slim loader, compact snooze row, and the unchanged evaluator together. Eligible Issue IDs must still match the oracle.
+   - Under 250 ms: adopt B+. Stop. Do not start Option G or Option J.
+   - From 250 ms through 615 ms: do not adopt B+ yet, and do not start Option G or Option J. Profile that same combined run. If the slim load or the snooze lookup is most of the wall time, fix that path and repeat this slice. If the Python walk is most of the wall time, continue to slice 4. This is the only next step for this band.
+   - Worse than 615 ms: no-go. Stop. Do not start Option G or Option J.
+4. **SQL function in shadow.** Start only when slice 3's profile says the Python walk is most of the remaining wall time. Identical frontier sets for the named reading orders and one full reader snapshot, with p95 execution under 50 ms. No-go on any ID mismatch or on a function that is not clearly cheaper than the combined B+ measurement.
+5. **Option J, still not serving.** Start only when slice 4 has run and missed its gate. Roll and Cancel write zero membership rows. Rate and list edits commit the canonical change and the set difference together, or roll both back. Concurrent rate and Roll never observe a partial set or another reader's Issue. No-go on any drift.
 
 ## ADR amendment, only after a stored set is earned
 
