@@ -4,13 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorDetailPage from '../pages/CreatorDetailPage'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import type { CreatorDetailState } from '../hooks/useCreatorDetail'
+import { useCreatorSeriesIssues } from '../hooks/useCreatorSeriesIssues'
 import type { CreatorIssueInsight } from '../services/api-creators'
 
 vi.mock('../hooks/useCreatorDetail', () => ({
   useCreatorDetail: vi.fn(),
 }))
 
+vi.mock('../hooks/useCreatorSeriesIssues', () => ({
+  useCreatorSeriesIssues: vi.fn(),
+}))
+
 const mockedHook = vi.mocked(useCreatorDetail)
+const mockedSeriesIssues = vi.mocked(useCreatorSeriesIssues)
 
 function baseState(overrides: Partial<CreatorDetailState> = {}): CreatorDetailState {
   return {
@@ -54,10 +60,12 @@ function baseState(overrides: Partial<CreatorDetailState> = {}): CreatorDetailSt
         read_unrated_issue_count: 0,
         metadata_complete: true,
         sort_key: '0002:Series A:thread:1',
+        population_scope: 'all_verified_credits',
       },
     ],
     seriesGroupsTotal: 1,
     seriesGroupsComplete: true,
+    headlineRoles: ['artist', 'colorist', 'inker', 'letterer', 'penciler', 'writer'],
     ratedIssues: [
       {
         issue_id: 11,
@@ -121,6 +129,19 @@ function renderAt(key: string) {
 beforeEach(() => {
   vi.clearAllMocks()
   mockedHook.mockReturnValue(baseState())
+  mockedSeriesIssues.mockReturnValue({
+    data: undefined,
+    fetchStatus: 'idle',
+    issues: [],
+    total: 0,
+    isPending: false,
+    isFetchingMore: false,
+    isError: false,
+    error: undefined,
+    hasMore: false,
+    loadMore: async () => undefined,
+    refetch: () => undefined,
+  })
 })
 
 describe('CreatorDetailPage', () => {
@@ -642,5 +663,93 @@ describe('CreatorDetailPage highlights reasons and issue lists (#3946)', () => {
     expect(
       screen.getByText(/Only 3 rated issues, so there is no separate highest and lowest/),
     ).toBeInTheDocument()
+  })
+})
+
+describe('CreatorDetailPage population scopes (#3579)', () => {
+  it('labels the headline Rated list and all-credits series groups explicitly', () => {
+    renderAt('creator:7')
+
+    expect(
+      screen.getByText(
+        'Headline roles only: artist, colorist, inker, letterer, penciler, writer. Each issue counts once in this list and the rating distribution, so a non-headline credit can appear in a series group without appearing here.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Rated (headline roles)')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'All verified credits, including roles outside the headline set. Series counts and averages can exceed the headline-only Rated list.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText('All verified credits').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('loads the exact issues behind a series average on demand', async () => {
+    // SAFETY: test mock supplies subset of hook state with cast
+    mockedSeriesIssues.mockReturnValue({
+      data: undefined,
+      fetchStatus: 'idle',
+      isPending: false,
+      isFetchingMore: false,
+      isError: false,
+      error: undefined,
+      hasMore: false,
+      loadMore: async () => undefined,
+      refetch: () => undefined,
+      issues: [
+        {
+          issue_id: 12,
+          issue_number: '2',
+          thread_id: 1,
+          thread_title: 'Series A',
+          status: 'read',
+          roles: ['cover'],
+          effective_rating: 4,
+          rating_timestamp: null,
+          sort_key: '12',
+        },
+      ],
+      total: 2,
+    } as ReturnType<typeof useCreatorSeriesIssues>)
+    renderAt('creator:7')
+
+    expect(mockedSeriesIssues).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 issues behind this average' }))
+
+    expect(mockedSeriesIssues).toHaveBeenCalledWith('creator:7', 'thread:1')
+    expect(
+      screen.getByText(
+        'All verified credits. 2 rated issues back this average; each issue counts once even when several roles are credited.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Series A #2/ })).toHaveAttribute('href', '/thread/1')
+    expect(screen.getByLabelText('Rated 4 out of 5')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide issues behind this average' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+  })
+
+  it('reports a drill-down failure instead of hiding the aggregate', () => {
+    mockedSeriesIssues.mockReturnValue({
+      data: undefined,
+      fetchStatus: 'idle',
+      issues: [],
+      total: 0,
+      isPending: false,
+      isFetchingMore: false,
+      isError: true,
+      error: undefined,
+      hasMore: false,
+      loadMore: async () => undefined,
+      refetch: () => undefined,
+    })
+    renderAt('creator:7')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 issues behind this average' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not load the issues behind this average.',
+    )
   })
 })

@@ -75,6 +75,30 @@ export interface CreatorSeriesGroup {
   read_unrated_issue_count: number
   metadata_complete: boolean
   sort_key: string
+  /**
+   * Population backing this aggregate (issue #3579). Series groups include
+   * every verified credited role, so they can exceed the headline Rated list.
+   */
+  population_scope: 'all_verified_credits'
+}
+
+/** Bounded drill-down of the issues backing one creator series group. */
+export interface CreatorSeriesIssueListResponse {
+  series_key: string
+  thread_id: number
+  thread_title: string
+  roles: string[]
+  rated_issue_count: number
+  average_rating: number | null
+  lowest_rating: number | null
+  highest_rating: number | null
+  metadata_complete: boolean
+  population_scope: 'all_verified_credits'
+  issues: CreatorIssueRow[]
+  total: number
+  limit: number
+  offset: number
+  next_cursor: string | null
 }
 
 /** One individual issue extreme behind a creator highlight (issue #3092). */
@@ -131,6 +155,10 @@ export interface CreatorDetailResponse {
   series_groups_total: number
   series_groups_complete: boolean
   rated_issues: CreatorIssueRow[]
+  /** Population behind the headline summary and Rated list (issue #3579). */
+  rated_population_scope: 'headline_roles_only'
+  /** Explicit role set that makes an issue headline-eligible. */
+  headline_roles: string[]
   read_unrated_issues: CreatorIssueRow[]
   upcoming_issues: CreatorIssueRow[]
   next_cursor: string | null
@@ -187,6 +215,24 @@ export function createCreatorsApi(client: HttpClient) {
       }
       return client.get<CreatorDetailResponse>(
         `/v1/creators/${encodeURIComponent(creatorKey)}`,
+        { params: queryParams, ...RECOVERY_CONFIG },
+      )
+    },
+
+    getSeriesIssues: (
+      creatorKey: string,
+      seriesKey: string,
+      params: CreatorDetailPageParams = {},
+    ) => {
+      const queryParams: Record<string, string | number> = {}
+      if (params.limit !== undefined) {
+        queryParams.limit = params.limit
+      }
+      if (params.offset !== undefined && params.offset > 0) {
+        queryParams.offset = params.offset
+      }
+      return client.get<CreatorSeriesIssueListResponse>(
+        `/v1/creators/${encodeURIComponent(creatorKey)}/series/${encodeURIComponent(seriesKey)}/issues`,
         { params: queryParams, ...RECOVERY_CONFIG },
       )
     },

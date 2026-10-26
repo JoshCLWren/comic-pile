@@ -5272,6 +5272,14 @@
             "$ref": "#/components/schemas/CreatorSummaryCoverage",
             "description": "Metadata coverage state (from #2028)."
           },
+          "headline_roles": {
+            "description": "The explicit role set that makes an issue headline-eligible. A credited role outside this set is visible in role stats and series groups but never in the headline Rated list.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Headline Roles",
+            "type": "array"
+          },
           "insights": {
             "anyOf": [
               {
@@ -5296,12 +5304,19 @@
             "title": "Next Cursor"
           },
           "rated_issues": {
-            "description": "Bounded list of rated issues, recent-first.",
+            "description": "Bounded list of headline-eligible rated issues, recent-first.",
             "items": {
               "$ref": "#/components/schemas/CreatorIssueRow"
             },
             "title": "Rated Issues",
             "type": "array"
+          },
+          "rated_population_scope": {
+            "const": "headline_roles_only",
+            "default": "headline_roles_only",
+            "description": "Population used by the headline summary and the Rated list. Only issues where the creator held a headline role count, matching the Rated heading and rating distribution denominator.",
+            "title": "Rated Population Scope",
+            "type": "string"
           },
           "rating_distribution": {
             "anyOf": [
@@ -6748,6 +6763,13 @@
             "title": "Metadata Complete",
             "type": "boolean"
           },
+          "population_scope": {
+            "const": "all_verified_credits",
+            "default": "all_verified_credits",
+            "description": "Population used for this aggregate. Series groups cover every verified creator credit in the thread, not only headline roles, so their counts/averages may differ from the headline-only Rated list.",
+            "title": "Population Scope",
+            "type": "string"
+          },
           "rated_issue_count": {
             "description": "Attributed issues in this thread with an effective rating. Equals the number of rows the drill-down can return for this group.",
             "minimum": 0.0,
@@ -6957,6 +6979,13 @@
             "minimum": 0.0,
             "title": "Offset",
             "type": "integer"
+          },
+          "population_scope": {
+            "const": "all_verified_credits",
+            "default": "all_verified_credits",
+            "description": "Population backing this drill-down. Rows include every verified creator credit in the thread, matching the parent series group exactly.",
+            "title": "Population Scope",
+            "type": "string"
           },
           "rated_issue_count": {
             "description": "Total attributed rated issues backing this group.",

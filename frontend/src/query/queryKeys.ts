@@ -509,6 +509,12 @@ export const queryKeys = {
       })
       return ['creators', 'seriesStats', creatorKey, seriesKey, normalizedParams] as const
     },
+    /**
+     * Canonical creator series issue drill-down key (issue #3579). The
+     * drill-down is reactive only while its group is expanded.
+     */
+    seriesIssues: (creatorKey: string, seriesKey: string) =>
+      ['creators', 'seriesIssues', creatorKey, seriesKey] as const,
   },
   continuityCorrection: {
     groups: () => ['continuityCorrection', 'groups'] as const,

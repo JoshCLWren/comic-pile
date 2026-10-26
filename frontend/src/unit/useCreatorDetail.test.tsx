@@ -55,6 +55,7 @@ function makePage(overrides: Partial<CreatorDetailResponse> = {}): CreatorDetail
         read_unrated_issue_count: 0,
         metadata_complete: true,
         sort_key: '0001:Series A:thread:1',
+        population_scope: 'all_verified_credits',
       },
     ],
     series_groups_total: 1,
@@ -72,6 +73,8 @@ function makePage(overrides: Partial<CreatorDetailResponse> = {}): CreatorDetail
         sort_key: '11',
       },
     ],
+    rated_population_scope: 'headline_roles_only',
+    headline_roles: ['artist', 'colorist', 'inker', 'letterer', 'penciler', 'writer'],
     read_unrated_issues: [],
     upcoming_issues: [],
     next_cursor: null,
@@ -100,6 +103,14 @@ describe('useCreatorDetail (bounded incremental loader)', () => {
     expect(result.current.seriesGroups).toHaveLength(1)
     expect(result.current.seriesGroupsTotal).toBe(1)
     expect(result.current.seriesGroupsComplete).toBe(true)
+    expect(result.current.headlineRoles).toEqual([
+      'artist',
+      'colorist',
+      'inker',
+      'letterer',
+      'penciler',
+      'writer',
+    ])
     expect(result.current.hasMore).toBe(false)
   })
 

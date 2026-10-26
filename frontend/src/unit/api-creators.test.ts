@@ -96,6 +96,38 @@ describe('creatorsApi', () => {
     })
   })
 
+  describe('getSeriesIssues', () => {
+    it('requests the series drill-down with the canonical encoded keys', async () => {
+      const response = {
+        series_key: 'thread:7',
+        thread_id: 7,
+        thread_title: 'Alpha Flight',
+        roles: ['cover', 'writer'],
+        rated_issue_count: 2,
+        average_rating: 3.25,
+        lowest_rating: 3,
+        highest_rating: 3.5,
+        metadata_complete: true,
+        population_scope: 'all_verified_credits',
+        issues: [],
+        total: 2,
+        limit: 50,
+        offset: 0,
+        next_cursor: null,
+      }
+      client.get.mockResolvedValue(response)
+
+      await expect(creatorsApi.getSeriesIssues('creator:1672', 'thread:7')).resolves.toEqual(
+        response,
+      )
+
+      expect(client.get).toHaveBeenCalledWith(
+        '/v1/creators/creator%3A1672/series/thread%3A7/issues',
+        { params: {}, skipAuthRedirect: true },
+      )
+    })
+  })
+
   describe('getList', () => {
     it('requests creator list with skipAuthRedirect: true', async () => {
       client.get.mockResolvedValue(LIST_RESPONSE)
