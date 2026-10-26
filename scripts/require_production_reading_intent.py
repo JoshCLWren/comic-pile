@@ -6,6 +6,7 @@ A clean migration preview or green current Roll frontier is not an approval.
 
 import argparse
 import json
+from collections.abc import Mapping
 from pathlib import Path
 
 DEFAULT_CONTRACT = Path(__file__).resolve().parents[1] / (
@@ -19,7 +20,7 @@ REQUIRED_INTENT_CATEGORIES = (
 )
 
 
-def incomplete_intent_reasons(contract: dict[str, object]) -> list[str]:
+def incomplete_intent_reasons(contract: Mapping[str, object]) -> list[str]:
     """Report unresolved source, coverage and reader-approval evidence.
 
     Args:
