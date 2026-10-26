@@ -35,6 +35,7 @@ _EXPORT_MODULES: dict[str, str] = {
     "ThreadListResponse": "app.schemas.thread",
     "ComicVineMappingHealth": "app.schemas.thread",
     "ComicVineMappingStatus": "app.schemas.thread",
+    "QueueSeriesMetadata": "app.schemas.thread",
     "QueueThreadListItem": "app.schemas.thread",
     "QueueThreadListResponse": "app.schemas.thread",
     "ReactivateRequest": "app.schemas.thread",
@@ -133,6 +134,7 @@ __all__ = [
     "PerformanceMetricCreate",
     "PerformanceMetricQuery",
     "PerformanceMetricSummary",
+    "QueueSeriesMetadata",
     "QueueThreadListItem",
     "QueueThreadListResponse",
     "RateRequest",
@@ -298,6 +300,7 @@ if TYPE_CHECKING:
     from app.schemas.thread import (
         ComicVineMappingHealth,
         ComicVineMappingStatus,
+        QueueSeriesMetadata,
         QueueThreadListItem,
         QueueThreadListResponse,
         ReactivateRequest,

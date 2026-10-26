@@ -11,6 +11,7 @@ from starlette.requests import Request
 
 from app.api.thread import list_threads
 from app.models import Issue, Thread
+from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from tests.conftest import get_or_create_user_async
 
 
@@ -69,6 +70,23 @@ async def test_queue_query_count_is_constant_for_page_size(
         thread.next_unread_issue_id = first_unread.id
         expected[thread.id] = (first_unread.issue_number, 2)
 
+    metadata_thread_id = thread.id
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="series",
+        external_id="metadata-contract",
+        metadata_json={"start_year": "2020", "name": "Second Run", "publisher": {"name": "Image"}},
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    async_db.add(
+        ThreadExternalSeriesMapping(
+            thread_id=metadata_thread_id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1.0,
+        )
+    )
     await async_db.commit()
 
     request = Request(
@@ -117,3 +135,10 @@ async def test_queue_query_count_is_constant_for_page_size(
         expected_issue_number, expected_remaining = expected[queue_thread.id]
         assert queue_thread.next_unread_issue_number == expected_issue_number
         assert queue_thread.issues_remaining == expected_remaining
+        if queue_thread.id == metadata_thread_id:
+            assert queue_thread.series_metadata is not None
+            assert queue_thread.series_metadata.year == 2020
+            assert queue_thread.series_metadata.volume == "Second Run"
+            assert queue_thread.series_metadata.publisher == "Image"
+        else:
+            assert queue_thread.series_metadata is None

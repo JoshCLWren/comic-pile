@@ -494,6 +494,82 @@ describe('QueueThreadCard', () => {
     expect(screen.getByText('Trade Paperback')).toBeInTheDocument()
   })
 
+  it('renders series metadata for a fully mapped series with year, volume, and publisher', () => {
+    const thread = createMockThread({
+      title: 'Uncanny X-Men',
+      series_metadata: {
+        year: 2013,
+        volume: 'Vol. 3',
+        publisher: 'Marvel',
+      },
+    })
+    renderCard(thread)
+
+    const metadata = screen.getByTestId('queue-series-metadata')
+    expect(within(metadata).getByText('Series metadata:')).toBeInTheDocument()
+    expect(screen.getByText('2013')).toBeInTheDocument()
+    expect(screen.getByText('Vol. 3')).toBeInTheDocument()
+    expect(screen.getByText('Marvel')).toBeInTheDocument()
+  })
+
+  it('renders a truthful "Volume unknown" fallback for a partially mapped series', () => {
+    const thread = createMockThread({
+      title: 'Some Series',
+      series_metadata: {
+        year: 2020,
+        volume: null,
+        publisher: 'DC Comics',
+      },
+    })
+    renderCard(thread)
+
+    expect(screen.getByText('2020')).toBeInTheDocument()
+    expect(screen.getByText('Volume unknown')).toBeInTheDocument()
+    expect(screen.getByText('DC Comics')).toBeInTheDocument()
+    expect(screen.queryByText('Vol.')).not.toBeInTheDocument()
+  })
+
+  it('renders a truthful "Year unknown" fallback for a mapped series without a confirmed year', () => {
+    const thread = createMockThread({
+      title: 'Some Series',
+      series_metadata: {
+        year: null,
+        volume: 'Vol. 1',
+        publisher: null,
+      },
+    })
+    renderCard(thread)
+
+    expect(screen.getByText('Year unknown')).toBeInTheDocument()
+    expect(screen.getByText('Vol. 1')).toBeInTheDocument()
+    expect(screen.queryByText('2020')).not.toBeInTheDocument()
+    expect(screen.queryByText('DC Comics')).not.toBeInTheDocument()
+  })
+
+  it('renders "Unmapped series" fallback when series_metadata is null', () => {
+    const thread = createMockThread({
+      title: 'Unknown Series',
+      series_metadata: null,
+    })
+    renderCard(thread)
+
+    expect(screen.getByTestId('series-unmapped')).toHaveTextContent('Unmapped series')
+  })
+
+  it('renders "No confirmed metadata" when series_metadata exists but all fields are null', () => {
+    const thread = createMockThread({
+      title: 'Mapped But No Metadata',
+      series_metadata: {
+        year: null,
+        volume: null,
+        publisher: null,
+      },
+    })
+    renderCard(thread)
+
+    expect(screen.getByText('No confirmed metadata')).toBeInTheDocument()
+  })
+
   it('renders singular "1 issue remaining" for a single remaining issue', () => {
     const thread = createMockThread({ issues_remaining: 1 })
     renderCard(thread)

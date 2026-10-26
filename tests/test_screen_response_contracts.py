@@ -28,7 +28,17 @@ QUEUE_FIELDS = {
     "comicvine_mapping",
     "manual_creator_credits",
     "tags",
+    "series_metadata",
 }
+# Queue rows project confirmed series metadata that the full thread response
+# does not carry, so they are additive screen fields rather than a wider
+# detail contract.
+QUEUE_ONLY_FIELDS = {
+    "comicvine_mapping",
+    "tags",
+    "series_metadata",
+}
+SERIES_METADATA_FIELDS = {"year", "volume", "publisher"}
 QUEUE_DROPPED_FIELDS = {
     "last_rating",
     "is_test",
@@ -121,19 +131,20 @@ def _component_schema(name: str) -> dict[str, object]:
 
 
 def test_queue_item_contract_is_exact_and_measurably_narrower() -> None:
-    """Queue items expose only the documented 16-field screen contract."""
+    """Queue items expose the documented screen contract and drop detail-only fields."""
     full_fields = set(ThreadResponse.model_fields)
     queue_fields = set(QueueThreadListItem.model_fields)
 
     assert queue_fields == QUEUE_FIELDS
     assert full_fields - queue_fields == QUEUE_DROPPED_FIELDS
+    assert queue_fields - full_fields == QUEUE_ONLY_FIELDS
     assert len(full_fields) == 18
-    assert len(queue_fields) == 16
-    assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 2 / 18
+    assert len(queue_fields) == 17
+    assert len(QUEUE_DROPPED_FIELDS) / len(full_fields) == 4 / 18
 
 
 def test_queue_item_records_serialized_byte_reduction() -> None:
-    """A representative queue item serializes at least 20% smaller than thread detail."""
+    """The original representative full row still serializes at least 20% smaller."""
     timestamp = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
     detail = ThreadResponse(
         id=42,
@@ -150,9 +161,7 @@ def test_queue_item_records_serialized_byte_reduction() -> None:
         blocking_reasons=["Read Mister Miracle #1 first"],
         created_at=timestamp,
         total_issues=12,
-        reading_progress=(
-            "Issue 1 of 12 read; continuing with issue 2 after Mister Miracle #1."
-        ),
+        reading_progress=("Issue 1 of 12 read; continuing with issue 2 after Mister Miracle #1."),
         next_unread_issue_id=4202,
         next_unread_issue_number="2",
     )
@@ -160,9 +169,12 @@ def test_queue_item_records_serialized_byte_reduction() -> None:
 
     detail_bytes = len(detail.model_dump_json().encode())
     queue_bytes = len(queue_item.model_dump_json().encode())
+    shared_queue_bytes = len(queue_item.model_dump_json(exclude={"series_metadata"}).encode())
 
-    assert queue_bytes < detail_bytes
+    # Measure the complete original fixture without inflating detail-only data.
+    # Unknown series metadata is omitted from the payload instead of adding null padding.
     assert (detail_bytes - queue_bytes) / detail_bytes >= 0.20
+    assert (detail_bytes - shared_queue_bytes) / detail_bytes >= 0.20
     assert not QUEUE_DROPPED_FIELDS.intersection(queue_item.model_dump())
 
 
@@ -316,9 +328,9 @@ def test_no_legacy_collection_contracts_remain_in_openapi() -> None:
 def test_component_schemas_expose_exact_screen_contracts() -> None:
     """Named component schemas advertise the bounded screen models, not detail models."""
     assert set(_component_schema("QueueThreadListItem")["properties"]) == QUEUE_FIELDS
+    assert set(_component_schema("QueueSeriesMetadata")["properties"]) == SERIES_METADATA_FIELDS
     assert set(_component_schema("IssueResponse")["properties"]) == ISSUE_FIELDS
     assert (
-        set(_component_schema("BlockingExplanation")["properties"])
-        == BLOCKING_EXPLANATION_FIELDS
+        set(_component_schema("BlockingExplanation")["properties"]) == BLOCKING_EXPLANATION_FIELDS
     )
     assert set(_component_schema("RollResponse")["properties"]) == ROLL_FIELDS

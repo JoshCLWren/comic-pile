@@ -12802,12 +12802,39 @@ export interface components {
             updated_at: string;
         };
         /**
+         * QueueSeriesMetadata
+         * @description Confirmed provider series metadata projected for one Queue row.
+         *
+         *     Values come only from the reader-owned Thread's own confirmed provider
+         *     series identity. A value that is not stored stays ``None`` instead of being
+         *     inferred from the display title or a provider numeric id.
+         */
+        QueueSeriesMetadata: {
+            /**
+             * Publisher
+             * @description Confirmed publisher name
+             */
+            publisher?: string | null;
+            /**
+             * Volume
+             * @description Confirmed provider run/volume name when it adds identification beyond the thread title. Never a fabricated numeric volume.
+             */
+            volume?: string | null;
+            /**
+             * Year
+             * @description Confirmed publication/start year.
+             */
+            year?: number | null;
+        };
+        /**
          * QueueThreadListItem
          * @description Schema for a single thread in the list/queue view.
          *
          *     A deliberate subset of ThreadResponse. The list view does not need
          *     detail-only fields like last_rating, is_test, or reading_progress,
-         *     which reduces payload size for large lists.
+         *     which reduces payload size for large lists. Queue rows additionally carry
+         *     series metadata projected only from the thread's own confirmed provider
+         *     identity, so readers can tell same-titled runs apart (issue #3605).
          */
         QueueThreadListItem: {
             /**
@@ -12845,6 +12872,8 @@ export interface components {
             notes?: string | null;
             /** Queue Position */
             queue_position: number;
+            /** @description Confirmed provider series metadata for this thread. ``None`` means the reader-owned thread has no confirmed series identity (unmapped series). */
+            series_metadata?: components["schemas"]["QueueSeriesMetadata"] | null;
             /** Status */
             status: string;
             /** Tags */
