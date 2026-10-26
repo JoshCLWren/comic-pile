@@ -329,14 +329,25 @@ export function ThreadPool({
           </button>
           {blockedExpanded && (
             <div className="mt-2 space-y-1">
-              {blockedThreads.map((thread) => (
+              {blockedThreads.map((thread, index) => (
                 <div
-                  key={thread.id}
+                  key={thread.id || `blocked-missing-${index}`}
                   className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
                   <span className="text-sm">🔒</span>
                   <div className="flex-1 min-w-0">
-                    <Link to={`/thread/${thread.id}`} className="text-sm text-[var(--theme-text-muted)] underline">{thread.title}</Link>
+                    {thread.id ? (
+                      <Link
+                        to={`/thread/${thread.id}`}
+                        className="block text-sm text-[var(--theme-text-muted)] underline truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                      >
+                        {thread.title}
+                      </Link>
+                    ) : (
+                      <span className="block text-sm text-[var(--theme-text-muted)] truncate">
+                        {thread.title}
+                      </span>
+                    )}
                     <EligibilityExplanation isBlocked reasons={thread.blocking_reasons} dependencies={blockingDependencyMap[thread.id]} />
                   </div>
                 </div>
@@ -505,17 +516,23 @@ export function ThreadPool({
           </button>
           {inactiveExpanded && (
             <div className="mt-2 space-y-1">
-              {inactiveThreads.map((thread) => (
+              {inactiveThreads.map((thread, index) => (
                 <div
-                  key={thread.thread_id}
+                  key={thread.thread_id ?? `inactive-missing-${index}`}
                   className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
-                  <Link
-                    to={`/thread/${thread.thread_id}`}
-                    className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] underline truncate"
-                  >
-                    {thread.title}
-                  </Link>
+                  {thread.thread_id ? (
+                    <Link
+                      to={`/thread/${thread.thread_id}`}
+                      className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] underline truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                    >
+                      {thread.title}
+                    </Link>
+                  ) : (
+                    <span className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] truncate">
+                      {thread.title}
+                    </span>
+                  )}
                   <span className="shrink-0 text-xs text-stone-500">
                     {exclusionReasonLabel(thread)}
                   </span>
