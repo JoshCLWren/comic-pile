@@ -12,8 +12,9 @@ and ``/api/v2/roll/bootstrap`` on the same database session, and the harness:
 * validates v2-only enrichment (canonical series identity, effective ratings,
   catalog run length, identity states, covers, bounded group routes, last read)
   against stored source rows;
-* measures SELECT round trips for the empty, normal, d100, and recovery-fail-open
-  paths, including the v2 projection cost after authentication/recovery/mode;
+* measures read round trips (``SELECT`` and ``WITH``/CTE statements) for the empty,
+  normal, d100, and recovery-fail-open paths, including the v2 projection cost
+  after authentication/recovery/mode;
 * measures uncompressed and encoded payload size at d100; and
 * emits a machine-readable report, including every parity or query-budget
   failure, when ``ROLL_V2_COMPARISON_REPORT`` names an output path.
@@ -53,18 +54,34 @@ D100_PAYLOAD_LIMIT_BYTES = 512 * 1024
 D100_PER_ITEM_LIMIT_BYTES = 8 * 1024
 SERIALIZED_COVER = "https://comicvine.gamespot.com/a/uploads/scale_large/0/1/cover.jpg"
 
+#: Postgres renders a SQLAlchemy query built from a ``.cte()`` as
+#: ``WITH <name> AS (...) SELECT ...``, so read round trips also begin with
+#: ``WITH``. Counting only ``SELECT`` would silently hide CTE reads such as the
+#: bounded roll candidate query in ``app/repositories/roll_v2_projection.py``.
+READ_STATEMENT_PREFIXES = ("SELECT", "WITH")
+
+#: CTE name used by ``fetch_rollable_candidates``; the harness pins that this
+#: statement is inside the measured v2 projection window.
+CANDIDATE_CTE_NAME = "bounded_roll_thread_ids"
+
 V1_PATH = "/api/v1/roll/bootstrap"
 V2_PATH = "/api/v2/roll/bootstrap"
 
 
+def _is_read_statement(statement: str) -> bool:
+    """Return True when a statement is a read (``SELECT`` or a CTE)."""
+    return statement.lstrip().upper().startswith(READ_STATEMENT_PREFIXES)
+
+
 class _SelectRecorder:
-    """Count SELECT round trips on one engine and gate the projection window."""
+    """Count read round trips on one engine and gate the projection window."""
 
     def __init__(self, engine: AsyncEngine) -> None:
         """Attach a listener and prepare measurement state."""
         self._engine = engine
         self.selects: list[str] = []
         self.projection_selects = 0
+        self.projection_statements: list[str] = []
         self._in_projection = False
 
     def _record(
@@ -76,20 +93,23 @@ class _SelectRecorder:
         context: object,
         executemany: bool,
     ) -> None:
-        if not statement.lstrip().upper().startswith("SELECT"):
+        if not _is_read_statement(statement):
             return
         self.selects.append(statement)
         if self._in_projection:
             self.projection_selects += 1
+            self.projection_statements.append(statement)
 
     def reset(self) -> None:
-        """Clear recorded statements and the projection counter."""
+        """Clear recorded statements and the projection counters."""
         self.selects = []
         self.projection_selects = 0
+        self.projection_statements = []
 
     def begin_projection(self) -> None:
-        """Start counting only statements issued inside the v2 projection."""
+        """Start counting only reads issued inside the v2 projection."""
         self.projection_selects = 0
+        self.projection_statements = []
         self._in_projection = True
 
     def end_projection(self) -> None:
@@ -141,6 +161,30 @@ def _v1_null_rows(body: dict[str, Any]) -> list[dict[str, Any]]:
 def _check(failures: list[dict[str, Any]], code: str, detail: object) -> None:
     """Record one named harness failure."""
     failures.append({"code": code, "detail": detail})
+
+
+def _check_candidate_cte_recorded(
+    recorder: _SelectRecorder,
+    *,
+    scenario: str,
+    failures: list[dict[str, Any]],
+) -> None:
+    """Require the bounded candidate CTE read to be inside the measured window.
+
+    ``fetch_rollable_candidates`` emits ``WITH bounded_roll_thread_ids AS (...)
+    SELECT ...``. A recorder that only counts ``SELECT`` drops that read, which
+    would let a projection exceed the frozen budget without failing the harness.
+    """
+    if not any(CANDIDATE_CTE_NAME in statement for statement in recorder.projection_statements):
+        _check(
+            failures,
+            "query_budget.candidate_cte_uncounted",
+            {
+                "scenario": scenario,
+                "projection_reads": recorder.projection_selects,
+                "projection_statements": len(recorder.projection_statements),
+            },
+        )
 
 
 def _compare_v1_v2(
@@ -474,6 +518,9 @@ async def test_production_shaped_v1_v2_comparison_harness(
         ],
         "query_budget": {
             "limit_after_auth": PROJECTION_QUERY_LIMIT,
+            "count_rule": (
+                "SELECT and WITH (CTE) statements both count as read round trips"
+            ),
             "measurements": [],
         },
         "payloads": [],
@@ -762,6 +809,8 @@ async def test_production_shaped_v1_v2_comparison_harness(
         v2_normal, v2_normal_ms = await _timed_get(auth_client, V2_PATH)
         v2_normal_selects = len(recorder.selects)
         v2_projection_selects = recorder.projection_selects
+        v2_projection_statements = len(recorder.projection_statements)
+        _check_candidate_cte_recorded(recorder, scenario="normal", failures=failures)
         v2_normal_payload = _payload_metrics(v2_normal)
 
         monkeypatch.undo()
@@ -793,6 +842,7 @@ async def test_production_shaped_v1_v2_comparison_harness(
                 "v1_selects": v1_normal_selects,
                 "v2_selects": v2_normal_selects,
                 "v2_projection_selects_after_auth": v2_projection_selects,
+                "v2_projection_statements_after_auth": v2_projection_statements,
                 "v1_latency_ms": round(v1_normal_ms, 2),
                 "v2_latency_ms": round(v2_normal_ms, 2),
                 "v1_payload": v1_normal_payload,
@@ -810,6 +860,7 @@ async def test_production_shaped_v1_v2_comparison_harness(
                 "v1_selects": v1_normal_selects,
                 "v2_selects": v2_normal_selects,
                 "v2_projection_selects_after_auth": v2_projection_selects,
+                "v2_projection_statements_after_auth": v2_projection_statements,
                 "limit": PROJECTION_QUERY_LIMIT,
                 "passed": 1 <= v2_projection_selects <= PROJECTION_QUERY_LIMIT,
             }
@@ -860,6 +911,8 @@ async def test_production_shaped_v1_v2_comparison_harness(
         v2_d100, v2_d100_ms = await _timed_get(auth_client, V2_PATH)
         v2_d100_selects = len(recorder.selects)
         v2_d100_projection_selects = recorder.projection_selects
+        v2_d100_projection_statements = len(recorder.projection_statements)
+        _check_candidate_cte_recorded(recorder, scenario="d100", failures=failures)
         v2_d100_payload = _payload_metrics(v2_d100)
 
         monkeypatch.undo()
@@ -922,6 +975,7 @@ async def test_production_shaped_v1_v2_comparison_harness(
                 "v1_selects": v1_d100_selects,
                 "v2_selects": v2_d100_selects,
                 "v2_projection_selects_after_auth": v2_d100_projection_selects,
+                "v2_projection_statements_after_auth": v2_d100_projection_statements,
                 "v1_latency_ms": round(v1_d100_ms, 2),
                 "v2_latency_ms": round(v2_d100_ms, 2),
                 "v1_payload": v1_d100_payload,
@@ -935,6 +989,7 @@ async def test_production_shaped_v1_v2_comparison_harness(
                 "v1_selects": v1_d100_selects,
                 "v2_selects": v2_d100_selects,
                 "v2_projection_selects_after_auth": v2_d100_projection_selects,
+                "v2_projection_statements_after_auth": v2_d100_projection_statements,
                 "limit": PROJECTION_QUERY_LIMIT,
                 "passed": 1 <= v2_d100_projection_selects <= PROJECTION_QUERY_LIMIT,
             }
@@ -1039,6 +1094,8 @@ async def test_production_shaped_v1_v2_comparison_harness(
     report["passed"] = not failures
     report["notes"] = [
         "Latency values are single local-run wall times, not production SLOs.",
+        "Read round trips include SELECT and WITH (CTE) statements; the bounded "
+        "roll candidate query uses a CTE.",
         "v1 does not expose thread.last_activity_at; v2 exposes it as enrichment.",
         "Cover URLs are direct provider URLs per #4177; the retired image optimizer is not expected.",
         "A v1 pool row with a null issue id is listed with independent proof it has no readable target.",
@@ -1084,3 +1141,26 @@ def _projection_symbol() -> Callable[..., Awaitable[object]]:
 
     symbol: Callable[..., Awaitable[object]] = roll.get_v2_rollable_projection
     return symbol
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "SELECT 1",
+        "  select 1",
+        "\nWITH bounded_roll_thread_ids AS (SELECT 1) SELECT * FROM bounded_roll_thread_ids",
+        "WITH RECURSIVE reachable_continuity_nodes AS (SELECT 1) SELECT * FROM reachable_continuity_nodes",
+    ],
+)
+def test_recorder_treats_ctes_as_read_round_trips(statement: str) -> None:
+    """CTE statements count as reads; Postgres renders them starting with WITH."""
+    assert _is_read_statement(statement)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    ["INSERT INTO threads DEFAULT VALUES", "UPDATE threads SET id = 1", "BEGIN", "COMMIT", ""],
+)
+def test_recorder_ignores_non_read_statements(statement: str) -> None:
+    """Writes and transaction control are not read round trips."""
+    assert not _is_read_statement(statement)

@@ -5,6 +5,7 @@
   "issue": 2718,
   "notes": [
     "Latency values are single local-run wall times, not production SLOs.",
+    "Read round trips include SELECT and WITH (CTE) statements; the bounded roll candidate query uses a CTE.",
     "v1 does not expose thread.last_activity_at; v2 exposes it as enrichment.",
     "Cover URLs are direct provider URLs per #4177; the retired image optimizer is not expected.",
     "A v1 pool row with a null issue id is listed with independent proof it has no readable target."
@@ -60,14 +61,15 @@
       },
       "rows": 100,
       "scenario": "d100",
-      "v1_gzip_bytes": 2038,
+      "v1_gzip_bytes": 2036,
       "v1_uncompressed_bytes": 26937,
       "v2_bytes_per_item": 491.21,
-      "v2_gzip_bytes": 2397,
+      "v2_gzip_bytes": 2395,
       "v2_uncompressed_bytes": 49121
     }
   ],
   "query_budget": {
+    "count_rule": "SELECT and WITH (CTE) statements both count as read round trips",
     "limit_after_auth": 3,
     "measurements": [
       {
@@ -75,21 +77,23 @@
         "passed": true,
         "scenario": "normal",
         "v1_selects": 16,
-        "v2_projection_selects_after_auth": 2,
-        "v2_selects": 16
+        "v2_projection_selects_after_auth": 3,
+        "v2_projection_statements_after_auth": 3,
+        "v2_selects": 17
       },
       {
         "limit": 3,
         "passed": true,
         "scenario": "d100",
         "v1_selects": 16,
-        "v2_projection_selects_after_auth": 2,
-        "v2_selects": 16
+        "v2_projection_selects_after_auth": 3,
+        "v2_projection_statements_after_auth": 3,
+        "v2_selects": 17
       },
       {
         "scenario": "recovery_fail_open",
         "v1_selects": 17,
-        "v2_selects": 17
+        "v2_selects": 18
       }
     ],
     "passed": true
@@ -97,59 +101,61 @@
   "scenarios": [
     {
       "name": "empty",
-      "v1_latency_ms": 61.12,
+      "v1_latency_ms": 51.26,
       "v1_payload": {
-        "gzip_bytes": 1044,
+        "gzip_bytes": 1043,
         "uncompressed_bytes": 11380
       },
       "v1_selects": 19,
-      "v2_latency_ms": 33.6,
+      "v2_latency_ms": 23.25,
       "v2_payload": {
-        "gzip_bytes": 833,
+        "gzip_bytes": 832,
         "uncompressed_bytes": 4109
       },
-      "v2_selects": 16
+      "v2_selects": 17
     },
     {
       "name": "normal",
-      "v1_latency_ms": 34.74,
+      "v1_latency_ms": 17.03,
       "v1_payload": {
-        "gzip_bytes": 1204,
+        "gzip_bytes": 1201,
         "uncompressed_bytes": 12894
       },
       "v1_selects": 16,
-      "v2_latency_ms": 38.53,
+      "v2_latency_ms": 19.64,
       "v2_payload": {
-        "gzip_bytes": 1288,
+        "gzip_bytes": 1286,
         "uncompressed_bytes": 8061
       },
-      "v2_projection_selects_after_auth": 2,
-      "v2_selects": 16
+      "v2_projection_selects_after_auth": 3,
+      "v2_projection_statements_after_auth": 3,
+      "v2_selects": 17
     },
     {
       "name": "d100",
       "rows": 100,
-      "v1_latency_ms": 45.73,
+      "v1_latency_ms": 171.27,
       "v1_payload": {
-        "gzip_bytes": 2038,
+        "gzip_bytes": 2036,
         "uncompressed_bytes": 26937
       },
       "v1_selects": 16,
       "v2_bytes_per_item": 491.21,
-      "v2_latency_ms": 41.73,
+      "v2_latency_ms": 22.52,
       "v2_payload": {
-        "gzip_bytes": 2397,
+        "gzip_bytes": 2395,
         "uncompressed_bytes": 49121
       },
-      "v2_projection_selects_after_auth": 2,
-      "v2_selects": 16
+      "v2_projection_selects_after_auth": 3,
+      "v2_projection_statements_after_auth": 3,
+      "v2_selects": 17
     },
     {
       "name": "recovery_fail_open",
-      "v1_latency_ms": 38.85,
+      "v1_latency_ms": 19.15,
       "v1_selects": 17,
-      "v2_latency_ms": 38.05,
-      "v2_selects": 17
+      "v2_latency_ms": 20.88,
+      "v2_selects": 18
     }
   ],
   "special_fixtures": [
