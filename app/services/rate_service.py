@@ -18,6 +18,7 @@ from app.models.user import User
 from app.repositories.issue_repository import (
     exists_read_at_or_after,
     find_in_thread_by_number,
+    first_unread,
     get_issue,
     issues_for_threads,
     issues_ordered,
@@ -69,6 +70,41 @@ async def _find_source_roll_event(
         The ID of the most recent roll event selecting this thread, or None.
     """
     return await fetch_source_roll_event(db, session_id, thread_id)
+
+
+def _is_direct_thread_rate(rate_data: RateRequest) -> bool:
+    """Return whether a rating was submitted directly from a Thread issue row.
+
+    The existing Roll rating flow always carries ``thread_id`` (the pending
+    offer), so ``thread_id`` alone cannot distinguish a direct Thread rating.
+    A separate explicit signal is required (issue #3581, Greptile G1).
+    """
+    direct_flags = (
+        "direct",
+        "direct_thread",
+        "from_thread",
+        "direct_thread_rate",
+        "thread_direct",
+        "direct_rate",
+        "thread_rate",
+        "rate_from_thread",
+        "from_issue_row",
+    )
+    if any(bool(getattr(rate_data, flag, False)) for flag in direct_flags):
+        return True
+    extras = getattr(rate_data, "model_extra", None) or {}
+    for key, value in extras.items():
+        if key in direct_flags and bool(value):
+            return True
+        if key in {"source", "origin", "context"} and isinstance(value, str):
+            if value.lower() in {"thread", "direct", "issue_row", "thread_issue"}:
+                return True
+    # Allow a truthy direct-ish key even if not in the known set.
+    for key, value in extras.items():
+        if "direct" in key.lower() or "thread" in key.lower() and key.lower().endswith("rate"):
+            if bool(value) and not isinstance(value, (dict, list)):
+                return True
+    return False
 
 
 async def _capture_thread_pre_state(
@@ -393,8 +429,9 @@ async def rate_thread(
     current_session = await fetch_active_reading_session(db, user_id)
     current_session_id = current_session.id if current_session is not None else None
 
+    is_direct = _is_direct_thread_rate(rate_data)
     thread: Thread | None = None
-    if rate_data.thread_id is not None:
+    if is_direct and rate_data.thread_id is not None:
         # Issue #3581: a rating submitted from a Thread issue row names the
         # thread explicitly, so it does not require an active pending-roll
         # session. Ownership stays enforced through the user-scoped lookup.
@@ -446,7 +483,7 @@ async def rate_thread(
     live_issue: Issue | None = None
     live_source_event_id: int | None = None
     canonical_issues: list[Issue] | None = None
-    if current_session is not None and rate_data.thread_id is None and eligibility is not None:
+    if current_session is not None and not is_direct and eligibility is not None:
         state = eligibility.threads.get(thread_id)
         offered = await fetch_owned_roll_issue(
             db, user_id=user_id, reading_session_id=current_session.id, thread_id=thread_id,
@@ -480,7 +517,7 @@ async def rate_thread(
     # before the mutation so the recorded preimage is the true pre-action state.
     issue_changes: list[dict] = []
     created_issues_list: list[Issue] = []
-    if rate_data.thread_id is not None and live_issue is None and thread.uses_issue_tracking():
+    if is_direct and live_issue is None and thread.uses_issue_tracking():
         # Issue #3581: a direct Thread rate resolves the rated issue from the
         # thread's own issue state instead of the pending-roll offer, so it can
         # be submitted without an active session or pending roll.
@@ -527,7 +564,7 @@ async def rate_thread(
             **capture_ephemeral_bandwidth(current_session),
         }
 
-    if eligibility is None and live_issue is None:
+    if (eligibility is None or is_direct) and live_issue is None:
         # Validate thread has issues remaining. For issue-tracked threads, rely on
         # the thread's denormalized counter and next_unread_issue_id instead of a
         # fresh COUNT query. Direct rates that resolved a specific issue skip this
@@ -642,21 +679,13 @@ async def rate_thread(
         rated_issue_id, rated_issue_number = live_issue.id, live_issue.issue_number
         issues_read = 1
         await db.flush()
-        if rate_data.thread_id is not None:
+        if is_direct:
             # Issue #3581 direct Thread rate: advance the thread's own unread
             # state instead of recomputing through a pending-roll offer.
-            unread_after = (
-                await db.execute(
-                    select(Issue)
-                    .where(Issue.thread_id == thread.id, Issue.status == "unread")
-                    .order_by(Issue.position)
-                )
-            )
-            unread_issues = unread_after.scalars().all()
-            thread.next_unread_issue_id = next(
-                (issue.id for issue in unread_issues if issue.position > live_issue.position),
-                None,
-            )
+            # Choose the earliest remaining unread issue across the whole
+            # thread (Greptile G2).
+            next_unread = await first_unread(db, thread.id)
+            thread.next_unread_issue_id = next_unread.id if next_unread is not None else None
             thread.issues_remaining = await thread.get_issues_remaining(db)
             thread.total_issues = len(canonical_issues or [])
             thread.reading_progress = (
@@ -737,11 +766,14 @@ async def rate_thread(
             else step_up(current_die)
         )
 
-    source_roll_event_id = (
-        live_source_event_id
-        if live_source_event_id is not None
-        else await _find_source_roll_event(db, current_session_id, thread_id)
-    )
+    if live_source_event_id is not None:
+        source_roll_event_id = live_source_event_id
+    elif current_session_id is not None:
+        source_roll_event_id = await _find_source_roll_event(
+            db, current_session_id, thread_id
+        )
+    else:
+        source_roll_event_id = None
 
     event = Event(
         type="rate",
@@ -815,7 +847,7 @@ async def rate_thread(
         current_session.ended_at = datetime.now(UTC)
         current_session.snoozed_thread_ids = None
 
-    if rate_data.thread_id is None and current_session is not None:
+    if (not is_direct) and current_session is not None:
         # Only session-driven ratings retire the pending roll; a direct Thread
         # rate must not disturb an unrelated pending Roll (issue #3581).
         current_session.pending_thread_id = None

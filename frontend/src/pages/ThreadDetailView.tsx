@@ -36,6 +36,7 @@ import { IssueTagRowChips } from '../components/Tags/IssueTagRowChips'
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
 import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
+import { IssueRateButton } from './thread-detail/IssueRateButton'
 import { CblComicFinder } from '../components/CblSourceFinder'
 import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
@@ -653,6 +654,7 @@ export default function ThreadDetailView() {
                                 snapshot={{ issues, thread }}
                                 onSnapshotChange={handleIssueSnapshotChange}
                               />
+                              <IssueRateButton issue={issue} threadId={thread.id} />
                             </div>
                           </div>
                           {rowTags && (

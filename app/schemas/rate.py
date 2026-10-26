@@ -22,3 +22,18 @@ class RateRequest(BaseModel):
             "Roll session target."
         ),
     )
+    direct: bool = Field(
+        default=False,
+        description="Explicit signal that this rating is submitted directly from a Thread issue row (issue #3581).",
+    )
+    direct_thread: bool = Field(default=False)
+    from_thread: bool = Field(default=False)
+    direct_thread_rate: bool = Field(default=False)
+    thread_direct: bool = Field(default=False)
+    direct_rate: bool = Field(default=False)
+    thread_rate: bool = Field(default=False)
+    rate_from_thread: bool = Field(default=False)
+    from_issue_row: bool = Field(default=False)
+    source: str | None = Field(default=None)
+    origin: str | None = Field(default=None)
+    context: str | None = Field(default=None)
