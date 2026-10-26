@@ -13,8 +13,8 @@ Compact fixture arrays are laid out as follows:
 
 | Key | Column order |
 | --- | --- |
-| threads | id, title, format, issues_remaining, total_issues, next_unread_issue_id, queue_position, status, is_blocked, queue_position_is_manual, queue_order_key |
-| issues | id, thread_id, issue_number, position, status |
+| threads | id, title, format, issues_remaining, total_issues, next_unread_issue_id, queue_position, status, is_blocked, queue_position_is_manual, queue_order_key, catalog_series_id |
+| issues | id, thread_id, issue_number, position, status, catalog_issue_id |
 | lists | id, name, mode |
 | entries | id, list_id, issue_id, position, gate, skipped, is_checkpoint, checkpoint_target_issue_ids |
 | dependencies | id, source_issue_id, target_issue_id, origin, classification, redacted evidence kind |
@@ -57,4 +57,4 @@ No regenerated expected Roll set should be accepted as a new oracle. Any change 
 
 ## Unresolved, not silently accepted
 
-The production snapshot includes 20 authored lists, but the incident audit still reported **163 unread issues outside partial strict-list coverage**, **33 Reading List versus Reading Plan differences**, and converted historical relationships (including JLI) that can contradict newer strict lists. They require **independent classification** against sources and prior reader decisions; this test suite must not invent those classifications or silently turn every loose list strict. See issues #3676, #4198, #4199, and PR #4201. The checked-in contract lists the known unresolved categories explicitly. These are outstanding completeness blockers: do **not** sign off on full migration parity until they are cleared. CI passing the known-sequence tests proves those specific sequences, not all unscreened reading intent.
+The production snapshot includes 20 authored lists, but the incident audit still reported **163 unread issues outside partial strict-list coverage**, **33 Reading List versus Reading Plan differences**, and converted historical relationships (including JLI) that can contradict newer strict lists. They require **independent classification** against sources and prior reader decisions; this test suite must not invent those classifications or silently turn every loose list strict. See issues #3676, #4198, #4199, and PR #4201. The checked-in contract lists all three required unresolved categories explicitly. The fail-closed signoff script rejects missing census categories, nonzero/ambiguous values, absent reconciliation receipts, or absent reviewed digest, independently of green CI. The fixture's compact row schema and foreign-key columns are type-validated on every load. Newly populated catalog links are preserved across re-export and replay. These are outstanding completeness blockers: do **not** sign off on full migration parity until they are cleared. CI passing the known-sequence tests proves those specific sequences, not all unscreened reading intent.
