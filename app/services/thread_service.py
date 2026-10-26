@@ -286,15 +286,17 @@ def _extract_series_metadata(
     *,
     thread_title: str,
 ) -> tuple[int | None, str | None, str | None]:
-    """Extract confirmed series year, volume, and publisher from metadata documents.
+    """Extract confirmed series year, volume, and publisher from one identity.
 
     Reads only stored, confirmed provider metadata. Never fabricates values from
-    a display title or ComicVine numeric ID. Returns the first document that
-    carries a usable value for each field.
+    a display title or ComicVine numeric ID. Only the canonical identity document
+    (the repository's first result, ordered by confirmed-mapping confidence) is
+    interpreted, so fields from two different series identities are never
+    combined into one Queue row.
 
     Args:
         series_metadata_docs: Confirmed series ``metadata_json`` documents for one
-            thread, in mapping-id order.
+            thread, in canonical confirmed-identity order.
         thread_title: The owning thread's display title, used only to avoid
             repeating the title as a run label.
 
@@ -302,28 +304,23 @@ def _extract_series_metadata(
         ``(series_year, series_volume, series_publisher)``, each ``None`` when no
         confirmed value is available.
     """
-    series_year: int | None = None
-    series_volume: str | None = None
-    series_publisher: str | None = None
+    if not series_metadata_docs:
+        return None, None, None
+    metadata = series_metadata_docs[0]
+    if not isinstance(metadata, dict):
+        return None, None, None
+
     normalized_title = " ".join(thread_title.split()).casefold()
-
-    for metadata in series_metadata_docs:
-        if not isinstance(metadata, dict):
-            continue
-        if series_year is None:
-            series_year = _coerce_publication_year(metadata.get("start_year"))
-            if series_year is None:
-                # Series identities exported from an issue-shaped document may
-                # carry a publication date instead of a start year.
-                series_year = publication_year_from_metadata(metadata)
-        if series_volume is None:
-            series_volume = _extract_run_label(metadata, normalized_title=normalized_title)
-        if series_publisher is None:
-            series_publisher = _extract_publisher(metadata)
-        if series_year is not None and series_volume is not None and series_publisher is not None:
-            break
-
-    return series_year, series_volume, series_publisher
+    series_year = _coerce_publication_year(metadata.get("start_year"))
+    if series_year is None:
+        # Series identities exported from an issue-shaped document may carry a
+        # publication date instead of a start year.
+        series_year = publication_year_from_metadata(metadata)
+    return (
+        series_year,
+        _extract_run_label(metadata, normalized_title=normalized_title),
+        _extract_publisher(metadata),
+    )
 
 
 def to_queue_list_item(

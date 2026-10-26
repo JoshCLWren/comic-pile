@@ -279,11 +279,21 @@ async def count_active_threads(db: AsyncSession, user_id: int) -> int:
 
 
 def _queue_series_documents() -> ScalarSelect[object]:
-    """Project confirmed series documents in the existing page read."""
+    """Project confirmed series documents in the existing page read.
+
+    Documents follow the canonical confirmed-identity order used elsewhere:
+    highest mapping confidence first, then stable identity id. The Queue service
+    interprets only the first document so one row never mixes metadata from two
+    series identities.
+    """
     return (
         select(
             func.json_agg(
-                aggregate_order_by(ExternalIdentity.metadata_json, ThreadExternalSeriesMapping.id)
+                aggregate_order_by(
+                    ExternalIdentity.metadata_json,
+                    ThreadExternalSeriesMapping.confidence.desc().nullslast(),
+                    ExternalIdentity.id,
+                )
             )
         )
         .select_from(ThreadExternalSeriesMapping)

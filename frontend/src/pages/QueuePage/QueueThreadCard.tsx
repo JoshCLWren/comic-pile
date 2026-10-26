@@ -2,7 +2,7 @@ import { EligibilityExplanation } from '../../components/EligibilityExplanation'
 import { ReadingBoundaryExplanation } from '../../components/ReadingBoundaryExplanation'
 import type { ReadingBoundaryExplanation as BoundaryExplanation } from '../../services/api-reading-boundaries'
 import { Link } from 'react-router-dom'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
@@ -53,6 +53,40 @@ interface QueueThreadCardProps {
   onDelete: () => void
   onRemoveFromQueue?: () => void
   positionActionsAvailable?: boolean
+}
+
+type SeriesMetadata = NonNullable<ThreadListItem['series_metadata']>
+
+interface SeriesMetadataPart {
+  key: 'year' | 'volume' | 'publisher'
+  label: string
+  known: boolean
+}
+
+/**
+ * Build the secondary metadata parts shown under a Queue row title.
+ *
+ * Verified values render as ordinary muted metadata. A missing year or volume
+ * renders a compact truthful fallback so partially mapped series explain what
+ * is not known instead of silently omitting a field (#3605). Publisher is
+ * omitted when unknown; the issue defines fallback copy only for year/volume.
+ */
+function seriesMetadataParts(metadata: SeriesMetadata): SeriesMetadataPart[] {
+  return [
+    {
+      key: 'year',
+      label: metadata.year != null ? String(metadata.year) : 'Year unknown',
+      known: metadata.year != null,
+    },
+    {
+      key: 'volume',
+      label: metadata.volume ?? 'Volume unknown',
+      known: metadata.volume != null,
+    },
+    ...(metadata.publisher != null
+      ? [{ key: 'publisher' as const, label: metadata.publisher, known: true }]
+      : []),
+  ]
 }
 
 export default function QueueThreadCard({
@@ -187,44 +221,41 @@ export default function QueueThreadCard({
               </Tooltip>
             )}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <div
+            className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1"
+            data-testid="queue-series-metadata"
+          >
             {thread.series_metadata != null ? (
               <>
-                {thread.series_metadata.year != null && (
-                  <span className="text-xs text-[var(--theme-text-muted)]">
-                    {thread.series_metadata.year}
-                  </span>
-                )}
-                {thread.series_metadata.volume != null && (
-                  <>
-                    {thread.series_metadata.year != null && (
-                      <span className="text-xs text-[var(--theme-text-muted)]" aria-hidden="true">
-                        {' · '}
-                      </span>
-                    )}
-                    <span className="text-xs text-[var(--theme-text-muted)]">
-                      {thread.series_metadata.volume}
-                    </span>
-                  </>
-                )}
-                {thread.series_metadata.publisher != null && (
-                  <>
-                    {(thread.series_metadata.year != null || thread.series_metadata.volume != null) && (
-                      <span className="text-xs text-[var(--theme-text-muted)]" aria-hidden="true">
-                        {' · '}
-                      </span>
-                    )}
-                    <span className="text-xs text-[var(--theme-text-muted)]">
-                      {thread.series_metadata.publisher}
-                    </span>
-                  </>
-                )}
+                <span className="sr-only">Series metadata: </span>
                 {thread.series_metadata.year == null &&
-                  thread.series_metadata.volume == null &&
-                  thread.series_metadata.publisher == null && (
+                thread.series_metadata.volume == null &&
+                thread.series_metadata.publisher == null ? (
                   <span className="text-xs text-[var(--theme-text-dim)]">
                     No confirmed metadata
                   </span>
+                ) : (
+                  seriesMetadataParts(thread.series_metadata).map((part, partIndex) => (
+                    <Fragment key={part.key}>
+                      {partIndex > 0 && (
+                        <span
+                          className="text-xs text-[var(--theme-text-muted)]"
+                          aria-hidden="true"
+                        >
+                          {' · '}
+                        </span>
+                      )}
+                      <span
+                        className={
+                          part.known
+                            ? 'text-xs text-[var(--theme-text-muted)]'
+                            : 'text-xs text-[var(--theme-text-dim)]'
+                        }
+                      >
+                        {part.label}
+                      </span>
+                    </Fragment>
+                  ))
                 )}
               </>
             ) : (

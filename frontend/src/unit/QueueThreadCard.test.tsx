@@ -537,12 +537,14 @@ describe('QueueThreadCard', () => {
     })
     renderCard(thread)
 
+    const metadata = screen.getByTestId('queue-series-metadata')
+    expect(within(metadata).getByText('Series metadata:')).toBeInTheDocument()
     expect(screen.getByText('2013')).toBeInTheDocument()
     expect(screen.getByText('Vol. 3')).toBeInTheDocument()
     expect(screen.getByText('Marvel')).toBeInTheDocument()
   })
 
-  it('renders series metadata for a partially mapped series with only year and publisher', () => {
+  it('renders a truthful "Volume unknown" fallback for a partially mapped series', () => {
     const thread = createMockThread({
       title: 'Some Series',
       series_metadata: {
@@ -554,11 +556,12 @@ describe('QueueThreadCard', () => {
     renderCard(thread)
 
     expect(screen.getByText('2020')).toBeInTheDocument()
+    expect(screen.getByText('Volume unknown')).toBeInTheDocument()
     expect(screen.getByText('DC Comics')).toBeInTheDocument()
     expect(screen.queryByText('Vol.')).not.toBeInTheDocument()
   })
 
-  it('renders series metadata for a mapped series with only volume', () => {
+  it('renders a truthful "Year unknown" fallback for a mapped series without a confirmed year', () => {
     const thread = createMockThread({
       title: 'Some Series',
       series_metadata: {
@@ -569,6 +572,7 @@ describe('QueueThreadCard', () => {
     })
     renderCard(thread)
 
+    expect(screen.getByText('Year unknown')).toBeInTheDocument()
     expect(screen.getByText('Vol. 1')).toBeInTheDocument()
     expect(screen.queryByText('2020')).not.toBeInTheDocument()
     expect(screen.queryByText('DC Comics')).not.toBeInTheDocument()
