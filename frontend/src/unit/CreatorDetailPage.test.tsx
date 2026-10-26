@@ -131,9 +131,17 @@ beforeEach(() => {
   mockedHook.mockReturnValue(baseState())
   mockedSeriesIssues.mockReturnValue({
     data: undefined,
+    fetchStatus: 'idle',
+    issues: [],
+    total: 0,
     isPending: false,
+    isFetchingMore: false,
     isError: false,
-  } as unknown as ReturnType<typeof useCreatorSeriesIssues>)
+    error: undefined,
+    hasMore: false,
+    loadMore: async () => undefined,
+    refetch: () => undefined,
+  })
 })
 
 describe('CreatorDetailPage', () => {
@@ -677,38 +685,17 @@ describe('CreatorDetailPage population scopes (#3579)', () => {
   })
 
   it('loads the exact issues behind a series average on demand', async () => {
+    // SAFETY: test mock supplies subset of hook state with cast
     mockedSeriesIssues.mockReturnValue({
-      data: {
-        series_key: 'thread:1',
-        thread_id: 1,
-        thread_title: 'Series A',
-        roles: ['cover', 'writer'],
-        rated_issue_count: 2,
-        average_rating: 4.5,
-        lowest_rating: 4,
-        highest_rating: 5,
-        metadata_complete: true,
-        population_scope: 'all_verified_credits',
-        issues: [
-          {
-            issue_id: 12,
-            issue_number: '2',
-            thread_id: 1,
-            thread_title: 'Series A',
-            status: 'read',
-            roles: ['cover'],
-            effective_rating: 4,
-            rating_timestamp: null,
-            sort_key: '12',
-          },
-        ],
-        total: 2,
-        limit: 50,
-        offset: 0,
-        next_cursor: null,
-      },
+      data: undefined,
+      fetchStatus: 'idle',
       isPending: false,
+      isFetchingMore: false,
       isError: false,
+      error: undefined,
+      hasMore: false,
+      loadMore: async () => undefined,
+      refetch: () => undefined,
       issues: [
         {
           issue_id: 12,
@@ -723,7 +710,7 @@ describe('CreatorDetailPage population scopes (#3579)', () => {
         },
       ],
       total: 2,
-    } as unknown as ReturnType<typeof useCreatorSeriesIssues>)
+    } as ReturnType<typeof useCreatorSeriesIssues>)
     renderAt('creator:7')
 
     expect(mockedSeriesIssues).not.toHaveBeenCalled()
@@ -746,10 +733,17 @@ describe('CreatorDetailPage population scopes (#3579)', () => {
   it('reports a drill-down failure instead of hiding the aggregate', () => {
     mockedSeriesIssues.mockReturnValue({
       data: undefined,
-      isPending: false,
-      isError: true,
+      fetchStatus: 'idle',
       issues: [],
-    } as unknown as ReturnType<typeof useCreatorSeriesIssues>)
+      total: 0,
+      isPending: false,
+      isFetchingMore: false,
+      isError: true,
+      error: undefined,
+      hasMore: false,
+      loadMore: async () => undefined,
+      refetch: () => undefined,
+    })
     renderAt('creator:7')
 
     fireEvent.click(screen.getByRole('button', { name: 'Show 2 issues behind this average' }))
