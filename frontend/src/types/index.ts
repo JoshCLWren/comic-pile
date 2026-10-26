@@ -89,17 +89,6 @@ export interface RatePayload {
   finish_session?: boolean;
   issue_number?: string;
   direct?: boolean;
-  direct_thread?: boolean;
-  from_thread?: boolean;
-  direct_thread_rate?: boolean;
-  thread_direct?: boolean;
-  direct_rate?: boolean;
-  thread_rate?: boolean;
-  rate_from_thread?: boolean;
-  from_issue_row?: boolean;
-  source?: string;
-  origin?: string;
-  context?: string;
 }
 
 export interface OverrideRollPayload {

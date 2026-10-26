@@ -12741,6 +12741,12 @@
       "RateRequest": {
         "description": "Schema for rating request.",
         "properties": {
+          "direct": {
+            "default": false,
+            "description": "Set by a Thread issue row rating (issue #3581). Roll requests keep the session-driven path even though they also send ``thread_id``.",
+            "title": "Direct",
+            "type": "boolean"
+          },
           "finish_session": {
             "default": false,
             "title": "Finish Session",
@@ -12765,6 +12771,18 @@
             "minimum": 0.5,
             "title": "Rating",
             "type": "number"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Explicit thread being rated (issue #3581). Required when ``direct`` is true; the rating is then applied to that owned thread instead of the pending Roll target.",
+            "title": "Thread Id"
           }
         },
         "required": [
