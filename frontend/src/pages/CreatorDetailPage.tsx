@@ -78,7 +78,8 @@ function SeriesGroupDrilldown({
     )
   }
 
-  if (isError) {
+  if (isError && issues.length === 0) {
+    // Only show error if we have no data at all (initial request failure)
     return (
       <p className="mt-2 text-xs" role="alert" style={{ color: 'var(--theme-error)' }}>
         Could not load the issues behind this average.
@@ -107,6 +108,11 @@ function SeriesGroupDrilldown({
         >
           {isFetchingMore ? 'Loading…' : `Load more issues (${issues.length} of ${total})`}
         </button>
+      )}
+      {isError && issues.length > 0 && (
+        <p className="mt-2 text-xs" role="alert" style={{ color: 'var(--theme-error)' }}>
+          Some additional issues could not be loaded. The issues shown above are complete.
+        </p>
       )}
     </>
   )

@@ -72,6 +72,9 @@ export function useCreatorSeriesIssues(
     return query.fetchNextPage().then(() => undefined)
   }, [query])
 
+  // isError should only be true for the initial request, not for subsequent page failures
+  const isInitialError = query.isError && pages.length === 0
+
   return {
     data: query.data,
     fetchStatus: query.fetchStatus,
@@ -79,7 +82,7 @@ export function useCreatorSeriesIssues(
     total: firstPage?.total ?? 0,
     isPending: query.isPending,
     isFetchingMore: query.isFetchingNextPage,
-    isError: query.isError,
+    isError: isInitialError,
     error: query.error,
     hasMore: query.hasNextPage ?? false,
     loadMore,
