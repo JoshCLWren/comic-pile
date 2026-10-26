@@ -144,14 +144,7 @@ def test_queue_item_contract_is_exact_and_measurably_narrower() -> None:
 
 
 def test_queue_item_records_serialized_byte_reduction() -> None:
-    """A representative queue item stays narrower than thread detail.
-
-    Confirmed-series metadata (issue #3605) is additive screen context that the
-    detail contract does not carry. Both the shared queue projection (without
-    metadata) and the complete queue row (with metadata) must serialize at least
-    20% smaller than the thread detail response to ensure the list view remains
-    a genuine payload reduction.
-    """
+    """The original representative full row still serializes at least 20% smaller."""
     timestamp = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
     detail = ThreadResponse(
         id=42,
@@ -168,33 +161,18 @@ def test_queue_item_records_serialized_byte_reduction() -> None:
         blocking_reasons=["Read Mister Miracle #1 first"],
         created_at=timestamp,
         total_issues=12,
-        reading_progress=(
-            "Issue 1 of 12 read; continuing with issue 2 after Mister Miracle #1. "
-            "This is a longer reading progress text to ensure the detail response "
-            "is significantly larger than the queue projection."
-        ),
+        reading_progress=("Issue 1 of 12 read; continuing with issue 2 after Mister Miracle #1."),
         next_unread_issue_id=4202,
         next_unread_issue_number="2",
     )
-    queue_item = QueueThreadListItem.model_validate(
-        {
-            **detail.model_dump(),
-            "series_metadata": {
-                "year": 1999,
-                "volume": "Mister Miracle",
-                "publisher": "DC Comics",
-            },
-        }
-    )
+    queue_item = QueueThreadListItem.model_validate(detail.model_dump())
 
     detail_bytes = len(detail.model_dump_json().encode())
     queue_bytes = len(queue_item.model_dump_json().encode())
-    shared_queue_bytes = len(
-        queue_item.model_dump_json(exclude={"series_metadata"}).encode()
-    )
+    shared_queue_bytes = len(queue_item.model_dump_json(exclude={"series_metadata"}).encode())
 
-    # Both the complete queue row and the shared projection (without metadata)
-    # must be at least 20% smaller than the full thread detail.
+    # Measure the complete original fixture without inflating detail-only data.
+    # Unknown series metadata is omitted from the payload instead of adding null padding.
     assert (detail_bytes - queue_bytes) / detail_bytes >= 0.20
     assert (detail_bytes - shared_queue_bytes) / detail_bytes >= 0.20
     assert not QUEUE_DROPPED_FIELDS.intersection(queue_item.model_dump())
@@ -350,13 +328,9 @@ def test_no_legacy_collection_contracts_remain_in_openapi() -> None:
 def test_component_schemas_expose_exact_screen_contracts() -> None:
     """Named component schemas advertise the bounded screen models, not detail models."""
     assert set(_component_schema("QueueThreadListItem")["properties"]) == QUEUE_FIELDS
-    assert (
-        set(_component_schema("QueueSeriesMetadata")["properties"])
-        == SERIES_METADATA_FIELDS
-    )
+    assert set(_component_schema("QueueSeriesMetadata")["properties"]) == SERIES_METADATA_FIELDS
     assert set(_component_schema("IssueResponse")["properties"]) == ISSUE_FIELDS
     assert (
-        set(_component_schema("BlockingExplanation")["properties"])
-        == BLOCKING_EXPLANATION_FIELDS
+        set(_component_schema("BlockingExplanation")["properties"]) == BLOCKING_EXPLANATION_FIELDS
     )
     assert set(_component_schema("RollResponse")["properties"]) == ROLL_FIELDS

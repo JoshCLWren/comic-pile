@@ -24,7 +24,6 @@ from app.models.thread import EXCLUDED_STATUS, normalize_format_value, normalize
 from app.repositories import (
     continuity_repository,
     issue_repository,
-    rate_repository,
     reading_session_repository,
     thread_repository,
 )
@@ -511,6 +510,7 @@ async def list_queue_threads(
             raise InvalidRequestError(str(exc)) from exc
 
     position_map: dict[int, int] = {}
+    series_metadata_map: dict[int, list[dict[str, object]]] = {}
     threads = await thread_repository.fetch_queue_page(
         db,
         user_id,
@@ -519,6 +519,7 @@ async def list_queue_threads(
         cursor=cursor,
         limit=page_size + 1,
         position_map=position_map,
+        series_metadata_map=series_metadata_map,
         **eligibility_args,
     )
 
@@ -540,13 +541,6 @@ async def list_queue_threads(
     # tags without a per-row query.
     tags_map = await TagInheritanceService(db).get_threads_direct_tags(
         user_id, [tr.id for tr in thread_responses]
-    )
-
-    # One batched confirmed-series read for the whole page so Queue rows show
-    # verified year/volume/publisher without a per-thread provider lookup
-    # (issue #3605). Threads with no confirmed series identity resolve to None.
-    series_metadata_map = await rate_repository.fetch_confirmed_series_identity_metadata(
-        db, [tr.id for tr in thread_responses]
     )
 
     queue_items = [
@@ -623,6 +617,7 @@ async def list_completed_threads(
         except ValueError as exc:
             raise InvalidRequestError(str(exc)) from exc
 
+    series_metadata_map: dict[int, list[dict[str, object]]] = {}
     threads = await thread_repository.fetch_completed_page(
         db,
         user_id,
@@ -630,6 +625,7 @@ async def list_completed_threads(
         sort=effective_sort,
         cursor=cursor,
         limit=page_size + 1,
+        series_metadata_map=series_metadata_map,
     )
 
     has_more = len(threads) > page_size
@@ -648,13 +644,6 @@ async def list_completed_threads(
     # tags without a per-row query.
     tags_map = await TagInheritanceService(db).get_threads_direct_tags(
         user_id, [tr.id for tr in thread_responses]
-    )
-
-    # One batched confirmed-series read for the whole page so Queue rows show
-    # verified year/volume/publisher without a per-thread provider lookup
-    # (issue #3605). Threads with no confirmed series identity resolve to None.
-    series_metadata_map = await rate_repository.fetch_confirmed_series_identity_metadata(
-        db, [tr.id for tr in thread_responses]
     )
 
     queue_items = [
@@ -727,6 +716,7 @@ async def list_excluded_threads(
         except ValueError as exc:
             raise InvalidRequestError(str(exc)) from exc
 
+    series_metadata_map: dict[int, list[dict[str, object]]] = {}
     threads = await thread_repository.fetch_excluded_page(
         db,
         user_id,
@@ -734,6 +724,7 @@ async def list_excluded_threads(
         sort=effective_sort,
         cursor=cursor,
         limit=page_size + 1,
+        series_metadata_map=series_metadata_map,
     )
 
     has_more = len(threads) > page_size
@@ -745,13 +736,6 @@ async def list_excluded_threads(
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
     tags_map = await TagInheritanceService(db).get_threads_direct_tags(
         user_id, [tr.id for tr in thread_responses]
-    )
-
-    # One batched confirmed-series read for the whole page so Queue rows show
-    # verified year/volume/publisher without a per-thread provider lookup
-    # (issue #3605). Threads with no confirmed series identity resolve to None.
-    series_metadata_map = await rate_repository.fetch_confirmed_series_identity_metadata(
-        db, [tr.id for tr in thread_responses]
     )
 
     queue_items = [
@@ -1019,7 +1003,9 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
     await thread_repository.renormalize_queue_positions(db, user_id)
     thread = await _require_owned_thread(db, user_id, thread_id)
 
-    await reading_session_repository.detach_pending_thread_references_from_reading_sessions(db, thread_id)
+    await reading_session_repository.detach_pending_thread_references_from_reading_sessions(
+        db, thread_id
+    )
 
     # Collect issue ids that will disappear with the thread for plan cleanup.
     deleted_issue_ids = await issue_repository.issue_ids_for_thread(db, thread_id)
@@ -1047,7 +1033,7 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
                 try:
                     ntype = str(node.get("node_type", ""))
                     ref = int(node.get("ref_id", 0))
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     pruned.append(node)
                     continue
                 if ntype == "thread" and ref == thread_id:
@@ -1192,7 +1178,9 @@ async def restore_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
 
     if thread.uses_issue_tracking():
         tracked_issues = await issue_repository.get_issues_by_thread(db, thread.id)
-        issues_remaining = apply_thread_issue_tracking_state(thread, tracked_issues).issues_remaining
+        issues_remaining = apply_thread_issue_tracking_state(
+            thread, tracked_issues
+        ).issues_remaining
     else:
         issues_remaining = thread.issues_remaining
 
@@ -1549,9 +1537,7 @@ async def migrate_thread_to_issues_simple(
     if thread.total_issues is not None:
         raise InvalidRequestError(f"Thread {thread_id} already uses issue tracking")
 
-    current_issue = await issue_repository.find_in_thread_by_number(
-        db, thread_id, issue_number
-    )
+    current_issue = await issue_repository.find_in_thread_by_number(db, thread_id, issue_number)
 
     if not current_issue:
         try:
@@ -1583,8 +1569,7 @@ async def migrate_thread_to_issues_simple(
 
             if not current_issue:
                 raise InvalidRequestError(
-                    f"Failed to create issue '{issue_number}'."
-                    " Please add it via Edit Thread first."
+                    f"Failed to create issue '{issue_number}'. Please add it via Edit Thread first."
                 )
         except ValueError:
             raise InvalidRequestError(
@@ -1659,9 +1644,7 @@ async def set_current_issue(
 
     target_number = issue_number.strip()
 
-    target_issue = await issue_repository.find_in_thread_by_number(
-        db, thread_id, target_number
-    )
+    target_issue = await issue_repository.find_in_thread_by_number(db, thread_id, target_number)
 
     if not target_issue:
         raise NotFoundError(f"Issue '{target_number}' not found in thread {thread_id}")
@@ -1728,7 +1711,3 @@ async def set_current_issue(
         total_issues=total_issues,
         reading_progress=reading_progress,
     )
-
-
-
-

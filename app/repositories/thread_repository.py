@@ -9,15 +9,26 @@ from typing import NotRequired, TypedDict
 
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import aggregate_order_by
+from sqlalchemy.sql.selectable import ScalarSelect
 from sqlalchemy.orm import aliased
 
 from app.services.reading_eligibility_service import ReadingEligibilitySnapshot
 from app.repositories.reading_eligibility_queries import candidate_predicate
 
 from app.models import Issue, Thread
-from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.models.external_identity import (
+    ExternalIdentity,
+    IssueExternalIdentityMapping,
+    ThreadExternalSeriesMapping,
+)
 from app.models.thread import EXCLUDED_STATUS
-from app.services.queue_pagination import QueueCursor, QueueSort, build_cursor_filter, build_sort_order
+from app.services.queue_pagination import (
+    QueueCursor,
+    QueueSort,
+    build_cursor_filter,
+    build_sort_order,
+)
 
 
 async def get_thread(db: AsyncSession, thread_id: int) -> Thread | None:
@@ -43,9 +54,7 @@ async def lock_thread(db: AsyncSession, thread_id: int) -> Thread | None:
     Returns:
         The locked thread, or None when it does not exist.
     """
-    result = await db.execute(
-        select(Thread).where(Thread.id == thread_id).with_for_update()
-    )
+    result = await db.execute(select(Thread).where(Thread.id == thread_id).with_for_update())
     return result.scalar_one_or_none()
 
 
@@ -269,6 +278,35 @@ async def count_active_threads(db: AsyncSession, user_id: int) -> int:
     return int(result.scalar_one())
 
 
+def _queue_series_documents() -> ScalarSelect[object]:
+    """Project confirmed series documents in the existing page read."""
+    return (
+        select(
+            func.json_agg(
+                aggregate_order_by(ExternalIdentity.metadata_json, ThreadExternalSeriesMapping.id)
+            )
+        )
+        .select_from(ThreadExternalSeriesMapping)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+        )
+        .where(ThreadExternalSeriesMapping.thread_id == Thread.id)
+        .where(ThreadExternalSeriesMapping.status == "confirmed")
+        .correlate(Thread)
+        .scalar_subquery()
+    )
+
+
+def _series_documents(raw: object) -> list[dict[str, object]]:
+    """Normalize the JSON aggregate without hydrating ORM identities."""
+    if not isinstance(raw, list):
+        return []
+    return [
+        {str(key): value for key, value in item.items()} for item in raw if isinstance(item, dict)
+    ]
+
+
 async def fetch_queue_page(
     db: AsyncSession,
     user_id: int,
@@ -277,6 +315,7 @@ async def fetch_queue_page(
     sort: QueueSort,
     cursor: QueueCursor | None,
     limit: int,
+    series_metadata_map: dict[int, list[dict[str, object]]] | None = None,
     eligibility: ReadingEligibilitySnapshot | None = None,
     position_map: dict[int, int] | None = None,
 ) -> list[Thread]:
@@ -289,6 +328,7 @@ async def fetch_queue_page(
         sort: Validated sort order key with deterministic tie-breakers.
         cursor: Decoded continuation cursor, or None for the first page.
         limit: Maximum number of threads to return.
+        series_metadata_map: Optional output map of confirmed series documents.
 
         eligibility: Shared live result, or None for legacy execution.
 
@@ -300,14 +340,17 @@ async def fetch_queue_page(
     ranks = (
         select(
             Thread.id.label("thread_id"),
-            func.row_number().over(order_by=build_sort_order("position", eligibility)).label("position"),
+            func.row_number()
+            .over(order_by=build_sort_order("position", eligibility))
+            .label("position"),
         )
         .where(Thread.user_id == user_id, Thread.status == "active")
         .subquery()
     )
     query = (
-        select(Thread, func.coalesce(ranks.c.position, 0))
-        .outerjoin(ranks, ranks.c.thread_id == Thread.id)
+        select(Thread, func.coalesce(ranks.c.position, 0), _queue_series_documents()).outerjoin(
+            ranks, ranks.c.thread_id == Thread.id
+        )
     ).where(
         Thread.user_id == user_id,
         Thread.status == "active",
@@ -328,8 +371,12 @@ async def fetch_queue_page(
     result = await db.execute(query)
     rows = result.all()
     if position_map is not None:
-        position_map.update({thread.id: position for thread, position in rows})
-    return [thread for thread, _position in rows]
+        position_map.update({thread.id: position for thread, position, _metadata in rows})
+    if series_metadata_map is not None:
+        series_metadata_map.update(
+            {thread.id: _series_documents(metadata) for thread, _position, metadata in rows}
+        )
+    return [thread for thread, _position, _metadata in rows]
 
 
 async def fetch_completed_page(
@@ -340,6 +387,7 @@ async def fetch_completed_page(
     sort: QueueSort,
     cursor: QueueCursor | None,
     limit: int,
+    series_metadata_map: dict[int, list[dict[str, object]]] | None = None,
 ) -> list[Thread]:
     """Fetch one deterministic page of a user's COMPLETED threads for the finished series.
 
@@ -350,6 +398,7 @@ async def fetch_completed_page(
         sort: Validated sort order key with deterministic tie-breakers.
         cursor: Decoded continuation cursor, or None for the first page.
         limit: Maximum number of threads to return.
+        series_metadata_map: Optional output map of confirmed series documents.
 
     Returns:
         Completed threads in canonical page order, at most ``limit`` rows.
@@ -360,9 +409,8 @@ async def fetch_completed_page(
         :func:`build_sort_order` helper keeps the ORDER BY columns and the
         keyset cursor filter on the same contract for every sort.
     """
-    query = select(Thread).where(
-        Thread.user_id == user_id,
-        Thread.status == "completed"
+    query = select(Thread, _queue_series_documents()).where(
+        Thread.user_id == user_id, Thread.status == "completed"
     )
 
     if search:
@@ -379,7 +427,12 @@ async def fetch_completed_page(
 
     query = query.limit(limit)
     result = await db.execute(query)
-    return list(result.scalars().all())
+    rows = result.all()
+    if series_metadata_map is not None:
+        series_metadata_map.update(
+            {thread.id: _series_documents(metadata) for thread, metadata in rows}
+        )
+    return [thread for thread, _metadata in rows]
 
 
 async def fetch_excluded_page(
@@ -390,6 +443,7 @@ async def fetch_excluded_page(
     sort: QueueSort,
     cursor: QueueCursor | None,
     limit: int,
+    series_metadata_map: dict[int, list[dict[str, object]]] | None = None,
 ) -> list[Thread]:
     """Fetch one deterministic page of a user's EXCLUDED threads.
 
@@ -400,11 +454,12 @@ async def fetch_excluded_page(
         sort: Validated sort order key with deterministic tie-breakers.
         cursor: Decoded continuation cursor, or None for the first page.
         limit: Maximum number of threads to return.
+        series_metadata_map: Optional output map of confirmed series documents.
 
     Returns:
         Excluded threads in canonical page order, at most ``limit`` rows.
     """
-    query = select(Thread).where(
+    query = select(Thread, _queue_series_documents()).where(
         Thread.user_id == user_id,
         Thread.status == EXCLUDED_STATUS,
     )
@@ -420,7 +475,12 @@ async def fetch_excluded_page(
 
     query = query.limit(limit)
     result = await db.execute(query)
-    return list(result.scalars().all())
+    rows = result.all()
+    if series_metadata_map is not None:
+        series_metadata_map.update(
+            {thread.id: _series_documents(metadata) for thread, metadata in rows}
+        )
+    return [thread for thread, _metadata in rows]
 
 
 async def fetch_excluded_thread_ids(db: AsyncSession, user_id: int) -> list[int]:
@@ -806,15 +866,20 @@ async def fetch_comicvine_mapping_health(
             Issue.id.label("issue_id"),
             Issue.thread_id.label("thread_id"),
             func.count(ExternalIdentity.id).label("confirmed_count"),
-            func.count(ExternalIdentity.id).filter(
+            func.count(ExternalIdentity.id)
+            .filter(
                 or_(
-                    func.coalesce(ExternalIdentity.metadata_json["issue_number"].as_string(), "") == "",
+                    func.coalesce(ExternalIdentity.metadata_json["issue_number"].as_string(), "")
+                    == "",
                     func.coalesce(
                         ExternalIdentity.metadata_json["volume"]["name"].as_string(),
-                        ExternalIdentity.metadata_json["volume_name"].as_string(), "",
-                    ) == "",
+                        ExternalIdentity.metadata_json["volume_name"].as_string(),
+                        "",
+                    )
+                    == "",
                 )
-            ).label("metadata_missing_count"),
+            )
+            .label("metadata_missing_count"),
         )
         .select_from(Issue)
         .where(Issue.thread_id.in_(select(tracked_threads.c.id)))
@@ -828,8 +893,7 @@ async def fetch_comicvine_mapping_health(
         .outerjoin(
             ExternalIdentity,
             and_(
-                ExternalIdentity.id
-                == IssueExternalIdentityMapping.external_identity_id,
+                ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
                 ExternalIdentity.provider == "comicvine",
             ),
         )
@@ -850,10 +914,9 @@ async def fetch_comicvine_mapping_health(
         func.count()
         .filter(issue_mapping_state.c.confirmed_count == 0)
         .label("needs_mapping_count"),
+        func.count().filter(issue_mapping_state.c.confirmed_count > 1).label("needs_review_count"),
         func.count()
-        .filter(issue_mapping_state.c.confirmed_count > 1)
-        .label("needs_review_count"),
-        func.count().filter(issue_mapping_state.c.metadata_missing_count > 0)
+        .filter(issue_mapping_state.c.metadata_missing_count > 0)
         .label("metadata_missing_count"),
         (func.count(issue_mapping_state.c.issue_id) > 0).label("has_issues"),
     ).group_by(issue_mapping_state.c.thread_id)
@@ -900,6 +963,9 @@ async def owned_title_exists(db: AsyncSession, user_id: int, title: str) -> bool
     Returns:
         Whether any thread owned by this reader uses the title.
     """
-    return await db.scalar(
-        select(Thread.id).where(Thread.user_id == user_id, Thread.title == title).limit(1)
-    ) is not None
+    return (
+        await db.scalar(
+            select(Thread.id).where(Thread.user_id == user_id, Thread.title == title).limit(1)
+        )
+        is not None
+    )

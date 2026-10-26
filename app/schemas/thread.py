@@ -224,10 +224,18 @@ class ComicVineMappingHealth(BaseModel):
 
     status: ComicVineMappingStatus
     tracked_issue_count: int = Field(..., ge=0, description="Total issues in this thread's scope")
-    confirmed_issue_count: int = Field(..., ge=0, description="Issues with confirmed ComicVine mappings")
-    needs_mapping_count: int = Field(..., ge=0, description="Issues with no confirmed mapping (unresolved/candidate)")
-    needs_review_count: int = Field(..., ge=0, description="Issues with conflicting/ambiguous mappings")
-    metadata_missing_count: int = Field(default=0, ge=0, description="Confirmed mappings without usable issue and series metadata")
+    confirmed_issue_count: int = Field(
+        ..., ge=0, description="Issues with confirmed ComicVine mappings"
+    )
+    needs_mapping_count: int = Field(
+        ..., ge=0, description="Issues with no confirmed mapping (unresolved/candidate)"
+    )
+    needs_review_count: int = Field(
+        ..., ge=0, description="Issues with conflicting/ambiguous mappings"
+    )
+    metadata_missing_count: int = Field(
+        default=0, ge=0, description="Confirmed mappings without usable issue and series metadata"
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -279,6 +287,7 @@ class QueueThreadListItem(BaseModel):
     tags: list[TagResponse] = Field(default_factory=list)
     series_metadata: QueueSeriesMetadata | None = Field(
         None,
+        exclude_if=lambda value: value is None,
         description=(
             "Confirmed provider series metadata for this thread. ``None`` means the "
             "reader-owned thread has no confirmed series identity (unmapped series)."
