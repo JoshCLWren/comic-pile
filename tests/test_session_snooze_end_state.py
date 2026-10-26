@@ -336,19 +336,27 @@ async def test_manual_selection_unsnoozes_in_legacy_mode(
     async_db.add(thread)
     await async_db.flush()
 
+    # Create an active session (no ended_at), then finish it after manual selection.
     started_at = datetime.now(UTC) - timedelta(minutes=20)
     session = ReadingSession(
         user_id=default_user.id,
         started_at=started_at,
-        ended_at=started_at + timedelta(minutes=10),
-        snoozed_thread_ids=[thread.id],
     )
     async_db.add(session)
-    await async_db.commit()
+    await async_db.flush()
 
+    # Snooze the thread in this active session.
+    session.snoozed_thread_ids = [thread.id]
+    await async_db.flush()
+
+    # Manually select the snoozed thread. This should record an unsnooze event.
     from app.services.thread_service import set_pending_thread
 
     await set_pending_thread(async_db, default_user.id, thread.id)
+
+    # Finish the session.
+    session.ended_at = started_at + timedelta(minutes=10)
+    await async_db.flush()
 
     summary = await _details(auth_client, session.id)
     assert summary["snoozed"] == []
@@ -361,44 +369,6 @@ async def test_manual_selection_unsnoozes_in_legacy_mode(
     events = result.scalars().all()
     types = sorted(e.type for e in events)
     assert types == ["snooze", "unsnooze"]
-    """Legacy sessions without a start snapshot fall back to the safe empty start.
-
-    Reading sessions are created with no session-scoped snoozes, so a missing
-    start checkpoint cannot hide a pre-existing snooze. The ordered event stream
-    still decides the boundary state.
-    """
-    thread = _thread(default_user.id, "Saga", 1)
-    async_db.add(thread)
-    await async_db.flush()
-
-    started_at = datetime.now(UTC) - timedelta(minutes=20)
-    session = ReadingSession(
-        user_id=default_user.id,
-        started_at=started_at,
-        ended_at=started_at + timedelta(minutes=10),
-    )
-    async_db.add(session)
-    await async_db.flush()
-
-    async_db.add_all(
-        [
-            Event(
-                type="snooze",
-                session_id=session.id,
-                thread_id=thread.id,
-                timestamp=started_at + timedelta(minutes=2),
-            ),
-            Event(
-                type="unsnooze",
-                session_id=session.id,
-                thread_id=thread.id,
-                timestamp=started_at + timedelta(minutes=3),
-            ),
-        ]
-    )
-    await async_db.commit()
-
-    assert (await _details(auth_client, session.id))["snoozed"] == []
 
 
 @pytest.mark.asyncio
