@@ -12853,6 +12853,12 @@ export interface components {
          */
         RateRequest: {
             /**
+             * Direct
+             * @description Set by a Thread issue row rating (issue #3581). Roll requests keep the session-driven path even though they also send ``thread_id``.
+             * @default false
+             */
+            direct: boolean;
+            /**
              * Finish Session
              * @default false
              */
@@ -12864,6 +12870,11 @@ export interface components {
             issue_number?: string | null;
             /** Rating */
             rating: number;
+            /**
+             * Thread Id
+             * @description Explicit thread being rated (issue #3581). Required when ``direct`` is true; the rating is then applied to that owned thread instead of the pending Roll target.
+             */
+            thread_id?: number | null;
         };
         /**
          * RateResponse

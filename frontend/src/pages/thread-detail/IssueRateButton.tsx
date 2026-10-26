@@ -17,6 +17,17 @@ interface IssueRateButtonProps {
 
 const RATING_VALUES = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
 
+/**
+ * Shared treatment for the Rate toggle and its choice buttons. Ratings are
+ * personal context, so the controls use the personal-accent theme role with
+ * ordinary button typography; the visual grammar reserves the uppercase
+ * letter-spaced treatment for eyebrow labels, not action text.
+ */
+const rateControlClass = [
+  'text-xs font-semibold text-[var(--theme-personal-accent)]',
+  'transition-opacity hover:opacity-80 disabled:opacity-50',
+].join(' ')
+
 /** Rate an issue directly from its Thread row without launching Roll (issue #3581). */
 export function IssueRateButton({
   issue,
@@ -67,13 +78,17 @@ export function IssueRateButton({
 
   return (
     <div className="flex items-center gap-2">
-      {error && <span className="text-xs text-red-400">{error}</span>}
+      {error && (
+        <span role="alert" className="text-xs text-[var(--theme-error)]">
+          {error}
+        </span>
+      )}
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         disabled={mutation.isPending}
         aria-expanded={open}
-        className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 disabled:opacity-50"
+        className={rateControlClass}
       >
         {savedRating != null ? `Rated ${savedRating}` : 'Rate'}
       </button>
@@ -86,7 +101,7 @@ export function IssueRateButton({
               onClick={() => mutation.mutate(value)}
               disabled={mutation.isPending}
               aria-label={`Rate issue #${issue.issue_number} ${value} out of 5`}
-              className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 disabled:opacity-50"
+              className={rateControlClass}
             >
               {value}
             </button>
