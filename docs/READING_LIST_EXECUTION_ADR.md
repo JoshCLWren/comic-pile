@@ -7,6 +7,8 @@
 **Design basis:** Independent Opus architecture review, revised 2026-10-13, and production read-only evidence.  
 **Implementation coordination:** [#2366](https://github.com/JoshCLWren/comic-pile/issues/2366). **This ADR is the authority for replacement work; do not extend the retiring Reading Plan compiler.**
 
+**Serving-path review (2026-10-25):** [Roll eligibility serving options](ROLL_ELIGIBILITY_SERVING_OPTIONS.md) compares ways to serve the eligible Issue set. It does not change this decision. A stored frontier stays non-authoritative until that review's measurement gates pass and this ADR is amended.
+
 ## Context and decision
 
 ComicPile duplicates reading intent across Custom CBLs, Reading Plans, plan JSON, plan memberships, ContinuityRules, dependency rows and cached Thread flags. Import and plan-save paths compile lossy copies, and obsolete enforced edges can survive later edits. Roll can consequently be blocked by rules no longer visible in the edited list.
