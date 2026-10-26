@@ -74,18 +74,19 @@ def project_still_snoozed_thread_ids(
 ) -> list[int]:
     """Project the snooze set in force at a historical session boundary.
 
-    The projection starts from recorded session state and replays the session's
-    own ordered snooze/unsnooze actions. It never reads today's Queue, later
-    sessions, or another reader's state, and it never mutates an event.
+    This is the reconstruction fallback for sessions whose snooze column was
+    cleared when the session finished. The projection starts from the recorded
+    session-start state and replays the session's own ordered snooze/unsnooze
+    actions. It never reads today's Queue, later sessions, or another reader's
+    state, and it never mutates an event.
 
-    Replaying over a persisted end state is safe for a toggle set: the last
-    recorded action for a series determines its membership, and series with no
-    recorded action keep the membership they already had. That lets the same
-    helper handle both an authoritative live/end snapshot and a recorded
-    session-start state.
+    The helper must not be pointed at a saved end state. Legacy rows can contain
+    a snooze action whose matching clear was never recorded as an unsnooze
+    event, so replaying over the saved state would resurrect series the reader
+    had already cleared.
 
     Args:
-        start_thread_ids: Series snoozed at the projection's starting state.
+        start_thread_ids: Series snoozed at the session start.
         events: The session's events in ``(timestamp, id)`` order.
 
     Returns:
@@ -153,11 +154,13 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     skipped_titles = set()
     completed_titles = set()
 
-    # The persisted snooze column is the authoritative live/end state whenever
-    # it was not cleared. Sessions finished through the rate flow clear it, so
-    # those rebuild from the recorded start state instead. Replaying the
-    # session's ordered actions over either base resolves the boundary state
-    # without reading today's Queue.
+    # The persisted snooze column is the authoritative boundary state whenever
+    # it still exists: session snooze and unsnooze actions update the column and
+    # the event stream in the same transaction. Sessions finished through the
+    # rate flow clear it, so only those rebuild from recorded start state plus
+    # the session's ordered actions. Legacy rows may carry a snooze action whose
+    # clear was never recorded as an unsnooze event, so the saved state must win
+    # instead of being replayed over.
     reading_session = await get_reading_session(db, session_id)
     # Read model attributes before later awaits so a future expiry cannot
     # resurrect them through lazy loads.
@@ -166,21 +169,19 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
         reading_session.snoozed_thread_ids if reading_session is not None else None
     )
     if session_user_id is not None and recorded_snoozed_ids is not None:
-        base_snoozed_ids: list[int] = [
+        still_snoozed_ids = sorted(
             thread_id
             for thread_id in recorded_snoozed_ids
             if isinstance(thread_id, int) and not isinstance(thread_id, bool)
-        ]
+        )
     else:
         start_snapshot = (
             await first_start_snapshot(db, session_id) if session_user_id is not None else None
         )
-        base_snoozed_ids = _recorded_start_snoozes(start_snapshot)
-
-    still_snoozed_ids = project_still_snoozed_thread_ids(
-        start_thread_ids=base_snoozed_ids,
-        events=events,
-    )
+        still_snoozed_ids = project_still_snoozed_thread_ids(
+            start_thread_ids=_recorded_start_snoozes(start_snapshot),
+            events=events,
+        )
 
     # Still-snoozed series usually have no event naming them on the boundary,
     # so their IDs must join the event-derived set before titles are resolved.
