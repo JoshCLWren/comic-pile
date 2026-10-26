@@ -14,3 +14,11 @@ class RateRequest(BaseModel):
         max_length=50,
         description="Issue number just read, e.g. '5' or 'Annual 1' (triggers migration if provided)",
     )
+    thread_id: int | None = Field(
+        default=None,
+        description=(
+            "Explicit thread being rated (issue #3581). When set, the rating "
+            "is applied directly to that owned thread instead of the pending "
+            "Roll session target."
+        ),
+    )
