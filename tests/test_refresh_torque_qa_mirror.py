@@ -49,9 +49,12 @@ def mock_engine() -> tuple[MagicMock, AsyncMock]:
     """Provide a connection that captures operations without touching a database."""
     engine = MagicMock()
     connection = AsyncMock()
+    engine.dispose = AsyncMock()
     engine.connect.return_value.__aenter__.return_value = connection
     engine.begin.return_value.__aenter__.return_value = connection
-    connection.execute.return_value.mappings.return_value.one.return_value = {
+    result = MagicMock()
+    connection.execute = AsyncMock(return_value=result)
+    result.mappings.return_value.one.return_value = {
         "source_threads": 904,
         "qa_threads": 904,
         "source_issues": 7736,
