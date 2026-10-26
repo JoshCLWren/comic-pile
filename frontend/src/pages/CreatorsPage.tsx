@@ -191,11 +191,16 @@ export default function CreatorsPage() {
     const keysParam = searchParams.get('keys')
     if (keysParam) {
       const keys = keysParam.split(',').map((k) => k.trim()).filter(Boolean)
-      // Validate keys against actual creators in the list
+      // Validate keys using parseCreatorKey and enforce maximum selection
       const validKeys = new Set<string>()
-      // We'll validate after the list loads - for now store all keys
-      // The checkbox rendering will handle invalid keys by not finding them in the list
-      keys.forEach((key) => validKeys.add(key))
+      for (const key of keys) {
+        if (parseCreatorKey(key) !== null) {
+          validKeys.add(key)
+          if (validKeys.size >= MAX_COMPARISON_SELECTION) {
+            break
+          }
+        }
+      }
       setSelectedKeys(validKeys)
     }
   }, [searchParams])
