@@ -248,6 +248,49 @@ describe('TagEditor (issue #3032)', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Removed “Private 1”.')
   })
 
+  it('says a removed direct assignment remains inherited (issue #4182)', async () => {
+    const user = userEvent.setup()
+    // A private tag so the non-admin test viewer is offered the remove action.
+    const tag: Tag = {
+      ...makeTag(12),
+      name: 'QA Plan Tag',
+      normalized_name: 'qa plan tag',
+    }
+    mockedTagsApi.effectiveForIssue.mockResolvedValue({
+      target_type: 'Issue',
+      target_id: 11,
+      direct_tags: [tag],
+      // The server reports one entry carrying both sources: the issue's own
+      // direct assignment and the reading plan that keeps supplying it.
+      effective_tags: [
+        {
+          tag,
+          direct: true,
+          sources: [
+            { target_type: 'Issue', target_id: 11, display_name: '#11' },
+            {
+              target_type: 'ContinuityPlan',
+              target_id: 4,
+              display_name: 'QA Boundary Test',
+            },
+          ],
+        },
+      ],
+    })
+    mockedTagsApi.unassign.mockResolvedValue(assignment(tag.id))
+
+    renderEditor()
+
+    await user.click(await screen.findByRole('button', { name: `Remove tag ${tag.name}` }))
+    expect(mockedTagsApi.unassign).toHaveBeenCalledWith(tag.id, {
+      target_type: 'Issue',
+      target_id: 11,
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Removed direct “QA Plan Tag”. It remains inherited from QA Boundary Test.',
+    )
+  })
+
   it('explains the refusal when removing a tag fails', async () => {
     const user = userEvent.setup()
     mockedTagsApi.effectiveForIssue.mockResolvedValue(makeEffective())
@@ -766,6 +809,28 @@ describe('TagEditor (issue #3032)', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Used existing tag “Physical”.',
     )
+  })
+
+  it('warns about an exact duplicate that differs only by internal spacing (issue #4182)', async () => {
+    const user = userEvent.setup()
+    const spaced = {
+      ...makeTag(6),
+      name: 'QA Tag 001 Teal',
+      normalized_name: 'qa tag 001 teal',
+    }
+    mockedTagsApi.list.mockResolvedValue({ tags: [spaced] })
+
+    renderEditor()
+
+    // Two spaces between words is the production repro: same normalized key.
+    await user.type(screen.getByLabelText('New tag name'), 'QA Tag  001 Teal')
+
+    const warning = await screen.findByRole('alert')
+    expect(warning).toHaveTextContent(
+      'A tag named “QA Tag 001 Teal” already exists. Use it instead of creating a duplicate.',
+    )
+    expect(screen.queryByRole('button', { name: 'Create and add' })).toBeNull()
+    expect(mockedTagsApi.create).not.toHaveBeenCalled()
   })
 
   it('blocks creation and reuses an exact global-name duplicate (issue #3423)', async () => {
@@ -1322,6 +1387,32 @@ describe('BulkTagToolbar (issue #3032)', () => {
       </MemoryRouter>,
     )
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('labels one selected issue with singular toolbar wording (issue #4182)', () => {
+    render(
+      <MemoryRouter>
+        <BulkTagToolbar selectedIds={[1]} onClearSelection={vi.fn()} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('toolbar')).toHaveAttribute(
+      'aria-label',
+      'Bulk tag editing for 1 selected issue',
+    )
+  })
+
+  it('labels several selected issues with plural toolbar wording', () => {
+    render(
+      <MemoryRouter>
+        <BulkTagToolbar selectedIds={[1, 2, 3]} onClearSelection={vi.fn()} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('toolbar')).toHaveAttribute(
+      'aria-label',
+      'Bulk tag editing for 3 selected issues',
+    )
   })
 
   it('asks for a tag before running a bulk operation', async () => {

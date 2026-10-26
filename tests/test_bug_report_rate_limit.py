@@ -373,12 +373,45 @@ def _migration_path() -> Path:
     )
 
 
+def _is_on_head_path(script: ScriptDirectory, revision_id: str, head: str) -> bool:
+    """Return whether ``revision_id`` is ``head`` or one of its ancestors.
+
+    Args:
+        script: Loaded revision map.
+        revision_id: Revision that must remain on the chain.
+        head: Current single Alembic head.
+
+    Returns:
+        ``True`` when the head's history reaches ``revision_id``.
+    """
+    pending: list[str | None] = [head]
+    seen: set[str] = set()
+    while pending:
+        current = pending.pop()
+        if current is None or current in seen:
+            continue
+        if current == revision_id:
+            return True
+        seen.add(current)
+        revision = script.get_revision(current)
+        if revision is None:
+            continue
+        down = revision.down_revision
+        if isinstance(down, str):
+            pending.append(down)
+        elif down:
+            pending.extend(down)
+    return False
+
+
 def test_rate_limit_migration_chains_onto_main_head() -> None:
     """The submission-limit migration extends the base head without forking it.
 
     The parent must resolve on the checkout under test. A conditional
     single-head assertion would let the test pass while the revision graph is
-    dangling, which is the failure mode this test exists to catch.
+    dangling, which is the failure mode this test exists to catch. Later
+    revisions may extend the same chain above this one, so the durable
+    assertions are a single head and this revision remaining on its path.
     """
     root = Path(__file__).parents[1]
     script = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
@@ -386,7 +419,9 @@ def test_rate_limit_migration_chains_onto_main_head() -> None:
     assert revision is not None
     assert revision.down_revision == MIGRATION_PARENT
     assert script.get_revision(MIGRATION_PARENT) is not None
-    assert script.get_heads() == [MIGRATION_ID]
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert _is_on_head_path(script, MIGRATION_ID, heads[0])
 
 
 @pytest.mark.asyncio

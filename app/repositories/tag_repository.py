@@ -49,8 +49,9 @@ def normalize_tag_name(name: str) -> str:
     """Normalize a tag name the same way ``tags.normalized_name`` is stored.
 
     Display casing is preserved in ``tags.name``; this helper produces the
-    trimmed, lowercased form used for matching and uniqueness. Normalizing at
-    the matching boundary keeps lookups case- and whitespace-insensitive no
+    trimmed, whitespace-collapsed, lowercased form used for matching and
+    uniqueness, so ``QA  Tag`` and ``QA Tag`` share one stored key. Normalizing
+    at the matching boundary keeps lookups case- and whitespace-insensitive no
     matter what a caller passes.
 
     Args:
@@ -59,7 +60,7 @@ def normalize_tag_name(name: str) -> str:
     Returns:
         Normalized name.
     """
-    return name.strip().lower()
+    return " ".join(name.split()).lower()
 
 
 async def get_tag_by_id(db: AsyncSession, tag_id: int) -> Tag | None:

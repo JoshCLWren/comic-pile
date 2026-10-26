@@ -274,6 +274,36 @@ class TestModelNormalization:
         assert result is not None
         assert result.name == "Joker"
 
+    async def test_internal_whitespace_is_collapsed_on_matching(
+        self, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Repeated internal whitespace still matches the stored single-space key.
+
+        Issue #4182: the production duplicate warning handled case variants but
+        not a name typed with two spaces between words, so a visually identical
+        duplicate was created. Normalization must collapse internal runs before
+        the unique-key comparison.
+        """
+        await tag_repository.create_tag(
+            async_db,
+            Tag(
+                name="QA Tag 001 Teal",
+                normalized_name="qa tag 001 teal",
+                scope="global",
+                owner_user_id=None,
+                color=validate_tag_color("teal")[1],
+            ),
+        )
+        result = await tag_repository.get_tag_by_name(
+            async_db, "QA Tag  001\tTeal", "global"
+        )
+        assert result is not None
+        assert result.name == "QA Tag 001 Teal"
+        assert (
+            tag_repository.normalize_tag_name("  QA   Tag\t001  Teal  ")
+            == "qa tag 001 teal"
+        )
+
 
 class TestGlobalAndPrivateScoping:
     """Tests for global vs user-private tag scoping."""
@@ -373,6 +403,35 @@ class TestDuplicatePrevention:
             )
         )
         assert count.scalar_one() == 1
+
+    async def test_internal_whitespace_variant_redirects_to_global(
+        self, admin_user: User, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """A global tag is reused when only internal spacing differs (#4182)."""
+        service = TagService(async_db)
+        global_tag = await service.create_tag(
+            admin_user, "QA Tag 001 Teal", color="teal", scope="global"
+        )
+        result = await service.create_tag(
+            non_admin_user, "QA Tag  001 Teal", color="red"
+        )
+        assert result.redirected_to_global is True
+        assert result.tag.id == global_tag.tag.id
+        count = await async_db.execute(
+            select(func.count())
+            .select_from(Tag)
+            .where(Tag.normalized_name == "qa tag 001 teal")
+        )
+        assert count.scalar_one() == 1
+
+    async def test_internal_whitespace_variant_private_duplicate_is_refused(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """One owner cannot create a private tag differing only by spacing (#4182)."""
+        service = TagService(async_db)
+        await service.create_tag(non_admin_user, "QA Tag 001 Teal", color="teal")
+        with pytest.raises(ConflictError):
+            await service.create_tag(non_admin_user, "QA Tag  001 Teal", color="red")
 
     async def test_partial_near_name_allows_private_creation(
         self, admin_user: User, non_admin_user: User, async_db: AsyncSession

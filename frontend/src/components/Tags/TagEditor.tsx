@@ -44,6 +44,17 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Normalize a typed tag name the same way the API's stored `normalized_name`
+ * key does (issue #4182): trim the ends, collapse internal whitespace runs,
+ * and lowercase. The duplicate warning, the draft-identity guard, and the
+ * create-continuation check all compare through this one helper so a name
+ * typed with different internal spacing still means the same tag.
+ */
+function normalizeTagName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+/**
  * Human-readable source list for inherited-tag explanations (issue #3426):
  * "The Ultimates", or "The Ultimates and Mignolaverse".
  */
@@ -88,10 +99,12 @@ export function TagEditor({
   // Usable-tag lookup for the name being typed so an exact normalized match
   // blocks creation and offers reuse instead of a duplicate (issue #3423).
   // An empty typed name reuses the unfiltered list key, so no extra request
-  // fires until the viewer actually types.
+  // fires until the viewer actually types. The server normalizes this search
+  // the same way it normalizes stored keys, so spacing variants still match
+  // (issue #4182); only the cache key differs.
   const nameLookup = useTags(debouncedNewName.trim() ? debouncedNewName : undefined)
-  const normalizedTypedName = newName.trim().toLowerCase()
-  const debouncedNormalizedName = debouncedNewName.trim().toLowerCase()
+  const normalizedTypedName = normalizeTagName(newName)
+  const debouncedNormalizedName = normalizeTagName(debouncedNewName)
   const [newColor, setNewColor] = useState<string>(DEFAULT_TAG_COLOR_NAME)
   // Roving tab stop for the 32-swatch palette (issues #3432, #3557). The
   // palette is a custom radio group built from buttons, so it must implement
@@ -163,6 +176,23 @@ export function TagEditor({
   const targetNoun =
     targetType === 'ContinuityPlan' ? 'reading plan' : targetType.toLowerCase()
   /**
+   * Sources that keep a tag visible after only its direct assignment is
+   * removed (issue #4182). The effective entry keeps every contributing
+   * source, including this target itself for a direct assignment, so the
+   * answer is the entry's sources minus this target. Reading
+   * `inheritedById` would miss a tag that is both directly assigned and
+   * inherited, because that map drops every entry with `direct: true`.
+   */
+  function remainingInheritedSources(tagId: number): InheritanceSource[] {
+    const entry = (effective.data?.effective_tags ?? []).find(
+      (candidate) => candidate.tag.id === tagId,
+    )
+    if (!entry) return []
+    return entry.sources.filter(
+      (source) => source.target_type !== targetType || source.target_id !== targetId,
+    )
+  }
+  /**
    * Explanation for a tag this item already carries via inheritance, or null
    * when the tag is not inherited here. Used by every assign entry point so
    * no path silently creates a direct duplicate of an inherited tag.
@@ -202,7 +232,7 @@ export function TagEditor({
    * (PR #3996 review).
    */
   const draftStillNames = (nameAtStart: string) =>
-    typedNameRef.current.trim().toLowerCase() === nameAtStart.trim().toLowerCase()
+    normalizeTagName(typedNameRef.current) === normalizeTagName(nameAtStart)
 
   async function handleAssign(tag: Tag) {
     clearFeedback()
@@ -288,9 +318,19 @@ export function TagEditor({
 
   async function handleRemove(tag: Tag) {
     clearFeedback()
+    // Capture the surviving sources before the mutation refreshes the cache:
+    // a tag can be direct *and* inherited, so only the current target's own
+    // source disappears with this removal (issue #4182).
+    const inheritedSources = remainingInheritedSources(tag.id)
     try {
       await unassign.mutateAsync({ id: tag.id, data: payload })
-      setNotice(`Removed “${tag.name}”.`)
+      if (inheritedSources.length > 0) {
+        setNotice(
+          `Removed direct “${tag.name}”. It remains inherited from ${formatSourceNames(inheritedSources)}.`,
+        )
+      } else {
+        setNotice(`Removed “${tag.name}”.`)
+      }
     } catch (error) {
       setFailure(tagErrorMessage(error, `Could not remove “${tag.name}”.`))
     }
@@ -352,7 +392,7 @@ export function TagEditor({
       // first pass still persisted (or matched) that submitted tag, but a late
       // result must never become the continuation target for the name now on
       // screen: assigning it would add the wrong tag (PR #3996 review).
-      if (typedNameRef.current.trim().toLowerCase() !== name.toLowerCase()) {
+      if (normalizeTagName(typedNameRef.current) !== normalizeTagName(name)) {
         setPendingNearMatches(null)
         setPendingCreatedTag(null)
         setNotice(
