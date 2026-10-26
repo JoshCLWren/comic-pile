@@ -183,6 +183,7 @@ export default function ThreadDetailView() {
   useEffect(() => {
     if (!issuesExpanded || requestedIssueId <= 0) {
       setDeepLinkedIssueId(null)
+      focusedIssueRef.current = null
       return
     }
     if (focusedIssueRef.current === requestedIssueId) return
@@ -190,6 +191,10 @@ export default function ThreadDetailView() {
     if (!row) {
       if (issuesQuery.hasNextPage && !issuesQuery.isFetching && !issuesQuery.isFetchNextPageError) {
         void issuesQuery.fetchNextPage()
+      } else if (!issuesQuery.hasNextPage || issuesQuery.isFetchNextPageError) {
+        // Pagination exhausted or failed without finding the target; clear any
+        // stale highlight from a previous navigation.
+        setDeepLinkedIssueId(null)
       }
       return
     }
