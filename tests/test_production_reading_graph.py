@@ -324,3 +324,15 @@ def test_production_graph_matches_pinned_reviewed_fingerprint() -> None:
     blob = b"blob " + str(len(data)).encode("ascii") + b"\0" + data
     expected_blob_sha = review_contract()["fixture_git_blob_sha"]
     assert hashlib.sha1(blob).hexdigest() == expected_blob_sha
+
+
+def test_unresolved_source_reconciliation_fails_parity_signoff() -> None:
+    """A clean schema and CI cannot bless the 163/33 unresolved source decisions."""
+    from scripts.require_production_reading_intent import incomplete_intent_reasons
+
+    contract = review_contract()
+    reasons = incomplete_intent_reasons(contract)
+    assert reasons
+    assert any("strict_partial_membership" in reason for reason in reasons)
+    assert any("reading_list_vs_reading_plan" in reason for reason in reasons)
+    assert any("signoff" in reason.lower() for reason in reasons)
