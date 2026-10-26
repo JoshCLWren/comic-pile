@@ -70,3 +70,38 @@ def test_old_reverse_edge_is_not_silently_accepted() -> None:
         ReadingListEntry(10), ReadingListEntry(20),
     ))
     assert not audit_future_parity(state(lists=(strict,)), (old,)).safe_to_certify
+
+
+def test_excluded_hold_cannot_create_false_order_parity() -> None:
+    """An excluded milestone must not prove an order Option E no longer gates."""
+    snap = ReadingSnapshot(
+        user_id=TEST_READER_ID,
+        threads=(ReadingThread(1), ReadingThread(2), ReadingThread(3)),
+        issues=(
+            ReadingIssue(10, 1, 1),
+            ReadingIssue(20, 2, 1),
+            ReadingIssue(30, 3, 1),
+        ),
+        lists=(ReadingList(9, "loose", (
+            ReadingListEntry(10), ReadingListEntry(20, "hold"),
+            ReadingListEntry(30),
+        )),),
+        excluded_issue_ids=frozenset({20}),
+    )
+    old = HistoricalEdge(1010, 10, 30, "converted")
+    assert not audit_future_parity(snap, (old,)).safe_to_certify
+
+
+def test_excluded_endpoint_is_reported_not_raised() -> None:
+    """Exclude an irrelevant historical relationship without aborting the audit."""
+    snap = ReadingSnapshot(
+        user_id=TEST_READER_ID,
+        threads=(ReadingThread(1), ReadingThread(2)),
+        issues=(ReadingIssue(10, 1, 1), ReadingIssue(20, 2, 1)),
+        excluded_issue_ids=frozenset({20}),
+    )
+    old = HistoricalEdge(1010, 10, 20, None)
+    report = audit_future_parity(snap, (old,))
+    assert report.excluded == (old,)
+    assert report.missing == ()
+    assert report.examined == 1
