@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { PropsWithChildren } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { invalidateAfterQueueMutation } from '../query/cacheEffects'
 import { usePotentialDuplicates } from '../hooks/usePotentialDuplicates'
 import type { CheckPotentialDuplicatesRequest } from '../types'
 const { check } = vi.hoisted(() => ({ check: vi.fn() }))
@@ -41,4 +42,18 @@ describe('advisory duplicate queries', () => {
     const inputs: CheckPotentialDuplicatesRequest[] = check.mock.calls.map(([input]) => input)
     expect(inputs).toEqual(expect.arrayContaining([{ title: 'Saga', format: 'Comic' }, { title: 'Saga', format: 'Comic', exclude_thread_id: 7 }]))
   })
+  it('refreshes a cached empty answer after a library mutation', async () => {
+    check.mockReset().mockResolvedValueOnce({ matches: [] })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
+    const provider = ({ children }: PropsWithChildren) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    const { result } = renderHook(() => usePotentialDuplicates({ title: 'Saga', format: 'Comic' }, true), { wrapper: provider })
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(result.current.isChecking).toBe(false))
+    const matches = [{ id: 9, title: 'Saga', match_type: 'fuzzy' }]
+    check.mockResolvedValue({ matches })
+    await act(async () => { await invalidateAfterQueueMutation(client) })
+    await waitFor(() => expect(result.current.matches).toEqual(matches))
+    expect(check).toHaveBeenCalledTimes(2)
+  })
+
 })

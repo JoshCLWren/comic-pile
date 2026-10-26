@@ -237,15 +237,16 @@ export async function invalidateAfterQueueMovement(
  * unsnooze, reactivate, exclude, restore). TanStack Query refetches invalidated
  * queries automatically — callers must not also call `refetch()`.
  *
- * This is intentionally an alias of `invalidateAfterQueueMovement` — both
- * operations refresh the same retained resources (queue pages, current
- * session, roll bootstrap, excluded library pages, Roll exclusion drill-down
- * pages) and must stay in sync.
+ * Refresh the retained queue resources and advisory duplicate answers: a
+ * create, rename, or delete changes which existing editions the forms report.
  */
 export async function invalidateAfterQueueMutation(
   client: QueryClient,
 ): Promise<void> {
-  return invalidateAfterQueueMovement(client)
+  await Promise.all([
+    invalidateAfterQueueMovement(client),
+    client.invalidateQueries({ queryKey: queryKeys.thread.duplicateChecks() }),
+  ])
 }
 
 /**

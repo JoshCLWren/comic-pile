@@ -192,6 +192,7 @@ export const queryKeys = {
     roll: () => ['demo', 'roll'] as const,
   },
   thread: {
+    duplicateChecks: () => ['thread', 'potential-duplicates'] as const,
     potentialDuplicates: (params: { title: string; format: string; comicvine_volume_id?: number; exclude_thread_id?: number }) =>
       ['thread', 'potential-duplicates', { title: params.title.trim(), format: params.format.trim(),
         comicvine_volume_id: params.comicvine_volume_id ?? null, exclude_thread_id: params.exclude_thread_id ?? null }] as const,
