@@ -265,5 +265,7 @@
     "reading_list_vs_reading_plan_discrepancies_needing_classification": 33,
     "historical_contradictions": "Unresolved converted JLI and other historical constraints must be reviewed, never enabled by default"
   },
-  "fixture_git_blob_sha": "7e8866d9efa8c57d24363abb811f0c624b8f639a"
+  "fixture_git_blob_sha": "7e8866d9efa8c57d24363abb811f0c624b8f639a",
+  "reader_intent_signoff": "blocked",
+  "reviewed_source_decisions": []
 }
