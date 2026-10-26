@@ -1061,7 +1061,7 @@ describe('CreatorComparisonPage return paths', () => {
 
     expect(screen.getByRole('link', { name: 'Change selection' })).toHaveAttribute(
       'href',
-      '/creators?keys=creator:7,creator:12',
+      '/creators?keys=creator%3A7%2Ccreator%3A12',
     )
 
     fireEvent.click(screen.getByRole('link', { name: 'Change selection' }))
