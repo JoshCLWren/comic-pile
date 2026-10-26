@@ -4,6 +4,7 @@ All SQLAlchemy access for the ``Thread`` model family lives here. Functions
 return ORM models or plain values; callers (services) own transactions.
 """
 
+import re
 from collections.abc import Sequence
 from datetime import datetime
 from typing import NotRequired, TypedDict
@@ -325,7 +326,7 @@ async def fetch_queue_page(
     )
 
     if search:
-        query = query.where(Thread.title.ilike(f"%{search}%"))
+        query = query.where(Thread.title.ilike(f"%{re.escape(search)}%"))
 
     # Apply deterministic sort order with tie-breakers
     for col in build_sort_order(sort, eligibility):
@@ -374,7 +375,7 @@ async def fetch_completed_page(
     query = select(Thread).where(Thread.user_id == user_id, Thread.status == "completed")
 
     if search:
-        query = query.where(Thread.title.ilike(f"%{search}%"))
+        query = query.where(Thread.title.ilike(f"%{re.escape(search)}%"))
 
     # Apply deterministic sort order with tie-breakers (shared with the
     # active-queue path so ordering and cursor filters cannot diverge).
@@ -418,7 +419,7 @@ async def fetch_excluded_page(
     )
 
     if search:
-        query = query.where(Thread.title.ilike(f"%{search}%"))
+        query = query.where(Thread.title.ilike(f"%{re.escape(search)}%"))
 
     for col in build_sort_order(sort):
         query = query.order_by(col)
@@ -1015,10 +1016,10 @@ async def find_potential_duplicates_by_title_format(
         Thread.format == normalized_format,
         # Title similarity: either contains the other or shares significant words
         or_(
-            Thread.title.ilike(f"%{normalized_title}%"),
-            func.strpos(normalized_title, func.lower(Thread.title)) > 0,
+            Thread.title.ilike(f"%{re.escape(normalized_title)}%"),
+            func.strpos(func.lower(Thread.title), normalized_title) > 0,
             *(
-                Thread.title.ilike(f"%{word}%")
+                Thread.title.ilike(f"%{re.escape(word)}%")
                 for word in normalized_title.split()
                 if len(word) >= 3
             ),
