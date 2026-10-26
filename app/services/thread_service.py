@@ -11,7 +11,6 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +30,7 @@ from app.repositories import (
 from app.schemas import (
     ComicVineMappingHealth,
     ComicVineMappingStatus,
+    PotentialDuplicateMatch,
     QueueThreadListItem,
     QueueThreadListResponse,
     ReactivateRequest,
@@ -640,21 +640,6 @@ async def active_threads_html(db: AsyncSession, user_id: int) -> str:
     return items or '<p class="text-gray-500 text-center py-4">No active threads available</p>'
 
 
-class PotentialDuplicateMatch(BaseModel):
-    """A thread that potentially duplicates the proposed series."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    thread_id: int
-    title: str
-    format: str
-    issues_remaining: int
-    total_issues: int | None
-    status: str
-    match_type: str  # "strong" (ComicVine volume) or "weak" (title/format)
-    comicvine_volume_id: int | None = None
-
-
 async def check_potential_duplicates(
     db: AsyncSession,
     user_id: int,
@@ -680,9 +665,6 @@ async def check_potential_duplicates(
     Returns:
         List of potential duplicate matches with match type and thread details.
     """
-    from app.models.thread import normalize_format_value
-    from app.repositories import thread_repository
-
     normalized_format = normalize_format_value(format_value)
     matches: list[PotentialDuplicateMatch] = []
 

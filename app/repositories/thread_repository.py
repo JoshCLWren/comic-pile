@@ -15,7 +15,11 @@ from app.services.reading_eligibility_service import ReadingEligibilitySnapshot
 from app.repositories.reading_eligibility_queries import candidate_predicate
 
 from app.models import Issue, Thread
-from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.models.external_identity import (
+    ExternalIdentity,
+    IssueExternalIdentityMapping,
+    ThreadExternalSeriesMapping,
+)
 from app.models.thread import EXCLUDED_STATUS
 from app.services.queue_pagination import (
     QueueCursor,
@@ -934,8 +938,6 @@ async def find_potential_duplicates_by_comicvine_volume(
     Returns:
         List of matching threads with confirmed ComicVine volume linkage.
     """
-    from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
-
     query = (
         select(Thread)
         .join(ThreadExternalSeriesMapping, Thread.id == ThreadExternalSeriesMapping.thread_id)
@@ -985,8 +987,6 @@ async def find_potential_duplicates_by_title_format(
     Returns:
         List of potentially matching threads, ordered by relevance.
     """
-    from sqlalchemy import func
-
     normalized_title = title.strip().lower()
     normalized_format = format_value.strip()
 
@@ -1012,7 +1012,6 @@ async def find_potential_duplicates_by_title_format(
     fuzzy_query = select(Thread).where(
         Thread.user_id == user_id,
         Thread.format == normalized_format,
-        Thread.id.not_in([t.id for t in exact_matches]) if exact_matches else True,
         # Title similarity: either contains the other or shares significant words
         or_(
             Thread.title.ilike(f"%{normalized_title}%"),
@@ -1024,6 +1023,8 @@ async def find_potential_duplicates_by_title_format(
             ),
         ),
     )
+    if exact_matches:
+        fuzzy_query = fuzzy_query.where(Thread.id.not_in([t.id for t in exact_matches]))
     if exclude_thread_id is not None:
         fuzzy_query = fuzzy_query.where(Thread.id != exclude_thread_id)
     fuzzy_query = fuzzy_query.limit(remaining_limit)

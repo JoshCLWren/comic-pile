@@ -17,6 +17,7 @@ function createTestWrapper() {
 
 const spyThreadsApiUpdate = vi.spyOn(threadsApi, 'update')
 const spyApplyEditedThreadToQueuePages = vi.spyOn(cacheEffects, 'applyEditedThreadToQueuePages')
+const spyInvalidatePotentialDuplicates = vi.spyOn(cacheEffects, 'invalidatePotentialDuplicates')
 const spyInvalidateAfterCreatorCreditChange = vi.spyOn(
   cacheEffects,
   'invalidateAfterCreatorCreditChange',
@@ -25,6 +26,7 @@ const spyInvalidateAfterCreatorCreditChange = vi.spyOn(
 beforeEach(() => {
   spyThreadsApiUpdate.mockReset()
   spyApplyEditedThreadToQueuePages.mockReset()
+  spyInvalidatePotentialDuplicates.mockClear()
   spyInvalidateAfterCreatorCreditChange.mockReset()
 })
 
@@ -96,6 +98,23 @@ it('refreshes creator analytics when an update edits manual creator credits (#34
   })
 
   expect(spyInvalidateAfterCreatorCreditChange).toHaveBeenCalledOnce()
+})
+
+it('refreshes advisory duplicate answers after a rename or format edit (#3612)', async () => {
+  // SAFETY: the updated thread supplies only the fields the cache write asserts
+  const updatedThread = { id: 7, title: 'Spider-Man' } as Thread
+  spyThreadsApiUpdate.mockResolvedValue(updatedThread)
+
+  const { wrapper } = createTestWrapper()
+  const { result } = renderHook(() => useUpdateThread(), { wrapper })
+
+  await act(async () => {
+    await result.current.mutate({ id: 7, data: { title: 'Spider-Man', format: 'Comic' } })
+  })
+
+  // The queue rows are patched in place, but the cached duplicate-check answers
+  // from before the rename must stop being served to the Add/Edit forms.
+  expect(spyInvalidatePotentialDuplicates).toHaveBeenCalledOnce()
 })
 
 it('leaves creator analytics untouched when an update does not change creator credits', async () => {

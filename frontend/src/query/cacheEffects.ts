@@ -232,6 +232,22 @@ export async function invalidateAfterQueueMovement(
 }
 
 /**
+ * Refresh the advisory duplicate answers the Add Series and Edit/Rename forms
+ * read (#3612).
+ *
+ * Creating, renaming, re-formatting, or deleting a series changes which
+ * existing editions those forms should warn about. The checks live under one
+ * query prefix with the app's 30s `staleTime`, so without this refresh a form
+ * can keep serving an answer from before the library change — for example an
+ * empty result cached just before the same title was created.
+ */
+export async function invalidatePotentialDuplicates(
+  client: QueryClient,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.thread.duplicateChecks() })
+}
+
+/**
  * Invalidate all Queue-affecting queries after a mutation that changes queue
  * ordering or membership (create, delete, reposition, shuffle, snooze,
  * unsnooze, reactivate, exclude, restore). TanStack Query refetches invalidated
@@ -245,7 +261,7 @@ export async function invalidateAfterQueueMutation(
 ): Promise<void> {
   await Promise.all([
     invalidateAfterQueueMovement(client),
-    client.invalidateQueries({ queryKey: queryKeys.thread.duplicateChecks() }),
+    invalidatePotentialDuplicates(client),
   ])
 }
 
