@@ -11,13 +11,14 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_rating_settings
+from app.config import get_rating_settings, get_session_settings
 from app.models import Event, Issue, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.repositories.issue_repository import (
     exists_read_at_or_after,
     find_in_thread_by_number,
+    first_unread,
     get_issue,
     issues_for_threads,
     issues_ordered,
@@ -391,21 +392,37 @@ async def rate_thread(
     """
     user_id = current_user.id
     current_session = await fetch_active_reading_session(db, user_id)
-    if not current_session:
+    current_session_id = current_session.id if current_session is not None else None
+
+    is_direct = rate_data.direct
+    thread: Thread
+    if is_direct:
+        if rate_data.thread_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="thread_id is required for a direct Thread rating",
+            )
+        # Issue #3581: a rating submitted from a Thread issue row names the
+        # thread explicitly, so it does not require an active pending-roll
+        # session. Ownership stays enforced through the user-scoped lookup.
+        owned_thread = await find_owned(db, user_id, rate_data.thread_id)
+        if owned_thread is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Thread {rate_data.thread_id} not found",
+            )
+        thread = owned_thread
+    elif current_session is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active session. Please roll the dice first.",
         )
-
-    current_session_id = current_session.id
-    target_thread_id = current_session.pending_thread_id
-
-    if target_thread_id is not None:
-        thread = await find_owned(db, user_id, target_thread_id)
+    elif current_session.pending_thread_id is not None:
+        thread = await find_owned(db, user_id, current_session.pending_thread_id)
         if not thread:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Thread {target_thread_id} not found",
+                detail=f"Thread {current_session.pending_thread_id} not found",
             )
     else:
         latest_action_event_ = await latest_action_event(
@@ -437,10 +454,10 @@ async def rate_thread(
     live_issue: Issue | None = None
     live_source_event_id: int | None = None
     canonical_issues: list[Issue] | None = None
-    if eligibility is not None:
+    if current_session is not None and not is_direct and eligibility is not None:
         state = eligibility.threads.get(thread_id)
         offered = await fetch_owned_roll_issue(
-            db, user_id=user_id, reading_session_id=current_session_id, thread_id=thread_id,
+            db, user_id=user_id, reading_session_id=current_session.id, thread_id=thread_id,
         )
         if (
             thread_id not in eligibility.candidate_ids()
@@ -471,35 +488,67 @@ async def rate_thread(
     # before the mutation so the recorded preimage is the true pre-action state.
     issue_changes: list[dict] = []
     created_issues_list: list[Issue] = []
-    current_die = await get_current_die_for_session(current_session, db)
+    if is_direct:
+        # Issue #3581: a direct Thread rate resolves the rated issue from the
+        # thread's own issue state instead of the pending-roll offer, so it can
+        # be submitted without an active session or pending roll. A discarded
+        # pending roll is left untouched below.
+        if not thread.uses_issue_tracking():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Thread {thread.id} does not track individual issues",
+            )
+        if rate_data.issue_number is not None:
+            live_issue = await find_in_thread_by_number(db, thread.id, rate_data.issue_number)
+            if live_issue is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Issue {rate_data.issue_number} not found in thread {thread.id}",
+                )
+        else:
+            live_issue = await first_unread(db, thread.id)
+        if live_issue is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Thread {thread.id} has no unread issues",
+            )
+        canonical_issues = await issues_ordered(db, thread.id)
+    current_die = (
+        await get_current_die_for_session(current_session, db)
+        if current_session is not None
+        else None
+    )
     automatic_die = (
         await get_current_die_for_session(current_session, db, automatic=True)
-        if current_session.manual_die is not None else current_die
+        if current_session is not None and current_session.manual_die is not None
+        else current_die
     )
-    pre_session_state = {
-        "start_die": current_session.start_die,
-        "manual_die": current_session.manual_die,
-        "current_die": current_die,
-        "automatic_die": automatic_die,
-        "pending_thread_id": current_session.pending_thread_id,
-        "pending_thread_updated_at": current_session.pending_thread_updated_at.isoformat()
-        if current_session.pending_thread_updated_at
-        else None,
-        "ended_at": current_session.ended_at.isoformat()
-        if current_session.ended_at
-        else None,
-        "snoozed_thread_ids": (
-            list(current_session.snoozed_thread_ids)
-            if current_session.snoozed_thread_ids
-            else None
-        ),
-        **capture_ephemeral_bandwidth(current_session),
-    }
+    pre_session_state = None
+    if current_session is not None:
+        pre_session_state = {
+            "start_die": current_session.start_die,
+            "manual_die": current_session.manual_die,
+            "current_die": current_die,
+            "automatic_die": automatic_die,
+            "pending_thread_id": current_session.pending_thread_id,
+            "pending_thread_updated_at": current_session.pending_thread_updated_at.isoformat()
+            if current_session.pending_thread_updated_at
+            else None,
+            "ended_at": current_session.ended_at.isoformat()
+            if current_session.ended_at
+            else None,
+            "snoozed_thread_ids": (
+                list(current_session.snoozed_thread_ids)
+                if current_session.snoozed_thread_ids
+                else None
+            ),
+            **capture_ephemeral_bandwidth(current_session),
+        }
 
-    if eligibility is None:
+    if eligibility is None and live_issue is None:
         # Validate thread has issues remaining. For issue-tracked threads, rely on
         # the thread's denormalized counter and next_unread_issue_id instead of a
-        # fresh COUNT query.
+        # fresh COUNT query. Direct rates always resolve a concrete issue above.
         if thread.uses_issue_tracking():
             if thread.issues_remaining <= 0 or thread.next_unread_issue_id is None:
                 raise HTTPException(
@@ -610,17 +659,31 @@ async def rate_thread(
         rated_issue_id, rated_issue_number = live_issue.id, live_issue.issue_number
         issues_read = 1
         await db.flush()
-        after_read = await get_execution_eligibility(db, user_id)
-        if after_read is None:
-            raise HTTPException(status_code=503, detail="Reading execution changed; retry the rating")
-        next_state = after_read.threads.get(thread_id)
-        next_id = next_state.next_issue_id if next_state is not None else None
-        next_issue = await get_issue(db, next_id) if next_id is not None else None
-        thread.next_unread_issue_id = next_id
-        thread.issues_remaining = after_read.unread_counts.get(thread_id, 0)
-        thread.total_issues = len(canonical_issues or [])
-        thread.reading_progress = "in_progress" if next_id is not None else "completed"
-        thread_issues_remaining = thread.issues_remaining
+        if is_direct:
+            # Issue #3581 direct Thread rate: advance the thread's own unread
+            # state instead of recomputing through a pending-roll offer.
+            # Choose the earliest remaining unread issue across the whole
+            # thread (Greptile G2).
+            next_unread = await first_unread(db, thread.id)
+            thread.next_unread_issue_id = next_unread.id if next_unread is not None else None
+            thread.issues_remaining = await thread.get_issues_remaining(db)
+            thread.total_issues = len(canonical_issues or [])
+            thread.reading_progress = (
+                "in_progress" if thread.next_unread_issue_id is not None else "completed"
+            )
+            thread_issues_remaining = thread.issues_remaining
+        else:
+            after_read = await get_execution_eligibility(db, user_id)
+            if after_read is None:
+                raise HTTPException(status_code=503, detail="Reading execution changed; retry the rating")
+            next_state = after_read.threads.get(thread_id)
+            next_id = next_state.next_issue_id if next_state is not None else None
+            next_issue = await get_issue(db, next_id) if next_id is not None else None
+            thread.next_unread_issue_id = next_id
+            thread.issues_remaining = after_read.unread_counts.get(thread_id, 0)
+            thread.total_issues = len(canonical_issues or [])
+            thread.reading_progress = "in_progress" if next_id is not None else "completed"
+            thread_issues_remaining = thread.issues_remaining
     elif thread.uses_issue_tracking():
         if thread.next_unread_issue_id:
             result = await db.execute(
@@ -675,16 +738,29 @@ async def rate_thread(
 
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now(UTC)
-    new_die = current_session.manual_die or (
-        step_down(current_die)
-        if rate_data.rating >= rating_threshold
-        else step_up(current_die)
-    )
+    # A direct Thread rating never moves the die ladder: that state belongs to
+    # the Roll flow, and altering it here would change the next roll merely
+    # because a rating was submitted outside Roll (issue #3581).
+    new_die = None
+    if current_session is not None and not is_direct:
+        new_die = current_session.manual_die or (
+            step_down(current_die)
+            if rate_data.rating >= rating_threshold
+            else step_up(current_die)
+        )
 
-    source_roll_event_id = (
-        live_source_event_id if eligibility is not None
-        else await _find_source_roll_event(db, current_session_id, thread_id)
-    )
+    if is_direct:
+        # A direct rating has no originating Roll, so it must not borrow an
+        # unrelated pending Roll's source event.
+        source_roll_event_id = None
+    elif live_source_event_id is not None:
+        source_roll_event_id = live_source_event_id
+    elif current_session_id is not None:
+        source_roll_event_id = await _find_source_roll_event(
+            db, current_session_id, thread_id
+        )
+    else:
+        source_roll_event_id = None
 
     event = Event(
         type="rate",
@@ -695,7 +771,8 @@ async def rate_thread(
         die=current_die,
         die_after=new_die,
         context={"automatic_die_after": automatic_die}
-        if current_session.manual_die is not None else None,
+        if current_session is not None and current_session.manual_die is not None
+        else None,
         issue_id=rated_issue_id,
         issue_number=rated_issue_number,
         source_roll_event_id=source_roll_event_id,
@@ -736,13 +813,13 @@ async def rate_thread(
         excluded_ids = await derive_effective_roll_excluded_thread_ids(
             db,
             user_id,
-            session_snoozed_ids=current_session.snoozed_thread_ids,
-            session_skipped_ids=current_session.skipped_thread_ids,
+            session_snoozed_ids=current_session.snoozed_thread_ids if current_session is not None else None,
+            session_skipped_ids=current_session.skipped_thread_ids if current_session is not None else None,
         )
         queue_position_changes = await move_to_safe_position(
             thread_id,
             user_id,
-            new_die,
+            new_die if new_die is not None else current_die or get_session_settings().start_die,
             db,
             excluded_thread_ids=excluded_ids,
         )
@@ -753,12 +830,15 @@ async def rate_thread(
     # left stale is_blocked flags that let blocked threads enter the roll pool.
     blocked_changes = await refresh_user_blocked_status(user_id, db)
 
-    if rate_data.finish_session:
+    if rate_data.finish_session and current_session is not None:
         current_session.ended_at = datetime.now(UTC)
         current_session.snoozed_thread_ids = None
 
-    current_session.pending_thread_id = None
-    current_session.pending_thread_updated_at = None
+    if (not is_direct) and current_session is not None:
+        # Only session-driven ratings retire the pending roll; a direct Thread
+        # rate must not disturb an unrelated pending Roll (issue #3581).
+        current_session.pending_thread_id = None
+        current_session.pending_thread_updated_at = None
 
     # Extract response values before commit to avoid post-commit re-reads
     # that trigger MissingGreenlet errors on expired session objects.
@@ -793,21 +873,25 @@ async def rate_thread(
                 resp_next_unread_issue_number = next_issue_obj.issue_number
 
     await db.flush()
-    await snapshot_thread_states(
-        db,
-        current_session_id,
-        event.id,
-        user_id,
-        commit=False,
-        rated_thread_id=thread_id,
-        rated_thread_pre_state=pre_thread_state,
-        queue_position_changes=queue_position_changes,
-        blocked_changes=blocked_changes,
-        pre_session_state=pre_session_state,
-        issue_changes=issue_changes,
-        created_issues=[_issue_preimage(i) for i in created_issues_list] if created_issues_list else None,
-        deleted_issues=None,
-    )
+    if current_session is not None:
+        # Undo snapshots are keyed by reading session; a direct Thread rate
+        # submitted without a session has no session to key an undo record to,
+        # so it persists the rating/event without fabricating session state.
+        await snapshot_thread_states(
+            db,
+            current_session.id,
+            event.id,
+            user_id,
+            commit=False,
+            rated_thread_id=thread_id,
+            rated_thread_pre_state=pre_thread_state,
+            queue_position_changes=queue_position_changes,
+            blocked_changes=blocked_changes,
+            pre_session_state=pre_session_state,
+            issue_changes=issue_changes,
+            created_issues=[_issue_preimage(i) for i in created_issues_list] if created_issues_list else None,
+            deleted_issues=None,
+        )
     response_eligibility = await get_execution_eligibility(db, user_id)
     await db.commit()
 

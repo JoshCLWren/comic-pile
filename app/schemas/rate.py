@@ -14,3 +14,19 @@ class RateRequest(BaseModel):
         max_length=50,
         description="Issue number just read, e.g. '5' or 'Annual 1' (triggers migration if provided)",
     )
+    thread_id: int | None = Field(
+        default=None,
+        description=(
+            "Explicit thread being rated (issue #3581). Required when "
+            "``direct`` is true; the rating is then applied to that owned "
+            "thread instead of the pending Roll target."
+        ),
+    )
+    direct: bool = Field(
+        default=False,
+        description=(
+            "Set by a Thread issue row rating (issue #3581). Roll requests "
+            "keep the session-driven path even though they also send "
+            "``thread_id``."
+        ),
+    )

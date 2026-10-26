@@ -88,6 +88,7 @@ export interface RatePayload {
   issues_read?: number;
   finish_session?: boolean;
   issue_number?: string;
+  direct?: boolean;
 }
 
 export interface OverrideRollPayload {

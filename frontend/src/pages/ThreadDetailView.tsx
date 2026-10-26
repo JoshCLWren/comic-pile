@@ -36,6 +36,7 @@ import { IssueTagRowChips } from '../components/Tags/IssueTagRowChips'
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
 import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
+import { IssueRateButton } from './thread-detail/IssueRateButton'
 import { CblComicFinder } from '../components/CblSourceFinder'
 import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
@@ -317,6 +318,11 @@ export default function ThreadDetailView() {
           </h1>
           <p className="text-sm font-medium text-stone-500">
             {thread.format}
+            {thread.last_rating != null && (
+              <span className="ml-2 text-[var(--theme-personal-accent)]">
+                Last rating {thread.last_rating.toFixed(1)}/5
+              </span>
+            )}
           </p>
         </div>
         <button
@@ -649,6 +655,11 @@ export default function ThreadDetailView() {
                                 )}
                               </span>
                               <IssueReadStatusButton
+                                issue={issue}
+                                snapshot={{ issues, thread }}
+                                onSnapshotChange={handleIssueSnapshotChange}
+                              />
+                              <IssueRateButton
                                 issue={issue}
                                 snapshot={{ issues, thread }}
                                 onSnapshotChange={handleIssueSnapshotChange}
