@@ -5,6 +5,7 @@
 -- interactive tests start with a clean QA session. Muse remains disabled.
 -- Clone IDs use a fixed +10000000 offset, allowing deterministic source-to-QA test mappings.
 -- NEXT_STATEMENT
+LOCK TABLE threads, issues, dependencies, custom_cbl_lists, custom_cbl_entries, custom_cbl_overlap_decisions, custom_cbl_source_links, continuity_plans, continuity_rules, reading_plan_issues, reading_plan_sources, reading_plan_source_placements, reading_plan_release_sources, reading_plan_dependencies, events, sessions, snapshots, thread_external_series_mappings, issue_external_identity_mappings, dependency_groups, dependency_group_memberships, collection_exclusions, reading_orders, reading_order_items, tags, tag_assignments, cbl_adoption_receipts IN SHARE ROW EXCLUSIVE MODE-- NEXT_STATEMENT
 SELECT pg_advisory_xact_lock(23199)
 -- NEXT_STATEMENT
 DO $guard$ BEGIN
@@ -68,7 +69,7 @@ BEGIN
  ELSIF jsonb_typeof(doc)='object' THEN
   outval='{}'::jsonb;
   FOR k,v IN SELECT key,value FROM jsonb_each(doc) LOOP
-   IF jsonb_typeof(v)='number' AND (k IN ('issue_id','checkpoint_issue_id','source_issue_id','target_issue_id') OR (k='ref_id' AND doc->>'node_type'='issue')) THEN
+   IF jsonb_typeof(v)='number' AND (k IN ('issue_id','checkpoint_issue_id','source_issue_id','target_issue_id','checkpoint_target_ref_id') OR (k='ref_id' AND doc->>'node_type' IN ('issue','crossover')) OR (k='id' AND doc->>'type' IN ('issue','crossover'))) THEN
     old_id=(v#>>'{}')::bigint;
     IF EXISTS(SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id WHERE i.id=old_id AND t.user_id=1) THEN v=to_jsonb(old_id+10000000); END IF;
    ELSIF jsonb_typeof(v)='number' AND (k IN ('thread_id','pending_thread_id') OR (k='ref_id' AND doc->>'node_type' IN ('thread','series'))) THEN
@@ -77,9 +78,16 @@ BEGIN
    ELSIF jsonb_typeof(v)='number' AND k='custom_cbl_list_id' THEN
     old_id=(v#>>'{}')::bigint;
     IF EXISTS(SELECT 1 FROM custom_cbl_lists WHERE id=old_id AND user_id=1) THEN v=to_jsonb(old_id+10000000); END IF;
-   ELSIF k='id' AND jsonb_typeof(v)='string' AND doc->>'type'='issue' AND (v#>>'{}')~'^[0-9]+$' THEN
+   ELSIF k='id' AND jsonb_typeof(v)='string' AND doc->>'type' IN ('issue','crossover') AND (v#>>'{}')~'^[0-9]+$' THEN
     old_id=(v#>>'{}')::bigint;
     IF EXISTS(SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id WHERE i.id=old_id AND t.user_id=1) THEN v=to_jsonb((old_id+10000000)::text); END IF;
+   ELSIF k IN ('checkpoint_target_ref_ids','checkpoint_target_issue_ids') AND jsonb_typeof(v)='array' THEN
+    v=(SELECT coalesce(jsonb_agg(
+       CASE WHEN jsonb_typeof(x.value)='number'
+         AND EXISTS(SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id WHERE i.id=(x.value#>>'{}')::bigint AND t.user_id=1)
+         THEN to_jsonb((x.value#>>'{}')::bigint+10000000) ELSE x.value END
+       ORDER BY x.ordinality),'[]'::jsonb)
+       FROM jsonb_array_elements(v) WITH ORDINALITY AS x(value,ordinality));
    ELSE v=pg_temp.qa_rewrite_json(v); END IF;
    outval=outval||jsonb_build_object(k,v);
   END LOOP;
@@ -142,7 +150,7 @@ INSERT INTO reading_plan_release_sources (id,plan_id,thread_id,external_identity
 -- NEXT_STATEMENT
 INSERT INTO reading_plan_dependencies (plan_id,dependency_id,explanation) SELECT x.plan_id+10000000,x.dependency_id+10000000,x.explanation FROM reading_plan_dependencies x JOIN continuity_plans p ON p.id=x.plan_id WHERE p.user_id=1
 -- NEXT_STATEMENT
-INSERT INTO continuity_rules (id,user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,note,created_at,updated_at,legacy_dependency_id,convergence_targets) SELECT id+10000000,23199,source_type,CASE WHEN source_type IN ('issue','thread','plan','group') THEN source_id+10000000 ELSE source_id END,target_type,CASE WHEN target_type IN ('issue','thread','plan','group') THEN target_id+10000000 ELSE target_id END,satisfaction_type,CASE WHEN checkpoint_issue_id IS NULL THEN NULL ELSE checkpoint_issue_id+10000000 END,CASE WHEN note ~ '^continuity-plan:[0-9]+$' THEN 'continuity-plan:'||((substring(note from 17)::bigint)+10000000)::text ELSE note END,created_at,updated_at,CASE WHEN legacy_dependency_id IS NULL THEN NULL ELSE legacy_dependency_id+10000000 END,pg_temp.qa_rewrite_json(convergence_targets::jsonb) FROM continuity_rules WHERE user_id=1
+INSERT INTO continuity_rules (id,user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,note,created_at,updated_at,legacy_dependency_id,convergence_targets) SELECT id+10000000,23199,source_type,CASE WHEN source_type IN ('issue','crossover','thread','plan','group') THEN source_id+10000000 ELSE source_id END,target_type,CASE WHEN target_type IN ('issue','crossover','thread','plan','group') THEN target_id+10000000 ELSE target_id END,satisfaction_type,CASE WHEN checkpoint_issue_id IS NULL THEN NULL ELSE checkpoint_issue_id+10000000 END,CASE WHEN note ~ '^continuity-plan:[0-9]+$' THEN 'continuity-plan:'||((substring(note from 17)::bigint)+10000000)::text ELSE note END,created_at,updated_at,CASE WHEN legacy_dependency_id IS NULL THEN NULL ELSE legacy_dependency_id+10000000 END,pg_temp.qa_rewrite_json(convergence_targets::jsonb) FROM continuity_rules WHERE user_id=1
 -- NEXT_STATEMENT
 INSERT INTO continuity_rule_selected_members (id,rule_id,issue_id) SELECT m.id+10000000,m.rule_id+10000000,m.issue_id+10000000 FROM continuity_rule_selected_members m JOIN continuity_rules r ON r.id=m.rule_id WHERE r.user_id=1
 -- NEXT_STATEMENT
@@ -161,4 +169,11 @@ DO $verify$ BEGIN
  IF (SELECT count(*) FROM continuity_plans WHERE user_id=1) IS DISTINCT FROM (SELECT count(*) FROM continuity_plans WHERE user_id=23199) THEN RAISE EXCEPTION 'plan count mismatch'; END IF;
  IF EXISTS(SELECT 1 FROM issues s JOIN threads t ON t.id=s.thread_id LEFT JOIN issues q ON q.id=s.id+10000000 WHERE t.user_id=1 AND (q.id IS NULL OR q.status IS DISTINCT FROM s.status OR q.thread_id IS DISTINCT FROM s.thread_id+10000000)) THEN RAISE EXCEPTION 'QA issue progress/owner mismatch'; END IF;
  IF EXISTS(SELECT 1 FROM threads s LEFT JOIN threads q ON q.id=s.id+10000000 WHERE s.user_id=1 AND (q.id IS NULL OR q.title IS DISTINCT FROM s.title OR q.next_unread_issue_id IS DISTINCT FROM CASE WHEN s.next_unread_issue_id IS NULL THEN NULL ELSE s.next_unread_issue_id+10000000 END)) THEN RAISE EXCEPTION 'QA thread/frontier mismatch'; END IF;
+ IF EXISTS (
+ SELECT 1 FROM continuity_rules r
+ CROSS JOIN LATERAL jsonb_array_elements(r.convergence_targets::jsonb) e(value)
+ LEFT JOIN issues i ON i.id=(e.value->>'id')::int
+ LEFT JOIN threads t ON t.id=i.thread_id
+ WHERE r.user_id=23199 AND e.value->>'type'='issue' AND (i.id IS NULL OR t.user_id IS DISTINCT FROM 23199)
+ ) THEN RAISE EXCEPTION 'QA convergence target references non-QA issue'; END IF;
  END $verify$
