@@ -28,7 +28,25 @@ ORDER BY d.id
 
 
 async def run(url: str, uid: int) -> dict:
-    """Load canonical and historical rows in one read-only owner transaction."""
+    """Load canonical and historical rows in one read-only owner transaction.
+
+    This function connects to the PostgreSQL database using an async engine with
+    REPEATABLE READ isolation, executes a read‑only transaction, loads the
+    shadow inputs for the given user, runs the audit of future unread historical
+    edges, and returns a structured JSON report.  The report includes:
+
+    * ``examined`` – total number of historical edges considered (excluding
+      excluded issues).
+    * ``implied`` – number of edges that are implied by the canonical graph.
+    * ``unresolved`` – list of edges that are missing from the canonical graph,
+      each with source and target issue labels.
+    * ``partial_strict_list_omissions`` – details of strict‑list omissions.
+    * ``status`` – ``PASS`` if the audit is safe to certify and there are no
+      partial strict‑list omissions, otherwise ``REVIEW_REQUIRED``.
+
+    The function is intended for use by the CLI entry point ``main`` and by
+    automated tests that need PostgreSQL coverage of the production path.
+    """
     if not url.startswith("postgresql+asyncpg://") or uid < 1:
         raise ValueError("Specify an asyncpg URL and positive user ID")
     engine = create_async_engine(url, isolation_level="REPEATABLE READ")
@@ -83,7 +101,12 @@ async def run(url: str, uid: int) -> dict:
 
 
 def vars_edge(edge: HistoricalEdge) -> dict:
-    """Serialize one unresolved historical edge without changing it."""
+    """Serialize one unresolved historical edge without changing it.
+
+    Returns a dictionary with the edge's identifier, source and target issue IDs,
+    origin, and note.  This helper is used by the CLI report to produce JSON
+    output that is easy to parse.
+    """
     return {
         "id": edge.dependency_id, "source": edge.source_issue_id,
         "target": edge.target_issue_id, "origin": edge.origin,
@@ -92,7 +115,13 @@ def vars_edge(edge: HistoricalEdge) -> dict:
 
 
 def main() -> int:
-    """Exit nonzero unless the historical unread-edge audit passes."""
+    """Exit nonzero unless the historical unread-edge audit passes.
+
+    Parses command-line arguments for ``--database-url`` and ``--user-id``,
+    runs the ``run`` coroutine, prints the JSON report, and exits with a
+    status code indicating success (0) or failure (non‑zero).  The exit code
+    is useful for CI pipelines to detect audit failures automatically.
+    """
     p = argparse.ArgumentParser()
     p.add_argument("--database-url", required=True)
     p.add_argument("--user-id", required=True, type=int)
