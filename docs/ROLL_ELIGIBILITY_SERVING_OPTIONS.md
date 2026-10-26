@@ -67,7 +67,7 @@ Option J is not in the original design note. It is the only stored-table design 
 
 ## Option B+: Slim snapshot plus compact snooze state
 
-**Mechanism.** Option B, narrowed to the columns `evaluate()` actually uses: unread frontier candidates, list entries with status, reader prerequisites with endpoint status, exclusions, overlap decisions, and confirmed volume identity. Separately, persist compact per-thread backoff (`snooze_count` after the reset boundary, latest snooze time, and whether a later unsnooze cleared it). Update that row on snooze, unsnooze, rate, undo, and snapshot restore — each of these can change `Thread.last_activity_at`, which is the backoff reset boundary. At selection time, compare it with the count of sessions started after the latest snooze. Current-session snooze and skip stay filters on the session row. Add a shadow check for the snooze → rate → undo sequence: restoring an earlier boundary can revive a streak that the stored row cleared on rating, so the shadow must verify that the compact row and the reconstructed event history agree after any boundary-moving operation.
+**Mechanism.** Option B, narrowed to the columns `evaluate()` actually uses: unread frontier candidates, list entries with status, reader prerequisites with endpoint status, exclusions, overlap decisions, and confirmed volume identity. Separately, persist compact per-thread backoff (`snooze_count` after the reset boundary, latest snooze time, and whether a later unsnooze cleared it). Recompute that row on every write that moves `Thread.last_activity_at`, because backoff counts snoozes after that boundary. The writers are snooze, unsnooze, rate, undo (`app/api/undo.py` restoring an undo snapshot), and snapshot restore (`app/repositories/reading_session_repository.py` and `app/repositories/undo_snapshot_repository.py`). At selection time, compare the row with the count of sessions started after the latest snooze. Current-session snooze and skip stay filters on the session row.
 
 **Reasons this is the recommendation.**
 
@@ -79,7 +79,7 @@ Option J is not in the original design note. It is the only stored-table design 
 
 **Reasons to doubt it.** The Python walk still runs on every Roll. If a production-shaped reader shows that the walk or the slim payload, rather than the current loader and snooze scan, is the remaining cost, B+ is the wrong final form. That is a measurement question, not a reason to skip B+.
 
-**Verdict.** Build and measure this first. Go if the eligible Issue IDs match today's oracle and median Roll wall on a production-shaped reader is under 250 ms. No-go if the median is worse than the post-#4191 615 ms sample.
+**Verdict.** Build and measure this first. The adoption go is the combined design in measurement slice 3: eligible Issue IDs match today's oracle and median Roll wall on a production-shaped reader is under 250 ms. A loader-only result under 250 ms is not required, and a loader-only result between 250 and 615 ms does not decide this verdict. No-go for the combined design if its median is worse than the post-#4191 615 ms sample.
 
 ## Option C: Versioned per-Thread frontier records
 
@@ -158,11 +158,11 @@ Ownership is a composite foreign key through `threads(user_id, id)` and `issues(
 
 **Reasons it is not next.** It adds a table, a lock protocol, a rebuild command, and an ADR amendment before anyone has shown that B+ is too slow. Fail-closed Roll is a production incident if a write path leaves the reader dirty. The concurrency protocol has to be tested: one statement must observe either the old complete set or the new complete set, and a rate transaction must hold the revision row before it mutates canonical data.
 
-**Verdict.** Last resort, after slices 1–3 below. Do not start with the table.
+**Verdict.** Last resort, after the SQL-function slice misses its gate. Do not start with the table.
 
 ## Snooze, history, and ownership
 
-Keep current-session snooze and skip out of any membership table. They are properties of the open session. Compact the cross-session backoff into its own row, updated on snooze, unsnooze, and rate. Selection combines that row with the frontier set. That removes the historical event scan without making session start rewrite eligible Issues.
+Keep current-session snooze and skip out of any membership table. They are properties of the open session. Compact the cross-session backoff into its own row. Recompute it on snooze, unsnooze, rate, undo, and snapshot restore, because each of those can move `Thread.last_activity_at` and bring a cleared streak back. Selection combines that row with the frontier set. That removes the historical event scan without making session start rewrite eligible Issues.
 
 Do not keep an append-only copy of the full eligible set. If debugging later needs a trail, record compact change events. Existing reading events document what the reader did. They are not a replay log for old rule versions.
 
@@ -170,12 +170,13 @@ Any future membership table must prove the Issue belongs to the reader. Two inde
 
 ## Measurement gates
 
-Run these in order against read-only production-shaped data or an isolated dataset. A later slice does not start because an earlier one was merely implemented.
+Run these in order against read-only production-shaped data or an isolated dataset. A correctness mismatch stops the sequence. The 250 ms figure belongs only to the combined B+ gate. It is not a pass condition for the loader alone, because snooze reconstruction is a separate cost.
 
-1. **Slim loader gate (loader only).** The consolidated snapshot fetch alone must achieve median wall time under 250 ms on a production-shaped reader. No-go if the loader median exceeds 615 ms (the post-#4191 baseline). **If the loader lands between 250 ms and 615 ms, the gate is inconclusive: continue to slice 2 but do not treat the combined B+ design as validated.** The combined B+ target (slim loader + compact snooze row + evaluator) remains under 250 ms median.
-2. **Compact snooze row, shadow only.** Excluded Thread IDs match `derive_cross_session_excluded_thread_ids()` across session boundaries. No-go on any mismatch.
-3. **SQL function in shadow.** Identical frontier sets for the named reading orders and one full reader snapshot, with p95 execution under 50 ms. No-go on any ID mismatch or on a function that is not clearly cheaper than slice 1.
-4. **Option J, still not serving.** Roll and Cancel write zero membership rows. Rate and list edits commit the canonical change and the set difference together, or roll both back. Concurrent rate and Roll never observe a partial set or another reader's Issue. No-go on any drift.
+1. **Slim loader, evaluator unchanged.** Eligible Issue IDs match the current oracle. Record median Roll wall time while snooze reconstruction stays as it is today. No-go if that median is worse than the post-#4191 615 ms sample. A median from 250 ms through 615 ms continues to slice 2. It means the loader is not a regression, and it does not validate B+. The loader is not required to land under 250 ms before slice 2 starts.
+2. **Compact snooze row, shadow only.** Excluded Thread IDs match `derive_cross_session_excluded_thread_ids()` across session boundaries. The shadow must include snooze, then rate, then undo, and a snapshot restore that writes an earlier `Thread.last_activity_at`. Restoring that boundary can revive a streak the stored row cleared on rating, so the compact row and the event-history derivation have to agree after the restore. No-go on any mismatch.
+3. **Combined B+.** Slim loader, compact snooze row, and the unchanged evaluator together. Go when eligible Issue IDs still match and median Roll wall on a production-shaped reader is under 250 ms. A combined median from 250 ms through 615 ms is not a pass and does not authorize Option G or Option J. No-go when the combined median is worse than 615 ms.
+4. **SQL function in shadow.** Start only when slice 3 misses its go. Identical frontier sets for the named reading orders and one full reader snapshot, with p95 execution under 50 ms. No-go on any ID mismatch or on a function that is not clearly cheaper than the combined B+ measurement.
+5. **Option J, still not serving.** Start only when slice 4 also misses its gate. Roll and Cancel write zero membership rows. Rate and list edits commit the canonical change and the set difference together, or roll both back. Concurrent rate and Roll never observe a partial set or another reader's Issue. No-go on any drift.
 
 ## ADR amendment, only after a stored set is earned
 
