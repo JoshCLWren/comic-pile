@@ -135,6 +135,65 @@ async def test_run_excludes_edges_with_excluded_endpoint(
     assert report["status"] == "PASS"
 
 
+async def test_run_filters_non_historical_inert_and_read_edges(
+    async_db_committed: AsyncSession,
+) -> None:
+    """The production SQL audits only unread, non-reader, non-inert edges."""
+    db = async_db_committed
+    user = await _owner(db)
+    _thread, issues = await _series(db, user, "Audited series", 3)
+    _later_thread, later_issues = await _series(db, user, "Later series", 2)
+    source = issues[0]
+    read_target = issues[1]
+    read_target.status = "read"
+    audited = Dependency(
+        source_issue_id=source.id,
+        target_issue_id=later_issues[0].id,
+        origin=None,
+        note=None,
+        classification=None,
+        provenance=None,
+    )
+    db.add_all([
+        audited,
+        # Reader-approved prerequisites belong to the live graph, not this audit.
+        Dependency(
+            source_issue_id=source.id,
+            target_issue_id=later_issues[1].id,
+            origin="reader",
+            note=None,
+            classification=None,
+            provenance=None,
+        ),
+        # Inert generated adjacency is not a historical requirement.
+        Dependency(
+            source_issue_id=issues[2].id,
+            target_issue_id=later_issues[1].id,
+            origin=None,
+            note="cbl-order:123",
+            classification=None,
+            provenance=None,
+        ),
+        # Already-read targets are not future order.
+        Dependency(
+            source_issue_id=source.id,
+            target_issue_id=read_target.id,
+            origin=None,
+            note=None,
+            classification=None,
+            provenance=None,
+        ),
+    ])
+    await db.commit()
+
+    report = await audit.run(get_test_database_url(), user.id)
+
+    assert report["examined"] == 1
+    assert report["implied"] == 0
+    assert [edge["id"] for edge in report["unresolved"]] == [audited.id]
+    assert report["status"] == "REVIEW_REQUIRED"
+
+
 def test_main_exit_code_review_required(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

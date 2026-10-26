@@ -3,11 +3,25 @@
 from app.services.reading_future_parity import HistoricalEdge, audit_future_parity
 from app.services.reading_list_evaluator import (
     ReadingIssue, ReadingList, ReadingListEntry, ReadingPrerequisite,
-    ReadingSnapshot, ReadingThread,
+    ReadingSnapshot, ReadingThread, evaluate,
 )
 
 
 TEST_READER_ID = 764321
+
+# The production chain from #4198: UXM #360 (read) -> X-Men #80 (unread) ->
+# X-Men #1/2 (unread) -> UXM #361 (unread). Dependency 1860 and Thread 305 /
+# UXM #361 issue 2029 are the real production identities; the sibling IDs are
+# representative fixture identities for the same named series.
+UXM_THREAD_ID = 305
+XMEN_THREAD_ID = 306
+UXM_360_ISSUE_ID = 2028
+UXM_361_ISSUE_ID = 2029
+XMEN_80_ISSUE_ID = 101874
+XMEN_1_2_ISSUE_ID = 101875
+LEGACY_UXM_HANDOFF = HistoricalEdge(
+    1860, XMEN_1_2_ISSUE_ID, UXM_361_ISSUE_ID, None,
+)
 
 
 def state(
@@ -92,6 +106,14 @@ def test_excluded_hold_cannot_create_false_order_parity() -> None:
     assert not audit_future_parity(snap, (old,)).safe_to_certify
 
 
+def test_self_referential_historical_edge_is_unresolved() -> None:
+    """A historical edge cannot be implied when it points at its own source."""
+    old = HistoricalEdge(1020, 10, 10, None)
+    report = audit_future_parity(state(), (old,))
+    assert report.missing == (old,)
+    assert not report.safe_to_certify
+
+
 def test_excluded_endpoint_is_reported_not_raised() -> None:
     """Exclude an irrelevant historical relationship without aborting the audit."""
     snap = ReadingSnapshot(
@@ -105,3 +127,41 @@ def test_excluded_endpoint_is_reported_not_raised() -> None:
     assert report.excluded == (old,)
     assert report.missing == ()
     assert report.examined == 1
+
+
+def uxm_chain(
+    prerequisites: tuple[ReadingPrerequisite, ...] = (),
+) -> ReadingSnapshot:
+    """Build the #4198 UXM #361 chain with the named production handoff."""
+    return ReadingSnapshot(
+        user_id=TEST_READER_ID,
+        threads=(ReadingThread(UXM_THREAD_ID), ReadingThread(XMEN_THREAD_ID)),
+        issues=(
+            ReadingIssue(UXM_360_ISSUE_ID, UXM_THREAD_ID, 360, "read"),
+            ReadingIssue(UXM_361_ISSUE_ID, UXM_THREAD_ID, 361),
+            ReadingIssue(XMEN_80_ISSUE_ID, XMEN_THREAD_ID, 80),
+            ReadingIssue(XMEN_1_2_ISSUE_ID, XMEN_THREAD_ID, 81),
+        ),
+        prerequisites=prerequisites,
+    )
+
+
+def test_named_uxm_handoff_is_reported_before_explicit_correction() -> None:
+    """#4198: the unapproved legacy handoff leaves UXM #361 offered prematurely."""
+    snap = uxm_chain()
+    report = audit_future_parity(snap, (LEGACY_UXM_HANDOFF,))
+    assert report.missing == (LEGACY_UXM_HANDOFF,)
+    assert not report.safe_to_certify
+    assert evaluate(snap)[UXM_THREAD_ID].eligible
+
+
+def test_named_uxm_handoff_is_protected_by_explicit_prerequisite() -> None:
+    """#4198: the authored prerequisite blocks #361 and keeps X-Men #80 eligible."""
+    explicit = ReadingPrerequisite(
+        1860, XMEN_1_2_ISSUE_ID, UXM_361_ISSUE_ID, "reader",
+    )
+    snap = uxm_chain((explicit,))
+    assert audit_future_parity(snap, (LEGACY_UXM_HANDOFF,)).safe_to_certify
+    eligibility = evaluate(snap)
+    assert not eligibility[UXM_THREAD_ID].eligible
+    assert eligibility[XMEN_THREAD_ID].eligible
