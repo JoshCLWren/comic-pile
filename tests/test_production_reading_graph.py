@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_reading_execution_settings
@@ -163,10 +163,11 @@ async def assert_offers(
 
 async def advance(db: AsyncSession, issue_id: int) -> None:
     """Simulate one rating's read-state transition against restored actual issues."""
-    result = await db.execute(
-        update(Issue).where(Issue.id == issue_id).values(status="read").returning(Issue.id)
-    )
-    assert result.scalar_one() == issue_id
+    # Use the same ORM write lifecycle as the rating path. Bulk SQL would
+    # bypass after_flush invalidation and accidentally replay cached snapshots.
+    issue = await db.get(Issue, issue_id)
+    assert issue is not None and issue.status != "read"
+    issue.status = "read"
     await db.flush()
 
 
@@ -285,10 +286,9 @@ async def test_strict_plan_future_frontier_respects_list_order(
         assert not offered.intersection(unread[1:]), (
             f"{list_name}: future issue bypassed {unread[0]}"
         )
-        # Progress is hypothetical: do not require a particular earlier issue to
-        # be offered if another real list, prerequisite or exclusion still blocks it.
-        if unread[0] not in offered:
-            break
+        # This branch is deliberately hypothetical. Replay several source
+        # placements even when another unrelated plan blocks the real offer,
+        # so dormant future frontiers cannot escape our assertions.
         await advance(async_db, unread.pop(0))
 
 
@@ -305,11 +305,12 @@ async def test_missing_xmen_prerequisite_is_caught_by_independent_oracle(
     expected = review_contract()["approved_sequences"]["xmen_1998"]["steps"]
     await advance(async_db, expected[0]["read"])
     await assert_offers(async_db, owner, withheld=(2029,))
-    await async_db.execute(delete(Dependency).where(
+    requirement = (await async_db.scalars(select(Dependency).where(
         Dependency.source_issue_id == 101875,
         Dependency.target_issue_id == 2029,
         Dependency.origin == "reader",
-    ))
+    ))).one()
+    await async_db.delete(requirement)
     await async_db.flush()
     with pytest.raises(AssertionError, match="prematurely offered issue 2029"):
         await assert_offers(async_db, owner, withheld=(2029,))
