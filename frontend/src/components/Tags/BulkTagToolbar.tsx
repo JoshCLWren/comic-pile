@@ -75,7 +75,7 @@ export function BulkTagToolbar({ selectedIds, onClearSelection, onDone }: BulkTa
   return (
     <div
       role="toolbar"
-      aria-label={`Bulk tag editing for ${selectedIds.length} selected issues`}
+      aria-label={`Bulk tag editing for ${selectedIds.length} selected ${selectedIds.length === 1 ? 'issue' : 'issues'}`}
       className="flex min-w-0 flex-col gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
     >
       <div className="flex flex-wrap items-center gap-2">

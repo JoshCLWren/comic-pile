@@ -59,7 +59,7 @@ def normalize_tag_name(name: str) -> str:
     Returns:
         Normalized name.
     """
-    return name.strip().lower()
+    return " ".join(name.split()).lower()
 
 
 async def get_tag_by_id(db: AsyncSession, tag_id: int) -> Tag | None:

@@ -90,8 +90,8 @@ export function TagEditor({
   // An empty typed name reuses the unfiltered list key, so no extra request
   // fires until the viewer actually types.
   const nameLookup = useTags(debouncedNewName.trim() ? debouncedNewName : undefined)
-  const normalizedTypedName = newName.trim().toLowerCase()
-  const debouncedNormalizedName = debouncedNewName.trim().toLowerCase()
+  const normalizedTypedName = newName.trim().replace(/\s+/g, ' ').toLowerCase()
+  const debouncedNormalizedName = debouncedNewName.trim().replace(/\s+/g, ' ').toLowerCase()
   const [newColor, setNewColor] = useState<string>(DEFAULT_TAG_COLOR_NAME)
   // Roving tab stop for the 32-swatch palette (issues #3432, #3557). The
   // palette is a custom radio group built from buttons, so it must implement
@@ -202,7 +202,7 @@ export function TagEditor({
    * (PR #3996 review).
    */
   const draftStillNames = (nameAtStart: string) =>
-    typedNameRef.current.trim().toLowerCase() === nameAtStart.trim().toLowerCase()
+    typedNameRef.current.trim().replace(/\s+/g, ' ').toLowerCase() === nameAtStart.trim().replace(/\s+/g, ' ').toLowerCase()
 
   async function handleAssign(tag: Tag) {
     clearFeedback()
@@ -290,7 +290,14 @@ export function TagEditor({
     clearFeedback()
     try {
       await unassign.mutateAsync({ id: tag.id, data: payload })
-      setNotice(`Removed “${tag.name}”.`)
+      const inherited = inheritedById.get(tag.id)
+      if (inherited) {
+        setNotice(
+          `Removed direct “${tag.name}”. It remains inherited from ${formatSourceNames(inherited)}.`,
+        )
+      } else {
+        setNotice(`Removed “${tag.name}”.`)
+      }
     } catch (error) {
       setFailure(tagErrorMessage(error, `Could not remove “${tag.name}”.`))
     }
@@ -352,7 +359,7 @@ export function TagEditor({
       // first pass still persisted (or matched) that submitted tag, but a late
       // result must never become the continuation target for the name now on
       // screen: assigning it would add the wrong tag (PR #3996 review).
-      if (typedNameRef.current.trim().toLowerCase() !== name.toLowerCase()) {
+      if (typedNameRef.current.trim().replace(/\s+/g, ' ').toLowerCase() !== name.trim().replace(/\s+/g, ' ').toLowerCase()) {
         setPendingNearMatches(null)
         setPendingCreatedTag(null)
         setNotice(
