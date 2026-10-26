@@ -98,8 +98,11 @@ async def run(*, apply: bool, database_url: str) -> None:
                 await connection.rollback()
             return
         async with engine.begin() as connection:
-            # Every step shares one connection/transaction, including the
-            # temporary JSON remapping function. Any exception rolls back.
+            # Every step shares one consistent source snapshot and one
+            # transaction. Any exception rolls back the entire QA replacement.
+            await connection.exec_driver_sql(
+                "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+            )
             await connection.exec_driver_sql("SET LOCAL lock_timeout = '10s'")
             await connection.exec_driver_sql("SET LOCAL statement_timeout = '180s'")
             for statement in statements:
