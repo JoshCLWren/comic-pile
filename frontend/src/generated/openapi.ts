@@ -5527,6 +5527,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/check-duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Potential Duplicates
+         * @description Check for potential duplicate threads before creating or renaming.
+         *
+         *     Compares canonical ComicVine volume identity when available (strong match),
+         *     and uses title + format similarity as a fallback (weak match).
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         check_data: Title, format, optional ComicVine volume ID, and optional thread ID to exclude.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         List of potential duplicate matches with match type and thread details.
+         */
+        post: operations["check_potential_duplicates_api_v1_threads_check_duplicates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/completed": {
         parameters: {
             query?: never;
@@ -8032,6 +8064,34 @@ export interface components {
             provider_updated_at?: number | null;
             /** Updated At */
             updated_at: number;
+        };
+        /**
+         * CheckPotentialDuplicatesRequest
+         * @description Request to check for potential duplicate threads.
+         */
+        CheckPotentialDuplicatesRequest: {
+            /**
+             * Comicvine Volume Id
+             * @description ComicVine volume ID for strong matching
+             */
+            comicvine_volume_id?: number | null;
+            /**
+             * Exclude Thread Id
+             * @description Thread ID to exclude from results (for edit flow)
+             */
+            exclude_thread_id?: number | null;
+            /** Format */
+            format: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * CheckPotentialDuplicatesResponse
+         * @description Response containing potential duplicate matches.
+         */
+        CheckPotentialDuplicatesResponse: {
+            /** Matches */
+            matches?: components["schemas"]["PotentialDuplicateMatch"][];
         };
         /**
          * CollectionExclusionCreate
@@ -12690,6 +12750,28 @@ export interface components {
         PositionRequest: {
             /** New Position */
             new_position: number;
+        };
+        /**
+         * PotentialDuplicateMatch
+         * @description A thread that potentially duplicates the proposed series.
+         */
+        PotentialDuplicateMatch: {
+            /** Comicvine Volume Id */
+            comicvine_volume_id?: number | null;
+            /** Format */
+            format: string;
+            /** Issues Remaining */
+            issues_remaining: number;
+            /** Match Type */
+            match_type: string;
+            /** Status */
+            status: string;
+            /** Thread Id */
+            thread_id: number;
+            /** Title */
+            title: string;
+            /** Total Issues */
+            total_issues: number | null;
         };
         /**
          * PrerequisiteCreate
@@ -23424,6 +23506,39 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+        };
+    };
+    check_potential_duplicates_api_v1_threads_check_duplicates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckPotentialDuplicatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckPotentialDuplicatesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -224,10 +224,18 @@ class ComicVineMappingHealth(BaseModel):
 
     status: ComicVineMappingStatus
     tracked_issue_count: int = Field(..., ge=0, description="Total issues in this thread's scope")
-    confirmed_issue_count: int = Field(..., ge=0, description="Issues with confirmed ComicVine mappings")
-    needs_mapping_count: int = Field(..., ge=0, description="Issues with no confirmed mapping (unresolved/candidate)")
-    needs_review_count: int = Field(..., ge=0, description="Issues with conflicting/ambiguous mappings")
-    metadata_missing_count: int = Field(default=0, ge=0, description="Confirmed mappings without usable issue and series metadata")
+    confirmed_issue_count: int = Field(
+        ..., ge=0, description="Issues with confirmed ComicVine mappings"
+    )
+    needs_mapping_count: int = Field(
+        ..., ge=0, description="Issues with no confirmed mapping (unresolved/candidate)"
+    )
+    needs_review_count: int = Field(
+        ..., ge=0, description="Issues with conflicting/ambiguous mappings"
+    )
+    metadata_missing_count: int = Field(
+        default=0, ge=0, description="Confirmed mappings without usable issue and series metadata"
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -305,8 +313,12 @@ class CheckPotentialDuplicatesRequest(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=200)
     format: str = Field(..., min_length=1)
-    comicvine_volume_id: int | None = Field(None, gt=0, description="ComicVine volume ID for strong matching")
-    exclude_thread_id: int | None = Field(None, gt=0, description="Thread ID to exclude from results (for edit flow)")
+    comicvine_volume_id: int | None = Field(
+        None, gt=0, description="ComicVine volume ID for strong matching"
+    )
+    exclude_thread_id: int | None = Field(
+        None, gt=0, description="Thread ID to exclude from results (for edit flow)"
+    )
 
 
 class CheckPotentialDuplicatesResponse(BaseModel):

@@ -1,10 +1,10 @@
+import { usePotentialDuplicates } from '../../hooks/usePotentialDuplicates'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import type { Thread, ThreadListItem, ThreadCreatePayload, CheckPotentialDuplicatesRequest, PotentialDuplicateMatch } from '../../types'
+import type { Thread, ThreadListItem, ThreadCreatePayload, PotentialDuplicateMatch } from '../../types'
 import { getManualCreatorCreditList } from '../../types'
 import { issuesApi } from '../../services/api-issues'
-import { threadsApi } from '../../services/api-threads'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
@@ -123,9 +123,6 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const [issueParseWarnings, setIssueParseWarnings] = useState<string[]>([])
   const [issueParseBreakdown, setIssueParseBreakdown] = useState<ParsedIssueRangeDetail['breakdown']>([])
   const [isIssuesLoading, setIsIssuesLoading] = useState(false)
-  const [createPotentialDuplicates, setCreatePotentialDuplicates] = useState<PotentialDuplicateMatch[]>([])
-  const [editPotentialDuplicates, setEditPotentialDuplicates] = useState<PotentialDuplicateMatch[]>([])
-  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false)
 
   const creatingRef = useRef(false)
 
@@ -148,7 +145,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     setOpenModal(null)
     clearRestoreAction()
     clearQueueModalState()
-    setCreatePotentialDuplicates([])
+
   }, [clearQueueModalState, clearRestoreAction])
 
   const showEditModal = useCallback(
@@ -166,7 +163,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         lastIssueRead: 0,
         manualCreatorCredits: getManualCreatorCreditList(thread),
       })
-      setEditPotentialDuplicates([])
+
       setIsIssuesLoading(issuesLoadRequired)
       setOpenModal('edit')
       setRestoreAction(() => {
@@ -180,7 +177,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           lastIssueRead: 0,
           manualCreatorCredits: getManualCreatorCreditList(thread),
         })
-        setEditPotentialDuplicates([])
+
         setIsIssuesLoading(issuesLoadRequired)
         setOpenModal('edit')
       })
@@ -190,7 +187,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
 
   const closeEditModal = useCallback(() => {
     setEditingThread(null)
-    setEditPotentialDuplicates([])
+
     setIsIssuesLoading(false)
     setOpenModal(null)
     clearRestoreAction()
@@ -334,83 +331,12 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     }
   }, [createForm.issues])
 
-  // Check for potential duplicates when title or format changes in create form
-  useEffect(() => {
-    let cancelled = false
-    const checkDuplicates = async () => {
-      const title = createForm.title.trim()
-      const format = createForm.format.trim()
-      if (!title || !format) {
-        setCreatePotentialDuplicates([])
-        return
-      }
-      setIsCheckingDuplicates(true)
-      try {
-        const response = await threadsApi.checkPotentialDuplicates({
-          title,
-          format,
-          comicvine_volume_id: undefined,
-          exclude_thread_id: undefined,
-        })
-        if (!cancelled) {
-          setCreatePotentialDuplicates(response.matches)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Failed to check potential duplicates:', error)
-          setCreatePotentialDuplicates([])
-        }
-      } finally {
-        if (!cancelled) {
-          setIsCheckingDuplicates(false)
-        }
-      }
-    }
-    const debounceTimer = setTimeout(checkDuplicates, 300)
-    return () => {
-      cancelled = true
-      clearTimeout(debounceTimer)
-    }
-  }, [createForm.title, createForm.format])
-
-  // Check for potential duplicates when title or format changes in edit form
-  useEffect(() => {
-    let cancelled = false
-    const checkDuplicates = async () => {
-      const title = editForm.title.trim()
-      const format = editForm.format.trim()
-      if (!title || !format || !editingThread) {
-        setEditPotentialDuplicates([])
-        return
-      }
-      setIsCheckingDuplicates(true)
-      try {
-        const response = await threadsApi.checkPotentialDuplicates({
-          title,
-          format,
-          comicvine_volume_id: undefined,
-          exclude_thread_id: editingThread.id,
-        })
-        if (!cancelled) {
-          setEditPotentialDuplicates(response.matches)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Failed to check potential duplicates:', error)
-          setEditPotentialDuplicates([])
-        }
-      } finally {
-        if (!cancelled) {
-          setIsCheckingDuplicates(false)
-        }
-      }
-    }
-    const debounceTimer = setTimeout(checkDuplicates, 300)
-    return () => {
-      cancelled = true
-      clearTimeout(debounceTimer)
-    }
-  }, [editForm.title, editForm.format, editingThread])
+  const createDuplicates = usePotentialDuplicates({ title: createForm.title, format: createForm.format }, openModal === 'create')
+  const editDuplicates = usePotentialDuplicates({ title: editForm.title, format: editForm.format,
+    exclude_thread_id: editingThread?.id }, openModal === 'edit' && editingThread != null)
+  const createPotentialDuplicates = createDuplicates.matches
+  const editPotentialDuplicates = editDuplicates.matches
+  const isCheckingDuplicates = openModal === 'create' ? createDuplicates.isChecking : editDuplicates.isChecking
 
   const handleCreateSubmit = useCallback(
     async (event: FormEvent) => {

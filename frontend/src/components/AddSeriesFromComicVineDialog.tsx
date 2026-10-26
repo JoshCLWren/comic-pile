@@ -1,8 +1,8 @@
+import { usePotentialDuplicates } from '../hooks/usePotentialDuplicates'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import Modal from './Modal'
 import { comicVineApi } from '../services/api-comicvine'
-import { threadsApi } from '../services/api-threads'
 import type {
   ComicVineSeriesImportStatus,
   ComicVineSeriesResult,
@@ -263,48 +263,10 @@ export default function AddSeriesFromComicVineDialog({
     select: (status) => (status?.imported ? status : null),
   })
 
-  // Check for potential duplicates (same ComicVine volume or similar title/format)
-  const [potentialDuplicates, setPotentialDuplicates] = useState<PotentialDuplicateMatch[]>([])
-  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const checkDuplicates = async () => {
-      if (!selectedSeries) {
-        setPotentialDuplicates([])
-        return
-      }
-      setIsCheckingDuplicates(true)
-      try {
-        const response = await threadsApi.checkPotentialDuplicates({
-          title: selectedSeries.name,
-          format: 'Comic', // Default format; the user can change it in the manual create flow
-          comicvine_volume_id: selectedSeries.comicvine_volume_id,
-          exclude_thread_id: undefined,
-        })
-        if (!cancelled) {
-          setPotentialDuplicates(response.matches)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Failed to check potential duplicates:', error)
-          setPotentialDuplicates([])
-        }
-      } finally {
-        if (!cancelled) {
-          setIsCheckingDuplicates(false)
-        }
-      }
-    }
-    if (step === 'confirm' && selectedSeries) {
-      checkDuplicates()
-    } else {
-      setPotentialDuplicates([])
-    }
-    return () => {
-      cancelled = true
-    }
-  }, [step, selectedSeries])
+  const duplicateQuery = usePotentialDuplicates({ title: selectedSeries?.name ?? '', format: 'Comic',
+    comicvine_volume_id: selectedSeries?.comicvine_volume_id }, isOpen && step === 'confirm')
+  const potentialDuplicates = duplicateQuery.matches
+  const isCheckingDuplicates = duplicateQuery.isChecking
 
   const handleSearch = useCallback(
     async (searchQuery: string, offset = 0, append = false) => {
@@ -674,23 +636,23 @@ export default function AddSeriesFromComicVineDialog({
 
             {(potentialDuplicates.length > 0 || isCheckingDuplicates) && (
               <div
-                className="space-y-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30"
+                className="space-y-2 p-3 rounded-xl bg-[var(--theme-bg-panel)] border border-[var(--theme-warning)]"
                 role="alert"
                 aria-live="polite"
               >
                 {isCheckingDuplicates ? (
-                  <div className="flex items-center gap-2 text-sm text-amber-300">
-                    <div className="w-4 h-4 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                  <div className="flex items-center gap-2 text-sm text-[var(--theme-warning)]">
+                    <div className="w-4 h-4 border-2 border-[var(--theme-warning)] border-t-[var(--theme-warning)] rounded-full animate-spin" />
                     Checking for potential duplicates...
                   </div>
                 ) : (
                   <>
-                    <p className="text-sm font-bold text-amber-300">
+                    <p className="text-sm font-bold text-[var(--theme-warning)]">
                       {potentialDuplicates.some((m) => m.match_type === 'strong')
                         ? '⚠ Same ComicVine volume already in your library'
                         : '⚠ Similar series found in your library'}
                     </p>
-                    <p className="text-xs text-stone-300">
+                    <p className="text-xs text-[var(--theme-text-primary)]">
                       {potentialDuplicates.some((m) => m.match_type === 'strong')
                         ? 'This ComicVine volume is already linked to an existing series. Adding it again will not create a new series or duplicate issues.'
                         : 'A series with a similar title and format already exists. You can still add this series if it\'s a different volume or edition.'}
@@ -699,21 +661,21 @@ export default function AddSeriesFromComicVineDialog({
                       {potentialDuplicates.map((match) => (
                         <div
                           key={match.thread_id}
-                          className="p-2 rounded-lg bg-stone-800/50 border border-stone-700/50"
+                          className="p-2 rounded-lg bg-[var(--theme-bg-panel)] border border-[var(--theme-border)]"
                         >
                           <div className="flex items-start gap-2">
                             <span
                               className={`text-xs px-2 py-0.5 rounded-full ${
                                 match.match_type === 'strong'
-                                  ? 'bg-amber-500/20 text-amber-300'
-                                  : 'bg-stone-600/50 text-stone-300'
+                                  ? 'bg-[var(--theme-bg-panel)] text-[var(--theme-warning)]'
+                                  : 'bg-[var(--theme-bg-panel)] text-[var(--theme-text-primary)]'
                               }`}
                             >
                               {match.match_type === 'strong' ? 'Same ComicVine Volume' : 'Similar Title/Format'}
                             </span>
                           </div>
-                          <p className="text-sm font-medium text-stone-100 mt-1">{match.title}</p>
-                          <div className="flex flex-wrap gap-2 text-xs text-stone-400 mt-1">
+                          <p className="text-sm font-medium text-[var(--theme-text-primary)] mt-1">{match.title}</p>
+                          <div className="flex flex-wrap gap-2 text-xs text-[var(--theme-text-muted)] mt-1">
                             <span>{match.format}</span>
                             <span>•</span>
                             <span>
@@ -724,7 +686,7 @@ export default function AddSeriesFromComicVineDialog({
                             <span>•</span>
                             <span>{match.status}</span>
                           </div>
-                          <p className="text-xs text-stone-500 mt-1">
+                          <p className="text-xs text-[var(--theme-text-dim)] mt-1">
                             Thread ID: {match.thread_id}
                             {match.match_type === 'strong' && match.comicvine_volume_id && (
                               <> • ComicVine Volume: {match.comicvine_volume_id}</>

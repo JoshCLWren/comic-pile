@@ -315,7 +315,7 @@ async def create_thread(
     return await thread_service.create_thread_with_retry(db, current_user.id, thread_data)
 
 
-@router.post("/check-duplicates", response_model=CheckPotentialDuplicatesResponse)
+@v1_router.post("/check-duplicates", response_model=CheckPotentialDuplicatesResponse)
 @limiter.limit("60/minute")
 async def check_potential_duplicates(
     request: Request,

@@ -2798,6 +2798,68 @@
         "title": "CatalogSeriesSearchResponse",
         "type": "object"
       },
+      "CheckPotentialDuplicatesRequest": {
+        "description": "Request to check for potential duplicate threads.",
+        "properties": {
+          "comicvine_volume_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ComicVine volume ID for strong matching",
+            "title": "Comicvine Volume Id"
+          },
+          "exclude_thread_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Thread ID to exclude from results (for edit flow)",
+            "title": "Exclude Thread Id"
+          },
+          "format": {
+            "minLength": 1,
+            "title": "Format",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "format"
+        ],
+        "title": "CheckPotentialDuplicatesRequest",
+        "type": "object"
+      },
+      "CheckPotentialDuplicatesResponse": {
+        "description": "Response containing potential duplicate matches.",
+        "properties": {
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/PotentialDuplicateMatch"
+            },
+            "title": "Matches",
+            "type": "array"
+          }
+        },
+        "title": "CheckPotentialDuplicatesResponse",
+        "type": "object"
+      },
       "CollectionExclusionCreate": {
         "description": "Exactly one target: external volume identity, Thread or Issue.",
         "properties": {
@@ -12342,6 +12404,68 @@
           "new_position"
         ],
         "title": "PositionRequest",
+        "type": "object"
+      },
+      "PotentialDuplicateMatch": {
+        "description": "A thread that potentially duplicates the proposed series.",
+        "properties": {
+          "comicvine_volume_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Volume Id"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "issues_remaining": {
+            "title": "Issues Remaining",
+            "type": "integer"
+          },
+          "match_type": {
+            "title": "Match Type",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_issues": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Issues"
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "total_issues",
+          "status",
+          "match_type"
+        ],
+        "title": "PotentialDuplicateMatch",
         "type": "object"
       },
       "PrerequisiteCreate": {
@@ -33122,6 +33246,54 @@
           }
         ],
         "summary": "List Active Threads",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/check-duplicates": {
+      "post": {
+        "description": "Check for potential duplicate threads before creating or renaming.\n\nCompares canonical ComicVine volume identity when available (strong match),\nand uses title + format similarity as a fallback (weak match).\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    check_data: Title, format, optional ComicVine volume ID, and optional thread ID to exclude.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    List of potential duplicate matches with match type and thread details.",
+        "operationId": "check_potential_duplicates_api_v1_threads_check_duplicates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckPotentialDuplicatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckPotentialDuplicatesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Potential Duplicates",
         "tags": [
           "threads",
           "threads"

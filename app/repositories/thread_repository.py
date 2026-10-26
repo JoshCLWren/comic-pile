@@ -17,7 +17,12 @@ from app.repositories.reading_eligibility_queries import candidate_predicate
 from app.models import Issue, Thread
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.thread import EXCLUDED_STATUS
-from app.services.queue_pagination import QueueCursor, QueueSort, build_cursor_filter, build_sort_order
+from app.services.queue_pagination import (
+    QueueCursor,
+    QueueSort,
+    build_cursor_filter,
+    build_sort_order,
+)
 
 
 async def get_thread(db: AsyncSession, thread_id: int) -> Thread | None:
@@ -43,9 +48,7 @@ async def lock_thread(db: AsyncSession, thread_id: int) -> Thread | None:
     Returns:
         The locked thread, or None when it does not exist.
     """
-    result = await db.execute(
-        select(Thread).where(Thread.id == thread_id).with_for_update()
-    )
+    result = await db.execute(select(Thread).where(Thread.id == thread_id).with_for_update())
     return result.scalar_one_or_none()
 
 
@@ -300,14 +303,17 @@ async def fetch_queue_page(
     ranks = (
         select(
             Thread.id.label("thread_id"),
-            func.row_number().over(order_by=build_sort_order("position", eligibility)).label("position"),
+            func.row_number()
+            .over(order_by=build_sort_order("position", eligibility))
+            .label("position"),
         )
         .where(Thread.user_id == user_id, Thread.status == "active")
         .subquery()
     )
     query = (
-        select(Thread, func.coalesce(ranks.c.position, 0))
-        .outerjoin(ranks, ranks.c.thread_id == Thread.id)
+        select(Thread, func.coalesce(ranks.c.position, 0)).outerjoin(
+            ranks, ranks.c.thread_id == Thread.id
+        )
     ).where(
         Thread.user_id == user_id,
         Thread.status == "active",
@@ -360,10 +366,7 @@ async def fetch_completed_page(
         :func:`build_sort_order` helper keeps the ORDER BY columns and the
         keyset cursor filter on the same contract for every sort.
     """
-    query = select(Thread).where(
-        Thread.user_id == user_id,
-        Thread.status == "completed"
-    )
+    query = select(Thread).where(Thread.user_id == user_id, Thread.status == "completed")
 
     if search:
         query = query.where(Thread.title.ilike(f"%{search}%"))
@@ -806,15 +809,20 @@ async def fetch_comicvine_mapping_health(
             Issue.id.label("issue_id"),
             Issue.thread_id.label("thread_id"),
             func.count(ExternalIdentity.id).label("confirmed_count"),
-            func.count(ExternalIdentity.id).filter(
+            func.count(ExternalIdentity.id)
+            .filter(
                 or_(
-                    func.coalesce(ExternalIdentity.metadata_json["issue_number"].as_string(), "") == "",
+                    func.coalesce(ExternalIdentity.metadata_json["issue_number"].as_string(), "")
+                    == "",
                     func.coalesce(
                         ExternalIdentity.metadata_json["volume"]["name"].as_string(),
-                        ExternalIdentity.metadata_json["volume_name"].as_string(), "",
-                    ) == "",
+                        ExternalIdentity.metadata_json["volume_name"].as_string(),
+                        "",
+                    )
+                    == "",
                 )
-            ).label("metadata_missing_count"),
+            )
+            .label("metadata_missing_count"),
         )
         .select_from(Issue)
         .where(Issue.thread_id.in_(select(tracked_threads.c.id)))
@@ -828,8 +836,7 @@ async def fetch_comicvine_mapping_health(
         .outerjoin(
             ExternalIdentity,
             and_(
-                ExternalIdentity.id
-                == IssueExternalIdentityMapping.external_identity_id,
+                ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
                 ExternalIdentity.provider == "comicvine",
             ),
         )
@@ -850,10 +857,9 @@ async def fetch_comicvine_mapping_health(
         func.count()
         .filter(issue_mapping_state.c.confirmed_count == 0)
         .label("needs_mapping_count"),
+        func.count().filter(issue_mapping_state.c.confirmed_count > 1).label("needs_review_count"),
         func.count()
-        .filter(issue_mapping_state.c.confirmed_count > 1)
-        .label("needs_review_count"),
-        func.count().filter(issue_mapping_state.c.metadata_missing_count > 0)
+        .filter(issue_mapping_state.c.metadata_missing_count > 0)
         .label("metadata_missing_count"),
         (func.count(issue_mapping_state.c.issue_id) > 0).label("has_issues"),
     ).group_by(issue_mapping_state.c.thread_id)
@@ -900,9 +906,12 @@ async def owned_title_exists(db: AsyncSession, user_id: int, title: str) -> bool
     Returns:
         Whether any thread owned by this reader uses the title.
     """
-    return await db.scalar(
-        select(Thread.id).where(Thread.user_id == user_id, Thread.title == title).limit(1)
-    ) is not None
+    return (
+        await db.scalar(
+            select(Thread.id).where(Thread.user_id == user_id, Thread.title == title).limit(1)
+        )
+        is not None
+    )
 
 
 async def find_potential_duplicates_by_comicvine_volume(
@@ -1007,7 +1016,12 @@ async def find_potential_duplicates_by_title_format(
         # Title similarity: either contains the other or shares significant words
         or_(
             Thread.title.ilike(f"%{normalized_title}%"),
-            func.lower(Thread.title).like(f"%{normalized_title.split()[0]}%") if normalized_title.split() else False,
+            func.strpos(normalized_title, func.lower(Thread.title)) > 0,
+            *(
+                Thread.title.ilike(f"%{word}%")
+                for word in normalized_title.split()
+                if len(word) >= 3
+            ),
         ),
     )
     if exclude_thread_id is not None:
