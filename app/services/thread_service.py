@@ -1033,7 +1033,7 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
                 try:
                     ntype = str(node.get("node_type", ""))
                     ref = int(node.get("ref_id", 0))
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     pruned.append(node)
                     continue
                 if ntype == "thread" and ref == thread_id:
