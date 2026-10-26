@@ -14,10 +14,12 @@ def test_timeline_detail_view_is_newest_first():
 
 
 def test_summary_separates_snoozed_from_skipped():
-    """Narrative summary keeps snoozed series out of skipped (issue #3195)."""
+    """Narrative summary keeps still-snoozed series separate from skipped (#3195, #3707)."""
     src = open("app/services/summary_service.py").read()
     assert '"snoozed": []' in src
-    assert 'elif event.type == "snooze":' in src
+    assert "project_still_snoozed_thread_ids" in src
+    assert 'event.type == "snooze"' in src
+    assert "still_snoozed.discard(thread_id)" in src
     assert 'elif event.type == "rolled_but_skipped":' in src
 
 

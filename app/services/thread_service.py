@@ -1361,6 +1361,13 @@ async def set_pending_thread(db: AsyncSession, user_id: int, thread_id: int) -> 
         )
         if thread_id in excluded:
             raise InvalidRequestError(f"Thread {thread_id} is excluded from this reading session")
+    else:
+        # Legacy execution mode: manual selection also clears a current-session
+        # snooze. Record the unsnooze so historical replay sees the boundary
+        # state correctly (#4209).
+        if thread_id in (current_session.snoozed_thread_ids or []):
+            db.add(Event(type="unsnooze", session_id=current_session_id, thread_id=thread_id))
+            await db.flush()
 
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []

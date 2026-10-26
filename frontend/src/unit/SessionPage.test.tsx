@@ -230,6 +230,20 @@ it('renders loading, missing, empty, and active session branches', () => {
   expect(screen.getByText('No events to show. No reading activity was recorded for this roll.')).toBeInTheDocument()
 })
 
+it('labels the historical snooze section as still snoozed at end', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 15, started_at: '2024-01-01', ended_at: '2024-01-01T01:00:00Z', start_die: 4,
+    current_die: 4, ladder_path: 'd4',
+    narrative_summary: { read: [], snoozed: ['Saga'], skipped: [], completed: [] }, events: [],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(screen.getByText('Still snoozed at end')).toBeInTheDocument()
+  expect(screen.getByText('Saga')).toBeInTheDocument()
+  expect(screen.queryByText('Snoozed')).not.toBeInTheDocument()
+})
+
 it('renders fallback labels for sparse summaries and events', () => {
   mockedUseSessionDetails.mockReturnValue({ data: {
     session_id: 14, started_at: '2024-01-01', ended_at: null, start_die: 4, current_die: 4,

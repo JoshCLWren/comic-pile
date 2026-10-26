@@ -290,6 +290,13 @@ async def create_session_start_snapshot(db: AsyncSession, session: ReadingSessio
             "start_die": session.start_die,
             "manual_die": session.manual_die,
             "current_die": session.start_die,
+            # Session-scoped snoozes begin empty for a freshly created session.
+            # Recording the value keeps the historical end-of-session snooze
+            # projection anchored to authoritative start state when a session is
+            # recovered or restored rather than freshly created (#3707).
+            "snoozed_thread_ids": (
+                list(session.snoozed_thread_ids) if session.snoozed_thread_ids else None
+            ),
             "active_bandwidth": session.active_bandwidth,
             "predicted_bandwidth": session.predicted_bandwidth,
             "bandwidth_confidence": session.bandwidth_confidence,
