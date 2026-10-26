@@ -5,14 +5,14 @@
   "description": "Dice-Driven Comic Reading Tracker - FastAPI + HTMX + Tailwind CSS",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@oxlint/plugins": "1.88.0",
+    "@oxlint/plugins": "1.89.0",
     "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.13.0",
     "htmlhint": "^1.1.5",
     "jiti": "^2.6.1",
-    "oxlint": "1.88.0",
+    "oxlint": "1.89.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "testdriverai": "^7.11.58-test",
@@ -33,6 +33,6 @@
   },
   "packageManager": "pnpm@10.15.0+sha512.486ebc259d3e999a4e8691ce03b5cac4a71cbeca39372a9b762cb500cfdf0873e2cb16abe3d951b1ee2cf012503f027b98b6584e4df22524e0c7450d9ec7aa7b",
   "dependencies": {
-    "dotenv": "^18.0.8"
+    "dotenv": "^18.0.9"
   }
 }
