@@ -509,6 +509,7 @@ class UndoSnapshotRepository:
             read_at=self._deserialize_datetime(issue_state.get("read_at")),
             position=issue_state.get("position", fallback_position),
             catalog_issue_id=issue_state.get("catalog_issue_id"),
+            last_rating=issue_state.get("last_rating"),
         )
         
         self.db.add(issue)
@@ -534,6 +535,10 @@ class UndoSnapshotRepository:
         # not clear an existing link (issue #3226).
         if "catalog_issue_id" in issue_state:
             issue.catalog_issue_id = issue_state["catalog_issue_id"]
+        # Same rule for the per-issue saved rating (issue #4204): snapshots
+        # written before the column existed must not clear a stored score.
+        if "last_rating" in issue_state:
+            issue.last_rating = issue_state["last_rating"]
 
     async def create_undo_event(
         self, session_id: int, snapshot: Snapshot

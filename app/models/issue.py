@@ -5,7 +5,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -34,6 +42,11 @@ class Issue(Base):
     catalog_issue_id: Mapped[int | None] = mapped_column(
         ForeignKey("catalog_issues.id", ondelete="SET NULL"), nullable=True
     )
+    # Score the reader gave this specific issue, so a Thread row can show its
+    # own saved rating after reload instead of borrowing the thread-wide
+    # ``threads.last_rating`` (issue #4204). ``None`` means "never rated".
+    # Undo restores the pre-rating value from the rating snapshot preimage.
+    last_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Indexes for performance
     __table_args__ = (

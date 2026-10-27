@@ -1,5 +1,8 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
-import type { RatePayload, Thread } from '../types'
+import type { RatePayload, RateUndoInfo, Thread } from '../types'
+
+/** Rate response: the updated thread plus the undo record the rating wrote. */
+export type RateResponse = Thread & { undo?: RateUndoInfo | null }
 
 /**
  * Build the rating service bound to an HTTP client.
@@ -10,7 +13,7 @@ import type { RatePayload, Thread } from '../types'
 export function createRateApi(client: HttpClient) {
   return {
     rate: (data: RatePayload) =>
-      client.post<Thread, RatePayload>('/v1/rate/', data),
+      client.post<RateResponse, RatePayload>('/v1/rate/', data),
   }
 }
 

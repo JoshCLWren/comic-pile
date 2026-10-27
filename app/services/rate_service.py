@@ -34,7 +34,12 @@ from app.repositories.reading_session_repository import (
 )
 from app.repositories.thread_repository import find_owned, threads_for_user
 from app.schemas import RateRequest
-from app.schemas.roll_v2 import RateResponse, RollLastRead, RollReconciliation
+from app.schemas.roll_v2 import (
+    RateResponse,
+    RateUndoInfo,
+    RollLastRead,
+    RollReconciliation,
+)
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     CREATED_ISSUES_KEY,
@@ -51,7 +56,7 @@ from comic_pile.bandwidth import capture_ephemeral_bandwidth
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
-from comic_pile.reading_session import get_current_die_for_session
+from comic_pile.reading_session import get_current_die_for_session, get_or_create
 
 
 async def _find_source_roll_event(
@@ -133,6 +138,7 @@ async def _capture_thread_pre_state(
                 "status": issue.status,
                 "read_at": issue.read_at.isoformat() if issue.read_at else None,
                 "position": issue.position,
+                "last_rating": issue.last_rating,
             }
             for issue in issues
         ]
@@ -196,6 +202,7 @@ def _issue_preimage(issue: Issue) -> dict:
         "read_at": issue.read_at.isoformat() if issue.read_at else None,
         "position": issue.position,
         "catalog_issue_id": issue.catalog_issue_id,
+        "last_rating": issue.last_rating,
     }
 
 
@@ -249,7 +256,7 @@ async def snapshot_thread_states(
     issue_changes: list[dict] | None = None,
     created_issues: list[dict] | None = None,
     deleted_issues: list[dict] | None = None,
-) -> None:
+) -> Snapshot:
     """Create a versioned delta or legacy full undo snapshot.
 
     The v2 delta stores only the records that actually changed on this action
@@ -272,6 +279,10 @@ async def snapshot_thread_states(
         issue_changes: Issue preimages whose state changed on this action.
         created_issues: Preimages of issues created during implicit migration.
         deleted_issues: Preimages of issues deleted during this action.
+
+    Returns:
+        The pending snapshot row, so callers that advertise undo can reference
+        its primary key.
 
     Raises:
         ValueError: If delta state is supplied without a rated thread ID.
@@ -318,20 +329,19 @@ async def snapshot_thread_states(
         delta_kind, delta_version = classify_snapshot(
             thread_states, description="After rating", event_id=event_id
         )
-        db.add(
-            Snapshot(
-                session_id=session_id,
-                event_id=event_id,
-                thread_states=thread_states,
-                session_state=pre_session_state,
-                description="After rating",
-                snapshot_kind=delta_kind,
-                schema_version=delta_version,
-            )
+        snapshot = Snapshot(
+            session_id=session_id,
+            event_id=event_id,
+            thread_states=thread_states,
+            session_state=pre_session_state,
+            description="After rating",
+            snapshot_kind=delta_kind,
+            schema_version=delta_version,
         )
+        db.add(snapshot)
         if commit:
             await db.commit()
-        return
+        return snapshot
 
     threads = await threads_for_user(db, user_id)
     thread_states = await _capture_threads_pre_states(db, threads)
@@ -347,19 +357,19 @@ async def snapshot_thread_states(
     legacy_kind, legacy_version = classify_snapshot(
         thread_states, description="After rating", event_id=event_id
     )
-    db.add(
-        Snapshot(
-            session_id=session_id,
-            event_id=event_id,
-            thread_states=thread_states,
-            session_state=session_state,
-            description="After rating",
-            snapshot_kind=legacy_kind,
-            schema_version=legacy_version,
-        )
+    snapshot = Snapshot(
+        session_id=session_id,
+        event_id=event_id,
+        thread_states=thread_states,
+        session_state=session_state,
+        description="After rating",
+        snapshot_kind=legacy_kind,
+        schema_version=legacy_version,
     )
+    db.add(snapshot)
     if commit:
         await db.commit()
+    return snapshot
 
 
 def _get_rating_limits() -> tuple[float, float, float]:
@@ -647,6 +657,36 @@ async def rate_thread(
             detail=f"Rating must be between {rating_min} and {rating_max}",
         )
 
+    # Issue #4204: a direct Thread rating with no active reading session still
+    # needs a session to key its undo snapshot and History entry to. Create it
+    # inside this transaction (``commit=False``) so the rating, the
+    # session-start checkpoint, and the undo record commit together — a rating
+    # must never be saved without the undo record that reverses it (Greptile
+    # P1). It is created before any mutation below so the checkpoint records
+    # the true pre-rating library state.
+    undo_session = current_session
+    if undo_session is None and is_direct:
+        undo_session = await get_or_create(
+            db,
+            user_id,
+            existing_user=current_user,
+            commit=False,
+        )
+        # A session created moments ago has no events and no manual die, so its
+        # die state is exactly its start die.
+        pre_session_state = {
+            "start_die": undo_session.start_die,
+            "manual_die": undo_session.manual_die,
+            "current_die": undo_session.start_die,
+            "automatic_die": undo_session.start_die,
+            "pending_thread_id": undo_session.pending_thread_id,
+            "pending_thread_updated_at": None,
+            "ended_at": None,
+            "snoozed_thread_ids": None,
+            **capture_ephemeral_bandwidth(undo_session),
+        }
+    undo_session_id = undo_session.id if undo_session is not None else None
+
     issues_read = 0
     rated_issue_id: int | None = None
     rated_issue_number: str | None = None
@@ -656,6 +696,9 @@ async def rate_thread(
         issue_changes.append(_issue_preimage(live_issue))
         live_issue.status = "read"
         live_issue.read_at = datetime.now(UTC)
+        # The row's own score, so a Thread page reload can show "Rated N" for
+        # this issue instead of the thread-wide last rating (issue #4204).
+        live_issue.last_rating = rate_data.rating
         rated_issue_id, rated_issue_number = live_issue.id, live_issue.issue_number
         issues_read = 1
         await db.flush()
@@ -699,6 +742,7 @@ async def rate_thread(
                     issue_changes.append(_issue_preimage(issue))
                     issue.status = "read"
                     issue.read_at = datetime.now(UTC)
+                    issue.last_rating = rate_data.rating
                     rated_issue_id = issue.id
                     rated_issue_number = issue.issue_number
                     issues_read = 1
@@ -764,7 +808,7 @@ async def rate_thread(
 
     event = Event(
         type="rate",
-        session_id=current_session_id,
+        session_id=undo_session_id,
         thread_id=thread_id,
         rating=rate_data.rating,
         issues_read=issues_read,
@@ -873,22 +917,12 @@ async def rate_thread(
                 resp_next_unread_issue_number = next_issue_obj.issue_number
 
     await db.flush()
-    # If this is a direct Thread rating without an active session, create one
-    # so that an undo snapshot can be keyed to it.  A session‑less direct rate
-    # still persists the rating and event, but without a session the existing
-    # undo infrastructure has no bucket to store the delta in.
-    if current_session is None and is_direct:
-        from comic_pile.reading_session import get_or_create as _get_or_create
 
-        current_session = await _get_or_create(db, user_id)
-        current_session_id = current_session.id
-    else:
-        current_session_id = current_session.id if current_session is not None else None
-
-    if current_session is not None:
-        await snapshot_thread_states(
+    created_snapshot: Snapshot | None = None
+    if undo_session is not None:
+        created_snapshot = await snapshot_thread_states(
             db,
-            current_session_id,
+            undo_session_id,
             event.id,
             user_id,
             commit=False,
@@ -902,6 +936,15 @@ async def rate_thread(
             deleted_issues=None,
         )
     response_eligibility = await get_execution_eligibility(db, user_id)
+    # Flush so the undo snapshot has a primary key before the commit expires
+    # the ORM objects; the response advertises it to the row's Undo control.
+    await db.flush()
+    undo_info = None
+    if created_snapshot is not None and undo_session_id is not None:
+        undo_info = RateUndoInfo(
+            session_id=undo_session_id,
+            snapshot_id=created_snapshot.id,
+        )
     await db.commit()
 
     # Create base ThreadResponse data
@@ -948,4 +991,5 @@ async def rate_thread(
     return RateResponse(
         **thread_response_data,
         roll_reconciliation=roll_reconciliation,
+        undo=undo_info,
     )

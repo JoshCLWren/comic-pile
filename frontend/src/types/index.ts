@@ -91,6 +91,15 @@ export interface RatePayload {
   direct?: boolean;
 }
 
+/**
+ * Undo target written by one rating action. The row-level Undo control uses it
+ * to reverse a direct Thread rating without re-reading a snapshot list.
+ */
+export interface RateUndoInfo {
+  session_id: number;
+  snapshot_id: number;
+}
+
 export interface OverrideRollPayload {
   thread_id: number;
 }
@@ -348,6 +357,8 @@ export interface Issue {
   read_at: string | null;
   /** ISO 8601 timestamp when the issue was created */
   created_at: string;
+  /** Score this issue itself received, or null when it was never rated */
+  last_rating?: number | null;
 }
 
 /**

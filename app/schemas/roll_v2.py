@@ -170,13 +170,26 @@ class RollReconciliation(BaseModel):
     last_read: RollLastRead
 
 
+class RateUndoInfo(BaseModel):
+    """Undo target written by one rating action.
+
+    Identifies the session and the "After rating" snapshot the rating just
+    created, so a caller can offer Undo for a rating that happened outside Roll
+    (issue #4204) without re-reading a snapshot list.
+    """
+
+    session_id: int
+    snapshot_id: int
+
+
 class RateResponse(ThreadResponse):
     """Rate response extending ThreadResponse with roll reconciliation.
 
     Subclasses ThreadResponse so every current top-level field is preserved
-    exactly, and adds ``roll_reconciliation.last_read`` for the v2 contract.
-    Declared as the FastAPI ``response_model`` so the extra field is not
-    filtered out.
+    exactly, and adds ``roll_reconciliation.last_read`` for the v2 contract and
+    ``undo`` for the rating's own undo record. Declared as the FastAPI
+    ``response_model`` so the extra fields are not filtered out.
     """
 
     roll_reconciliation: RollReconciliation | None = None
+    undo: RateUndoInfo | None = None

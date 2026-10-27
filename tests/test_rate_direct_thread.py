@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, ReadingSession, Snapshot, Thread, User
@@ -85,23 +85,135 @@ async def test_direct_rate_without_session_persists_and_advances_frontier(
     assert thread.reading_progress == "in_progress"
     assert issues["1"].status == "read"
     assert issues["1"].read_at is not None
+    # The saved rating belongs to the rated row, not the whole thread (#4204).
+    assert issues["1"].last_rating == 4.0
+    assert issues["2"].last_rating is None
 
     event_result = await async_db.execute(
         select(Event).where(Event.type == "rate").where(Event.thread_id == thread.id)
     )
     event = event_result.scalar_one()
-    assert event.session_id is None
     assert event.issue_id == issues["1"].id
     assert event.issue_number == "1"
     assert event.die is None
     assert event.die_after is None
     assert event.source_roll_event_id is None
 
-    # The direct path must not fabricate a Roll session or an undo snapshot.
-    session_count = await async_db.scalar(select(func.count()).select_from(ReadingSession))
-    snapshot_count = await async_db.scalar(select(func.count()).select_from(Snapshot))
-    assert session_count == 0
-    assert snapshot_count == 0
+    # Issue #4204: a direct rating without a prior session now owns a reading
+    # session, because that is the only durable bucket the undo/history
+    # infrastructure can key a rating's undo record to. It must still not
+    # fabricate a pending Roll.
+    session = (
+        await async_db.execute(select(ReadingSession))
+    ).scalar_one()
+    assert event.session_id == session.id
+    assert session.pending_thread_id is None
+    assert session.ended_at is None
+
+
+@pytest.mark.asyncio
+async def test_direct_rate_without_session_writes_undo_snapshot_that_restores_row(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A session-less direct rating is undoable and reversal restores the row (#4204)."""
+    thread, issues = await _create_issue_tracked_thread(async_db, default_user.id)
+
+    response = await auth_client.post(
+        "/api/v1/rate/",
+        json={
+            "rating": 4.0,
+            "thread_id": thread.id,
+            "direct": True,
+            "issue_number": "1",
+        },
+    )
+    assert response.status_code == 200
+    undo_info = response.json()["undo"]
+    assert undo_info is not None
+
+    await async_db.refresh(thread)
+    await async_db.refresh(issues["1"])
+    assert issues["1"].status == "read"
+    assert issues["1"].last_rating == 4.0
+
+    session = await async_db.get(ReadingSession, undo_info["session_id"])
+    assert session is not None
+
+    snapshots = (
+        await async_db.execute(
+            select(Snapshot).where(Snapshot.session_id == session.id).order_by(Snapshot.id)
+        )
+    ).scalars().all()
+    assert [snapshot.description for snapshot in snapshots] == [
+        "Session start",
+        "After rating",
+    ]
+    assert snapshots[-1].id == undo_info["snapshot_id"]
+
+    # The session-start checkpoint must hold the true pre-rating state: the
+    # session is created inside the rating transaction, but before the rating
+    # mutates the issue (Greptile P1 on #4207).
+    start_states = snapshots[0].thread_states
+    start_issue_states = start_states[str(thread.id)]["issue_states"]
+    rated_start_state = next(
+        state for state in start_issue_states if state["id"] == issues["1"].id
+    )
+    assert rated_start_state["status"] == "unread"
+    assert rated_start_state["last_rating"] is None
+    assert start_states[str(thread.id)]["next_unread_issue_id"] == issues["1"].id
+
+    undo_response = await auth_client.post(
+        f"/api/v1/undo/{session.id}/undo/{undo_info['snapshot_id']}"
+    )
+    assert undo_response.status_code == 200
+
+    await async_db.refresh(thread)
+    await async_db.refresh(issues["1"])
+    assert issues["1"].status == "unread"
+    assert issues["1"].read_at is None
+    assert issues["1"].last_rating is None
+    assert thread.next_unread_issue_id == issues["1"].id
+    assert thread.issues_remaining == 3
+    assert thread.last_rating is None
+
+
+@pytest.mark.asyncio
+async def test_issue_list_reports_each_rows_own_saved_rating(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Rows keep their own saved rating after reload instead of the thread's (#4204)."""
+    thread, issues = await _create_issue_tracked_thread(async_db, default_user.id)
+
+    for issue_number, rating in (("1", 4.0), ("2", 2.0)):
+        response = await auth_client.post(
+            "/api/v1/rate/",
+            json={
+                "rating": rating,
+                "thread_id": thread.id,
+                "direct": True,
+                "issue_number": issue_number,
+            },
+        )
+        assert response.status_code == 200
+
+    await async_db.refresh(thread)
+    assert thread.last_rating == 2.0
+
+    list_response = await auth_client.get(f"/api/v1/threads/{thread.id}/issues")
+    assert list_response.status_code == 200
+    ratings_by_number = {
+        issue["issue_number"]: issue["last_rating"]
+        for issue in list_response.json()["issues"]
+    }
+    assert ratings_by_number == {"1": 4.0, "2": 2.0, "3": None}
+
+    issue_response = await auth_client.get(f"/api/v1/issues/{issues['1'].id}")
+    assert issue_response.status_code == 200
+    assert issue_response.json()["last_rating"] == 4.0
 
 
 @pytest.mark.asyncio
