@@ -815,6 +815,7 @@ it('treats a malformed issue deep link as plain thread navigation', async () => 
 
 it('shows deep-link notice when issue param references a missing issue', async () => {
   locationState.search = '?issue=999'
+  // SAFETY: the mock thread shape matches ThreadSummary returned by the API for this test case.
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 1, queue_position: 1,
     status: 'active', total_issues: 2, next_unread_issue_number: '1', notes: null,
@@ -825,7 +826,8 @@ it('shows deep-link notice when issue param references a missing issue', async (
       { id: 12, thread_id: 1, issue_number: '2', status: 'read', read_at: 'now', created_at: 'now' },
     ],
     next_page_token: null, total_count: 2, page_size: 100,
-  })
+    // SAFETY: the mock issues list shape matches the API response for this test case.
+  } as never)
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await waitFor(() => expect(screen.getByText("That issue isn't in this thread.")).toBeInTheDocument())
