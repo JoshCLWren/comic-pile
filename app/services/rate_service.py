@@ -954,6 +954,10 @@ async def rate_thread(
     # Flush so the undo snapshot has a primary key before the commit expires
     # the ORM objects; the response advertises it to the row's Undo control.
     await db.flush()
+    # Refresh to guarantee created_snapshot.id is populated before ORM
+    # object expiration; prevents MissingGreenlet error on response construction.
+    if created_snapshot is not None:
+        await db.refresh(created_snapshot)
     undo_info = None
     if created_snapshot is not None and undo_session_id is not None:
         undo_info = RateUndoInfo(

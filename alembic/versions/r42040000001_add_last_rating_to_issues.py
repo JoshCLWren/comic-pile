@@ -1,7 +1,7 @@
 """Add last_rating to issues (#4204).
 
 Revision ID: r42040000001
-Revises: c30740000001
+Revises: c42100000001
 Create Date: 2026-10-26 00:00:00.000000
 
 A Thread issue row must be able to show the score the reader gave that exact
