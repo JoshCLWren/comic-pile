@@ -64,7 +64,7 @@ export function buildReplacementModel(
       included: sourceIncluded || saved !== undefined,
       defaultIncluded: sourceIncluded,
       saved: saved !== undefined,
-      gate: saved?.gate ?? DEFAULT_GATE,
+      gate: saved?.gate ?? 'none',
       skipped: saved?.skipped ?? false,
     })
   }
