@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import type { CustomCBLEntry, ReadingListGate, ReadingListMode } from '../services/api-custom-cbl'
 
 const GATE_ORDER: ReadingListGate[] = ['none', 'after_previous', 'hold']
@@ -43,6 +44,8 @@ interface Props {
   entry: CustomCBLEntry
   index: number
   entryCount: number
+  isNextUnread: boolean
+  cardRef?: Ref<HTMLLIElement>
   mode: ReadingListMode
   waitingOn: number[]
   nameOf: (issueId: number) => string
@@ -62,18 +65,19 @@ interface Props {
 
 /** A legible full-title card on phones, with per-issue settings revealed on demand. */
 export default function ReadingListEntryCard({
-  entry, index, entryCount, mode, waitingOn, nameOf, expanded,
+  entry, index, entryCount, isNextUnread, cardRef, mode, waitingOn, nameOf, expanded,
   moveDestination, disabled, onCheckpoint, onMoveEarlier, onMoveLater,
   onRemove, onToggleOptions, onGate, onSkip, onDestinationChange, onMoveToPosition,
 }: Props) {
   const label = `${entry.series_name} #${entry.issue_number}`
   const waitText = waitDescription(entry, mode, waitingOn, nameOf)
   return (
-                    <li className="min-w-0 rounded-xl border border-[var(--theme-border)] p-3" data-testid="reading-list-entry">
+                    <li ref={cardRef} tabIndex={cardRef ? -1 : undefined} aria-current={isNextUnread ? "step" : undefined} className={`min-w-0 rounded-xl border p-3 ${isNextUnread ? "border-[var(--theme-continuity-accent)]" : "border-[var(--theme-border)]"}`} data-testid="reading-list-entry">
                       <div className="flex min-w-0 items-start gap-3">
                         <span aria-hidden="true" className="w-7 shrink-0 pt-0.5 text-center text-xs font-black text-[var(--theme-text-dim)]">{index + 1}</span>
                         <p data-testid="reading-list-entry-title" className="min-w-0 flex-1 break-words text-sm font-semibold leading-relaxed text-[var(--theme-text-primary)]">
                           {label}
+                          {isNextUnread && <span className="ml-2 inline-block rounded-full border border-[var(--theme-continuity-accent)] px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--theme-continuity-accent)]">Up next</span>}
                           {entry.skipped && <span className="ml-2 inline-block rounded-full border border-[var(--theme-border)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">Skipped in this list</span>}
                         </p>
                       </div>
