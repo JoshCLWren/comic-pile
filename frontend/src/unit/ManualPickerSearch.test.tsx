@@ -194,7 +194,7 @@ describe('ManualPickerSearch', () => {
     }
   })
 
-  it('dismisses only its own list on Escape inside the real Modal dialog', async () => {
+  it('lets the first Escape reach the dialog while the option list is open', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
 
@@ -212,12 +212,13 @@ describe('ManualPickerSearch', () => {
     expect(screen.getByRole('listbox')).toBeInTheDocument()
     await user.keyboard('{Escape}')
 
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-    expect(screen.getByRole('dialog', { name: 'Pick manually' })).toBeInTheDocument()
-    expect(onClose).not.toHaveBeenCalled()
+    // docs/FRONTEND_VISUAL_GRAMMAR.md: the topmost Modal owns Escape. The
+    // picker may collapse its popup, but it must not swallow the press and
+    // force a second or third Escape before the dialog closes.
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('steps Escape through list, query, then dialog without skipping a layer', async () => {
+  it('lets one Escape close the dialog even while a search query is active', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
 
@@ -235,19 +236,8 @@ describe('ManualPickerSearch', () => {
     await user.type(input, 'super')
     expect(screen.getByRole('listbox')).toBeInTheDocument()
 
-    // 1: popup only. The query and dialog both survive.
     await user.keyboard('{Escape}')
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-    expect(input).toHaveValue('super')
-    expect(onClose).not.toHaveBeenCalled()
 
-    // 2: the stale query is cleared; the dialog still survives.
-    await user.keyboard('{Escape}')
-    expect(input).toHaveValue('')
-    expect(onClose).not.toHaveBeenCalled()
-
-    // 3: now the dialog itself handles Escape.
-    await user.keyboard('{Escape}')
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -271,18 +261,19 @@ describe('ManualPickerSearch', () => {
     expect(input).not.toHaveAttribute('aria-activedescendant')
   })
 
-  it('submits the form when Enter is pressed with the list already closed', async () => {
+  it('submits the form when Enter is pressed after a keyboard commit closed the list', async () => {
     const user = userEvent.setup()
     const onSubmit = vi.fn()
     render(<Harness initialValue="3" onSubmit={onSubmit} />)
 
     const input = screen.getByRole('combobox')
     await user.click(input)
-    await user.keyboard('{Escape}')
+    // A keyboard commit collapses the popup and keeps focus in the combobox.
+    await user.keyboard('{Enter}')
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
 
     await user.keyboard('{Enter}')
-    expect(onSubmit).toHaveBeenCalledWith('3')
+    expect(onSubmit).toHaveBeenCalledWith('1')
   })
 
   it('ignores keyboard interaction while the picker is pending', async () => {

@@ -20,8 +20,9 @@ export interface ManualPickerSearchProps {
 /**
  * Searchable, accessible manual series picker for the Roll "Pick manually"
  * modal. Replaces the previous native `<select>` so large libraries stay
- * usable: the reader types a partial title (or any already-known
- * disambiguating identity text) and the option list filters in place.
+ * usable: the reader types a partial title, any already-known disambiguating
+ * identity text, or a Thread id (including the ids shown in "Series #N"
+ * fallback labels) and the option list filters in place.
  *
  * Filtering never mutates, rolls, rates, or marks anything read; it only
  * narrows the visible choices. Selection still resolves to the exact Thread
@@ -105,19 +106,11 @@ export function ManualPickerSearch({
         if (choice) commit(choice.option.id)
       }
     } else if (event.key === 'Escape') {
-      if (open) {
-        // ARIA combobox contract: Escape dismisses the popup without closing
-        // the surrounding dialog. The next Escape (with the list already
-        // closed) clears an active query instead of bubbling, and the one
-        // after that reaches the dialog.
-        event.preventDefault()
-        event.stopPropagation()
-        setOpen(false)
-      } else if (query) {
-        event.preventDefault()
-        event.stopPropagation()
-        setQuery('')
-      }
+      // The shared Modal owns Escape for the topmost dialog
+      // (docs/FRONTEND_VISUAL_GRAMMAR.md). Collapse the popup here, but do
+      // not prevent or stop the event: one Escape must still close
+      // "Pick manually" instead of requiring a second or third press.
+      if (open) setOpen(false)
     }
   }
 
