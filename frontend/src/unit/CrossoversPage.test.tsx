@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -60,7 +60,6 @@ beforeEach(() => {
   groupsApi.addMember.mockResolvedValue({ id: 99, thread_id: null, issue_id: null })
   groupsApi.addIssueRange.mockResolvedValue({ thread_id: 1, start_position: 1, end_position: 5, added_issue_ids: [], already_present_issue_ids: [] })
   threadsApi.list.mockResolvedValue({ threads: [], next_page_token: null, active_count: 0 })
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
 describe('CrossoversPage', () => {
@@ -152,9 +151,11 @@ describe('CrossoversPage', () => {
     expect(groupsApi.rename).toHaveBeenCalledWith(7, 'Annihilation Conquest')
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    // Delete confirms in-page, so automation can see and click the dialog.
+    expect(screen.getByRole('dialog', { name: 'Delete Crossover' })).toBeInTheDocument()
     groupsApi.list.mockResolvedValue([])
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Crossover' }))
     await waitFor(() => expect(screen.queryByText('Annihilation Conquest')).not.toBeInTheDocument())
-    expect(window.confirm).toHaveBeenCalled()
     expect(groupsApi.delete).toHaveBeenCalledWith(7)
   })
 
@@ -237,19 +238,25 @@ describe('CrossoversPage', () => {
 
   it('keeps a crossover when deletion is cancelled and reports delete failures', async () => {
     groupsApi.list.mockResolvedValue([annihilation])
-    vi.mocked(window.confirm).mockReturnValueOnce(false).mockReturnValueOnce(true)
     groupsApi.delete.mockRejectedValue(new Error('Delete unavailable'))
     renderPage()
 
     await screen.findByText('Annihilation')
     fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
-    expect(groupsApi.delete).not.toHaveBeenCalled()
-    expect(screen.getByText('Annihilation')).toBeInTheDocument()
 
+    // Cancelling in the dialog keeps the crossover; no native confirm is involved.
+    expect(groupsApi.delete).not.toHaveBeenCalled()
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Delete Crossover' })).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog', { name: 'Delete Crossover' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Annihilation.*2 members/ })).toBeInTheDocument()
+
+    // A failed delete keeps the dialog open with the error visible for retry.
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Delete unavailable')
-    expect(screen.getByText('Annihilation')).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Delete Crossover' })).getByRole('button', { name: 'Delete Crossover' }))
+    const dialog = screen.getByRole('dialog', { name: 'Delete Crossover' })
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Delete unavailable')
+    expect(screen.getByRole('button', { name: /Annihilation.*2 members/ })).toBeInTheDocument()
   })
 
   it('presents validation and server failures clearly', async () => {

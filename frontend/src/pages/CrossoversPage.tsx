@@ -9,6 +9,7 @@ import {
 import { type DependencyGroup, type DependencyGroupMember } from '../services/api-dependency-groups'
 import type { Issue } from '../types'
 import Breadcrumbs from '../components/Breadcrumbs'
+import ConfirmDialog from '../components/ConfirmDialog'
 import GlossaryLink from '../components/GlossaryLink'
 import type { ThreadListItem } from '../types'
 import { isString } from '../utils/runtimeChecks'
@@ -91,6 +92,8 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
   const [rangeThread, setRangeThread] = useState<ThreadListItem | null>(null)
   const [rangeSelection, setRangeSelection] = useState<SelectedIssueRange | null>(null)
   const [membershipMessage, setMembershipMessage] = useState<string | null>(null)
+  const [pendingDeleteGroup, setPendingDeleteGroup] = useState<DependencyGroup | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const {
     data: rangeIssues = [],
@@ -184,15 +187,34 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
     }
   }
 
-  const deleteGroup = async (group: DependencyGroup) => {
-    if (mutationGuardRef.current || !window.confirm(`Delete "${group.name}"? Its comic memberships will be removed.`)) return
+  /**
+   * Opens the in-page delete confirmation. The native `window.confirm` this
+   * replaces cannot be accepted by browser QA automation, which made it
+   * impossible to verify any crossover deletion end to end.
+   */
+  const requestDeleteGroup = (group: DependencyGroup) => {
+    setDeleteError(null)
+    setPendingDeleteGroup(group)
+  }
+
+  const cancelDeleteGroup = () => {
+    setDeleteError(null)
+    setPendingDeleteGroup(null)
+  }
+
+  const confirmDeleteGroup = async () => {
+    const group = pendingDeleteGroup
+    if (!group || mutationGuardRef.current) return
     mutationGuardRef.current = true
-    setMutationError(null)
+    setDeleteError(null)
     try {
       await deleteMutation.mutateAsync(group.id)
       if (expandedId === group.id) setExpandedId(null)
+      setPendingDeleteGroup(null)
     } catch (error) {
-      setMutationError(errorMessage(error, 'Unable to delete crossover.'))
+      // Keep the confirmation open so the failure is visible and retryable,
+      // matching the queue's destructive dialogs.
+      setDeleteError(errorMessage(error, 'Unable to delete crossover.'))
     } finally {
       mutationGuardRef.current = false
     }
@@ -344,7 +366,7 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
                       {isExpanded && (
                         <>
                           <button type="button" onClick={() => { setEditingId(group.id); setEditingName(group.name) }} disabled={isAnyMutationPending}>Rename</button>
-                          <button type="button" onClick={() => void deleteGroup(group)} disabled={isAnyMutationPending}>Delete</button>
+                          <button type="button" onClick={() => requestDeleteGroup(group)} disabled={isAnyMutationPending}>Delete</button>
                         </>
                       )}
                     </div>
@@ -393,6 +415,27 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
           })}
         </ul>
       )}
+
+      <ConfirmDialog
+        isOpen={pendingDeleteGroup !== null}
+        title="Delete Crossover"
+        isPending={deleteMutation.isPending}
+        error={deleteError}
+        confirmLabel="Delete Crossover"
+        pendingLabel="Deleting…"
+        onConfirm={() => void confirmDeleteGroup()}
+        onCancel={cancelDeleteGroup}
+        testId="delete-crossover-dialog"
+      >
+        <p className="text-sm text-[var(--theme-text-muted)]">
+          Permanently delete{' '}
+          <span className="font-bold text-[var(--theme-text-primary)]">{pendingDeleteGroup?.name}</span>?
+        </p>
+        <p className="text-sm text-[var(--theme-text-muted)]">
+          This removes the crossover label together with its comic memberships. The comics
+          themselves and their reading progress are not deleted.
+        </p>
+      </ConfirmDialog>
     </section>
   )
 }

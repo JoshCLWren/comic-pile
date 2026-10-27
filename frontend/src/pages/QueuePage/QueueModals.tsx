@@ -194,6 +194,8 @@ interface QueueModalsProps {
   openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | 'addSeriesComicVine' | null
   createForm: QueueFormState
   editForm: QueueFormState
+  /** Failure feedback for the Add Series submit, rendered inside the dialog. */
+  createError?: string | null
   setCreateForm: (next: QueueFormState) => void
   setEditForm: (next: QueueFormState) => void
   issuePreview: number | null
@@ -254,6 +256,7 @@ export function QueueModals({
   openModal,
   createForm,
   editForm,
+  createError = null,
   setCreateForm,
   setEditForm,
   issuePreview,
@@ -522,6 +525,15 @@ export function QueueModals({
             creators={createForm.manualCreatorCredits}
             onChange={(next) => setCreateForm({ ...createForm, manualCreatorCredits: next })}
           />
+          {createError && (
+            <p
+              role="alert"
+              data-testid="create-thread-error"
+              className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-danger)]"
+            >
+              {createError}
+            </p>
+          )}
           <button
             type="submit"
             disabled={isPendingCreate || issueParseError !== null || createTitleError}

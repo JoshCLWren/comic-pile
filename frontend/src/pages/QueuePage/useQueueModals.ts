@@ -5,6 +5,7 @@ import type { Thread, ThreadListItem, ThreadCreatePayload } from '../../types'
 import { getManualCreatorCreditList } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
+import { useToast } from '../../contexts/useToast'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 import type { ParsedIssueRangeDetail } from '../../utils/issueParser'
@@ -38,6 +39,8 @@ interface UseQueueModalsResult {
   isAnyModalOpen: boolean
   createForm: QueueFormState
   editForm: QueueFormState
+  /** Failure feedback rendered inside the open Add Series dialog. */
+  createError: string | null
   issuePreview: number | null
   issueParseError: string | null
   issueParseWarnings: string[]
@@ -82,12 +85,23 @@ interface UseQueueModalsResult {
 }
 
 /**
+ * Injectable seams for hook-level side channels. Production callers omit
+ * `deps`; tests substitute a toast double through the same seam pattern
+ * `useQueueThreadActions` uses.
+ */
+export interface UseQueueModalsDeps {
+  toastHook?: typeof useToast
+}
+
+/**
  * Centralized modal lifecycle, restore-action registration, and form state for
  * every modal the Queue page coordinates. The hook returns plain handlers and
  * presentational state so the page can compose the modal modules without
  * re-implementing the navigation, bug-report-restore, or location-state wiring.
  */
-export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult {
+export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDeps = {}): UseQueueModalsResult {
+  const { toastHook = useToast } = deps
+  const { showToast } = toastHook()
   const {
     threads,
     onCreated,
@@ -106,6 +120,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null)
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editingThread, setEditingThread] = useState<Thread | ThreadListItem | null>(null)
   const [reactivateThreadId, setReactivateThreadId] = useState('')
@@ -130,15 +145,18 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
 
   const showCreateModal = useCallback(() => {
     setCreateForm(DEFAULT_CREATE_STATE)
+    setCreateError(null)
     setOpenModal('create')
     setRestoreAction(() => {
       setCreateForm(DEFAULT_CREATE_STATE)
+      setCreateError(null)
       setOpenModal('create')
     })
   }, [setRestoreAction])
 
   const closeCreateModal = useCallback(() => {
     setOpenModal(null)
+    setCreateError(null)
     clearRestoreAction()
     clearQueueModalState()
   }, [clearQueueModalState, clearRestoreAction])
@@ -328,6 +346,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
       event.preventDefault()
       if (creatingRef.current) return
       creatingRef.current = true
+      setCreateError(null)
       try {
         const { parseIssueRange, validateIssueRangeForStaging } = await import('../../utils/issueParser')
         const hasIssueRange = Boolean(createForm.issues && createForm.issues.trim())
@@ -340,7 +359,11 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           // display-only affordance (#3262) and must not block a valid entry.
           const validation = validateIssueRangeForStaging(createForm.issues.trim())
           if (!validation.valid) {
-            window.alert(`Failed to create series: ${validation.error ?? 'Invalid issue range.'}`)
+            // Render the rejection inside the open dialog: a toast paints below
+            // the modal layer, so on mobile the dialog hides it entirely.
+            setCreateError(
+              `Failed to create series: ${validation.error ?? 'Invalid issue range.'}`,
+            )
             creatingRef.current = false
             return
           }
@@ -381,8 +404,9 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
             }
           } catch (issueError: unknown) {
             console.error('Thread created but failed to create issues:', issueError)
-            window.alert(
+            showToast(
               `Thread created successfully, but failed to create individual issues: ${getApiErrorDetail(issueError)}`,
+              'error',
             )
           }
         }
@@ -392,12 +416,14 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         await onCreated()
       } catch (error: unknown) {
         console.error('Failed to create thread:', error)
-        window.alert(`Failed to create series: ${getApiErrorDetail(error)}`)
+        // The Add Series dialog stays open, so the failure reason has to live
+        // inside it rather than in a toast the dialog covers.
+        setCreateError(`Failed to create series: ${getApiErrorDetail(error)}`)
       } finally {
         creatingRef.current = false
       }
     },
-    [createForm, closeCreateModal, onCreated, submitCreate],
+    [createForm, closeCreateModal, onCreated, submitCreate, showToast],
   )
 
   const handleEditSubmit = useCallback(
@@ -454,13 +480,13 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         await refetchSession()
       } catch (error) {
         console.error('Failed to refresh data after migration:', error)
-        window.alert('Failed to refresh data. Please refresh the page.')
+        showToast('Failed to refresh data. Please refresh the page.', 'error')
       }
       setShowMigrationDialog(false)
       setThreadToMigrate(null)
       setEditingThread(migratedThread)
     },
-    [onUpdated, refetchSession],
+    [onUpdated, refetchSession, showToast],
   )
 
   const handleMigrationSkip = useCallback(() => {
@@ -477,6 +503,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     openModal,
     isAnyModalOpen,
     createForm,
+    createError,
     editForm,
     issuePreview,
     issueParseError,

@@ -413,17 +413,20 @@ describe('RollPage parent handlers', () => {
     spies.snooze.mockRejectedValue(error)
     spies.rate.mockRejectedValue(error)
     spies.setPending.mockRejectedValue(error)
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     render(<RollPage />)
 
     await user.click(screen.getByRole('button', { name: 'shuffle pool' }))
     await user.click(await screen.findByTestId('confirm-shuffle-queue'))
+    // A failed shuffle keeps the confirmation open and the reason renders
+    // inside it rather than in a blocking native alert (issue #4193).
     await waitFor(() =>
-      expect(alertSpy).toHaveBeenCalledWith('Failed to shuffle pool: operation failed'),
+      expect(screen.getByTestId('shuffle-queue-error')).toHaveTextContent(
+        'Failed to shuffle pool: operation failed',
+      ),
     )
-    // A failed shuffle keeps the confirmation open so the retry path stays reachable.
     await user.click(within(screen.getByTestId('shuffle-queue-dialog')).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByTestId('shuffle-queue-error')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /move to front/i }))
     await user.click(screen.getByRole('button', { name: 'thread' }))
@@ -442,8 +445,6 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'save rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     expect(errorSpy).toHaveBeenCalled()
-    expect(alertSpy).toHaveBeenCalled()
-    alertSpy.mockRestore()
     errorSpy.mockRestore()
   })
 
@@ -1112,13 +1113,16 @@ describe('RollPage parent handlers', () => {
   })
 
   it('reports pool, stale-read, and action failures without leaving the page stuck', async () => {
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     spies.shuffle.mockRejectedValue(new Error('pool failed'))
     render(<RollPage />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'shuffle pool' }))
     await userEvent.setup().click(await screen.findByTestId('confirm-shuffle-queue'))
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Failed to shuffle pool: pool failed'))
+    await waitFor(() =>
+      expect(screen.getByTestId('shuffle-queue-error')).toHaveTextContent(
+        'Failed to shuffle pool: pool failed',
+      ),
+    )
 
     cleanup()
     bootstrapData.stale_thread = { id: 7, title: 'Old', format: 'Comic', last_activity_at: '2000-01-01' }
@@ -1135,7 +1139,6 @@ describe('RollPage parent handlers', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'thread' }))
     await userEvent.setup().click(screen.getByRole('button', { name: /move to front/i }))
     await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Action failed:', expect.any(Error)))
-    alertSpy.mockRestore()
     errorSpy.mockRestore()
     bootstrapData.stale_thread = null
     bootstrapData.stale_thread_count = 0

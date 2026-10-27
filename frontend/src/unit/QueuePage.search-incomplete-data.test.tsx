@@ -92,7 +92,6 @@ function renderQueue(): void {
 
 beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver)
-  vi.stubGlobal('alert', vi.fn())
   vi.mocked(useQueueListLoading).mockReturnValue(false)
   // SAFETY: mockReturnValue accepts partial hook returns; never cast bypasses full-type requirements
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)

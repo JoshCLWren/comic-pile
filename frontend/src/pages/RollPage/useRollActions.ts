@@ -89,6 +89,7 @@ export function useRollActions({
     setIsActionSheetOpen,
     setIsSetCurrentIssueOpen,
     setIsShuffleOpen,
+    setShuffleError,
     setErrorMessage,
     setCurrentDie,
     setThreadToMigrate,
@@ -151,6 +152,7 @@ export function useRollActions({
    * reader's entire queue on its own (issue #3261).
    */
   function handleShufflePool() {
+    setShuffleError('')
     setIsShuffleOpen(true)
   }
 
@@ -307,20 +309,19 @@ export function useRollActions({
   /**
    * Runs the confirmed whole-queue shuffle. The confirmation only closes once
    * the mutation succeeds, so a failure leaves the dialog in place and the
-   * reader can retry without re-discovering the button. Failure reporting
-   * mirrors the Queue page's identical confirmation
-   * (`useQueueThreadActions.confirmShuffle`): the Roll page has no in-context
-   * error region outside the rating view, so the reason is announced rather
-   * than written to a banner nothing is rendering (issue #3261).
+   * reader can retry without re-discovering the button. The reason renders
+   * inside the dialog: a toast paints below the modal layer, and a native
+   * `alert` blocks the page and is invisible to QA automation (issue #4193).
    */
   async function performShuffle() {
     try {
       await shuffleQueueMutation.mutate()
       await refetchBootstrap()
+      setShuffleError('')
       setIsShuffleOpen(false)
     } catch (error) {
       console.error('Shuffle failed:', error)
-      alert(`Failed to shuffle pool: ${getApiErrorDetail(error)}`)
+      setShuffleError(`Failed to shuffle pool: ${getApiErrorDetail(error)}`)
     }
   }
 

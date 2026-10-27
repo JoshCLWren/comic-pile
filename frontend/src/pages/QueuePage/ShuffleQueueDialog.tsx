@@ -4,6 +4,12 @@ interface ShuffleQueueDialogProps {
   isOpen: boolean
   seriesCount: number
   isPending: boolean
+  /**
+   * Failure feedback rendered inside the dialog. The shared toast layer paints
+   * below open dialogs, so a failure toast on this nearly full-height mobile
+   * dialog is invisible — the reason has to live in the dialog itself.
+   */
+  error?: string | null
   onConfirm: () => void
   onCancel: () => void
 }
@@ -20,6 +26,7 @@ export default function ShuffleQueueDialog({
   isOpen,
   seriesCount,
   isPending,
+  error = null,
   onConfirm,
   onCancel,
 }: ShuffleQueueDialogProps) {
@@ -35,12 +42,21 @@ export default function ShuffleQueueDialog({
           Shuffle the entire queue? This reorders all {seriesCount} series, including any manual
           order you set. This cannot be undone.
         </p>
+        {error && (
+          <p
+            role="alert"
+            data-testid="shuffle-queue-error"
+            className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-danger)]"
+          >
+            {error}
+          </p>
+        )}
         <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
           <button
             type="button"
             onClick={onCancel}
             disabled={isPending}
-            className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
+            className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
@@ -49,7 +65,7 @@ export default function ShuffleQueueDialog({
             onClick={onConfirm}
             disabled={isPending}
             data-testid="confirm-shuffle-queue"
-            className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
+            className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-black text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
           >
             {isPending ? 'Shuffling...' : 'Shuffle Queue'}
           </button>

@@ -90,7 +90,6 @@ class NoopIntersectionObserver {
 
 beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver)
-  vi.stubGlobal('alert', vi.fn())
   // SAFETY: mockReturnValue accepts partial hook returns; never cast bypasses full-type requirements
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   // SAFETY: as never is used for type narrowing in mock data
