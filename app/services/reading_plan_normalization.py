@@ -1386,7 +1386,6 @@ async def get_plan_membership(
                 id=source.id,
                 display_name=source_names.get(source.raw_source_path),
                 raw_source_path=public_cbl_source_path(source.raw_source_path),
-                custom_cbl_list_id=source.custom_cbl_list_id,
                 repository=(
                     public_cbl_repository(source.repository)
                     if source.repository
