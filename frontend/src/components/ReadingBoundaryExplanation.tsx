@@ -32,32 +32,50 @@ interface Props {
    * next-issue/blocker detail instead of dropping it.
    */
   fallback?: ReactNode
+  /** Queue-sized presentation: one actionable comic by default, complete reasoning on demand. */
+  compact?: boolean
 }
 
 const UNAVAILABLE = <p className="text-sm text-[var(--theme-text-muted)]">Reading boundaries are unavailable.</p>
 
 /** Present the evaluator's result; only current canonical requirements are presented. */
-export function ReadingBoundaryExplanation({ explanation, isPending, isError, onRetry, fallback }: Props) {
+export function ReadingBoundaryExplanation({ explanation, isPending, isError, onRetry, fallback, compact = false }: Props) {
   if (isError) return <div role="alert" className="text-sm text-[var(--theme-error)]"><p>Reading boundaries could not be loaded.</p><button type="button" className="min-h-11 underline" onClick={onRetry}>Retry reading boundaries</button></div>
   if (isPending) return <p role="status" className="text-sm text-[var(--theme-text-muted)]">Loading reading boundaries…</p>
   if (!explanation || explanation.state === 'unavailable') return <>{fallback ?? UNAVAILABLE}</>
+  const blockers = explanation.blockers ?? []
+  // Strict-list blockers enumerate every earlier unread issue. The first is the
+  // actionable reading frontier, while the full set still enforces eligibility.
+  const primaryBlocker =
+    blockers.find((blocker) => blocker.kind === 'strict_order' && (blocker.waiting_on?.length ?? 0) > 0) ??
+    blockers.find((blocker) => (blocker.waiting_on?.length ?? 0) > 0)
+  const primaryIssue = primaryBlocker?.waiting_on?.[0]
+  const allRequirements = blockers.length > 0 ? (
+    <ul className="space-y-2" aria-label="Active reading blockers">
+      {blockers.map((blocker, index) => (
+        <li key={`${blocker.kind}-${index}`}>
+          <p>{blocker.reason}</p>
+          <ul className="space-y-1" aria-label="Waiting on comics">
+            {blocker.waiting_on?.map((issue) => <li key={issue.issue_id}><IssueLabel issue={issue} /></li>)}
+          </ul>
+          <EditorLink editor={blocker.editor} />
+        </li>
+      ))}
+    </ul>
+  ) : null
   return (
     <div className="min-w-0 space-y-2 break-words text-sm text-[var(--theme-text-muted)]" data-testid="canonical-reading-boundary">
       <p className={`font-semibold ${explanation.state === 'blocked' ? 'text-[var(--theme-warning)]' : 'text-[var(--theme-text-primary)]'}`}>{explanation.summary}</p>
       {explanation.next && <div><p>Next: <IssueLabel issue={explanation.next.issue} /></p><EditorLink editor={explanation.next.editor} /></div>}
-      {(explanation.blockers?.length ?? 0) > 0 && (
-        <ul className="space-y-2" aria-label="Active reading blockers">
-          {explanation.blockers?.map((blocker, index) => (
-            <li key={`${blocker.kind}-${index}`}>
-              <p>{blocker.reason}</p>
-              <ul className="space-y-1" aria-label="Waiting on comics">
-                {blocker.waiting_on?.map((issue) => <li key={issue.issue_id}><IssueLabel issue={issue} /></li>)}
-              </ul>
-              <EditorLink editor={blocker.editor} />
-            </li>
-          ))}
-        </ul>
-      )}
+      {compact && explanation.state === 'blocked' && primaryIssue ? (
+        <>
+          <p>Read <IssueLabel issue={primaryIssue} /> first.</p>
+          <details className="text-xs">
+            <summary className="cursor-pointer font-semibold">Show all reading requirements</summary>
+            <div className="mt-2">{allRequirements}</div>
+          </details>
+        </>
+      ) : allRequirements}
     </div>
   )
 }
