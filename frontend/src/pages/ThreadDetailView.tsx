@@ -23,6 +23,7 @@ import {
 import { getApiErrorDetail } from '../utils/apiError'
 import { evaluateReadingProgress } from '../utils/readingProgress'
 import { formatIssueCount } from '../utils/formatIssueCount'
+import { parseRequestedIssueId } from '../utils/threadRoutes'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getManualCreatorCreditList } from '../types'
 import type { ManualCreatorCredit, Thread } from '../types'
@@ -104,7 +105,9 @@ export default function ThreadDetailView() {
 
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
-  const requestedIssueId = Number(new URLSearchParams(location.search).get('issue'))
+  // Malformed `?issue=` values collapse to 0 (plain thread navigation) so a
+  // stale or hand-edited link cannot drive pagination toward an impossible row.
+  const requestedIssueId = parseRequestedIssueId(location.search)
   const focusedIssueRef = useRef<number | null>(null)
   const [issuesExpanded, setIssuesExpanded] = useState(requestedIssueId > 0)
   const [isDependencyOpen, setIsDependencyOpen] = useState(false)

@@ -799,6 +799,19 @@ it('does not retarget an unknown deep-linked issue to another row', async () => 
   scrollIntoView.mockRestore()
 })
 
+it('treats a malformed issue deep link as plain thread navigation', async () => {
+  locationState.search = '?issue=abc'
+  const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView')
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  // A malformed target is not a row id: the issue list stays collapsed, no page
+  // is requested to hunt for an impossible row, and nothing is focused.
+  expect(document.querySelector('.issue-deep-link-target')).toBeNull()
+  expect(mockedIssuesApiList).not.toHaveBeenCalled()
+  expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'center', behavior: 'instant' })
+  scrollIntoView.mockRestore()
+})
+
 function creatorsResponseFor(
   entries: { issueId: number; creators: { name: string; roles: string[] }[] }[],
 ) {

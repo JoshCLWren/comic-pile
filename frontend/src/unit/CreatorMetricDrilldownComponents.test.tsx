@@ -105,7 +105,9 @@ describe('DrilldownIssueList', () => {
 
     const links = screen.getAllByRole('link')
     expect(links).toHaveLength(2)
-    expect(links[0].getAttribute('href')).toBe('/thread/7')
+    // Metric drilldown rows deep-link to the exact canonical issue (#3626).
+    expect(links[0].getAttribute('href')).toBe('/thread/7?issue=11#issue-11')
+    expect(links[1].getAttribute('href')).toBe('/thread/7?issue=12#issue-12')
     expect(screen.getByText('4.5★')).toBeInTheDocument()
     expect(screen.getByText('writer')).toBeInTheDocument()
     expect(screen.getByText('Read')).toBeInTheDocument()

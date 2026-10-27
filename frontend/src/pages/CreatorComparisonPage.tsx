@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
+import { threadIssueRoutePath } from '../utils/threadRoutes'
 import type { CreatorComparisonIssueRef, CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { CreatorMetricDrilldownModal } from '../components/CreatorMetricDrilldownModal'
@@ -258,7 +259,7 @@ function IssueDrilldown({
         {refs.map((ref) => (
           <li key={ref.issue_id} className="min-w-0">
             <Link
-              to={`/thread/${ref.thread_id}`}
+              to={threadIssueRoutePath(ref.thread_id, ref.issue_id)}
               className="block min-w-0 truncate rounded text-sm font-semibold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               style={{ color: 'var(--theme-text-primary)' }}
             >

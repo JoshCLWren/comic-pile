@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { threadIssueRoutePath } from '../utils/threadRoutes'
 import type { BoundaryEditorTarget, BoundaryIssue, ReadingBoundaryExplanation as Explanation } from '../services/api-reading-boundaries'
 
 /** Translate server-owned rule descriptors into the current editor routes. */
 function readingBoundaryEditorHref(editor: BoundaryEditorTarget): string | null {
   if (editor.kind === 'reading_list' && editor.list_id) return `/reading-lists/${editor.list_id}`
   if (editor.kind === 'prerequisite' && editor.thread_id) return `/thread/${editor.thread_id}?prerequisites=1`
-  if (editor.thread_id) return `/thread/${editor.thread_id}${editor.issue_id ? `?issue=${editor.issue_id}#issue-${editor.issue_id}` : ''}`
+  if (editor.thread_id) return threadIssueRoutePath(editor.thread_id, editor.issue_id)
   return null
 }
 
@@ -16,7 +17,7 @@ function EditorLink({ editor }: { editor?: BoundaryEditorTarget | null }) {
 }
 
 function IssueLabel({ issue }: { issue: BoundaryIssue }) {
-  return <Link to={`/thread/${issue.thread_id}?issue=${issue.issue_id}#issue-${issue.issue_id}`} aria-label={`Open ${issue.thread_title} issue #${issue.issue_number}`} className="text-[var(--theme-continuity-accent)] underline">{issue.label}{issue.volume_label && !issue.label.includes(issue.volume_label) ? ` · ${issue.volume_label}` : ''}</Link>
+  return <Link to={threadIssueRoutePath(issue.thread_id, issue.issue_id)} aria-label={`Open ${issue.thread_title} issue #${issue.issue_number}`} className="text-[var(--theme-continuity-accent)] underline">{issue.label}{issue.volume_label && !issue.label.includes(issue.volume_label) ? ` · ${issue.volume_label}` : ''}</Link>
 }
 
 interface Props {
