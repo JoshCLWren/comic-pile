@@ -237,7 +237,7 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.queryByText('Reading List editor')).not.toBeInTheDocument()
   })
 
-  it('preserves bracketed prefixes in owned Reading List names', async () {
+  it('preserves bracketed prefixes in owned Reading List names', async () => {
     const source = { ...readerView.sources[0], raw_source_path: 'custom-cbl:1000002', source_path: null, display_name: '[Favorites]' }
     mockGetReader.mockResolvedValue({ ...readerView, sources: [source], available_now: readerView.available_now.map((issue) => ({ ...issue, source_paths: [source.raw_source_path] })) })
     renderPage()
