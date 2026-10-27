@@ -37,7 +37,7 @@ const MIN_RATINGS_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
 ]
 
 /** Sample sizes below this are visibly called out in the average column. */
-const SMALL_SAMPLE_THRESHOLD = 3
+const SMALL_SAMPLE_THRESHOLD = 5
 
 /**
  * The two top-level modes of `/creators`: the plain directory and the optional
