@@ -71,7 +71,6 @@ const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 
 beforeEach(() => {
-  vi.stubGlobal('alert', vi.fn())
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility

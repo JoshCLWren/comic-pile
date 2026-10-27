@@ -40,7 +40,6 @@ const mocks = { refetch: vi.fn(), refetchSession: vi.fn(), mutate: vi.fn() }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.stubGlobal('alert', vi.fn())
   mocks.mutate.mockResolvedValue(undefined)
   vi.mocked(useQueueThreads).mockImplementation(() => {
      // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap

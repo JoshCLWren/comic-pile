@@ -260,10 +260,10 @@ export function useQueueThreadActions(
           restoreSeriesActionsFocus(threadId)
         })
         .catch(() => {
-          window.alert('Failed to move series to front. Please try again.')
+          showToast('Failed to move series to front. Please try again.', 'error')
         })
     },
-    [moveToFrontMutation, restoreSeriesActionsFocus],
+    [moveToFrontMutation, restoreSeriesActionsFocus, showToast],
   )
 
   const handleMoveToBack = useCallback(
@@ -273,25 +273,25 @@ export function useQueueThreadActions(
           restoreSeriesActionsFocus(threadId)
         })
         .catch(() => {
-          window.alert('Failed to move series to back. Please try again.')
+          showToast('Failed to move series to back. Please try again.', 'error')
         })
     },
-    [moveToBackMutation, restoreSeriesActionsFocus],
+    [moveToBackMutation, restoreSeriesActionsFocus, showToast],
   )
 
   const handleReposition = useCallback(
     (threadId: number, targetPosition: number, total: number) => {
       if (targetPosition < 1 || targetPosition > total) {
-        window.alert('Invalid position specified. Please choose a valid position.')
+        showToast('Invalid position specified. Please choose a valid position.', 'error')
         return
       }
       moveToPositionMutation
         .mutate({ id: threadId, position: targetPosition })
         .catch(() => {
-          window.alert('Failed to reposition thread. Please try again.')
+          showToast('Failed to reposition thread. Please try again.', 'error')
         })
     },
-    [moveToPositionMutation],
+    [moveToPositionMutation, showToast],
   )
 
   const requestShuffle = useCallback(() => {
@@ -309,9 +309,9 @@ export function useQueueThreadActions(
     } catch {
       // Keep the confirmation open so the reader can retry without
       // re-clicking SHUFFLE; the dialog mirrors the delete confirmation.
-      window.alert('Failed to shuffle queue. Please try again.')
+      showToast('Failed to shuffle queue. Please try again.', 'error')
     }
-  }, [shuffleQueueMutation])
+  }, [shuffleQueueMutation, showToast])
 
   const handleThreadRead = useCallback(
     async (thread: ThreadListItem) => {
@@ -326,10 +326,10 @@ export function useQueueThreadActions(
         navigateToRoll(thread, response)
       } catch (error: unknown) {
         console.error('Action failed:', error)
-        window.alert(`Action failed: ${getApiErrorDetail(error)}`)
+        showToast(`Action failed: ${getApiErrorDetail(error)}`, 'error')
       }
     },
-    [navigateToRoll, setPending],
+    [navigateToRoll, setPending, showToast],
   )
 
   const handleSnoozeToggle = useCallback(
@@ -351,12 +351,13 @@ export function useQueueThreadActions(
         restoreSeriesActionsFocus(thread.id)
       } catch (error: unknown) {
         console.error('Snooze action failed:', error)
-        window.alert(
+        showToast(
           `Failed to ${isSnoozed ? 'unsnooze' : 'snooze'} thread: ${getApiErrorDetail(error)}`,
+          'error',
         )
       }
     },
-    [snoozeMutation, unsnoozeMutation, refetchSession, restoreSeriesActionsFocus],
+    [snoozeMutation, unsnoozeMutation, refetchSession, restoreSeriesActionsFocus, showToast],
   )
 
   return {

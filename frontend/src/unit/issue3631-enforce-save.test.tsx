@@ -40,11 +40,14 @@ describe('#3631 Add Series save enforcement (focus)', () => {
  * the code that decides whether `submitCreate` runs.
  */
 describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
-  let alertSpy: ReturnType<typeof vi.fn>
+  // The hook reports create failures through the toast context, so the stub
+  // keeps observable feedback without a ToastProvider.
+  let alertSpy = vi.fn()
+  let modalsDeps: Parameters<typeof useQueueModals>[1]
 
   beforeEach(() => {
     alertSpy = vi.fn()
-    vi.stubGlobal('alert', alertSpy)
+    modalsDeps = { toastHook: () => ({ showToast: alertSpy, removeToast: vi.fn(), toasts: [] }) }
   })
 
   function makeWrapper() {
@@ -84,7 +87,7 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
       onDismissRollNudge: vi.fn(),
       onRollNudgeNavigate: vi.fn(),
     }
-    const rendered = renderHook(() => useQueueModals(params), { wrapper: makeWrapper() })
+    const rendered = renderHook(() => useQueueModals(params, modalsDeps), { wrapper: makeWrapper() })
     return { ...rendered, submitCreate }
   }
 
@@ -106,6 +109,7 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
     expect(rendered.submitCreate).not.toHaveBeenCalled()
     expect(alertSpy).toHaveBeenCalledWith(
       expect.stringContaining("'abc' is not a valid issue number"),
+      'error',
     )
   })
 

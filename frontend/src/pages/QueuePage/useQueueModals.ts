@@ -5,6 +5,7 @@ import type { Thread, ThreadListItem, ThreadCreatePayload } from '../../types'
 import { getManualCreatorCreditList } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
+import { useToast } from '../../contexts/useToast'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 import type { ParsedIssueRangeDetail } from '../../utils/issueParser'
@@ -87,7 +88,18 @@ interface UseQueueModalsResult {
  * presentational state so the page can compose the modal modules without
  * re-implementing the navigation, bug-report-restore, or location-state wiring.
  */
-export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult {
+/**
+ * Injectable seams for hook-level side channels. Production callers omit
+ * `deps`; tests substitute a toast double through the same seam pattern
+ * `useQueueThreadActions` uses.
+ */
+export interface UseQueueModalsDeps {
+  toastHook?: typeof useToast
+}
+
+export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDeps = {}): UseQueueModalsResult {
+  const { toastHook = useToast } = deps
+  const { showToast } = toastHook()
   const {
     threads,
     onCreated,
@@ -340,7 +352,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           // display-only affordance (#3262) and must not block a valid entry.
           const validation = validateIssueRangeForStaging(createForm.issues.trim())
           if (!validation.valid) {
-            window.alert(`Failed to create series: ${validation.error ?? 'Invalid issue range.'}`)
+            showToast(`Failed to create series: ${validation.error ?? 'Invalid issue range.'}`, 'error')
             creatingRef.current = false
             return
           }
@@ -381,8 +393,9 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
             }
           } catch (issueError: unknown) {
             console.error('Thread created but failed to create issues:', issueError)
-            window.alert(
+            showToast(
               `Thread created successfully, but failed to create individual issues: ${getApiErrorDetail(issueError)}`,
+              'error',
             )
           }
         }
@@ -392,12 +405,12 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         await onCreated()
       } catch (error: unknown) {
         console.error('Failed to create thread:', error)
-        window.alert(`Failed to create series: ${getApiErrorDetail(error)}`)
+        showToast(`Failed to create series: ${getApiErrorDetail(error)}`, 'error')
       } finally {
         creatingRef.current = false
       }
     },
-    [createForm, closeCreateModal, onCreated, submitCreate],
+    [createForm, closeCreateModal, onCreated, submitCreate, showToast],
   )
 
   const handleEditSubmit = useCallback(
@@ -454,13 +467,13 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         await refetchSession()
       } catch (error) {
         console.error('Failed to refresh data after migration:', error)
-        window.alert('Failed to refresh data. Please refresh the page.')
+        showToast('Failed to refresh data. Please refresh the page.', 'error')
       }
       setShowMigrationDialog(false)
       setThreadToMigrate(null)
       setEditingThread(migratedThread)
     },
-    [onUpdated, refetchSession],
+    [onUpdated, refetchSession, showToast],
   )
 
   const handleMigrationSkip = useCallback(() => {

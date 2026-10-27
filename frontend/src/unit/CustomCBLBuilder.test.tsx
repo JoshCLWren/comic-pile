@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { queryKeys } from '../query/queryKeys'
@@ -424,7 +424,6 @@ describe('CustomCBLBuilder', () => {
     mocks.update.mockResolvedValue(onlyAllStar)
     mocks.exportXml.mockResolvedValue('<ReadingList><Name>Starman into JSA</Name></ReadingList>')
     mocks.delete.mockResolvedValue(undefined)
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
@@ -468,15 +467,41 @@ describe('CustomCBLBuilder', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:custom-cbl')
     expect(anchorClick).toHaveBeenCalled()
 
+    // Delete confirms through an in-page dialog QA automation can operate,
+    // not a native window.confirm the harness auto-dismisses.
     const deleteButton = screen.getByRole('button', { name: 'Delete' })
     fireEvent.click(deleteButton)
+    expect(screen.getByRole('dialog', { name: 'Delete custom CBL' })).toBeInTheDocument()
     expect(mocks.delete).not.toHaveBeenCalled()
+
+    // Cancelling keeps the saved list exactly as it is.
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Delete custom CBL' })).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Delete custom CBL' })).not.toBeInTheDocument())
+    expect(mocks.delete).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Custom CBL')).toHaveValue('9')
+
     fireEvent.click(deleteButton)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete custom CBL' }))
     await waitFor(() => expect(mocks.delete).toHaveBeenCalledWith(9))
     expect(await screen.findByRole('status')).toHaveTextContent('Custom CBL deleted.')
 
-    confirm.mockRestore()
     anchorClick.mockRestore()
+  })
+
+  it('keeps the delete confirmation open with a visible error when deletion fails', async () => {
+    mocks.delete.mockRejectedValue(new Error('Deletion unavailable'))
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete custom CBL' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Delete custom CBL' })
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Deletion unavailable')
+    // The list survives the failed deletion and stays loaded for a retry.
+    expect(screen.getByText('Starman #55')).toBeInTheDocument()
   })
 
   it('flags a custom CBL checkpoint and includes it on save', async () => {
@@ -1593,7 +1618,6 @@ describe('CustomCBLBuilder', () => {
   })
 
   it('keeps a list editable after apply and delete requests fail', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     mocks.apply.mockRejectedValue(new Error('Apply unavailable'))
     mocks.delete.mockRejectedValue(new Error('Delete unavailable'))
     renderBuilder()
@@ -1602,8 +1626,13 @@ describe('CustomCBLBuilder', () => {
     await screen.findByText('Starman #55')
     fireEvent.click(screen.getByRole('button', { name: 'Apply to this Reading Plan' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Apply unavailable')
+
+    // The delete failure keeps the in-page confirmation open with the error
+    // visible, so the list stays editable and retryable without a reload.
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Delete unavailable')
+    const dialog = screen.getByRole('dialog', { name: 'Delete custom CBL' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete custom CBL' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Delete unavailable')
     expect(screen.getByLabelText('Custom CBL')).toHaveValue('9')
     expect(screen.getByRole('list', { name: 'Custom CBL ordered issues' })).toHaveTextContent('Starman #55')
   })

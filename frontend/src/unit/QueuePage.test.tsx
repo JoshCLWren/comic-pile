@@ -138,7 +138,6 @@ const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
 const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
-  vi.stubGlobal('alert', vi.fn())
   mockedUseQueueThreads.mockReturnValue({
     data: [
       { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },

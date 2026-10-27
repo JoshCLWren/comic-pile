@@ -202,7 +202,6 @@ async function openEditSeries(user: ReturnType<typeof userEvent.setup>) {
 }
 
 beforeEach(() => {
-  vi.stubGlobal('alert', vi.fn())
   mockedUseQueueThreads.mockReturnValue({
     data: [MIGRATED_THREAD],
     isPending: false,

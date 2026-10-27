@@ -6,6 +6,7 @@ import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useExcludedThreads, useMoveToPosition, useQueueThreads, useRestoreThread, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
+import { useToast } from '../../contexts/useToast'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
@@ -37,6 +38,7 @@ import { useQueueModals as useQueueModalsHook } from './useQueueModals'
  */
 export default function QueuePage() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
   const isSearching = searchQuery.trim() !== ''
@@ -154,7 +156,7 @@ const {
     async (targetPosition: number) => {
       if (!modals.repositioningThread) return
       if (targetPosition < 1 || targetPosition > authoritativeActiveCount) {
-        window.alert('Invalid position specified. Please choose a valid position.')
+        showToast('Invalid position specified. Please choose a valid position.', 'error')
         return
       }
       try {
@@ -165,10 +167,10 @@ const {
         modals.closeRepositionModal()
       } catch {
         modals.closeRepositionModal()
-        window.alert('Failed to reposition thread. Please try again.')
+        showToast('Failed to reposition thread. Please try again.', 'error')
       }
     },
-    [modals, moveToPositionMutation, authoritativeActiveCount],
+    [modals, moveToPositionMutation, authoritativeActiveCount, showToast],
   )
 
   const handleLoadMore = useCallback(() => {
