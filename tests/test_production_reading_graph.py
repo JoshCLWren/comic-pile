@@ -513,8 +513,9 @@ def test_approved_old_order_conversion_preserves_exact_source_pairs() -> None:
     assert all(row[3] == "reader" and row[4] == "A" for row in converted.values())
     # Do not relabel old JLI reversals as explicit reader requirements.
     stale_jli = next(
-        row for row in data["dependencies"] if row[0] == 1725339
+        (row for row in data["dependencies"] if row[0] == 1725339), None
     )
+    assert stale_jli is not None, "Expected stale JLI dependency 1725339 in fixture"
     assert stale_jli[3] == "converted"
 
 
