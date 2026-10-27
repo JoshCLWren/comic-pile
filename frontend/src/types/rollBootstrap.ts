@@ -35,6 +35,10 @@ export interface ThreadExclusionReason {
   thread_id?: number
   title: string
   format: string
+  /** Truthful identity context for disambiguating same-named out-of-pool series. */
+  year?: number | string | null
+  volume?: string | null
+  publisher?: string | null
   reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue"
   detail?: string | null
   /** Live eligibility labels for a blocked series, when the server has them. */
@@ -103,6 +107,10 @@ export interface RollRecoveryDiagnostic {
 export interface RollRecoveryInfo {
   original_thread_id: number
   original_thread_title: string
+  /** Specific issue identity/number for the restored pending roll, when known. */
+  original_thread_issue_number?: string | null
+  /** Honest rating representation; null means no rating was recorded. */
+  original_thread_rating?: number | null
   direct_blockers: RollRecoveryBlocker[]
   readable_prerequisites: RollRecoveryPrerequisite[]
   chains?: RollRecoveryChainNode[][]

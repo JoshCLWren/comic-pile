@@ -527,10 +527,32 @@ export function ThreadPool({
                       className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] underline truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                     >
                       {thread.title}
+                      {(() => {
+                        const context = [
+                          thread.year != null ? `(${thread.year})` : null,
+                          thread.volume ? `Vol. ${thread.volume}` : null,
+                          thread.publisher ?? null,
+                        ].filter(Boolean).join(' · ')
+                        const fallback = context || (thread.thread_id ? `Series #${thread.thread_id}` : null)
+                        return fallback ? (
+                          <span className="ml-1 text-xs text-stone-500">{fallback}</span>
+                        ) : null
+                      })()}
                     </Link>
                   ) : (
                     <span className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] truncate">
                       {thread.title}
+                      {(() => {
+                        const context = [
+                          thread.year != null ? `(${thread.year})` : null,
+                          thread.volume ? `Vol. ${thread.volume}` : null,
+                          thread.publisher ?? null,
+                        ].filter(Boolean).join(' · ')
+                        const fallback = context || null
+                        return fallback ? (
+                          <span className="ml-1 text-xs text-stone-500">{fallback}</span>
+                        ) : null
+                      })()}
                     </span>
                   )}
                   <span className="shrink-0 text-xs text-stone-500">
