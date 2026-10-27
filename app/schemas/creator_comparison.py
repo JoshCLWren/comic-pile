@@ -150,7 +150,7 @@ class CreatorComparisonItem(BaseModel):
     )
     insufficient_data: bool = Field(
         default=False,
-        description="True when the creator has fewer than 3 rated issues, making "
+        description="True when the creator has fewer than 5 rated issues, making "
         "statistics less reliable.",
     )
 
@@ -224,7 +224,7 @@ class CreatorComparisonResponse(BaseModel):
     )
     insufficient_data_keys: list[str] = Field(
         default_factory=list,
-        description="Canonical keys of creators with insufficient data (fewer than 3 rated issues).",
+        description="Canonical keys of creators with insufficient data (fewer than 5 rated issues).",
     )
 
 

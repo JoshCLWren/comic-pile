@@ -165,12 +165,9 @@ async def test_compare_returns_bounded_side_by_side_metrics(
     assert writer["role_stats"] == [
         {"role": "writer", "issue_count": 3, "rated_issue_count": 3, "average_rating": pytest.approx(4.0)}
     ]
-    assert writer["insufficient_data"] is False
+    assert writer["insufficient_data"] is True
     assert writer["min_rated_issues_per_series"] == MIN_RATED_ISSUES_PER_SERIES
-    assert writer["strongest_series"][0]["thread_title"] == "Team Book"
-    assert writer["strongest_series"][0]["issue_count"] == 3
-    assert writer["strongest_series"][0]["rated_issue_count"] == 3
-    assert writer["strongest_series"][0]["average_rating"] == pytest.approx(4.0)
+    assert writer["strongest_series"] == []
 
     artist = body["comparisons"]["creator:2"]
     assert artist["ratings_count"] == 1
@@ -179,7 +176,7 @@ async def test_compare_returns_bounded_side_by_side_metrics(
     assert artist["unread_upcoming_count"] == 1
     assert artist["read_unrated_count"] == 1
 
-    assert body["insufficient_data_keys"] == ["creator:2"]
+    assert body["insufficient_data_keys"] == ["creator:1", "creator:2"]
 
     coverage = body["coverage"]
     assert coverage["rated_issues_total"] == 4

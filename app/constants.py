@@ -171,7 +171,7 @@ NEAR_MATCH_LIMIT: int = 8
 # series "strongest series" is allowed to rank. Shared by the aggregation layer
 # and the response schema so the documented minimum sample and the enforced
 # contract cannot drift apart.
-MIN_RATED_FOR_RELIABLE: int = 3
+MIN_RATED_FOR_RELIABLE: int = 5
 MIN_RATED_ISSUES_PER_SERIES: int = MIN_RATED_FOR_RELIABLE
 
 #: Minimum number of shared rated issues a pair of canonical creators must

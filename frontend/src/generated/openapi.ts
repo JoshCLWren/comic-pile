@@ -8949,7 +8949,7 @@ export interface components {
             display_name: string;
             /**
              * Insufficient Data
-             * @description True when the creator has fewer than 3 rated issues, making statistics less reliable.
+             * @description True when the creator has fewer than 5 rated issues, making statistics less reliable.
              * @default false
              */
             insufficient_data: boolean;
@@ -9042,7 +9042,7 @@ export interface components {
             coverage: components["schemas"]["CreatorComparisonCoverage"];
             /**
              * Insufficient Data Keys
-             * @description Canonical keys of creators with insufficient data (fewer than 3 rated issues).
+             * @description Canonical keys of creators with insufficient data (fewer than 5 rated issues).
              */
             insufficient_data_keys?: string[];
         };

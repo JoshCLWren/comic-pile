@@ -743,7 +743,7 @@ export default function CreatorComparisonPage() {
           }}
         >
           <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
-            <strong>Note:</strong> Some creators have fewer than 3 rated issues, making their statistics less reliable.
+            <strong>Note:</strong> Some creators have fewer than 5 rated issues, making their statistics less reliable.
             <span className="break-words ml-2">Affected: {affectedNames.join(', ')}</span>
           </p>
         </div>
