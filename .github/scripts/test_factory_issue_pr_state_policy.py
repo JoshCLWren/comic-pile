@@ -5,7 +5,11 @@ from __future__ import annotations
 
 import unittest
 
-from factory_issue_pr_state_policy import stage_from_trusted_prs
+from factory_issue_pr_state_policy import (
+    issue_labels_block_reconciliation,
+    stage_from_trusted_prs,
+)
+from factory_work_policy import BLOCKED_LABELS
 
 
 class FactoryIssuePrStatePolicyTests(unittest.TestCase):
@@ -58,6 +62,21 @@ class FactoryIssuePrStatePolicyTests(unittest.TestCase):
                 {"trusted": False, "merged": False, "state": "OPEN"},
             ]),
             "claimable",
+        )
+
+    def test_ralph_status_blocked_blocks_reconciliation(self) -> None:
+        """Hold labels must skip factory label rewrites, including ralph-status:blocked."""
+        self.assertTrue(
+            issue_labels_block_reconciliation(
+                ["factory", "factory:unowned", "ralph-status:blocked"]
+            )
+        )
+        for label in BLOCKED_LABELS:
+            self.assertTrue(issue_labels_block_reconciliation([label]), label)
+        self.assertFalse(
+            issue_labels_block_reconciliation(
+                ["factory", "factory:unowned", "ralph-status:pending"]
+            )
         )
 
 
