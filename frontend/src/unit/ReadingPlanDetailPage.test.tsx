@@ -254,8 +254,10 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getByRole('heading', { name: 'Available now' })).toBeInTheDocument()
     expect(screen.getAllByText('X-Men #95').length).toBeGreaterThan(0)
     expect(screen.getByRole('heading', { name: 'Blocked next' })).toBeInTheDocument()
-    expect(within(screen.getByTestId('blocked-next')).getByText('Blocked by X-Men: #95')).toBeInTheDocument()
+    expect(within(screen.getByTestId('blocked-next')).getByRole('link', { name: 'Open X-Men issue #95' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Upcoming' })).toBeInTheDocument()
+    expect(within(screen.getByTestId('upcoming-material')).queryByText('Cable #76')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 upcoming issues' }))
     expect(within(screen.getByTestId('upcoming-material')).getByText('Cable #76')).toBeInTheDocument()
     expect(screen.getByText('Source reading order')).toBeInTheDocument()
     expect(screen.getByText('CBL-backed')).toBeInTheDocument()
@@ -265,7 +267,9 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getByRole('link', { name: 'Continue reading' })).toHaveAttribute('href', '/thread/4')
     expect(screen.getByRole('button', { name: 'Edit plan' })).toBeInTheDocument()
     expect(screen.queryByText(/ContinuityRule/i)).not.toBeInTheDocument()
-    // New releases control is part of the Reading Plan reader surface.
+    // Release following is secondary, hidden until explicitly requested.
+    expect(screen.queryByRole('heading', { name: 'New releases' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Manage release tracking' }))
     expect(screen.getByRole('heading', { name: 'New releases' })).toBeInTheDocument()
     const newRelease = within(screen.getByTestId('new-release-source'))
     expect(newRelease.getByText(/X-Men/)).toBeInTheDocument()
@@ -280,6 +284,7 @@ describe('ReadingPlanDetailPage', () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Age of Apocalypse' })
+    fireEvent.click(screen.getByRole('button', { name: 'Manage release tracking' }))
     const candidate = within(screen.getByTestId('new-release-candidate'))
     expect(candidate.getByText(/Ultimate Spider-Man \(2024\)/)).toBeInTheDocument()
     expect(
@@ -295,6 +300,65 @@ describe('ReadingPlanDetailPage', () => {
     expect(blocked.queryByRole('link', { name: 'Repair the mapping' })).not.toBeInTheDocument()
   })
 
+
+  it('keeps Julix-sized strict blockers and release-follow noise out of the initial screen', async () => {
+    const blockers = Array.from({ length: 382 }, (_, index) => ({
+      issue_id: index + 1000,
+      thread_id: index + 2000,
+      thread_title: index === 0 ? 'B.P.R.D.: Casualties' : `Extra prerequisite ${index}`,
+      issue_number: '1',
+      explanation: `Strict order: waiting on requirement ${index}`,
+    }))
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      name: 'Mignolaverse',
+      ordering_mode: 'strict_sequential',
+      execution_mode: 'option_e',
+      progress: { total_issues: 464, read_issues: 82 },
+      available_now: [],
+      blocked_next: Array.from({ length: 8 }, (_, index) => ({
+        ...blockedIssue,
+        occurrence_id: `blocked-${index}`,
+        issue_id: 75 + index,
+        blockers,
+      })),
+      lanes: [{
+        ...readerView.lanes[0],
+        issues: Array.from({ length: 464 }, (_, index) => ({
+          ...laterIssue,
+          occurrence_id: `later-${index}`,
+          issue_id: 500 + index,
+        })),
+      }],
+    })
+    renderPage()
+    expect(await screen.findByRole('heading', { name: 'Mignolaverse' })).toBeInTheDocument()
+    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(3)
+    expect(screen.getAllByRole('link', { name: 'Open B.P.R.D.: Casualties issue #1' })).toHaveLength(3)
+    expect(screen.queryByText('Extra prerequisite 1 #1')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Follow Ultimate Spider-Man (2024)' })).not.toBeInTheDocument()
+    expect(screen.getByText(/This linked Reading List controls reading eligibility/)).toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show 381 other reading requirements' })[0])
+    expect(screen.getByRole('link', { name: 'Open Extra prerequisite 1 issue #1' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show 5 more blocked issues' }))
+    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(8)
+    expect(screen.queryByText('Cable #76')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show complete reading order (464 issues)' }))
+    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(472)
+  })
+
+  it('keeps optional release tracking outside the reading workflow until opened', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: 'Age of Apocalypse' })
+    const releaseHeading = screen.getByRole('heading', { name: 'Optional: Track future releases' })
+    const availableHeading = screen.getByRole('heading', { name: 'Available now' })
+    expect(availableHeading.compareDocumentPosition(releaseHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByTestId('new-release-candidate')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Manage release tracking' }))
+    expect(screen.getByTestId('new-release-candidate')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide release tracking' }))
+    expect(screen.queryByTestId('new-release-candidate')).not.toBeInTheDocument()
+  })
   it('rejects an invalid plan id before fetching', () => {
     renderPage('not-a-number')
     expect(screen.getByRole('alert')).toHaveTextContent('Invalid reading plan ID.')
