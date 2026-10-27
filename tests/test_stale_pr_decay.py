@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / ".github" / "scripts"
 if str(SCRIPTS) not in sys.path:
@@ -551,7 +553,9 @@ def test_reset_issue_to_unowned_respects_terminal_closed_issue(monkeypatch) -> N
     assert writes == []
 
 
-def test_process_stale_prs_does_not_close_manual_only_pr(monkeypatch) -> None:
+def test_process_stale_prs_does_not_close_manual_only_pr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A factory PR with the shared manual-only marker must stay open.
 
     Stale expiration ages from created_at, so a reopen of #3971/#3970 still

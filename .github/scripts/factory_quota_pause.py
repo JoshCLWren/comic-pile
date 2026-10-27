@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -25,6 +26,9 @@ PAUSES_PATH = Path(__file__).resolve().parents[1] / "factory-quota-pauses.json"
 PROTECTED_WORKERS = frozenset({46})
 
 OLLAMA_BALANCE_URL = "https://ollama.com/api/balance"
+# The balance probe is a public helper, so network reads are pinned to the
+# documented provider host instead of forwarding an arbitrary URL (SSRF).
+ALLOWED_BALANCE_HOSTS = frozenset({"ollama.com"})
 BACKOFF_CAP_HOURS = 24
 
 
@@ -515,7 +519,8 @@ def parse_ollama_balance_reset(
     """Parse Ollama balance endpoint for next reset time.
 
     Args:
-        balance_url: Balance endpoint URL (file:// supported for tests).
+        balance_url: Balance endpoint URL (file:// supported for tests). Only
+            https://ollama.com URLs are fetched over the network.
         api_key: Ollama API key.
         timeout: Request timeout seconds.
 
@@ -534,6 +539,10 @@ def parse_ollama_balance_reset(
             return _extract_period_until(data)
         except (OSError, ValueError, json.JSONDecodeError):
             return None
+
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or parsed.hostname not in ALLOWED_BALANCE_HOSTS:
+        return None
 
     headers = {"Accept": "application/json", "User-Agent": "comicpile-factory-quota-pause"}
     if key:

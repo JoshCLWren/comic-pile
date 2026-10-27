@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useParams, useSearchParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanDetailPage from '../pages/ReadingPlanDetailPage'
@@ -51,7 +51,8 @@ function createWrapper() {
 
 function ReadingListEditorTarget() {
   const { id } = useParams()
-  return <div>Reading List editor {id}</div>
+  const [searchParams] = useSearchParams()
+  return <div data-plan-id={searchParams.get('planId') ?? ''}>Reading List editor {id}</div>
 }
 
 function renderPage(planId = '12') {
@@ -212,7 +213,7 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.queryByText(/custom-cbl:/)).not.toBeInTheDocument()
   })
 
-  it('opens a linked Reading List directly instead of the obsolete plan editor', async () => {
+  it('keeps the plan editor reachable and opens a linked Reading List separately', async () => {
     mockGetReader.mockResolvedValue({
       ...readerView,
       sources: [
@@ -221,9 +222,25 @@ describe('ReadingPlanDetailPage', () => {
       ],
     })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit reading order' }))
+
+    // The plan's own copied order stays editable: "Edit reading order" only
+    // edits the source Reading List, which does not rewrite the plan order.
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit plan' }))
+    expect(screen.getByText('Editor')).toBeInTheDocument()
+  })
+
+  it('opens a linked Reading List in plan context so its order can be applied', async () => {
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      sources: [
+        { ...readerView.sources[0], raw_source_path: 'custom-cbl:9999', display_name: null },
+        { ...readerView.sources[0], id: 2, raw_source_path: 'custom-cbl:2', display_name: 'Mignolaverse' },
+      ],
+    })
+    renderPage()
+    fireEvent.click(await screen.findByRole('link', { name: 'Edit reading order' }))
     expect(screen.getByText('Reading List editor 2')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument()
+    expect(screen.getByText('Reading List editor 2')).toHaveAttribute('data-plan-id', '12')
   })
 
   it('does not navigate to an unresolved or foreign Reading List from source paths alone', async () => {

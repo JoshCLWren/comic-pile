@@ -831,6 +831,10 @@ it('shows deep-link notice when issue param references a missing issue', async (
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await waitFor(() => expect(screen.getByText("That issue isn't in this thread.")).toBeInTheDocument())
+  // Secondary notice text must use the semantic theme role, not a raw palette
+  // color, so it follows classic/ink-gold/command-center
+  // (docs/FRONTEND_VISUAL_GRAMMAR.md).
+  expect(screen.getByRole('status')).toHaveClass('text-[var(--theme-text-muted)]')
 })
 
 it('does not show deep-link notice when no issue param present', async () => {

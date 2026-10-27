@@ -140,9 +140,16 @@ export function ManualPickerSearch({
           placeholder={placeholder}
           disabled={disabled || pending}
           onChange={(event) => {
-            setQuery(event.target.value)
+            const nextQuery = event.target.value
+            setQuery(nextQuery)
             setOpen(true)
             setHighlighted(0)
+            // Editing the search invalidates the previous commit: the
+            // "Selected: …" line is hidden while a query is active, so keeping
+            // the saved id would leave "Pick this series" enabled and able to
+            // submit a series the reader is no longer looking at. The reader
+            // must choose from the current results.
+            if (value) onChange('')
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
@@ -171,6 +178,15 @@ export function ManualPickerSearch({
         // referenced by aria-activedescendant. Mirroring the committed `value`
         // here as well would advertise two selections at once, so the saved
         // choice is reported by the "Selected: …" line above instead.
+        //
+        // This listbox stays in normal document flow inside the surrounding
+        // Modal instead of being portaled through `OverlayPortal`. It is the
+        // inline popup of a combobox form control, not a floating menu: it
+        // scrolls with the dialog body and never escapes it. A portal would
+        // also paint it underneath the open dialog: the shared layer tokens in
+        // `components/overlay.css` stack menus (`--overlay-layer-menu: 200`)
+        // below dialogs (`--overlay-layer-dialog: 300`), and the Modal already
+        // lives in the dialog root.
         <ul
           ref={listRef}
           id={listboxId}

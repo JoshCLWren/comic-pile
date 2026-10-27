@@ -218,6 +218,18 @@ def test_parse_reset_from_body_and_ollama_balance(tmp_path: Path) -> None:
     assert parsed_offset == datetime(2026, 11, 1, 18, 0, 0, tzinfo=UTC)
 
 
+def test_ollama_balance_refuses_non_provider_urls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The public balance helper must not fetch arbitrary hosts or schemes."""
+
+    def explode(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("network fetch must not happen for a non-provider URL")
+
+    monkeypatch.setattr(qp.urllib.request, "urlopen", explode)
+    assert qp.parse_ollama_balance_reset("http://169.254.169.254/latest/meta-data/") is None
+    assert qp.parse_ollama_balance_reset("https://evil.example/api/balance") is None
+    assert qp.parse_ollama_balance_reset("ftp://ollama.com/api/balance") is None
+
+
 def test_unknown_reset_uses_backoff_not_tomorrow() -> None:
     reset = qp.parse_reset_from_config("unknown-provider")
     assert reset is None

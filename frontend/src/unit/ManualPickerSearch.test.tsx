@@ -40,7 +40,9 @@ function Harness({
         pending={pending}
         disabled={disabled}
       />
-      <button type="submit">Pick this series</button>
+      <button type="submit" disabled={!value}>
+        Pick this series
+      </button>
       <output data-testid="picked-value">{value}</output>
     </form>
   )
@@ -136,7 +138,7 @@ describe('ManualPickerSearch', () => {
     )
   })
 
-  it('consumes Enter while a failed search has no matches instead of submitting an old choice', async () => {
+  it('clears the previous commit when the reader types a new search', async () => {
     const user = userEvent.setup()
     const onSubmit = vi.fn()
     render(<Harness initialValue="1" onSubmit={onSubmit} />)
@@ -146,11 +148,14 @@ describe('ManualPickerSearch', () => {
     await user.type(input, 'zzz')
     expect(screen.getByRole('option', { name: 'No matching series' })).toBeInTheDocument()
 
-    // The picker owns Enter while its list is open, even with zero matches.
+    // Typing a new search invalidates the earlier choice, so neither the
+    // "Pick this series" button nor Enter can submit the hidden old series.
+    expect(screen.getByTestId('picked-value')).toHaveTextContent('')
+    expect(screen.getByRole('button', { name: 'Pick this series' })).toBeDisabled()
+    expect(screen.queryByTestId('manual-picker-selection')).not.toBeInTheDocument()
+
     expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false)
     expect(onSubmit).not.toHaveBeenCalled()
-    expect(screen.getByTestId('picked-value')).toHaveTextContent('1')
-    expect(screen.getByRole('listbox')).toBeInTheDocument()
   })
 
   it('clears the query with the clear control and restores the full list', async () => {

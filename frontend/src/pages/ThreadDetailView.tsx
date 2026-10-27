@@ -588,7 +588,7 @@ export default function ThreadDetailView() {
         </div>
 
         {deepLinkNotice && (
-          <p role="status" className="text-sm text-stone-400">
+          <p role="status" className="text-sm text-[var(--theme-text-muted)]">
             {deepLinkNotice}
           </p>
         )}

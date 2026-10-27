@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import ReadingListEditorPage from '../pages/ReadingListEditorPage'
 
 vi.mock('../components/CustomCBLBuilder', () => ({
-  default: ({ initialListId }: { initialListId?: number }) => (
-    <div data-testid="mock-cbl-builder" data-list-id={initialListId} />
+  default: ({ initialListId, planId }: { initialListId?: number; planId?: number }) => (
+    <div data-testid="mock-cbl-builder" data-list-id={initialListId} data-plan-id={planId ?? ''} />
   ),
 }))
 
@@ -25,6 +25,24 @@ describe('ReadingListEditorPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Edit Reading List' })).toBeInTheDocument()
     expect(screen.getByTestId('mock-cbl-builder')).toHaveAttribute('data-list-id', '12')
+    expect(screen.getByTestId('mock-cbl-builder')).toHaveAttribute('data-plan-id', '')
+  })
+
+  it('passes the originating plan so the list order can be applied to it', () => {
+    renderAt('/reading-lists/12?planId=34')
+
+    expect(screen.getByTestId('mock-cbl-builder')).toHaveAttribute('data-plan-id', '34')
+  })
+
+  it.each([
+    ['a non-numeric plan id', '/reading-lists/12?planId=abc'],
+    ['a zero plan id', '/reading-lists/12?planId=0'],
+    ['an unsafe plan id', '/reading-lists/12?planId=9007199254740993'],
+  ])('ignores %s and still opens the list editor', (_label, path) => {
+    renderAt(path)
+
+    expect(screen.getByTestId('mock-cbl-builder')).toHaveAttribute('data-list-id', '12')
+    expect(screen.getByTestId('mock-cbl-builder')).toHaveAttribute('data-plan-id', '')
   })
 
   it.each([

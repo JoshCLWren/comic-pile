@@ -30,7 +30,7 @@ D4 = datetime(2026, 3, 4, tzinfo=UTC)
 _identity_serial = 0
 
 
-def test_shared_reliability_threshold_is_five():
+def test_shared_reliability_threshold_is_five() -> None:
     """The shared creator-reliability floor is five rated issues (issue #4237).
 
     Pins MIN_RATED_FOR_RELIABLE (and its alias MIN_RATED_ISSUES_PER_SERIES) at 5

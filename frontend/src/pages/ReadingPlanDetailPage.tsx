@@ -252,12 +252,20 @@ export default function ReadingPlanDetailPage() {
               Continue reading
             </Link>
           )}
+          {editableListId != null && (
+            <Link
+              to={`/reading-lists/${editableListId}?planId=${planId}`}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+            >
+              Edit reading order
+            </Link>
+          )}
           <button
             type="button"
-            onClick={() => navigate(editableListId != null ? `/reading-lists/${editableListId}` : `/continuity-plans/${planId}/edit`)}
+            onClick={() => navigate(`/continuity-plans/${planId}/edit`)}
             className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
           >
-            {editableListId != null ? 'Edit reading order' : 'Edit plan'}
+            Edit plan
           </button>
         </div>
       </header>

@@ -32,6 +32,13 @@ def issue_labels_block_reconciliation(labels: Iterable[str]) -> bool:
     Reuses ``BLOCKED_LABELS`` from factory work policy so the scheduled
     reconciler leaves ``ralph-status:blocked`` (and the rest of that set)
     alone instead of restoring ``factory`` + ``factory:unowned``.
+
+    Args:
+        labels: Current label names on the issue, as reported by GitHub.
+
+    Returns:
+        True when any label belongs to the claim policy's blocked set, so the
+        reconciler must leave the issue's factory labels untouched.
     """
     return bool(set(labels) & BLOCKED_LABELS)
 
