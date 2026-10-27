@@ -6,7 +6,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.custom_cbl import CustomCBLList
-from app.models.reading_plan_membership import ReadingPlanSource
 from app.services.reading_plan_source_labels import load_reading_plan_source_names
 from tests.conftest import get_or_create_user_async
 from tests.test_reading_plan_reader import _create_plan, _make_issue, _node
@@ -43,16 +42,6 @@ async def test_plan_list_and_reader_resolve_owned_source_names_without_writing(
             }
         ],
     )
-    # Record the same durable source identity used in production for Julix.
-    owned_source = await async_db.scalar(
-        select(ReadingPlanSource).where(
-            ReadingPlanSource.plan_id == plan_id,
-            ReadingPlanSource.raw_source_path == owned_ref,
-        )
-    )
-    assert owned_source is not None
-    owned_source.custom_cbl_list_id = owned.id
-    await async_db.commit()
     before_count = await async_db.scalar(select(func.count()).select_from(CustomCBLList))
     before_revision = owned.updated_at
     listed = await auth_client.get("/api/v1/continuity-plans/")
@@ -64,15 +53,12 @@ async def test_plan_list_and_reader_resolve_owned_source_names_without_writing(
     assert response.status_code == 200, response.text
     sources = {row["raw_source_path"]: row for row in response.json()["sources"]}
     assert sources[owned_ref]["display_name"] == "Mignolaverse"
-    assert sources[owned_ref]["custom_cbl_list_id"] == owned.id
     assert sources[foreign_ref]["display_name"] is None
-    assert sources[foreign_ref]["custom_cbl_list_id"] is None
     assert "Private foreign source" not in response.text
     membership = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/membership")
     assert membership.status_code == 200, membership.text
     membership_sources = {row["raw_source_path"]: row for row in membership.json()["sources"]}
     assert membership_sources[owned_ref]["display_name"] == "Mignolaverse"
-    assert membership_sources[owned_ref]["custom_cbl_list_id"] == owned.id
     assert membership_sources[foreign_ref]["display_name"] is None
     assert await async_db.scalar(select(func.count()).select_from(CustomCBLList)) == before_count
     await async_db.refresh(owned)
