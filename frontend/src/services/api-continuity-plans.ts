@@ -124,6 +124,7 @@ export interface ReadingPlanReaderLane {
 export interface ReadingPlanSourceSnapshot {
   id: number
   raw_source_path: string
+  custom_cbl_list_id?: number | null
   display_name?: string | null
   repository: string | null
   source_path: string | null
