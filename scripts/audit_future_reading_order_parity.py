@@ -10,10 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.repositories.reading_shadow_repository import load_shadow_inputs
 from app.services.reading_future_parity import HistoricalEdge, audit_future_parity
 from app.services.reading_list_evaluator import ReadingSnapshot
-from app.services.reading_partial_list_coverage import partial_strict_coverage
+from app.services.reading_partial_list_coverage import (
+    classify_partial_strict_coverage,
+    partial_strict_coverage,
+    superseded_converted_edge,
+)
 
 SQL = """
-SELECT d.id, d.source_issue_id, d.target_issue_id, d.origin, d.note
+SELECT d.id, d.source_issue_id, d.target_issue_id, d.origin, d.note, d.classification
 FROM dependencies d
 JOIN issues s ON s.id=d.source_issue_id
 JOIN issues t ON t.id=d.target_issue_id
@@ -24,6 +28,15 @@ AND s.status<>'read' AND t.status<>'read'
 AND d.origin IS DISTINCT FROM 'reader'
 AND (d.note IS NULL OR d.note NOT LIKE 'cbl-order:%')
 ORDER BY d.id
+"""
+
+OLD_PLAN_SQL = """
+SELECT s.custom_cbl_list_id AS list_id, pi.issue_id, pi.display_position
+FROM reading_plan_sources s
+JOIN continuity_plans p ON p.id=s.plan_id AND p.user_id=:uid
+JOIN reading_plan_issues pi ON pi.plan_id=p.id
+WHERE s.custom_cbl_list_id IS NOT NULL
+ORDER BY s.custom_cbl_list_id, p.id, pi.display_position
 """
 
 
@@ -75,9 +88,34 @@ async def run(url: str, uid: int) -> dict:
                     checked = audit_future_parity(snapshot, tuple(
                         HistoricalEdge(r["id"], r["source_issue_id"],
                                        r["target_issue_id"], r["origin"],
-                                       r["note"]) for r in rows
+                                       r["note"], r["classification"]) for r in rows
                     ))
                     omitted = partial_strict_coverage(snapshot)
+                    old_rows = (await db.execute(
+                        text(OLD_PLAN_SQL), {"uid": uid},
+                    )).mappings().all()
+                    plan_positions: dict[int, dict[int, int]] = {}
+                    for old_row in old_rows:
+                        plan_positions.setdefault(old_row["list_id"], {})[
+                            old_row["issue_id"]
+                        ] = old_row["display_position"]
+                    scoped, unresolved_omissions = classify_partial_strict_coverage(
+                        snapshot, omitted,
+                        {list_id: frozenset(p) for list_id, p in plan_positions.items()},
+                    )
+                    superseded = tuple(
+                        edge for edge in checked.contradicted
+                        if edge.origin == "converted" and edge.classification == "C"
+                        and superseded_converted_edge(
+                            edge.source_issue_id, edge.target_issue_id,
+                            snapshot, plan_positions,
+                        )
+                    )
+                    superseded_ids = {edge.dependency_id for edge in superseded}
+                    unreviewed_contradictions = tuple(
+                        edge for edge in checked.contradicted
+                        if edge.dependency_id not in superseded_ids
+                    )
                     issue_names = dict(data.issue_labels)
                     list_names = dict(data.list_labels)
                     return {
@@ -104,13 +142,29 @@ async def run(url: str, uid: int) -> dict:
                              "target_label": issue_names.get(e.target_issue_id)}
                             for e in checked.contradicted
                         ],
+                        "superseded_historical_edges": [
+                            {**vars_edge(e), "reason": "old generated ordering superseded by current owned strict list"}
+                            for e in superseded
+                        ],
+                        "unresolved_contradictions": [
+                            vars_edge(e) for e in unreviewed_contradictions
+                        ],
+                        "scoped_strict_list_omissions": [
+                            {"list_id": list_id, "issue_id": issue_id, "reason": reason}
+                            for list_id, issue_id, reason in scoped
+                        ],
+                        "unresolved_strict_list_omissions": [
+                            {"list_id": list_id, "issue_id": issue_id}
+                            for list_id, issue_id in unresolved_omissions
+                        ],
                         "partial_strict_list_omissions": [
                             {"list_id": list_id, "list_name": list_names.get(list_id),
                              "issue_id": issue_id, "issue_label": issue_names.get(issue_id)}
                             for list_id, issue_id in omitted
                         ],
                         "status": (
-                            "PASS" if checked.safe_to_certify and not omitted
+                            "PASS" if not checked.missing and not unreviewed_contradictions
+                            and not unresolved_omissions
                             else "REVIEW_REQUIRED"
                         ),
                     }
@@ -132,7 +186,7 @@ def vars_edge(edge: HistoricalEdge) -> dict:
     return {
         "id": edge.dependency_id, "source": edge.source_issue_id,
         "target": edge.target_issue_id, "origin": edge.origin,
-        "note": edge.note,
+        "note": edge.note, "classification": edge.classification,
     }
 
 
