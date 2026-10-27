@@ -820,13 +820,13 @@ it('shows deep-link notice when issue param references a missing issue', async (
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 1, queue_position: 1,
     status: 'active', total_issues: 2, next_unread_issue_number: '1', notes: null,
   } as never)
+  // SAFETY: the mock issues list shape matches the API response for this test case.
   mockedIssuesApiList.mockResolvedValue({
     issues: [
       { id: 11, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' },
       { id: 12, thread_id: 1, issue_number: '2', status: 'read', read_at: 'now', created_at: 'now' },
     ],
     next_page_token: null, total_count: 2, page_size: 100,
-    // SAFETY: the mock issues list shape matches the API response for this test case.
   } as never)
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
