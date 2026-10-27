@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories import queue_repository, thread_repository
 from app.services.errors import InvalidRequestError, NotFoundError
+from app.services.queue_display import display_position
 from app.services.thread_service import thread_to_response
 from app.schemas import ThreadResponse
 from comic_pile.queue import (
@@ -123,7 +124,10 @@ class QueueService:
         if action == "position":
             if new_position is None:
                 raise InvalidRequestError("new_position is required")
-            if thread.queue_position == new_position:
+            # Readers choose the ordinal the Queue shows. A blocked series
+            # displays after every readable series, so that ordinal is not the
+            # raw ``queue_position``; compare against the displayed rank (#4181).
+            if await display_position(self._db, thread) == new_position:
                 # The reader still made an explicit placement choice even when
                 # the ordinal did not change; keep the manual claim so a later
                 # below-threshold rating cannot demote the series (#3638).

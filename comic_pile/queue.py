@@ -5,12 +5,17 @@ from datetime import UTC, datetime, timedelta
 import logging
 import random
 from typing import Any, NamedTuple
-from sqlalchemy import and_, func, select, text
+from sqlalchemy import and_, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models import Issue, Thread
-from app.repositories.reading_eligibility_queries import candidate_predicate, frontier_expression
+from app.repositories.reading_eligibility_queries import (
+    blocked_predicate,
+    candidate_predicate,
+    frontier_expression,
+)
+from app.services.queue_pagination import build_sort_order
 from app.services.reading_eligibility_service import get_execution_eligibility
 
 logger = logging.getLogger(__name__)
@@ -223,6 +228,36 @@ async def move_to_back(
     return changes
 
 
+async def active_display_rows(
+    user_id: int,
+    db: AsyncSession,
+) -> list[tuple[int, int, bool]]:
+    """Return ``(id, queue_position, blocked)`` in the reader-visible order.
+
+    The Queue lists readable rows ahead of blocked rows and numbers them in that
+    order, so this sequence is the ordinal space every Queue surface displays.
+    Reposition requests arrive in this space; ``move_to_position`` translates
+    them back into raw ranks before writing.
+
+    Args:
+        user_id: Thread owner whose active queue is read.
+        db: Async database session.
+
+    Returns:
+        One tuple per active queued thread, in displayed order.
+    """
+    eligibility = await get_execution_eligibility(db, user_id)
+    blocked = blocked_predicate(eligibility)
+    result = await db.execute(
+        select(Thread.id, Thread.queue_position, blocked)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .order_by(*build_sort_order("position", eligibility))
+    )
+    return [(int(row[0]), int(row[1]), bool(row[2])) for row in result.all()]
+
+
 async def move_to_position(
     thread_id: int,
     user_id: int,
@@ -232,6 +267,14 @@ async def move_to_position(
     manual: bool = False,
 ) -> QueuePositionChanges:
     """Move an active thread to a normalized sequential position.
+
+    ``new_position`` is the reader-visible Queue ordinal that the Queue rows,
+    the Reposition dialog, and ``ThreadResponse.queue_position`` all display.
+    The Queue orders readable rows ahead of blocked rows, so a blocked thread
+    keeps its raw ``queue_position`` while displaying after every readable
+    series. The requested ordinal is translated into the matching raw rank
+    before the set-based move; otherwise an entered position persisted two
+    ranks early whenever blocked rows held lower raw positions (#4181).
 
     Args:
         thread_id: Thread to move.
@@ -283,49 +326,66 @@ async def move_to_position(
             await db.commit()
         return {}
 
-    # For move_to_front (new_position=1), we can skip the stats query since:
-    # - Position 1 is always valid (thread_count >= 1 because thread is active)
-    # - old_seq is only used for logging
-    if new_position == 1:
-        thread_count = 0  # Not needed for validation
-        old_seq = 0  # Only used for logging
-    else:
-        stats_result = await db.execute(
-            text(
-                """
-                SELECT
-                    count(*)::integer AS total,
-                    count(*) FILTER (
-                        WHERE queue_position < :queue_position
-                           OR (queue_position = :queue_position AND id <= :tid)
-                    )::integer AS seq
-                FROM threads
-                WHERE user_id = :uid
-                  AND status = 'active'
-                  AND queue_position >= 1
-                """
-            ),
-            {
-                "uid": user_id,
-                "tid": thread_id,
-                "queue_position": queue_position,
-            },
-        )
-        thread_count, old_seq = stats_result.one()
-        logger.debug("Active thread count: %d", thread_count)
+    display_rows = await active_display_rows(user_id, db)
+    active_total = len(display_rows)
+    current_ordinal = next(
+        (index for index, active_row in enumerate(display_rows, start=1) if active_row[0] == thread_id),
+        0,
+    )
+    if current_ordinal == 0:
+        logger.error("Target thread %d not found in active threads list", thread_id)
+        if do_commit:
+            await db.commit()
+        return {}
 
-        if new_position < 1:
-            raise ValueError(f"Position must be at least 1, got {new_position}")
-        if new_position > thread_count:
-            raise ValueError(
-                f"Position {new_position} is out of range. Maximum position is {thread_count}."
-            )
+    if new_position < 1:
+        raise ValueError(f"Position must be at least 1, got {new_position}")
+    if new_position > active_total:
+        raise ValueError(
+            f"Position {new_position} is out of range. Maximum position is {active_total}."
+        )
+
+    # A blocked row always displays after every readable row, so it can only
+    # reach ordinals inside its own group. Clamp a request that crosses groups
+    # to the nearest reachable ordinal instead of persisting an unreachable
+    # rank that the row badges can never show.
+    first_blocked = next(
+        (index for index, active_row in enumerate(display_rows) if active_row[2]),
+        active_total,
+    )
+    target_is_blocked = display_rows[current_ordinal - 1][2]
+    group_start = first_blocked + 1 if target_is_blocked else 1
+    group_end = active_total if target_is_blocked else first_blocked
+    target_ordinal = min(max(new_position, group_start), group_end)
 
     logger.debug(
-        "Moving thread %d from sequential position %d to %d",
+        "Moving thread %d from ordinal %d to ordinal %d (raw position %d)",
         thread_id,
-        old_seq,
-        new_position,
+        current_ordinal,
+        target_ordinal,
+        queue_position,
+    )
+
+    if target_ordinal == current_ordinal:
+        if manual:
+            await db.execute(
+                update(Thread)
+                .where(Thread.id == thread_id)
+                .where(Thread.user_id == user_id)
+                .values(queue_position_is_manual=True)
+            )
+        if do_commit:
+            await db.commit()
+        return {}
+
+    # `_MOVE_POSITION_SQL` rewrites every active row to its raw rank and places
+    # the target at `new_pos`, so the ordinal has to be expressed as the raw
+    # rank of the row that currently holds it.
+    anchor_id, anchor_position, _ = display_rows[target_ordinal - 1]
+    raw_target = 1 + sum(
+        1
+        for active_row in display_rows
+        if (active_row[1], active_row[0]) < (anchor_position, anchor_id)
     )
 
     move_result = await db.execute(
@@ -333,7 +393,7 @@ async def move_to_position(
         {
             "uid": user_id,
             "tid": thread_id,
-            "new_pos": new_position,
+            "new_pos": raw_target,
             "manual": manual,
         },
     )

@@ -257,7 +257,7 @@ describe('targeted cache effects', () => {
 
     await invalidateAfterIssueEdit(client, thread.id)
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(6)
+    expect(invalidateQueries).toHaveBeenCalledTimes(7)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.thread.issuePages(thread.id),
     })
@@ -280,6 +280,10 @@ describe('targeted cache effects', () => {
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
+    })
+    // The availability explanation is derived from the same read state (#4181).
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.dependencies.all,
     })
     expect(resetQueries).not.toHaveBeenCalled()
   })

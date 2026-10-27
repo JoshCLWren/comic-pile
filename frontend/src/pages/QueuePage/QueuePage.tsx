@@ -123,9 +123,9 @@ export default function QueuePage() {
   const modals = useQueueModalsHook({
     threads,
     onCreated: rollNudge.onCreated,
-    onUpdated: async () => {
-      await queueLoader.refetch()
-    },
+    // Refetch so a confirmed edit reconciles the Queue immediately: a finished
+    // series leaves the active list and shifted rows keep their rank (#4181).
+    onUpdated: queueLoader.refetch,
     onReactivated: async () => {},
     refetchSession: async () => {
       await refetchSession()

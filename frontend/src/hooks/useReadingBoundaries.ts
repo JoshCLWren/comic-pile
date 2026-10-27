@@ -9,5 +9,9 @@ export function useReadingBoundaries(threadIds: number[], enabled = true) {
     queryKey: queryKeys.dependencies.readingBoundaries(ids),
     queryFn: () => readingBoundariesApi.batch(ids),
     enabled: enabled && ids.length > 0,
+    // Read state can change from another tab (a rating, an issue toggle, or a
+    // completed run). Returning to an open page must not keep showing the
+    // previous "available next" explanation (#4181 / MQA-QUEUE-010).
+    refetchOnWindowFocus: 'always',
   })
 }

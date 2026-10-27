@@ -1256,3 +1256,77 @@ async def test_get_bounded_roll_pool_rows_d20_includes_all_smaller_pool(
     bounded = await get_bounded_roll_pool_rows(default_user.id, async_db, current_die=20)
     assert len(bounded) == 6
     assert [row[0].id for row in bounded] == [threads[i].id for i in range(6)]
+
+
+@pytest.mark.asyncio
+async def test_move_to_position_persists_the_displayed_rank_with_blocked_rows(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """The entered position is the Queue rank even when blocked rows sort last.
+
+    Reproduces MQA-QUEUE-006 (#4181): the Queue displays readable rows ahead of
+    blocked ones and numbers rows in that order, so a request for ordinal N has
+    to land at N. Persisting N as a raw rank landed the series two rows early
+    whenever two blocked rows held lower raw positions.
+    """
+    from app.services.queue_display import display_position
+
+    now = datetime.now(UTC)
+    blocked_a = Thread(
+        title="Blocked A",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        is_blocked=True,
+        user_id=default_user.id,
+        created_at=now,
+    )
+    blocked_b = Thread(
+        title="Blocked B",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        is_blocked=True,
+        user_id=default_user.id,
+        created_at=now,
+    )
+    readable = [
+        Thread(
+            title=f"Readable {letter}",
+            format="Comic",
+            issues_remaining=1,
+            queue_position=position,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        )
+        for letter, position in (("A", 3), ("B", 4), ("C", 5), ("D", 6), ("E", 7))
+    ]
+    async_db.add_all([blocked_a, blocked_b, *readable])
+    await async_db.commit()
+    for thread in [blocked_a, blocked_b, *readable]:
+        await async_db.refresh(thread)
+
+    assert await display_position(async_db, readable[0]) == 1
+
+    await move_to_position(readable[0].id, default_user.id, 4, async_db)
+
+    for thread in readable:
+        await async_db.refresh(thread)
+
+    assert await display_position(async_db, readable[0]) == 4
+    ordered = [
+        (await display_position(async_db, thread), thread.title)
+        for thread in [*readable, blocked_a, blocked_b]
+    ]
+    assert sorted(ordered) == [
+        (1, "Readable B"),
+        (2, "Readable C"),
+        (3, "Readable D"),
+        (4, "Readable A"),
+        (5, "Readable E"),
+        (6, "Blocked A"),
+        (7, "Blocked B"),
+    ]
