@@ -486,3 +486,84 @@ async def test_catalog_links_are_preserved_by_fixture_loader(
 def test_production_overlap_census_is_explicit_not_invented() -> None:
     """No production-approved overlap choices existed at export time."""
     assert fixture_data()["overlaps"] == []
+
+
+# October 26 production conversion: source-order relationships previously
+# persisted only as historical diagnostics, now explicitly approved as reader
+# prerequisites. This set is not a generated copy of the Roll candidate pool.
+RESTORED_SOURCE_ORDER_DEPENDENCIES = frozenset({
+    1886, 1723958, 1723961, 1723964, 1723966, 1723967, 1723972,
+    1723973, 1723977, 1723978, 1723979, 1723983, 1723986, 1723988,
+    1723989, 1723990, 1723993, 1723994, 1723995, 1723996, 1723997,
+    1723998, 1724001, 1724002, 1724004, 1724005, 1724006, 1724007,
+    1724008, 1724009, 1724010, 1724011, 1724012, 1724013, 1724015,
+    1724016, 1724017, 1724018, 1724019, 1724020, 1725384, 1725385,
+    1725472, 1725563,
+})
+
+
+def test_approved_old_order_conversion_preserves_exact_source_pairs() -> None:
+    """The real 44 accepted links must be executable, with unchanged endpoints."""
+    data = fixture_data()
+    converted = {
+        row[0]: row for row in data["dependencies"]
+        if row[0] in RESTORED_SOURCE_ORDER_DEPENDENCIES
+    }
+    assert set(converted) == RESTORED_SOURCE_ORDER_DEPENDENCIES
+    assert all(row[3] == "reader" and row[4] == "A" for row in converted.values())
+    # Do not relabel old JLI reversals as explicit reader requirements.
+    stale_jli = next(
+        (row for row in data["dependencies"] if row[0] == 1725339), None
+    )
+    assert stale_jli is not None, "Expected stale JLI dependency 1725339 in fixture"
+    assert stale_jli[3] == "converted"
+
+
+@pytest.mark.asyncio
+async def test_restored_conversion_future_offer(
+    production_graph: tuple[int, ProductionGraphFixture], async_db: AsyncSession,
+) -> None:
+    """A dormant cross-series Ultimate edge becomes binding at the future frontier.
+
+    Advance the target series inside the isolated production-derived test fixture.
+    The target must wait on an unread issue in another series. Reading that
+    source removes this particular blocker without globally strict-mode gating
+    unrelated Ultimate titles.
+    """
+    owner, _ = production_graph
+    prerequisite_id = 1723958
+    source_id, target_id = 23616, 23554
+    edge = (await async_db.scalars(select(Dependency).where(
+        Dependency.id == prerequisite_id,
+    ))).one()
+    assert (
+        edge.source_issue_id, edge.target_issue_id, edge.origin
+    ) == (source_id, target_id, "reader")
+
+    target = (await async_db.scalars(select(Issue).where(Issue.id == target_id))).one()
+    earlier = (await async_db.scalars(select(Issue).where(
+        Issue.thread_id == target.thread_id,
+        Issue.position < target.position,
+        Issue.status != "read",
+    ))).all()
+    for issue in earlier:
+        issue.status = "read"
+    await async_db.flush()
+    before = await get_execution_eligibility(async_db, owner)
+    assert before is not None
+    frontier = before.threads[target.thread_id]
+    assert frontier.next_issue_id == target_id
+    assert any(
+        blocker.prerequisite_id == prerequisite_id
+        and source_id in blocker.waiting_on_issue_ids
+        for blocker in frontier.blockers
+    ), "Restored legacy reading boundary was lost from the future Roll frontier"
+
+    await advance(async_db, source_id)
+    after = await get_execution_eligibility(async_db, owner)
+    assert after is not None
+    assert after.threads[target.thread_id].next_issue_id == target_id
+    assert not any(
+        blocker.prerequisite_id == prerequisite_id
+        for blocker in after.threads[target.thread_id].blockers
+    )
