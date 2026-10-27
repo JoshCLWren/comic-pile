@@ -3,7 +3,9 @@
 from app.services.reading_list_evaluator import (
     ReadingIssue, ReadingList, ReadingListEntry, ReadingSnapshot, ReadingThread,
 )
-from app.services.reading_partial_list_coverage import partial_strict_coverage
+from app.services.reading_partial_list_coverage import (
+    classify_partial_strict_coverage, partial_strict_coverage, superseded_converted_edge,
+)
 
 TEST_READER_ID = 764323
 
@@ -42,3 +44,75 @@ def test_multiple_strict_lists_each_have_independent_gap() -> None:
         ),
     )
     assert partial_strict_coverage(snap) == ((10, 2), (11, 1))
+
+
+def test_scoped_outside_range_does_not_need_unread_gates() -> None:
+    """A selective plan is not permission to gate a whole Thread."""
+    snapshot = ReadingSnapshot(
+        user_id=TEST_READER_ID,
+        threads=(ReadingThread(1),),
+        issues=(
+            ReadingIssue(10, 1, 1),
+            ReadingIssue(11, 1, 2),
+            ReadingIssue(12, 1, 3),
+            ReadingIssue(13, 1, 4),
+        ),
+        lists=(ReadingList(50, "strict", (
+            ReadingListEntry(11), ReadingListEntry(12),
+        )),),
+    )
+    omitted = partial_strict_coverage(snapshot)
+    assert omitted == ((50, 10), (50, 13))
+    scoped, unresolved = classify_partial_strict_coverage(snapshot, omitted, {})
+    assert scoped == (
+        (50, 10, "outside_list_scope"),
+        (50, 13, "outside_list_scope"),
+    )
+    assert unresolved == ()
+
+
+def test_old_plan_also_omitted_internal_issue() -> None:
+    """Internal gaps are safe only when old source explicitly omitted them."""
+    snapshot = ReadingSnapshot(
+        user_id=TEST_READER_ID,
+        threads=(ReadingThread(1),),
+        issues=(
+            ReadingIssue(10, 1, 1),
+            ReadingIssue(11, 1, 2),
+            ReadingIssue(12, 1, 3),
+        ),
+        lists=(ReadingList(50, "strict", (
+            ReadingListEntry(10), ReadingListEntry(12),
+        )),),
+    )
+    omitted = partial_strict_coverage(snapshot)
+    assert omitted == ((50, 11),)
+    scoped, unresolved = classify_partial_strict_coverage(
+        snapshot, omitted, {50: frozenset({10, 12})},
+    )
+    assert scoped == ((50, 11, "also_absent_from_linked_old_plan"),)
+    assert unresolved == ()
+    scoped, unresolved = classify_partial_strict_coverage(snapshot, omitted, {})
+    assert scoped == ()
+    assert unresolved == ((50, 11),)
+    scoped, unresolved = classify_partial_strict_coverage(
+        snapshot, omitted, {50: frozenset({10, 11, 12})},
+    )
+    assert scoped == ()
+    assert unresolved == ((50, 11),)
+
+
+def test_old_generated_reverse_edge_requires_explicit_source_order() -> None:
+    """A canonical strict-list correction supersedes only proven old-plan order."""
+    snapshot = ReadingSnapshot(
+        user_id=TEST_READER_ID,
+        threads=(ReadingThread(1), ReadingThread(2)),
+        issues=(ReadingIssue(10, 1, 1), ReadingIssue(20, 2, 1)),
+        lists=(ReadingList(50, "strict", (
+            ReadingListEntry(10), ReadingListEntry(20),
+        )),),
+    )
+    assert superseded_converted_edge(20, 10, snapshot, {50: {20: 0, 10: 1}})
+    assert not superseded_converted_edge(20, 10, snapshot, {})
+    assert not superseded_converted_edge(10, 20, snapshot, {50: {20: 0, 10: 1}})
+    assert not superseded_converted_edge(20, 10, snapshot, {50: {10: 0, 20: 1}})
