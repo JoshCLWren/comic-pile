@@ -16,7 +16,7 @@ import os
 import re
 import sys
 import urllib.request
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -690,7 +690,7 @@ def resume_worker(
     worker: int | str,
     *,
     path: Path | str | None = None,
-    smoke_fn: callable | None = None,
+    smoke_fn: Callable[[int], bool] | None = None,
     now: datetime | None = None,
     pauses: Iterable[QuotaPause] | None = None,
 ) -> bool:
