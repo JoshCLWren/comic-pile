@@ -139,7 +139,7 @@ test.describe('Roll-mode control state grammar at phone width (#2304)', () => {
       headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
     })).json()) as { csrf_token?: string }
     const token = await getAuthToken(page)
-    const seeded = await page.request.post('/v1/roll/set-die?die=8', {
+    const seeded = await page.request.post('/api/v1/roll/set-die?die=8', {
       headers: { Authorization: `Bearer ${token}`, 'X-CSRF-Token': csrf.csrf_token! },
     })
     expect(seeded.ok(), `set-die failed: ${seeded.status()}`).toBeTruthy()
