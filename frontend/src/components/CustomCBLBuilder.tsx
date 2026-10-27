@@ -7,7 +7,6 @@ import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
 import {
   customCBLApi,
-  type CustomCBL,
   type CustomCBLEntry,
   type CustomCBLIssueSearchResult,
   type CustomCBLWrite,
@@ -19,10 +18,11 @@ import {
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import {
   cblSourcesApi,
-  type CBLAdoptionPreview,
   type CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
-import CblReplaceReviewPanel, { type ReplaceEntry } from './CblReplaceReviewPanel'
+import CblReplaceReviewPanel from './CblReplaceReviewPanel'
+import ReadingListEntryCard from './ReadingListEntryCard'
+import { buildReplacementModel } from '../utils/readingListReplacementModel'
 import ConfirmDialog from './ConfirmDialog'
 import {
   computeEntryRequirements,
@@ -42,18 +42,6 @@ interface CustomCBLBuilderProps {
 const DEFAULT_MODE: ReadingListMode = 'loose'
 const DEFAULT_GATE: ReadingListGate = 'none'
 const ENTRY_PAGE_SIZE = 30
-
-const GATE_ORDER: ReadingListGate[] = ['none', 'after_previous', 'hold']
-
-const GATE_LABELS: Record<ReadingListGate, string> = {
-  none: 'No extra wait',
-  after_previous: 'Wait for previous entry',
-  hold: 'Hold until reached',
-}
-
-function toGate(value: string): ReadingListGate {
-  return value === 'hold' || value === 'after_previous' ? value : 'none'
-}
 
 function normalizePositions(entries: CustomCBLEntry[]): CustomCBLEntry[] {
   return entries.map((entry, position) => ({
@@ -163,115 +151,6 @@ class StaleReadingListUndoError extends Error {
     super('This Reading List changed after the replacement, so Undo is no longer available. Nothing was changed.')
     this.name = 'StaleReadingListUndoError'
   }
-}
-
-/**
- * Exact before/after review projection for one Reading List replacement.
- *
- * Named so the owner contract stays explicit instead of widening through an
- * anonymous return type.
- */
-interface ReplacementModel {
-  before: ReplaceEntry[]
-  after: ReplaceEntry[]
-  unresolvedCount: number
-}
-
-/**
- * Project one CBL source preview onto a Reading List replacement review.
- *
- * Only already-resolved canonical Issues can join a Reading List. Source rows
- * that still need identity resolution are reported separately instead of being
- * guessed. Saved entries that the chosen CBL does not contain stay checked so a
- * replacement never silently discards the reader's own additions.
- *
- * @param list - The exact owned Reading List being replaced.
- * @param preview - Reconciled global CBL source preview.
- * @returns Exact before/after entries plus the count of unresolvable source rows.
- */
-function buildReplacementModel(
-  list: CustomCBL,
-  preview: CBLAdoptionPreview,
-): ReplacementModel {
-  const savedByIssue = new Map(list.entries.map((entry) => [entry.issue_id, entry]))
-  const before: ReplaceEntry[] = list.entries.map((entry) => ({
-    comicId: entry.issue_id,
-    title: `${entry.series_name} #${entry.issue_number}`,
-    included: true,
-    saved: true,
-    gate: entry.gate,
-    skipped: entry.skipped,
-  }))
-
-  const after: ReplaceEntry[] = []
-  const sourceIssueIds = new Set<number>()
-  let unresolvedCount = 0
-  for (const entry of preview.entries) {
-    const issueId = entry.resolved_issue_id
-    if (issueId === null || entry.adoption_class !== 'existing' || sourceIssueIds.has(issueId)) {
-      if (entry.adoption_class !== 'existing' || issueId === null) unresolvedCount += 1
-      continue
-    }
-    const saved = savedByIssue.get(issueId)
-    // Collection exclusions can return an owned Issue with
-    // `adoption_decision: 'excluded'`. Only a source row the server actually
-    // adopted becomes a checked default; an excluded row stays visible only
-    // when the reader already saved it, and then as a saved entry rather than
-    // a default.
-    const sourceIncluded = entry.adopted && entry.adoption_decision !== 'excluded'
-    if (!sourceIncluded && !saved) continue
-    sourceIssueIds.add(issueId)
-    after.push({
-      comicId: issueId,
-      title: `${entry.series_name} #${entry.issue_number}`,
-      included: sourceIncluded || saved !== undefined,
-      defaultIncluded: sourceIncluded,
-      saved: saved !== undefined,
-      gate: saved?.gate ?? DEFAULT_GATE,
-      skipped: saved?.skipped ?? false,
-    })
-  }
-
-  for (const entry of list.entries) {
-    if (sourceIssueIds.has(entry.issue_id)) continue
-    after.push({
-      comicId: entry.issue_id,
-      title: `${entry.series_name} #${entry.issue_number}`,
-      included: true,
-      manual: true,
-      defaultIncluded: false,
-      saved: true,
-      gate: entry.gate,
-      skipped: entry.skipped,
-    })
-  }
-
-  return { before, after, unresolvedCount }
-}
-
-function waitDescription(
-  entry: CustomCBLEntry,
-  mode: ReadingListMode,
-  waitingOn: number[],
-  nameOf: (issueId: number) => string,
-): string | null {
-  const names = waitingOn.map(nameOf)
-  const parts: string[] = []
-  if (entry.skipped) {
-    parts.push('Skipped in this list only; it does not wait and is not waited on.')
-  } else if (names.length > 0) {
-    parts.push(names.length > 2
-      ? `Waits on ${names.length} earlier comics, beginning with ${names[0]}.`
-      : `Waits on ${names.join(', ')}.`)
-  } else if (entry.gate === 'after_previous') {
-    parts.push('Waits on the previous entry.')
-  }
-  if (entry.gate === 'hold' && !entry.skipped) {
-    parts.push('Every later entry stays blocked until this milestone is read.')
-  } else if (mode === 'strict' && entry.gate === 'none' && !entry.skipped && names.length > 0) {
-    parts.push('Strict mode: waits on every earlier entry.')
-  }
-  return parts.length > 0 ? parts.join(' ') : null
 }
 
 export default function CustomCBLBuilder({
@@ -957,87 +836,29 @@ export default function CustomCBLBuilder({
               )}
 
               <ol className="space-y-2" aria-label="Custom CBL ordered issues">
-                {visibleEntries.map(({ entry, index }) => {
-                  const label = `${entry.series_name} #${entry.issue_number}`
-                  const waitText = waitDescription(entry, mode, requirements.get(entry.issue_id) ?? [], nameFor)
-                  const optionsOpen = expandedEntryOptions === entry.issue_id
-                  return (
-                    <li key={entry.issue_id} className="min-w-0 rounded-xl border border-[var(--theme-border)] p-3" data-testid="reading-list-entry">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <span aria-hidden="true" className="w-7 shrink-0 pt-0.5 text-center text-xs font-black text-[var(--theme-text-dim)]">{index + 1}</span>
-                        <p data-testid="reading-list-entry-title" className="min-w-0 flex-1 break-words text-sm font-semibold leading-relaxed text-[var(--theme-text-primary)]">
-                          {label}
-                          {entry.skipped && <span className="ml-2 inline-block rounded-full border border-[var(--theme-border)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">Skipped in this list</span>}
-                        </p>
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 sm:justify-end sm:pl-10" aria-label={`Actions for ${label}`}>
-                        <button
-                          type="button"
-                          onClick={() => toggleCheckpoint(entry.issue_id)}
-                          title="Crossover checkpoint metadata. It records where a crossover resumes and does not by itself make later entries wait."
-                          aria-label={entry.is_checkpoint ? `Remove crossover checkpoint from ${label}` : `Mark ${label} as crossover checkpoint`}
-                          disabled={disabled || isPending}
-                          className={`min-h-11 min-w-11 rounded-lg border px-2 text-base ${entry.is_checkpoint ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-bg-panel)] text-[var(--theme-comic-accent)]' : 'border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'} disabled:opacity-50`}
-                        >
-                          {entry.is_checkpoint ? '⚑' : '⚐'}
-                        </button>
-                        <button type="button" aria-label={`Move ${label} earlier`} onClick={() => moveIssue(index, -1)} disabled={index === 0 || disabled || isPending} className="min-h-11 min-w-11 rounded-lg border border-[var(--theme-border)] text-lg text-[var(--theme-text-muted)] disabled:opacity-30">↑</button>
-                        <button type="button" aria-label={`Move ${label} later`} onClick={() => moveIssue(index, 1)} disabled={index === entries.length - 1 || disabled || isPending} className="min-h-11 min-w-11 rounded-lg border border-[var(--theme-border)] text-lg text-[var(--theme-text-muted)] disabled:opacity-30">↓</button>
-                        <button type="button" aria-label={`Remove ${label}`} onClick={() => removeIssue(entry.issue_id)} disabled={disabled || isPending} className="min-h-11 rounded-lg border border-[var(--theme-danger)] px-3 text-xs font-bold text-[var(--theme-danger)] disabled:opacity-50">Remove</button>
-                        <button
-                          type="button"
-                          aria-label={`${optionsOpen ? 'Hide' : 'Show'} settings for ${label}`}
-                          aria-expanded={optionsOpen}
-                          onClick={() => setExpandedEntryOptions(optionsOpen ? null : entry.issue_id)}
-                          className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-semibold text-[var(--theme-text-primary)] sm:hidden"
-                        >{optionsOpen ? 'Less' : 'Options'}</button>
-                      </div>
-                      <div className={`mt-3 flex-wrap items-end gap-3 border-t border-[var(--theme-border)] pt-3 sm:pl-10 ${optionsOpen ? 'flex' : 'hidden sm:flex'}`}>
-                        <label className="w-full text-xs text-[var(--theme-text-muted)] sm:w-auto">
-                          <span className="block font-semibold text-[var(--theme-text-primary)]">Wait behavior</span>
-                          <select
-                            aria-label={`Wait behavior for ${label}`}
-                            value={entry.gate}
-                            onChange={(event) => updateGate(entry.issue_id, toGate(event.target.value))}
-                            disabled={disabled || isPending || entry.skipped}
-                            className="mt-1 min-h-11 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 text-sm text-[var(--theme-text-primary)] disabled:opacity-50 sm:w-auto"
-                          >
-                            {GATE_ORDER.map((gate) => (
-                              <option key={gate} value={gate}>{mode === 'strict' && gate === 'none' ? 'Strict order only' : GATE_LABELS[gate]}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="flex min-h-11 items-center gap-2 text-xs text-[var(--theme-text-primary)]">
-                          <input
-                            type="checkbox"
-                            aria-label={`Skip ${label} in this list`}
-                            checked={entry.skipped}
-                            onChange={() => toggleSkipped(entry.issue_id)}
-                            disabled={disabled || isPending}
-                            className="h-5 w-5"
-                          />
-                          Skip in this list
-                        </label>
-                        <div className="flex w-full flex-wrap items-end gap-2">
-                          <label className="text-xs text-[var(--theme-text-primary)]">
-                            Move to position
-                            <input type="number" inputMode="numeric" min={1} max={entries.length}
-                              aria-label={`Move ${label} to position`}
-                              value={moveDestinations[entry.issue_id] ?? ''}
-                              onChange={(event) => setMoveDestinations((current) => ({ ...current, [entry.issue_id]: event.target.value }))}
-                              className="mt-1 block min-h-11 w-24 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 text-sm"
-                            />
-                          </label>
-                          <button type="button" onClick={() => moveIssueToPosition(index, entry.issue_id)}
-                            disabled={disabled || isPending || !Number.isSafeInteger(Number(moveDestinations[entry.issue_id])) || Number(moveDestinations[entry.issue_id]) < 1 || Number(moveDestinations[entry.issue_id]) > entries.length}
-                            className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-semibold disabled:opacity-40"
-                          >Move here</button>
-                        </div>
-                      </div>
-                      {waitText && <p className={`mt-2 break-words text-xs text-[var(--theme-text-muted)] sm:pl-10 ${optionsOpen ? 'block' : 'hidden sm:block'}`}>{waitText}</p>}
-                    </li>
-                  )
-                })}
+                {visibleEntries.map(({ entry, index }) => (
+                  <ReadingListEntryCard
+                    key={entry.issue_id}
+                    entry={entry}
+                    index={index}
+                    entryCount={entries.length}
+                    mode={mode}
+                    waitingOn={requirements.get(entry.issue_id) ?? []}
+                    nameOf={nameFor}
+                    expanded={expandedEntryOptions === entry.issue_id}
+                    moveDestination={moveDestinations[entry.issue_id] ?? ''}
+                    disabled={disabled || isPending}
+                    onCheckpoint={() => toggleCheckpoint(entry.issue_id)}
+                    onMoveEarlier={() => moveIssue(index, -1)}
+                    onMoveLater={() => moveIssue(index, 1)}
+                    onRemove={() => removeIssue(entry.issue_id)}
+                    onToggleOptions={() => setExpandedEntryOptions((current) => current === entry.issue_id ? null : entry.issue_id)}
+                    onGate={(gate) => updateGate(entry.issue_id, gate)}
+                    onSkip={() => toggleSkipped(entry.issue_id)}
+                    onDestinationChange={(value) => setMoveDestinations((current) => ({ ...current, [entry.issue_id]: value }))}
+                    onMoveToPosition={() => moveIssueToPosition(index, entry.issue_id)}
+                  />
+                ))}
               </ol>
               {matchedEntries.length === 0 && entries.length > 0 && (
                 <p className="text-sm text-[var(--theme-text-muted)]">No issues match this search. Clear the search to see the complete list.</p>
