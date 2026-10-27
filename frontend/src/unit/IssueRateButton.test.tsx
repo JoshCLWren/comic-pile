@@ -103,6 +103,37 @@ describe('IssueRateButton', () => {
     expect(screen.getByRole('button', { name: 'Rated 4' })).toBeInTheDocument()
   })
 
+  it('updates label when issue.last_rating changes (regression for label update)', async () => {
+    const onSnapshotChange = vi.fn()
+    const { rerender } = render(
+      <IssueRateButton
+        issue={{ ...issue, last_rating: 3 }}
+        snapshot={snapshot}
+        onSnapshotChange={onSnapshotChange}
+      />,
+      { wrapper },
+    )
+    expect(screen.getByRole('button', { name: 'Rated 3' })).toBeInTheDocument()
+
+    rerender(
+      <IssueRateButton
+        issue={{ ...issue, last_rating: 4.5 }}
+        snapshot={snapshot}
+        onSnapshotChange={onSnapshotChange}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Rated 4.5' })).toBeInTheDocument()
+
+    rerender(
+      <IssueRateButton
+        issue={{ ...issue, last_rating: null }}
+        snapshot={snapshot}
+        onSnapshotChange={onSnapshotChange}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Rate' })).toBeInTheDocument()
+  })
+
   it('shows an error and keeps the issue unread when the server rejects the rating', async () => {
     vi.mocked(rateApi.rate).mockRejectedValue(new Error('nope'))
     const onSnapshotChange = vi.fn()
