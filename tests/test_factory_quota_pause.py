@@ -169,3 +169,84 @@ def test_scheduled_batch_filters_pauses_before_offer_cap() -> None:
     scheduled = text[text.index("source_seed=") : text.index("Scheduled batch:")]
     assert 'head -n "$offer_count"' not in scheduled
     assert scheduled.index("factory_quota_pause.py filter") < scheduled.index(".[:$cap]")
+
+
+def test_parse_retry_after_seconds_and_http_date(tmp_path: Path) -> None:
+    now = datetime(2026, 10, 18, 12, 0, tzinfo=UTC)
+    assert qp.parse_retry_after("120", now=now) == datetime(2026, 10, 18, 12, 2, tzinfo=UTC)
+    parsed = qp.parse_retry_after("Wed, 21 Oct 2026 07:28:00 GMT", now=now)
+    assert parsed is not None and parsed.tzinfo is not None
+
+
+def test_parse_rate_limit_reset_variants(now: datetime = datetime(2026, 10, 18, 12, 0, tzinfo=UTC)) -> None:
+    assert qp.parse_rate_limit_reset({"x-ratelimit-reset": "60"}, now=now) == datetime(
+        2026, 10, 18, 12, 1, tzinfo=UTC
+    )
+    assert qp.parse_rate_limit_reset({"x-ratelimit-reset-requests": "6m0s"}, now=now) == datetime(
+        2026, 10, 18, 12, 6, tzinfo=UTC
+    )
+    assert qp.parse_rate_limit_reset({"X-RateLimit-Reset": "1729268880"}, now=now) is not None
+
+
+def test_classify_quota_failures_mistral_402_and_ollama_429() -> None:
+    assert qp.classify_quota_failure(402, '{"message":"API budget exhausted.","type":"billing_api_budget_exhausted","code":"2303"}')
+    assert qp.classify_quota_failure(429, "you have reached your monthly usage limit, upgrade for higher limits")
+    assert not qp.classify_quota_failure(500, "Model is unavailable")
+    assert not qp.classify_quota_failure(500, "Something else went wrong")
+
+
+def test_parse_reset_from_body_and_ollama_balance(tmp_path: Path) -> None:
+    body = '{"message":"API budget exhausted.","type":"billing_api_budget_exhausted"}'
+    reset = qp.parse_reset_from_body(body)
+    assert reset is not None
+    balance = tmp_path / "balance.json"
+    balance.write_text(
+        json.dumps({"included": {"period": {"until": "2026-10-18T00:29:05Z"}}}),
+        encoding="utf-8",
+    )
+    parsed = qp.parse_ollama_balance_reset("file://" + str(balance))
+    assert parsed == datetime(2026, 10, 18, 0, 29, 5, tzinfo=UTC)
+    parsed_offset = qp.parse_reset_from_body("reset at 2026-11-01T13:00:00-05:00")
+    assert parsed_offset == datetime(2026, 11, 1, 18, 0, 0, tzinfo=UTC)
+
+
+def test_unknown_reset_uses_backoff_not_tomorrow() -> None:
+    reset = qp.parse_reset_from_config("unknown-provider")
+    assert reset is None
+
+
+def test_create_pause_and_resume_worker(tmp_path: Path) -> None:
+    path = tmp_path / "pauses.json"
+    pause = qp.create_pause(
+        48,
+        provider="mistral",
+        model="codestral-latest",
+        status_code=402,
+        body='{"type":"billing_api_budget_exhausted"}',
+        run_id="123",
+        path=path,
+    )
+    assert pause.worker == 48
+    assert pause.reset_source in ("body", "config", "backoff", "header", "balance")
+    # Expired pause with failing smoke re-pauses
+    past = datetime(2020, 1, 1, tzinfo=UTC)
+    paused = qp.resume_worker(48, path=path, smoke_fn=lambda w: False, now=past)
+    assert paused is False
+    # With passing smoke it clears
+    expired_path = tmp_path / "pauses2.json"
+    qp.save_pauses([qp.QuotaPause(48, "mistral", datetime(2020, 1, 1, tzinfo=UTC), "q", "config")], expired_path)
+    resumed = qp.resume_worker(48, path=expired_path, smoke_fn=lambda w: True, now=datetime(2026, 1, 1, tzinfo=UTC))
+    assert resumed is True
+
+
+def test_resume_worker_no_smoke_does_not_auto_resume(tmp_path: Path) -> None:
+    path = tmp_path / "pauses.json"
+    qp.save_pauses([qp.QuotaPause(48, "mistral", datetime(2020, 1, 1, tzinfo=UTC), "q", "config")], path)
+    resumed = qp.resume_worker(48, path=path, now=datetime(2026, 1, 1, tzinfo=UTC))
+    assert resumed is False
+
+
+def test_worker_46_never_paused_by_create(tmp_path: Path) -> None:
+    path = tmp_path / "pauses.json"
+    with pytest.raises(ValueError, match="protected"):
+        qp.create_pause(46, provider="mistral", path=path)

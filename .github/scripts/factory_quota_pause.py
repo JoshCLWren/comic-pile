@@ -50,6 +50,14 @@ def _parse_until(value: object) -> datetime:
 
 
 def _iso(dt: datetime) -> str:
+    """Format a datetime as UTC ISO-8601 with Z suffix.
+
+    Args:
+        dt: Datetime to format.
+
+    Returns:
+        UTC timestamp string ending in Z.
+    """
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -151,16 +159,28 @@ def filter_workers(workers: list[str], now: datetime | None = None) -> tuple[lis
     return kept, messages
 
 
-def classify_quota_failure(status_code: Any = None, body: Any = "", log_file: Any = None) -> bool:
-    """Return True when the failure is a provider quota/budget exhaustion."""
-    if isinstance(status_code, str) and body == "" and log_file is None:
+def classify_quota_failure(
+    status_code: int | str | None = None, body: str | bytes | None = "", log_file: str | Path | None = None
+) -> bool:
+    """Return True when the failure is a provider quota/budget exhaustion.
+
+    Args:
+        status_code: HTTP status code if available.
+        body: Response body text or log text.
+        log_file: Optional log file to read.
+
+    Returns:
+        True if the failure is quota/budget exhaustion.
+    """
+    if isinstance(status_code, str) and (body == "" or body is None) and log_file is None:
         body = status_code
         status_code = None
 
     text = ""
     if log_file is not None:
         try:
-            text += Path(log_file).read_text(encoding="utf-8", errors="replace")
+            log_path = Path(log_file)
+            text += log_path.read_text(encoding="utf-8", errors="replace")
         except (OSError, TypeError, ValueError):
             try:
                 text += str(log_file)
@@ -184,7 +204,7 @@ def classify_quota_failure(status_code: Any = None, body: Any = "", log_file: An
 
     if "model is unavailable" in lower or "model unavailable" in lower:
         if "budget exhausted" not in lower and "billing_api_budget_exhausted" not in lower:
-            if "usage limit" not in lower and "rate limit" not in lower:
+            if "usage limit" not in lower and "rate limit" not in lower and "quota" not in lower:
                 return False
 
     quota_keywords = (
@@ -226,6 +246,11 @@ def classify_quota_failure(status_code: Any = None, body: Any = "", log_file: An
         "reached your",
         "usage limit",
         "payment required",
+        "insufficient credits",
+        "insufficient balance",
+        "insufficient quota",
+        "quota exceeded",
+        "quota exhausted",
     )
     if any(k in lower for k in strong):
         return True
@@ -260,7 +285,21 @@ def _parse_duration(value: str) -> timedelta | None:
     return timedelta(seconds=total)
 
 
-def parse_retry_after(header_value: Any, now: datetime | None = None, clock: Any = None) -> datetime | None:
+def parse_retry_after(
+    header_value: str | int | float | None,
+    now: datetime | None = None,
+    clock: callable | None = None,
+) -> datetime | None:
+    """Parse Retry-After header into UTC datetime.
+
+    Args:
+        header_value: Header value (seconds or HTTP-date).
+        now: Current time override.
+        clock: Callable returning current time.
+
+    Returns:
+        UTC datetime when retry is allowed, or None if unparseable.
+    """
     if header_value is None:
         return None
     text = str(header_value).strip()
@@ -299,7 +338,18 @@ def parse_retry_after(header_value: Any, now: datetime | None = None, clock: Any
     return None
 
 
-def parse_rate_limit_reset(headers: Any, now: datetime | None = None) -> datetime | None:
+def parse_rate_limit_reset(
+    headers: dict[str, str] | None, now: datetime | None = None
+) -> datetime | None:
+    """Parse rate-limit reset headers into UTC datetime.
+
+    Args:
+        headers: Response headers.
+        now: Current time override.
+
+    Returns:
+        UTC datetime for reset, or None if unparseable.
+    """
     if not isinstance(headers, dict):
         return None
     if now is None:
@@ -350,7 +400,16 @@ def parse_rate_limit_reset(headers: Any, now: datetime | None = None) -> datetim
     return None
 
 
-def parse_reset_from_body(response_body: Any, status_code: Any = None) -> datetime | None:
+def parse_reset_from_body(response_body: str | bytes | None, status_code: int | None = None) -> datetime | None:
+    """Extract a quota reset time from a response body.
+
+    Args:
+        response_body: Raw response body text.
+        status_code: Optional HTTP status code.
+
+    Returns:
+        UTC datetime for the reset, or None if not found.
+    """
     if response_body is None:
         return None
     text = str(response_body)
@@ -359,12 +418,21 @@ def parse_reset_from_body(response_body: Any, status_code: Any = None) -> dateti
     if "billing_api_budget_exhausted" in lower or "budget exhausted" in lower or "api budget exhausted" in lower:
         return parse_reset_from_config("mistral")
 
-    for match in re.finditer(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?", text):
+    for match in re.finditer(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?", text
+    ):
         token = match.group(0)
-        if not token.endswith("Z"):
-            token = token + "Z"
         try:
-            return _parse_until(token)
+            if token.endswith("Z"):
+                return _parse_until(token)
+            if re.search(r"[+-]\d{2}:?\d{2}$", token):
+                normalized = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", token)
+                dt = datetime.fromisoformat(normalized)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
+            token_z = token + "Z"
+            return _parse_until(token_z)
         except ValueError:
             continue
 
@@ -380,7 +448,9 @@ def parse_reset_from_body(response_body: Any, status_code: Any = None) -> dateti
     return None
 
 
-def parse_ollama_balance_reset(balance_url: Any = None, api_key: Any = None, timeout: float = 10.0) -> datetime | None:
+def parse_ollama_balance_reset(
+    balance_url: str | None = None, api_key: str | None = None, timeout: float = 10.0
+) -> datetime | None:
     url = str(balance_url).strip() if balance_url is not None else OLLAMA_BALANCE_URL
     if not url:
         url = OLLAMA_BALANCE_URL
@@ -431,7 +501,15 @@ def _extract_period_until(data: Any) -> datetime | None:
         return None
 
 
-def parse_reset_from_config(provider: Any) -> datetime | None:
+def parse_reset_from_config(provider: str | None) -> datetime | None:
+    """Infer a reset time from provider-specific config windows.
+
+    Args:
+        provider: Provider name to map to a known reset window.
+
+    Returns:
+        UTC datetime for the inferred reset, or None when unknown.
+    """
     name = str(provider or "").strip().lower()
     now = datetime.now(timezone.utc)
 
@@ -455,11 +533,18 @@ def parse_reset_from_config(provider: Any) -> datetime | None:
             month += 1
         return datetime(year, month, 1, tzinfo=timezone.utc)
 
-    tomorrow = (now + timedelta(days=1)).date()
-    return datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+    return None
 
 
 def calculate_backoff(attempt: int = 0) -> datetime:
+    """Calculate bounded exponential backoff time.
+
+    Args:
+        attempt: Attempt count (0-based).
+
+    Returns:
+        UTC datetime for next retry.
+    """
     try:
         n = int(attempt)
     except (TypeError, ValueError):
@@ -475,20 +560,39 @@ def calculate_backoff(attempt: int = 0) -> datetime:
 
 
 def create_pause(
-    worker: Any,
+    worker: int | str,
     provider: str = "",
     model: str = "",
-    status_code: Any = None,
-    body: Any = "",
-    log_file: Any = None,
-    run_id: Any = "",
+    status_code: int | str | None = None,
+    body: str | bytes | None = "",
+    log_file: str | Path | None = None,
+    run_id: str | int | None = "",
     *,
     path: Path | str | None = None,
     headers: dict[str, str] | None = None,
-    retry_after: Any = None,
+    retry_after: str | int | float | None = None,
     now: datetime | None = None,
     attempt: int | None = None,
 ) -> QuotaPause:
+    """Create and persist a quota pause for a worker.
+
+    Args:
+        worker: Worker number.
+        provider: Provider name.
+        model: Model name.
+        status_code: HTTP status code if available.
+        body: Response body or log text.
+        log_file: Optional log file path.
+        run_id: Evidence run identifier.
+        path: Optional pause file path.
+        headers: Optional response headers.
+        retry_after: Optional Retry-After value.
+        now: Current time override.
+        attempt: Attempt count for backoff.
+
+    Returns:
+        The created QuotaPause.
+    """
     worker_int = int(worker)
     if worker_int in PROTECTED_WORKERS:
         raise ValueError(f"worker {worker_int} is protected and must never be paused")
@@ -565,17 +669,34 @@ def create_pause(
 
 
 def _default_resume_smoke(worker: int) -> bool:
-    return True
+    """Default resume smoke check.
+
+    Without a caller-supplied check the provider state is unknown, so
+    do not clear an expired pause automatically.
+    """
+    return False
 
 
 def resume_worker(
-    worker: Any,
+    worker: int | str,
     *,
     path: Path | str | None = None,
-    smoke_fn: Any = None,
+    smoke_fn: callable | None = None,
     now: datetime | None = None,
     pauses: Iterable[QuotaPause] | None = None,
 ) -> bool:
+    """Resume a worker if expired and smoke check passes.
+
+    Args:
+        worker: Worker number.
+        path: Pause file path.
+        smoke_fn: Callable returning True if smoke passes.
+        now: Current time override.
+        pauses: Optional in-memory pauses.
+
+    Returns:
+        True if resumed/cleared or no pause exists; False if still paused.
+    """
     text = str(worker).strip() if worker is not None else ""
     if not text.isdigit():
         return True
@@ -624,6 +745,14 @@ def resume_worker(
 
 
 def describe_for_visibility(pause: QuotaPause) -> str:
+    """Format a pause for factory visibility with UTC and CT.
+
+    Args:
+        pause: Quota pause to describe.
+
+    Returns:
+        Visibility string.
+    """
     utc_str = pause.paused_until.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         from zoneinfo import ZoneInfo
