@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
-from datetime import datetime, UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -259,6 +259,124 @@ def test_resume_worker_no_smoke_does_not_auto_resume(tmp_path: Path) -> None:
     )
     resumed = qp.resume_worker(48, path=path, now=datetime(2026, 1, 1, tzinfo=UTC))
     assert resumed is False
+
+
+def test_expired_pause_runs_exactly_one_resume_smoke(tmp_path: Path) -> None:
+    """An expired pause runs one smoke per resume call; a pass clears the pause."""
+    path = tmp_path / "pauses.json"
+    qp.save_pauses(
+        [qp.QuotaPause(48, "mistral", datetime(2020, 1, 1, tzinfo=UTC), "q", "config")], path
+    )
+    calls: list[int] = []
+
+    def smoke(worker: int) -> bool:
+        calls.append(worker)
+        return True
+
+    assert qp.resume_worker(48, path=path, smoke_fn=smoke, now=datetime(2026, 1, 1, tzinfo=UTC))
+    assert calls == [48]
+    assert qp.load_pauses(path) == []
+
+    # A worker without a pause is dispatchable and never runs a smoke.
+    calls.clear()
+    assert qp.resume_worker(21, path=path, smoke_fn=smoke, now=datetime(2026, 1, 1, tzinfo=UTC))
+    assert calls == []
+
+
+def test_failed_resume_repauses_with_backoff(tmp_path: Path) -> None:
+    """A failed resume smoke re-pauses on the bounded backoff, keeping the reason flat."""
+    path = tmp_path / "pauses.json"
+    qp.save_pauses(
+        [
+            qp.QuotaPause(
+                55,
+                "ollama-cloud",
+                datetime(2020, 1, 1, tzinfo=UTC),
+                "provider_quota: Ollama monthly usage limit",
+                "balance",
+                model="nemotron-3-nano:30b",
+                evidence_run="38255409735",
+                attempt=1,
+            )
+        ],
+        path,
+    )
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    assert qp.resume_worker(55, path=path, smoke_fn=lambda w: False, now=now) is False
+    repaused = qp.load_pauses(path)[0]
+    assert repaused.attempt == 2
+    assert repaused.reset_source == "backoff"
+    assert repaused.paused_until == qp.calculate_backoff(2, now=now)
+    assert repaused.paused_until > now
+    assert repaused.reason == "provider_quota: Ollama monthly usage limit"
+    assert repaused.provider == "ollama-cloud"
+    assert repaused.evidence_run == "38255409735"
+
+
+def test_ollama_reset_falls_back_balance_then_config_then_backoff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reset resolution order is balance, then config window, then backoff."""
+    now = datetime(2026, 10, 18, 12, 0, tzinfo=UTC)
+    balance_reset = datetime(2026, 10, 19, 0, 29, 5, tzinfo=UTC)
+    monkeypatch.setattr(qp, "parse_ollama_balance_reset", lambda *a, **k: balance_reset)
+    with_balance = qp.create_pause(
+        55,
+        provider="ollama-cloud",
+        status_code=429,
+        body="monthly usage limit",
+        path=tmp_path / "a.json",
+        now=now,
+    )
+    assert with_balance.reset_source == "balance"
+    assert with_balance.paused_until == balance_reset
+
+    monkeypatch.setattr(qp, "parse_ollama_balance_reset", lambda *a, **k: None)
+    config = qp.create_pause(
+        55,
+        provider="ollama-cloud",
+        status_code=429,
+        body="monthly usage limit",
+        path=tmp_path / "b.json",
+        now=now,
+    )
+    assert config.reset_source == "config"
+    assert config.paused_until == datetime(2026, 11, 1, tzinfo=UTC)
+
+    backoff = qp.create_pause(
+        21,
+        provider="unknown-provider",
+        status_code=500,
+        body="boom",
+        path=tmp_path / "c.json",
+        now=now,
+    )
+    assert backoff.reset_source == "backoff"
+    assert backoff.paused_until == now + timedelta(hours=1)
+
+
+def test_backoff_is_bounded_by_the_daily_cap() -> None:
+    """1h, 2h, 4h ... capped at 24h so a pause is re-checked at least daily."""
+    now = datetime(2026, 10, 18, 12, 0, tzinfo=UTC)
+    assert qp.calculate_backoff(0, now=now) == now + timedelta(hours=1)
+    assert qp.calculate_backoff(1, now=now) == now + timedelta(hours=2)
+    assert qp.calculate_backoff(2, now=now) == now + timedelta(hours=4)
+    assert qp.calculate_backoff(20, now=now) == now + timedelta(hours=24)
+
+
+def test_visibility_output_includes_utc_ct_and_source() -> None:
+    """Factory visibility output carries the reset time in UTC and CT plus its source."""
+    pause = qp.QuotaPause(
+        48,
+        "mistral",
+        datetime(2026, 11, 1, tzinfo=UTC),
+        "provider_quota: budget exhausted",
+        "config",
+    )
+    text = qp.describe_for_visibility(pause)
+    assert "Factory 48 paused until 2026-11-01T00:00:00Z UTC" in text
+    assert "2026-10-31T19:00:00 CT" in text
+    assert "(config)" in text
 
 
 def test_worker_46_never_paused_by_create(tmp_path: Path) -> None:

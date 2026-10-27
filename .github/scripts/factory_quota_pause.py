@@ -61,7 +61,18 @@ def _iso(dt: datetime) -> str:
 
 
 def load_pauses(path: Path | str = PAUSES_PATH) -> list[QuotaPause]:
-    """Load and validate configured quota pauses; a missing file means none."""
+    """Load and validate configured quota pauses.
+
+    Args:
+        path: Pause file path; a missing file means no pauses are configured.
+
+    Returns:
+        Every configured pause, active or expired, in file order.
+
+    Raises:
+        ValueError: If the schema version, a worker id, or a timestamp is invalid,
+            if a worker is duplicated, or if a protected worker is pinned.
+    """
     path = Path(path)
     if not path.exists():
         return []
@@ -100,7 +111,15 @@ def load_pauses(path: Path | str = PAUSES_PATH) -> list[QuotaPause]:
 
 
 def save_pauses(pauses: list[QuotaPause], path: Path | str = PAUSES_PATH) -> None:
-    """Persist pauses to disk, replacing the file contents."""
+    """Persist pauses to disk, replacing the file contents.
+
+    Args:
+        pauses: Complete pause list to persist.
+        path: Pause file path to overwrite.
+
+    Returns:
+        None.
+    """
     path = Path(path)
     payload = {
         "schema_version": 1,
@@ -124,14 +143,31 @@ def save_pauses(pauses: list[QuotaPause], path: Path | str = PAUSES_PATH) -> Non
 def active_pauses(
     now: datetime | None = None, pauses: Iterable[QuotaPause] | None = None
 ) -> dict[int, QuotaPause]:
-    """Return pauses whose reset time has not yet passed, keyed by worker."""
+    """Return pauses whose reset time has not yet passed, keyed by worker.
+
+    Args:
+        now: Current time override; defaults to the real UTC clock.
+        pauses: Pauses to inspect; defaults to loading the committed pause file.
+
+    Returns:
+        Map of worker number to its still-active pause.
+    """
     now = now or datetime.now(timezone.utc)
     items = load_pauses() if pauses is None else pauses
     return {pause.worker: pause for pause in items if pause.paused_until > now}
 
 
 def is_paused(worker: int | str | None, now: datetime | None = None) -> QuotaPause | None:
-    """Return the active pause for a worker, or None."""
+    """Return the active pause for a worker, or None.
+
+    Args:
+        worker: Worker id as configured in the manifest.
+        now: Current time override; defaults to the real UTC clock.
+
+    Returns:
+        The active pause for the worker, or None when it is not paused or the
+        id is not numeric.
+    """
     text = str(worker).strip() if worker is not None else ""
     if not text.isdigit():
         return None
@@ -139,13 +175,29 @@ def is_paused(worker: int | str | None, now: datetime | None = None) -> QuotaPau
 
 
 def describe(pause: QuotaPause) -> str:
-    """Render a one-line operator log message for a paused worker."""
+    """Render a one-line operator log message for a paused worker.
+
+    Args:
+        pause: Pause to render.
+
+    Returns:
+        Single-line message including the reset time and its source.
+    """
     until = pause.paused_until.strftime("%Y-%m-%dT%H:%M:%SZ")
     return f"Factory {pause.worker} paused until {until} ({pause.reset_source}): {pause.reason}"
 
 
 def filter_workers(workers: list[str], now: datetime | None = None) -> tuple[list[str], list[str]]:
-    """Split worker ids into (dispatchable, paused log lines), preserving order."""
+    """Split worker ids into dispatchable ids and paused-worker log lines.
+
+    Args:
+        workers: Worker ids offered for dispatch, in dispatch order.
+        now: Current time override; defaults to the real UTC clock.
+
+    Returns:
+        Tuple of (dispatchable worker ids in original order, one log line per
+        skipped paused worker).
+    """
     active = active_pauses(now)
     kept: list[str] = []
     messages: list[str] = []
@@ -291,7 +343,7 @@ def _parse_duration(value: str) -> timedelta | None:
 def parse_retry_after(
     header_value: str | int | float | None,
     now: datetime | None = None,
-    clock: Callable[[], object] | None = None,
+    clock: Callable[[], datetime | float] | None = None,
 ) -> datetime | None:
     """Parse Retry-After header into UTC datetime.
 
@@ -543,6 +595,11 @@ def parse_reset_from_config(provider: str | None) -> datetime | None:
         return datetime(year, month, 1, tzinfo=timezone.utc)
 
     if "ollama" in name:
+        # Fallback only: the balance endpoint's ``included.period.until`` is the
+        # authoritative anniversary reset, and ``create_pause`` tries it first.
+        # Without the endpoint the calendar-month boundary is the closest
+        # documented approximation, and the bounded backoff covers anything
+        # shorter.
         year = now.year
         month = now.month
         if month == 12:
@@ -555,15 +612,20 @@ def parse_reset_from_config(provider: str | None) -> datetime | None:
     return None
 
 
-def calculate_backoff(attempt: int = 0) -> datetime:
-    """Calculate bounded exponential backoff time.
+def calculate_backoff(attempt: int = 0, now: datetime | None = None) -> datetime:
+    """Calculate a bounded exponential backoff retry time.
 
     Args:
         attempt: Attempt count (0-based).
+        now: Current time override; defaults to the real UTC clock.
 
     Returns:
-        UTC datetime for next retry.
+        UTC datetime for the next retry, never more than ``BACKOFF_CAP_HOURS``
+        ahead of ``now``.
     """
+    base = now if now is not None else datetime.now(timezone.utc)
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=timezone.utc)
     try:
         n = int(attempt)
     except (TypeError, ValueError):
@@ -575,7 +637,7 @@ def calculate_backoff(attempt: int = 0) -> datetime:
         hours = 1
     if hours > BACKOFF_CAP_HOURS:
         hours = BACKOFF_CAP_HOURS
-    return datetime.now(timezone.utc) + timedelta(hours=hours)
+    return base.astimezone(timezone.utc) + timedelta(hours=hours)
 
 
 def create_pause(
@@ -664,7 +726,7 @@ def create_pause(
         if attempt is None:
             existing = [p for p in load_pauses(pauses_path) if p.worker == worker_int]
             attempt = len(existing)
-        reset = calculate_backoff(attempt if attempt is not None else 0)
+        reset = calculate_backoff(attempt if attempt is not None else 0, now=now)
         reset_source = "backoff"
 
     existing_pauses = [p for p in load_pauses(pauses_path) if p.worker != worker_int]
@@ -704,7 +766,7 @@ def resume_worker(
     now: datetime | None = None,
     pauses: Iterable[QuotaPause] | None = None,
 ) -> bool:
-    """Resume a worker if expired and smoke check passes.
+    """Resume an expired pause when the resume smoke check passes.
 
     Args:
         worker: Worker number.
@@ -714,7 +776,9 @@ def resume_worker(
         pauses: Optional in-memory pauses.
 
     Returns:
-        True if resumed/cleared or no pause exists; False if still paused.
+        True if the pause was cleared or the worker was not paused; False while
+        the pause is still active or after a failed smoke re-pauses the worker
+        on the bounded backoff.
     """
     text = str(worker).strip() if worker is not None else ""
     if not text.isdigit():
@@ -745,21 +809,29 @@ def resume_worker(
         save_pauses(remaining, pauses_path)
         return True
 
+    # The smoke check returns only pass/fail, so no fresh provider detail is
+    # available: re-pause on the bounded backoff and keep the original reason
+    # instead of fabricating a 429 from it (which would also re-parse the old
+    # reason and could pin the pause to an already-elapsed reset time).
+    reason = pause.reason
+    if not reason.startswith("provider_quota"):
+        reason = f"provider_quota: {reason}".strip() if reason else "provider_quota"
+    repaused = QuotaPause(
+        worker=worker_int,
+        provider=pause.provider,
+        paused_until=calculate_backoff(pause.attempt + 1, now=now),
+        reason=reason,
+        reset_source="backoff",
+        model=pause.model,
+        evidence_run=pause.evidence_run,
+        attempt=pause.attempt + 1,
+    )
+    remaining = [p for p in all_pauses if p.worker != worker_int]
+    remaining.append(repaused)
     try:
-        create_pause(
-            worker_int,
-            provider=pause.provider,
-            model=pause.model,
-            status_code=429,
-            body=pause.reason,
-            log_file=None,
-            run_id=pause.evidence_run,
-            path=pauses_path,
-            now=now,
-            attempt=pause.attempt + 1,
-        )
-    except Exception:
-        pass
+        save_pauses(remaining, pauses_path)
+    except OSError:
+        return False
     return False
 
 
@@ -787,6 +859,14 @@ def describe_for_visibility(pause: QuotaPause) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the pause CLI used by the factory dispatcher and operators.
+
+    Args:
+        argv: Argument list override; defaults to ``sys.argv[1:]``.
+
+    Returns:
+        Process exit status; paused workers never make the filter exit non-zero.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "command",
