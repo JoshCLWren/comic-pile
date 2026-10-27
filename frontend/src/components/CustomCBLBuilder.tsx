@@ -913,64 +913,141 @@ export default function CustomCBLBuilder({
                 </div>
               )}
 
+              {entries.length > 0 && (
+                <div className="space-y-3 rounded-xl border border-[var(--theme-border)] p-3" aria-label="Reading List navigation">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-[var(--theme-text-primary)]">Ordered issues ({entries.length})</h4>
+                    <p className="text-xs text-[var(--theme-text-muted)]">Changes are saved with the list.</p>
+                  </div>
+                  <label className="block text-sm text-[var(--theme-text-primary)]">
+                    Find an issue already in this list
+                    <input
+                      type="search"
+                      aria-label="Find an issue in this reading list"
+                      value={entrySearch}
+                      onChange={(event) => { setEntrySearch(event.target.value); setEntryPage(0) }}
+                      placeholder="Search titles or issue numbers"
+                      className="mt-1 min-h-11 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)]"
+                    />
+                  </label>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="text-sm text-[var(--theme-text-primary)]">
+                      Jump to position
+                      <input
+                        aria-label="Jump to reading list position"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={entries.length}
+                        value={jumpPosition}
+                        onChange={(event) => setJumpPosition(event.target.value)}
+                        className="mt-1 block min-h-11 w-28 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm"
+                      />
+                    </label>
+                    <button type="button" disabled={!Number.isSafeInteger(Number(jumpPosition)) || Number(jumpPosition) < 1 || Number(jumpPosition) > entries.length} onClick={jumpToPosition} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-4 text-sm font-semibold text-[var(--theme-text-primary)] disabled:opacity-40">Go to position</button>
+                  </div>
+                  <p role="status" className="text-xs text-[var(--theme-text-muted)]">
+                    {matchedEntries.length} matching issues · Page {currentPage + 1} of {pageCount}
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <button type="button" onClick={() => setEntryPage((page) => Math.max(0, page - 1))} disabled={currentPage === 0} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-semibold disabled:opacity-40">Previous 30</button>
+                    <button type="button" onClick={() => setEntryPage((page) => Math.min(pageCount - 1, page + 1))} disabled={currentPage >= pageCount - 1} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-semibold disabled:opacity-40">Next 30</button>
+                  </div>
+                </div>
+              )}
+
               <ol className="space-y-2" aria-label="Custom CBL ordered issues">
-                {entries.map((entry, index) => {
+                {visibleEntries.map(({ entry, index }) => {
                   const label = `${entry.series_name} #${entry.issue_number}`
                   const waitText = waitDescription(entry, mode, requirements.get(entry.issue_id) ?? [], nameFor)
+                  const optionsOpen = expandedEntryOptions === entry.issue_id
                   return (
-                    <li key={entry.issue_id} className="rounded-xl border border-[var(--theme-border)] p-2">
-                      <div className="flex items-center gap-2">
-                        <span aria-hidden="true" className="w-7 shrink-0 text-center text-xs font-black text-[var(--theme-text-dim)]">{index + 1}</span>
-                        <span className="min-w-0 flex-1 truncate text-sm text-[var(--theme-text-primary)]">
+                    <li key={entry.issue_id} className="min-w-0 rounded-xl border border-[var(--theme-border)] p-3" data-testid="reading-list-entry">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span aria-hidden="true" className="w-7 shrink-0 pt-0.5 text-center text-xs font-black text-[var(--theme-text-dim)]">{index + 1}</span>
+                        <p data-testid="reading-list-entry-title" className="min-w-0 flex-1 break-words text-sm font-semibold leading-relaxed text-[var(--theme-text-primary)]">
                           {label}
-                          {entry.skipped && <span className="ml-2 rounded-full border border-[var(--theme-border)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">Skipped in this list</span>}
-                        </span>
+                          {entry.skipped && <span className="ml-2 inline-block rounded-full border border-[var(--theme-border)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">Skipped in this list</span>}
+                        </p>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 sm:justify-end sm:pl-10" aria-label={`Actions for ${label}`}>
                         <button
                           type="button"
                           onClick={() => toggleCheckpoint(entry.issue_id)}
                           title="Crossover checkpoint metadata. It records where a crossover resumes and does not by itself make later entries wait."
                           aria-label={entry.is_checkpoint ? `Remove crossover checkpoint from ${label}` : `Mark ${label} as crossover checkpoint`}
                           disabled={disabled || isPending}
-                          className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${entry.is_checkpoint ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-bg-panel)] text-[var(--theme-comic-accent)]' : 'border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'} disabled:opacity-50`}
+                          className={`min-h-11 min-w-11 rounded-lg border px-2 text-base ${entry.is_checkpoint ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-bg-panel)] text-[var(--theme-comic-accent)]' : 'border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'} disabled:opacity-50`}
                         >
                           {entry.is_checkpoint ? '⚑' : '⚐'}
                         </button>
-                        <button type="button" aria-label={`Move ${label} earlier`} onClick={() => moveIssue(index, -1)} disabled={index === 0 || disabled || isPending} className="min-h-9 min-w-9 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] disabled:opacity-30">↑</button>
-                        <button type="button" aria-label={`Move ${label} later`} onClick={() => moveIssue(index, 1)} disabled={index === entries.length - 1 || disabled || isPending} className="min-h-9 min-w-9 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] disabled:opacity-30">↓</button>
-                        <button type="button" aria-label={`Remove ${label}`} onClick={() => removeIssue(entry.issue_id)} disabled={disabled || isPending} className="min-h-9 rounded-lg border border-[var(--theme-danger)] px-2 text-xs font-bold text-[var(--theme-danger)] disabled:opacity-50">Remove</button>
+                        <button type="button" aria-label={`Move ${label} earlier`} onClick={() => moveIssue(index, -1)} disabled={index === 0 || disabled || isPending} className="min-h-11 min-w-11 rounded-lg border border-[var(--theme-border)] text-lg text-[var(--theme-text-muted)] disabled:opacity-30">↑</button>
+                        <button type="button" aria-label={`Move ${label} later`} onClick={() => moveIssue(index, 1)} disabled={index === entries.length - 1 || disabled || isPending} className="min-h-11 min-w-11 rounded-lg border border-[var(--theme-border)] text-lg text-[var(--theme-text-muted)] disabled:opacity-30">↓</button>
+                        <button type="button" aria-label={`Remove ${label}`} onClick={() => removeIssue(entry.issue_id)} disabled={disabled || isPending} className="min-h-11 rounded-lg border border-[var(--theme-danger)] px-3 text-xs font-bold text-[var(--theme-danger)] disabled:opacity-50">Remove</button>
+                        <button
+                          type="button"
+                          aria-label={`${optionsOpen ? 'Hide' : 'Show'} settings for ${label}`}
+                          aria-expanded={optionsOpen}
+                          onClick={() => setExpandedEntryOptions(optionsOpen ? null : entry.issue_id)}
+                          className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-semibold text-[var(--theme-text-primary)] sm:hidden"
+                        >{optionsOpen ? 'Less' : 'Options'}</button>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-end gap-3 pl-9">
-                        <label className="text-xs text-[var(--theme-text-muted)]">
+                      <div className={`mt-3 flex-wrap items-end gap-3 border-t border-[var(--theme-border)] pt-3 sm:pl-10 ${optionsOpen ? 'flex' : 'hidden sm:flex'}`}>
+                        <label className="w-full text-xs text-[var(--theme-text-muted)] sm:w-auto">
                           <span className="block font-semibold text-[var(--theme-text-primary)]">Wait behavior</span>
                           <select
                             aria-label={`Wait behavior for ${label}`}
                             value={entry.gate}
                             onChange={(event) => updateGate(entry.issue_id, toGate(event.target.value))}
                             disabled={disabled || isPending || entry.skipped}
-                            className="mt-1 min-h-9 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 text-sm text-[var(--theme-text-primary)] disabled:opacity-50"
+                            className="mt-1 min-h-11 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 text-sm text-[var(--theme-text-primary)] disabled:opacity-50 sm:w-auto"
                           >
                             {GATE_ORDER.map((gate) => (
                               <option key={gate} value={gate}>{GATE_LABELS[gate]}</option>
                             ))}
                           </select>
                         </label>
-                        <label className="flex min-h-9 items-center gap-2 text-xs text-[var(--theme-text-primary)]">
+                        <label className="flex min-h-11 items-center gap-2 text-xs text-[var(--theme-text-primary)]">
                           <input
                             type="checkbox"
                             aria-label={`Skip ${label} in this list`}
                             checked={entry.skipped}
                             onChange={() => toggleSkipped(entry.issue_id)}
                             disabled={disabled || isPending}
-                            className="h-4 w-4"
+                            className="h-5 w-5"
                           />
                           Skip in this list
                         </label>
+                        <div className="flex w-full flex-wrap items-end gap-2">
+                          <label className="text-xs text-[var(--theme-text-primary)]">
+                            Move to position
+                            <input type="number" inputMode="numeric" min={1} max={entries.length}
+                              aria-label={`Move ${label} to position`}
+                              value={moveDestinations[entry.issue_id] ?? ''}
+                              onChange={(event) => setMoveDestinations((current) => ({ ...current, [entry.issue_id]: event.target.value }))}
+                              className="mt-1 block min-h-11 w-24 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 text-sm"
+                            />
+                          </label>
+                          <button type="button" onClick={() => moveIssueToPosition(index, entry.issue_id)}
+                            disabled={disabled || isPending || !Number.isSafeInteger(Number(moveDestinations[entry.issue_id])) || Number(moveDestinations[entry.issue_id]) < 1 || Number(moveDestinations[entry.issue_id]) > entries.length}
+                            className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-semibold disabled:opacity-40"
+                          >Move here</button>
+                        </div>
                       </div>
-                      {waitText && <p className="mt-1 pl-9 text-xs text-[var(--theme-text-muted)]">{waitText}</p>}
+                      {waitText && <p className={`mt-2 break-words text-xs text-[var(--theme-text-muted)] sm:pl-10 ${optionsOpen ? 'block' : 'hidden sm:block'}`}>{waitText}</p>}
                     </li>
                   )
                 })}
               </ol>
+              {matchedEntries.length === 0 && entries.length > 0 && (
+                <p className="text-sm text-[var(--theme-text-muted)]">No issues match this search. Clear the search to see the complete list.</p>
+              )}
+              {entries.length > ENTRY_PAGE_SIZE && (
+                <div className="flex items-center justify-between gap-3">
+                  <button type="button" onClick={() => setEntryPage((page) => Math.max(0, page - 1))} disabled={currentPage === 0} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm disabled:opacity-40">Previous 30</button>
+                  <button type="button" onClick={() => setEntryPage((page) => Math.min(pageCount - 1, page + 1))} disabled={currentPage >= pageCount - 1} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm disabled:opacity-40">Next 30</button>
+                </div>
+              )}
               {entries.length === 0 && <p className="text-sm text-[var(--theme-text-muted)]">This custom CBL is empty. Search for issues above to build it.</p>}
               <p className="text-xs text-[var(--theme-text-muted)]">Skipping an issue here ignores it only in this list. It stays in your collection and other lists. Use your collection exclusions to remove a comic everywhere.</p>
 
