@@ -199,14 +199,14 @@ function EventRecord({ event }: { event: DisplayEvent }) {
           ))}
         </ul>
       ) : !isThreadlessEvent(event) && detail ? (
-        <p className="mt-1 text-xs text-stone-400 break-words">{detail}</p>
+        <p className="mt-1 text-xs text-[var(--theme-text-dim)] break-words">{detail}</p>
       ) : !isThreadlessEvent(event) && !hasRecordedDescription ? (
         <p className="mt-1 text-xs text-stone-500">No additional event details recorded.</p>
       ) : null}
       {metadata.length > 0 &&
       (event.type === 'undo' || event.type === 'restore') &&
       detail ? (
-        <p className="mt-1 text-xs text-stone-400 break-words">{detail}</p>
+        <p className="mt-1 text-xs text-[var(--theme-text-dim)] break-words">{detail}</p>
       ) : null}
       {event.queue_move && (
         <p className="mt-1 break-words text-xs text-stone-500">Queue move: {event.queue_move}</p>
