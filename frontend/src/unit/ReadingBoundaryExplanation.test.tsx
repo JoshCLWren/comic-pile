@@ -110,6 +110,31 @@ describe('ReadingBoundaryExplanation', () => {
     expect(screen.queryByText('Historical associations — not active blockers')).not.toBeInTheDocument()
   })
 
+  it('shows only the first actionable strict-order issue by default in compact mode', () => {
+    renderExplanation({
+      compact: true,
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'Abe Sapien #8 is waiting on strict Mignolaverse order.',
+        blockers: [{
+          kind: 'strict_order',
+          origin: 'reading_list',
+          reason: 'Strict order in Mignolaverse: read Casualties #1 and every other earlier unread comic first',
+          waiting_on: [
+            issue({ issue_id: 117305, thread_id: 18847, thread_title: 'B.P.R.D.: Casualties', label: 'B.P.R.D.: Casualties #1' }),
+            issue({ issue_id: 117306, thread_id: 18848, thread_title: 'Abe Sapien: The Haunted Boy', label: 'Abe Sapien: The Haunted Boy #1' }),
+          ],
+        }],
+      }),
+    })
+    const first = screen.getByRole('link', { name: 'Open B.P.R.D.: Casualties issue #1' })
+    expect(first).toBeVisible()
+    const disclosure = screen.getByText('Show all reading requirements').closest('details')
+    expect(disclosure).not.toHaveAttribute('open')
+    expect(disclosure).toHaveTextContent('Abe Sapien: The Haunted Boy #1')
+    expect(screen.getByText('Read', { exact: false })).toBeTruthy()
+  })
+
   it('links the next issue to its editor target when the server supplies one', () => {
     renderExplanation({
       explanation: explanation({
