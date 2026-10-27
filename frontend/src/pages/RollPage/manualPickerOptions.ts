@@ -129,6 +129,17 @@ function pickerDetailSegments(thread: ManualPickerThread): string[] {
   return segments
 }
 
+
+/**
+ * Normalize a series title for same-name detection by stripping parenthetical
+ * year/volume/run metadata. Two reader threads whose titles differ only by
+ * such parenthetical identity text still refer to the same base series name
+ * and need disambiguation.
+ */
+function normalizeSeriesTitle(title: string): string {
+  return title.replace(/\s*\([^)]*\)/g, '').trim()
+}
+
 function intoRows(group: PickerGroup, threads: ManualPickerThread[], seenIds: Set<number>): PickerRow[] {
   const rows: PickerRow[] = []
   for (const thread of threads) {
@@ -141,14 +152,22 @@ function intoRows(group: PickerGroup, threads: ManualPickerThread[], seenIds: Se
   return rows
 }
 
-/** Append the thread id to still-identical labels so every option stays unique. */
-function resolveResidualCollisions(rows: PickerRow[]): void {
+/** Append the thread id to still-ambiguous labels so every option stays unique. */
+function resolveResidualCollisions(rows: PickerRow[], normalizedTitleCounts: Map<string, number>): void {
   const labelCounts = new Map<string, number>()
   for (const row of rows) {
     labelCounts.set(row.label, (labelCounts.get(row.label) ?? 0) + 1)
   }
   for (const row of rows) {
     if ((labelCounts.get(row.label) ?? 0) > 1) {
+      row.label = `${row.label} · Series #${row.thread.id}`
+      continue
+    }
+    // Same base series name with no other disambiguating text: tie the row to
+    // its actual Thread identity instead of leaving it bare (issue #3559).
+    const sameNormalizedTitle =
+      (normalizedTitleCounts.get(normalizeSeriesTitle(row.thread.title)) ?? 0) > 1
+    if (sameNormalizedTitle && !row.label.includes('·')) {
       row.label = `${row.label} · Series #${row.thread.id}`
     }
   }
@@ -185,14 +204,21 @@ export function buildManualPickerOptions(params: {
   for (const row of rows) {
     baseLabelCounts.set(row.baseLabel, (baseLabelCounts.get(row.baseLabel) ?? 0) + 1)
   }
+  const normalizedTitleCounts = new Map<string, number>()
+  for (const row of rows) {
+    const normalized = normalizeSeriesTitle(row.thread.title)
+    normalizedTitleCounts.set(normalized, (normalizedTitleCounts.get(normalized) ?? 0) + 1)
+  }
   for (const row of rows) {
     row.label = row.baseLabel
-    if ((baseLabelCounts.get(row.baseLabel) ?? 0) > 1) {
+    const sameBaseName = (baseLabelCounts.get(row.baseLabel) ?? 0) > 1
+    const sameNormalizedTitle = (normalizedTitleCounts.get(normalizeSeriesTitle(row.thread.title)) ?? 0) > 1
+    if (sameBaseName || sameNormalizedTitle) {
       const details = pickerDetailSegments(row.thread)
       if (details.length > 0) row.label = `${row.label} · ${details.join(' · ')}`
     }
   }
-  resolveResidualCollisions(rows)
+  resolveResidualCollisions(rows, normalizedTitleCounts)
 
   return {
     activeOptions: rows.flatMap((row) =>

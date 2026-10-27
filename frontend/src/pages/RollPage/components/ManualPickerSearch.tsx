@@ -192,7 +192,7 @@ export function ManualPickerSearch({
                 key={option.id}
                 id={`${listboxId}-option-${option.id}`}
                 role="option"
-                aria-selected={String(option.id) === value}
+                aria-selected={index === highlighted || String(option.id) === value}
                 className={`cursor-pointer px-3 py-2 text-sm ${
                   index === highlighted
                     ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-text-primary)]'
