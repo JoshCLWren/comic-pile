@@ -186,6 +186,52 @@ describe('ReadingBoundaryExplanation', () => {
     expect(screen.queryByRole('button', { name: 'Show all reading requirements' })).not.toBeInTheDocument()
   })
 
+  it('falls back to a hold when a strict blocker omits waiting_on entirely', () => {
+    renderExplanation({
+      compact: true,
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'Reading order is blocked.',
+        blockers: [
+          { kind: 'strict_order', origin: 'reading_list', reason: 'Strict source has no actionable comic.' },
+          { kind: 'hold', origin: 'reading_list', reason: 'Read One Year In first.', waiting_on: [issue()] },
+        ],
+      }),
+    })
+    expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toBeVisible()
+    expect(screen.queryByText('Strict source has no actionable comic.')).not.toBeInTheDocument()
+  })
+
+  it('prefers the strict reading frontier even when a hold blocker comes first', async () => {
+    renderExplanation({
+      compact: true,
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'Multiple reading requirements.',
+        blockers: [
+          { kind: 'hold', origin: 'reading_list', reason: 'Hold on One Year In.', waiting_on: [issue()] },
+          {
+            kind: 'strict_order',
+            origin: 'reading_list',
+            reason: 'Read Casualties before this series.',
+            waiting_on: [issue({ issue_id: 117305, thread_id: 18847, thread_title: 'B.P.R.D.: Casualties', label: 'B.P.R.D.: Casualties #1' })],
+          },
+        ],
+      }),
+    })
+    expect(screen.getByRole('link', { name: 'Open B.P.R.D.: Casualties issue #1' })).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Open One Year In issue #1' })).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Show all reading requirements' }))
+    expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toBeVisible()
+  })
+
+  it('renders no requirements list for a blocked compact response without blockers', () => {
+    renderExplanation({ compact: true, explanation: explanation({ state: 'blocked', summary: 'Blocked without details.' }) })
+    expect(screen.getByText('Blocked without details.')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Active reading blockers' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Show all reading requirements' })).not.toBeInTheDocument()
+  })
+
   it('links the next issue to its editor target when the server supplies one', () => {
     renderExplanation({
       explanation: explanation({
