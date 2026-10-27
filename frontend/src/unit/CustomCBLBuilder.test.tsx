@@ -323,6 +323,30 @@ describe('CustomCBLBuilder', () => {
     expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #49')).toBeInTheDocument()
   })
 
+  it('goes to the correct previous page after removing the final issue on the last page', async () => {
+    const entries = Array.from({ length: 61 }, (_, index) => ({
+      ...existingList.entries[0],
+      id: 500 + index,
+      issue_id: 70000 + index,
+      position: index,
+      series_name: 'Mobile Reading Series',
+      issue_number: String(index + 1),
+    }))
+    mocks.get.mockResolvedValue({ ...existingList, issue_count: entries.length, entries })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    await screen.findByText('Mobile Reading Series #1')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Mobile Reading Series #61' }))
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Previous 30' })[0])
+    expect(screen.getByText('Mobile Reading Series #1')).toBeInTheDocument()
+    expect(screen.queryByText('Mobile Reading Series #31')).not.toBeInTheDocument()
+  })
+
   it('navigates issue results with arrows and adds only the focused canonical issue with Enter', async () => {
     const user = userEvent.setup()
     mocks.searchIssues.mockResolvedValue([
