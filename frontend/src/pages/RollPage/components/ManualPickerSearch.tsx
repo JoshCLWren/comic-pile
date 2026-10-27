@@ -55,7 +55,12 @@ export function ManualPickerSearch({
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!needle) return allOptions
-    return allOptions.filter(({ option }) => option.label.toLowerCase().includes(needle))
+    return allOptions.filter(({ option }) => {
+      // Search on both the full label AND the raw thread ID for identity-based filtering
+      const labelMatch = option.label.toLowerCase().includes(needle)
+      const identityMatch = String(option.id).includes(needle)
+      return labelMatch || identityMatch
+    })
   }, [allOptions, query])
 
   useEffect(() => {
@@ -101,8 +106,7 @@ export function ManualPickerSearch({
       }
     } else if (event.key === 'Escape') {
       if (open) {
-        // Stop the dialog-level Escape handler from closing "Pick manually"
-        // when the picker only dismisses its own open list.
+        // First Escape closes the listbox, second Escape closes the dialog
         event.preventDefault()
         event.stopPropagation()
         setOpen(false)

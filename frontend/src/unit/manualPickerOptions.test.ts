@@ -253,4 +253,24 @@ describe('buildManualPickerOptions (#3704)', () => {
 
     expect(result).toEqual({ activeOptions: [], snoozedOptions: [] })
   })
+
+  it('adds thread ID fallback for single options that have no disambiguating information', () => {
+    const result = buildManualPickerOptions({
+      activeThreads: [thread({ id: 101, title: 'Mister Miracle' })],
+      snoozedThreads: [thread({ id: 102, title: 'Mister Miracle' })],
+    })
+
+    expect(labelsOf(result.activeOptions)).toEqual(['Mister Miracle (Single Issues) · Series #101'])
+    expect(labelsOf(result.snoozedOptions)).toEqual(['Mister Miracle (Single Issues) · Series #102'])
+  })
+
+  it('does not add thread ID fallback for single options that have disambiguating information', () => {
+    const result = buildManualPickerOptions({
+      activeThreads: [thread({ id: 101, title: 'Mister Miracle', next_unread_issue_number: '5' })],
+      snoozedThreads: [thread({ id: 102, title: 'Mister Miracle', next_unread_issue_number: '10' })],
+    })
+
+    expect(labelsOf(result.activeOptions)).toEqual(['Mister Miracle (Single Issues) · Up next: #5'])
+    expect(labelsOf(result.snoozedOptions)).toEqual(['Mister Miracle (Single Issues) · Up next: #10'])
+  })
 })

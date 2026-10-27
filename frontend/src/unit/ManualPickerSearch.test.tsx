@@ -57,6 +57,28 @@ describe('ManualPickerSearch', () => {
     expect(screen.queryByRole('option', { name: 'Saga (Comic)' })).not.toBeInTheDocument()
   })
 
+  it('filters on thread identity ID even when labels have no disambiguation', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    const input = screen.getByRole('combobox')
+    
+    // Search by thread ID should work even for options without disambiguation
+    await user.type(input, '2')
+    expect(screen.getByRole('option', { name: 'Superman (Comic) · Up next: #5' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Saga (Comic)' })).not.toBeInTheDocument()
+    
+    await user.clear(input)
+    await user.type(input, '3')
+    expect(screen.getByRole('option', { name: 'Superman (Comic) · Up next: #9' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Saga (Comic)' })).not.toBeInTheDocument()
+    
+    await user.clear(input)
+    await user.type(input, '1')
+    expect(screen.getByRole('option', { name: 'Saga (Comic)' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Superman (Comic) · Up next: #5' })).not.toBeInTheDocument()
+  })
+
   it('resolves keyboard selection to the exact Thread when names collide', async () => {
     const user = userEvent.setup()
     render(<Harness />)
