@@ -43,10 +43,11 @@ async def run(url: str, uid: int) -> dict:
     Returns:
         A dictionary with the audit report: ``user_id``, ``scope``,
         ``examined``, ``implied``, ``excluded``, ``unresolved``,
-        ``partial_strict_list_omissions``, and ``status`` (``PASS`` or
-        ``REVIEW_REQUIRED``). ``examined`` counts every historical edge
-        considered; ``implied`` plus ``unresolved`` plus ``excluded`` totals
-        equal ``examined`` so no examined edge vanishes from the report.
+        ``contradicted``, ``partial_strict_list_omissions``, and ``status``
+        (``PASS`` or ``REVIEW_REQUIRED``). ``examined`` counts every
+        historical edge; ``implied`` + ``unresolved`` + ``contradicted``
+        + ``excluded`` equals ``examined``. Opposing historical edges remain
+        diagnostic and cannot automatically replace the canonical order.
 
     Raises:
         ValueError: If the URL is not an asyncpg URL or ``uid`` is not positive.
