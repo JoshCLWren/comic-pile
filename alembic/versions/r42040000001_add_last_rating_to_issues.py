@@ -1,7 +1,7 @@
 """Add last_rating to issues (#4204).
 
 Revision ID: r42040000001
-Revises: c42100000001
+Revises: c30740000001
 Create Date: 2026-10-26 00:00:00.000000
 
 A Thread issue row must be able to show the score the reader gave that exact
@@ -18,12 +18,6 @@ that the reader already reversed must not be restored as the saved score. The
 backfill nets undo events against rate events per session the same way
 ``build_narrative_summary`` does (each undo pops the most recent not-yet-undone
 rate) and skips any rate event that was undone.
-
-This revision extends the repository's single head, which is now
-``c42100000001`` (tag-name normalization, #4182). It must never point at an
-interior revision such as ``c30740000001``: that revision already has a child,
-so forking off it would leave two Alembic heads and make ``alembic upgrade
-head`` fail on deployment.
 """
 
 from __future__ import annotations
