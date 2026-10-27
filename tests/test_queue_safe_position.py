@@ -165,6 +165,75 @@ async def test_move_to_safe_position_blocked_threads_in_range(
 
 
 @pytest.mark.asyncio
+async def test_move_to_safe_position_keeps_stored_rank_under_display_translation(
+    async_db: AsyncSession, default_user
+) -> None:
+    """Rating-time placement stays in the stored rank space.
+
+    The Queue re-numbers readable rows ahead of blocked ones, so the
+    Reposition dialog works in displayed ordinals. ``move_to_safe_position``
+    computes its target from the stored order instead (the order the roll pool
+    is drawn from), and must persist that stored rank directly. With 14 stored
+    ranks, blocked rows at 4 and 6, and a d6, the caller targets rank 9 —
+    after the six readable series. Routing the rank through the displayed
+    ordinal translation would instead persist rank 10, one readable series
+    too far (#4181 review finding).
+    """
+    from app.services.queue_display import display_position
+
+    user = default_user
+    threads = []
+    for i in range(1, 15):
+        t = Thread(
+            title=f"Thread {i}",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=i,
+            is_blocked=(i == 4 or i == 6),
+            status="active",
+            user_id=user.id,
+        )
+        async_db.add(t)
+        threads.append(t)
+    await async_db.flush()
+    for t in threads:
+        await async_db.refresh(t)
+
+    target = threads[0]  # pos 1
+    await move_to_safe_position(target.id, user.id, 6, async_db)
+    await async_db.refresh(target)
+
+    # Stored rank 9: the d6-exhausting readable series at stored rank 9 is the
+    # sixth readable row, and the target sits immediately after it.
+    assert target.queue_position == 9
+
+    # The move renumbers readable rows by raw order, so the target also
+    # displays directly after the sixth readable series (seventh readable row
+    # overall) and blocked rows still display last.
+    assert await display_position(async_db, target) == 7
+    ordered = [
+        (await display_position(async_db, thread), thread.title)
+        for thread in threads
+    ]
+    assert sorted(ordered) == [
+        (1, "Thread 2"),
+        (2, "Thread 3"),
+        (3, "Thread 5"),
+        (4, "Thread 7"),
+        (5, "Thread 8"),
+        (6, "Thread 9"),
+        (7, "Thread 1"),
+        (8, "Thread 10"),
+        (9, "Thread 11"),
+        (10, "Thread 12"),
+        (11, "Thread 13"),
+        (12, "Thread 14"),
+        (13, "Thread 4"),
+        (14, "Thread 6"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_move_to_safe_position_many_blocked_before_target_bug_597(
     async_db: AsyncSession, default_user
 ) -> None:

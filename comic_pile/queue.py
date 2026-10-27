@@ -388,12 +388,65 @@ async def move_to_position(
         if (active_row[1], active_row[0]) < (anchor_position, anchor_id)
     )
 
+    return await _move_to_raw_rank(
+        thread_id, user_id, raw_target, db, do_commit=do_commit, manual=manual
+    )
+
+
+async def _move_to_raw_rank(
+    thread_id: int,
+    user_id: int,
+    raw_rank: int,
+    db: AsyncSession,
+    do_commit: bool = False,
+    manual: bool = False,
+) -> QueuePositionChanges:
+    """Place an active thread at a stored queue rank, shifting rows between.
+
+    ``raw_rank`` is a dense stored ``queue_position`` rank, the same space
+    ``_MOVE_POSITION_SQL`` orders rows in and the same order the roll pool is
+    drawn from. So it is the write surface for callers that compute their
+    target from stored ranks — rating-time placement via
+    ``move_to_safe_position`` — rather than the reader-visible ordinal space
+    ``move_to_position`` translates from (#4181).
+
+    Args:
+        thread_id: Thread to move.
+        user_id: Thread owner.
+        raw_rank: Target dense stored rank (1-indexed by ``queue_position, id``).
+        db: Async database session.
+        do_commit: Whether to commit inside this helper.
+        manual: Whether the reader explicitly chose this placement. Explicit
+            placements are remembered so a later automatic rating demotion does
+            not discard them (#3638).
+
+    Returns:
+        Mapping of changed thread IDs to their previous positions.
+
+    Raises:
+        ValueError: When ``raw_rank`` is outside the active queue ranks.
+    """
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+    )
+    active_total = int(count_result.scalar_one())
+    if raw_rank < 1:
+        raise ValueError(f"Position must be at least 1, got {raw_rank}")
+    if raw_rank > active_total:
+        raise ValueError(
+            f"Position {raw_rank} is out of range. Maximum position is {active_total}."
+        )
+
     move_result = await db.execute(
         _MOVE_POSITION_SQL,
         {
             "uid": user_id,
             "tid": thread_id,
-            "new_pos": raw_target,
+            "new_pos": raw_rank,
             "manual": manual,
         },
     )
@@ -423,9 +476,9 @@ async def move_to_position(
         await db.commit()
 
     logger.debug(
-        "move_to_position SUCCESS: thread %d moved to position %d",
+        "move_to_position SUCCESS: thread %d moved to stored rank %d",
         thread_id,
-        new_position,
+        raw_rank,
     )
     return changes
 
@@ -455,6 +508,12 @@ async def move_to_safe_position(
       because the bounded pool covers the whole eligible set.
     - When the thread is already ranked at or beyond ``die_size``, or is the only
       eligible thread, the position is left unchanged.
+    - Placement is written in the stored rank space via ``_move_to_raw_rank``,
+      the same space the roll pool itself is drawn from. It must not route
+      through the reader-visible ordinal translation in ``move_to_position``:
+      the Queue re-numbers readable rows ahead of blocked ones, so a stored
+      rank handed in as an ordinal would push a rated series past extra
+      readable series (#4181).
 
     Args:
         thread_id: Thread to reposition.
@@ -511,12 +570,17 @@ async def move_to_safe_position(
     if target_current_seq == target_seq:
         return {}
 
-    return await move_to_position(
+    # The target sequence is a stored rank. Keep it out of ``move_to_position``:
+    # that helper now treats its argument as the displayed Queue ordinal, so a
+    # raw rank passed there lands too far down whenever blocked rows occupy
+    # lower stored positions (#4181).
+    return await _move_to_raw_rank(
         thread_id,
         user_id,
         target_seq,
         db,
         do_commit=False,
+        manual=False,
     )
 
 
