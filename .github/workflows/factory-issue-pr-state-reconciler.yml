@@ -160,7 +160,18 @@ jobs:
           }
 
           reconcile_issue() {
-            local issue="$1" pulls records stage
+            local issue="$1" pulls records stage labels blocked
+            # Claim policy already treats BLOCKED_LABELS (including
+            # ralph-status:blocked) as non-executable. Skip before any
+            # trusted-history walk so replace_issue_state never rewrites
+            # a held issue back to factory + factory:unowned.
+            labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${issue}/labels?per_page=100" --jq '[.[].name]')"
+            blocked="$(python3 .github/scripts/factory_issue_pr_state_policy.py \
+              --blocked-by-labels-json "$labels")"
+            if [[ "$blocked" == "blocked" ]]; then
+              echo "Issue #${issue}: skipped (blocked labels)"
+              return 0
+            fi
             # Scheduled sweeps reuse one PR snapshot for all issues.
             pulls="${SWEEP_PULLS:-}"
             if [[ -z "$pulls" ]]; then

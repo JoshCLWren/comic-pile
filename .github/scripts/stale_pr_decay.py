@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Any, cast
 
 from factory_review_policy import performed_via_untrusted_app
+from factory_work_policy import is_manual_only
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 STALE_PR_GUARD_MARKER_RE = re.compile(
@@ -434,6 +435,12 @@ def process_stale_prs(
         pr_number = int(pr["number"])
         age = pr_lifetime_seconds(pr, now_epoch=now_epoch)
         if age is None:
+            continue
+
+        # Human/interactive holds stay open. Reopen is not enough: created_at
+        # still exceeds the cold-start 24h threshold, so skip before close.
+        if is_manual_only(str(pr.get("body") or "")):
+            results.append({"pr": pr_number, "status": "manual-only", "age_seconds": age})
             continue
 
         if has_stale_expiration_marker(get_pr_comments(pr_number), pr_number):

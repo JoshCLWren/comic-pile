@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pure issue-state precedence for trusted canonical factory PR history."""
+"""Issue-state precedence and blocked-label skip for factory reconciliation."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ import argparse
 import json
 from collections.abc import Iterable, Mapping
 from typing import Any
+
+from factory_work_policy import BLOCKED_LABELS
 
 
 def stage_from_trusted_prs(records: Iterable[Mapping[str, Any]]) -> str:
@@ -24,11 +26,39 @@ def stage_from_trusted_prs(records: Iterable[Mapping[str, Any]]) -> str:
     return "claimable"
 
 
+def issue_labels_block_reconciliation(labels: Iterable[str]) -> bool:
+    """Return whether claim policy forbids rewriting this issue's factory labels.
+
+    Reuses ``BLOCKED_LABELS`` from factory work policy so the scheduled
+    reconciler leaves ``ralph-status:blocked`` (and the rest of that set)
+    alone instead of restoring ``factory`` + ``factory:unowned``.
+    """
+    return bool(set(labels) & BLOCKED_LABELS)
+
+
+def _label_names(decoded: object) -> list[str]:
+    """Return string label names from a decoded JSON labels payload."""
+    if not isinstance(decoded, list):
+        raise TypeError("labels JSON must decode to a list")
+    return [item for item in decoded if isinstance(item, str)]
+
+
 def main() -> int:
-    """Parse trusted PR records and print the derived issue lifecycle stage."""
+    """Print derived issue stage, or whether labels block reconciliation."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--records-json", required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--records-json")
+    mode.add_argument("--blocked-by-labels-json")
     args = parser.parse_args()
+    if args.blocked_by_labels_json is not None:
+        try:
+            labels = _label_names(json.loads(args.blocked_by_labels_json))
+        except (TypeError, json.JSONDecodeError) as exc:
+            parser.error(f"--blocked-by-labels-json must decode to a list: {exc}")
+        print("blocked" if issue_labels_block_reconciliation(labels) else "ok")
+        return 0
+    if args.records_json is None:
+        parser.error("--records-json is required")
     records = json.loads(args.records_json)
     if not isinstance(records, list):
         parser.error("--records-json must decode to a list")
