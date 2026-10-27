@@ -291,7 +291,7 @@ def _parse_duration(value: str) -> timedelta | None:
 def parse_retry_after(
     header_value: str | int | float | None,
     now: datetime | None = None,
-    clock: callable | None = None,
+    clock: Callable[[], object] | None = None,
 ) -> datetime | None:
     """Parse Retry-After header into UTC datetime.
 
@@ -460,6 +460,16 @@ def parse_reset_from_body(
 def parse_ollama_balance_reset(
     balance_url: str | None = None, api_key: str | None = None, timeout: float = 10.0
 ) -> datetime | None:
+    """Parse Ollama balance endpoint for next reset time.
+
+    Args:
+        balance_url: Balance endpoint URL (file:// supported for tests).
+        api_key: Ollama API key.
+        timeout: Request timeout seconds.
+
+    Returns:
+        UTC datetime for reset, or None if unavailable.
+    """
     url = str(balance_url).strip() if balance_url is not None else OLLAMA_BALANCE_URL
     if not url:
         url = OLLAMA_BALANCE_URL

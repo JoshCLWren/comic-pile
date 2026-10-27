@@ -20,7 +20,7 @@ qp = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = qp
 _SPEC.loader.exec_module(qp)
 
-BEFORE_RESET = datetime(2026, 10, 18, 13, 0, tzinfo=UTC)
+BEFORE_RESET = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
 AFTER_RESET = datetime(2026, 11, 1, 0, 0, 1, tzinfo=UTC)
 
 
@@ -34,8 +34,9 @@ def test_repo_config_pauses_w48_and_w55_until_november() -> None:
     """The committed config quota-pauses Mistral w48 and Ollama w55 until ~Nov 1."""
     active = qp.active_pauses(BEFORE_RESET)
     assert set(active) == {48, 55}
+    assert active[48].paused_until == datetime(2026, 11, 1, tzinfo=UTC)
+    assert active[55].paused_until == datetime(2026, 10, 18, 0, 29, 5, tzinfo=UTC)
     for worker in (48, 55):
-        assert active[worker].paused_until == datetime(2026, 11, 1, tzinfo=UTC)
         assert "provider_quota" in active[worker].reason
     assert qp.active_pauses(AFTER_RESET) == {}
 

@@ -14,9 +14,9 @@
       "worker": 55,
       "provider": "ollama-cloud",
       "model": "nemotron-3-nano:30b",
-      "paused_until": "2026-11-01T00:00:00Z",
+      "paused_until": "2026-10-18T00:29:05Z",
       "reason": "provider_quota: Ollama Cloud monthly usage limit reached (HTTP 429 'reached your monthly usage limit')",
-      "reset_source": "config",
+      "reset_source": "balance",
       "evidence_run": "38255409735"
     }
   ]
