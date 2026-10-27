@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import type { BoundaryEditorTarget, BoundaryIssue, ReadingBoundaryExplanation as Explanation } from '../services/api-reading-boundaries'
@@ -38,6 +38,33 @@ interface Props {
 
 const UNAVAILABLE = <p className="text-sm text-[var(--theme-text-muted)]">Reading boundaries are unavailable.</p>
 
+function CompactReadingRequirements({
+  primaryIssue,
+  editor,
+  allRequirements,
+}: {
+  primaryIssue: BoundaryIssue
+  editor?: BoundaryEditorTarget | null
+  allRequirements: ReactNode
+}) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <>
+      <p>Read <IssueLabel issue={primaryIssue} /> first.</p>
+      <EditorLink editor={editor} />
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        className="min-h-9 text-xs font-semibold text-[var(--theme-continuity-accent)] underline"
+      >
+        {expanded ? 'Hide' : 'Show'} all reading requirements
+      </button>
+      {expanded && <div className="mt-2">{allRequirements}</div>}
+    </>
+  )
+}
+
 /** Present the evaluator's result; only current canonical requirements are presented. */
 export function ReadingBoundaryExplanation({ explanation, isPending, isError, onRetry, fallback, compact = false }: Props) {
   if (isError) return <div role="alert" className="text-sm text-[var(--theme-error)]"><p>Reading boundaries could not be loaded.</p><button type="button" className="min-h-11 underline" onClick={onRetry}>Retry reading boundaries</button></div>
@@ -68,13 +95,7 @@ export function ReadingBoundaryExplanation({ explanation, isPending, isError, on
       <p className={`font-semibold ${explanation.state === 'blocked' ? 'text-[var(--theme-warning)]' : 'text-[var(--theme-text-primary)]'}`}>{explanation.summary}</p>
       {explanation.next && <div><p>Next: <IssueLabel issue={explanation.next.issue} /></p><EditorLink editor={explanation.next.editor} /></div>}
       {compact && explanation.state === 'blocked' && primaryIssue ? (
-        <>
-          <p>Read <IssueLabel issue={primaryIssue} /> first.</p>
-          <details className="text-xs">
-            <summary className="cursor-pointer font-semibold">Show all reading requirements</summary>
-            <div className="mt-2">{allRequirements}</div>
-          </details>
-        </>
+        <CompactReadingRequirements primaryIssue={primaryIssue} editor={primaryBlocker?.editor} allRequirements={allRequirements} />
       ) : allRequirements}
     </div>
   )
