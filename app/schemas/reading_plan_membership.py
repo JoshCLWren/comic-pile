@@ -35,6 +35,7 @@ class ReadingPlanSourceSnapshot(BaseModel):
 
     id: int
     raw_source_path: str
+    custom_cbl_list_id: int | None = None
     display_name: str | None = None
     repository: str | None = None
     source_path: str | None = None
