@@ -16,6 +16,7 @@ from httpx import AsyncClient
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.constants import MIN_RATED_FOR_RELIABLE
 from app.models import Event, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.repositories.creator_comparison import MIN_RATED_ISSUES_PER_SERIES
@@ -27,6 +28,17 @@ D3 = datetime(2026, 3, 3, tzinfo=UTC)
 D4 = datetime(2026, 3, 4, tzinfo=UTC)
 
 _identity_serial = 0
+
+
+def test_shared_reliability_threshold_is_five():
+    """The shared creator-reliability floor is five rated issues (issue #4237).
+
+    Pins MIN_RATED_FOR_RELIABLE (and its alias MIN_RATED_ISSUES_PER_SERIES) at 5
+    so the comparison, strongest-series, and discovery thresholds cannot silently
+    drift back to 3 without failing this test.
+    """
+    assert MIN_RATED_FOR_RELIABLE == 5
+    assert MIN_RATED_ISSUES_PER_SERIES == 5
 
 
 async def _make_thread(
