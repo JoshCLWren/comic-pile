@@ -615,7 +615,7 @@ it('uses canonical boundary blockers for queue rows instead of legacy dependenci
 
   const readButton = screen.getByLabelText('Read & Rate')
   expect(readButton).toBeDisabled()
-  expect(readButton).toHaveAttribute('title', expect.stringContaining('Hold in Ultimate'))
+  expect(readButton).toHaveAttribute('title', expect.stringContaining('Read One Year In #1 first'))
   expect(screen.getByTestId('canonical-reading-boundary')).toBeInTheDocument()
   // A canonical answer suppresses the legacy batch read, so rows never pay for
   // two sources of blocking truth.
