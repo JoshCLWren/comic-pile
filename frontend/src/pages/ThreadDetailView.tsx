@@ -109,6 +109,9 @@ export default function ThreadDetailView() {
   const focusedIssueRef = useRef<number | null>(null)
   const [issuesExpanded, setIssuesExpanded] = useState(requestedIssueId > 0)
   const [isDependencyOpen, setIsDependencyOpen] = useState(false)
+  // Shared undo target across issue rows: only the most recently rated row may
+  // offer Undo, because the server rejects older snapshots with 409 (#4204).
+  const [undoStack, setUndoStack] = useState<{ issueId: number; target: RateUndoInfo }[]>([])
   const editNotesId = useId()
   const dependencyLocationRef = useRef<string | null>(null)
   const openPrerequisites = new URLSearchParams(location.search).get('prerequisites') === '1'
@@ -126,9 +129,6 @@ export default function ThreadDetailView() {
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set())
   const [bulkNotice, setBulkNotice] = useState<string | null>(null)
-  // Shared undo target across issue rows: only the most recently rated row
-  // may offer Undo, because the server rejects older snapshots with 409.
-  const [undoStack, setUndoStack] = useState<{ issueId: number; target: RateUndoInfo }[]>([])
 
   const issuesQuery = useThreadIssuePages(threadId, { enabled: issuesExpanded })
   const issues = issuesQuery.issues

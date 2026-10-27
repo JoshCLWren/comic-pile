@@ -19,10 +19,11 @@ backfill nets undo events against rate events per session the same way
 ``build_narrative_summary`` does (each undo pops the most recent not-yet-undone
 rate) and skips any rate event that was undone.
 
-This revision continues the repository's single head at ``c30740000001``. It
-must never point at an interior revision: a revision with an already-existing
-child forks the migration graph, leaves two Alembic heads, and makes
-``alembic upgrade head`` fail on deployment.
+This revision extends the repository's single head, which is now
+``c42100000001`` (tag-name normalization, #4182). It must never point at an
+interior revision such as ``c30740000001``: that revision already has a child,
+so forking off it would leave two Alembic heads and make ``alembic upgrade
+head`` fail on deployment.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "r42040000001"
-down_revision: str | Sequence[str] | None = "c30740000001"
+down_revision: str | Sequence[str] | None = "c42100000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

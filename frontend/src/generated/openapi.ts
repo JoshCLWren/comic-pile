@@ -12320,6 +12320,8 @@ export interface components {
             id: number;
             /** Issue Number */
             issue_number: string;
+            /** Last Rating */
+            last_rating?: number | null;
             /** Position */
             position: number;
             /** Read At */
@@ -12936,9 +12938,9 @@ export interface components {
          * @description Rate response extending ThreadResponse with roll reconciliation.
          *
          *     Subclasses ThreadResponse so every current top-level field is preserved
-         *     exactly, and adds ``roll_reconciliation.last_read`` for the v2 contract.
-         *     Declared as the FastAPI ``response_model`` so the extra field is not
-         *     filtered out.
+         *     exactly, and adds ``roll_reconciliation.last_read`` for the v2 contract and
+         *     ``undo`` for the rating's own undo record. Declared as the FastAPI
+         *     ``response_model`` so the extra fields are not filtered out.
          */
         RateResponse: {
             /**
@@ -12990,6 +12992,21 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+            undo?: components["schemas"]["RateUndoInfo"] | null;
+        };
+        /**
+         * RateUndoInfo
+         * @description Undo target written by one rating action.
+         *
+         *     Identifies the session and the "After rating" snapshot the rating just
+         *     created, so a caller can offer Undo for a rating that happened outside Roll
+         *     (issue #4204) without re-reading a snapshot list.
+         */
+        RateUndoInfo: {
+            /** Session Id */
+            session_id: number;
+            /** Snapshot Id */
+            snapshot_id: number;
         };
         /**
          * ReactivateRequest

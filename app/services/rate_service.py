@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_rating_settings, get_session_settings
-from app.models import Event, Issue, Snapshot, Thread
+from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.repositories.issue_repository import (
@@ -203,6 +203,45 @@ def _issue_preimage(issue: Issue) -> dict:
         "position": issue.position,
         "catalog_issue_id": issue.catalog_issue_id,
         "last_rating": issue.last_rating,
+    }
+
+
+async def _capture_session_pre_state(
+    db: AsyncSession, reading_session: ReadingSession
+) -> dict[str, object]:
+    """Capture the undo preimage of the session that owns a rating action.
+
+    Args:
+        db: SQLAlchemy session used to resolve the session's effective dice.
+        reading_session: Session whose pre-rating state must be restorable.
+
+    Returns:
+        Session preimage suitable for ``snapshot_thread_states``.
+    """
+    current_die = await get_current_die_for_session(reading_session, db)
+    automatic_die = (
+        await get_current_die_for_session(reading_session, db, automatic=True)
+        if reading_session.manual_die is not None
+        else current_die
+    )
+    return {
+        "start_die": reading_session.start_die,
+        "manual_die": reading_session.manual_die,
+        "current_die": current_die,
+        "automatic_die": automatic_die,
+        "pending_thread_id": reading_session.pending_thread_id,
+        "pending_thread_updated_at": reading_session.pending_thread_updated_at.isoformat()
+        if reading_session.pending_thread_updated_at
+        else None,
+        "ended_at": reading_session.ended_at.isoformat()
+        if reading_session.ended_at
+        else None,
+        "snoozed_thread_ids": (
+            list(reading_session.snoozed_thread_ids)
+            if reading_session.snoozed_thread_ids
+            else None
+        ),
+        **capture_ephemeral_bandwidth(reading_session),
     }
 
 
@@ -533,27 +572,11 @@ async def rate_thread(
         if current_session is not None and current_session.manual_die is not None
         else current_die
     )
-    pre_session_state = None
-    if current_session is not None:
-        pre_session_state = {
-            "start_die": current_session.start_die,
-            "manual_die": current_session.manual_die,
-            "current_die": current_die,
-            "automatic_die": automatic_die,
-            "pending_thread_id": current_session.pending_thread_id,
-            "pending_thread_updated_at": current_session.pending_thread_updated_at.isoformat()
-            if current_session.pending_thread_updated_at
-            else None,
-            "ended_at": current_session.ended_at.isoformat()
-            if current_session.ended_at
-            else None,
-            "snoozed_thread_ids": (
-                list(current_session.snoozed_thread_ids)
-                if current_session.snoozed_thread_ids
-                else None
-            ),
-            **capture_ephemeral_bandwidth(current_session),
-        }
+    pre_session_state = (
+        await _capture_session_pre_state(db, current_session)
+        if current_session is not None
+        else None
+    )
 
     if eligibility is None and live_issue is None:
         # Validate thread has issues remaining. For issue-tracked threads, rely on
@@ -672,19 +695,11 @@ async def rate_thread(
             existing_user=current_user,
             commit=False,
         )
-        # A session created moments ago has no events and no manual die, so its
-        # die state is exactly its start die.
-        pre_session_state = {
-            "start_die": undo_session.start_die,
-            "manual_die": undo_session.manual_die,
-            "current_die": undo_session.start_die,
-            "automatic_die": undo_session.start_die,
-            "pending_thread_id": undo_session.pending_thread_id,
-            "pending_thread_updated_at": None,
-            "ended_at": None,
-            "snoozed_thread_ids": None,
-            **capture_ephemeral_bandwidth(undo_session),
-        }
+        # Record the session's real pre-rating state. A freshly created session
+        # has no events and no manual die, but resolution also reuses an active
+        # session when a concurrent request created one mid-flight, so the die
+        # and pending state must be read from the session instead of assumed.
+        pre_session_state = await _capture_session_pre_state(db, undo_session)
     undo_session_id = undo_session.id if undo_session is not None else None
 
     issues_read = 0

@@ -51,26 +51,12 @@ export function IssueRateButton({
   const [error, setError] = useState<string | null>(null)
   // The saved rating belongs to this issue, not to the thread: two rows scored
   // differently must not share one label, and a reload must restore each row's
-  // own score (issue #4204, Greptile P1).
-  const [savedRating, setSavedRating] = useState<number | null>(null)
-  // Initialize savedRating from issue prop on first mount to handle page reloads
-  // that preserve the issue context but don't trigger the useEffect
-  const initialIssueRef = useRef<Issue | undefined>(undefined)
-  
+  // own score from the issue payload (issue #4204, Greptile P1).
+  const [savedRating, setSavedRating] = useState<number | null>(issue.last_rating ?? null)
+  // Follow server truth whenever the row's issue payload changes (a rating, its
+  // undo, or a refetch), so the label never keeps a stale component-local value.
   useEffect(() => {
-    if (initialIssueRef.current === undefined) {
-      // First render - initialize from issue prop
-      setSavedRating(issue.last_rating ?? null)
-      initialIssueRef.current = issue
-    } else if (initialIssueRef.current.id !== issue.id) {
-      // New issue mounted - restore its rating
-      setSavedRating(issue.last_rating ?? null)
-      initialIssueRef.current = issue
-    } else if (issue.last_rating !== initialIssueRef.current.last_rating) {
-      // Issue rating changed - update saved state
-      setSavedRating(issue.last_rating ?? null)
-      initialIssueRef.current = issue
-    }
+    setSavedRating(issue.last_rating ?? null)
   }, [issue.id, issue.last_rating])
   // The rating response names the undo record it wrote, so the row can offer
   // the same Undo Roll ratings get without re-reading a snapshot list.

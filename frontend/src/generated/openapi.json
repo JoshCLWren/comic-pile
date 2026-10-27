@@ -11655,6 +11655,17 @@
             "title": "Issue Number",
             "type": "string"
           },
+          "last_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rating"
+          },
           "position": {
             "title": "Position",
             "type": "integer"
@@ -12875,7 +12886,7 @@
         "type": "object"
       },
       "RateResponse": {
-        "description": "Rate response extending ThreadResponse with roll reconciliation.\n\nSubclasses ThreadResponse so every current top-level field is preserved\nexactly, and adds ``roll_reconciliation.last_read`` for the v2 contract.\nDeclared as the FastAPI ``response_model`` so the extra field is not\nfiltered out.",
+        "description": "Rate response extending ThreadResponse with roll reconciliation.\n\nSubclasses ThreadResponse so every current top-level field is preserved\nexactly, and adds ``roll_reconciliation.last_read`` for the v2 contract and\n``undo`` for the rating's own undo record. Declared as the FastAPI\n``response_model`` so the extra fields are not filtered out.",
         "properties": {
           "blocking_reasons": {
             "default": [],
@@ -13034,6 +13045,16 @@
               }
             ],
             "title": "Total Issues"
+          },
+          "undo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RateUndoInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -13050,6 +13071,25 @@
           "created_at"
         ],
         "title": "RateResponse",
+        "type": "object"
+      },
+      "RateUndoInfo": {
+        "description": "Undo target written by one rating action.\n\nIdentifies the session and the \"After rating\" snapshot the rating just\ncreated, so a caller can offer Undo for a rating that happened outside Roll\n(issue #4204) without re-reading a snapshot list.",
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "integer"
+          },
+          "snapshot_id": {
+            "title": "Snapshot Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_id",
+          "snapshot_id"
+        ],
+        "title": "RateUndoInfo",
         "type": "object"
       },
       "ReactivateRequest": {
