@@ -311,7 +311,7 @@ export default function QueueThreadCard({
                       <p>
                         Read <Link
                           to={`/thread/${blockingDependencies[0].thread_id}`}
-                          aria-label={`Open ${blockingDependencies[0].thread_title}`}
+                          aria-label={`Read required issue: ${blockingDependencies[0].label}`}
                           className="text-[var(--theme-continuity-accent)] underline"
                         >{blockingDependencies[0].label}</Link> first.
                       </p>
