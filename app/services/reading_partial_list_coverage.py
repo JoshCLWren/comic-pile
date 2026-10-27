@@ -87,7 +87,7 @@ def superseded_converted_edge(
     source_id: int,
     target_id: int,
     snapshot: ReadingSnapshot,
-    plan_positions: dict[int, dict[int, int]],
+    plan_positions: dict[int, dict[tuple[int, str], dict[int, int]]],
 ) -> bool:
     """Identify an old generated pair reversed by an explicitly owned strict list.
 
@@ -100,7 +100,9 @@ def superseded_converted_edge(
         source_id: Earlier Issue according to the archived generated edge.
         target_id: Later Issue according to the archived generated edge.
         snapshot: Active owner-owned reading constraints.
-        plan_positions: Linked old-plan ordered Issue positions by list ID.
+        plan_positions: Ordered Issue positions grouped by owned list, then by
+            the exact source Reading Plan ID and lane ID. Different source
+            plans/lanes must not be merged into a fabricated sequence.
 
     Returns:
         Whether the archived relation is provably superseded by a current
@@ -113,12 +115,21 @@ def superseded_converted_edge(
             entry.issue_id: index for index, entry in enumerate(reading_list.entries)
             if not entry.skipped
         }
-        old_positions = plan_positions.get(reading_list.list_id, {})
         if (
-            source_id in positions and target_id in positions
-            and positions[source_id] > positions[target_id]
-            and source_id in old_positions and target_id in old_positions
-            and old_positions[source_id] < old_positions[target_id]
+            source_id not in positions or target_id not in positions
+            or positions[source_id] <= positions[target_id]
         ):
-            return True
+            continue
+        # A relation can be superseded only if ONE real older lane contains
+        # both ends in the reversed order. Multiple candidate lanes are
+        # ambiguous even if one happens to support the claim.
+        candidates = [
+            old_positions
+            for old_positions in plan_positions.get(reading_list.list_id, {}).values()
+            if source_id in old_positions and target_id in old_positions
+        ]
+        if len(candidates) == 1:
+            old_positions = candidates[0]
+            if old_positions[source_id] < old_positions[target_id]:
+                return True
     return False
