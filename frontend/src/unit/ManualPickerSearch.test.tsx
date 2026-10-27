@@ -116,6 +116,8 @@ describe('ManualPickerSearch', () => {
     try {
       render(<Harness />)
       await user.click(screen.getByRole('combobox'))
+      // Clear any scrollIntoView triggered by opening, so we only measure navigation.
+      scrollIntoView.mockClear()
       await user.keyboard('{ArrowDown}{ArrowDown}')
 
       await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
