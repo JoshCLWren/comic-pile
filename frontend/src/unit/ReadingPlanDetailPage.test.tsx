@@ -348,6 +348,16 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Show next 40 issues in reading order' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Show next 40 issues in reading order' }))
     expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(88)
+    fireEvent.click(screen.getByRole('button', { name: 'Hide complete reading order' }))
+    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(8)
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer blocked issues' }))
+    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(3)
+    fireEvent.click(screen.getByRole('button', { name: 'Show 464 upcoming issues' }))
+    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(33)
+    fireEvent.click(screen.getByRole('button', { name: 'Show next 30 upcoming issues' }))
+    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(63)
+    fireEvent.click(screen.getByRole('button', { name: 'Hide upcoming issues' }))
+    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(3)
   })
 
   it('keeps optional release tracking outside the reading workflow until opened', async () => {
