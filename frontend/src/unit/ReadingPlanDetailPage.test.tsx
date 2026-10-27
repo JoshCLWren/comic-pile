@@ -344,7 +344,10 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(8)
     expect(screen.queryByText('Cable #76')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Show complete reading order (464 issues)' }))
-    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(472)
+    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(48)
+    expect(screen.getByRole('button', { name: 'Show next 40 issues in reading order' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show next 40 issues in reading order' }))
+    expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(88)
   })
 
   it('keeps optional release tracking outside the reading workflow until opened', async () => {
