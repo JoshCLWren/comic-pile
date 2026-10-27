@@ -107,10 +107,6 @@ export interface RollRecoveryDiagnostic {
 export interface RollRecoveryInfo {
   original_thread_id: number
   original_thread_title: string
-  /** Specific issue identity/number for the restored pending roll, when known. */
-  original_thread_issue_number?: string | null
-  /** Honest rating representation; null means no rating was recorded. */
-  original_thread_rating?: number | null
   direct_blockers: RollRecoveryBlocker[]
   readable_prerequisites: RollRecoveryPrerequisite[]
   chains?: RollRecoveryChainNode[][]

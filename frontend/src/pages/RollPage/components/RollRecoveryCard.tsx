@@ -63,18 +63,7 @@ export function RollRecoveryCard({
       className="mx-auto w-full max-w-xl rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 shadow-lg"
     >
       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500">Roll blocked</p>
-      <h2 className="mt-1 text-lg font-black text-stone-100">
-        {recovery.original_thread_title}
-        {recovery.original_thread_issue_number ? (
-          <span className="text-stone-400"> · #{recovery.original_thread_issue_number}</span>
-        ) : null}
-      </h2>
-      <p className="mt-1 text-xs text-stone-400">
-        Rating:{' '}
-        {recovery.original_thread_rating == null
-          ? 'no rating recorded'
-          : recovery.original_thread_rating}
-      </p>
+      <h2 className="mt-1 text-lg font-black text-stone-100">{recovery.original_thread_title}</h2>
       <p className="mt-2 text-sm text-stone-300">
         Your original roll is still waiting. {primaryBlocker
           ? <><strong>{primaryBlocker.source_label}</strong> has to be read first.</>

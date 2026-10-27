@@ -19,6 +19,30 @@ function exclusionReasonLabel(thread: ThreadExclusionReason): string {
 }
 
 /**
+ * Truthful identity context for an out-of-pool series row (issue #3534).
+ *
+ * Verified provider metadata is preferred. When it is unavailable, a
+ * same-named row falls back to its actual Thread pointer instead of guessing a
+ * volume. Rows with unique titles stay quiet so the extra context only appears
+ * where a reader would otherwise see two indistinguishable names.
+ */
+function exclusionIdentityContext(
+  thread: ThreadExclusionReason,
+  hasDuplicateTitle: boolean,
+): string | null {
+  const verifiedContext = [
+    thread.year != null ? `(${thread.year})` : null,
+    thread.volume ? `Vol. ${thread.volume}` : null,
+    thread.publisher ?? null,
+  ]
+    .filter((value): value is string => value !== null)
+    .join(' · ')
+  if (verifiedContext) return verifiedContext
+  if (!hasDuplicateTitle || thread.thread_id == null) return null
+  return `Series #${thread.thread_id}`
+}
+
+/**
  * Pagination state for one Roll exclusion section (issue #3330).
  *
  * `total` is the authoritative category size, never the loaded row count, so
@@ -176,6 +200,10 @@ export function ThreadPool({
   // their length as the category size (issue #3330).
   const blockedTotal = blockedPagination?.total ?? blockedThreads.length
   const inactiveTotal = inactivePagination?.total ?? inactiveThreads.length
+  const inactiveTitleCounts = new Map<string, number>()
+  for (const thread of inactiveThreads) {
+    inactiveTitleCounts.set(thread.title, (inactiveTitleCounts.get(thread.title) ?? 0) + 1)
+  }
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
   const skippedTotal = skippedCount ?? skippedThreads.length
 
@@ -516,50 +544,40 @@ export function ThreadPool({
           </button>
           {inactiveExpanded && (
             <div className="mt-2 space-y-1">
-              {inactiveThreads.map((thread, index) => (
-                <div
-                  key={thread.thread_id ?? `inactive-missing-${index}`}
-                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
-                >
-                  {thread.thread_id ? (
-                    <Link
-                      to={`/thread/${thread.thread_id}`}
-                      className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] underline truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-                    >
-                      {thread.title}
-                      {(() => {
-                        const context = [
-                          thread.year != null ? `(${thread.year})` : null,
-                          thread.volume ? `Vol. ${thread.volume}` : null,
-                          thread.publisher ?? null,
-                        ].filter(Boolean).join(' · ')
-                        const fallback = context || (thread.thread_id ? `Series #${thread.thread_id}` : null)
-                        return fallback ? (
-                          <span className="ml-1 text-xs text-stone-500">{fallback}</span>
-                        ) : null
-                      })()}
-                    </Link>
-                  ) : (
-                    <span className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] truncate">
-                      {thread.title}
-                      {(() => {
-                        const context = [
-                          thread.year != null ? `(${thread.year})` : null,
-                          thread.volume ? `Vol. ${thread.volume}` : null,
-                          thread.publisher ?? null,
-                        ].filter(Boolean).join(' · ')
-                        const fallback = context || null
-                        return fallback ? (
-                          <span className="ml-1 text-xs text-stone-500">{fallback}</span>
-                        ) : null
-                      })()}
+              {inactiveThreads.map((thread, index) => {
+                const identityContext = exclusionIdentityContext(
+                  thread,
+                  (inactiveTitleCounts.get(thread.title) ?? 0) > 1,
+                )
+                return (
+                  <div
+                    key={thread.thread_id ?? `inactive-missing-${index}`}
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
+                  >
+                    {thread.thread_id ? (
+                      <Link
+                        to={`/thread/${thread.thread_id}`}
+                        className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] underline truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                      >
+                        {thread.title}
+                        {identityContext ? (
+                          <span className="ml-1 text-xs text-[var(--theme-text-dim)]">{identityContext}</span>
+                        ) : null}
+                      </Link>
+                    ) : (
+                      <span className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] truncate">
+                        {thread.title}
+                        {identityContext ? (
+                          <span className="ml-1 text-xs text-[var(--theme-text-dim)]">{identityContext}</span>
+                        ) : null}
+                      </span>
+                    )}
+                    <span className="shrink-0 text-xs text-[var(--theme-text-dim)]">
+                      {exclusionReasonLabel(thread)}
                     </span>
-                  )}
-                  <span className="shrink-0 text-xs text-stone-500">
-                    {exclusionReasonLabel(thread)}
-                  </span>
-                </div>
-              ))}
+                  </div>
+                )
+              })}
               {inactivePagination && (
                 <ExclusionPaginationFooter
                   pagination={inactivePagination}

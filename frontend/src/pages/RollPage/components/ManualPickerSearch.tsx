@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 
 export interface ManualPickerSearchOption {
   id: number
@@ -42,7 +42,8 @@ export function ManualPickerSearch({
   const [open, setOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
-  const listboxId = useRef(`manual-picker-listbox-${Math.random().toString(36).slice(2)}`).current
+  const listRef = useRef<HTMLUListElement>(null)
+  const listboxId = useId()
 
   const allOptions = useMemo(() => {
     const rows: { option: ManualPickerSearchOption; group: 'active' | 'snoozed' }[] = []
@@ -61,6 +62,12 @@ export function ManualPickerSearch({
     if (highlighted >= filtered.length) setHighlighted(filtered.length > 0 ? filtered.length - 1 : 0)
   }, [filtered.length, highlighted])
 
+  useEffect(() => {
+    if (!open || filtered.length === 0) return
+    const activeOption = listRef.current?.children[highlighted]
+    activeOption?.scrollIntoView?.({ block: 'nearest' })
+  }, [filtered.length, highlighted, open])
+
   const selectedOption = allOptions.find(({ option }) => String(option.id) === value)?.option
 
   const commit = (id: number) => {
@@ -74,22 +81,34 @@ export function ManualPickerSearch({
     if (event.key === 'ArrowDown') {
       event.preventDefault()
       setOpen(true)
-      setHighlighted((prev) => Math.min(prev + 1, Math.max(filtered.length - 1, 0)))
+      if (filtered.length > 0) {
+        setHighlighted((prev) => Math.min(prev + 1, filtered.length - 1))
+      }
     } else if (event.key === 'ArrowUp') {
       event.preventDefault()
       setOpen(true)
-      setHighlighted((prev) => Math.max(prev - 1, 0))
+      if (filtered.length > 0) {
+        setHighlighted((prev) => Math.max(prev - 1, 0))
+      }
     } else if (event.key === 'Enter') {
-      if (open && filtered[highlighted]) {
+      // While the picker owns the list, Enter must never bubble on to the
+      // surrounding form. A failed search therefore cannot submit a stale
+      // selection from before the reader started typing.
+      if (open) {
         event.preventDefault()
-        commit(filtered[highlighted].option.id)
+        const choice = filtered[highlighted]
+        if (choice) commit(choice.option.id)
       }
     } else if (event.key === 'Escape') {
       if (open) {
+        // Stop the dialog-level Escape handler from closing "Pick manually"
+        // when the picker only dismisses its own open list.
         event.preventDefault()
+        event.stopPropagation()
         setOpen(false)
       } else if (query) {
         event.preventDefault()
+        event.stopPropagation()
         setQuery('')
       }
     }
@@ -134,7 +153,7 @@ export function ManualPickerSearch({
             type="button"
             onClick={handleClear}
             aria-label={clearLabel}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-200"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--theme-text-dim)] hover:text-[var(--theme-text-primary)]"
           >
             ×
           </button>
@@ -142,20 +161,25 @@ export function ManualPickerSearch({
       </div>
 
       {selectedOption && !query && (
-        <p className="text-xs text-stone-300" data-testid="manual-picker-selection">
+        <p className="text-xs text-[var(--theme-text-muted)]" data-testid="manual-picker-selection">
           Selected: {selectedOption.label}
         </p>
       )}
 
       {open && (
         <ul
+          ref={listRef}
           id={listboxId}
           role="listbox"
           aria-label="Series options"
           className="max-h-60 overflow-auto rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
         >
           {filtered.length === 0 ? (
-            <li role="option" aria-disabled="true" className="px-3 py-2 text-sm text-stone-500">
+            <li
+              role="option"
+              aria-disabled="true"
+              className="px-3 py-2 text-sm text-[var(--theme-text-dim)]"
+            >
               {noMatchText}
             </li>
           ) : (
@@ -166,14 +190,16 @@ export function ManualPickerSearch({
                 role="option"
                 aria-selected={String(option.id) === value}
                 className={`cursor-pointer px-3 py-2 text-sm ${
-                  index === highlighted ? 'bg-white/10 text-stone-100' : 'text-stone-300'
+                  index === highlighted
+                    ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-text-primary)]'
+                    : 'text-[var(--theme-text-muted)]'
                 }`}
                 onMouseEnter={() => setHighlighted(index)}
                 onClick={() => commit(option.id)}
               >
                 <span className="block font-bold">{option.label}</span>
                 {group === 'snoozed' && (
-                  <span className="block text-[10px] uppercase tracking-wider text-stone-500">Snoozed</span>
+                  <span className="block text-[10px] uppercase tracking-wider text-[var(--theme-text-dim)]">Snoozed</span>
                 )}
               </li>
             ))

@@ -303,7 +303,9 @@ describe('RollPage parent handlers', () => {
     const user = userEvent.setup()
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
-    await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '1')
+    const picker = screen.getAllByRole('combobox').at(-1)!
+    await user.click(picker)
+    await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: /Pick this series/ }))
     await waitFor(() => expect(spies.override).toHaveBeenCalled())
 
@@ -462,7 +464,9 @@ describe('RollPage parent handlers', () => {
 
     spies.override.mockRejectedValueOnce(error)
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
-    await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '1')
+    const picker = screen.getAllByRole('combobox').at(-1)!
+    await user.click(picker)
+    await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: /Pick this series/ }))
     await waitFor(() => expect(screen.getByText('failed')).toBeInTheDocument())
 
