@@ -241,3 +241,28 @@ def test_main_exit_code_pass(
         ],
     )
     assert audit.main() == 0
+
+
+async def test_run_marks_reversed_compiled_sequence(
+    async_db_committed: AsyncSession,
+) -> None:
+    """A legacy rule reversed against the natural order is not an unmet gate."""
+    db = async_db_committed
+    user = await _owner(db)
+    _thread, issues = await _series(db, user, "Old reverse series", 2)
+    old = Dependency(
+        source_issue_id=issues[1].id,
+        target_issue_id=issues[0].id,
+        origin="converted",
+        classification="C",
+        provenance="old compiled rule",
+    )
+    db.add(old)
+    await db.commit()
+    report = await audit.run(get_test_database_url(), user.id)
+    assert report["examined"] == 1
+    assert report["implied"] == 0
+    assert report["unresolved"] == []
+    assert len(report["contradicted"]) == 1
+    assert report["contradicted"][0]["id"] == old.id
+    assert report["status"] == "REVIEW_REQUIRED"
