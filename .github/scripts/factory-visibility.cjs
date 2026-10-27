@@ -61,6 +61,14 @@ const STAGE_LABELS = [
 ];
 const ADVANCED_PR_STAGES = new Set(['factory:review', 'factory:ci', 'factory:ready']);
 const MANUAL_ONLY_MARKER = '<!-- factory-execution:manual-only -->';
+// Lockstep with factory_work_policy.BLOCKED_LABELS / issue_labels_block_reconciliation.
+const BLOCKED_LABELS = new Set([
+  'factory:blocked',
+  'ralph-status:blocked',
+  'wontfix',
+  'invalid',
+  'duplicate',
+]);
 
 function hasManualOnlyDirective(body) {
   // Referencing this marker in inline or fenced documentation is not an opt-out.
@@ -70,6 +78,11 @@ function hasManualOnlyDirective(body) {
     .replace(/`[^`\n]*`/g, '');
   return prose.split(/\r?\n/).some(line => line.trim() === MANUAL_ONLY_MARKER);
 }
+
+function labelsBlockEnrollment(labels) {
+  return [...labels].some(label => BLOCKED_LABELS.has(label));
+}
+
 const TRUSTED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 const TRUSTED_APP_SLUGS = new Set(['github-actions']);
 
@@ -544,6 +557,21 @@ async function routeGreptileFindings(github, context, number) {
   return { routed: true, openThreads: openThreads.length, openSummary: openSummary.length };
 }
 
+async function livePullRequest(github, context, number) {
+  const response = await withRetryLogged(github, context, {
+    endpoint: `repos/${context.repo.owner}/${context.repo.repo}/pulls/${number}`,
+    method: 'GET',
+    event: context.eventName,
+  }, async () => {
+    return github.rest.pulls.get({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      pull_number: number,
+    });
+  });
+  return response?.data ?? null;
+}
+
 async function livePullRequestHead(github, context, number) {
   const response = await withRetry(() => github.rest.pulls.get({
     owner: context.repo.owner,
@@ -836,10 +864,26 @@ async function reconcileMissingPrLabels({ github, context }) {
     if (pr.state !== 'open' || pr.draft
       || !pr.head.repo?.full_name
       || /^(dependabot|renovate)(\[bot\])?$/.test(pr.user?.login || '')) continue;
-    // Manual-only PRs are operator-managed and must never be enrolled into the
-    // factory queue (enroll would otherwise default them to factory:review).
-    if (hasManualOnlyDirective(pr.body)) continue;
+    // Unlabeled / pull_request_target payloads can carry a null or stale body.
+    // Re-fetch the live PR (same contract as routeGreptileFindings) and skip
+    // operator holds before any label write. Fail closed when the body cannot
+    // be read: never enroll from an unread or truncated payload.
+    let live;
+    try {
+      live = await livePullRequest(github, context, pr.number);
+    } catch (error) {
+      console.warn(
+        `PR #${pr.number}: live body unread (${error?.message || error}); skipping enrollment`,
+      );
+      continue;
+    }
+    if (!live || typeof live.body !== 'string') {
+      console.warn(`PR #${pr.number}: live body unread; skipping enrollment`);
+      continue;
+    }
+    if (hasManualOnlyDirective(live.body)) continue;
     const current = await currentLabels(github, context, pr.number);
+    if (labelsBlockEnrollment(current)) continue;
     // A local factory lease is a real active owner, not an exemption from
     // factory review. Preserve it until the local session explicitly releases
     // ownership; never take it over during an enrollment sweep.
@@ -1001,6 +1045,9 @@ module.exports._test = {
   ownerFor,
   isOwnerLabel,
   hasManualOnlyDirective,
+  BLOCKED_LABELS,
+  labelsBlockEnrollment,
+  livePullRequest,
   reconcileLabels,
   withRetry,
   rateLimitDelay,
