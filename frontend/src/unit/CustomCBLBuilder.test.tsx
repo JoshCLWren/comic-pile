@@ -252,6 +252,75 @@ describe('CustomCBLBuilder', () => {
     ])
   })
 
+  it('keeps long issue names readable with phone-sized actions and optional settings', async () => {
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    const card = screen.getAllByTestId('reading-list-entry')[0]
+    const title = within(card).getByTestId('reading-list-entry-title')
+    expect(title).toHaveTextContent('Starman #55')
+    expect(title).toHaveClass('break-words')
+    expect(title).not.toHaveClass('truncate')
+    expect(within(card).getByRole('button', { name: 'Move Starman #55 earlier' })).toHaveClass('min-h-11')
+    expect(within(card).getByRole('button', { name: 'Remove Starman #55' })).toHaveClass('min-h-11')
+    const options = within(card).getByRole('button', { name: 'Show settings for Starman #55' })
+    expect(options).toHaveAttribute('aria-expanded', 'false')
+    const settings = within(card).getByLabelText('Wait behavior for Starman #55').closest('div')
+    expect(settings).toHaveClass('hidden')
+    fireEvent.click(options)
+    expect(within(card).getByRole('button', { name: 'Hide settings for Starman #55' })).toHaveAttribute('aria-expanded', 'true')
+    expect(settings).toHaveClass('flex')
+  })
+
+  it('navigates 65 strict-list issues in pages, jumps and moves an issue without discarding the others', async () => {
+    const entries = Array.from({ length: 65 }, (_, index) => ({
+      ...existingList.entries[0],
+      id: 1000 + index,
+      issue_id: 80000 + index,
+      position: index,
+      series_name: 'Hellboy and the B.P.R.D.: The Long Night',
+      issue_number: String(index + 1),
+    }))
+    const longList = { ...existingList, mode: 'strict', issue_count: entries.length, entries }
+    mocks.get.mockResolvedValue(longList)
+    mocks.update.mockResolvedValue(longList)
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
+    expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #1')).toBeInTheDocument()
+    expect(screen.queryByText('Hellboy and the B.P.R.D.: The Long Night #31')).not.toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
+    expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #31')).toBeInTheDocument()
+    expect(screen.queryByText('Hellboy and the B.P.R.D.: The Long Night #1')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Jump to reading list position'), { target: { value: '65' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Go to position' }))
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(5)
+    const last = screen.getAllByTestId('reading-list-entry').at(-1)!
+    const label = 'Hellboy and the B.P.R.D.: The Long Night #65'
+    expect(within(last).getByTestId('reading-list-entry-title')).toHaveTextContent(label)
+    fireEvent.click(within(last).getByRole('button', { name: `Show settings for ${label}` }))
+    fireEvent.change(within(last).getByLabelText(`Move ${label} to position`), { target: { value: '2' } })
+    fireEvent.click(within(last).getByRole('button', { name: 'Move here' }))
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
+    expect(screen.getAllByTestId('reading-list-entry')[1]).toHaveTextContent(label)
+    fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+    await waitFor(() => {
+      expect(mocks.update).toHaveBeenCalledWith(9, expect.objectContaining({
+        issue_ids: expect.arrayContaining([80000, 80064, 80063]),
+      }))
+      const payload = mocks.update.mock.calls[0][1]
+      expect(payload.issue_ids).toHaveLength(65)
+      expect(payload.issue_ids.slice(0, 3)).toEqual([80000, 80064, 80001])
+    })
+
+    fireEvent.change(screen.getByLabelText('Find an issue in this reading list'), { target: { value: '#49' } })
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(1)
+    expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #49')).toBeInTheDocument()
+  })
+
   it('navigates issue results with arrows and adds only the focused canonical issue with Enter', async () => {
     const user = userEvent.setup()
     mocks.searchIssues.mockResolvedValue([
