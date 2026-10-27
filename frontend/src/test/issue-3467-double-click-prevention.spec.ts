@@ -17,13 +17,13 @@ async function openOverridePicker(page: Page, title: string): Promise<Locator> {
   const dialog = page.getByRole('dialog', { name: 'Pick manually' })
   await expect(dialog).toBeVisible()
 
-  const select = dialog.locator('select')
-  await expect.poll(() => select.locator('option').count()).toBeGreaterThan(1)
+  const picker = dialog.getByRole('combobox')
+  await picker.click()
+  await picker.fill(title)
+  await expect.poll(() => dialog.getByRole('option').count()).toBeGreaterThan(0)
 
-  const option = select.locator('option').filter({ hasText: title }).first()
-  const value = await option.getAttribute('value')
-  if (!value) throw new Error(`Series "${title}" was not offered in the picker`)
-  await select.selectOption(value)
+  const option = dialog.getByRole('option').filter({ hasText: title }).first()
+  await option.click()
   return dialog
 }
 

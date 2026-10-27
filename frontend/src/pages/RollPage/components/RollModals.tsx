@@ -14,6 +14,7 @@ import type { Thread, ThreadListItem } from '../../../types'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 import type { RatingThread } from '../types'
 import { buildManualPickerOptions } from '../manualPickerOptions'
+import { ManualPickerSearch } from './ManualPickerSearch'
 
 interface SetCurrentIssueModalProps {
   onSubmit: (issueNumber: string) => Promise<void>
@@ -227,36 +228,13 @@ export function RollModals({
             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
               Series
             </label>
-            <select
+            <ManualPickerSearch
+              activeOptions={pickerOptions.activeOptions}
+              snoozedOptions={pickerOptions.snoozedOptions}
               value={overrideThreadId}
-              onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                onOverrideThreadIdChange(event.target.value)
-              }
-              className="w-full rounded-xl px-3 py-2 text-sm form-control"
-              required
-            >
-              <option value="">Select a series...</option>
-              <optgroup label="Active series">
-                {pickerOptions.activeOptions.map((option) => {
-                  return (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  )
-                })}
-              </optgroup>
-              {pickerOptions.snoozedOptions.length > 0 && (
-                <optgroup label="Snoozed series">
-                  {pickerOptions.snoozedOptions.map((option) => {
-                    return (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    )
-                  })}
-                </optgroup>
-              )}
-            </select>
+              onChange={onOverrideThreadIdChange}
+              pending={overridePending}
+            />
           </div>
           {overrideErrorMessage && <p className="text-xs text-red-400">{overrideErrorMessage}</p>}
           <button
