@@ -129,6 +129,40 @@ function pickerDetailSegments(thread: ManualPickerThread): string[] {
   return segments
 }
 
+/**
+ * Normalize a series title for same-name detection by stripping parenthetical
+ * year/volume/run metadata. Two reader threads whose titles differ only by
+ * such parenthetical identity text still refer to the same base series name
+ * and need disambiguation.
+ */
+function normalizeSeriesTitle(title: string): string {
+  return title.replace(/\s*\([^)]*\)/g, '').trim()
+}
+
+/**
+ * Collect the keys that occur on more than one row.
+ *
+ * Args:
+ *     rows: Rows to inspect.
+ *     keyOf: Derives the comparison key for a row.
+ *
+ * Returns:
+ *     Keys shared by at least two rows.
+ */
+function duplicateKeys(rows: PickerRow[], keyOf: (row: PickerRow) => string): Set<string> {
+  const seen = new Set<string>()
+  const duplicates = new Set<string>()
+  for (const row of rows) {
+    const key = keyOf(row)
+    if (seen.has(key)) {
+      duplicates.add(key)
+    } else {
+      seen.add(key)
+    }
+  }
+  return duplicates
+}
+
 function intoRows(group: PickerGroup, threads: ManualPickerThread[], seenIds: Set<number>): PickerRow[] {
   const rows: PickerRow[] = []
   for (const thread of threads) {
@@ -141,14 +175,29 @@ function intoRows(group: PickerGroup, threads: ManualPickerThread[], seenIds: Se
   return rows
 }
 
-/** Append the thread id to still-identical labels so every option stays unique. */
-function resolveResidualCollisions(rows: PickerRow[]): void {
-  const labelCounts = new Map<string, number>()
+/** Append the thread id to still-ambiguous labels so every option stays unique. */
+function resolveResidualCollisions(
+  rows: PickerRow[],
+  duplicateNormalizedTitles: Set<string>,
+): void {
+  const duplicateLabels = duplicateKeys(rows, (row) => row.label)
   for (const row of rows) {
-    labelCounts.set(row.label, (labelCounts.get(row.label) ?? 0) + 1)
-  }
-  for (const row of rows) {
-    if ((labelCounts.get(row.label) ?? 0) > 1) {
+    if (duplicateLabels.has(row.label)) {
+      row.label = `${row.label} · Series #${row.thread.id}`
+      continue
+    }
+    // Same base series name with no other disambiguating text: tie the row to
+    // its actual Thread identity instead of leaving it bare (issue #3559).
+    // A title that already carries its own parenthetical run/volume metadata
+    // is self-identifying, so it keeps the concise label.
+    const normalizedTitle = normalizeSeriesTitle(row.thread.title)
+    const titleCarriesIdentity =
+      normalizedTitle !== '' && normalizedTitle !== row.thread.title.trim()
+    if (
+      duplicateNormalizedTitles.has(normalizedTitle) &&
+      !titleCarriesIdentity &&
+      !row.label.includes('·')
+    ) {
       row.label = `${row.label} · Series #${row.thread.id}`
     }
   }
@@ -159,10 +208,11 @@ function resolveResidualCollisions(rows: PickerRow[]): void {
  * Roll picker.
  *
  * Unique rows keep their quiet base label. Rows that collide with another row
- * on `Title (Format) · tags` gain progress detail (next issue, remaining
- * count, mapping health). If the detail still leaves identical labels (no
- * progress data or identical counts), the thread id is appended so a reader
- * can always tell the options apart.
+ * on `Title (Format) · tags`, or that share a base series name once
+ * parenthetical run/volume metadata is removed, gain progress detail (next
+ * issue, remaining count, mapping health). If the detail still leaves
+ * identical labels (no progress data or identical counts), the thread id is
+ * appended so a reader can always tell the options apart.
  *
  * Args:
  *     params.activeThreads: Queue list rows shown in the "Active series" group.
@@ -181,18 +231,21 @@ export function buildManualPickerOptions(params: {
     ...intoRows('snoozed', params.snoozedThreads, seenIds),
   ]
 
-  const baseLabelCounts = new Map<string, number>()
-  for (const row of rows) {
-    baseLabelCounts.set(row.baseLabel, (baseLabelCounts.get(row.baseLabel) ?? 0) + 1)
-  }
+  const duplicateBaseLabels = duplicateKeys(rows, (row) => row.baseLabel)
+  const duplicateNormalizedTitles = duplicateKeys(rows, (row) =>
+    normalizeSeriesTitle(row.thread.title),
+  )
   for (const row of rows) {
     row.label = row.baseLabel
-    if ((baseLabelCounts.get(row.baseLabel) ?? 0) > 1) {
+    const ambiguous =
+      duplicateBaseLabels.has(row.baseLabel) ||
+      duplicateNormalizedTitles.has(normalizeSeriesTitle(row.thread.title))
+    if (ambiguous) {
       const details = pickerDetailSegments(row.thread)
       if (details.length > 0) row.label = `${row.label} · ${details.join(' · ')}`
     }
   }
-  resolveResidualCollisions(rows)
+  resolveResidualCollisions(rows, duplicateNormalizedTitles)
 
   return {
     activeOptions: rows.flatMap((row) =>

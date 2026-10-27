@@ -20,8 +20,9 @@ export interface ManualPickerSearchProps {
 /**
  * Searchable, accessible manual series picker for the Roll "Pick manually"
  * modal. Replaces the previous native `<select>` so large libraries stay
- * usable: the reader types a partial title (or any already-known
- * disambiguating identity text) and the option list filters in place.
+ * usable: the reader types a partial title, any already-known disambiguating
+ * identity text, or a Thread id (including the ids shown in "Series #N"
+ * fallback labels) and the option list filters in place.
  *
  * Filtering never mutates, rolls, rates, or marks anything read; it only
  * narrows the visible choices. Selection still resolves to the exact Thread
@@ -55,7 +56,12 @@ export function ManualPickerSearch({
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!needle) return allOptions
-    return allOptions.filter(({ option }) => option.label.toLowerCase().includes(needle))
+    return allOptions.filter(({ option }) => {
+      // Search on both the full label AND the raw thread ID for identity-based filtering
+      const labelMatch = option.label.toLowerCase().includes(needle)
+      const identityMatch = String(option.id).includes(needle)
+      return labelMatch || identityMatch
+    })
   }, [allOptions, query])
 
   useEffect(() => {
@@ -100,17 +106,11 @@ export function ManualPickerSearch({
         if (choice) commit(choice.option.id)
       }
     } else if (event.key === 'Escape') {
-      if (open) {
-        // Stop the dialog-level Escape handler from closing "Pick manually"
-        // when the picker only dismisses its own open list.
-        event.preventDefault()
-        event.stopPropagation()
-        setOpen(false)
-      } else if (query) {
-        event.preventDefault()
-        event.stopPropagation()
-        setQuery('')
-      }
+      // The shared Modal owns Escape for the topmost dialog
+      // (docs/FRONTEND_VISUAL_GRAMMAR.md). Collapse the popup here, but do
+      // not prevent or stop the event: one Escape must still close
+      // "Pick manually" instead of requiring a second or third press.
+      if (open) setOpen(false)
     }
   }
 
@@ -167,6 +167,10 @@ export function ManualPickerSearch({
       )}
 
       {open && (
+        // Single-select listbox: expose exactly one selected option, the one
+        // referenced by aria-activedescendant. Mirroring the committed `value`
+        // here as well would advertise two selections at once, so the saved
+        // choice is reported by the "Selected: …" line above instead.
         <ul
           ref={listRef}
           id={listboxId}
@@ -188,7 +192,7 @@ export function ManualPickerSearch({
                 key={option.id}
                 id={`${listboxId}-option-${option.id}`}
                 role="option"
-                aria-selected={String(option.id) === value}
+                aria-selected={index === highlighted}
                 className={`cursor-pointer px-3 py-2 text-sm ${
                   index === highlighted
                     ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-text-primary)]'
