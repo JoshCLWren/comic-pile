@@ -103,6 +103,32 @@ class Worker48InstallationTokenTest(unittest.TestCase):
             source, token = app.resolve_push_credential(env)
         self.assertEqual((source, token), ("pr_rebase", SHARED_TOKEN))
 
+    def test_worker_48_missing_app_id_env_ok_with_saved_mapping(self) -> None:
+        """Missing FACTORY_WORKER_48_APP_ID in env is OK when mapping has saved IDs."""
+        env = {**_configured_48_env()}
+        del env["FACTORY_WORKER_48_APP_ID"]
+        with mock.patch.dict(
+            os.environ,
+            {"FACTORY_WORKER_APP_MINT_STUB_TOKEN": MINT_STUB_TOKEN},
+            clear=False,
+        ):
+            source, token = app.resolve_push_credential(env)
+        self.assertEqual(source, "installation")
+        self.assertEqual(token, MINT_STUB_TOKEN)
+
+    def test_worker_48_missing_installation_id_env_ok_with_saved_mapping(self) -> None:
+        """Missing FACTORY_WORKER_48_INSTALLATION_ID in env is OK when mapping has saved IDs."""
+        env = {**_configured_48_env()}
+        del env["FACTORY_WORKER_48_INSTALLATION_ID"]
+        with mock.patch.dict(
+            os.environ,
+            {"FACTORY_WORKER_APP_MINT_STUB_TOKEN": MINT_STUB_TOKEN},
+            clear=False,
+        ):
+            source, token = app.resolve_push_credential(env)
+        self.assertEqual(source, "installation")
+        self.assertEqual(token, MINT_STUB_TOKEN)
+
     def test_worker_48_missing_private_key_falls_back_to_shared_token(
         self,
     ) -> None:
