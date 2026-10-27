@@ -825,7 +825,7 @@ export default function CustomCBLBuilder({
                     </label>
                     <button type="button" disabled={!Number.isSafeInteger(Number(jumpPosition)) || Number(jumpPosition) < 1 || Number(jumpPosition) > entries.length} onClick={jumpToPosition} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-4 text-sm font-semibold text-[var(--theme-text-primary)] disabled:opacity-40">Go to position</button>
                   </div>
-                  <p role="status" className="text-xs text-[var(--theme-text-muted)]">
+                  <p aria-live="polite" className="text-xs text-[var(--theme-text-muted)]">
                     {matchedEntries.length} matching issues · Page {currentPage + 1} of {pageCount}
                   </p>
                   <div className="flex items-center justify-between gap-2">
