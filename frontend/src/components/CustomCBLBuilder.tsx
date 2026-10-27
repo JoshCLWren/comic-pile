@@ -1133,7 +1133,7 @@ export default function CustomCBLBuilder({
         confirmLabel="Delete custom CBL"
         pendingLabel="Deleting…"
         onConfirm={() => { if (selectedId) deleteMutation.mutate(selectedId) }}
-        onCancel={() => { deleteMutation.reset(); setConfirmDeleteOpen(false) }}
+        onCancel={() => { if (!deleteMutation.isPending) { deleteMutation.reset() } setConfirmDeleteOpen(false) }}
         testId="delete-custom-cbl-dialog"
       >
         <p className="text-sm text-[var(--theme-text-muted)]">
