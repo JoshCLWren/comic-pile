@@ -541,12 +541,13 @@ async def test_restored_conversion_future_offer(
     ) == (source_id, target_id, "reader")
 
     target = (await async_db.scalars(select(Issue).where(Issue.id == target_id))).one()
-    await async_db.execute(
-        update(Issue).where(
-            Issue.thread_id == target.thread_id,
-            Issue.position < target.position,
-        ).values(status="read")
-    )
+    earlier = (await async_db.scalars(select(Issue).where(
+        Issue.thread_id == target.thread_id,
+        Issue.position < target.position,
+        Issue.status != "read",
+    ))).all()
+    for issue in earlier:
+        issue.status = "read"
     await async_db.flush()
     before = await get_execution_eligibility(async_db, owner)
     assert before is not None
@@ -558,10 +559,7 @@ async def test_restored_conversion_future_offer(
         for blocker in frontier.blockers
     ), "Restored legacy reading boundary was lost from the future Roll frontier"
 
-    await async_db.execute(
-        update(Issue).where(Issue.id == source_id).values(status="read")
-    )
-    await async_db.flush()
+    await advance(async_db, source_id)
     after = await get_execution_eligibility(async_db, owner)
     assert after is not None
     assert after.threads[target.thread_id].next_issue_id == target_id
