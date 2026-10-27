@@ -491,6 +491,9 @@ async function routeGreptileFindings(github, context, number) {
     });
   }))?.data;
   if (!live || (live.state && live.state !== 'open')) return { routed: false, reason: 'not-open' };
+  // Operator holds stay off the factory even when Greptile findings are open.
+  // Enrollment already skips this marker; routing must not re-label the PR.
+  if (hasManualOnlyDirective(live.body)) return { routed: false, reason: 'manual-only' };
   const head = live.head?.sha;
   const current = await currentLabels(github, context, number);
   const sameRepo = !live.head?.repo || live.head.repo.full_name === context.payload.repository?.full_name;
@@ -889,6 +892,9 @@ async function reconcileMissingPrLabels({ github, context }) {
 async function reconcile({ github, context }) {
   await ensureLabels(github, context);
 
+  const payloadBody = context.payload.pull_request?.body ?? context.payload.issue?.body ?? '';
+  if (hasManualOnlyDirective(payloadBody)) return;
+
   if (context.eventName === 'issue_comment') {
     const comment = context.payload.comment;
     const body = comment?.body || '';
@@ -994,6 +1000,7 @@ module.exports._test = {
   durablePrOwner,
   ownerFor,
   isOwnerLabel,
+  hasManualOnlyDirective,
   reconcileLabels,
   withRetry,
   rateLimitDelay,

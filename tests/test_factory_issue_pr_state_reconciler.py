@@ -112,5 +112,71 @@ def test_reconcile_issue_skips_blocked_labels_before_replace() -> None:
     assert "return 0" in body[skip_at:replace_at]
     assert '[[ "$blocked" == "blocked" ]]' in body
     policy_source = POLICY_SCRIPT.read_text(encoding="utf-8")
-    assert "from factory_work_policy import BLOCKED_LABELS" in policy_source
+    assert "from factory_work_policy import BLOCKED_LABELS, is_manual_only" in policy_source
     assert "set(labels) & BLOCKED_LABELS" in policy_source
+
+
+def test_manual_only_body_blocks_reconciliation() -> None:
+    """A standalone manual-only directive must skip factory label rewrites."""
+    policy = _policy()
+
+    assert policy.body_blocks_reconciliation(
+        "<!-- factory-execution:manual-only -->\nHold this factory PR.\n"
+    )
+    assert not policy.body_blocks_reconciliation("Ordinary autonomous factory work.\n")
+    assert not policy.body_blocks_reconciliation(
+        "To opt out, use `<!-- factory-execution:manual-only -->`."
+    )
+
+
+def test_blocked_by_body_cli_reports_skip_for_manual_only(tmp_path: Path) -> None:
+    """The reconciler CLI must report blocked so bash returns before a rewrite."""
+    hold = tmp_path / "hold.md"
+    hold.write_text(
+        "<!-- factory-execution:manual-only -->\nHold this factory PR.\n",
+        encoding="utf-8",
+    )
+    blocked = subprocess.run(
+        [
+            sys.executable,
+            str(POLICY_SCRIPT),
+            "--blocked-by-body-file",
+            str(hold),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert blocked.stdout.strip() == "blocked"
+
+    ordinary = tmp_path / "ordinary.md"
+    ordinary.write_text("Ordinary autonomous factory work.\n", encoding="utf-8")
+    allowed = subprocess.run(
+        [
+            sys.executable,
+            str(POLICY_SCRIPT),
+            "--blocked-by-body-file",
+            str(ordinary),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert allowed.stdout.strip() == "ok"
+
+
+def test_reconcile_issue_skips_manual_only_before_replace() -> None:
+    """Open PRs with the marker must not be rewritten to factory:unowned.
+
+    ``gh issue list --label factory`` includes pull requests, so the body
+    skip has to live inside reconcile_issue with the BLOCKED_LABELS skip.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    body = _reconcile_issue_body(workflow)
+
+    skip_at = body.index("--blocked-by-body-file")
+    replace_at = body.index('replace_issue_state "$issue" "$stage"')
+    assert skip_at < replace_at
+    assert "skipped (manual-only)" in body
+    assert "return 0" in body[skip_at:replace_at]
+    assert '[[ "$blocked" == "blocked" ]]' in body[skip_at:replace_at]

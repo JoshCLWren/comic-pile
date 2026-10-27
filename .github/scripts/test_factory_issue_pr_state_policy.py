@@ -6,6 +6,7 @@ from __future__ import annotations
 import unittest
 
 from factory_issue_pr_state_policy import (
+    body_blocks_reconciliation,
     issue_labels_block_reconciliation,
     stage_from_trusted_prs,
 )
@@ -76,6 +77,22 @@ class FactoryIssuePrStatePolicyTests(unittest.TestCase):
         self.assertFalse(
             issue_labels_block_reconciliation(
                 ["factory", "factory:unowned", "ralph-status:pending"]
+            )
+        )
+
+    def test_manual_only_body_blocks_reconciliation(self) -> None:
+        """A standalone manual-only PR body must skip factory label rewrites."""
+        self.assertTrue(
+            body_blocks_reconciliation(
+                "<!-- factory-execution:manual-only -->\nHold this factory PR.\n"
+            )
+        )
+        self.assertFalse(
+            body_blocks_reconciliation("Ordinary autonomous factory work.\n")
+        )
+        self.assertFalse(
+            body_blocks_reconciliation(
+                "To opt out, use `<!-- factory-execution:manual-only -->`."
             )
         )
 

@@ -80,6 +80,15 @@ test('a standalone manual-only directive opts out even with factory labels', asy
   const { writes } = await run({ prs: [explicit], labels: ['factory'] });
   assert.deepEqual(writes, []);
 });
+
+test('manual-only PR with empty factory labels is not enrolled as factory:unowned', async () => {
+  const hold = {
+    ...pr(3971),
+    body: '<!-- factory-execution:manual-only -->\nHold this factory PR.\n',
+  };
+  const { writes } = await run({ prs: [hold], labels: ['ralph-status:blocked'] });
+  assert.deepEqual(writes, []);
+});
 test('scheduled sweep paginates all open PRs', async () => {
   const { writes, reads } = await run({ prs: [pr(1), pr(2)] });
   assert.deepEqual(writes.map(input => input.issue_number), [1, 2]);
