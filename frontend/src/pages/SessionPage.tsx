@@ -145,7 +145,11 @@ function EventRecord({ event }: { event: DisplayEvent }) {
     event.die != null ? `d${event.die}` : null,
     rollLabel(event),
     event.die_after != null ? `Die after: d${event.die_after}` : null,
-    event.rating != null ? `Rating ${event.rating}` : null,
+    event.rating != null
+      ? `Rating ${event.rating}`
+      : event.type === 'undo' || event.type === 'restore'
+        ? 'No rating'
+        : null,
     event.result == null || event.result > 0 ? selectionLabel(event) : null,
   ].filter((value): value is string => value !== null)
 
@@ -198,6 +202,11 @@ function EventRecord({ event }: { event: DisplayEvent }) {
         <p className="mt-1 text-xs text-stone-400 break-words">{detail}</p>
       ) : !isThreadlessEvent(event) && !hasRecordedDescription ? (
         <p className="mt-1 text-xs text-stone-500">No additional event details recorded.</p>
+      ) : null}
+      {metadata.length > 0 &&
+      (event.type === 'undo' || event.type === 'restore') &&
+      detail ? (
+        <p className="mt-1 text-xs text-stone-400 break-words">{detail}</p>
       ) : null}
       {event.queue_move && (
         <p className="mt-1 break-words text-xs text-stone-500">Queue move: {event.queue_move}</p>

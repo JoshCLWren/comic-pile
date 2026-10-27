@@ -55,7 +55,12 @@ export function ManualPickerSearch({
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!needle) return allOptions
-    return allOptions.filter(({ option }) => option.label.toLowerCase().includes(needle))
+    return allOptions.filter(({ option }) => {
+      // Search on both the full label AND the raw thread ID for identity-based filtering
+      const labelMatch = option.label.toLowerCase().includes(needle)
+      const identityMatch = String(option.id).includes(needle)
+      return labelMatch || identityMatch
+    })
   }, [allOptions, query])
 
   useEffect(() => {
