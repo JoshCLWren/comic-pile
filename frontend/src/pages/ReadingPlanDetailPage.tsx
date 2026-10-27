@@ -144,9 +144,14 @@ export default function ReadingPlanDetailPage() {
     source.raw_source_path,
     displayReadingListName(source.display_name, source.source_path ?? source.raw_source_path) ?? 'Reading order',
   ]))
-  // The persisted source relationship identifies the live reader-owned list.
-  // Do not infer a list from names or route into the retired plan editor when linked.
-  const editableListId = view.sources.find((source) => source.custom_cbl_list_id != null)?.custom_cbl_list_id ?? null
+  // Only an owned custom-CBL source gets a resolved display_name from the backend.
+  // The immutable custom-cbl:<id> reference is enough to navigate without
+  // exposing cross-reader list IDs in a new API field.
+  const ownedListSource = view.sources.find((source) =>
+    source.display_name != null && /^custom-cbl:[1-9][0-9]*$/.test(source.raw_source_path),
+  )
+  const candidateListId = ownedListSource ? Number(ownedListSource.raw_source_path.slice('custom-cbl:'.length)) : null
+  const editableListId = candidateListId != null && Number.isSafeInteger(candidateListId) ? candidateListId : null
   const modeLabel = readingPlanModeLabel(view.ordering_mode)
   const isStrict = view.ordering_mode === 'strict_sequential'
   const percent = progressPercent(view.progress.read_issues, view.progress.total_issues)
