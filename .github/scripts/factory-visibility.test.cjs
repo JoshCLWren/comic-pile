@@ -632,7 +632,14 @@ function enrollGithubFor({ pulls, labelsByPr, comments = [], setLabels }) {
   return {
     rest: {
       issues: api,
-      pulls: { list: async () => ({ data: pulls, headers: {}, status: 200 }) },
+      pulls: {
+        list: async () => ({ data: pulls, headers: {}, status: 200 }),
+        get: async ({ pull_number }) => ({
+          data: pulls.find(item => item.number === pull_number) || pulls[0],
+          headers: {},
+          status: 200,
+        }),
+      },
     },
   };
 }
@@ -643,6 +650,7 @@ function enrollPr(number, extra = {}) {
     state: 'open',
     draft: false,
     user: { login: 'JoshCLWren' },
+    body: '',
     head: { sha: 'a'.repeat(40), repo: { full_name: 'JoshCLWren/comic-pile' } },
     ...extra,
   };

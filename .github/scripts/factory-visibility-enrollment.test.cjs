@@ -1,16 +1,31 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
-const { reconcileMissingPrLabels } = require('./factory-visibility.cjs');
+const visibility = require('./factory-visibility.cjs');
+const { reconcileMissingPrLabels } = visibility;
+const { BLOCKED_LABELS } = visibility._test;
 
 const sha = 'a'.repeat(40);
+const MANUAL_ONLY = '<!-- factory-execution:manual-only -->';
 const pr = (number = 1) => ({
   number, state: 'open', draft: false, user: { login: 'JoshCLWren' },
+  body: '',
   head: { sha, repo: { full_name: 'JoshCLWren/comic-pile' } },
 });
 
-async function run({ prs = [pr()], labels = [], comments = [], event = 'schedule', action = 'opened' } = {}) {
+async function run({
+  prs = [pr()],
+  labels = [],
+  comments = [],
+  event = 'schedule',
+  action = 'opened',
+  liveByNumber,
+  getError,
+} = {}) {
   const writes = [];
   const reads = [];
+  const gets = [];
   // REST response doubles: every read now consumes `result.data`, and label
   // reads are paginated issue REST endpoints rather than github.paginate.
   const issues = {
@@ -27,13 +42,24 @@ async function run({ prs = [pr()], labels = [], comments = [], event = 'schedule
       reads.push(params);
       return { data: prs, headers: {}, status: 200 };
     },
+    async get(params) {
+      gets.push(params);
+      if (getError) throw getError;
+      const item = prs.find(candidate => candidate.number === params.pull_number) || prs[0];
+      const overlay = liveByNumber?.[params.pull_number];
+      return {
+        data: overlay ? { ...item, ...overlay } : { ...item },
+        headers: {},
+        status: 200,
+      };
+    },
   };
   const github = { rest: { issues, pulls } };
   await reconcileMissingPrLabels({ github, context: {
     eventName: event, repo: { owner: 'JoshCLWren', repo: 'comic-pile' },
     payload: { pull_request: prs[0], action },
   } });
-  return { writes, reads };
+  return { writes, reads, gets };
 }
 
 test('open event enrolls a manual PR and preserves unrelated labels atomically', async () => {
@@ -84,11 +110,91 @@ test('a standalone manual-only directive opts out even with factory labels', asy
 test('manual-only PR with empty factory labels is not enrolled as factory:unowned', async () => {
   const hold = {
     ...pr(3971),
-    body: '<!-- factory-execution:manual-only -->\nHold this factory PR.\n',
+    body: `${MANUAL_ONLY}\nHold this factory PR.\n`,
   };
   const { writes } = await run({ prs: [hold], labels: ['ralph-status:blocked'] });
   assert.deepEqual(writes, []);
 });
+
+test('unlabeled pull_request_target skips enroll when live body has the marker', async () => {
+  const hold = { ...pr(3970), body: `${MANUAL_ONLY}\nOperator hold.\n` };
+  const { writes, reads, gets } = await run({
+    prs: [hold],
+    labels: [],
+    event: 'pull_request_target',
+    action: 'unlabeled',
+  });
+  assert.deepEqual(reads, []);
+  assert.equal(gets.length, 1);
+  assert.equal(gets[0].pull_number, 3970);
+  assert.deepEqual(writes, []);
+});
+
+test('enroll skips when payload body is stale but live fetch has the marker', async () => {
+  const stale = { ...pr(3971), body: null };
+  const { writes, gets } = await run({
+    prs: [stale],
+    labels: [],
+    event: 'pull_request_target',
+    action: 'unlabeled',
+    liveByNumber: { 3971: { body: `${MANUAL_ONLY}\nHold this factory PR.\n` } },
+  });
+  assert.equal(gets.length, 1);
+  assert.deepEqual(writes, []);
+});
+
+test('ralph-status:blocked alone skips enroll without a manual-only marker', async () => {
+  const { writes, gets } = await run({
+    prs: [{ ...pr(3970), body: 'Ordinary operator-held PR.' }],
+    labels: ['ralph-status:blocked'],
+    event: 'pull_request_target',
+    action: 'unlabeled',
+  });
+  assert.equal(gets.length, 1);
+  assert.deepEqual(writes, []);
+});
+
+test('enroll skips every claim-policy BLOCKED_LABEL without a marker', async () => {
+  for (const label of [...BLOCKED_LABELS].sort()) {
+    const { writes } = await run({
+      prs: [{ ...pr(), body: 'No hold marker in this body.' }],
+      labels: [label],
+      event: 'pull_request_target',
+      action: 'unlabeled',
+    });
+    assert.deepEqual(writes, [], label);
+  }
+});
+
+test('enroll skips when the live PR body cannot be read', async () => {
+  const { writes, gets } = await run({
+    prs: [{ ...pr(), body: 'Looks enrollable from the payload.' }],
+    event: 'pull_request_target',
+    action: 'unlabeled',
+    getError: Object.assign(new Error('Not Found'), { status: 404 }),
+  });
+  assert.equal(gets.length, 1);
+  assert.deepEqual(writes, []);
+});
+
+test('enroll skips when live GET omits a readable body string', async () => {
+  const { writes } = await run({
+    prs: [{ ...pr(), body: 'Looks enrollable from the payload.' }],
+    event: 'pull_request_target',
+    action: 'unlabeled',
+    liveByNumber: { 1: { body: null } },
+  });
+  assert.deepEqual(writes, []);
+});
+
+test('enrollment BLOCKED_LABELS matches factory_work_policy.py', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'factory_work_policy.py'), 'utf8');
+  const match = source.match(/^BLOCKED_LABELS = \{([^}]+)\}/m);
+  assert.ok(match, 'factory_work_policy.BLOCKED_LABELS must remain parseable');
+  const fromPolicy = [...match[1].matchAll(/'([^']+)'/g)].map(item => item[1]).sort();
+  assert.deepEqual([...BLOCKED_LABELS].sort(), fromPolicy);
+});
+
 test('scheduled sweep paginates all open PRs', async () => {
   const { writes, reads } = await run({ prs: [pr(1), pr(2)] });
   assert.deepEqual(writes.map(input => input.issue_number), [1, 2]);
