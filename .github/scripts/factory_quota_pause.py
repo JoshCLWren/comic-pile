@@ -572,17 +572,19 @@ def _extract_period_until(data: object) -> datetime | None:
         return None
 
 
-def parse_reset_from_config(provider: str | None) -> datetime | None:
+def parse_reset_from_config(provider: str | None, now: datetime | None = None) -> datetime | None:
     """Infer a reset time from provider-specific config windows.
 
     Args:
         provider: Provider name to map to a known reset window.
+        now: Clock override; defaults to current UTC time.
 
     Returns:
         UTC datetime for the inferred reset, or None when unknown.
     """
     name = str(provider or "").strip().lower()
-    now = datetime.now(timezone.utc)
+    if now is None:
+        now = datetime.now(timezone.utc)
 
     if "mistral" in name:
         year = now.year
@@ -717,7 +719,7 @@ def create_pause(
             reset_source = "balance"
 
     if reset is None:
-        parsed = parse_reset_from_config(provider)
+        parsed = parse_reset_from_config(provider, now=now)
         if parsed is not None:
             reset = parsed
             reset_source = "config"
@@ -785,7 +787,7 @@ def resume_worker(
         return True
     worker_int = int(text)
     if worker_int in PROTECTED_WORKERS:
-        return False
+        return True  # never paused => resume is a no-op success
 
     pauses_path = Path(path) if path is not None else PAUSES_PATH
     if now is None:
