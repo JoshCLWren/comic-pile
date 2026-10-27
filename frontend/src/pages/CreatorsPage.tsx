@@ -37,7 +37,7 @@ const MIN_RATINGS_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
 ]
 
 /** Sample sizes below this are visibly called out in the average column. */
-const SMALL_SAMPLE_THRESHOLD = 5
+const SMALL_SAMPLE_THRESHOLD = 3
 
 /**
  * The two top-level modes of `/creators`: the plain directory and the optional
@@ -146,7 +146,7 @@ function CreatorRow({
         aria-expanded={showSampleHelp}
         aria-controls={helpId}
         aria-label={`Small sample: fewer than ${SMALL_SAMPLE_THRESHOLD} rated comics. Average ratings based on a small sample may be less representative.`}
-        title="Fewer than 5 rated comics. Average ratings based on a small sample may be less representative."
+        title={`Fewer than ${SMALL_SAMPLE_THRESHOLD} rated comics. Average ratings based on a small sample may be less representative.`}
         onClick={() => setShowSampleHelp((open) => !open)}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && showSampleHelp) {
