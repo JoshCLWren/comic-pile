@@ -51,6 +51,19 @@ def audit_future_parity(
     canonical validator detect a cycle. This asks the actual canonical graph,
     preserving strict overlap exceptions and positional gates, even when the
     target is not the first unread issue in its Thread.
+
+    Args:
+        snapshot: Complete current reader-owned canonical graph.
+        historical_edges: Unread archival relations inspected as evidence,
+            never enabled as execution prerequisites by this audit.
+
+    Returns:
+        Each historical edge classified as already implied, missing,
+        excluded or opposed by current canonical order.
+
+    Raises:
+        ReadingCycleError: The canonical graph is already cyclic.
+        ValueError: The evidence references a missing or foreign Issue.
     """
     validate_reading_constraints(snapshot)
     effective = effective_reading_snapshot(snapshot)
