@@ -24,6 +24,7 @@ class HistoricalEdge:
     target_issue_id: int
     origin: str | None
     note: str | None = None
+    classification: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
