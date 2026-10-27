@@ -131,7 +131,9 @@ function pickerDetailSegments(thread: ManualPickerThread): string[] {
 
 /**
  * Normalize a series title for same-name detection by stripping parenthetical
- * year/volume/run metadata.
+ * year/volume/run metadata. Two reader threads whose titles differ only by
+ * such parenthetical identity text still refer to the same base series name
+ * and need disambiguation.
  */
 function normalizeSeriesTitle(title: string): string {
   return title.replace(/\s*\([^)]*\)/g, '').trim()
@@ -139,6 +141,13 @@ function normalizeSeriesTitle(title: string): string {
 
 /**
  * Collect the keys that occur on more than one row.
+ *
+ * Args:
+ *     rows: Rows to inspect.
+ *     keyOf: Derives the comparison key for a row.
+ *
+ * Returns:
+ *     Keys shared by at least two rows.
  */
 function duplicateKeys(rows: PickerRow[], keyOf: (row: PickerRow) => string): Set<string> {
   const seen = new Set<string>()
