@@ -9,6 +9,7 @@ import type { CreatorIssueInsight, CreatorIssueRow, CreatorSeriesGroup, CreatorS
 import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { RatingHistoryChart } from '../components/RatingHistoryChart'
+import { threadIssueRoutePath } from '../utils/threadRoutes'
 
 function formatRatingDate(value: string | null): string | null {
   if (!value) return null
@@ -42,8 +43,9 @@ function IssueRow({ row, showRating }: { row: CreatorIssueRow; showRating: boole
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
       <Link
-        to={`/thread/${row.thread_id}`}
+        to={threadIssueRoutePath(row.thread_id, row.issue_id)}
         className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+        aria-label={`Open ${row.thread_title} #${row.issue_number} in its thread`}
       >
         <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
           {row.thread_title} #{row.issue_number}
@@ -195,8 +197,9 @@ function IssueInsightCard({ insight }: { insight: CreatorIssueInsight }) {
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
       <Link
-        to={`/thread/${insight.thread_id}?issue=${insight.issue_id}#issue-${insight.issue_id}`}
+        to={threadIssueRoutePath(insight.thread_id, insight.issue_id)}
         className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+        aria-label={`Open ${insight.thread_title} #${insight.issue_number} in its thread`}
       >
         <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
           {insight.thread_title} #{insight.issue_number}

@@ -508,6 +508,30 @@ body {
   }
 }
 
+/* Deep-link arrival target (#3626). The outline uses the focus-visibility role
+   because the highlight accompanies programmatic focus; the offset animation is
+   the brief arrival flash and collapses to a static ring under reduced motion. */
+.issue-deep-link-target {
+  outline: 2px solid var(--theme-focus-ring);
+  outline-offset: 2px;
+  animation: issue-deep-link-arrival 0.6s ease-out;
+}
+
+@keyframes issue-deep-link-arrival {
+  from {
+    outline-offset: 8px;
+  }
+  to {
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .issue-deep-link-target {
+    animation: none;
+  }
+}
+
 /* Range slider styling for the rating input (#2763) */
 .rating-slider {
   -webkit-appearance: none;

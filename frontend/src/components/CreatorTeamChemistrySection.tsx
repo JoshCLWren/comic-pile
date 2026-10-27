@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { creatorRoutePath } from '../utils/creatorKey'
+import { threadIssueRoutePath } from '../utils/threadRoutes'
 import type {
   CreatorTeamChemistryResponse,
   CreatorTeamMember,
@@ -95,7 +96,7 @@ function IssueRefs({ pair }: { pair: CreatorTeamPair }) {
       {pair.shared_issue_refs.map((ref) => (
         <Link
           key={ref.issue_id}
-          to={`/thread/${ref.thread_id}`}
+          to={threadIssueRoutePath(ref.thread_id, ref.issue_id)}
           className={`rounded ${FOCUS_RING}`}
           style={{ color: 'var(--theme-text-primary)' }}
           aria-label={`${ref.thread_title} issue ${ref.issue_number}${

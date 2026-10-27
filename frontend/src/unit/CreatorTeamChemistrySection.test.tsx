@@ -101,7 +101,8 @@ describe('CreatorTeamChemistrySection', () => {
     renderSection({ data: makeResponse() })
 
     const issueLink = screen.getByRole('link', { name: /Team Run issue 3, rated 5 out of 5/ })
-    expect(issueLink).toHaveAttribute('href', '/thread/11')
+    // The shared-issue ref deep-links to that exact canonical issue (#3626).
+    expect(issueLink).toHaveAttribute('href', '/thread/11?issue=101#issue-101')
 
     const note = screen.getByText(
       /Descriptive context from your own ratings/i,

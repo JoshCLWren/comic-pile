@@ -294,6 +294,13 @@ behaviors:
       - "issue-2774-creators-browse.spec.ts"
       - "issue-3091-creator-comparison.spec.ts"
 
+  - id: CREATOR-002
+    area: feature
+    behavior: "Creator issue links deep-link to the exact canonical issue, scroll to it, focus it with an accessible name, and highlight it without mutating reading state"
+    priority: P1
+    status: covered
+    specs: ["issue-3626-creator-issue-deep-link.spec.ts"]
+
   - id: RMODE-001
     area: feature
     behavior: "Reading-mode switching, quiz flow, and bootstrap restore behave per contract"

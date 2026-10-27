@@ -287,13 +287,15 @@ describe('CreatorComparisonPage', () => {
       screen.getByText('Read issues by this creator with no stored rating.'),
     ).toBeInTheDocument()
 
-    // Both counts drill into the supporting creator-attributed issues.
+    // Both counts drill into the supporting creator-attributed issues, and each
+    // drilldown row deep-links to that exact canonical issue (#3626).
     const sagaLinks = screen.getAllByRole('link', { name: /Saga #/ })
     expect(sagaLinks).toHaveLength(2)
-    expect(sagaLinks[0]).toHaveAttribute('href', '/thread/1')
+    expect(sagaLinks[0]).toHaveAttribute('href', '/thread/1?issue=11#issue-11')
+    expect(sagaLinks[1]).toHaveAttribute('href', '/thread/1?issue=12#issue-12')
     expect(screen.getByRole('link', { name: 'Y: The Last Man #5' })).toHaveAttribute(
       'href',
-      '/thread/2',
+      '/thread/2?issue=21#issue-21',
     )
   })
 

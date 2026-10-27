@@ -23,6 +23,7 @@ import {
 import { getApiErrorDetail } from '../utils/apiError'
 import { evaluateReadingProgress } from '../utils/readingProgress'
 import { formatIssueCount } from '../utils/formatIssueCount'
+import { parseRequestedIssueId } from '../utils/threadRoutes'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getManualCreatorCreditList } from '../types'
 import type { ManualCreatorCredit, Thread } from '../types'
@@ -105,7 +106,9 @@ export default function ThreadDetailView() {
 
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
-  const requestedIssueId = Number(new URLSearchParams(location.search).get('issue'))
+  // Malformed `?issue=` values collapse to 0 (plain thread navigation) so a
+  // stale or hand-edited link cannot drive pagination toward an impossible row.
+  const requestedIssueId = parseRequestedIssueId(location.search)
   const focusedIssueRef = useRef<number | null>(null)
   const [issuesExpanded, setIssuesExpanded] = useState(requestedIssueId > 0)
   const [isDependencyOpen, setIsDependencyOpen] = useState(false)
@@ -126,6 +129,10 @@ export default function ThreadDetailView() {
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set())
   const [bulkNotice, setBulkNotice] = useState<string | null>(null)
+  // The issue the current URL names (`?issue=<id>`), while it still holds focus.
+  // Keeping this in React state lets the arrival highlight follow re-renders and
+  // disappear on blur instead of leaving imperative styles on a detached node.
+  const [deepLinkedIssueId, setDeepLinkedIssueId] = useState<number | null>(null)
 
   const issuesQuery = useThreadIssuePages(threadId, { enabled: issuesExpanded })
   const issues = issuesQuery.issues
@@ -152,23 +159,55 @@ export default function ThreadDetailView() {
       activeThreadIdRef.current = threadId
       setIssuesExpanded(requestedIssueId > 0)
       focusedIssueRef.current = null
+      setDeepLinkedIssueId(null)
       setBulkSelectMode(false)
       setSelectedIssueIds(new Set())
       setBulkNotice(null)
       setTagEditorIssue(null)
+    } else if (requestedIssueId > 0 && focusedIssueRef.current !== requestedIssueId) {
+      // Same thread, new issue target (e.g. Back/Forward or a pasted link):
+      // expand the list and clear any previous arrival state so the new target
+      // is scrolled to, focused, and highlighted.
+      setIssuesExpanded(true)
+      focusedIssueRef.current = null
+      setDeepLinkedIssueId(null)
+    } else if (requestedIssueId === 0) {
+      // Plain thread navigation: clear arrival tracking without collapsing an
+      // already-expanded list.
+      focusedIssueRef.current = null
+      setDeepLinkedIssueId(null)
     }
   }, [threadId, requestedIssueId])
 
+  // Deep-link arrival (#3626): jump straight to the exact canonical issue named
+  // by `?issue=<issue_id>`, focus it so keyboard and assistive-technology users
+  // start at the issue the link named, and mark it as the arrival target so it
+  // is visually identifiable. Issue ids are canonical, so identically numbered
+  // comics in other series cannot be targeted by mistake.
   useEffect(() => {
-    if (!issuesExpanded || requestedIssueId <= 0 || focusedIssueRef.current === requestedIssueId) return
-    const row = document.getElementById(`issue-${requestedIssueId}`)
-    if (row) {
-      row.scrollIntoView?.({ block: 'center' })
-      row.focus({ preventScroll: true })
-      focusedIssueRef.current = requestedIssueId
-    } else if (issuesQuery.hasNextPage && !issuesQuery.isFetching && !issuesQuery.isFetchNextPageError) {
-      void issuesQuery.fetchNextPage()
+    if (!issuesExpanded || requestedIssueId <= 0) {
+      setDeepLinkedIssueId(null)
+      focusedIssueRef.current = null
+      return
     }
+    if (focusedIssueRef.current === requestedIssueId) return
+    const row = document.getElementById(`issue-${requestedIssueId}`)
+    if (!row) {
+      if (issuesQuery.hasNextPage && !issuesQuery.isFetching && !issuesQuery.isFetchNextPageError) {
+        void issuesQuery.fetchNextPage()
+      } else if (!issuesQuery.hasNextPage || issuesQuery.isFetchNextPageError) {
+        // Pagination exhausted or failed without finding the target; clear any
+        // stale highlight from a previous navigation.
+        setDeepLinkedIssueId(null)
+      }
+      return
+    }
+    // `instant` skips smooth scrolling so a long issue list lands on the target
+    // immediately; `preventScroll` stops the focus call from scrolling again.
+    row.scrollIntoView?.({ block: 'center', behavior: 'instant' })
+    row.focus({ preventScroll: true })
+    focusedIssueRef.current = requestedIssueId
+    setDeepLinkedIssueId(requestedIssueId)
   }, [issuesExpanded, requestedIssueId, issuesQuery])
 
   function handleToggleBulkSelect() {
@@ -600,11 +639,18 @@ export default function ThreadDetailView() {
                           key={issue.id}
                           id={`issue-${issue.id}`}
                           tabIndex={-1}
+                          role="group"
+                          aria-label={`Issue #${issue.issue_number} in ${thread.title}`}
+                          onBlur={
+                            deepLinkedIssueId === issue.id
+                              ? () => setDeepLinkedIssueId(null)
+                              : undefined
+                          }
                           className={`space-y-1.5 p-2 rounded-lg border ${
                             issue.status === 'read'
                               ? 'bg-green-500/10 border-green-500/20'
                               : 'bg-white/5 border-white/10'
-                          }`}
+                          }${deepLinkedIssueId === issue.id ? ' issue-deep-link-target' : ''}`}
                         >
                           <div className="flex items-center justify-between gap-3">
                             <span className="flex min-w-0 items-center gap-2">

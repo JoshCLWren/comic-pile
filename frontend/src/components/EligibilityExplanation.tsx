@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { threadIssueRoutePath } from '../utils/threadRoutes'
 import type { BlockingDependency } from '../types'
 
 interface Props {
@@ -19,7 +20,7 @@ export function EligibilityExplanation({ isBlocked, reasons = [], dependencies =
         <ul className="mt-1 space-y-1" aria-label="Reading requirements">
           {dependencies.map((dependency, index) => (
             <li key={`${dependency.issue_id ?? dependency.thread_id}-${index}`} className="break-words">
-              <Link aria-label={`Open ${dependency.thread_title}${dependency.issue_id ? ` issue #${dependency.issue_number}` : ''}`}  to={`/thread/${dependency.thread_id}${dependency.issue_id ? `?issue=${dependency.issue_id}#issue-${dependency.issue_id}` : ''}`} className="text-[var(--theme-continuity-accent)] underline hover:text-[var(--theme-text-primary)]">
+              <Link aria-label={`Open ${dependency.thread_title}${dependency.issue_id ? ` issue #${dependency.issue_number}` : ''}`}  to={threadIssueRoutePath(dependency.thread_id, dependency.issue_id)} className="text-[var(--theme-continuity-accent)] underline hover:text-[var(--theme-text-primary)]">
                 {dependency.label}
               </Link>
             </li>

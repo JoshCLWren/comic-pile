@@ -5,7 +5,8 @@
  * 1. `/creators/:creatorKey` renders personal creator detail from #2037.
  * 2. Summary shows average + sample size with a neutral unrated state.
  * 3. Partial metadata coverage is communicated as lower-bound results.
- * 4. Rated/upcoming/read-unrated rows link into existing thread routes.
+ * 4. Rated/upcoming/read-unrated rows deep-link to the exact issue inside the
+ *    existing thread route.
  * 5. Desktop uses available width; mobile stays single-column with no
  *    horizontal overflow and summary information before long lists.
  * 6. Invalid creator keys produce not-found behavior.
@@ -128,7 +129,13 @@ test.describe('Issue #2030: creator detail route', () => {
 
     const ratedLink = page.getByRole('link', { name: /Series A With A Long Title/ })
     await expect(ratedLink).toBeVisible()
-    expect(await ratedLink.getAttribute('href')).toBe('/thread/1')
+    // #3626: an issue row deep-links to that canonical issue inside its thread.
+    expect(await ratedLink.getAttribute('href')).toBe('/thread/1?issue=11#issue-11')
+    expect(
+      await page
+        .getByRole('link', { name: 'Open Series C #4 in its thread' })
+        .getAttribute('href'),
+    ).toBe('/thread/3?issue=14#issue-14')
 
     await expectNoHorizontalOverflow(page)
   })

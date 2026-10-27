@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { threadIssueRoutePath } from '../utils/threadRoutes'
 import type { CreatorMetricIssue } from '../types/index'
 
 interface DrilldownIssueListProps {
@@ -34,7 +35,7 @@ export function DrilldownIssueList({ issues }: DrilldownIssueListProps) {
           
           <div className="flex-1 min-w-0">
             <Link
-              to={`/thread/${issue.thread_id}`}
+              to={threadIssueRoutePath(issue.thread_id, issue.issue_id)}
               className="block hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
               style={{ color: 'var(--theme-text-primary)' }}
             >
