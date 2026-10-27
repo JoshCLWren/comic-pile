@@ -123,8 +123,13 @@ export default function QueuePage() {
   const modals = useQueueModalsHook({
     threads,
     onCreated: rollNudge.onCreated,
-    onUpdated: async () => {},
-    onReactivated: async () => {},
+    onUpdated: async () => {
+      await queueLoader.refetch()
+    },
+    onReactivated: async () => {
+      await queueLoader.refetch()
+      await refetchSession()
+    },
     refetchSession: async () => {
       await refetchSession()
     },
