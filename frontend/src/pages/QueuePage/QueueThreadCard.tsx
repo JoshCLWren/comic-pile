@@ -307,7 +307,15 @@ export default function QueueThreadCard({
                 isPending={boundaryPending}
                 fallback={
                   <>
-                    <p>{blockingDependencies[0]?.label ?? thread.blocking_reasons?.[0] ?? 'Waiting for reading requirements'}</p>
+                    {blockingDependencies[0] ? (
+                      <p>
+                        Read <Link
+                          to={`/thread/${blockingDependencies[0].thread_id}`}
+                          aria-label={`Open ${blockingDependencies[0].thread_title}`}
+                          className="text-[var(--theme-continuity-accent)] underline"
+                        >{blockingDependencies[0].label}</Link> first.
+                      </p>
+                    ) : <p>{thread.blocking_reasons?.[0] ?? 'Waiting for reading requirements'}</p>}
                     <details className="mt-1">
                       <summary className="cursor-pointer font-semibold">Show all reading requirements</summary>
                       <EligibilityExplanation
