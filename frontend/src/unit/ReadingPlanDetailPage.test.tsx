@@ -55,6 +55,7 @@ function renderPage(planId = '12') {
       <Routes>
         <Route path="/continuity-plans/:id" element={<ReadingPlanDetailPage />} />
         <Route path="/continuity-plans/:id/edit" element={<div>Editor</div>} />
+        <Route path="/reading-lists/:id" element={<div>Reading List editor</div>} />
         <Route path="/thread/:id" element={<div>Thread page</div>} />
       </Routes>
     </MemoryRouter>,
@@ -204,6 +205,17 @@ describe('ReadingPlanDetailPage', () => {
     expect(await screen.findByText('Mignolaverse')).toBeVisible()
     expect(screen.getByText('Source reading order: Mignolaverse')).toBeVisible()
     expect(screen.queryByText(/custom-cbl:/)).not.toBeInTheDocument()
+  })
+
+  it('opens a linked Reading List directly instead of the obsolete plan editor', async () => {
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      sources: [{ ...readerView.sources[0], raw_source_path: 'custom-cbl:2', custom_cbl_list_id: 2 }],
+    })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit reading order' }))
+    expect(screen.getByText('Reading List editor')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument()
   })
 
   it('preserves bracketed prefixes in owned Reading List names', async () => {
