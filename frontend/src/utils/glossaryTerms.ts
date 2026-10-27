@@ -118,7 +118,7 @@ const DEFINITIONS: GlossaryTermDefinition[] = [
   },
   {
     term: 'Small sample',
-    def: 'A confidence/context indicator shown when a creator has fewer than 5 rated comics. Average ratings based on a small sample may be less representative. This is not a data-quality defect or a new rating-scoring formula.',
+    def: 'A confidence/context indicator shown when a creator has fewer than 5 rated comics — distinct comics you have rated, not read items or credited roles. Average ratings based on a small sample may be less representative; it is not a data-quality defect or a new rating-scoring formula.',
   },
 ]
 

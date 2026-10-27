@@ -50,6 +50,16 @@ describe('HelpPage', () => {
     }
   })
 
+  it('defines the creator small-sample indicator with the production threshold', () => {
+    renderRoute(<HelpPage />)
+
+    expect(screen.getByText(/fewer than 5 rated comics/)).toBeInTheDocument()
+    expect(screen.getByText(/confidence\/context indicator/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/not a data-quality defect or a new rating-scoring formula/),
+    ).toBeInTheDocument()
+  })
+
   it('gives every definition a stable anchor id for cross-linking', () => {
     renderRoute(<HelpPage />)
     for (const id of [
