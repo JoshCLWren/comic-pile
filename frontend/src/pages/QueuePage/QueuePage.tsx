@@ -126,10 +126,7 @@ export default function QueuePage() {
     onUpdated: async () => {
       await queueLoader.refetch()
     },
-    onReactivated: async () => {
-      await queueLoader.refetch()
-      await refetchSession()
-    },
+    onReactivated: async () => {},
     refetchSession: async () => {
       await refetchSession()
     },
