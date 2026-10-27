@@ -472,7 +472,7 @@ export default function ReadingPlanDetailPage() {
         )}
       </section>
 
-      <section aria-label="Optional release tracking" className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4">
+      <section aria-label="Optional release tracking" className="surface-panel p-4">
         <h2 className="text-base font-bold text-[var(--theme-text-primary)]">Optional: Track future releases</h2>
         <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
           Subscribing to ComicVine volumes is separate from the reading order and is not required to read any of these comics.
