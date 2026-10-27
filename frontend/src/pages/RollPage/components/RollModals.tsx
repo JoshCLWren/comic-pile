@@ -127,6 +127,8 @@ interface RollModalsProps {
   onShuffleConfirm: () => void
   onShuffleCancel: () => void
   shufflePending: boolean
+  /** Failure feedback rendered inside the open shuffle confirmation. */
+  shuffleError?: string
   seriesCount: number
 }
 
@@ -174,6 +176,7 @@ export function RollModals({
   onShuffleConfirm,
   onShuffleCancel,
   shufflePending,
+  shuffleError,
   seriesCount,
 }: RollModalsProps) {
   const actionSheetThreadIsSnoozed =
@@ -395,6 +398,7 @@ export function RollModals({
           isOpen={isShuffleOpen}
           seriesCount={seriesCount}
           isPending={shufflePending}
+          error={shuffleError}
           onConfirm={onShuffleConfirm}
           onCancel={onShuffleCancel}
         />

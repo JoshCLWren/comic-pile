@@ -62,7 +62,7 @@ export default function DeleteThreadDialog({
               type="button"
               onClick={onCancel}
               disabled={isPending}
-              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
@@ -71,7 +71,7 @@ export default function DeleteThreadDialog({
               onClick={onConfirm}
               disabled={isPending}
               data-testid="confirm-delete-thread"
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-black text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
             >
               {isPending ? 'Deleting...' : 'Delete Series'}
             </button>

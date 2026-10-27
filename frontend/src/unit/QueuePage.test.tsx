@@ -679,7 +679,7 @@ it('shows one shared boundary failure notice and retries the batch', async () =>
   expect(readButton).toBeDisabled()
   expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
-  expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
+  expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'), 'error')
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
   expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
@@ -817,13 +817,21 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1 },
     { id: 2, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1 },
   ], isPending: false, refetch: vi.fn() })
+  const showToast = vi.fn()
+  vi.mocked(useToast).mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByRole('button', { name: /shuffle/i }))
   await user.click(screen.getByTestId('confirm-shuffle-queue'))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('shuffle')))
+  // The confirmation stays open on failure so the reason is visible inside it
+  // instead of behind the dialog layer (PR #4226 review).
+  await waitFor(() =>
+    expect(screen.getByTestId('shuffle-queue-error')).toHaveTextContent(/shuffle/i),
+  )
+  await user.keyboard('{Escape}')
+  expect(screen.queryByTestId('shuffle-queue-error')).not.toBeInTheDocument()
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /move to front/i }))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('front')))
+  await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.stringContaining('front'), 'error'))
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
   const slider = screen.getByRole('slider')
@@ -850,7 +858,13 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.type(screen.getByLabelText('Title'), 'Broken')
   await user.type(screen.getByLabelText('Issues'), '1')
   await user.click(screen.getByRole('button', { name: /create series/i }))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('create failed')))
+  await waitFor(() =>
+    expect(screen.getByTestId('create-thread-error')).toHaveTextContent(/create failed/i),
+  )
+  // The Add Series dialog is still open; cancelling must clear the failure so
+  // it does not leak onto the next attempt.
+  await user.keyboard('{Escape}')
+  expect(screen.queryByTestId('create-thread-error')).not.toBeInTheDocument()
 })
 
   it('uses thread blocked state without loading dependency details, and handles edit failure', async () => {

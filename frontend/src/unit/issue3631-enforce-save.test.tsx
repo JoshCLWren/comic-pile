@@ -40,14 +40,14 @@ describe('#3631 Add Series save enforcement (focus)', () => {
  * the code that decides whether `submitCreate` runs.
  */
 describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
-  // The hook reports create failures through the toast context, so the stub
-  // keeps observable feedback without a ToastProvider.
-  let alertSpy = vi.fn()
+  // Create failures render inside the open Add Series dialog, so the stub only
+  // proves no hidden toast is emitted alongside it.
+  let toastSpy = vi.fn()
   let modalsDeps: Parameters<typeof useQueueModals>[1]
 
   beforeEach(() => {
-    alertSpy = vi.fn()
-    modalsDeps = { toastHook: () => ({ showToast: alertSpy, removeToast: vi.fn(), toasts: [] }) }
+    toastSpy = vi.fn()
+    modalsDeps = { toastHook: () => ({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] }) }
   })
 
   function makeWrapper() {
@@ -107,10 +107,8 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
     await submitIssues(rendered, 'abc')
 
     expect(rendered.submitCreate).not.toHaveBeenCalled()
-    expect(alertSpy).toHaveBeenCalledWith(
-      expect.stringContaining("'abc' is not a valid issue number"),
-      'error',
-    )
+    expect(rendered.result.current.createError).toContain("'abc' is not a valid issue number")
+    expect(toastSpy).not.toHaveBeenCalled()
   })
 
   it('blocks save when a valid range is mixed with garbage (#3631)', async () => {
@@ -118,7 +116,7 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
     await submitIssues(rendered, '1-3, abc')
 
     expect(rendered.submitCreate).not.toHaveBeenCalled()
-    expect(alertSpy).toHaveBeenCalled()
+    expect(rendered.result.current.createError).toContain('Failed to create series')
   })
 
   it('still saves a fully valid range (#3631)', async () => {
@@ -129,7 +127,8 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
     expect(rendered.submitCreate).toHaveBeenCalledWith(
       expect.objectContaining({ issues_remaining: 3 }),
     )
-    expect(alertSpy).not.toHaveBeenCalled()
+    expect(toastSpy).not.toHaveBeenCalled()
+    expect(rendered.result.current.createError).toBeNull()
   })
 
   it('still saves numbered labels that carry an issue number, despite preview warnings (#3631)', async () => {

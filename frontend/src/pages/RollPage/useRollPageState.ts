@@ -30,6 +30,8 @@ export interface RollPageState {
   showSimpleMigration: boolean
   isRatingView: boolean
   isShuffleOpen: boolean
+  /** Failure feedback rendered inside the open shuffle confirmation. */
+  shuffleError: string
   rating: number
   errorMessage: string
   suppressPendingAutoOpenRef: React.MutableRefObject<boolean>
@@ -72,6 +74,7 @@ export interface RollPageStateSetters {
   setShowSimpleMigration: (value: boolean) => void
   setIsRatingView: (value: boolean) => void
   setIsShuffleOpen: (value: boolean) => void
+  setShuffleError: (value: string) => void
   setRating: (value: number) => void
   setErrorMessage: (value: string) => void
 }
@@ -103,6 +106,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [showSimpleMigration, setShowSimpleMigration] = useState(false)
   const [isRatingView, setIsRatingView] = useState(false)
   const [isShuffleOpen, setIsShuffleOpen] = useState(false)
+  const [shuffleError, setShuffleError] = useState('')
   const [rating, setRating] = useState(4.0)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -164,6 +168,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setIsRatingView,
     isShuffleOpen,
     setIsShuffleOpen,
+    shuffleError,
+    setShuffleError,
     rating,
     setRating,
     errorMessage,

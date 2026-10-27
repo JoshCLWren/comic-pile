@@ -271,6 +271,7 @@ const {
           openModal={modals.openModal}
           createForm={modals.createForm}
           editForm={modals.editForm}
+          createError={modals.createError}
           setCreateForm={modals.setCreateForm}
           setEditForm={modals.setEditForm}
           issuePreview={modals.issuePreview}
@@ -336,6 +337,7 @@ const {
           isOpen={actions.isShuffleConfirmOpen}
           seriesCount={authoritativeActiveCount}
           isPending={shuffleQueueMutation.isPending}
+          error={actions.shuffleError}
           onConfirm={() => void actions.confirmShuffle()}
           onCancel={actions.cancelShuffle}
         />

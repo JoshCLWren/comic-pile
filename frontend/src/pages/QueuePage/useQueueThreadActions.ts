@@ -91,6 +91,7 @@ interface QueueThreadActionResult {
   confirmRemove: () => Promise<void> | void
   cancelRemove: () => void
   isShuffleConfirmOpen: boolean
+  shuffleError: string | null
   requestShuffle: () => void
   confirmShuffle: () => Promise<void> | void
   cancelShuffle: () => void
@@ -147,6 +148,7 @@ export function useQueueThreadActions(
   const [pendingRemoveThread, setPendingRemoveThread] = useState<ThreadListItem | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
   const [isShuffleConfirmOpen, setIsShuffleConfirmOpen] = useState(false)
+  const [shuffleError, setShuffleError] = useState<string | null>(null)
 
   const handleDragStart = useCallback(
     (threadId: number) => (event: DragEvent<HTMLElement>) => {
@@ -295,10 +297,12 @@ export function useQueueThreadActions(
   )
 
   const requestShuffle = useCallback(() => {
+    setShuffleError(null)
     setIsShuffleConfirmOpen(true)
   }, [])
 
   const cancelShuffle = useCallback(() => {
+    setShuffleError(null)
     setIsShuffleConfirmOpen(false)
   }, [])
 
@@ -306,12 +310,15 @@ export function useQueueThreadActions(
     try {
       await shuffleQueueMutation.mutate()
       setIsShuffleConfirmOpen(false)
+      setShuffleError(null)
     } catch {
       // Keep the confirmation open so the reader can retry without
-      // re-clicking SHUFFLE; the dialog mirrors the delete confirmation.
-      showToast('Failed to shuffle queue. Please try again.', 'error')
+      // re-clicking SHUFFLE. The reason renders inside the open dialog: the
+      // shared toast layer paints below the modal, so a toast here would be
+      // invisible on a nearly full-height mobile dialog.
+      setShuffleError('Failed to shuffle queue. Please try again.')
     }
-  }, [shuffleQueueMutation, showToast])
+  }, [shuffleQueueMutation])
 
   const handleThreadRead = useCallback(
     async (thread: ThreadListItem) => {
@@ -382,6 +389,7 @@ export function useQueueThreadActions(
     confirmRemove,
     cancelRemove,
     isShuffleConfirmOpen,
+    shuffleError,
     requestShuffle,
     confirmShuffle,
     cancelShuffle,

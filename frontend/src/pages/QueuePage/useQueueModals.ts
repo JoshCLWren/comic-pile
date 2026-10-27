@@ -39,6 +39,8 @@ interface UseQueueModalsResult {
   isAnyModalOpen: boolean
   createForm: QueueFormState
   editForm: QueueFormState
+  /** Failure feedback rendered inside the open Add Series dialog. */
+  createError: string | null
   issuePreview: number | null
   issueParseError: string | null
   issueParseWarnings: string[]
@@ -118,6 +120,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null)
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editingThread, setEditingThread] = useState<Thread | ThreadListItem | null>(null)
   const [reactivateThreadId, setReactivateThreadId] = useState('')
@@ -142,15 +145,18 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
 
   const showCreateModal = useCallback(() => {
     setCreateForm(DEFAULT_CREATE_STATE)
+    setCreateError(null)
     setOpenModal('create')
     setRestoreAction(() => {
       setCreateForm(DEFAULT_CREATE_STATE)
+      setCreateError(null)
       setOpenModal('create')
     })
   }, [setRestoreAction])
 
   const closeCreateModal = useCallback(() => {
     setOpenModal(null)
+    setCreateError(null)
     clearRestoreAction()
     clearQueueModalState()
   }, [clearQueueModalState, clearRestoreAction])
@@ -340,6 +346,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
       event.preventDefault()
       if (creatingRef.current) return
       creatingRef.current = true
+      setCreateError(null)
       try {
         const { parseIssueRange, validateIssueRangeForStaging } = await import('../../utils/issueParser')
         const hasIssueRange = Boolean(createForm.issues && createForm.issues.trim())
@@ -352,7 +359,11 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
           // display-only affordance (#3262) and must not block a valid entry.
           const validation = validateIssueRangeForStaging(createForm.issues.trim())
           if (!validation.valid) {
-            showToast(`Failed to create series: ${validation.error ?? 'Invalid issue range.'}`, 'error')
+            // Render the rejection inside the open dialog: a toast paints below
+            // the modal layer, so on mobile the dialog hides it entirely.
+            setCreateError(
+              `Failed to create series: ${validation.error ?? 'Invalid issue range.'}`,
+            )
             creatingRef.current = false
             return
           }
@@ -405,7 +416,9 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
         await onCreated()
       } catch (error: unknown) {
         console.error('Failed to create thread:', error)
-        showToast(`Failed to create series: ${getApiErrorDetail(error)}`, 'error')
+        // The Add Series dialog stays open, so the failure reason has to live
+        // inside it rather than in a toast the dialog covers.
+        setCreateError(`Failed to create series: ${getApiErrorDetail(error)}`)
       } finally {
         creatingRef.current = false
       }
@@ -490,6 +503,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
     openModal,
     isAnyModalOpen,
     createForm,
+    createError,
     editForm,
     issuePreview,
     issueParseError,

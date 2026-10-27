@@ -303,7 +303,7 @@ describe('useQueueThreadActions', () => {
     expect(unsnooze.mutate).toHaveBeenCalledWith(4)
   })
 
-  it('reports a shuffle failure as an error toast and keeps the confirmation open', async () => {
+  it('exposes a shuffle failure for the open confirmation instead of a hidden toast', async () => {
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
@@ -321,8 +321,39 @@ describe('useQueueThreadActions', () => {
 
     act(() => result.current.requestShuffle())
     await act(() => result.current.confirmShuffle())
-    expect(toastSpy).toHaveBeenCalledWith(expect.stringContaining('shuffle'), 'error')
+    // The dialog stays open, so the failure must be dialog state; the shared
+    // toast paints below the modal layer and is invisible on mobile.
+    expect(result.current.shuffleError).toBe('Failed to shuffle queue. Please try again.')
+    expect(toastSpy).not.toHaveBeenCalled()
     expect(result.current.isShuffleConfirmOpen).toBe(true)
+  })
+
+  it('clears the shuffle failure when the confirmation reopens', async () => {
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession,
+            restoreSeriesActionsFocus: vi.fn(),
+          },
+          buildDeps({
+            shuffleHook: () => ({ mutate: vi.fn().mockRejectedValue(new Error('shuffle failed')), isPending: false, isError: false }),
+          }),
+        ),
+      { wrapper },
+    )
+
+    act(() => result.current.requestShuffle())
+    await act(() => result.current.confirmShuffle())
+    expect(result.current.shuffleError).not.toBeNull()
+
+    act(() => result.current.cancelShuffle())
+    expect(result.current.shuffleError).toBeNull()
+
+    act(() => result.current.requestShuffle())
+    expect(result.current.isShuffleConfirmOpen).toBe(true)
+    expect(result.current.shuffleError).toBeNull()
   })
 
   it('gates the queue shuffle behind a confirmation that cancels without mutating', async () => {
