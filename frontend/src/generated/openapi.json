@@ -5033,7 +5033,7 @@
           },
           "insufficient_data": {
             "default": false,
-            "description": "True when the creator has fewer than 3 rated issues, making statistics less reliable.",
+            "description": "True when the creator has fewer than 5 rated issues, making statistics less reliable.",
             "title": "Insufficient Data",
             "type": "boolean"
           },
@@ -5168,7 +5168,7 @@
             "description": "Coverage state distinguishing complete from lower-bound statistics."
           },
           "insufficient_data_keys": {
-            "description": "Canonical keys of creators with insufficient data (fewer than 3 rated issues).",
+            "description": "Canonical keys of creators with insufficient data (fewer than 5 rated issues).",
             "items": {
               "type": "string"
             },
