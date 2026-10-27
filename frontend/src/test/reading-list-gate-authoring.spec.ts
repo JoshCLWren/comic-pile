@@ -150,4 +150,46 @@ test.describe('Reading List gate authoring', () => {
       reloadedBuilder.getByLabel('Skip Gate Skipped Series #1 in this list'),
     ).toBeChecked()
   })
+  test('wraps a long comic title and keeps advanced options collapsed on a phone', async ({ authenticatedPage }) => {
+    const page = authenticatedPage
+    await page.setViewportSize({ width: 390, height: 844 })
+    const longName = 'Hellboy and the B.P.R.D.: The Very Long and Unforgettable Midnight Investigation'
+    const created = await createThread(page, {
+      title: longName,
+      format: 'Comics',
+      issues_remaining: 1,
+      total_issues: 1,
+    })
+    const fixtureSuffix = `${created.id}-${Date.now()}`
+    await createReadingPlan(page, `Phone Reading List Test ${fixtureSuffix}`)
+    const builder = page.locator('section[aria-labelledby="custom-cbl-heading"]')
+    await builder.getByRole('button', { name: 'Create or edit custom CBL' }).click()
+    await page.getByLabel('New custom CBL name').fill(`Phone Long Title ${fixtureSuffix}`)
+    await page.getByRole('button', { name: 'Create' }).click()
+    await page.getByLabel('Search issues for custom CBL').fill(longName)
+    await page.getByRole('button', { name: 'Find issues' }).click()
+    await page.getByRole('button', { name: /Hellboy and the B\.P\.R\.D\.: The Very Long/ }).click()
+
+    const titleText = `${longName} #1`
+    const card = builder.getByTestId('reading-list-entry').filter({ hasText: titleText })
+    const title = card.getByTestId('reading-list-entry-title')
+    await expect(title).toBeVisible()
+    const [cardBox, titleBox] = await Promise.all([card.boundingBox(), title.boundingBox()])
+    expect(cardBox).not.toBeNull()
+    expect(titleBox).not.toBeNull()
+    // At phone width this title takes multiple lines without overflowing its card.
+    expect(titleBox!.height).toBeGreaterThan(32)
+    expect(titleBox!.x + titleBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width + 1)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+    const wait = card.getByLabel(`Wait behavior for ${titleText}`)
+    await expect(wait).toBeHidden()
+    const show = card.getByRole('button', { name: `Show settings for ${titleText}` })
+    await expect(show).toBeVisible()
+    await show.click()
+    await expect(wait).toBeVisible()
+    await card.getByRole('button', { name: `Hide settings for ${titleText}` }).click()
+    await expect(wait).toBeHidden()
+  })
+
 })
