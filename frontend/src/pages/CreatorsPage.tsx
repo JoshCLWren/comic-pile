@@ -6,6 +6,7 @@ import { useDebounce } from '../hooks/useDebounce'
 import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { useCreatorDiscoveries } from '../hooks/useCreatorDiscoveries'
 import { creatorRoutePath, parseCreatorKey } from '../utils/creatorKey'
+import { SMALL_SAMPLE_THRESHOLD } from '../utils/creatorUtils'
 import type { CreatorListItem } from '../services/api-creators'
 import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 import CreatorDiscoverySection from '../components/CreatorDiscoverySection'
@@ -35,17 +36,6 @@ const MIN_RATINGS_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
   { value: 10, label: '10+' },
   { value: 25, label: '25+' },
 ]
-
-/**
- * Sample sizes below this are visibly called out in the average column.
- *
- * #3627 asked for "fewer than three" copy, but the shipped creator metric has
- * always used 5 (this constant and the sibling `Minimum rated` control's `5+`
- * option), and the issue forbids changing the threshold. The help copy
- * interpolates this authoritative constant instead, so the number in the issue
- * body is stale and should be corrected there rather than in production code.
- */
-const SMALL_SAMPLE_THRESHOLD = 5
 
 /**
  * The two top-level modes of `/creators`: the plain directory and the optional

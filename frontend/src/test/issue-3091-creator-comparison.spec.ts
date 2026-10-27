@@ -9,8 +9,9 @@
  *    request, never one detail request per creator.
  * 3. Cards render personal averages with sample sizes, 5-star rate, role
  *    breakdown, navigable series aggregates, and distinct same-name creators.
- * 4. Thin samples are explicit (`Insufficient data` plus banner) and partial
- *    metadata is a lower bound, never an exhaustive total.
+ * 4. Thin samples are explicit (a `Small sample` badge per affected card plus
+ *    one shared explanatory banner) and partial metadata is a lower bound,
+ *    never an exhaustive total.
  * 5. Phone width stacks comparison cards with no horizontal overflow.
  * 6. Four creators lay out as two balanced rows with no card-edge overflow at
  *    1280 or at a 200%-zoom(~640px) viewport (#3459).
@@ -70,7 +71,7 @@ function comparisonItem(
     strongest_series: [
       { thread_id: 1, thread_title: 'Saga', issue_count: 4, rated_issue_count: 3, average_rating: 4.7 },
     ],
-    min_rated_issues_per_series: 3,
+    min_rated_issues_per_series: 5,
     unread_upcoming_count: 2,
     read_unrated_count: 1,
     unread_issue_refs: [],
@@ -234,8 +235,9 @@ test.describe('Issue #3091: creator comparison', () => {
     await expect(page.getByRole('heading', { name: 'Creator Comparison' })).toBeVisible({
       timeout: 20000,
     })
-    await expect(page.getByText('Insufficient data')).toBeVisible()
-    await expect(page.getByText(/less reliable/)).toBeVisible()
+    await expect(page.getByText('Small sample', { exact: true })).toBeVisible()
+    await expect(page.getByText(/fewer than 5 rated comics/)).toBeVisible()
+    await expect(page.getByText(/less representative/)).toBeVisible()
     await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
     await expect(page.getByText('Steve McNiven')).toBeVisible()
 

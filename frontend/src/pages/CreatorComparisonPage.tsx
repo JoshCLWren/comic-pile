@@ -3,10 +3,12 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
+import { SMALL_SAMPLE_THRESHOLD } from '../utils/creatorUtils'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import type { CreatorComparisonIssueRef, CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
 import { CreatorMetricDrilldownModal } from '../components/CreatorMetricDrilldownModal'
 import Breadcrumbs from '../components/Breadcrumbs'
+import GlossaryLink from '../components/GlossaryLink'
 
 interface MetricClickParams {
   role?: string
@@ -90,13 +92,14 @@ function MetricValueButton({
   )
 }
 
-function InsufficientDataBadge() {
+function SmallSampleBadge() {
   return (
     <span
       className="inline-flex items-center rounded-full bg-[var(--theme-warning)]/15 px-2 py-0.5 text-xs font-semibold"
       style={{ color: 'var(--theme-warning)' }}
+      title={`Small sample: fewer than ${SMALL_SAMPLE_THRESHOLD} rated comics`}
     >
-      Insufficient data
+      Small sample
     </span>
   )
 }
@@ -342,7 +345,7 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
               </p>
             )}
           </div>
-          {item.insufficient_data && <InsufficientDataBadge />}
+          {item.insufficient_data && <SmallSampleBadge />}
         </div>
       </header>
 
@@ -680,11 +683,13 @@ export default function CreatorComparisonPage() {
   }
 
   const comparisonItems = Object.values(data.comparisons)
-  // Name the affected creators the way the reader knows them. A key the
-  // response could not resolve (omitted because it is not in the library) still
-  // falls back to its canonical key so the caveat is never silently dropped.
-  const affectedNames = data.insufficient_data_keys.map(
-    (key) => data.comparisons[key]?.display_name ?? key
+  // The banner explains the shared "Small sample" threshold once; each resolved
+  // affected card carries the single per-creator Small sample badge (#4237).
+  // Naming the creators here as well duplicated the same warning on their
+  // cards. Keys that did not resolve to a card are covered by the mixed-result
+  // or empty-state message instead of being mislabeled as a visible sample.
+  const hasSmallSample = data.insufficient_data_keys.some(
+    (key) => data.comparisons[key] !== undefined,
   )
 
   const resolvedKeys = new Set(Object.keys(data.comparisons))
@@ -734,7 +739,7 @@ export default function CreatorComparisonPage() {
         </div>
       )}
 
-      {affectedNames.length > 0 && (
+      {hasSmallSample && (
         <div
           className="mt-4 rounded-xl border px-4 py-3"
           style={{
@@ -743,8 +748,10 @@ export default function CreatorComparisonPage() {
           }}
         >
           <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
-            <strong>Note:</strong> Some creators have fewer than 3 rated issues, making their statistics less reliable.
-            <span className="break-words ml-2">Affected: {affectedNames.join(', ')}</span>
+            <strong>Small sample:</strong> fewer than {SMALL_SAMPLE_THRESHOLD} rated comics
+            (distinct comics you have rated). Average ratings based on a small sample may be
+            less representative.{' '}
+            <GlossaryLink id="small-sample">Glossary</GlossaryLink>
           </p>
         </div>
       )}

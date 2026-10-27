@@ -105,7 +105,7 @@ function makeComparisonItem(key: string, displayName: string): CreatorComparison
     top_rating_rate: 1,
     role_stats: [],
     strongest_series: [],
-    min_rated_issues_per_series: 3,
+    min_rated_issues_per_series: 5,
     unread_upcoming_count: 0,
     read_unrated_count: 0,
     unread_issue_refs: [],
@@ -606,6 +606,22 @@ describe('CreatorsPage small-sample explanation (#3627)', () => {
 
     const badge = screen.getByRole('button', { name: /Small sample/ })
     expect(badge.closest('a')).toBeNull()
+  })
+
+  it('exposes a theme focus ring and wraps the expanded explanation', () => {
+    sampleRow()
+
+    const badge = screen.getByRole('button', { name: /Small sample/ })
+    expect(badge.className).toContain('focus-visible:ring-2')
+    expect(badge.className).toContain('focus-visible:ring-[var(--theme-focus-ring)]')
+
+    fireEvent.click(badge)
+
+    const panel = document.getElementById(badge.getAttribute('aria-controls') ?? '')
+    expect(panel).not.toBeNull()
+    expect(panel?.className).toContain('basis-full')
+    expect(panel?.className).toContain('break-words')
+    expect(panel?.parentElement?.className).toContain('flex-wrap')
   })
 
   it('links the explanation to the canonical glossary anchor', () => {
