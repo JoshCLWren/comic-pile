@@ -23,6 +23,7 @@ import {
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
+import { getReadingListProgressIndex } from '../utils/readingListProgress'
 import ConfirmDialog from './ConfirmDialog'
 import {
   computeEntryRequirements,
@@ -164,6 +165,8 @@ export default function CustomCBLBuilder({
   const issueSearchInput = useRef<HTMLInputElement>(null)
   const issueSearchResults = useRef<HTMLDivElement>(null)
   const listNavigationRef = useRef<HTMLDivElement>(null)
+  const currentIssueRef = useRef<HTMLLIElement>(null)
+  const pendingProgressRevealRef = useRef<number | null>(null)
   const [readerOpen, setReaderOpen] = useState(false)
   const [open, setOpen] = useState(initialListId !== undefined)
   const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
@@ -246,7 +249,9 @@ export default function CustomCBLBuilder({
     setMode(list.mode ?? DEFAULT_MODE)
     setEntries(normalizePositions(list.entries))
     setEntrySearch('')
-    setEntryPage(0)
+    const progressIndex = getReadingListProgressIndex(list.entries)
+    setEntryPage(Math.floor(progressIndex / ENTRY_PAGE_SIZE))
+    pendingProgressRevealRef.current = list.entries[progressIndex]?.issue_id ?? null
     setJumpPosition('')
     setExpandedEntryOptions(null)
     setMoveDestinations({})
@@ -504,6 +509,27 @@ export default function CustomCBLBuilder({
   const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
   const currentPage = Math.min(entryPage, pageCount - 1)
   const visibleEntries = matchedEntries.slice(currentPage * ENTRY_PAGE_SIZE, (currentPage + 1) * ENTRY_PAGE_SIZE)
+  const progressIndex = getReadingListProgressIndex(entries)
+  const progressIssue = entries[progressIndex]
+  const nextUnreadIssueId = entries.find((entry) => !entry.skipped && entry.status === 'unread')?.issue_id
+  useEffect(() => {
+    if (pendingProgressRevealRef.current !== progressIssue?.issue_id || !currentIssueRef.current) return
+    const target = currentIssueRef.current
+    pendingProgressRevealRef.current = null
+    target.scrollIntoView?.({ block: 'center' })
+    target.focus({ preventScroll: true })
+  }, [entries, currentPage, entrySearch, progressIssue?.issue_id])
+  const returnToProgress = () => {
+    if (!progressIssue) return
+    pendingProgressRevealRef.current = progressIssue.issue_id
+    setEntrySearch('')
+    setEntryPage(Math.floor(progressIndex / ENTRY_PAGE_SIZE))
+    if (!entrySearch && currentPage === Math.floor(progressIndex / ENTRY_PAGE_SIZE) && currentIssueRef.current) {
+      currentIssueRef.current.scrollIntoView?.({ block: 'center' })
+      currentIssueRef.current.focus({ preventScroll: true })
+      pendingProgressRevealRef.current = null
+    }
+  }
   const focusListStart = () => {
     const target = listNavigationRef.current
     target?.scrollIntoView?.({ block: 'start' })
@@ -808,6 +834,11 @@ export default function CustomCBLBuilder({
                 <div ref={listNavigationRef} tabIndex={-1} className="surface-panel scroll-mt-4 space-y-3 p-3" aria-label="Reading List navigation">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-sm font-bold text-[var(--theme-text-primary)]">Ordered issues ({entries.length})</h4>
+                    {nextUnreadIssueId && (
+                      <button type="button" onClick={returnToProgress} className="min-h-11 rounded-lg border border-[var(--theme-continuity-accent)] px-3 text-sm font-semibold text-[var(--theme-continuity-accent)]">
+                        Go to next unread · #{progressIndex + 1}
+                      </button>
+                    )}
                     <p className="text-xs text-[var(--theme-text-muted)]">Changes are saved with the list.</p>
                   </div>
                   <label className="block text-sm text-[var(--theme-text-primary)]">
@@ -854,6 +885,8 @@ export default function CustomCBLBuilder({
                     entry={entry}
                     index={index}
                     entryCount={entries.length}
+                    isNextUnread={entry.issue_id === nextUnreadIssueId}
+                    cardRef={entry.issue_id === progressIssue?.issue_id ? currentIssueRef : undefined}
                     mode={mode}
                     waitingOn={requirements.get(entry.issue_id) ?? []}
                     nameOf={nameFor}
