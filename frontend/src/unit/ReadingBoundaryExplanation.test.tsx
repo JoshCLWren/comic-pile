@@ -110,7 +110,7 @@ describe('ReadingBoundaryExplanation', () => {
     expect(screen.queryByText('Historical associations — not active blockers')).not.toBeInTheDocument()
   })
 
-  it('shows only the first actionable strict-order issue by default in compact mode', () => {
+  it('shows only the first actionable strict-order issue by default in compact mode', async () => {
     renderExplanation({
       compact: true,
       explanation: explanation({
@@ -129,10 +129,13 @@ describe('ReadingBoundaryExplanation', () => {
     })
     const first = screen.getByRole('link', { name: 'Open B.P.R.D.: Casualties issue #1' })
     expect(first).toBeVisible()
-    const disclosure = screen.getByText('Show all reading requirements').closest('details')
-    expect(disclosure).not.toHaveAttribute('open')
-    expect(disclosure).toHaveTextContent('Abe Sapien: The Haunted Boy #1')
+    const disclosure = screen.getByRole('button', { name: 'Show all reading requirements' })
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('link', { name: 'Open Abe Sapien: The Haunted Boy issue #1' })).not.toBeInTheDocument()
     expect(first.closest('p')).toHaveTextContent(/^Read B\.P\.R\.D\.: Casualties #1.* first\.$/)
+    await userEvent.setup().click(disclosure)
+    expect(screen.getByRole('button', { name: 'Hide all reading requirements' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('link', { name: 'Open Abe Sapien: The Haunted Boy issue #1' })).toBeVisible()
   })
 
   it('links the next issue to its editor target when the server supplies one', () => {
