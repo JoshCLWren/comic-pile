@@ -134,7 +134,7 @@ function pickerDetailSegments(thread: ManualPickerThread): string[] {
  * year/volume/run metadata.
  */
 function normalizeSeriesTitle(title: string): string {
-  return title.replace(/\\s*\\([^)]*\\)/g, '').trim()
+  return title.replace(/\s*\([^)]*\)/g, '').trim()
 }
 
 /**

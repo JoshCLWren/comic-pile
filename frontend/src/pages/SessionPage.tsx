@@ -346,7 +346,7 @@ export default function SessionPage() {
             {restoreMutation.isPending ? 'Restoring...' : 'Restore Start'}
           </button>
         </div>
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-[var(--theme-text-dim)]">
           <span className="font-bold text-stone-300">Undo Latest</span> reverses only the newest
           change, and it stays on the newest snapshot until it has been used once.{' '}
           <span className="font-bold text-stone-300">Restore Start</span> rewinds the whole session
