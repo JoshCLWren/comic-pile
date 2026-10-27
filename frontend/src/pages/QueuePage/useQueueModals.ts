@@ -85,12 +85,6 @@ interface UseQueueModalsResult {
 }
 
 /**
- * Centralized modal lifecycle, restore-action registration, and form state for
- * every modal the Queue page coordinates. The hook returns plain handlers and
- * presentational state so the page can compose the modal modules without
- * re-implementing the navigation, bug-report-restore, or location-state wiring.
- */
-/**
  * Injectable seams for hook-level side channels. Production callers omit
  * `deps`; tests substitute a toast double through the same seam pattern
  * `useQueueThreadActions` uses.
@@ -99,6 +93,12 @@ export interface UseQueueModalsDeps {
   toastHook?: typeof useToast
 }
 
+/**
+ * Centralized modal lifecycle, restore-action registration, and form state for
+ * every modal the Queue page coordinates. The hook returns plain handlers and
+ * presentational state so the page can compose the modal modules without
+ * re-implementing the navigation, bug-report-restore, or location-state wiring.
+ */
 export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDeps = {}): UseQueueModalsResult {
   const { toastHook = useToast } = deps
   const { showToast } = toastHook()

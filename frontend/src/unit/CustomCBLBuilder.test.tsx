@@ -502,6 +502,12 @@ describe('CustomCBLBuilder', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Deletion unavailable')
     // The list survives the failed deletion and stays loaded for a retry.
     expect(screen.getByText('Starman #55')).toBeInTheDocument()
+
+    // Reopening must not resurrect the previous failure as if it just happened.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    const reopened = screen.getByRole('dialog', { name: 'Delete custom CBL' })
+    expect(within(reopened).queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('flags a custom CBL checkpoint and includes it on save', async () => {

@@ -45,6 +45,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     await dialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(dialog).toBeHidden()
     const afterCancel = await page.request.get('/api/v1/custom-cbls', { headers })
+    // SAFETY: the list endpoint returns a JSON array of custom CBLs with numeric ids.
     const afterCancelBody = await afterCancel.json() as Array<{ id: number }>
     expect(afterCancelBody.some((item) => item.id === list.id)).toBe(true)
 
@@ -55,6 +56,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
       .click()
     await expect(page.getByRole('status')).toContainText('Custom CBL deleted.')
     const afterDelete = await page.request.get('/api/v1/custom-cbls', { headers })
+    // SAFETY: the list endpoint returns a JSON array of custom CBLs with numeric ids.
     const afterDeleteBody = await afterDelete.json() as Array<{ id: number }>
     expect(afterDeleteBody.some((item) => item.id === list.id)).toBe(false)
     const reload = await page.request.get(`/api/v1/custom-cbls/${list.id}`, { headers })

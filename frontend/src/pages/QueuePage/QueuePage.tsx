@@ -44,7 +44,7 @@ export default function QueuePage() {
   const isSearching = searchQuery.trim() !== ''
 
   const queueLoader = useQueueThreads(searchQuery, sortBy)
-const {
+  const {
     data: threads,
     isPending,
     isError,
@@ -173,9 +173,7 @@ const {
     [modals, moveToPositionMutation, authoritativeActiveCount, showToast],
   )
 
-  const handleLoadMore = useCallback(() => {
-    void loadMore().catch(() => undefined)
-  }, [loadMore])
+  const handleLoadMore = useCallback(() => void loadMore().catch(() => undefined), [loadMore])
 
   const { sentinelRef } = useInfiniteScroll({
     onLoadMore: handleLoadMore,
