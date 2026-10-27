@@ -622,6 +622,73 @@ it('uses canonical boundary blockers for queue rows instead of legacy dependenci
   expect(mockedUseQueueBlockingInfo).toHaveBeenLastCalledWith([])
 })
 
+it.each([
+  {
+    caseName: 'strict predecessor is missing and a hold has the first action',
+    blockers: [
+      { kind: 'strict_order', origin: 'reading_list', reason: 'Strict source has no identified issue.' },
+      {
+        kind: 'hold',
+        origin: 'reading_list',
+        reason: 'Hold for One Year In.',
+        waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1' }],
+      },
+    ],
+    expectedTitle: 'Read One Year In #1 first',
+  },
+  {
+    caseName: 'strict predecessor takes priority over an earlier hold',
+    blockers: [
+      {
+        kind: 'hold',
+        origin: 'reading_list',
+        reason: 'Hold for One Year In.',
+        waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1' }],
+      },
+      {
+        kind: 'strict_order',
+        origin: 'reading_list',
+        reason: 'Strict Mignolaverse order.',
+        waiting_on: [{ issue_id: 117305, thread_id: 18847, thread_title: 'B.P.R.D.: Casualties', issue_number: '1', label: 'B.P.R.D.: Casualties #1' }],
+      },
+    ],
+    expectedTitle: 'Read B.P.R.D.: Casualties #1 first',
+  },
+  {
+    caseName: 'blocker reason is retained when no actionable issue is available',
+    blockers: [{ kind: 'prerequisite', origin: 'reader_prerequisite', reason: 'Finish the previous series before reading Saga.' }],
+    expectedTitle: 'Finish the previous series before reading Saga.',
+  },
+  {
+    caseName: 'no blockers means a neutral disabled read reason',
+    blockers: [],
+    expectedTitle: 'Waiting for reading requirements',
+  },
+])('uses the immediate Queue read-blocker explanation when $caseName', ({ blockers, expectedTitle }) => {
+  mockedUseQueueThreads.mockReturnValue({
+    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] }],
+    isPending: false,
+    refetch: vi.fn(),
+  })
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: {
+      threads: {
+        1: {
+          thread_id: 1,
+          state: 'blocked',
+          summary: 'Saga has reading requirements.',
+          blockers,
+        },
+      },
+    },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  expect(screen.getByLabelText('Read & Rate')).toHaveAttribute('title', expect.stringContaining(expectedTitle))
+})
+
 it('follows canonical availability over a stale legacy blocked flag', () => {
   mockedUseQueueThreads.mockReturnValue({
     data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: true, blocking_reasons: ['Blocked by: Prequel'] }],
