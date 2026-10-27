@@ -563,6 +563,106 @@ describe('CreatorsPage minimum-rated-sample control', () => {
   })
 })
 
+describe('CreatorsPage small-sample explanation (#3627)', () => {
+  function sampleRow(ratingsCount = 2, averageRating: number | null = 5.0) {
+    mockedHook.mockReturnValue(
+      baseState({
+        items: [
+          makeItem({
+            canonical_creator_key: 'creator:1',
+            average_rating: averageRating,
+            ratings_count: ratingsCount,
+          }),
+        ],
+        total: 1,
+      }),
+    )
+    renderPage()
+  }
+
+  function sampleBadge(): HTMLElement | null {
+    return screen.queryByRole('button', { name: /Small sample/ })
+  }
+
+  it('keeps the explanation collapsed until the reader activates it', () => {
+    sampleRow()
+
+    const badge = screen.getByRole('button', { name: /Small sample/ })
+    const panel = document.getElementById(badge.getAttribute('aria-controls') ?? '')
+    expect(panel).not.toBeNull()
+    expect(panel).not.toBeVisible()
+    expect(badge.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(badge)
+
+    expect(badge.getAttribute('aria-expanded')).toBe('true')
+    expect(panel).toBeVisible()
+    expect(panel).toHaveTextContent(/may be less representative/)
+    expect(panel).toHaveTextContent(/confidence\/context indicator/)
+  })
+
+  it('keeps the small-sample control outside the creator row link', () => {
+    sampleRow()
+
+    const badge = screen.getByRole('button', { name: /Small sample/ })
+    expect(badge.closest('a')).toBeNull()
+  })
+
+  it('links the explanation to the canonical glossary anchor', () => {
+    sampleRow()
+
+    fireEvent.click(screen.getByRole('button', { name: /Small sample/ }))
+
+    expect(screen.getByRole('link', { name: 'Glossary' })).toHaveAttribute(
+      'href',
+      '/glossary#small-sample',
+    )
+  })
+
+  it('closes on Escape from inside the explanation and returns focus to the control', () => {
+    sampleRow()
+
+    const badge = screen.getByRole('button', { name: /Small sample/ })
+    fireEvent.click(badge)
+
+    const glossaryLink = screen.getByRole('link', { name: 'Glossary' })
+    glossaryLink.focus()
+    fireEvent.keyDown(glossaryLink, { key: 'Escape' })
+
+    expect(badge.getAttribute('aria-expanded')).toBe('false')
+    expect(document.getElementById(badge.getAttribute('aria-controls') ?? '')).not.toBeVisible()
+    expect(document.activeElement).toBe(badge)
+  })
+
+  // Guards the authoritative production threshold (#3627 asked for "three";
+  // the shipped creator metric has always used five, and the issue forbids
+  // changing it). Counts are headline-rated distinct comics.
+  it.each([1, 2, 4])('flags a creator with %i rated comics', (count) => {
+    sampleRow(count)
+
+    const badge = screen.getByRole('button', { name: /Small sample/ })
+    const panel = document.getElementById(badge.getAttribute('aria-controls') ?? '')
+    expect(panel).not.toBeVisible()
+
+    fireEvent.click(badge)
+
+    expect(panel).toBeVisible()
+  })
+
+  it.each([5, 6])('does not flag a creator with %i rated comics', (count) => {
+    sampleRow(count)
+
+    expect(sampleBadge()).toBeNull()
+  })
+
+  it('does not flag an unrated creator that has no average yet', () => {
+    sampleRow(0, null)
+
+    expect(sampleBadge()).toBeNull()
+    expect(screen.getByText('unrated')).toBeInTheDocument()
+  })
+})
+
 describe('CreatorsPage comparison selection URL contract', () => {
   it('restores checked creators from a keyed URL and keeps each one uncheckable', () => {
     selectionState()

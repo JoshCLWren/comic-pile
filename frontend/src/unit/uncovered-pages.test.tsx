@@ -20,7 +20,7 @@ describe('HelpPage', () => {
   it('renders the complete glossary', () => {
     renderRoute(<HelpPage />)
     expect(screen.getByRole('heading', { name: 'Glossary' })).toBeInTheDocument()
-    expect(screen.getAllByTestId('glossary-term')).toHaveLength(20)
+    expect(screen.getAllByTestId('glossary-term')).toHaveLength(21)
     expect(
       screen.getByText(/hard “read this first” requirement/),
     ).toBeInTheDocument()
@@ -44,9 +44,20 @@ describe('HelpPage', () => {
       'Pos',
       'Reading mode',
       'Finished series',
+      'Small sample',
     ]) {
       expect(screen.getByText(term)).toBeInTheDocument()
     }
+  })
+
+  it('defines the creator small-sample indicator with the production threshold', () => {
+    renderRoute(<HelpPage />)
+
+    expect(screen.getByText(/fewer than 5 rated comics/)).toBeInTheDocument()
+    expect(screen.getByText(/confidence\/context indicator/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/not a data-quality defect or a new rating-scoring formula/),
+    ).toBeInTheDocument()
   })
 
   it('gives every definition a stable anchor id for cross-linking', () => {
@@ -74,6 +85,7 @@ describe('HelpPage', () => {
       'reading-order',
       'projection',
       'dependency-builder',
+      'small-sample',
     ]) {
       expect(document.getElementById(id)).not.toBeNull()
     }
