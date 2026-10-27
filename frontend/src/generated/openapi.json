@@ -5057,7 +5057,7 @@
             "title": "Median Rating"
           },
           "min_rated_issues_per_series": {
-            "default": 3,
+            "default": 5,
             "description": "Minimum rated issues a series needs before strongest_series ranks it. Exposed so the UI can explain an empty list instead of silently hiding it.",
             "minimum": 1.0,
             "title": "Min Rated Issues Per Series",
