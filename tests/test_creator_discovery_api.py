@@ -249,7 +249,7 @@ async def test_consistently_loved_requires_sample_average_and_low_dispersion(
         queue_position=1,
         creator_id=100,
         name="Steady Star",
-        ratings=[5.0, 5.0, 5.0],
+        ratings=[5.0, 5.0, 5.0, 5.0, 5.0],
     )
     # Small sample: excluded from a reliability-implying view.
     await _build_creator(
@@ -267,7 +267,7 @@ async def test_consistently_loved_requires_sample_average_and_low_dispersion(
         queue_position=3,
         creator_id=102,
         name="Erratic",
-        ratings=[5.0, 3.0, 5.0],
+        ratings=[5.0, 3.0, 5.0, 3.0, 5.0],
     )
     # Reliable but mediocre: excluded.
     await _build_creator(
@@ -276,7 +276,7 @@ async def test_consistently_loved_requires_sample_average_and_low_dispersion(
         queue_position=4,
         creator_id=103,
         name="Average",
-        ratings=[3.0, 3.0, 3.0],
+        ratings=[3.0, 3.0, 3.0, 3.0, 3.0],
     )
 
     body = (await auth_client.get(DISCOVERIES_URL)).json()
@@ -285,7 +285,7 @@ async def test_consistently_loved_requires_sample_average_and_low_dispersion(
     assert _keys(view) == ["creator:100"]
     assert view["min_sample"] == DISCOVERY_MIN_RELIABLE_SAMPLE
     entry = view["entries"][0]
-    assert entry["rated_issue_count"] == 3
+    assert entry["rated_issue_count"] == 5
     assert entry["average_rating"] == pytest.approx(5.0)
     assert entry["rating_stddev"] == pytest.approx(0.0)
 
@@ -303,7 +303,7 @@ async def test_polarizing_requires_wide_spread_on_reliable_sample(
         queue_position=1,
         creator_id=110,
         name="Split Opinion",
-        ratings=[5.0, 2.0, 3.0],
+        ratings=[5.0, 2.0, 3.0, 5.0, 2.0],
     )
     await _build_creator(
         async_db,
@@ -311,7 +311,7 @@ async def test_polarizing_requires_wide_spread_on_reliable_sample(
         queue_position=2,
         creator_id=111,
         name="Consensus",
-        ratings=[4.0, 4.0, 5.0],
+        ratings=[4.0, 4.0, 5.0, 4.0, 4.0],
     )
 
     body = (await auth_client.get(DISCOVERIES_URL)).json()
@@ -362,7 +362,7 @@ async def test_highest_top_rating_rate_requires_minimum_share(
         queue_position=1,
         creator_id=130,
         name="Crowd Pleaser",
-        ratings=[5.0, 5.0, 4.0],
+        ratings=[5.0, 5.0, 5.0, 4.0, 4.0],
     )
     await _build_creator(
         async_db,
@@ -370,7 +370,7 @@ async def test_highest_top_rating_rate_requires_minimum_share(
         queue_position=2,
         creator_id=131,
         name="Mixed",
-        ratings=[5.0, 4.0, 4.0],
+        ratings=[5.0, 4.0, 4.0, 4.0, 4.0],
     )
     # Perfect rate but below the reliable floor: excluded from this view.
     await _build_creator(
@@ -387,8 +387,8 @@ async def test_highest_top_rating_rate_requires_minimum_share(
     view = views[CreatorDiscoveryMode.HIGHEST_TOP_RATING_RATE.value]
 
     assert _keys(view) == ["creator:130"]
-    assert view["entries"][0]["top_rating_count"] == 2
-    assert view["entries"][0]["top_rating_rate"] == pytest.approx(2 / 3, abs=1e-3)
+    assert view["entries"][0]["top_rating_count"] == 3
+    assert view["entries"][0]["top_rating_rate"] == pytest.approx(3 / 5, abs=1e-3)
     # The excluded creator still surfaces in the explicitly small-sample view.
     small = views[CreatorDiscoveryMode.GREAT_AVERAGE_SMALL_SAMPLE.value]
     assert "creator:132" in _keys(small)
@@ -416,7 +416,7 @@ async def test_great_average_small_sample_is_below_reliability_floor(
         queue_position=4,
         creator_id=143,
         name="Fully Proven",
-        ratings=[5.0, 5.0, 5.0, 5.0],
+        ratings=[5.0, 5.0, 5.0, 5.0, 5.0],
     )
 
     body = (await auth_client.get(DISCOVERIES_URL)).json()
@@ -579,7 +579,7 @@ async def test_partial_creator_metadata_is_reported_as_lower_bound(
         queue_position=1,
         creator_id=180,
         name="Credited",
-        ratings=[5.0, 5.0, 5.0],
+        ratings=[5.0, 5.0, 5.0, 5.0, 5.0],
     )
     # Rated but never credited: a metadata gap only.
     _thread, issues = await _make_thread(
@@ -590,13 +590,13 @@ async def test_partial_creator_metadata_is_reported_as_lower_bound(
     body = (await auth_client.get(DISCOVERIES_URL)).json()
     coverage = body["coverage"]
 
-    assert coverage["rated_issues_total"] == 4
-    assert coverage["rated_issues_with_creator_metadata"] == 3
+    assert coverage["rated_issues_total"] == 6
+    assert coverage["rated_issues_with_creator_metadata"] == 5
     assert coverage["ratings_complete"] is False
-    # The credited creator's metrics derive from exactly its three real issues.
+    # The credited creator's metrics derive from exactly its five real issues.
     loved = _views_by_mode(body)[CreatorDiscoveryMode.CONSISTENTLY_LOVED.value]
     assert _keys(loved) == ["creator:180"]
-    assert loved["entries"][0]["rated_issue_count"] == 3
+    assert loved["entries"][0]["rated_issue_count"] == 5
 
 
 @pytest.mark.asyncio
@@ -638,7 +638,7 @@ async def test_entry_reasons_match_reported_metrics(
         queue_position=1,
         creator_id=190,
         name="Explainable",
-        ratings=[5.0, 5.0, 4.0],
+        ratings=[5.0, 5.0, 5.0, 4.0, 4.0],
     )
     # A trend creator so the trend view's reasons are exercised too.
     await _build_creator(
@@ -682,7 +682,7 @@ async def test_discovery_never_crosses_users(
         queue_position=1,
         creator_id=400,
         name="Mine",
-        ratings=[5.0, 5.0, 5.0],
+        ratings=[5.0, 5.0, 5.0, 5.0, 5.0],
     )
     await _build_creator(
         async_db,
@@ -690,14 +690,14 @@ async def test_discovery_never_crosses_users(
         queue_position=1,
         creator_id=401,
         name="Theirs",
-        ratings=[5.0, 5.0, 5.0],
+        ratings=[5.0, 5.0, 5.0, 5.0, 5.0],
     )
 
     body = (await auth_client.get(DISCOVERIES_URL)).json()
     loved = _views_by_mode(body)[CreatorDiscoveryMode.CONSISTENTLY_LOVED.value]
 
     assert _keys(loved) == ["creator:400"]
-    assert body["coverage"]["rated_issues_total"] == 3
+    assert body["coverage"]["rated_issues_total"] == 5
 
 
 @pytest.mark.asyncio

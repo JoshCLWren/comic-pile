@@ -61,6 +61,12 @@ vi.mock('../pages/QueuePage/FormatSelect', () => ({
   ),
 }))
 
+// The real preview hook reports create failures through the toast context;
+// the stub keeps the harness renderable without a ToastProvider.
+const createFailureToastDeps = {
+  toastHook: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
+}
+
 /**
  * Render the create modal from the production `useQueueModals` hook. The
  * preview count, warnings, and parse error all come from the hook itself, so
@@ -81,7 +87,7 @@ function PreviewHarness({ issues }: { issues: string }) {
     showRollNudge: false,
     onDismissRollNudge: vi.fn(),
     onRollNudgeNavigate: vi.fn(),
-  })
+  }, createFailureToastDeps)
   const { showCreateModal, setCreateForm } = modals
 
   useEffect(() => {

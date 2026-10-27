@@ -5033,7 +5033,7 @@
           },
           "insufficient_data": {
             "default": false,
-            "description": "True when the creator has fewer than 3 rated issues, making statistics less reliable.",
+            "description": "True when the creator has fewer than 5 rated issues, making statistics less reliable.",
             "title": "Insufficient Data",
             "type": "boolean"
           },
@@ -5057,7 +5057,7 @@
             "title": "Median Rating"
           },
           "min_rated_issues_per_series": {
-            "default": 3,
+            "default": 5,
             "description": "Minimum rated issues a series needs before strongest_series ranks it. Exposed so the UI can explain an empty list instead of silently hiding it.",
             "minimum": 1.0,
             "title": "Min Rated Issues Per Series",
@@ -5168,7 +5168,7 @@
             "description": "Coverage state distinguishing complete from lower-bound statistics."
           },
           "insufficient_data_keys": {
-            "description": "Canonical keys of creators with insufficient data (fewer than 3 rated issues).",
+            "description": "Canonical keys of creators with insufficient data (fewer than 5 rated issues).",
             "items": {
               "type": "string"
             },
@@ -5240,7 +5240,7 @@
           },
           "rated_issue_count": {
             "description": "Number of rated issues backing average_rating. Series below the minimum rated sample are excluded from strongest_series entirely.",
-            "minimum": 3.0,
+            "minimum": 5.0,
             "title": "Rated Issue Count",
             "type": "integer"
           },

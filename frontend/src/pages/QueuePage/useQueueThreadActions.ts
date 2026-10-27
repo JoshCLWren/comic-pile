@@ -91,6 +91,7 @@ interface QueueThreadActionResult {
   confirmRemove: () => Promise<void> | void
   cancelRemove: () => void
   isShuffleConfirmOpen: boolean
+  shuffleError: string | null
   requestShuffle: () => void
   confirmShuffle: () => Promise<void> | void
   cancelShuffle: () => void
@@ -147,6 +148,7 @@ export function useQueueThreadActions(
   const [pendingRemoveThread, setPendingRemoveThread] = useState<ThreadListItem | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
   const [isShuffleConfirmOpen, setIsShuffleConfirmOpen] = useState(false)
+  const [shuffleError, setShuffleError] = useState<string | null>(null)
 
   const handleDragStart = useCallback(
     (threadId: number) => (event: DragEvent<HTMLElement>) => {
@@ -260,10 +262,10 @@ export function useQueueThreadActions(
           restoreSeriesActionsFocus(threadId)
         })
         .catch(() => {
-          window.alert('Failed to move series to front. Please try again.')
+          showToast('Failed to move series to front. Please try again.', 'error')
         })
     },
-    [moveToFrontMutation, restoreSeriesActionsFocus],
+    [moveToFrontMutation, restoreSeriesActionsFocus, showToast],
   )
 
   const handleMoveToBack = useCallback(
@@ -273,32 +275,34 @@ export function useQueueThreadActions(
           restoreSeriesActionsFocus(threadId)
         })
         .catch(() => {
-          window.alert('Failed to move series to back. Please try again.')
+          showToast('Failed to move series to back. Please try again.', 'error')
         })
     },
-    [moveToBackMutation, restoreSeriesActionsFocus],
+    [moveToBackMutation, restoreSeriesActionsFocus, showToast],
   )
 
   const handleReposition = useCallback(
     (threadId: number, targetPosition: number, total: number) => {
       if (targetPosition < 1 || targetPosition > total) {
-        window.alert('Invalid position specified. Please choose a valid position.')
+        showToast('Invalid position specified. Please choose a valid position.', 'error')
         return
       }
       moveToPositionMutation
         .mutate({ id: threadId, position: targetPosition })
         .catch(() => {
-          window.alert('Failed to reposition thread. Please try again.')
+          showToast('Failed to reposition thread. Please try again.', 'error')
         })
     },
-    [moveToPositionMutation],
+    [moveToPositionMutation, showToast],
   )
 
   const requestShuffle = useCallback(() => {
+    setShuffleError(null)
     setIsShuffleConfirmOpen(true)
   }, [])
 
   const cancelShuffle = useCallback(() => {
+    setShuffleError(null)
     setIsShuffleConfirmOpen(false)
   }, [])
 
@@ -306,10 +310,13 @@ export function useQueueThreadActions(
     try {
       await shuffleQueueMutation.mutate()
       setIsShuffleConfirmOpen(false)
+      setShuffleError(null)
     } catch {
       // Keep the confirmation open so the reader can retry without
-      // re-clicking SHUFFLE; the dialog mirrors the delete confirmation.
-      window.alert('Failed to shuffle queue. Please try again.')
+      // re-clicking SHUFFLE. The reason renders inside the open dialog: the
+      // shared toast layer paints below the modal, so a toast here would be
+      // invisible on a nearly full-height mobile dialog.
+      setShuffleError('Failed to shuffle queue. Please try again.')
     }
   }, [shuffleQueueMutation])
 
@@ -326,10 +333,10 @@ export function useQueueThreadActions(
         navigateToRoll(thread, response)
       } catch (error: unknown) {
         console.error('Action failed:', error)
-        window.alert(`Action failed: ${getApiErrorDetail(error)}`)
+        showToast(`Action failed: ${getApiErrorDetail(error)}`, 'error')
       }
     },
-    [navigateToRoll, setPending],
+    [navigateToRoll, setPending, showToast],
   )
 
   const handleSnoozeToggle = useCallback(
@@ -351,12 +358,13 @@ export function useQueueThreadActions(
         restoreSeriesActionsFocus(thread.id)
       } catch (error: unknown) {
         console.error('Snooze action failed:', error)
-        window.alert(
+        showToast(
           `Failed to ${isSnoozed ? 'unsnooze' : 'snooze'} thread: ${getApiErrorDetail(error)}`,
+          'error',
         )
       }
     },
-    [snoozeMutation, unsnoozeMutation, refetchSession, restoreSeriesActionsFocus],
+    [snoozeMutation, unsnoozeMutation, refetchSession, restoreSeriesActionsFocus, showToast],
   )
 
   return {
@@ -381,6 +389,7 @@ export function useQueueThreadActions(
     confirmRemove,
     cancelRemove,
     isShuffleConfirmOpen,
+    shuffleError,
     requestShuffle,
     confirmShuffle,
     cancelShuffle,

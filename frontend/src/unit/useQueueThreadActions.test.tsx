@@ -92,7 +92,6 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   vi.clearAllMocks()
   sharedQueryClient.clear()
-  vi.stubGlobal('alert', vi.fn())
 })
 
 describe('useQueueThreadActions', () => {
@@ -208,7 +207,7 @@ describe('useQueueThreadActions', () => {
     )
 
     await result.current.handleThreadRead(makeThread({ id: 7, is_blocked: true }))
-    expect(window.alert).not.toHaveBeenCalled()
+    expect(toastSpy).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
 
     await result.current.handleThreadRead(makeThread({ id: 8 }))
@@ -271,8 +270,9 @@ describe('useQueueThreadActions', () => {
     await result.current.handleThreadRead(makeThread({ id: 8 }))
 
     expect(navigate).not.toHaveBeenCalled()
-    expect(window.alert).toHaveBeenCalledWith(
+    expect(toastSpy).toHaveBeenCalledWith(
       expect.stringContaining('Thread 8 has no issues remaining'),
+      'error',
     )
   })
 
@@ -303,7 +303,7 @@ describe('useQueueThreadActions', () => {
     expect(unsnooze.mutate).toHaveBeenCalledWith(4)
   })
 
-  it('reports shuffle failure as an alert and keeps the confirmation open', async () => {
+  it('exposes a shuffle failure for the open confirmation instead of a hidden toast', async () => {
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
@@ -321,8 +321,39 @@ describe('useQueueThreadActions', () => {
 
     act(() => result.current.requestShuffle())
     await act(() => result.current.confirmShuffle())
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('shuffle'))
+    // The dialog stays open, so the failure must be dialog state; the shared
+    // toast paints below the modal layer and is invisible on mobile.
+    expect(result.current.shuffleError).toBe('Failed to shuffle queue. Please try again.')
+    expect(toastSpy).not.toHaveBeenCalled()
     expect(result.current.isShuffleConfirmOpen).toBe(true)
+  })
+
+  it('clears the shuffle failure when the confirmation reopens', async () => {
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession,
+            restoreSeriesActionsFocus: vi.fn(),
+          },
+          buildDeps({
+            shuffleHook: () => ({ mutate: vi.fn().mockRejectedValue(new Error('shuffle failed')), isPending: false, isError: false }),
+          }),
+        ),
+      { wrapper },
+    )
+
+    act(() => result.current.requestShuffle())
+    await act(() => result.current.confirmShuffle())
+    expect(result.current.shuffleError).not.toBeNull()
+
+    act(() => result.current.cancelShuffle())
+    expect(result.current.shuffleError).toBeNull()
+
+    act(() => result.current.requestShuffle())
+    expect(result.current.isShuffleConfirmOpen).toBe(true)
+    expect(result.current.shuffleError).toBeNull()
   })
 
   it('gates the queue shuffle behind a confirmation that cancels without mutating', async () => {
@@ -373,7 +404,7 @@ describe('useQueueThreadActions', () => {
     await result.current.handleReposition(1, 0, 2)
     await result.current.handleReposition(1, 3, 2)
     expect(movePosition.mutate).not.toHaveBeenCalled()
-    expect(window.alert).toHaveBeenCalled()
+    expect(toastSpy).toHaveBeenCalled()
   })
 
   it('opens and cancels the delete confirmation without mutating', async () => {

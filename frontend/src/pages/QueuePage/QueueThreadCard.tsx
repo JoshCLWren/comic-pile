@@ -215,7 +215,7 @@ export default function QueueThreadCard({
               <MarqueeTitle title={thread.title} />
             </button>
             {isBlocked && (
-              <Tooltip content={blockerLabels.length > 0 ? blockerLabels.join('\n') : 'Waiting for reading requirements'}>
+              <Tooltip content={blockerLabels[0] ?? 'Waiting for reading requirements'}>
                 <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked series">🔒</span>
               </Tooltip>
             )}
@@ -302,15 +302,28 @@ export default function QueueThreadCard({
               className="mt-2 w-full rounded-lg border border-[var(--theme-continuity-accent)]/20 bg-[var(--theme-continuity-accent)]/10 px-3 py-2 text-left text-xs text-[var(--theme-text-muted)]"
             >
               <ReadingBoundaryExplanation
+                compact
                 explanation={readingBoundary}
                 isPending={boundaryPending}
                 fallback={
                   <>
-                    <EligibilityExplanation
-                      isBlocked={isBlocked}
-                      reasons={thread.blocking_reasons}
-                      dependencies={blockingDependencies}
-                    />
+                    {blockingDependencies[0] ? (
+                      <p>
+                        Read <Link
+                          to={`/thread/${blockingDependencies[0].thread_id}`}
+                          aria-label={`Read required issue: ${blockingDependencies[0].label}`}
+                          className="text-[var(--theme-continuity-accent)] underline"
+                        >{blockingDependencies[0].label}</Link> first.
+                      </p>
+                    ) : <p>{thread.blocking_reasons?.[0] ?? 'Waiting for reading requirements'}</p>}
+                    <details className="mt-1">
+                      <summary className="cursor-pointer font-semibold">Show all reading requirements</summary>
+                      <EligibilityExplanation
+                        isBlocked={isBlocked}
+                        reasons={thread.blocking_reasons}
+                        dependencies={blockingDependencies}
+                      />
+                    </details>
                     <button
                       type="button"
                       onClick={onDependencies}

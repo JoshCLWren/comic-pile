@@ -657,8 +657,12 @@ export default function RollPage() {
           onSetCurrentIssue={handleSetCurrentIssue}
           isShuffleOpen={state.isShuffleOpen}
           onShuffleConfirm={actions.performShuffle}
-          onShuffleCancel={() => state.setIsShuffleOpen(false)}
+          onShuffleCancel={() => {
+            state.setShuffleError('')
+            state.setIsShuffleOpen(false)
+          }}
           shufflePending={shuffleQueueMutation.isPending}
+          shuffleError={state.shuffleError}
           seriesCount={activeSeriesCount ?? 0}
         />
 

@@ -110,6 +110,128 @@ describe('ReadingBoundaryExplanation', () => {
     expect(screen.queryByText('Historical associations — not active blockers')).not.toBeInTheDocument()
   })
 
+  it('shows only the first actionable strict-order issue by default in compact mode', async () => {
+    renderExplanation({
+      compact: true,
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'Abe Sapien #8 is waiting on strict Mignolaverse order.',
+        blockers: [{
+          kind: 'strict_order',
+          origin: 'reading_list',
+          reason: 'Strict order in Mignolaverse: read Casualties #1 and every other earlier unread comic first',
+          waiting_on: [
+            issue({ issue_id: 117305, thread_id: 18847, thread_title: 'B.P.R.D.: Casualties', label: 'B.P.R.D.: Casualties #1' }),
+            issue({ issue_id: 117306, thread_id: 18848, thread_title: 'Abe Sapien: The Haunted Boy', label: 'Abe Sapien: The Haunted Boy #1' }),
+          ],
+        }],
+      }),
+    })
+    const first = screen.getByRole('link', { name: 'Open B.P.R.D.: Casualties issue #1' })
+    expect(first).toBeVisible()
+    const disclosure = screen.getByRole('button', { name: 'Show all reading requirements' })
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('link', { name: 'Open Abe Sapien: The Haunted Boy issue #1' })).not.toBeInTheDocument()
+    expect(first.closest('p')).toHaveTextContent(/^Read B\.P\.R\.D\.: Casualties #1.* first\.$/)
+    await userEvent.setup().click(disclosure)
+    expect(screen.getByRole('button', { name: 'Hide all reading requirements' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('link', { name: 'Open Abe Sapien: The Haunted Boy issue #1' })).toBeVisible()
+  })
+
+  it('uses the first actionable non-strict blocker when a strict blocker has no waiting issue', async () => {
+    renderExplanation({
+      compact: true,
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'Saga #6 has reading requirements.',
+        blockers: [
+          { kind: 'strict_order', origin: 'reading_list', reason: 'Strict order pending.', waiting_on: [] },
+          {
+            kind: 'hold',
+            origin: 'reading_list',
+            reason: 'Hold in Ultimate: read One Year In #1 first.',
+            waiting_on: [issue()],
+            editor: { kind: 'reading_list', list_id: 4, label: 'Ultimate' },
+          },
+        ],
+      }),
+    })
+
+    expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Edit Ultimate' })).toHaveAttribute('href', '/reading-lists/4')
+    expect(screen.queryByText('Strict order pending.')).not.toBeInTheDocument()
+    const disclosure = screen.getByRole('button', { name: 'Show all reading requirements' })
+    await userEvent.setup().click(disclosure)
+    expect(screen.getByText('Strict order pending.')).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Hide all reading requirements' }))
+    expect(screen.queryByText('Strict order pending.')).not.toBeInTheDocument()
+  })
+
+  it('shows the original details when compact blockers lack an actionable issue', () => {
+    renderExplanation({
+      compact: true,
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'No issue identified.',
+        blockers: [{ kind: 'prerequisite', origin: 'reader_prerequisite', reason: 'Resolve prerequisite.', waiting_on: [] }],
+      }),
+    })
+    expect(screen.getByText('Resolve prerequisite.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Show all reading requirements' })).not.toBeInTheDocument()
+  })
+
+  it('does not show a blocker disclosure for an available issue in compact mode', () => {
+    renderExplanation({ compact: true, explanation: explanation({ state: 'available', blockers: [] }) })
+    expect(screen.getByText('Saga #6 is available next.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Show all reading requirements' })).not.toBeInTheDocument()
+  })
+
+  it('falls back to a hold when a strict blocker omits waiting_on entirely', () => {
+    renderExplanation({
+      compact: true,
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'Reading order is blocked.',
+        blockers: [
+          { kind: 'strict_order', origin: 'reading_list', reason: 'Strict source has no actionable comic.' },
+          { kind: 'hold', origin: 'reading_list', reason: 'Read One Year In first.', waiting_on: [issue()] },
+        ],
+      }),
+    })
+    expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toBeVisible()
+    expect(screen.queryByText('Strict source has no actionable comic.')).not.toBeInTheDocument()
+  })
+
+  it('prefers the strict reading frontier even when a hold blocker comes first', async () => {
+    renderExplanation({
+      compact: true,
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'Multiple reading requirements.',
+        blockers: [
+          { kind: 'hold', origin: 'reading_list', reason: 'Hold on One Year In.', waiting_on: [issue()] },
+          {
+            kind: 'strict_order',
+            origin: 'reading_list',
+            reason: 'Read Casualties before this series.',
+            waiting_on: [issue({ issue_id: 117305, thread_id: 18847, thread_title: 'B.P.R.D.: Casualties', label: 'B.P.R.D.: Casualties #1' })],
+          },
+        ],
+      }),
+    })
+    expect(screen.getByRole('link', { name: 'Open B.P.R.D.: Casualties issue #1' })).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Open One Year In issue #1' })).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Show all reading requirements' }))
+    expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toBeVisible()
+  })
+
+  it('renders no requirements list for a blocked compact response without blockers', () => {
+    renderExplanation({ compact: true, explanation: explanation({ state: 'blocked', summary: 'Blocked without details.' }) })
+    expect(screen.getByText('Blocked without details.')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Active reading blockers' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Show all reading requirements' })).not.toBeInTheDocument()
+  })
+
   it('links the next issue to its editor target when the server supplies one', () => {
     renderExplanation({
       explanation: explanation({

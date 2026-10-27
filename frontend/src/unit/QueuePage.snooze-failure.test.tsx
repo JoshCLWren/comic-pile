@@ -57,8 +57,9 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
+const toastMocks = vi.hoisted(() => ({ showToast: vi.fn(), removeToast: vi.fn() }))
 vi.mock('../contexts/useToast', () => ({
-  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
+  useToast: vi.fn(() => ({ showToast: toastMocks.showToast, removeToast: toastMocks.removeToast, toasts: [] })),
 }))
 
 // SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
@@ -71,7 +72,6 @@ const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 
 beforeEach(() => {
-  vi.stubGlobal('alert', vi.fn())
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
@@ -142,7 +142,7 @@ it('does not refresh session or threads when snooze fails', async () => {
   await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
   await waitFor(() => {
-    expect(alert).toHaveBeenCalledWith('Failed to snooze thread: Snooze unavailable')
+    expect(toastMocks.showToast).toHaveBeenCalledWith('Failed to snooze thread: Snooze unavailable', 'error')
   })
   expect(snooze).toHaveBeenCalledOnce()
   expect(refetchSession).not.toHaveBeenCalled()
@@ -183,7 +183,7 @@ it('does not refresh session or threads when unsnooze fails', async () => {
   await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
   await waitFor(() => {
-    expect(alert).toHaveBeenCalledWith('Failed to unsnooze thread: Unsnooze unavailable')
+    expect(toastMocks.showToast).toHaveBeenCalledWith('Failed to unsnooze thread: Unsnooze unavailable', 'error')
   })
   expect(unsnooze).toHaveBeenCalledWith(1)
   expect(refetchSession).not.toHaveBeenCalled()
@@ -226,5 +226,5 @@ it('keeps snooze disabled before session data has loaded', async () => {
   expect(refetchSession).not.toHaveBeenCalled()
   expect(snooze).not.toHaveBeenCalled()
   expect(refetchThreads).not.toHaveBeenCalled()
-  expect(alert).not.toHaveBeenCalled()
+  expect(toastMocks.showToast).not.toHaveBeenCalled()
 })

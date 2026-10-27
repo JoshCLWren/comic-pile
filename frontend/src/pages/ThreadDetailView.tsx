@@ -109,7 +109,11 @@ export default function ThreadDetailView() {
   // Malformed `?issue=` values collapse to 0 (plain thread navigation) so a
   // stale or hand-edited link cannot drive pagination toward an impossible row.
   const requestedIssueId = parseRequestedIssueId(location.search)
+  const requestedIssueRaw = new URLSearchParams(location.search).get('issue')
+  const hasIssueParam = requestedIssueRaw !== null && requestedIssueRaw !== ''
   const focusedIssueRef = useRef<number | null>(null)
+  const lastLocationKeyRef = useRef<string>(location.key)
+  const [deepLinkNotice, setDeepLinkNotice] = useState<string | null>(null)
   const [issuesExpanded, setIssuesExpanded] = useState(requestedIssueId > 0)
   const [isDependencyOpen, setIsDependencyOpen] = useState(false)
   const editNotesId = useId()
@@ -159,25 +163,43 @@ export default function ThreadDetailView() {
       activeThreadIdRef.current = threadId
       setIssuesExpanded(requestedIssueId > 0)
       focusedIssueRef.current = null
+      lastLocationKeyRef.current = location.key
       setDeepLinkedIssueId(null)
+      setDeepLinkNotice(null)
       setBulkSelectMode(false)
       setSelectedIssueIds(new Set())
       setBulkNotice(null)
       setTagEditorIssue(null)
+    } else if (location.key !== lastLocationKeyRef.current) {
+      // Back/Forward or other in-thread navigation: reset arrival state so the
+      // new (or restored) target is re-applied deterministically.
+      lastLocationKeyRef.current = location.key
+      if (requestedIssueId > 0) {
+        setIssuesExpanded(true)
+      }
+      focusedIssueRef.current = null
+      setDeepLinkedIssueId(null)
+      setDeepLinkNotice(null)
     } else if (requestedIssueId > 0 && focusedIssueRef.current !== requestedIssueId) {
-      // Same thread, new issue target (e.g. Back/Forward or a pasted link):
+      // Same thread, new issue target (e.g. a pasted link):
       // expand the list and clear any previous arrival state so the new target
       // is scrolled to, focused, and highlighted.
       setIssuesExpanded(true)
       focusedIssueRef.current = null
       setDeepLinkedIssueId(null)
+      setDeepLinkNotice(null)
     } else if (requestedIssueId === 0) {
       // Plain thread navigation: clear arrival tracking without collapsing an
       // already-expanded list.
       focusedIssueRef.current = null
       setDeepLinkedIssueId(null)
+      if (hasIssueParam) {
+        setDeepLinkNotice("That issue isn't in this thread.")
+      } else {
+        setDeepLinkNotice(null)
+      }
     }
-  }, [threadId, requestedIssueId])
+  }, [threadId, requestedIssueId, location.key, hasIssueParam])
 
   // Deep-link arrival (#3626): jump straight to the exact canonical issue named
   // by `?issue=<issue_id>`, focus it so keyboard and assistive-technology users
@@ -188,6 +210,9 @@ export default function ThreadDetailView() {
     if (!issuesExpanded || requestedIssueId <= 0) {
       setDeepLinkedIssueId(null)
       focusedIssueRef.current = null
+      if (hasIssueParam && requestedIssueId === 0) {
+        setDeepLinkNotice("That issue isn't in this thread.")
+      }
       return
     }
     if (focusedIssueRef.current === requestedIssueId) return
@@ -199,6 +224,7 @@ export default function ThreadDetailView() {
         // Pagination exhausted or failed without finding the target; clear any
         // stale highlight from a previous navigation.
         setDeepLinkedIssueId(null)
+        setDeepLinkNotice("That issue isn't in this thread.")
       }
       return
     }
@@ -208,7 +234,8 @@ export default function ThreadDetailView() {
     row.focus({ preventScroll: true })
     focusedIssueRef.current = requestedIssueId
     setDeepLinkedIssueId(requestedIssueId)
-  }, [issuesExpanded, requestedIssueId, issuesQuery])
+    setDeepLinkNotice(null)
+  }, [issuesExpanded, requestedIssueId, issuesQuery, hasIssueParam, location.key])
 
   function handleToggleBulkSelect() {
     setBulkSelectMode((previous) => {
@@ -559,6 +586,12 @@ export default function ThreadDetailView() {
             targetLabel={thread.title}
           />
         </div>
+
+        {deepLinkNotice && (
+          <p role="status" className="text-sm text-stone-400">
+            {deepLinkNotice}
+          </p>
+        )}
 
         {isMigrated && (
           <div className="surface-panel p-3 md:p-4 space-y-3">

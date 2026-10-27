@@ -20,7 +20,7 @@ qp = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = qp
 _SPEC.loader.exec_module(qp)
 
-BEFORE_RESET = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
+BEFORE_RESET = datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
 AFTER_RESET = datetime(2026, 11, 1, 0, 0, 1, tzinfo=UTC)
 
 
@@ -383,3 +383,11 @@ def test_worker_46_never_paused_by_create(tmp_path: Path) -> None:
     path = tmp_path / "pauses.json"
     with pytest.raises(ValueError, match="protected"):
         qp.create_pause(46, provider="mistral", path=path)
+
+
+def test_worker_46_never_resumed_by_resume(tmp_path: Path) -> None:
+    """Worker 46 is protected: resume_worker returns True without smoke."""
+    path = tmp_path / "pauses.json"
+    # Even if a pause file exists for 46 (which load_pauses would reject),
+    # resume_worker must short-circuit and return True.
+    assert qp.resume_worker(46, path=path) is True

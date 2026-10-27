@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useId, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
@@ -6,9 +6,11 @@ import { useDebounce } from '../hooks/useDebounce'
 import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { useCreatorDiscoveries } from '../hooks/useCreatorDiscoveries'
 import { creatorRoutePath, parseCreatorKey } from '../utils/creatorKey'
+import { SMALL_SAMPLE_THRESHOLD } from '../utils/creatorUtils'
 import type { CreatorListItem } from '../services/api-creators'
 import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 import CreatorDiscoverySection from '../components/CreatorDiscoverySection'
+import GlossaryLink from '../components/GlossaryLink'
 
 /** Quiet period before a typed name search becomes a new bounded query. */
 const SEARCH_DEBOUNCE_MS = 300
@@ -34,9 +36,6 @@ const MIN_RATINGS_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
   { value: 10, label: '10+' },
   { value: 25, label: '25+' },
 ]
-
-/** Sample sizes below this are visibly called out in the average column. */
-const SMALL_SAMPLE_THRESHOLD = 5
 
 /**
  * The two top-level modes of `/creators`: the plain directory and the optional
@@ -93,6 +92,21 @@ function CreatorRow({
   // Unselected checkboxes are disabled only when at max selection.
   const canSelect = isSelected || selectionCount < maxSelection
 
+  const checkbox = (
+    <input
+      type="checkbox"
+      checked={isSelected}
+      onChange={onToggle}
+      disabled={!canSelect}
+      aria-label={`Select ${item.display_name} for comparison`}
+      className="mt-1.5 h-4 w-4 rounded border-[var(--theme-border)] text-[var(--theme-primary-action)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+    />
+  )
+
+  const [showSampleHelp, setShowSampleHelp] = useState(false)
+  const helpId = useId()
+  const sampleButtonRef = useRef<HTMLButtonElement>(null)
+
   const body = (
     <>
       <span className="block min-w-0 break-words text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
@@ -110,25 +124,58 @@ function CreatorRow({
         ) : (
           <span>unrated</span>
         )}
-        {average != null && ratingsCount < SMALL_SAMPLE_THRESHOLD && (
-          <span className="font-semibold" style={{ color: 'var(--theme-warning)' }}>
-            small sample
-          </span>
-        )}
       </span>
     </>
   )
 
-  const checkbox = (
-    <input
-      type="checkbox"
-      checked={isSelected}
-      onChange={onToggle}
-      disabled={!canSelect}
-      aria-label={`Select ${item.display_name} for comparison`}
-      className="mt-1.5 h-4 w-4 rounded border-[var(--theme-border)] text-[var(--theme-primary-action)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
-    />
-  )
+  const showSmallSample = average != null && ratingsCount < SMALL_SAMPLE_THRESHOLD
+
+  /**
+   * Help control lives outside the row's Link (#3627 review): a button
+   * nested in a link is invalid and lets clicks navigate to the creator
+   * instead of opening the explanation. Activation shows the explanation
+   * inline for touch, pointer, and keyboard readers — hover is never required.
+   * The panel stays in the document (hidden while collapsed) so `aria-controls`
+   * always resolves, and Escape is handled at the group so it also works while
+   * focus is on the glossary link inside the panel.
+   */
+  const sampleHelp = showSmallSample ? (
+    <div
+      className="mt-1 flex flex-wrap items-start gap-x-2 text-xs"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && showSampleHelp) {
+          event.preventDefault()
+          setShowSampleHelp(false)
+          sampleButtonRef.current?.focus()
+        }
+      }}
+    >
+      <button
+        ref={sampleButtonRef}
+        type="button"
+        className="-mx-1 inline-flex min-h-6 items-center rounded px-1 font-semibold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+        style={{ color: 'var(--theme-warning)' }}
+        aria-expanded={showSampleHelp}
+        aria-controls={helpId}
+        aria-label={`Small sample: fewer than ${SMALL_SAMPLE_THRESHOLD} rated comics. Average ratings based on a small sample may be less representative.`}
+        onClick={() => setShowSampleHelp((open) => !open)}
+      >
+        small sample
+      </button>
+      <span
+        id={helpId}
+        hidden={!showSampleHelp}
+        className="mt-0.5 basis-full break-words"
+        style={{ color: 'var(--theme-text-muted)' }}
+      >
+        Fewer than {SMALL_SAMPLE_THRESHOLD} rated comics (distinct comics you have
+        rated — not read items or credited roles). Average ratings based on a small
+        sample may be less representative. This is a confidence/context indicator,
+        not a data-quality defect or a new rating-scoring formula.{' '}
+        <GlossaryLink id="small-sample">Glossary</GlossaryLink>
+      </span>
+    </div>
+  ) : null
 
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2 flex items-start gap-3" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
@@ -144,6 +191,7 @@ function CreatorRow({
         ) : (
           <div className="min-w-0">{body}</div>
         )}
+        {sampleHelp}
       </div>
     </li>
   )

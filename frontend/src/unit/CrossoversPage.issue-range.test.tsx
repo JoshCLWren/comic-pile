@@ -372,7 +372,6 @@ describe('CrossoversPage issue ranges', () => {
 
   it('clears expanded range state when deleting the expanded crossover', async () => {
     groupsApi.delete.mockResolvedValue(undefined)
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     renderPage()
     await screen.findByText('Annihilation')
@@ -380,6 +379,7 @@ describe('CrossoversPage issue ranges', () => {
     await loadIssues()
     groupsApi.list.mockResolvedValue([])
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Delete Crossover' })).getByRole('button', { name: 'Delete Crossover' }))
 
     await waitFor(() => expect(groupsApi.delete).toHaveBeenCalledWith(7))
     await waitFor(() => expect(screen.queryByText('Annihilation')).not.toBeInTheDocument())

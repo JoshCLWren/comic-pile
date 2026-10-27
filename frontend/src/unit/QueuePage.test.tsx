@@ -138,7 +138,6 @@ const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
 const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
-  vi.stubGlobal('alert', vi.fn())
   mockedUseQueueThreads.mockReturnValue({
     data: [
       { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
@@ -616,11 +615,78 @@ it('uses canonical boundary blockers for queue rows instead of legacy dependenci
 
   const readButton = screen.getByLabelText('Read & Rate')
   expect(readButton).toBeDisabled()
-  expect(readButton).toHaveAttribute('title', expect.stringContaining('Hold in Ultimate'))
+  expect(readButton).toHaveAttribute('title', expect.stringContaining('Read One Year In #1 first'))
   expect(screen.getByTestId('canonical-reading-boundary')).toBeInTheDocument()
   // A canonical answer suppresses the legacy batch read, so rows never pay for
   // two sources of blocking truth.
   expect(mockedUseQueueBlockingInfo).toHaveBeenLastCalledWith([])
+})
+
+it.each([
+  {
+    caseName: 'strict predecessor is missing and a hold has the first action',
+    blockers: [
+      { kind: 'strict_order', origin: 'reading_list', reason: 'Strict source has no identified issue.' },
+      {
+        kind: 'hold',
+        origin: 'reading_list',
+        reason: 'Hold for One Year In.',
+        waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1' }],
+      },
+    ],
+    expectedTitle: 'Read One Year In #1 first',
+  },
+  {
+    caseName: 'strict predecessor takes priority over an earlier hold',
+    blockers: [
+      {
+        kind: 'hold',
+        origin: 'reading_list',
+        reason: 'Hold for One Year In.',
+        waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1' }],
+      },
+      {
+        kind: 'strict_order',
+        origin: 'reading_list',
+        reason: 'Strict Mignolaverse order.',
+        waiting_on: [{ issue_id: 117305, thread_id: 18847, thread_title: 'B.P.R.D.: Casualties', issue_number: '1', label: 'B.P.R.D.: Casualties #1' }],
+      },
+    ],
+    expectedTitle: 'Read B.P.R.D.: Casualties #1 first',
+  },
+  {
+    caseName: 'blocker reason is retained when no actionable issue is available',
+    blockers: [{ kind: 'prerequisite', origin: 'reader_prerequisite', reason: 'Finish the previous series before reading Saga.' }],
+    expectedTitle: 'Finish the previous series before reading Saga.',
+  },
+  {
+    caseName: 'no blockers means a neutral disabled read reason',
+    blockers: [],
+    expectedTitle: 'Waiting for reading requirements',
+  },
+])('uses the immediate Queue read-blocker explanation when $caseName', ({ blockers, expectedTitle }) => {
+  mockedUseQueueThreads.mockReturnValue({
+    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] }],
+    isPending: false,
+    refetch: vi.fn(),
+  })
+  mockedUseReadingBoundaries.mockReturnValue({
+    data: {
+      threads: {
+        1: {
+          thread_id: 1,
+          state: 'blocked',
+          summary: 'Saga has reading requirements.',
+          blockers,
+        },
+      },
+    },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  expect(screen.getByLabelText('Read & Rate')).toHaveAttribute('title', expect.stringContaining(expectedTitle))
 })
 
 it('follows canonical availability over a stale legacy blocked flag', () => {
@@ -680,7 +746,7 @@ it('shows one shared boundary failure notice and retries the batch', async () =>
   expect(readButton).toBeDisabled()
   expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
-  expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
+  expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'), 'error')
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
   expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
@@ -818,13 +884,21 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1 },
     { id: 2, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1 },
   ], isPending: false, refetch: vi.fn() })
+  const showToast = vi.fn()
+  vi.mocked(useToast).mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByRole('button', { name: /shuffle/i }))
   await user.click(screen.getByTestId('confirm-shuffle-queue'))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('shuffle')))
+  // The confirmation stays open on failure so the reason is visible inside it
+  // instead of behind the dialog layer (PR #4226 review).
+  await waitFor(() =>
+    expect(screen.getByTestId('shuffle-queue-error')).toHaveTextContent(/shuffle/i),
+  )
+  await user.keyboard('{Escape}')
+  expect(screen.queryByTestId('shuffle-queue-error')).not.toBeInTheDocument()
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /move to front/i }))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('front')))
+  await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.stringContaining('front'), 'error'))
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
   const slider = screen.getByRole('slider')
@@ -851,7 +925,13 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.type(screen.getByLabelText('Title'), 'Broken')
   await user.type(screen.getByLabelText('Issues'), '1')
   await user.click(screen.getByRole('button', { name: /create series/i }))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('create failed')))
+  await waitFor(() =>
+    expect(screen.getByTestId('create-thread-error')).toHaveTextContent(/create failed/i),
+  )
+  // The Add Series dialog is still open; cancelling must clear the failure so
+  // it does not leak onto the next attempt.
+  await user.keyboard('{Escape}')
+  expect(screen.queryByTestId('create-thread-error')).not.toBeInTheDocument()
 })
 
   it('uses thread blocked state without loading dependency details, and handles edit failure', async () => {

@@ -288,8 +288,11 @@ describe('ThreadPool exclusion transparency', () => {
       inactiveExpanded: true,
     })
 
-    const links = screen.getAllByRole('link', { name: 'Superman' })
+    const links = screen.getAllByRole('link', { name: /^Superman/ })
     expect(links.map((link) => link.getAttribute('href'))).toEqual(['/thread/11', '/thread/12'])
+    // Same-named rows carry a truthful Thread fallback instead of a guessed volume.
+    expect(links[0]).toHaveTextContent('Series #11')
+    expect(links[1]).toHaveTextContent('Series #12')
   })
 
   it('never loans a same-title Thread to a row that has no id', () => {
@@ -301,7 +304,7 @@ describe('ThreadPool exclusion transparency', () => {
       inactiveExpanded: true,
     })
 
-    const links = screen.getAllByRole('link', { name: 'Superman' })
+    const links = screen.getAllByRole('link', { name: /^Superman/ })
     expect(links).toHaveLength(1)
     expect(links[0]).toHaveAttribute('href', '/thread/11')
     expect(screen.getAllByText('Superman')).toHaveLength(2)

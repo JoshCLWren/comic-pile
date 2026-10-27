@@ -98,8 +98,10 @@ export function useQueueThreadCards({
       const blockingReasons = canonicalBoundary
         ? canonicalBoundary.blockers?.map((blocker) => blocker.reason) ?? []
         : blockingDependencies.map((dependency) => dependency.label)
-      const readDisabledReason =
-        blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Waiting for reading requirements'
+      const primaryIssue = canonicalBoundary?.blockers?.find((blocker) => blocker.kind === 'strict_order' && (blocker.waiting_on?.length ?? 0) > 0)?.waiting_on?.[0] ?? canonicalBoundary?.blockers?.find((blocker) => (blocker.waiting_on?.length ?? 0) > 0)?.waiting_on?.[0]
+      const readDisabledReason = primaryIssue
+        ? `Read ${primaryIssue.label} first. Open reading requirements for the full explanation.`
+        : blockingReasons[0] ?? 'Waiting for reading requirements'
 
       return (
         <QueueThreadCard

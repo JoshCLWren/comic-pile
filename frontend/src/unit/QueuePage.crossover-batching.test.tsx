@@ -103,7 +103,6 @@ let listForThreads: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver)
-  vi.stubGlobal('alert', vi.fn())
   // SAFETY: mockReturnValue accepts partial hook returns; never cast bypasses full-type requirements
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type

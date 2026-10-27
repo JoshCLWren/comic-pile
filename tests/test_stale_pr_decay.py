@@ -2,7 +2,7 @@
 """Regression coverage for the adaptive stale-PR decay guard."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 import importlib.util
 import sys
 from pathlib import Path
@@ -549,3 +549,55 @@ def test_reset_issue_to_unowned_respects_terminal_closed_issue(monkeypatch) -> N
     module.reset_issue_to_unowned(100)
 
     assert writes == []
+
+
+def test_process_stale_prs_does_not_close_manual_only_pr(monkeypatch) -> None:
+    """A factory PR with the shared manual-only marker must stay open.
+
+    Stale expiration ages from created_at, so a reopen of #3971/#3970 still
+    looks ~621k seconds old versus the 86400s cold-start threshold. Skip the
+    close instead of inventing a second hold marker.
+    """
+    now = 1_800_000_000
+    created = datetime.fromtimestamp(now - 700_000, tz=UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    source = (SCRIPTS / "stale_pr_decay.py").read_text(encoding="utf-8")
+    assert "from factory_work_policy import is_manual_only" in source
+    hold_body = "<!-- factory-execution:manual-only -->\nHold this factory PR.\n"
+    assert module.is_manual_only(hold_body)
+    hold = make_pr(
+        7,
+        created=created,
+        state="OPEN",
+        body=hold_body,
+    )
+    ordinary = make_pr(
+        8,
+        created=created,
+        state="OPEN",
+        body="Ordinary autonomous factory work.\n",
+    )
+    closed: list[int] = []
+    comment_fetches: list[int] = []
+    monkeypatch.setattr(
+        module,
+        "get_pr_comments",
+        lambda number: comment_fetches.append(number) or [],
+    )
+    monkeypatch.setattr(
+        module,
+        "record_stale_expiration",
+        lambda pr_number, issue_number, age_seconds, baseline: (
+            closed.append(pr_number) or "marker"
+        ),
+    )
+
+    results = module.process_stale_prs(prs=[hold, ordinary], now_epoch=now)
+    by_pr = {int(result["pr"]): result for result in results}
+
+    assert by_pr[7]["status"] == "manual-only"
+    assert 7 not in closed
+    assert 7 not in comment_fetches
+    assert 8 in closed
+    assert by_pr[8]["status"] == "expired"

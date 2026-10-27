@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
+import { existingList } from './fixtures/customCblFixture'
 import { queryKeys } from '../query/queryKeys'
 
 const mocks = vi.hoisted(() => ({
@@ -62,43 +63,6 @@ function renderBuilder(onApplied = vi.fn()) {
     </QueryClientProvider>,
   )
   return { client, onApplied }
-}
-
-const existingList = {
-  id: 9,
-  user_id: 1,
-  name: 'Starman into JSA',
-  description: 'The bridge I actually want',
-  mode: 'loose',
-  issue_count: 2,
-  created_at: '2026-09-14T03:00:00Z',
-  updated_at: '2026-09-14T03:00:00Z',
-  entries: [
-    {
-      id: 91,
-      position: 0,
-      issue_id: 26360,
-      thread_id: 180,
-      series_name: 'Starman',
-      issue_number: '55',
-      status: 'unread',
-      is_checkpoint: false,
-      gate: 'none',
-      skipped: false,
-    },
-    {
-      id: 92,
-      position: 1,
-      issue_id: 30001,
-      thread_id: 9001,
-      series_name: 'All-Star Comics',
-      issue_number: '1',
-      status: 'unread',
-      is_checkpoint: false,
-      gate: 'none',
-      skipped: false,
-    },
-  ],
 }
 
 const globalSource = {
@@ -250,6 +214,84 @@ describe('CustomCBLBuilder', () => {
         status: 'unread',
       },
     ])
+  })
+
+  it('navigates 65 strict-list issues in pages, jumps and moves an issue without discarding the others', async () => {
+    const entries = Array.from({ length: 65 }, (_, index) => ({
+      ...existingList.entries[0],
+      id: 1000 + index,
+      issue_id: 80000 + index,
+      position: index,
+      series_name: 'Hellboy and the B.P.R.D.: The Long Night',
+      issue_number: String(index + 1),
+    }))
+    const longList = { ...existingList, mode: 'strict', issue_count: entries.length, entries }
+    mocks.get.mockResolvedValue(longList)
+    mocks.update.mockResolvedValue(longList)
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+
+    await screen.findByText('Hellboy and the B.P.R.D.: The Long Night #1')
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
+    expect(screen.queryByText('Hellboy and the B.P.R.D.: The Long Night #31')).not.toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
+    expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #31')).toBeInTheDocument()
+    expect(screen.queryByText('Hellboy and the B.P.R.D.: The Long Night #1')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Jump to reading list position'), { target: { value: '65' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Go to position' }))
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(5)
+    const last = screen.getAllByTestId('reading-list-entry').at(-1)!
+    const label = 'Hellboy and the B.P.R.D.: The Long Night #65'
+    expect(within(last).getByTestId('reading-list-entry-title')).toHaveTextContent(label)
+    fireEvent.click(within(last).getByRole('button', { name: `Show settings for ${label}` }))
+    fireEvent.change(within(last).getByLabelText(`Move ${label} to position`), { target: { value: '2' } })
+    fireEvent.click(within(last).getByRole('button', { name: 'Move here' }))
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
+    expect(screen.getAllByTestId('reading-list-entry')[1]).toHaveTextContent(label)
+    fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+    await waitFor(() => {
+      expect(mocks.update).toHaveBeenCalledWith(9, expect.objectContaining({
+        issue_ids: expect.arrayContaining([80000, 80064, 80063]),
+      }))
+      const payload = mocks.update.mock.calls[0][1]
+      expect(payload.issue_ids).toHaveLength(65)
+      expect(payload.issue_ids.slice(0, 3)).toEqual([80000, 80064, 80001])
+    })
+
+    fireEvent.change(screen.getByLabelText('Find an issue in this reading list'), { target: { value: '#49' } })
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(1)
+    expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #49')).toBeInTheDocument()
+  })
+
+  it('goes to the correct previous page after removing the final issue on the last page', async () => {
+    const entries = Array.from({ length: 61 }, (_, index) => ({
+      ...existingList.entries[0],
+      id: 500 + index,
+      issue_id: 70000 + index,
+      position: index,
+      series_name: 'Mobile Reading Series',
+      issue_number: String(index + 1),
+    }))
+    mocks.get.mockResolvedValue({ ...existingList, issue_count: entries.length, entries })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    await screen.findByText('Mobile Reading Series #1')
+    const navigation = screen.getByLabelText('Reading List navigation')
+    const scrollTo = vi.fn()
+    Object.defineProperty(navigation, 'scrollIntoView', { value: scrollTo })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+    expect(navigation).toHaveFocus()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Mobile Reading Series #61' }))
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Previous 30' })[0])
+    expect(screen.getByText('Mobile Reading Series #1')).toBeInTheDocument()
+    expect(screen.queryByText('Mobile Reading Series #31')).not.toBeInTheDocument()
   })
 
   it('navigates issue results with arrows and adds only the focused canonical issue with Enter', async () => {
@@ -424,7 +466,6 @@ describe('CustomCBLBuilder', () => {
     mocks.update.mockResolvedValue(onlyAllStar)
     mocks.exportXml.mockResolvedValue('<ReadingList><Name>Starman into JSA</Name></ReadingList>')
     mocks.delete.mockResolvedValue(undefined)
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
@@ -468,15 +509,47 @@ describe('CustomCBLBuilder', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:custom-cbl')
     expect(anchorClick).toHaveBeenCalled()
 
+    // Delete confirms through an in-page dialog QA automation can operate,
+    // not a native window.confirm the harness auto-dismisses.
     const deleteButton = screen.getByRole('button', { name: 'Delete' })
     fireEvent.click(deleteButton)
+    expect(screen.getByRole('dialog', { name: 'Delete custom CBL' })).toBeInTheDocument()
     expect(mocks.delete).not.toHaveBeenCalled()
+
+    // Cancelling keeps the saved list exactly as it is.
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Delete custom CBL' })).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Delete custom CBL' })).not.toBeInTheDocument())
+    expect(mocks.delete).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Custom CBL')).toHaveValue('9')
+
     fireEvent.click(deleteButton)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete custom CBL' }))
     await waitFor(() => expect(mocks.delete).toHaveBeenCalledWith(9))
     expect(await screen.findByRole('status')).toHaveTextContent('Custom CBL deleted.')
 
-    confirm.mockRestore()
     anchorClick.mockRestore()
+  })
+
+  it('keeps the delete confirmation open with a visible error when deletion fails', async () => {
+    mocks.delete.mockRejectedValue(new Error('Deletion unavailable'))
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete custom CBL' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Delete custom CBL' })
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Deletion unavailable')
+    // The list survives the failed deletion and stays loaded for a retry.
+    expect(screen.getByText('Starman #55')).toBeInTheDocument()
+
+    // Reopening must not resurrect the previous failure as if it just happened.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    const reopened = screen.getByRole('dialog', { name: 'Delete custom CBL' })
+    expect(within(reopened).queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('flags a custom CBL checkpoint and includes it on save', async () => {
@@ -1593,7 +1666,6 @@ describe('CustomCBLBuilder', () => {
   })
 
   it('keeps a list editable after apply and delete requests fail', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     mocks.apply.mockRejectedValue(new Error('Apply unavailable'))
     mocks.delete.mockRejectedValue(new Error('Delete unavailable'))
     renderBuilder()
@@ -1602,8 +1674,13 @@ describe('CustomCBLBuilder', () => {
     await screen.findByText('Starman #55')
     fireEvent.click(screen.getByRole('button', { name: 'Apply to this Reading Plan' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Apply unavailable')
+
+    // The delete failure keeps the in-page confirmation open with the error
+    // visible, so the list stays editable and retryable without a reload.
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Delete unavailable')
+    const dialog = screen.getByRole('dialog', { name: 'Delete custom CBL' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete custom CBL' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Delete unavailable')
     expect(screen.getByLabelText('Custom CBL')).toHaveValue('9')
     expect(screen.getByRole('list', { name: 'Custom CBL ordered issues' })).toHaveTextContent('Starman #55')
   })
