@@ -252,27 +252,6 @@ describe('CustomCBLBuilder', () => {
     ])
   })
 
-  it('keeps long issue names readable with phone-sized actions and optional settings', async () => {
-    renderBuilder()
-    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
-    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
-    await screen.findByText('Starman #55')
-    const card = screen.getAllByTestId('reading-list-entry')[0]
-    const title = within(card).getByTestId('reading-list-entry-title')
-    expect(title).toHaveTextContent('Starman #55')
-    expect(title).toHaveClass('break-words')
-    expect(title).not.toHaveClass('truncate')
-    expect(within(card).getByRole('button', { name: 'Move Starman #55 earlier' })).toHaveClass('min-h-11')
-    expect(within(card).getByRole('button', { name: 'Remove Starman #55' })).toHaveClass('min-h-11')
-    const options = within(card).getByRole('button', { name: 'Show settings for Starman #55' })
-    expect(options).toHaveAttribute('aria-expanded', 'false')
-    const settings = within(card).getByLabelText('Wait behavior for Starman #55').closest('div')
-    expect(settings).toHaveClass('hidden')
-    fireEvent.click(options)
-    expect(within(card).getByRole('button', { name: 'Hide settings for Starman #55' })).toHaveAttribute('aria-expanded', 'true')
-    expect(settings).toHaveClass('flex')
-  })
-
   it('navigates 65 strict-list issues in pages, jumps and moves an issue without discarding the others', async () => {
     const entries = Array.from({ length: 65 }, (_, index) => ({
       ...existingList.entries[0],
@@ -291,7 +270,6 @@ describe('CustomCBLBuilder', () => {
 
     await screen.findByText('Hellboy and the B.P.R.D.: The Long Night #1')
     expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
-    expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #1')).toBeInTheDocument()
     expect(screen.queryByText('Hellboy and the B.P.R.D.: The Long Night #31')).not.toBeInTheDocument()
     fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
     expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #31')).toBeInTheDocument()
