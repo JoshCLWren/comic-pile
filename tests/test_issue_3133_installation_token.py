@@ -8,8 +8,11 @@ Verifies the closure-critical contract:
   short-lived token. That ``(source, token)`` pair is what
   ``factory_push_credential`` feeds to both ``git push`` and ``gh pr create``
   in ``_persist_issue_pr_untraced``.
-* Worker 48 missing any one secret fails closed to ``pr_rebase`` (never fails
-  open onto the installation path).
+* Worker 48 missing the private key fails closed to ``pr_rebase`` (never fails
+  open onto the installation path). When IDs come from saved mapping
+  configuration, missing the corresponding env vars does not force fallback.
+* When the mapping is unconfigured for IDs, missing any required secret causes
+  fallback to ``pr_rebase``.
 * Every other worker stays on the shared ``PR_REBASE_TOKEN`` producer.
 * The persisted worker-App mapping contains only worker 48.
 * The worker App is not a trusted marker author.
@@ -79,7 +82,7 @@ class Worker48InstallationTokenTest(unittest.TestCase):
         self.assertEqual(token, MINT_STUB_TOKEN)
 
     def test_worker_48_missing_app_id_falls_back_to_shared_token(self) -> None:
-        """Missing FACTORY_WORKER_48_APP_ID fails closed to PR_REBASE_TOKEN."""
+        """Missing FACTORY_WORKER_48_APP_ID fails closed to PR_REBASE_TOKEN when unconfigured."""
         env = {**_configured_48_env()}
         del env["FACTORY_WORKER_48_APP_ID"]
         with mock.patch.object(
@@ -91,7 +94,7 @@ class Worker48InstallationTokenTest(unittest.TestCase):
     def test_worker_48_missing_installation_id_falls_back_to_shared_token(
         self,
     ) -> None:
-        """Missing FACTORY_WORKER_48_INSTALLATION_ID fails closed to PR_REBASE_TOKEN."""
+        """Missing FACTORY_WORKER_48_INSTALLATION_ID fails closed to PR_REBASE_TOKEN when unconfigured."""
         env = {**_configured_48_env()}
         del env["FACTORY_WORKER_48_INSTALLATION_ID"]
         with mock.patch.object(
