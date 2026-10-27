@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanDetailPage from '../pages/ReadingPlanDetailPage'
@@ -49,13 +49,18 @@ function createWrapper() {
   }
 }
 
+function ReadingListEditorTarget() {
+  const { id } = useParams()
+  return <div>Reading List editor {id}</div>
+}
+
 function renderPage(planId = '12') {
   return render(
     <MemoryRouter initialEntries={[`/continuity-plans/${planId}`]}>
       <Routes>
         <Route path="/continuity-plans/:id" element={<ReadingPlanDetailPage />} />
         <Route path="/continuity-plans/:id/edit" element={<div>Editor</div>} />
-        <Route path="/reading-lists/:id" element={<div>Reading List editor</div>} />
+        <Route path="/reading-lists/:id" element={<ReadingListEditorTarget />} />
         <Route path="/thread/:id" element={<div>Thread page</div>} />
       </Routes>
     </MemoryRouter>,
@@ -210,11 +215,14 @@ describe('ReadingPlanDetailPage', () => {
   it('opens a linked Reading List directly instead of the obsolete plan editor', async () => {
     mockGetReader.mockResolvedValue({
       ...readerView,
-      sources: [{ ...readerView.sources[0], raw_source_path: 'custom-cbl:2', display_name: 'Mignolaverse' }],
+      sources: [
+        { ...readerView.sources[0], raw_source_path: 'custom-cbl:9999', display_name: null },
+        { ...readerView.sources[0], id: 2, raw_source_path: 'custom-cbl:2', display_name: 'Mignolaverse' },
+      ],
     })
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Edit reading order' }))
-    expect(screen.getByText('Reading List editor')).toBeInTheDocument()
+    expect(screen.getByText('Reading List editor 2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument()
   })
 
