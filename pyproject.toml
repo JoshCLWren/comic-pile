@@ -20,7 +20,7 @@ dependencies = [
     # through each inclusion node's `original_router.routes` with its
     # `include_context.prefix`. Keep those helpers version-tolerant: they
     # must not assume a flat `app.routes` list again.
-    "fastapi>=0.100.0,<0.144.0",
+    "fastapi>=0.100.0,<0.162.0",
     # Async application imports also run while Alembic loads model metadata.
     # SQLAlchemy 2.1 requires the asyncio extra to install greenlet.
     "sqlalchemy[asyncio]>=2.0.53",
