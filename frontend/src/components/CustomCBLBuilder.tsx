@@ -914,7 +914,7 @@ export default function CustomCBLBuilder({
               )}
 
               {entries.length > 0 && (
-                <div className="space-y-3 rounded-xl border border-[var(--theme-border)] p-3" aria-label="Reading List navigation">
+                <div className="surface-panel space-y-3 p-3" aria-label="Reading List navigation">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-sm font-bold text-[var(--theme-text-primary)]">Ordered issues ({entries.length})</h4>
                     <p className="text-xs text-[var(--theme-text-muted)]">Changes are saved with the list.</p>
