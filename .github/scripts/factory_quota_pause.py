@@ -20,7 +20,6 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
 
 PAUSES_PATH = Path(__file__).resolve().parents[1] / "factory-quota-pauses.json"
 PROTECTED_WORKERS = frozenset({46})
@@ -160,7 +159,9 @@ def filter_workers(workers: list[str], now: datetime | None = None) -> tuple[lis
 
 
 def classify_quota_failure(
-    status_code: int | str | None = None, body: str | bytes | None = "", log_file: str | Path | None = None
+    status_code: int | str | None = None,
+    body: str | bytes | None = "",
+    log_file: str | Path | None = None,
 ) -> bool:
     """Return True when the failure is a provider quota/budget exhaustion.
 
@@ -232,7 +233,9 @@ def classify_quota_failure(
             return True
         if sc == 402:
             return True
-        if sc == 429 and ("limit" in lower or "quota" in lower or "budget" in lower or "exhaust" in lower):
+        if sc == 429 and (
+            "limit" in lower or "quota" in lower or "budget" in lower or "exhaust" in lower
+        ):
             return True
         return False
 
@@ -400,7 +403,9 @@ def parse_rate_limit_reset(
     return None
 
 
-def parse_reset_from_body(response_body: str | bytes | None, status_code: int | None = None) -> datetime | None:
+def parse_reset_from_body(
+    response_body: str | bytes | None, status_code: int | None = None
+) -> datetime | None:
     """Extract a quota reset time from a response body.
 
     Args:
@@ -415,7 +420,11 @@ def parse_reset_from_body(response_body: str | bytes | None, status_code: int | 
     text = str(response_body)
     lower = text.lower()
 
-    if "billing_api_budget_exhausted" in lower or "budget exhausted" in lower or "api budget exhausted" in lower:
+    if (
+        "billing_api_budget_exhausted" in lower
+        or "budget exhausted" in lower
+        or "api budget exhausted" in lower
+    ):
         return parse_reset_from_config("mistral")
 
     for match in re.finditer(
@@ -478,7 +487,7 @@ def parse_ollama_balance_reset(
     return _extract_period_until(data)
 
 
-def _extract_period_until(data: Any) -> datetime | None:
+def _extract_period_until(data: object) -> datetime | None:
     if not isinstance(data, dict):
         return None
     included = data.get("included")

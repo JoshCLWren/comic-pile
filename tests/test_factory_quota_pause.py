@@ -178,7 +178,9 @@ def test_parse_retry_after_seconds_and_http_date(tmp_path: Path) -> None:
     assert parsed is not None and parsed.tzinfo is not None
 
 
-def test_parse_rate_limit_reset_variants(now: datetime = datetime(2026, 10, 18, 12, 0, tzinfo=UTC)) -> None:
+def test_parse_rate_limit_reset_variants(
+    now: datetime = datetime(2026, 10, 18, 12, 0, tzinfo=UTC),
+) -> None:
     assert qp.parse_rate_limit_reset({"x-ratelimit-reset": "60"}, now=now) == datetime(
         2026, 10, 18, 12, 1, tzinfo=UTC
     )
@@ -189,8 +191,13 @@ def test_parse_rate_limit_reset_variants(now: datetime = datetime(2026, 10, 18, 
 
 
 def test_classify_quota_failures_mistral_402_and_ollama_429() -> None:
-    assert qp.classify_quota_failure(402, '{"message":"API budget exhausted.","type":"billing_api_budget_exhausted","code":"2303"}')
-    assert qp.classify_quota_failure(429, "you have reached your monthly usage limit, upgrade for higher limits")
+    assert qp.classify_quota_failure(
+        402,
+        '{"message":"API budget exhausted.","type":"billing_api_budget_exhausted","code":"2303"}',
+    )
+    assert qp.classify_quota_failure(
+        429, "you have reached your monthly usage limit, upgrade for higher limits"
+    )
     assert not qp.classify_quota_failure(500, "Model is unavailable")
     assert not qp.classify_quota_failure(500, "Something else went wrong")
 
@@ -234,14 +241,21 @@ def test_create_pause_and_resume_worker(tmp_path: Path) -> None:
     assert paused is False
     # With passing smoke it clears
     expired_path = tmp_path / "pauses2.json"
-    qp.save_pauses([qp.QuotaPause(48, "mistral", datetime(2020, 1, 1, tzinfo=UTC), "q", "config")], expired_path)
-    resumed = qp.resume_worker(48, path=expired_path, smoke_fn=lambda w: True, now=datetime(2026, 1, 1, tzinfo=UTC))
+    qp.save_pauses(
+        [qp.QuotaPause(48, "mistral", datetime(2020, 1, 1, tzinfo=UTC), "q", "config")],
+        expired_path,
+    )
+    resumed = qp.resume_worker(
+        48, path=expired_path, smoke_fn=lambda w: True, now=datetime(2026, 1, 1, tzinfo=UTC)
+    )
     assert resumed is True
 
 
 def test_resume_worker_no_smoke_does_not_auto_resume(tmp_path: Path) -> None:
     path = tmp_path / "pauses.json"
-    qp.save_pauses([qp.QuotaPause(48, "mistral", datetime(2020, 1, 1, tzinfo=UTC), "q", "config")], path)
+    qp.save_pauses(
+        [qp.QuotaPause(48, "mistral", datetime(2020, 1, 1, tzinfo=UTC), "q", "config")], path
+    )
     resumed = qp.resume_worker(48, path=path, now=datetime(2026, 1, 1, tzinfo=UTC))
     assert resumed is False
 
