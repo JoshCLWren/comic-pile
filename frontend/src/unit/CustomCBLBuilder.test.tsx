@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
+import { existingList } from './fixtures/customCblFixture'
 import { queryKeys } from '../query/queryKeys'
 
 const mocks = vi.hoisted(() => ({
@@ -62,43 +63,6 @@ function renderBuilder(onApplied = vi.fn()) {
     </QueryClientProvider>,
   )
   return { client, onApplied }
-}
-
-const existingList = {
-  id: 9,
-  user_id: 1,
-  name: 'Starman into JSA',
-  description: 'The bridge I actually want',
-  mode: 'loose',
-  issue_count: 2,
-  created_at: '2026-09-14T03:00:00Z',
-  updated_at: '2026-09-14T03:00:00Z',
-  entries: [
-    {
-      id: 91,
-      position: 0,
-      issue_id: 26360,
-      thread_id: 180,
-      series_name: 'Starman',
-      issue_number: '55',
-      status: 'unread',
-      is_checkpoint: false,
-      gate: 'none',
-      skipped: false,
-    },
-    {
-      id: 92,
-      position: 1,
-      issue_id: 30001,
-      thread_id: 9001,
-      series_name: 'All-Star Comics',
-      issue_number: '1',
-      status: 'unread',
-      is_checkpoint: false,
-      gate: 'none',
-      skipped: false,
-    },
-  ],
 }
 
 const globalSource = {
@@ -250,6 +214,84 @@ describe('CustomCBLBuilder', () => {
         status: 'unread',
       },
     ])
+  })
+
+  it('navigates 65 strict-list issues in pages, jumps and moves an issue without discarding the others', async () => {
+    const entries = Array.from({ length: 65 }, (_, index) => ({
+      ...existingList.entries[0],
+      id: 1000 + index,
+      issue_id: 80000 + index,
+      position: index,
+      series_name: 'Hellboy and the B.P.R.D.: The Long Night',
+      issue_number: String(index + 1),
+    }))
+    const longList = { ...existingList, mode: 'strict', issue_count: entries.length, entries }
+    mocks.get.mockResolvedValue(longList)
+    mocks.update.mockResolvedValue(longList)
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+
+    await screen.findByText('Hellboy and the B.P.R.D.: The Long Night #1')
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
+    expect(screen.queryByText('Hellboy and the B.P.R.D.: The Long Night #31')).not.toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
+    expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #31')).toBeInTheDocument()
+    expect(screen.queryByText('Hellboy and the B.P.R.D.: The Long Night #1')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Jump to reading list position'), { target: { value: '65' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Go to position' }))
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(5)
+    const last = screen.getAllByTestId('reading-list-entry').at(-1)!
+    const label = 'Hellboy and the B.P.R.D.: The Long Night #65'
+    expect(within(last).getByTestId('reading-list-entry-title')).toHaveTextContent(label)
+    fireEvent.click(within(last).getByRole('button', { name: `Show settings for ${label}` }))
+    fireEvent.change(within(last).getByLabelText(`Move ${label} to position`), { target: { value: '2' } })
+    fireEvent.click(within(last).getByRole('button', { name: 'Move here' }))
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
+    expect(screen.getAllByTestId('reading-list-entry')[1]).toHaveTextContent(label)
+    fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+    await waitFor(() => {
+      expect(mocks.update).toHaveBeenCalledWith(9, expect.objectContaining({
+        issue_ids: expect.arrayContaining([80000, 80064, 80063]),
+      }))
+      const payload = mocks.update.mock.calls[0][1]
+      expect(payload.issue_ids).toHaveLength(65)
+      expect(payload.issue_ids.slice(0, 3)).toEqual([80000, 80064, 80001])
+    })
+
+    fireEvent.change(screen.getByLabelText('Find an issue in this reading list'), { target: { value: '#49' } })
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(1)
+    expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #49')).toBeInTheDocument()
+  })
+
+  it('goes to the correct previous page after removing the final issue on the last page', async () => {
+    const entries = Array.from({ length: 61 }, (_, index) => ({
+      ...existingList.entries[0],
+      id: 500 + index,
+      issue_id: 70000 + index,
+      position: index,
+      series_name: 'Mobile Reading Series',
+      issue_number: String(index + 1),
+    }))
+    mocks.get.mockResolvedValue({ ...existingList, issue_count: entries.length, entries })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    await screen.findByText('Mobile Reading Series #1')
+    const navigation = screen.getByLabelText('Reading List navigation')
+    const scrollTo = vi.fn()
+    Object.defineProperty(navigation, 'scrollIntoView', { value: scrollTo })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+    expect(navigation).toHaveFocus()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Mobile Reading Series #61' }))
+    expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Previous 30' })[0])
+    expect(screen.getByText('Mobile Reading Series #1')).toBeInTheDocument()
+    expect(screen.queryByText('Mobile Reading Series #31')).not.toBeInTheDocument()
   })
 
   it('navigates issue results with arrows and adds only the focused canonical issue with Enter', async () => {

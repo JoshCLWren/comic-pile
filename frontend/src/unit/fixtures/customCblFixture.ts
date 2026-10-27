@@ -1,0 +1,37 @@
+/** Reusable owned Reading List fixture for editor regression tests. */
+export const existingList = {
+  id: 9,
+  user_id: 1,
+  name: 'Starman into JSA',
+  description: 'The bridge I actually want',
+  mode: 'loose',
+  issue_count: 2,
+  created_at: '2026-09-14T03:00:00Z',
+  updated_at: '2026-09-14T03:00:00Z',
+  entries: [
+    {
+      id: 91,
+      position: 0,
+      issue_id: 26360,
+      thread_id: 180,
+      series_name: 'Starman',
+      issue_number: '55',
+      status: 'unread',
+      is_checkpoint: false,
+      gate: 'none',
+      skipped: false,
+    },
+    {
+      id: 92,
+      position: 1,
+      issue_id: 30001,
+      thread_id: 9001,
+      series_name: 'All-Star Comics',
+      issue_number: '1',
+      status: 'unread',
+      is_checkpoint: false,
+      gate: 'none',
+      skipped: false,
+    },
+  ],
+}

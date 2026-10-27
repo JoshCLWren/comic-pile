@@ -7,7 +7,6 @@ import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
 import {
   customCBLApi,
-  type CustomCBL,
   type CustomCBLEntry,
   type CustomCBLIssueSearchResult,
   type CustomCBLWrite,
@@ -19,10 +18,11 @@ import {
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import {
   cblSourcesApi,
-  type CBLAdoptionPreview,
   type CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
-import CblReplaceReviewPanel, { type ReplaceEntry } from './CblReplaceReviewPanel'
+import CblReplaceReviewPanel from './CblReplaceReviewPanel'
+import ReadingListEntryCard from './ReadingListEntryCard'
+import { buildReplacementModel } from '../utils/readingListReplacementModel'
 import ConfirmDialog from './ConfirmDialog'
 import {
   computeEntryRequirements,
@@ -41,18 +41,7 @@ interface CustomCBLBuilderProps {
 
 const DEFAULT_MODE: ReadingListMode = 'loose'
 const DEFAULT_GATE: ReadingListGate = 'none'
-
-const GATE_ORDER: ReadingListGate[] = ['none', 'after_previous', 'hold']
-
-const GATE_LABELS: Record<ReadingListGate, string> = {
-  none: 'No extra wait',
-  after_previous: 'Wait for previous entry',
-  hold: 'Hold until reached',
-}
-
-function toGate(value: string): ReadingListGate {
-  return value === 'hold' || value === 'after_previous' ? value : 'none'
-}
+const ENTRY_PAGE_SIZE = 30
 
 function normalizePositions(entries: CustomCBLEntry[]): CustomCBLEntry[] {
   return entries.map((entry, position) => ({
@@ -164,113 +153,6 @@ class StaleReadingListUndoError extends Error {
   }
 }
 
-/**
- * Exact before/after review projection for one Reading List replacement.
- *
- * Named so the owner contract stays explicit instead of widening through an
- * anonymous return type.
- */
-interface ReplacementModel {
-  before: ReplaceEntry[]
-  after: ReplaceEntry[]
-  unresolvedCount: number
-}
-
-/**
- * Project one CBL source preview onto a Reading List replacement review.
- *
- * Only already-resolved canonical Issues can join a Reading List. Source rows
- * that still need identity resolution are reported separately instead of being
- * guessed. Saved entries that the chosen CBL does not contain stay checked so a
- * replacement never silently discards the reader's own additions.
- *
- * @param list - The exact owned Reading List being replaced.
- * @param preview - Reconciled global CBL source preview.
- * @returns Exact before/after entries plus the count of unresolvable source rows.
- */
-function buildReplacementModel(
-  list: CustomCBL,
-  preview: CBLAdoptionPreview,
-): ReplacementModel {
-  const savedByIssue = new Map(list.entries.map((entry) => [entry.issue_id, entry]))
-  const before: ReplaceEntry[] = list.entries.map((entry) => ({
-    comicId: entry.issue_id,
-    title: `${entry.series_name} #${entry.issue_number}`,
-    included: true,
-    saved: true,
-    gate: entry.gate,
-    skipped: entry.skipped,
-  }))
-
-  const after: ReplaceEntry[] = []
-  const sourceIssueIds = new Set<number>()
-  let unresolvedCount = 0
-  for (const entry of preview.entries) {
-    const issueId = entry.resolved_issue_id
-    if (issueId === null || entry.adoption_class !== 'existing' || sourceIssueIds.has(issueId)) {
-      if (entry.adoption_class !== 'existing' || issueId === null) unresolvedCount += 1
-      continue
-    }
-    const saved = savedByIssue.get(issueId)
-    // Collection exclusions can return an owned Issue with
-    // `adoption_decision: 'excluded'`. Only a source row the server actually
-    // adopted becomes a checked default; an excluded row stays visible only
-    // when the reader already saved it, and then as a saved entry rather than
-    // a default.
-    const sourceIncluded = entry.adopted && entry.adoption_decision !== 'excluded'
-    if (!sourceIncluded && !saved) continue
-    sourceIssueIds.add(issueId)
-    after.push({
-      comicId: issueId,
-      title: `${entry.series_name} #${entry.issue_number}`,
-      included: sourceIncluded || saved !== undefined,
-      defaultIncluded: sourceIncluded,
-      saved: saved !== undefined,
-      gate: saved?.gate ?? DEFAULT_GATE,
-      skipped: saved?.skipped ?? false,
-    })
-  }
-
-  for (const entry of list.entries) {
-    if (sourceIssueIds.has(entry.issue_id)) continue
-    after.push({
-      comicId: entry.issue_id,
-      title: `${entry.series_name} #${entry.issue_number}`,
-      included: true,
-      manual: true,
-      defaultIncluded: false,
-      saved: true,
-      gate: entry.gate,
-      skipped: entry.skipped,
-    })
-  }
-
-  return { before, after, unresolvedCount }
-}
-
-function waitDescription(
-  entry: CustomCBLEntry,
-  mode: ReadingListMode,
-  waitingOn: number[],
-  nameOf: (issueId: number) => string,
-): string | null {
-  const names = waitingOn.map(nameOf)
-  const parts: string[] = []
-  if (entry.skipped) {
-    parts.push('Skipped in this list only; it does not wait and is not waited on.')
-  } else if (names.length > 0) {
-    parts.push(`Waits on ${names.join(', ')}.`)
-  } else if (entry.gate === 'after_previous') {
-    parts.push('Waits on the previous entry.')
-  }
-  if (entry.gate === 'hold' && !entry.skipped) {
-    parts.push('Every later entry stays blocked until this milestone is read.')
-  } else if (mode === 'strict' && entry.gate === 'none' && !entry.skipped && names.length > 0) {
-    parts.push('Strict mode: waits on every earlier entry.')
-  }
-  return parts.length > 0 ? parts.join(' ') : null
-}
-
 export default function CustomCBLBuilder({
   planId,
   initialListId,
@@ -281,6 +163,7 @@ export default function CustomCBLBuilder({
   const queryClient = useQueryClient()
   const issueSearchInput = useRef<HTMLInputElement>(null)
   const issueSearchResults = useRef<HTMLDivElement>(null)
+  const listNavigationRef = useRef<HTMLDivElement>(null)
   const [readerOpen, setReaderOpen] = useState(false)
   const [open, setOpen] = useState(initialListId !== undefined)
   const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
@@ -290,6 +173,11 @@ export default function CustomCBLBuilder({
   const [description, setDescription] = useState('')
   const [mode, setMode] = useState<ReadingListMode>(DEFAULT_MODE)
   const [entries, setEntries] = useState<CustomCBLEntry[]>([])
+  const [entrySearch, setEntrySearch] = useState('')
+  const [entryPage, setEntryPage] = useState(0)
+  const [jumpPosition, setJumpPosition] = useState('')
+  const [expandedEntryOptions, setExpandedEntryOptions] = useState<number | null>(null)
+  const [moveDestinations, setMoveDestinations] = useState<Record<number, string>>({})
   const [issueQuery, setIssueQuery] = useState('')
   const [submittedIssueQuery, setSubmittedIssueQuery] = useState('')
   const [message, setMessage] = useState<string | null>(null)
@@ -357,6 +245,11 @@ export default function CustomCBLBuilder({
     setDescription(list.description ?? '')
     setMode(list.mode ?? DEFAULT_MODE)
     setEntries(normalizePositions(list.entries))
+    setEntrySearch('')
+    setEntryPage(0)
+    setJumpPosition('')
+    setExpandedEntryOptions(null)
+    setMoveDestinations({})
     setLoadedListId(list.id)
     setMessage(null)
     setExportError(null)
@@ -601,6 +494,26 @@ export default function CustomCBLBuilder({
     return describeCyclePath(saveErrorDetail.cyclePath, resolveName)
   }, [entryNames, saveErrorDetail])
 
+  const matchedEntries = useMemo(() => {
+    const query = entrySearch.trim().toLocaleLowerCase()
+    return entries.flatMap((entry, index) => {
+      const label = `${entry.series_name} #${entry.issue_number}`
+      return !query || label.toLocaleLowerCase().includes(query) ? [{ entry, index }] : []
+    })
+  }, [entries, entrySearch])
+  const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
+  const currentPage = Math.min(entryPage, pageCount - 1)
+  const visibleEntries = matchedEntries.slice(currentPage * ENTRY_PAGE_SIZE, (currentPage + 1) * ENTRY_PAGE_SIZE)
+  const focusListStart = () => {
+    const target = listNavigationRef.current
+    target?.scrollIntoView?.({ block: 'start' })
+    target?.focus({ preventScroll: true })
+  }
+  const goToPage = (page: number) => {
+    setEntryPage(Math.max(0, Math.min(pageCount - 1, page)))
+    focusListStart()
+  }
+
   const searchResults = (issueQuery.trim() === submittedIssueQuery ? issueSearchQuery.data ?? [] : []).filter(
     (candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id),
   )
@@ -620,6 +533,8 @@ export default function CustomCBLBuilder({
   const addIssue = (candidate: CustomCBLIssueSearchResult) => {
     setEntries((current) => [...current, draftEntry(candidate, current.length)])
     setMessage(`Added ${candidate.series_name} #${candidate.issue_number} to this list. Save to keep your changes.`)
+    setEntrySearch('')
+    setEntryPage(Math.floor(entries.length / ENTRY_PAGE_SIZE))
     issueSearchInput.current?.focus()
   }
   const focusSearchResult = (event: KeyboardEvent<HTMLElement>, fromInput = false) => {
@@ -658,6 +573,31 @@ export default function CustomCBLBuilder({
       return normalizePositions(next)
     })
     setMessage(null)
+  }
+  const moveIssueToPosition = (index: number, issueId: number) => {
+    const position = Number(moveDestinations[issueId])
+    if (!Number.isSafeInteger(position) || position < 1 || position > entries.length) return
+    const target = position - 1
+    if (index === target) return
+    setEntries((current) => {
+      const next = [...current]
+      const [moved] = next.splice(index, 1)
+      if (!moved) return current
+      next.splice(target, 0, moved)
+      return normalizePositions(next)
+    })
+    setEntrySearch('')
+    setEntryPage(Math.floor(target / ENTRY_PAGE_SIZE))
+    focusListStart()
+    setExpandedEntryOptions(null)
+    setMessage(null)
+  }
+  const jumpToPosition = () => {
+    const position = Number(jumpPosition)
+    if (!Number.isSafeInteger(position) || position < 1 || position > entries.length) return
+    setEntrySearch('')
+    setEntryPage(Math.floor((position - 1) / ENTRY_PAGE_SIZE))
+    focusListStart()
   }
   const updateGate = (issueId: number, gate: ReadingListGate) => {
     setEntries((current) =>
@@ -702,6 +642,11 @@ export default function CustomCBLBuilder({
     setUndoPayload(null)
     setUndoBaseline(null)
     setSelectedId(next)
+    setEntrySearch('')
+    setEntryPage(0)
+    setJumpPosition('')
+    setExpandedEntryOptions(null)
+    setMoveDestinations({})
   }
   const exportList = async () => {
     if (!selectedId || !persisted || dirty || disabled || isPending) return
@@ -859,64 +804,83 @@ export default function CustomCBLBuilder({
                 </div>
               )}
 
+              {entries.length > 0 && (
+                <div ref={listNavigationRef} tabIndex={-1} className="surface-panel scroll-mt-4 space-y-3 p-3" aria-label="Reading List navigation">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-[var(--theme-text-primary)]">Ordered issues ({entries.length})</h4>
+                    <p className="text-xs text-[var(--theme-text-muted)]">Changes are saved with the list.</p>
+                  </div>
+                  <label className="block text-sm text-[var(--theme-text-primary)]">
+                    Find an issue already in this list
+                    <input
+                      type="search"
+                      aria-label="Find an issue in this reading list"
+                      value={entrySearch}
+                      onChange={(event) => { setEntrySearch(event.target.value); setEntryPage(0) }}
+                      placeholder="Search titles or issue numbers"
+                      className="mt-1 min-h-11 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)]"
+                    />
+                  </label>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="text-sm text-[var(--theme-text-primary)]">
+                      Jump to position
+                      <input
+                        aria-label="Jump to reading list position"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={entries.length}
+                        value={jumpPosition}
+                        onChange={(event) => setJumpPosition(event.target.value)}
+                        className="mt-1 block min-h-11 w-28 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm"
+                      />
+                    </label>
+                    <button type="button" disabled={!Number.isSafeInteger(Number(jumpPosition)) || Number(jumpPosition) < 1 || Number(jumpPosition) > entries.length} onClick={jumpToPosition} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-4 text-sm font-semibold text-[var(--theme-text-primary)] disabled:opacity-40">Go to position</button>
+                  </div>
+                  <p aria-live="polite" className="text-xs text-[var(--theme-text-muted)]">
+                    {matchedEntries.length} matching issues · Page {currentPage + 1} of {pageCount}
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-semibold disabled:opacity-40">Previous 30</button>
+                    <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= pageCount - 1} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-semibold disabled:opacity-40">Next 30</button>
+                  </div>
+                </div>
+              )}
+
               <ol className="space-y-2" aria-label="Custom CBL ordered issues">
-                {entries.map((entry, index) => {
-                  const label = `${entry.series_name} #${entry.issue_number}`
-                  const waitText = waitDescription(entry, mode, requirements.get(entry.issue_id) ?? [], nameFor)
-                  return (
-                    <li key={entry.issue_id} className="rounded-xl border border-[var(--theme-border)] p-2">
-                      <div className="flex items-center gap-2">
-                        <span aria-hidden="true" className="w-7 shrink-0 text-center text-xs font-black text-[var(--theme-text-dim)]">{index + 1}</span>
-                        <span className="min-w-0 flex-1 truncate text-sm text-[var(--theme-text-primary)]">
-                          {label}
-                          {entry.skipped && <span className="ml-2 rounded-full border border-[var(--theme-border)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">Skipped in this list</span>}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => toggleCheckpoint(entry.issue_id)}
-                          title="Crossover checkpoint metadata. It records where a crossover resumes and does not by itself make later entries wait."
-                          aria-label={entry.is_checkpoint ? `Remove crossover checkpoint from ${label}` : `Mark ${label} as crossover checkpoint`}
-                          disabled={disabled || isPending}
-                          className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${entry.is_checkpoint ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-bg-panel)] text-[var(--theme-comic-accent)]' : 'border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'} disabled:opacity-50`}
-                        >
-                          {entry.is_checkpoint ? '⚑' : '⚐'}
-                        </button>
-                        <button type="button" aria-label={`Move ${label} earlier`} onClick={() => moveIssue(index, -1)} disabled={index === 0 || disabled || isPending} className="min-h-9 min-w-9 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] disabled:opacity-30">↑</button>
-                        <button type="button" aria-label={`Move ${label} later`} onClick={() => moveIssue(index, 1)} disabled={index === entries.length - 1 || disabled || isPending} className="min-h-9 min-w-9 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] disabled:opacity-30">↓</button>
-                        <button type="button" aria-label={`Remove ${label}`} onClick={() => removeIssue(entry.issue_id)} disabled={disabled || isPending} className="min-h-9 rounded-lg border border-[var(--theme-danger)] px-2 text-xs font-bold text-[var(--theme-danger)] disabled:opacity-50">Remove</button>
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-end gap-3 pl-9">
-                        <label className="text-xs text-[var(--theme-text-muted)]">
-                          <span className="block font-semibold text-[var(--theme-text-primary)]">Wait behavior</span>
-                          <select
-                            aria-label={`Wait behavior for ${label}`}
-                            value={entry.gate}
-                            onChange={(event) => updateGate(entry.issue_id, toGate(event.target.value))}
-                            disabled={disabled || isPending || entry.skipped}
-                            className="mt-1 min-h-9 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 text-sm text-[var(--theme-text-primary)] disabled:opacity-50"
-                          >
-                            {GATE_ORDER.map((gate) => (
-                              <option key={gate} value={gate}>{GATE_LABELS[gate]}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="flex min-h-9 items-center gap-2 text-xs text-[var(--theme-text-primary)]">
-                          <input
-                            type="checkbox"
-                            aria-label={`Skip ${label} in this list`}
-                            checked={entry.skipped}
-                            onChange={() => toggleSkipped(entry.issue_id)}
-                            disabled={disabled || isPending}
-                            className="h-4 w-4"
-                          />
-                          Skip in this list
-                        </label>
-                      </div>
-                      {waitText && <p className="mt-1 pl-9 text-xs text-[var(--theme-text-muted)]">{waitText}</p>}
-                    </li>
-                  )
-                })}
+                {visibleEntries.map(({ entry, index }) => (
+                  <ReadingListEntryCard
+                    key={entry.issue_id}
+                    entry={entry}
+                    index={index}
+                    entryCount={entries.length}
+                    mode={mode}
+                    waitingOn={requirements.get(entry.issue_id) ?? []}
+                    nameOf={nameFor}
+                    expanded={expandedEntryOptions === entry.issue_id}
+                    moveDestination={moveDestinations[entry.issue_id] ?? ''}
+                    disabled={disabled || isPending}
+                    onCheckpoint={() => toggleCheckpoint(entry.issue_id)}
+                    onMoveEarlier={() => moveIssue(index, -1)}
+                    onMoveLater={() => moveIssue(index, 1)}
+                    onRemove={() => removeIssue(entry.issue_id)}
+                    onToggleOptions={() => setExpandedEntryOptions((current) => current === entry.issue_id ? null : entry.issue_id)}
+                    onGate={(gate) => updateGate(entry.issue_id, gate)}
+                    onSkip={() => toggleSkipped(entry.issue_id)}
+                    onDestinationChange={(value) => setMoveDestinations((current) => ({ ...current, [entry.issue_id]: value }))}
+                    onMoveToPosition={() => moveIssueToPosition(index, entry.issue_id)}
+                  />
+                ))}
               </ol>
+              {matchedEntries.length === 0 && entries.length > 0 && (
+                <p className="text-sm text-[var(--theme-text-muted)]">No issues match this search. Clear the search to see the complete list.</p>
+              )}
+              {entries.length > ENTRY_PAGE_SIZE && (
+                <div className="flex items-center justify-between gap-3">
+                  <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm disabled:opacity-40">Previous 30</button>
+                  <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= pageCount - 1} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm disabled:opacity-40">Next 30</button>
+                </div>
+              )}
               {entries.length === 0 && <p className="text-sm text-[var(--theme-text-muted)]">This custom CBL is empty. Search for issues above to build it.</p>}
               <p className="text-xs text-[var(--theme-text-muted)]">Skipping an issue here ignores it only in this list. It stays in your collection and other lists. Use your collection exclusions to remove a comic everywhere.</p>
 
