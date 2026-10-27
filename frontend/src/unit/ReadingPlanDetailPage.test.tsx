@@ -210,7 +210,7 @@ describe('ReadingPlanDetailPage', () => {
   it('opens a linked Reading List directly instead of the obsolete plan editor', async () => {
     mockGetReader.mockResolvedValue({
       ...readerView,
-      sources: [{ ...readerView.sources[0], raw_source_path: 'custom-cbl:2', custom_cbl_list_id: 2 }],
+      sources: [{ ...readerView.sources[0], raw_source_path: 'custom-cbl:2', display_name: 'Mignolaverse' }],
     })
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Edit reading order' }))
@@ -218,7 +218,18 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument()
   })
 
-  it('preserves bracketed prefixes in owned Reading List names', async () => {
+  it('does not navigate to an unresolved or foreign Reading List from source paths alone', async () => {
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      sources: [{ ...readerView.sources[0], raw_source_path: 'custom-cbl:9999', display_name: null }],
+    })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit plan' }))
+    expect(screen.getByText('Editor')).toBeInTheDocument()
+    expect(screen.queryByText('Reading List editor')).not.toBeInTheDocument()
+  })
+
+  it('preserves bracketed prefixes in owned Reading List names', async () {
     const source = { ...readerView.sources[0], raw_source_path: 'custom-cbl:1000002', source_path: null, display_name: '[Favorites]' }
     mockGetReader.mockResolvedValue({ ...readerView, sources: [source], available_now: readerView.available_now.map((issue) => ({ ...issue, source_paths: [source.raw_source_path] })) })
     renderPage()
