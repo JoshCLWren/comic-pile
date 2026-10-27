@@ -53,7 +53,7 @@ function makeItem(overrides: Partial<CreatorComparisonItem> & { canonical_creato
     strongest_series: [
       { thread_id: 1, thread_title: 'Saga', issue_count: 4, rated_issue_count: 3, average_rating: 4.7 },
     ],
-    min_rated_issues_per_series: 3,
+    min_rated_issues_per_series: 5,
     unread_upcoming_count: 2,
     read_unrated_count: 1,
     unread_issue_refs: [],
@@ -242,9 +242,14 @@ describe('CreatorComparisonPage', () => {
     renderAt('creator:7,creator:12')
 
     expect(screen.getByText('Comparing 1 creator')).toBeInTheDocument()
-    expect(screen.getByText('Insufficient data')).toBeInTheDocument()
-    expect(screen.getByText(/less reliable/)).toBeInTheDocument()
-    expect(screen.getByText(/Affected: Steve McNiven/)).toBeInTheDocument()
+    expect(screen.getByText('Small sample')).toBeInTheDocument()
+    expect(screen.getByText(/fewer than 5 rated comics/)).toBeInTheDocument()
+    expect(screen.getByText(/less representative/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Glossary' })).toHaveAttribute(
+      'href',
+      '/glossary#small-sample',
+    )
+    expect(screen.queryByText(/Affected:/)).not.toBeInTheDocument()
     expect(screen.getByRole('note')).toHaveTextContent('Counts shown are lower bounds.')
   })
 
@@ -385,7 +390,7 @@ describe('CreatorComparisonPage', () => {
     ).toHaveAttribute('href', '/creators/creator%3A7')
   })
 
-  it('names unresolved affected keys by their canonical key instead of dropping them', () => {
+  it('does not attach a small-sample warning to creators that are not in the comparison', () => {
     mockedHook.mockReturnValue(
       baseHook({
         data: makeResponse({
@@ -397,7 +402,10 @@ describe('CreatorComparisonPage', () => {
 
     renderAt('creator:404,creator:405')
 
-    expect(screen.getByText(/Affected: creator:404/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/None of the selected creators are available in your library/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Small sample/)).not.toBeInTheDocument()
   })
 
   it('renders unrated creators without manufacturing equivalence', () => {
@@ -416,7 +424,7 @@ describe('CreatorComparisonPage', () => {
               top_rating_rate: null,
               role_stats: [{ role: 'artist', issue_count: 2, rated_issue_count: 0, average_rating: null }],
               strongest_series: [],
-              min_rated_issues_per_series: 3,
+              min_rated_issues_per_series: 5,
               unread_upcoming_count: 0,
               read_unrated_count: 0,
             }),
@@ -438,7 +446,7 @@ describe('CreatorComparisonPage', () => {
     expect(screen.queryByText('Read with no stored rating')).not.toBeInTheDocument()
     // Below the minimum rated sample the section explains itself instead of
     // silently omitting ranked series.
-    expect(screen.getByText(/No series has 3 rated issues yet/)).toBeInTheDocument()
+    expect(screen.getByText(/No series has 5 rated issues yet/)).toBeInTheDocument()
   })
 
   it('shows the rated sample beside each strongest series and ranks by rating strength', () => {

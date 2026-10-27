@@ -8967,7 +8967,7 @@ export interface components {
             /**
              * Min Rated Issues Per Series
              * @description Minimum rated issues a series needs before strongest_series ranks it. Exposed so the UI can explain an empty list instead of silently hiding it.
-             * @default 3
+             * @default 5
              */
             min_rated_issues_per_series: number;
             /**

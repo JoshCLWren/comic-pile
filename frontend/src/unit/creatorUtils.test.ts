@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { getCreatorDisplayText } from '../utils/creatorUtils'
+import { SMALL_SAMPLE_THRESHOLD, getCreatorDisplayText } from '../utils/creatorUtils'
 import type { ManualCreatorCredit } from '../types'
+
+describe('SMALL_SAMPLE_THRESHOLD', () => {
+  // The creators directory badge, the comparison banner, and the backend
+  // reliability floor must describe the same "fewer than 5" concept (#4237).
+  it('pins the shared reader-facing small-sample floor at five', () => {
+    expect(SMALL_SAMPLE_THRESHOLD).toBe(5)
+  })
+})
 
 describe('getCreatorDisplayText', () => {
   it('returns empty string for null/undefined/empty input', () => {

@@ -5240,7 +5240,7 @@
           },
           "rated_issue_count": {
             "description": "Number of rated issues backing average_rating. Series below the minimum rated sample are excluded from strongest_series entirely.",
-            "minimum": 3.0,
+            "minimum": 5.0,
             "title": "Rated Issue Count",
             "type": "integer"
           },
