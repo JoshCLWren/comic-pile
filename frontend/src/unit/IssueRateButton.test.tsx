@@ -92,7 +92,7 @@ describe('IssueRateButton', () => {
     })
     expect(applyRatedThreadCache).toHaveBeenCalledWith(queryClient, ratedThread)
     expect(onSnapshotChange).toHaveBeenCalledWith({
-      issues: [{ ...issue, status: 'read', read_at: '2026-08-03T18:30:00Z' }],
+      issues: [{ ...issue, status: 'read', read_at: '2026-08-03T18:30:00Z', last_rating: 4 }],
       thread: {
         ...thread,
         issues_remaining: 1,

@@ -17,6 +17,12 @@ interface IssueRateButtonProps {
   issue: Issue
   snapshot: IssueMutationSnapshot
   onSnapshotChange: (snapshot: IssueMutationSnapshot) => void
+  // Controlled undo target shared across rows on the Thread page. When
+  // provided, only the row that owns the latest undo target shows Undo;
+  // older targets stay hidden until they become eligible again (#4204,
+  // Greptile P1). Omitted for standalone/test usage (uncontrolled).
+  undoTarget?: RateUndoInfo | null
+  onUndoTargetChange?: (target: RateUndoInfo | null) => void
 }
 
 const RATING_VALUES = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
@@ -38,6 +44,8 @@ export function IssueRateButton({
   issue,
   snapshot,
   onSnapshotChange,
+  undoTarget: undoTargetProp,
+  onUndoTargetChange,
 }: IssueRateButtonProps) {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -49,7 +57,16 @@ export function IssueRateButton({
   )
   // The rating response names the undo record it wrote, so the row can offer
   // the same Undo Roll ratings get without re-reading a snapshot list.
-  const [undoTarget, setUndoTarget] = useState<RateUndoInfo | null>(null)
+  const [internalUndoTarget, setInternalUndoTarget] = useState<RateUndoInfo | null>(null)
+  const isControlledUndo = undoTargetProp !== undefined
+  const undoTarget = isControlledUndo ? (undoTargetProp ?? null) : internalUndoTarget
+  function setUndoTarget(next: RateUndoInfo | null) {
+    if (isControlledUndo) {
+      onUndoTargetChange?.(next)
+    } else {
+      setInternalUndoTarget(next)
+    }
+  }
   // A rating always marks its issue read. Keep the newest snapshot so two rows
   // rated in quick succession both land in the visible issue list.
   const latestSnapshot = useRef(snapshot)

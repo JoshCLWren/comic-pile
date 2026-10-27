@@ -25,7 +25,7 @@ import { evaluateReadingProgress } from '../utils/readingProgress'
 import { formatIssueCount } from '../utils/formatIssueCount'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getManualCreatorCreditList } from '../types'
-import type { ManualCreatorCredit, Thread } from '../types'
+import type { ManualCreatorCredit, RateUndoInfo, Thread } from '../types'
 import { getCreatorDisplayText } from '../utils/creatorUtils'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
@@ -126,6 +126,9 @@ export default function ThreadDetailView() {
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set())
   const [bulkNotice, setBulkNotice] = useState<string | null>(null)
+  // Shared undo target across issue rows: only the most recently rated row
+  // may offer Undo, because the server rejects older snapshots with 409.
+  const [undoStack, setUndoStack] = useState<{ issueId: number; target: RateUndoInfo }[]>([])
 
   const issuesQuery = useThreadIssuePages(threadId, { enabled: issuesExpanded })
   const issues = issuesQuery.issues
@@ -663,6 +666,27 @@ export default function ThreadDetailView() {
                                 issue={issue}
                                 snapshot={{ issues, thread }}
                                 onSnapshotChange={handleIssueSnapshotChange}
+                                undoTarget={
+                                  undoStack.length > 0 &&
+                                  undoStack[undoStack.length - 1].issueId === issue.id
+                                    ? undoStack[undoStack.length - 1].target
+                                    : null
+                                }
+                                onUndoTargetChange={(target) => {
+                                  setUndoStack((prev) => {
+                                    if (target === null) {
+                                      if (
+                                        prev.length > 0 &&
+                                        prev[prev.length - 1].issueId === issue.id
+                                      ) {
+                                        return prev.slice(0, -1)
+                                      }
+                                      return prev
+                                    }
+                                    const without = prev.filter((entry) => entry.issueId !== issue.id)
+                                    return [...without, { issueId: issue.id, target }]
+                                  })
+                                }}
                               />
                             </div>
                           </div>
