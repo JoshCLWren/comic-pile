@@ -20,7 +20,7 @@ describe('HelpPage', () => {
   it('renders the complete glossary', () => {
     renderRoute(<HelpPage />)
     expect(screen.getByRole('heading', { name: 'Glossary' })).toBeInTheDocument()
-    expect(screen.getAllByTestId('glossary-term')).toHaveLength(20)
+    expect(screen.getAllByTestId('glossary-term')).toHaveLength(21)
     expect(
       screen.getByText(/hard “read this first” requirement/),
     ).toBeInTheDocument()

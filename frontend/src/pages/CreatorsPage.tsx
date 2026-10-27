@@ -111,9 +111,15 @@ function CreatorRow({
           <span>unrated</span>
         )}
         {average != null && ratingsCount < SMALL_SAMPLE_THRESHOLD && (
-          <span className="font-semibold" style={{ color: 'var(--theme-warning)' }}>
+          <button
+            type="button"
+            className="font-semibold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            style={{ color: 'var(--theme-warning)' }}
+            title="Fewer than 5 rated comics. Average ratings based on a small sample may be less representative."
+            aria-label="Small sample: fewer than 5 rated comics. Average ratings based on a small sample may be less representative."
+          >
             small sample
-          </span>
+          </button>
         )}
       </span>
     </>

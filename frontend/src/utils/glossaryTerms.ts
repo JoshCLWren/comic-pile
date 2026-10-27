@@ -113,8 +113,8 @@ const DEFINITIONS: GlossaryTermDefinition[] = [
     def: 'Applying a continuity plan to a saved reading order. You preview the result first and confirm before it is applied — your plan is never modified.',
   },
   {
-    term: 'Dependency Builder',
-    def: 'The editable surface for creating, viewing, and removing issue-level dependency rules. Access it from any Queue card (Dependencies in the series actions menu) or from the dependency dialog inside an issue list.',
+    term: 'Small sample',
+    def: 'A confidence/context indicator shown when a creator has fewer than 5 rated comics. Average ratings based on a small sample may be less representative. This is not a data-quality defect or a new rating-scoring formula.',
   },
 ]
 
