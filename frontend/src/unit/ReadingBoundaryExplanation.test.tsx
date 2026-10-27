@@ -132,7 +132,7 @@ describe('ReadingBoundaryExplanation', () => {
     const disclosure = screen.getByText('Show all reading requirements').closest('details')
     expect(disclosure).not.toHaveAttribute('open')
     expect(disclosure).toHaveTextContent('Abe Sapien: The Haunted Boy #1')
-    expect(screen.getByText('Read', { exact: false })).toBeTruthy()
+    expect(first.closest('p')).toHaveTextContent(/^Read B\.P\.R\.D\.: Casualties #1.* first\.$/)
   })
 
   it('links the next issue to its editor target when the server supplies one', () => {
