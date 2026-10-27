@@ -1,6 +1,7 @@
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle, displayReadingListName } from '../utils/cblSourceDisplay'
 import { ReaderIssueActions } from '../components/ReaderIssueActions'
-import { EligibilityExplanation } from '../components/EligibilityExplanation'
+import { useState } from 'react'
+import { threadIssueRoutePath } from '../utils/threadRoutes'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Breadcrumbs from '../components/Breadcrumbs'
 import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
@@ -28,6 +29,56 @@ function availabilityLabel(issue: ReadingPlanReaderIssue): string {
   if (issue.availability === 'blocked') return 'Blocked by'
   if (issue.availability === 'available') return 'Available now'
   return 'Upcoming'
+}
+
+/** Keep the first actionable prerequisite visible; never eagerly render 400+ dependency links. */
+function PlanIssueBlockers({ blockers }: { blockers: ReadingPlanReaderIssue['blockers'] }) {
+  const [expanded, setExpanded] = useState(false)
+  const first = blockers[0]
+  if (!first) return null
+  const remaining = blockers.length - 1
+  return (
+    <div className="mt-2 text-sm text-[var(--theme-text-muted)]" data-testid="plan-issue-blockers">
+      <p>
+        Read{' '}
+        <Link
+          aria-label={`Open ${first.thread_title} issue #${first.issue_number}`}
+          to={threadIssueRoutePath(first.thread_id, first.issue_id)}
+          className="font-semibold text-[var(--theme-continuity-accent)] underline"
+        >
+          {first.thread_title} #{first.issue_number}
+        </Link>{' '}
+        first.
+      </p>
+      {remaining > 0 && (
+        <>
+          <button
+            type="button"
+            className="mt-1 min-h-9 text-xs font-semibold text-[var(--theme-continuity-accent)] underline"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? 'Hide' : 'Show'} {remaining} other reading requirements
+          </button>
+          {expanded && (
+            <ul className="mt-2 space-y-2" aria-label="Other reading requirements">
+              {blockers.slice(1).map((blocker, index) => (
+                <li key={`${blocker.issue_id}-${index}`}>
+                  <Link
+                    aria-label={`Open ${blocker.thread_title} issue #${blocker.issue_number}`}
+                    to={threadIssueRoutePath(blocker.thread_id, blocker.issue_id)}
+                    className="text-[var(--theme-continuity-accent)] underline"
+                  >
+                    {blocker.thread_title} #{blocker.issue_number}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  )
 }
 
 function IssueRow({ issue, sourceNames }: { issue: ReadingPlanReaderIssue; sourceNames: Readonly<Record<string, string>> }) {
@@ -60,11 +111,7 @@ function IssueRow({ issue, sourceNames }: { issue: ReadingPlanReaderIssue; sourc
           {issue.issue_number}
           {issue.is_checkpoint ? ' · Checkpoint' : ''}
         </p>
-        {issue.blockers.length > 0 && (
-          <EligibilityExplanation isBlocked dependencies={issue.blockers.map((blocker) => ({
-            ...blocker, label: blocker.explanation,
-          }))} />
-        )}
+        {issue.blockers.length > 0 && <PlanIssueBlockers blockers={issue.blockers} />}
         <ReaderIssueActions issueId={issue.issue_id} threadId={issue.thread_id} issueNumber={issue.issue_number} isRead={isRead} available={isAvailable} />
         {issue.source_paths.length > 0 && (
           <p className="mt-1 text-xs text-[var(--theme-text-dim)]">
@@ -104,6 +151,10 @@ export default function ReadingPlanDetailPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const addFromCblRequested = searchParams.get('addFrom') === 'cbl'
+  const [showReleaseTracking, setShowReleaseTracking] = useState(false)
+  const [showAllBlocked, setShowAllBlocked] = useState(false)
+  const [showUpcoming, setShowUpcoming] = useState(false)
+  const [showReadingOrder, setShowReadingOrder] = useState(false)
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const readerQuery = useReadingPlanReader(planId)
@@ -226,12 +277,6 @@ export default function ReadingPlanDetailPage() {
         </dl>
       </div>
 
-      <NewReleasesSection
-        planId={planId}
-        sources={view.release_sources ?? []}
-        candidates={view.release_candidates ?? []}
-      />
-
       <section aria-labelledby="available-now-heading" data-testid="available-now">
         <h2 id="available-now-heading" className="text-lg font-bold text-[var(--theme-text-primary)]">
           Available now
@@ -267,10 +312,20 @@ export default function ReadingPlanDetailPage() {
           <p className="mt-3 text-sm text-[var(--theme-text-dim)]">No hard blockers on the next unread issues in this plan.</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {view.blocked_next.map((issue) => (
+            {(showAllBlocked ? view.blocked_next : view.blocked_next.slice(0, 3)).map((issue) => (
               <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
             ))}
           </ul>
+        )}
+        {view.blocked_next.length > 3 && (
+          <button
+            type="button"
+            className="mt-3 min-h-11 text-sm font-semibold text-[var(--theme-continuity-accent)] underline"
+            aria-expanded={showAllBlocked}
+            onClick={() => setShowAllBlocked((value) => !value)}
+          >
+            {showAllBlocked ? 'Show fewer blocked issues' : `Show ${view.blocked_next.length - 3} more blocked issues`}
+          </button>
         )}
       </section>
 
@@ -282,11 +337,21 @@ export default function ReadingPlanDetailPage() {
           <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
             Later issues still behind this series’ next unread issue.
           </p>
-          <ul className="mt-3 space-y-2">
-            {upcoming.map((issue) => (
-              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
-            ))}
-          </ul>
+          <button
+            type="button"
+            className="mt-2 min-h-11 text-sm font-semibold text-[var(--theme-continuity-accent)] underline"
+            aria-expanded={showUpcoming}
+            onClick={() => setShowUpcoming((value) => !value)}
+          >
+            {showUpcoming ? 'Hide upcoming issues' : `Show ${upcoming.length} upcoming issues`}
+          </button>
+          {showUpcoming && (
+            <ul className="mt-3 space-y-2">
+              {upcoming.map((issue) => (
+                <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
+              ))}
+            </ul>
+          )}
         </section>
       )}
 
@@ -300,7 +365,9 @@ export default function ReadingPlanDetailPage() {
           </h2>
           <p className="mt-1 text-xs font-black text-[var(--theme-continuity-accent)]">CBL-backed</p>
           <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
-            Where this plan’s order came from. A source reading order is not a hard reading block.
+            {view.execution_mode === 'option_e'
+              ? 'This linked Reading List controls reading eligibility in Roll, Queue, and this plan.'
+              : 'Where this plan’s source material came from. Source order does not add hard blockers in legacy mode.'}
           </p>
           <ul className="mt-2 space-y-1 text-sm text-[var(--theme-text-primary)]">
             {view.sources.map((source) => {
@@ -350,7 +417,16 @@ export default function ReadingPlanDetailPage() {
         {view.lanes.length === 0 || view.lanes.every((lane) => lane.issues.length === 0) ? (
           <p className="mt-3 text-sm text-[var(--theme-text-dim)]">No issues in this reading order yet.</p>
         ) : (
-          <div className="mt-4 space-y-6">
+          <>
+          <button
+            type="button"
+            className="mt-2 min-h-11 text-sm font-semibold text-[var(--theme-continuity-accent)] underline"
+            aria-expanded={showReadingOrder}
+            onClick={() => setShowReadingOrder((value) => !value)}
+          >
+            {showReadingOrder ? 'Hide complete reading order' : `Show complete reading order (${view.progress.total_issues} issues)`}
+          </button>
+          {showReadingOrder && <div className="mt-4 space-y-6">
             {view.lanes.map((lane) => (
               <section key={lane.id} aria-labelledby={`lane-${lane.id}-heading`} className="space-y-2">
                 <h3 id={`lane-${lane.id}-heading`} className="text-base font-bold text-[var(--theme-text-primary)]">
@@ -367,6 +443,31 @@ export default function ReadingPlanDetailPage() {
                 )}
               </section>
             ))}
+          </div>}
+          </>
+        )}
+      </section>
+
+      <section aria-label="Optional release tracking" className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4">
+        <h2 className="text-base font-bold text-[var(--theme-text-primary)]">Optional: Track future releases</h2>
+        <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
+          Subscribing to ComicVine volumes is separate from the reading order and is not required to read any of these comics.
+        </p>
+        <button
+          type="button"
+          className="mt-2 min-h-11 text-sm font-semibold text-[var(--theme-continuity-accent)] underline"
+          aria-expanded={showReleaseTracking}
+          onClick={() => setShowReleaseTracking((value) => !value)}
+        >
+          {showReleaseTracking ? 'Hide release tracking' : 'Manage release tracking'}
+        </button>
+        {showReleaseTracking && (
+          <div className="mt-3">
+            <NewReleasesSection
+              planId={planId}
+              sources={view.release_sources ?? []}
+              candidates={view.release_candidates ?? []}
+            />
           </div>
         )}
       </section>
