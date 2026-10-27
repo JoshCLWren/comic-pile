@@ -4,6 +4,8 @@
 
 **[▶ Try the live demo at comic-pile.vercel.app](https://comic-pile.vercel.app)**
 
+**Data provided by [ComicVine](https://comicvine.gamespot.com)**
+
 **Roll to read. Rotate your stack.**
 
 [![GitHub stars](https://img.shields.io/github/stars/JoshCLWren/comic-pile?style=social&label=Stars)](https://github.com/JoshCLWren/comic-pile)
