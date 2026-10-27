@@ -280,7 +280,8 @@ describe('QueueThreadCard', () => {
 
     expect(screen.getByTestId('canonical-reading-boundary')).toBeInTheDocument()
     expect(screen.getByText('Saga #6 is waiting on 1 live requirement.')).toBeInTheDocument()
-    expect(screen.getByText('Hold in Ultimate: waiting on One Year In #1')).toBeInTheDocument()
+    expect(screen.queryByText('Hold in Ultimate: waiting on One Year In #1')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show all reading requirements' })).toHaveAttribute('aria-expanded', 'false')
     expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toHaveAttribute(
       'href',
       '/thread/2?issue=9#issue-9',
