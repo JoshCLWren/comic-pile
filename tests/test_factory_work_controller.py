@@ -1145,6 +1145,28 @@ def test_reconcile_contradictory_labels_repairs_blocked_unowned(
     assert replaced == [(3006, "factory:unowned", "factory:blocked")]
 
 
+def test_reconcile_contradictory_labels_skips_manual_only_pr(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A manual-only PR must not be rewritten to factory:unowned + factory:blocked."""
+    hold = pr(
+        3971,
+        "infra/factory-local-hard-stop",
+        "ralph-status:blocked",
+    )
+    hold["body"] = "<!-- factory-execution:manual-only -->\nHold this factory PR.\n"
+    sibling = issue(3006, "ralph-status:blocked", "factory:unowned")
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels([sibling], [hold]) == [3006]
+    assert replaced == [(3006, "factory:unowned", "factory:blocked")]
+
+
 def test_reconcile_contradictory_labels_repairs_done_state(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:

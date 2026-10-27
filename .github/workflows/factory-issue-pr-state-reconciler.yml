@@ -160,7 +160,7 @@ jobs:
           }
 
           reconcile_issue() {
-            local issue="$1" pulls records stage labels blocked
+            local issue="$1" pulls records stage labels blocked body_file
             # Claim policy already treats BLOCKED_LABELS (including
             # ralph-status:blocked) as non-executable. Skip before any
             # trusted-history walk so replace_issue_state never rewrites
@@ -170,6 +170,18 @@ jobs:
               --blocked-by-labels-json "$labels")"
             if [[ "$blocked" == "blocked" ]]; then
               echo "Issue #${issue}: skipped (blocked labels)"
+              return 0
+            fi
+            # ``gh issue list --label factory`` includes pull requests.
+            # Manual-only PR bodies must skip here the same way
+            # stale-expiration already skips them (#4244).
+            body_file="$(mktemp)"
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${issue}" --jq '.body // ""' >"$body_file"
+            blocked="$(python3 .github/scripts/factory_issue_pr_state_policy.py \
+              --blocked-by-body-file "$body_file")"
+            rm -f "$body_file"
+            if [[ "$blocked" == "blocked" ]]; then
+              echo "Issue #${issue}: skipped (manual-only)"
               return 0
             fi
             # Scheduled sweeps reuse one PR snapshot for all issues.

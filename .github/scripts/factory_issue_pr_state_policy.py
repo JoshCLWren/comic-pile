@@ -6,9 +6,10 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 from typing import Any
 
-from factory_work_policy import BLOCKED_LABELS
+from factory_work_policy import BLOCKED_LABELS, is_manual_only
 
 
 def stage_from_trusted_prs(records: Iterable[Mapping[str, Any]]) -> str:
@@ -36,6 +37,17 @@ def issue_labels_block_reconciliation(labels: Iterable[str]) -> bool:
     return bool(set(labels) & BLOCKED_LABELS)
 
 
+def body_blocks_reconciliation(body: str | None) -> bool:
+    """Return whether a body forbids rewriting this target's factory labels.
+
+    Mirrors ``stale_pr_decay.process_stale_prs``: a standalone
+    ``<!-- factory-execution:manual-only -->`` directive is an operator hold.
+    ``gh issue list --label factory`` includes pull requests, so the scheduled
+    reconciler must skip those PR bodies the same way stale-expiration does.
+    """
+    return is_manual_only(body)
+
+
 def _label_names(decoded: object) -> list[str]:
     """Return string label names from a decoded JSON labels payload."""
     if not isinstance(decoded, list):
@@ -49,6 +61,7 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--records-json")
     mode.add_argument("--blocked-by-labels-json")
+    mode.add_argument("--blocked-by-body-file")
     args = parser.parse_args()
     if args.blocked_by_labels_json is not None:
         try:
@@ -56,6 +69,10 @@ def main() -> int:
         except (TypeError, json.JSONDecodeError) as exc:
             parser.error(f"--blocked-by-labels-json must decode to a list: {exc}")
         print("blocked" if issue_labels_block_reconciliation(labels) else "ok")
+        return 0
+    if args.blocked_by_body_file is not None:
+        body = Path(args.blocked_by_body_file).read_text(encoding="utf-8")
+        print("blocked" if body_blocks_reconciliation(body) else "ok")
         return 0
     if args.records_json is None:
         parser.error("--records-json is required")
