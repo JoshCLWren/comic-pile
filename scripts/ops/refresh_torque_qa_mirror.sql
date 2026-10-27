@@ -5,7 +5,7 @@
 -- interactive tests start with a clean QA session. Muse remains disabled.
 -- Clone IDs use a fixed +10000000 offset, allowing deterministic source-to-QA test mappings.
 -- NEXT_STATEMENT
-LOCK TABLE threads, issues, dependencies, custom_cbl_lists, custom_cbl_entries, custom_cbl_overlap_decisions, custom_cbl_source_links, continuity_plans, continuity_rules, reading_plan_issues, reading_plan_sources, reading_plan_source_placements, reading_plan_release_sources, reading_plan_dependencies, events, sessions, snapshots, thread_external_series_mappings, issue_external_identity_mappings, dependency_groups, dependency_group_memberships, collection_exclusions, reading_orders, reading_order_items, tags, tag_assignments, cbl_adoption_receipts IN SHARE ROW EXCLUSIVE MODE-- NEXT_STATEMENT
+LOCK TABLE threads, issues, dependencies, custom_cbl_lists, custom_cbl_entries, custom_cbl_overlap_decisions, custom_cbl_source_links, continuity_plans, continuity_rules, continuity_rule_selected_members, reading_plan_issues, reading_plan_sources, reading_plan_source_placements, reading_plan_release_sources, reading_plan_dependencies, events, sessions, snapshots, thread_external_series_mappings, issue_external_identity_mappings, dependency_groups, dependency_group_memberships, collection_exclusions, reading_orders, reading_order_items, tags, tag_assignments, cbl_adoption_receipts, catalog_commit_receipts, taste_signals IN SHARE ROW EXCLUSIVE MODE-- NEXT_STATEMENT
 SELECT pg_advisory_xact_lock(23199)
 -- NEXT_STATEMENT
 DO $guard$ BEGIN
@@ -169,9 +169,13 @@ DO $verify$ BEGIN
  IF (SELECT count(*) FROM continuity_plans WHERE user_id=1) IS DISTINCT FROM (SELECT count(*) FROM continuity_plans WHERE user_id=23199) THEN RAISE EXCEPTION 'plan count mismatch'; END IF;
  IF EXISTS(SELECT 1 FROM issues s JOIN threads t ON t.id=s.thread_id LEFT JOIN issues q ON q.id=s.id+10000000 WHERE t.user_id=1 AND (q.id IS NULL OR q.status IS DISTINCT FROM s.status OR q.thread_id IS DISTINCT FROM s.thread_id+10000000)) THEN RAISE EXCEPTION 'QA issue progress/owner mismatch'; END IF;
  IF EXISTS(SELECT 1 FROM threads s LEFT JOIN threads q ON q.id=s.id+10000000 WHERE s.user_id=1 AND (q.id IS NULL OR q.title IS DISTINCT FROM s.title OR q.next_unread_issue_id IS DISTINCT FROM CASE WHEN s.next_unread_issue_id IS NULL THEN NULL ELSE s.next_unread_issue_id+10000000 END)) THEN RAISE EXCEPTION 'QA thread/frontier mismatch'; END IF;
+ IF EXISTS(SELECT 1 FROM custom_cbl_entries s JOIN custom_cbl_lists l ON l.id=s.list_id LEFT JOIN custom_cbl_entries q ON q.id=s.id+10000000 WHERE l.user_id=1 AND (q.id IS NULL OR q.list_id IS DISTINCT FROM s.list_id+10000000 OR q.issue_id IS DISTINCT FROM s.issue_id+10000000 OR q.position IS DISTINCT FROM s.position OR q.gate IS DISTINCT FROM s.gate OR q.skipped IS DISTINCT FROM s.skipped)) THEN RAISE EXCEPTION 'QA strict-list gate or order mismatch'; END IF;
+ IF EXISTS(SELECT 1 FROM thread_external_series_mappings s JOIN threads t ON t.id=s.thread_id LEFT JOIN thread_external_series_mappings q ON q.id=s.id+10000000 WHERE t.user_id=1 AND (q.id IS NULL OR q.thread_id IS DISTINCT FROM s.thread_id+10000000 OR q.external_identity_id IS DISTINCT FROM s.external_identity_id OR q.status IS DISTINCT FROM s.status)) THEN RAISE EXCEPTION 'QA ComicVine thread mapping mismatch'; END IF;
+ IF EXISTS(SELECT 1 FROM dependencies s JOIN issues i ON i.id=s.source_issue_id JOIN threads t ON t.id=i.thread_id LEFT JOIN dependencies q ON q.id=s.id+10000000 WHERE t.user_id=1 AND (q.id IS NULL OR q.source_issue_id IS DISTINCT FROM s.source_issue_id+10000000 OR q.target_issue_id IS DISTINCT FROM s.target_issue_id+10000000 OR q.origin IS DISTINCT FROM s.origin OR q.classification IS DISTINCT FROM s.classification)) THEN RAISE EXCEPTION 'QA prerequisite dependency mismatch'; END IF;
+ IF EXISTS(SELECT 1 FROM continuity_plans s LEFT JOIN continuity_plans q ON q.id=s.id+10000000 WHERE s.user_id=1 AND (q.id IS NULL OR q.user_id IS DISTINCT FROM 23199 OR q.ordering_mode IS DISTINCT FROM s.ordering_mode OR q.nodes_json::jsonb IS DISTINCT FROM pg_temp.qa_rewrite_json(s.nodes_json::jsonb))) THEN RAISE EXCEPTION 'QA compiled continuity plan mismatch'; END IF;
  IF EXISTS (
  SELECT 1 FROM continuity_rules r
- CROSS JOIN LATERAL jsonb_array_elements(r.convergence_targets::jsonb) e(value)
+ CROSS JOIN LATERAL jsonb_array_elements(coalesce(nullif(r.convergence_targets::jsonb, 'null'::jsonb), '[]'::jsonb)) e(value)
  LEFT JOIN issues i ON i.id=(e.value->>'id')::int
  LEFT JOIN threads t ON t.id=i.thread_id
  WHERE r.user_id=23199 AND e.value->>'type'='issue' AND (i.id IS NULL OR t.user_id IS DISTINCT FROM 23199)

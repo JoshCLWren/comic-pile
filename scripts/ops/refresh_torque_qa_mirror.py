@@ -86,12 +86,16 @@ async def run(*, apply: bool, database_url: str) -> None:
     url = make_url(database_url)
     if not url.drivername.startswith("postgresql"):
         raise ValueError("QA graph mirroring supports only PostgreSQL")
-    # Neon/libpq's sslmode and channel_binding parameters are not valid
-    # asyncpg kwargs. Preserve required TLS while removing unsupported keys.
+    # Neon/libpq's channel_binding parameter is not a valid asyncpg kwarg, and
+    # asyncpg expects sslmode as the ``ssl`` connection option. Preserve the
+    # operator's requested verification mode instead of downgrading it to
+    # ``require``.
     query = dict(url.query)
     query.pop("channel_binding", None)
     sslmode = query.pop("sslmode", None)
-    if sslmode in {"require", "verify-ca", "verify-full"} or "ssl" not in query:
+    if sslmode is not None:
+        query["ssl"] = sslmode
+    elif "ssl" not in query:
         query["ssl"] = "require"
     engine = create_async_engine(url.set(drivername="postgresql+asyncpg", query=query))
     try:
