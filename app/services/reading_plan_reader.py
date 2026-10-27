@@ -295,6 +295,7 @@ async def get_reading_plan_reader(
                 id=source.id,
                 display_name=source_names.get(source.raw_source_path),
                 raw_source_path=source.raw_source_path,
+                custom_cbl_list_id=source.custom_cbl_list_id,
                 repository=source.repository,
                 source_path=source.source_path,
                 revision_sha=source.revision_sha,
