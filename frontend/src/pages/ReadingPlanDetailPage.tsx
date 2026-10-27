@@ -152,9 +152,11 @@ export default function ReadingPlanDetailPage() {
   const [searchParams] = useSearchParams()
   const addFromCblRequested = searchParams.get('addFrom') === 'cbl'
   const [showReleaseTracking, setShowReleaseTracking] = useState(false)
-  const [showAllBlocked, setShowAllBlocked] = useState(false)
+  const [visibleBlockedCount, setVisibleBlockedCount] = useState(3)
   const [showUpcoming, setShowUpcoming] = useState(false)
+  const [visibleUpcomingCount, setVisibleUpcomingCount] = useState(30)
   const [showReadingOrder, setShowReadingOrder] = useState(false)
+  const [visibleOrderCount, setVisibleOrderCount] = useState(40)
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const readerQuery = useReadingPlanReader(planId)
@@ -211,6 +213,13 @@ export default function ReadingPlanDetailPage() {
   const upcoming = view.lanes.flatMap((lane) =>
     lane.issues.filter((issue) => issue.availability === 'later'),
   )
+  const totalOrderIssues = view.lanes.reduce((count, lane) => count + lane.issues.length, 0)
+  let visibleOrderRemaining = visibleOrderCount
+  const visibleOrderLanes = view.lanes.flatMap((lane) => {
+    const visibleIssues = lane.issues.slice(0, visibleOrderRemaining)
+    visibleOrderRemaining = Math.max(0, visibleOrderRemaining - visibleIssues.length)
+    return visibleIssues.length ? [{ ...lane, issues: visibleIssues }] : []
+  })
 
   return (
     <section className="space-y-6 pb-8" aria-labelledby="reading-plan-heading" data-testid="reading-plan-reader">
@@ -312,7 +321,7 @@ export default function ReadingPlanDetailPage() {
           <p className="mt-3 text-sm text-[var(--theme-text-dim)]">No hard blockers on the next unread issues in this plan.</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {(showAllBlocked ? view.blocked_next : view.blocked_next.slice(0, 3)).map((issue) => (
+            {view.blocked_next.slice(0, visibleBlockedCount).map((issue) => (
               <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
             ))}
           </ul>
@@ -321,10 +330,13 @@ export default function ReadingPlanDetailPage() {
           <button
             type="button"
             className="mt-3 min-h-11 text-sm font-semibold text-[var(--theme-continuity-accent)] underline"
-            aria-expanded={showAllBlocked}
-            onClick={() => setShowAllBlocked((value) => !value)}
+            onClick={() => setVisibleBlockedCount((count) =>
+              count >= view.blocked_next.length ? 3 : Math.min(count + 10, view.blocked_next.length),
+            )}
           >
-            {showAllBlocked ? 'Show fewer blocked issues' : `Show ${view.blocked_next.length - 3} more blocked issues`}
+            {visibleBlockedCount >= view.blocked_next.length
+              ? 'Show fewer blocked issues'
+              : `Show ${Math.min(10, view.blocked_next.length - visibleBlockedCount)} more blocked issues`}
           </button>
         )}
       </section>
@@ -347,10 +359,16 @@ export default function ReadingPlanDetailPage() {
           </button>
           {showUpcoming && (
             <ul className="mt-3 space-y-2">
-              {upcoming.map((issue) => (
+              {upcoming.slice(0, visibleUpcomingCount).map((issue) => (
                 <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
               ))}
             </ul>
+          )}
+          {showUpcoming && upcoming.length > visibleUpcomingCount && (
+            <button type="button" className="mt-2 min-h-11 text-sm font-semibold text-[var(--theme-continuity-accent)] underline"
+              onClick={() => setVisibleUpcomingCount((count) => count + 30)}>
+              Show next {Math.min(30, upcoming.length - visibleUpcomingCount)} upcoming issues
+            </button>
           )}
         </section>
       )}
@@ -427,7 +445,7 @@ export default function ReadingPlanDetailPage() {
             {showReadingOrder ? 'Hide complete reading order' : `Show complete reading order (${view.progress.total_issues} issues)`}
           </button>
           {showReadingOrder && <div className="mt-4 space-y-6">
-            {view.lanes.map((lane) => (
+            {visibleOrderLanes.map((lane) => (
               <section key={lane.id} aria-labelledby={`lane-${lane.id}-heading`} className="space-y-2">
                 <h3 id={`lane-${lane.id}-heading`} className="text-base font-bold text-[var(--theme-text-primary)]">
                   {lane.name}
@@ -444,6 +462,12 @@ export default function ReadingPlanDetailPage() {
               </section>
             ))}
           </div>}
+          {showReadingOrder && totalOrderIssues > visibleOrderCount && (
+            <button type="button" className="mt-3 min-h-11 text-sm font-semibold text-[var(--theme-continuity-accent)] underline"
+              onClick={() => setVisibleOrderCount((count) => count + 40)}>
+              Show next {Math.min(40, totalOrderIssues - visibleOrderCount)} issues in reading order
+            </button>
+          )}
           </>
         )}
       </section>
