@@ -1003,7 +1003,7 @@ export default function CustomCBLBuilder({
                             className="mt-1 min-h-11 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 text-sm text-[var(--theme-text-primary)] disabled:opacity-50 sm:w-auto"
                           >
                             {GATE_ORDER.map((gate) => (
-                              <option key={gate} value={gate}>{GATE_LABELS[gate]}</option>
+                              <option key={gate} value={gate}>{mode === 'strict' && gate === 'none' ? 'Strict order only' : GATE_LABELS[gate]}</option>
                             ))}
                           </select>
                         </label>
