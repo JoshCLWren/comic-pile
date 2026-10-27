@@ -41,6 +41,7 @@ interface CustomCBLBuilderProps {
 
 const DEFAULT_MODE: ReadingListMode = 'loose'
 const DEFAULT_GATE: ReadingListGate = 'none'
+const ENTRY_PAGE_SIZE = 30
 
 const GATE_ORDER: ReadingListGate[] = ['none', 'after_previous', 'hold']
 
@@ -259,7 +260,9 @@ function waitDescription(
   if (entry.skipped) {
     parts.push('Skipped in this list only; it does not wait and is not waited on.')
   } else if (names.length > 0) {
-    parts.push(`Waits on ${names.join(', ')}.`)
+    parts.push(names.length > 2
+      ? `Waits on ${names.length} earlier comics, beginning with ${names[0]}.`
+      : `Waits on ${names.join(', ')}.`)
   } else if (entry.gate === 'after_previous') {
     parts.push('Waits on the previous entry.')
   }
@@ -290,6 +293,11 @@ export default function CustomCBLBuilder({
   const [description, setDescription] = useState('')
   const [mode, setMode] = useState<ReadingListMode>(DEFAULT_MODE)
   const [entries, setEntries] = useState<CustomCBLEntry[]>([])
+  const [entrySearch, setEntrySearch] = useState('')
+  const [entryPage, setEntryPage] = useState(0)
+  const [jumpPosition, setJumpPosition] = useState('')
+  const [expandedEntryOptions, setExpandedEntryOptions] = useState<number | null>(null)
+  const [moveDestinations, setMoveDestinations] = useState<Record<number, string>>({})
   const [issueQuery, setIssueQuery] = useState('')
   const [submittedIssueQuery, setSubmittedIssueQuery] = useState('')
   const [message, setMessage] = useState<string | null>(null)
@@ -357,6 +365,11 @@ export default function CustomCBLBuilder({
     setDescription(list.description ?? '')
     setMode(list.mode ?? DEFAULT_MODE)
     setEntries(normalizePositions(list.entries))
+    setEntrySearch('')
+    setEntryPage(0)
+    setJumpPosition('')
+    setExpandedEntryOptions(null)
+    setMoveDestinations({})
     setLoadedListId(list.id)
     setMessage(null)
     setExportError(null)
@@ -601,6 +614,17 @@ export default function CustomCBLBuilder({
     return describeCyclePath(saveErrorDetail.cyclePath, resolveName)
   }, [entryNames, saveErrorDetail])
 
+  const matchedEntries = useMemo(() => {
+    const query = entrySearch.trim().toLocaleLowerCase()
+    return entries.flatMap((entry, index) => {
+      const label = `${entry.series_name} #${entry.issue_number}`
+      return !query || label.toLocaleLowerCase().includes(query) ? [{ entry, index }] : []
+    })
+  }, [entries, entrySearch])
+  const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
+  const currentPage = Math.min(entryPage, pageCount - 1)
+  const visibleEntries = matchedEntries.slice(currentPage * ENTRY_PAGE_SIZE, (currentPage + 1) * ENTRY_PAGE_SIZE)
+
   const searchResults = (issueQuery.trim() === submittedIssueQuery ? issueSearchQuery.data ?? [] : []).filter(
     (candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id),
   )
@@ -620,6 +644,8 @@ export default function CustomCBLBuilder({
   const addIssue = (candidate: CustomCBLIssueSearchResult) => {
     setEntries((current) => [...current, draftEntry(candidate, current.length)])
     setMessage(`Added ${candidate.series_name} #${candidate.issue_number} to this list. Save to keep your changes.`)
+    setEntrySearch('')
+    setEntryPage(Math.floor(entries.length / ENTRY_PAGE_SIZE))
     issueSearchInput.current?.focus()
   }
   const focusSearchResult = (event: KeyboardEvent<HTMLElement>, fromInput = false) => {
@@ -658,6 +684,29 @@ export default function CustomCBLBuilder({
       return normalizePositions(next)
     })
     setMessage(null)
+  }
+  const moveIssueToPosition = (index: number, issueId: number) => {
+    const position = Number(moveDestinations[issueId])
+    if (!Number.isSafeInteger(position) || position < 1 || position > entries.length) return
+    const target = position - 1
+    if (index === target) return
+    setEntries((current) => {
+      const next = [...current]
+      const [moved] = next.splice(index, 1)
+      if (!moved) return current
+      next.splice(target, 0, moved)
+      return normalizePositions(next)
+    })
+    setEntrySearch('')
+    setEntryPage(Math.floor(target / ENTRY_PAGE_SIZE))
+    setExpandedEntryOptions(null)
+    setMessage(null)
+  }
+  const jumpToPosition = () => {
+    const position = Number(jumpPosition)
+    if (!Number.isSafeInteger(position) || position < 1 || position > entries.length) return
+    setEntrySearch('')
+    setEntryPage(Math.floor((position - 1) / ENTRY_PAGE_SIZE))
   }
   const updateGate = (issueId: number, gate: ReadingListGate) => {
     setEntries((current) =>
@@ -702,6 +751,11 @@ export default function CustomCBLBuilder({
     setUndoPayload(null)
     setUndoBaseline(null)
     setSelectedId(next)
+    setEntrySearch('')
+    setEntryPage(0)
+    setJumpPosition('')
+    setExpandedEntryOptions(null)
+    setMoveDestinations({})
   }
   const exportList = async () => {
     if (!selectedId || !persisted || dirty || disabled || isPending) return
