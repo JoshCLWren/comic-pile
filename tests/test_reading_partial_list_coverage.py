@@ -112,7 +112,40 @@ def test_old_generated_reverse_edge_requires_explicit_source_order() -> None:
             ReadingListEntry(10), ReadingListEntry(20),
         )),),
     )
-    assert superseded_converted_edge(20, 10, snapshot, {50: {20: 0, 10: 1}})
+    prior = {50: {(90, "reader-order"): {20: 0, 10: 1}}}
+    assert superseded_converted_edge(20, 10, snapshot, prior)
     assert not superseded_converted_edge(20, 10, snapshot, {})
-    assert not superseded_converted_edge(10, 20, snapshot, {50: {20: 0, 10: 1}})
-    assert not superseded_converted_edge(20, 10, snapshot, {50: {10: 0, 20: 1}})
+    assert not superseded_converted_edge(10, 20, snapshot, prior)
+    assert not superseded_converted_edge(
+        20, 10, snapshot, {50: {(90, "reader-order"): {10: 0, 20: 1}}},
+    )
+
+
+def test_unrelated_old_plans_cannot_fabricate_historical_precedence() -> None:
+    """No source plan/lane includes both ends, even though merged positions would."""
+    snapshot = ReadingSnapshot(
+        user_id=TEST_READER_ID,
+        threads=(ReadingThread(1), ReadingThread(2)),
+        issues=(ReadingIssue(10, 1, 1), ReadingIssue(20, 2, 1)),
+        lists=(ReadingList(50, "strict", (
+            ReadingListEntry(10), ReadingListEntry(20),
+        )),),
+    )
+    assert not superseded_converted_edge(
+        20, 10, snapshot,
+        {50: {(90, "main"): {20: 0}, (91, "main"): {10: 1}}},
+    )
+    assert not superseded_converted_edge(
+        20, 10, snapshot,
+        {50: {(90, "first"): {20: 0}, (90, "second"): {10: 1}}},
+    )
+    assert not superseded_converted_edge(
+        20, 10, snapshot,
+        {50: {(90, "main"): {20: 0, 10: 1},
+              (91, "main"): {20: 1, 10: 0}}},
+    )
+    assert not superseded_converted_edge(
+        20, 10, snapshot,
+        {50: {(90, "main"): {20: 0, 10: 1},
+              (91, "main"): {20: 0, 10: 1}}},
+    )
