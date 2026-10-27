@@ -809,7 +809,33 @@ it('treats a malformed issue deep link as plain thread navigation', async () => 
   expect(document.querySelector('.issue-deep-link-target')).toBeNull()
   expect(mockedIssuesApiList).not.toHaveBeenCalled()
   expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'center', behavior: 'instant' })
+  await waitFor(() => expect(screen.getByText("That issue isn't in this thread.")).toBeInTheDocument())
   scrollIntoView.mockRestore()
+})
+
+it('shows deep-link notice when issue param references a missing issue', async () => {
+  locationState.search = '?issue=999'
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 1, queue_position: 1,
+    status: 'active', total_issues: 2, next_unread_issue_number: '1', notes: null,
+  } as never)
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 11, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' },
+      { id: 12, thread_id: 1, issue_number: '2', status: 'read', read_at: 'now', created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 2, page_size: 100,
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText("That issue isn't in this thread.")).toBeInTheDocument())
+})
+
+it('does not show deep-link notice when no issue param present', async () => {
+  locationState.search = ''
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  expect(screen.queryByText("That issue isn't in this thread.")).not.toBeInTheDocument()
 })
 
 function creatorsResponseFor(
