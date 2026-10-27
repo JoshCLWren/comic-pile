@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useId, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
@@ -9,6 +9,7 @@ import { creatorRoutePath, parseCreatorKey } from '../utils/creatorKey'
 import type { CreatorListItem } from '../services/api-creators'
 import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 import CreatorDiscoverySection from '../components/CreatorDiscoverySection'
+import GlossaryLink from '../components/GlossaryLink'
 
 /** Quiet period before a typed name search becomes a new bounded query. */
 const SEARCH_DEBOUNCE_MS = 300
@@ -93,6 +94,20 @@ function CreatorRow({
   // Unselected checkboxes are disabled only when at max selection.
   const canSelect = isSelected || selectionCount < maxSelection
 
+  const checkbox = (
+    <input
+      type="checkbox"
+      checked={isSelected}
+      onChange={onToggle}
+      disabled={!canSelect}
+      aria-label={`Select ${item.display_name} for comparison`}
+      className="mt-1.5 h-4 w-4 rounded border-[var(--theme-border)] text-[var(--theme-primary-action)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+    />
+  )
+
+  const [showSampleHelp, setShowSampleHelp] = useState(false)
+  const helpId = useId()
+
   const body = (
     <>
       <span className="block min-w-0 break-words text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
@@ -110,31 +125,52 @@ function CreatorRow({
         ) : (
           <span>unrated</span>
         )}
-        {average != null && ratingsCount < SMALL_SAMPLE_THRESHOLD && (
-          <button
-            type="button"
-            className="font-semibold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-            style={{ color: 'var(--theme-warning)' }}
-            title="Fewer than 5 rated comics. Average ratings based on a small sample may be less representative."
-            aria-label="Small sample: fewer than 5 rated comics. Average ratings based on a small sample may be less representative."
-          >
-            small sample
-          </button>
-        )}
       </span>
     </>
   )
 
-  const checkbox = (
-    <input
-      type="checkbox"
-      checked={isSelected}
-      onChange={onToggle}
-      disabled={!canSelect}
-      aria-label={`Select ${item.display_name} for comparison`}
-      className="mt-1.5 h-4 w-4 rounded border-[var(--theme-border)] text-[var(--theme-primary-action)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
-    />
-  )
+  const showSmallSample = average != null && ratingsCount < SMALL_SAMPLE_THRESHOLD
+
+  /**
+   * Help control lives outside the row's Link (#3627 review): a button
+   * nested in a link is invalid and lets clicks navigate to the creator
+   * instead of opening the explanation. Activation shows the explanation
+   * inline for touch, pointer, and keyboard readers — hover is never required.
+   */
+  const sampleHelp = showSmallSample ? (
+    <div className="mt-1 flex flex-wrap items-start gap-x-2 text-xs">
+      <button
+        type="button"
+        className="font-semibold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+        style={{ color: 'var(--theme-warning)' }}
+        aria-expanded={showSampleHelp}
+        aria-controls={helpId}
+        aria-label={`Small sample: fewer than ${SMALL_SAMPLE_THRESHOLD} rated comics. Average ratings based on a small sample may be less representative.`}
+        title="Fewer than 5 rated comics. Average ratings based on a small sample may be less representative."
+        onClick={() => setShowSampleHelp((open) => !open)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && showSampleHelp) {
+            event.preventDefault()
+            setShowSampleHelp(false)
+          }
+        }}
+      >
+        small sample
+      </button>
+      {showSampleHelp && (
+        <span
+          id={helpId}
+          className="break-words"
+          style={{ color: 'var(--theme-text-muted)' }}
+        >
+          Fewer than {SMALL_SAMPLE_THRESHOLD} rated comics. Average ratings based on
+          a small sample may be less representative. This is a confidence/context
+          indicator, not a data-quality defect or a new rating-scoring formula.{' '}
+          <GlossaryLink id="small-sample">Glossary</GlossaryLink>
+        </span>
+      )}
+    </div>
+  ) : null
 
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2 flex items-start gap-3" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
@@ -150,6 +186,7 @@ function CreatorRow({
         ) : (
           <div className="min-w-0">{body}</div>
         )}
+        {sampleHelp}
       </div>
     </li>
   )

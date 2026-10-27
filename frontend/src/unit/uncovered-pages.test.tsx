@@ -44,6 +44,7 @@ describe('HelpPage', () => {
       'Pos',
       'Reading mode',
       'Finished series',
+      'Small sample',
     ]) {
       expect(screen.getByText(term)).toBeInTheDocument()
     }
@@ -74,6 +75,7 @@ describe('HelpPage', () => {
       'reading-order',
       'projection',
       'dependency-builder',
+      'small-sample',
     ]) {
       expect(document.getElementById(id)).not.toBeNull()
     }

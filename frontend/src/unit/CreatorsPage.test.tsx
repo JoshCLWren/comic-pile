@@ -563,6 +563,53 @@ describe('CreatorsPage minimum-rated-sample control', () => {
   })
 })
 
+describe('CreatorsPage small-sample explanation (#3627)', () => {
+  function sampleRow() {
+    mockedHook.mockReturnValue(
+      baseState({
+        items: [
+          makeItem({ canonical_creator_key: 'creator:1', average_rating: 5.0, ratings_count: 2 }),
+        ],
+        total: 1,
+      }),
+    )
+    renderPage()
+  }
+
+  it('shows the explanation only on activation, for touch/pointer/keyboard use', () => {
+    sampleRow()
+
+    expect(screen.queryByText(/may be less representative/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Small sample/ }))
+
+    expect(screen.getByText(/may be less representative/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Small sample/ }).getAttribute('aria-expanded'),
+    ).toBe('true')
+  })
+
+  it('keeps the small-sample control outside the creator row link', () => {
+    sampleRow()
+
+    const badge = screen.getByRole('button', { name: /Small sample/ })
+    expect(badge.closest('a')).toBeNull()
+  })
+
+  it('dismisses the open explanation with Escape', () => {
+    sampleRow()
+
+    const badge = screen.getByRole('button', { name: /Small sample/ })
+    fireEvent.click(badge)
+    expect(screen.getByText(/may be less representative/)).toBeInTheDocument()
+
+    fireEvent.keyDown(badge, { key: 'Escape' })
+    fireEvent.keyUp(badge, { key: 'Escape' })
+
+    expect(screen.queryByText(/may be less representative/)).not.toBeInTheDocument()
+  })
+})
+
 describe('CreatorsPage comparison selection URL contract', () => {
   it('restores checked creators from a keyed URL and keeps each one uncheckable', () => {
     selectionState()
