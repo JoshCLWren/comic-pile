@@ -144,6 +144,9 @@ export default function ReadingPlanDetailPage() {
     source.raw_source_path,
     displayReadingListName(source.display_name, source.source_path ?? source.raw_source_path) ?? 'Reading order',
   ]))
+  // The persisted source relationship identifies the live reader-owned list.
+  // Do not infer a list from names or route into the retired plan editor when linked.
+  const editableListId = view.sources.find((source) => source.custom_cbl_list_id != null)?.custom_cbl_list_id ?? null
   const modeLabel = readingPlanModeLabel(view.ordering_mode)
   const isStrict = view.ordering_mode === 'strict_sequential'
   const percent = progressPercent(view.progress.read_issues, view.progress.total_issues)
@@ -186,10 +189,10 @@ export default function ReadingPlanDetailPage() {
           )}
           <button
             type="button"
-            onClick={() => navigate(`/continuity-plans/${planId}/edit`)}
+            onClick={() => navigate(editableListId != null ? `/reading-lists/${editableListId}` : `/continuity-plans/${planId}/edit`)}
             className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
           >
-            Edit plan
+            {editableListId != null ? 'Edit reading order' : 'Edit plan'}
           </button>
         </div>
       </header>
