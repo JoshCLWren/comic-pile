@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { rateApi } from '../../services/api-rate'
 import { undoApi } from '../../services/api-undo'
@@ -55,6 +55,9 @@ export function IssueRateButton({
   const [savedRating, setSavedRating] = useState<number | null>(
     issue.last_rating ?? null,
   )
+  useEffect(() => {
+    setSavedRating(issue.last_rating ?? null)
+  }, [issue.last_rating])
   // The rating response names the undo record it wrote, so the row can offer
   // the same Undo Roll ratings get without re-reading a snapshot list.
   const [internalUndoTarget, setInternalUndoTarget] = useState<RateUndoInfo | null>(null)
