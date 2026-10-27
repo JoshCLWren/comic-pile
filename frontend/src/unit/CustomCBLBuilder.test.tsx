@@ -256,6 +256,7 @@ describe('CustomCBLBuilder', () => {
     renderBuilder()
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    await screen.findByText('Starman #55')
     const card = screen.getAllByTestId('reading-list-entry')[0]
     const title = within(card).getByTestId('reading-list-entry-title')
     expect(title).toHaveTextContent('Starman #55')
@@ -288,6 +289,7 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
 
+    await screen.findByText('Hellboy and the B.P.R.D.: The Long Night #1')
     expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
     expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #1')).toBeInTheDocument()
     expect(screen.queryByText('Hellboy and the B.P.R.D.: The Long Night #31')).not.toBeInTheDocument()
