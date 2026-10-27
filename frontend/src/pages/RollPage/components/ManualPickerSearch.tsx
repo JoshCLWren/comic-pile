@@ -106,7 +106,10 @@ export function ManualPickerSearch({
       }
     } else if (event.key === 'Escape') {
       if (open) {
-        // First Escape closes the listbox, second Escape closes the dialog
+        // ARIA combobox contract: Escape dismisses the popup without closing
+        // the surrounding dialog. The next Escape (with the list already
+        // closed) clears an active query instead of bubbling, and the one
+        // after that reaches the dialog.
         event.preventDefault()
         event.stopPropagation()
         setOpen(false)
@@ -171,6 +174,10 @@ export function ManualPickerSearch({
       )}
 
       {open && (
+        // Single-select listbox: expose exactly one selected option, the one
+        // referenced by aria-activedescendant. Mirroring the committed `value`
+        // here as well would advertise two selections at once, so the saved
+        // choice is reported by the "Selected: …" line above instead.
         <ul
           ref={listRef}
           id={listboxId}
@@ -192,7 +199,7 @@ export function ManualPickerSearch({
                 key={option.id}
                 id={`${listboxId}-option-${option.id}`}
                 role="option"
-                aria-selected={index === highlighted || String(option.id) === value}
+                aria-selected={index === highlighted}
                 className={`cursor-pointer px-3 py-2 text-sm ${
                   index === highlighted
                     ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-text-primary)]'
