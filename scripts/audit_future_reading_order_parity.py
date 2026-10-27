@@ -31,12 +31,12 @@ ORDER BY d.id
 """
 
 OLD_PLAN_SQL = """
-SELECT s.custom_cbl_list_id AS list_id, pi.issue_id, pi.display_position
+SELECT s.custom_cbl_list_id AS list_id, p.id AS plan_id, pi.lane_id, pi.issue_id, pi.display_position
 FROM reading_plan_sources s
 JOIN continuity_plans p ON p.id=s.plan_id AND p.user_id=:uid
 JOIN reading_plan_issues pi ON pi.plan_id=p.id
 WHERE s.custom_cbl_list_id IS NOT NULL
-ORDER BY s.custom_cbl_list_id, p.id, pi.display_position
+ORDER BY s.custom_cbl_list_id, p.id, pi.lane_id, pi.display_position
 """
 
 
@@ -94,14 +94,25 @@ async def run(url: str, uid: int) -> dict:
                     old_rows = (await db.execute(
                         text(OLD_PLAN_SQL), {"uid": uid},
                     )).mappings().all()
-                    plan_positions: dict[int, dict[int, int]] = {}
+                    plan_positions: dict[
+                        int, dict[tuple[int, str], dict[int, int]]
+                    ] = {}
                     for old_row in old_rows:
-                        plan_positions.setdefault(old_row["list_id"], {})[
+                        list_lanes = plan_positions.setdefault(old_row["list_id"], {})
+                        lane = (old_row["plan_id"], old_row["lane_id"])
+                        list_lanes.setdefault(lane, {})[
                             old_row["issue_id"]
                         ] = old_row["display_position"]
                     scoped, unresolved_omissions = classify_partial_strict_coverage(
                         snapshot, omitted,
-                        {list_id: frozenset(p) for list_id, p in plan_positions.items()},
+                        {
+                            list_id: frozenset(
+                                issue_id
+                                for lane in lanes.values()
+                                for issue_id in lane
+                            )
+                            for list_id, lanes in plan_positions.items()
+                        },
                     )
                     superseded = tuple(
                         edge for edge in checked.contradicted
