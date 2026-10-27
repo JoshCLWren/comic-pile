@@ -163,6 +163,7 @@ export default function CustomCBLBuilder({
   const queryClient = useQueryClient()
   const issueSearchInput = useRef<HTMLInputElement>(null)
   const issueSearchResults = useRef<HTMLDivElement>(null)
+  const listNavigationRef = useRef<HTMLDivElement>(null)
   const [readerOpen, setReaderOpen] = useState(false)
   const [open, setOpen] = useState(initialListId !== undefined)
   const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
@@ -503,6 +504,15 @@ export default function CustomCBLBuilder({
   const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
   const currentPage = Math.min(entryPage, pageCount - 1)
   const visibleEntries = matchedEntries.slice(currentPage * ENTRY_PAGE_SIZE, (currentPage + 1) * ENTRY_PAGE_SIZE)
+  const focusListStart = () => {
+    const target = listNavigationRef.current
+    target?.scrollIntoView?.({ block: 'start' })
+    target?.focus({ preventScroll: true })
+  }
+  const goToPage = (page: number) => {
+    setEntryPage(Math.max(0, Math.min(pageCount - 1, page)))
+    focusListStart()
+  }
 
   const searchResults = (issueQuery.trim() === submittedIssueQuery ? issueSearchQuery.data ?? [] : []).filter(
     (candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id),
@@ -578,6 +588,7 @@ export default function CustomCBLBuilder({
     })
     setEntrySearch('')
     setEntryPage(Math.floor(target / ENTRY_PAGE_SIZE))
+    focusListStart()
     setExpandedEntryOptions(null)
     setMessage(null)
   }
@@ -586,6 +597,7 @@ export default function CustomCBLBuilder({
     if (!Number.isSafeInteger(position) || position < 1 || position > entries.length) return
     setEntrySearch('')
     setEntryPage(Math.floor((position - 1) / ENTRY_PAGE_SIZE))
+    focusListStart()
   }
   const updateGate = (issueId: number, gate: ReadingListGate) => {
     setEntries((current) =>
@@ -793,7 +805,7 @@ export default function CustomCBLBuilder({
               )}
 
               {entries.length > 0 && (
-                <div className="surface-panel space-y-3 p-3" aria-label="Reading List navigation">
+                <div ref={listNavigationRef} tabIndex={-1} className="surface-panel scroll-mt-4 space-y-3 p-3" aria-label="Reading List navigation">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-sm font-bold text-[var(--theme-text-primary)]">Ordered issues ({entries.length})</h4>
                     <p className="text-xs text-[var(--theme-text-muted)]">Changes are saved with the list.</p>
@@ -829,8 +841,8 @@ export default function CustomCBLBuilder({
                     {matchedEntries.length} matching issues · Page {currentPage + 1} of {pageCount}
                   </p>
                   <div className="flex items-center justify-between gap-2">
-                    <button type="button" onClick={() => setEntryPage((page) => Math.max(0, page - 1))} disabled={currentPage === 0} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-semibold disabled:opacity-40">Previous 30</button>
-                    <button type="button" onClick={() => setEntryPage((page) => Math.min(pageCount - 1, page + 1))} disabled={currentPage >= pageCount - 1} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-semibold disabled:opacity-40">Next 30</button>
+                    <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-semibold disabled:opacity-40">Previous 30</button>
+                    <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= pageCount - 1} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-semibold disabled:opacity-40">Next 30</button>
                   </div>
                 </div>
               )}
@@ -865,8 +877,8 @@ export default function CustomCBLBuilder({
               )}
               {entries.length > ENTRY_PAGE_SIZE && (
                 <div className="flex items-center justify-between gap-3">
-                  <button type="button" onClick={() => setEntryPage((page) => Math.max(0, page - 1))} disabled={currentPage === 0} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm disabled:opacity-40">Previous 30</button>
-                  <button type="button" onClick={() => setEntryPage((page) => Math.min(pageCount - 1, page + 1))} disabled={currentPage >= pageCount - 1} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm disabled:opacity-40">Next 30</button>
+                  <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm disabled:opacity-40">Previous 30</button>
+                  <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= pageCount - 1} className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm disabled:opacity-40">Next 30</button>
                 </div>
               )}
               {entries.length === 0 && <p className="text-sm text-[var(--theme-text-muted)]">This custom CBL is empty. Search for issues above to build it.</p>}
