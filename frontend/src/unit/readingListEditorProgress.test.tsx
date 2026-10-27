@@ -77,7 +77,7 @@ describe('Reading List editing progress', () => {
     expect(screen.queryByText('B.P.R.D.: Casualties #1')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Go to next unread · #84' }))
     expect(screen.getByText('B.P.R.D.: Casualties #1')).toBeInTheDocument()
-    await waitFor(() => expect(card).toHaveFocus())
+    await waitFor(() => expect(screen.getByText('B.P.R.D.: Casualties #1').closest('[data-testid="reading-list-entry"]')).toHaveFocus())
   })
 
   it('uses the next non-skipped unread issue and does not mistake read items for the frontier', async () => {
