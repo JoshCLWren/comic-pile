@@ -96,6 +96,13 @@ async def run(url: str, uid: int) -> dict:
                              "target_label": issue_names.get(e.target_issue_id)}
                             for e in checked.missing
                         ],
+                        "contradicted": [
+                            {**vars_edge(e),
+                             "reason": "reversed by current canonical order",
+                             "source_label": issue_names.get(e.source_issue_id),
+                             "target_label": issue_names.get(e.target_issue_id)}
+                            for e in checked.contradicted
+                        ],
                         "partial_strict_list_omissions": [
                             {"list_id": list_id, "list_name": list_names.get(list_id),
                              "issue_id": issue_id, "issue_label": issue_names.get(issue_id)}
