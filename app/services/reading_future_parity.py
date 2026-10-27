@@ -33,11 +33,12 @@ class FutureParity:
     implied: int
     missing: tuple[HistoricalEdge, ...]
     excluded: tuple[HistoricalEdge, ...] = ()
+    contradicted: tuple[HistoricalEdge, ...] = ()
 
     @property
     def safe_to_certify(self) -> bool:
-        """False unless every reviewed edge follows from the canonical graph."""
-        return not self.missing
+        """False for missing requirements or reversed historical constraints."""
+        return not self.missing and not self.contradicted
 
 
 def audit_future_parity(
@@ -57,6 +58,7 @@ def audit_future_parity(
     existing = {p.prerequisite_id for p in effective.prerequisites}
     missing: list[HistoricalEdge] = []
     excluded: list[HistoricalEdge] = []
+    contradicted: list[HistoricalEdge] = []
     implied = 0
     for old in historical_edges:
         if old.source_issue_id not in available or old.target_issue_id not in available:
@@ -82,5 +84,21 @@ def audit_future_parity(
         except ReadingCycleError:
             implied += 1
         else:
-            missing.append(old)
-    return FutureParity(len(historical_edges), implied, tuple(missing), tuple(excluded))
+            forward = ReadingPrerequisite(
+                synthetic_id, old.source_issue_id, old.target_issue_id, "reader",
+            )
+            trial_forward = replace(
+                effective, prerequisites=(*effective.prerequisites, forward),
+            )
+            try:
+                validate_reading_constraints(trial_forward)
+            except ReadingCycleError:
+                # The canonical reader-owned sequence goes the opposite way.
+                # Never promote a stale compiled edge against that sequence.
+                contradicted.append(old)
+            else:
+                missing.append(old)
+    return FutureParity(
+        len(historical_edges), implied, tuple(missing), tuple(excluded),
+        tuple(contradicted),
+    )
