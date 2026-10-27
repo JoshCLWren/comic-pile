@@ -83,7 +83,10 @@ def test_old_reverse_edge_is_not_silently_accepted() -> None:
     strict = ReadingList(9, "strict", (
         ReadingListEntry(10), ReadingListEntry(20),
     ))
-    assert not audit_future_parity(state(lists=(strict,)), (old,)).safe_to_certify
+    report = audit_future_parity(state(lists=(strict,)), (old,))
+    assert report.contradicted == (old,)
+    assert report.missing == ()
+    assert not report.safe_to_certify
 
 
 def test_excluded_hold_cannot_create_false_order_parity() -> None:
@@ -165,3 +168,14 @@ def test_named_uxm_handoff_is_protected_by_explicit_prerequisite() -> None:
     eligibility = evaluate(snap)
     assert not eligibility[UXM_THREAD_ID].eligible
     assert eligibility[XMEN_THREAD_ID].eligible
+
+
+def test_unread_series_reverse_edge_is_a_contradiction_not_missing_gate() -> None:
+    """A historical B->A may not be promoted against natural issue order A->B."""
+    snapshot = state(second_issue=True)
+    old = HistoricalEdge(3333, 21, 20, "converted")
+    result = audit_future_parity(snapshot, (old,))
+    assert result.contradicted == (old,)
+    assert result.missing == ()
+    assert result.examined == 1
+    assert not result.safe_to_certify
