@@ -8,12 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_reading_execution_settings
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
-from app.models.reading_plan_membership import ReadingPlanSource
 from app.models.dependency import Dependency
-from app.models.custom_cbl import CustomCBLList, CustomCBLEntry
-from app.models.reading_plan_membership import ReadingPlanSource
-from app.config import get_reading_execution_settings
 from app.models.issue import Issue
+from app.models.reading_order import ReadingOrder, ReadingOrderItem
+from app.models.reading_plan_membership import ReadingPlanSource
 from app.models.thread import Thread
 from tests.conftest import get_or_create_user_async
 
@@ -618,5 +616,53 @@ async def test_option_e_reader_uses_loose_list_mode_not_stale_strict_plan(
         assert {row["issue_id"] for row in body["available_now"]} == {
             first.id, second.id,
         }
+    finally:
+        get_reading_execution_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_option_e_legacy_reading_order_adoption_keeps_its_issues(
+    auth_client: AsyncClient, async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Thread-only legacy adoption creates a populated authoritative Reading List."""
+    user = await get_or_create_user_async(async_db)
+    first = await _make_issue(
+        async_db, user_id=user.id, title="Planetary", issue_number="1",
+    )
+    second = await _make_issue(
+        async_db, user_id=user.id, title="The Authority", issue_number="1",
+    )
+    legacy = ReadingOrder(user_id=user.id, name="Legacy WildStorm")
+    async_db.add(legacy)
+    await async_db.flush()
+    async_db.add_all([
+        ReadingOrderItem(reading_order_id=legacy.id, thread_id=first.thread_id, position=0),
+        ReadingOrderItem(reading_order_id=legacy.id, thread_id=second.thread_id, position=1),
+    ])
+    await async_db.commit()
+    monkeypatch.setenv("OPTION_E_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPTION_E_APPROVED_PREVIEW", "local-test-fixture-no-production-approval",
+    )
+    get_reading_execution_settings.cache_clear()
+    try:
+        adopted = await auth_client.post(
+            "/api/v1/continuity-plans/from-reading-order",
+            json={"reading_order_id": legacy.id},
+        )
+        assert adopted.status_code == 201, adopted.text
+        plan_id = adopted.json()["id"]
+        reader = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
+        assert reader.status_code == 200, reader.text
+        body = reader.json()
+        assert body["execution_mode"] == "option_e"
+        assert [entry["issue_id"] for entry in body["lanes"][0]["issues"]] == [
+            first.id, second.id,
+        ]
+        assert body["progress"]["total_issues"] == 2
+        assert len([
+            source for source in body["sources"]
+            if source["raw_source_path"].startswith("custom-cbl:")
+        ]) == 1
     finally:
         get_reading_execution_settings.cache_clear()
