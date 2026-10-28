@@ -153,9 +153,13 @@ describe('ThreadPool eligible mappings', () => {
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     expect(row).toHaveAccessibleName(/Open series actions/i)
-    // The implementation shows all information visually and uses aria-label for screen
-    // readers; no elements are hidden with aria-hidden="true" as all content is visible.
-    expect(row.querySelector('[aria-hidden="true"]')).toBeNull()
+    // The implementation shows all information visually and uses aria-label for
+    // screen readers. The comic-first row may hide purely decorative visuals
+    // (the cover placeholder icon) from assistive tech, but no informational
+    // text may be hidden behind aria-hidden="true".
+    for (const hidden of row.querySelectorAll('[aria-hidden="true"]')) {
+      expect(hidden.textContent?.trim() ?? '').toBe('')
+    }
 
     row.click()
     expect(onThreadClick).toHaveBeenCalledWith({ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' })
