@@ -1,7 +1,13 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { Pool } from 'pg';
-import { createHash } from 'crypto';
+import { isTokenRevoked, getUserWithPasswordCheck } from './authRepository.js';
+import { UserResponse } from './authTypes.js';
+
+// Error response interface
+interface ErrorResponse {
+  error: string;
+}
 
 // Database configuration - use the same URL as the Python app
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/comic_pile_test';
@@ -15,22 +21,7 @@ const pool = (globalThis as any).pool || new Pool({
   connectionTimeoutMillis: 5000,
 });
 
-// User response interface matching the Python schema
-interface UserResponse {
-  id: number;
-  username: string;
-  email: string | null;
-  is_admin: boolean;
-}
-
-// Error response interface
-interface ErrorResponse {
-  error: string;
-}
-
-/**
- * Verify JWT token and extract claims
- */
+// Database configuration - use the same URL as the Python app
 function verifyToken(token: string): {
   sub: string;
   jti: string;
@@ -63,68 +54,6 @@ function verifyToken(token: string): {
     };
   } catch (error) {
     throw new Error(`Token verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
-
-/**
- * Check if a token JTI has been revoked
- */
-async function isTokenRevoked(db: any, username: string, jti: string): Promise<boolean> {
-  try {
-    const result = await db.query(
-      `SELECT 1 FROM revoked_tokens rt
-       JOIN users u ON rt.user_id = u.id
-       WHERE u.username = $1 AND rt.jti = $2`,
-      [username, jti]
-    );
-    
-    return result.rows.length > 0;
-  } catch (error) {
-    console.error('Database error checking revoked tokens:', error);
-    throw new Error('Database error checking token revocation');
-  }
-}
-
-/**
- * Get user by username and check password change timestamp
- */
-async function getUserWithPasswordCheck(db: any, username: string, tokenPc?: number): Promise<{
-  user: UserResponse;
-  isRevoked: boolean;
-}> {
-  try {
-    const result = await db.query(
-      `SELECT id, username, email, is_admin, password_changed_at
-       FROM users 
-       WHERE username = $1
-       LIMIT 1`,
-      [username]
-    );
-    
-    if (result.rows.length === 0) {
-      throw new Error('User not found');
-    }
-    
-    const user = result.rows[0];
-    const userPc = user.password_changed_at 
-      ? Math.floor(new Date(user.password_changed_at).getTime() / 1000)
-      : 0;
-    
-    // Check if token was issued before password change
-    const isRevoked = tokenPc !== undefined && tokenPc < userPc;
-    
-    return {
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        is_admin: user.is_admin
-      },
-      isRevoked
-    };
-  } catch (error) {
-    console.error('Database error getting user:', error);
-    throw new Error(`Database error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 

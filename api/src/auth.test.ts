@@ -10,7 +10,7 @@ const mockPool = {
       if (params[1] === 'revoked-jti') return { rows: [{ id: 1 }] };
       return { rows: [] };
     }
-    if (query.includes('SELECT id, username, email, is_admin, password_changed_at FROM users')) {
+    if (query.includes('FROM users')) {
       if (params[0] === 'testuser') {
         return { rows: [{ id: 1, username: 'testuser', email: 'test@example.com', is_admin: false, password_changed_at: null }] };
       }
@@ -65,5 +65,58 @@ test('Auth/me API Handler Tests', async (t) => {
     await authMeHandler(req as any, res as any);
     assert.equal(res._status, 401);
     assert.deepEqual(res._json, { error: 'Missing or invalid authorization header' });
+  });
+
+  await t.test('should return 401 for expired token', async () => {
+    const token = jwt.sign({ sub: 'testuser', jti: 'valid-jti-123', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '-1s' });
+    const req = createMockRequest(`Bearer ${token}`);
+    const res = createMockResponse();
+    await authMeHandler(req as any, res as any);
+    assert.equal(res._status, 401);
+    assert.deepEqual(res._json, { error: 'Invalid or expired token' });
+  });
+
+  await t.test('should return 401 for malformed token', async () => {
+    const req = createMockRequest('Bearer not-a-jwt');
+    const res = createMockResponse();
+    await authMeHandler(req as any, res as any);
+    assert.equal(res._status, 401);
+    assert.deepEqual(res._json, { error: 'Invalid or expired token' });
+  });
+
+  await t.test('should return 401 for revoked token', async () => {
+    const token = jwt.sign({ sub: 'testuser', jti: 'revoked-jti', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
+    const req = createMockRequest(`Bearer ${token}`);
+    const res = createMockResponse();
+    await authMeHandler(req as any, res as any);
+    assert.equal(res._status, 401);
+    assert.deepEqual(res._json, { error: 'Token has been revoked' });
+  });
+
+  await t.test('should return 401 for missing claims', async () => {
+    const token = jwt.sign({ sub: 'testuser', type: 'access' }, SECRET_KEY, { expiresIn: '1h' });
+    const req = createMockRequest(`Bearer ${token}`);
+    const res = createMockResponse();
+    await authMeHandler(req as any, res as any);
+    assert.equal(res._status, 401);
+    assert.deepEqual(res._json, { error: 'Invalid authentication credentials' });
+  });
+
+  await t.test('should return 401 for deleted user', async () => {
+    const token = jwt.sign({ sub: 'nonexistentuser', jti: 'valid-jti-123', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
+    const req = createMockRequest(`Bearer ${token}`);
+    const res = createMockResponse();
+    await authMeHandler(req as any, res as any);
+    assert.equal(res._status, 401);
+    assert.deepEqual(res._json, { error: 'User not found' });
+  });
+
+  await t.test('should return 401 for password change', async () => {
+    const token = jwt.sign({ sub: 'passwordchangeduser', jti: 'valid-jti-123', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
+    const req = createMockRequest(`Bearer ${token}`);
+    const res = createMockResponse();
+    await authMeHandler(req as any, res as any);
+    assert.equal(res._status, 401);
+    assert.deepEqual(res._json, { error: 'Password changed; please sign in again.' });
   });
 });
