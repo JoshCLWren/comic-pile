@@ -10,8 +10,12 @@ interface ErrorResponse {
 }
 
 // Database configuration - use the same URL as the Python app
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/comic_pile_test';
+const DATABASE_URL = process.env.DATABASE_URL || '';
 const SECRET_KEY = process.env.SECRET_KEY || '';
+
+if (!DATABASE_URL || !SECRET_KEY) {
+  throw new Error('DATABASE_URL and SECRET_KEY environment variables must be set');
+}
 
 // Create a connection pool (or use global mock for testing)
 const pool = (globalThis as any).pool || new Pool({
@@ -113,7 +117,7 @@ export default async function authMeHandler(req: Request, res: Response): Promis
     }
     
   } catch (error) {
-    console.error('Auth/me error:', error);
+    console.error('Auth/me error:', (error instanceof Error ? error.message : 'Unknown error'));
     
     // Map specific error types to appropriate HTTP status codes
     if (error instanceof Error) {
@@ -153,7 +157,7 @@ export default async function authMeHandler(req: Request, res: Response): Promis
       }
 
       // Generic server error
-      console.error('Unexpected error in auth/me:', error);
+      console.error('Unexpected error in auth/me:', error instanceof Error ? error.message : 'Unknown error');
       res.status(500).json({ error: 'Internal server error' } as ErrorResponse);
     } else {
       res.status(500).json({ error: 'Internal server error' } as ErrorResponse);

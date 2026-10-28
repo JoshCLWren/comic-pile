@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 
 process.env.SECRET_KEY = 'test-secret-key';
+process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/comic_pile_test';
 
 const mockPool = {
   query: async (query: string, params: any[]) => {
