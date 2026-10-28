@@ -4,7 +4,7 @@ Revision ID: c42550000001
 Revises: c42100000001
 
 Migrates legacy-only Reading Plans to owned Reading Lists, and attaches the two
-audited Planetary / Authority plans to their existing canonical lists. Existing
+audited Planetary / Authority plans to uniquely verified existing owned lists. Existing
 Reading Lists, ratings, Issue status, historical plan membership and source
 placements are never modified. This is deliberately additive and idempotent.
 """
@@ -19,9 +19,6 @@ down_revision = "c42100000001"
 branch_labels = None
 depends_on = None
 
-# Explicitly verified owner + plan + canonical List IDs on 2026-10-27.
-# No production reader-time matching by title or approximate issue overlap.
-_AUDITED_LINKS = {(1, 29): 1000018, (23199, 10000029): 11000018}
 
 
 def upgrade() -> None:
@@ -45,27 +42,29 @@ def upgrade() -> None:
             if not owned:
                 raise RuntimeError(f"Plan {plan_id} references an unowned Reading List")
             continue
-        audited_list = _AUDITED_LINKS.get((int(user_id), int(plan_id)))
-        # The fixed IDs only identify the audited production examples, not all
-        # installations. A missing or mismatched destination takes the ordinary
-        # additive conversion path, never halts an unrelated deployment.
-        verified_list: int | None = None
-        if audited_list is not None:
-            owned = db.execute(text(
-                "SELECT 1 FROM custom_cbl_lists WHERE id=:l AND user_id=:u"
-            ), {"l": audited_list, "u": user_id}).scalar()
-            if owned:
-                plan_n, list_n, shared = db.execute(text(
-                    "SELECT (SELECT count(*) FROM reading_plan_issues WHERE plan_id=:p),"
-                    " (SELECT count(*) FROM custom_cbl_entries WHERE list_id=:l),"
-                    " (SELECT count(*) FROM reading_plan_issues p "
-                    " JOIN custom_cbl_entries e ON e.issue_id=p.issue_id AND e.list_id=:l "
-                    " WHERE p.plan_id=:p)"
-                ), {"p": plan_id, "l": audited_list}).one()
-                if plan_n == 144 and list_n == 145 and shared == 144:
-                    verified_list = audited_list
-        if verified_list is not None:
-            list_id = verified_list
+        # One-time audited backfill: reuse a unique same-owner, same-name
+        # List only when the entire old Plan issue set is present and the
+        # List has exactly one additional entry. This proves the two known
+        # Planetary imports without hardcoding installation-specific IDs.
+        # A duplicate or unrelated name is NEVER chosen automatically.
+        plan_n = db.execute(text(
+            "SELECT count(*) FROM reading_plan_issues WHERE plan_id=:p"
+        ), {"p": plan_id}).scalar_one()
+        matching = []
+        if plan_n >= 20:
+            matching = db.execute(text(
+                "SELECT l.id FROM custom_cbl_lists l "
+                "WHERE l.user_id=:u AND lower(trim(l.name))=lower(trim(:n)) "
+                "AND (SELECT count(*) FROM custom_cbl_entries e "
+                "WHERE e.list_id=l.id)=:pn + 1 "
+                "AND NOT EXISTS (SELECT 1 FROM reading_plan_issues pi "
+                "WHERE pi.plan_id=:p AND NOT EXISTS "
+                "(SELECT 1 FROM custom_cbl_entries e "
+                "WHERE e.list_id=l.id AND e.issue_id=pi.issue_id)) "
+                "ORDER BY l.id"
+            ), {"u": user_id, "n": plan_name, "pn": plan_n, "p": plan_id}).scalars().all()
+        if len(matching) == 1:
+            list_id = matching[0]
         else:
             # A new List keeps the complete legacy issue sequence without touching
             # historical membership/provenance. All presently unlinked plans have
