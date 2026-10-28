@@ -845,6 +845,30 @@ describe('CreatorsPage comparison selection URL contract', () => {
     expect(currentKeysParam()).toBe('creator:9999,creator:7,creator:12')
   })
 
+  it('lets a reader select four visible creators even with an unknown key in the URL', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        items: [1, 2, 3, 4].map((id) =>
+          makeItem({ canonical_creator_key: `creator:${id}`, display_name: `Creator ${id}` }),
+        ),
+        total: 4,
+      }),
+    )
+
+    renderPage(undefined, '/creators?keys=creator:9999')
+
+    for (const id of [1, 2, 3, 4]) {
+      fireEvent.click(screen.getByLabelText(`Select Creator ${id} for comparison`))
+    }
+
+    expect(screen.getByText('4 of 4 selected for comparison')).toBeInTheDocument()
+    for (const id of [1, 2, 3, 4]) {
+      expect(screen.getByLabelText(`Select Creator ${id} for comparison`)).toBeChecked()
+    }
+    // The unknown key stays in the URL but the visible selection reaches the cap.
+    expect(currentKeysParam()).toContain('creator:9999')
+  })
+
   it('preserves a valid selection for a creator not on the current page', () => {
     mockedHook.mockReturnValue(
       baseState({ items: [BRIAN], total: 2, hasMore: true }),

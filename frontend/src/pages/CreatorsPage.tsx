@@ -353,12 +353,15 @@ export default function CreatorsPage() {
   const handleToggleSelection = (key: string) => {
     // Start from every key the URL carries, not just the visible rows, so
     // toggling one checkbox never silently drops a valid selection whose row is
-    // on another page or filtered out by the current search (#4208).
+    // on another page or filtered out by the current search (#4208). Unknown or
+    // off-page keys are preserved in the URL but never occupy a comparison
+    // slot, so the four-creator cap is measured against the visible selection
+    // only; otherwise a bogus key in the URL could crowd out a real one.
     const next = new Set(parsedSelectionKeys)
     if (next.has(key)) {
       // Selected checkboxes always stay enabled so one creator can be dropped.
       next.delete(key)
-    } else if (next.size < MAX_COMPARISON_SELECTION) {
+    } else if (selectedKeys.size < MAX_COMPARISON_SELECTION) {
       next.add(key)
     } else {
       return
