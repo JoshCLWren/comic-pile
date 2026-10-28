@@ -49,6 +49,8 @@ from app.services.reading_plan_normalization import (
     unlink_dependency_from_plan,
 )
 from app.services.tag_service import purge_target_assignments
+from app.config import get_reading_execution_settings
+from app.services.reading_plan_list_link import link_new_plan_to_owned_list
 
 router = APIRouter(tags=["continuity-plans"])
 
@@ -104,6 +106,10 @@ async def create_continuity_plan(
             nodes=payload.nodes,
             ordering_mode=payload.ordering_mode,
         )
+        if get_reading_execution_settings().enabled:
+            await link_new_plan_to_owned_list(
+                db, plan=plan, user_id=current_user.id,
+            )
         await db.commit()
     except ValueError as exc:
         await db.rollback()
