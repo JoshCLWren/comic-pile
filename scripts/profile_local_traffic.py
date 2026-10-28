@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replay safe local GET traffic and measure actual FastAPI process CPU on Linux.
+"""Replay safe local GET traffic and measure actual FastAPI process CPU.
 
 All HTTP and PostgreSQL traffic is forced to loopback. Never targets production.
 Run against a disposable, production-shaped LOCAL database copy.
@@ -174,10 +174,26 @@ class DelayProxy:
 
 
 def cpu_seconds(pid: int) -> float:
-    """Read Linux process utime+stime ticks, not wall time."""
-    stat = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
-    fields = stat[stat.rfind(")") + 2:].split()
-    return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+    """Read process user+system CPU time (never elapsed/wall time).
+
+    Linux can use /proc without dependencies. macOS requires psutil because
+    /proc/PID/stat does not exist there; install it via uv run --with psutil.
+    """
+    if sys.platform.startswith("linux"):
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+        fields = stat[stat.rfind(")") + 2:].split()
+        return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+    if sys.platform == "darwin":
+        try:
+            import psutil
+        except ImportError as exc:
+            raise RuntimeError(
+                "macOS CPU profiling needs psutil: "
+                "use uv run --with psutil python scripts/profile_local_traffic.py ..."
+            ) from exc
+        times = psutil.Process(pid).cpu_times()
+        return float(times.user + times.system)
+    raise RuntimeError("Only Linux and macOS process CPU measurement is supported")
 
 
 def free_port() -> int:
@@ -347,7 +363,7 @@ def report_markdown(data: dict) -> str:
     out = [
         "# Local ComicPile CPU profile",
         "",
-        "CPU is Linux process user+system time, not elapsed time or Vercel billed CPU.",
+        "CPU is process user+system time, not elapsed time or Vercel billed CPU.",
         "The delay proxy adds latency per PostgreSQL TCP packet/chunk, not per SQL query.",
         "Concurrent samples report whole-process CPU only; do not assign it to individual calls.",
         "",
@@ -375,7 +391,7 @@ def report_markdown(data: dict) -> str:
             )
     out.extend(["", "## Limitations", "",
                 "- The local single-worker server differs from Vercel's multi-instance scheduling.",
-                "- CPU readings are quantized to operating-system clock ticks; repeat measurements.",
+                "- Linux /proc CPU readings are quantized to clock ticks; macOS uses psutil; repeat measurements.",
                 "- Startup CPU is measured before the first HTTP request; deferred imports are included in first-hit CPU.",
                 "- HAR GETs can return 404 when copied production issue IDs differ on the local database.",
                 "- The harness never replays mutating methods, cookies, or authorization headers from a HAR.",
@@ -401,8 +417,16 @@ def main() -> int:
     args = ap.parse_args()
     try:
         safe_database_url(args.db_url)
-        if sys.platform != "linux":
-            raise ValueError("This prototype requires Linux /proc")
+        if sys.platform not in {"darwin", "linux"}:
+            raise ValueError("This profiler supports macOS or Linux")
+        if sys.platform == "darwin":
+            try:
+                import psutil  # noqa: F401
+            except ImportError as exc:
+                raise RuntimeError(
+                    "On macOS run: uv run --with psutil python "
+                    "scripts/profile_local_traffic.py ..."
+                ) from exc
         if not 1 <= args.workers <= 16 or args.speed < 1 or args.repeats < 2:
             raise ValueError("workers must be 1-16, speed >=1 and repeats >=2")
         delays = [int(x) for x in args.delays.split(",")]
