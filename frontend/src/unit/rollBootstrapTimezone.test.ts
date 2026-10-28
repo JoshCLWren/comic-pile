@@ -9,23 +9,21 @@ beforeEach(() => {
   client.get.mockReset().mockResolvedValue({})
 })
 
-it('sends a valid browser IANA timezone as the bootstrap query parameter', async () => {
+it('always requests v2 bootstrap regardless of timezone input', async () => {
   await rollBootstrapApi.get('America/Chicago')
 
-  expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap', {
-    params: { timezone: 'America/Chicago' },
-  })
+  expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
 })
 
-it('keeps the canonical bootstrap path when no timezone is available', async () => {
+it('keeps the canonical v2 bootstrap path when no timezone is available', async () => {
   await rollBootstrapApi.get()
 
-  expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap')
+  expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
   expect(client.get).toHaveBeenCalledTimes(1)
 })
 
-it('treats a blank timezone like a missing value instead of sending garbage', async () => {
+it('treats a blank timezone like any other value and still uses v2', async () => {
   await rollBootstrapApi.get('')
 
-  expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap')
+  expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
 })

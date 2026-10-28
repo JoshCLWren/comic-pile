@@ -13,11 +13,11 @@ import type {
  */
 export function createRollBootstrapApi(client: HttpClient) {
   return {
-    get: (timezone?: string) => {
-      if (!timezone) return client.get<RollBootstrapResponse>('/v2/roll/bootstrap')
-      return client.get<RollBootstrapResponse>('/v1/roll/bootstrap', {
-        params: { timezone },
-      })
+    get: (_timezone?: string) => {
+      // Idle Roll uses v2 as the single authoritative bootstrap source. Timezone
+      // is no longer required for the bootstrap contract; the client always
+      // requests v2 regardless of browser timezone availability.
+      return client.get<RollBootstrapResponse>('/v2/roll/bootstrap')
     },
     switchPrerequisite: (request: RollPrerequisiteSwitchRequest) =>
       client.post<RollPrerequisiteSwitchResponse>('/v1/roll/switch-prerequisite', request),

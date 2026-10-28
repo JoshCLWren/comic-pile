@@ -35,7 +35,7 @@ it('uses canonical v1 Roll and rating paths for maintained callers', async () =>
     thread_id: 7,
     rating: 4,
   })
-  expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap')
+  expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
 })
 
 it('keeps auth-recovery Roll mutations on canonical v1 paths', async () => {

@@ -41,11 +41,58 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
             queryKeys.roll.bootstrap(),
           ) ?? null
         }
-        return {
-    ...result,
-    // Map v2 field to legacy roll_pool for downstream consumers
-    roll_pool: (result as any).rollable ?? [],
-  }
+
+        // Normalize v2 bootstrap response to the legacy RollBootstrapResponse
+        // shape expected by downstream consumers. v2 provides `rollable` items with
+        // nested thread/issue structures; convert them to the flat
+        // RollBootstrapThread shape with top-level id/title/format.
+        const raw = result as any
+        // If the response already has roll_pool (legacy v1 shape), return it as-is
+        // to preserve reference equality for tests and avoid unnecessary mapping.
+        if (Array.isArray(raw.roll_pool) && !Array.isArray(raw.rollable)) {
+          return raw as RollBootstrapResponse
+        }
+
+        const convertThread = (t: any) => ({
+          id: t?.id,
+          title: t?.title ?? '',
+          format: t?.format ?? '',
+          last_activity_at: t?.last_activity_at ?? null,
+        })
+        const roll_pool = Array.isArray(raw.rollable)
+          ? raw.rollable.map((item: any) => ({
+              id: item?.thread?.id,
+              title: item?.thread?.title ?? '',
+              format: item?.thread?.format ?? '',
+              issue_id: item?.issue?.id ?? null,
+              issue_number: item?.issue?.number ?? null,
+              last_activity_at: item?.thread?.last_activity_at ?? null,
+            }))
+          : []
+
+        const normalized: RollBootstrapResponse = {
+          session_id: raw.session_id,
+          user_id: raw.user_id,
+          current_die: raw.current_die,
+          manual_die: raw.manual_die,
+          pending_thread_id: raw.pending_thread_id,
+          last_rolled_result: raw.last_rolled_result,
+          session_mode: raw.session_mode,
+          active_thread: raw.active_thread,
+          roll_recovery: raw.roll_recovery,
+          roll_pool,
+          snoozed_threads: Array.isArray(raw.snoozed_threads) ? raw.snoozed_threads.map(convertThread) : [],
+          snoozed_count: raw.snoozed_count ?? 0,
+          skipped_thread_ids: raw.skipped_thread_ids ?? [],
+          skipped_threads: Array.isArray(raw.skipped_threads) ? raw.skipped_threads.map(convertThread) : [],
+          blocked_count: raw.blocked_count ?? 0,
+          blocked_threads: Array.isArray(raw.blocked_threads) ? raw.blocked_threads.map(convertThread) : [],
+          stale_thread_count: raw.stale_thread_count ?? 0,
+          stale_thread: raw.stale_thread ? convertThread(raw.stale_thread) : null,
+          timezone: raw.timezone ?? null,
+        }
+
+        return normalized
       } catch (err) {
         const normalized =
           err instanceof Error ? err : new Error('Failed to fetch roll bootstrap')
