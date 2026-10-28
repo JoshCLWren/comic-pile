@@ -1,6 +1,10 @@
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle, displayReadingListName } from '../utils/cblSourceDisplay'
 import { ReaderIssueActions } from '../components/ReaderIssueActions'
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '../query/queryKeys'
+import { customCBLApi } from '../services/api-custom-cbl'
+import { verifiedOwnedReadingListForPlan } from '../utils/ownedReadingListPlanMatch'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Breadcrumbs from '../components/Breadcrumbs'
@@ -160,6 +164,28 @@ export default function ReadingPlanDetailPage() {
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const readerQuery = useReadingPlanReader(planId)
+  // Some migrated Reading Plans retain only a legacy source (e.g. a ComicVine
+  // volume) even though an owned, authoritatively ordered Reading List exists.
+  // Resolve a unique same-name owned list and check its issue membership before
+  // offering it as an editor; never infer ownership or mutate plan provenance.
+  const legacySourceOnly = readerQuery.isSuccess && !readerQuery.data.sources.some(
+    (source) => source.display_name != null && /^custom-cbl:[1-9][0-9]*$/.test(source.raw_source_path),
+  )
+  const ownedListsQuery = useQuery({
+    queryKey: queryKeys.customCBLs.list(),
+    queryFn: customCBLApi.list,
+    enabled: planId != null && legacySourceOnly,
+  })
+  const matchingName = readerQuery.data?.name.trim().toLocaleLowerCase()
+  const sameName = ownedListsQuery.data?.filter((list) =>
+    list.name.trim().toLocaleLowerCase() === matchingName,
+  ) ?? []
+  const potentialListId = sameName.length === 1 ? sameName[0].id : null
+  const potentialListQuery = useQuery({
+    queryKey: queryKeys.customCBLs.detail(potentialListId ?? 0),
+    queryFn: () => customCBLApi.get(potentialListId!),
+    enabled: legacySourceOnly && potentialListId != null,
+  })
 
   if (planId == null) {
     return (
@@ -204,7 +230,16 @@ export default function ReadingPlanDetailPage() {
     source.display_name != null && /^custom-cbl:[1-9][0-9]*$/.test(source.raw_source_path),
   )
   const candidateListId = ownedListSource ? Number(ownedListSource.raw_source_path.slice('custom-cbl:'.length)) : null
-  const editableListId = candidateListId != null && Number.isSafeInteger(candidateListId) ? candidateListId : null
+  const linkedListId = candidateListId != null && Number.isSafeInteger(candidateListId) ? candidateListId : null
+  const fallbackListId = legacySourceOnly && ownedListsQuery.data
+    ? verifiedOwnedReadingListForPlan(
+      view.name,
+      view.lanes.flatMap((lane) => lane.issues.map((issue) => issue.issue_id)),
+      ownedListsQuery.data,
+      potentialListQuery.data ?? null,
+    )
+    : null
+  const editableListId = linkedListId ?? fallbackListId
   const modeLabel = readingPlanModeLabel(view.ordering_mode)
   const isStrict = view.ordering_mode === 'strict_sequential'
   const percent = progressPercent(view.progress.read_issues, view.progress.total_issues)
@@ -254,6 +289,7 @@ export default function ReadingPlanDetailPage() {
           )}
           <button
             type="button"
+            disabled={legacySourceOnly && (ownedListsQuery.isPending || (potentialListId != null && potentialListQuery.isPending))}
             onClick={() => navigate(editableListId != null ? `/reading-lists/${editableListId}` : `/continuity-plans/${planId}/edit`)}
             className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
           >
