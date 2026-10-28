@@ -234,8 +234,16 @@ async def update_continuity_plan(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityPlanResponse:
-    """Replace a plan atomically, including rules explicitly owned by that plan."""
+    """Replace a legacy Plan; Option E edits must use the authoritative List."""
     plan = await _get_owned_plan(db, current_user.id, plan_id)
+    if get_reading_execution_settings().enabled:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "reading_list_is_authoritative",
+                "message": "Edit the linked Reading List, not the legacy Plan order",
+            },
+        )
     await validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
     membership_ids = await guard_plan_update(db, plan=plan, payload=payload)
     prior_ordering_mode = plan.ordering_mode
