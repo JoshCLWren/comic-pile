@@ -609,7 +609,7 @@ export default function CreatorComparisonPage() {
             >
               Back to Creators
             </Link>
-            {keys.length > 0 && (
+            {uniqueKeys.length > 0 && (
               <Link
                 to={creatorsReturnUrl}
                 className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
@@ -672,7 +672,7 @@ export default function CreatorComparisonPage() {
           >
             Back to Creators
           </Link>
-          {keys.length > 0 && (
+          {uniqueKeys.length > 0 && (
             <Link
               to={creatorsReturnUrl}
               className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
