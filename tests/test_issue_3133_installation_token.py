@@ -14,7 +14,7 @@ Verifies the closure-critical contract:
 * When the mapping is unconfigured for IDs, missing any required secret causes
   fallback to ``pr_rebase``.
 * Every other worker stays on the shared ``PR_REBASE_TOKEN`` producer.
-* The persisted worker-App mapping keeps worker 48\'s identity and tracks the active roster without retiring existing credentials.
+* The persisted worker-App mapping keeps worker 48 identity and tracks the active roster without retiring existing credentials.
 * The worker App is not a trusted marker author.
 """
 from __future__ import annotations
