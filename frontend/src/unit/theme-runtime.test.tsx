@@ -75,7 +75,7 @@ function PreferencesSyncConsumer() {
   return <PreferencesSync isAuthenticated={isAuthenticated} />
 }
 
-const AUTH_ME_CONFIG = { timeout: 15000, skipAuthRedirect: true }
+const AUTH_ME_CONFIG = { timeout: 15000, skipAuthRedirect: true, skipAuthRefresh: true }
 const PREFERENCES_CONFIG = { timeout: 15000, skipAuthRedirect: true }
 
 function axiosError(status: number): Error & { isAxiosError: true; response: { status: number } } {

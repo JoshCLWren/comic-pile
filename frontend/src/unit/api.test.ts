@@ -291,7 +291,9 @@ it('handles response success, network errors, validation errors, and auth errors
   const success = await responseSuccessInterceptor({ data: { ok: true } })
   expect(success).toEqual({ ok: true })
   // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
-  await expect(responseInterceptor({ config: { url: '/x' }, response: undefined } as never)).rejects.toThrow('Network error')
+  const networkError = Object.assign(new Error('Network error'), { config: { url: '/x' } })
+  // SAFETY: this deliberately response-less Axios transport failure exercises the network branch.
+  await expect(responseInterceptor(networkError as never)).rejects.toBe(networkError)
   // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: { url: '/x' }, response: { status: 400 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 400 } }))
   // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.

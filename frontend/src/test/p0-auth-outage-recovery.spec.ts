@@ -24,6 +24,11 @@ test.describe('Auth Outage Recovery', () => {
     page,
     mockApi,
   }) => {
+    let refreshCalls = 0
+    page.on('request', request => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/auth/refresh')) refreshCalls += 1
+    })
+    await page.addInitScript(() => localStorage.setItem('auth_token', 'test-access-token'))
     // Step 1: Start with authenticated user
     await mockApi.setupAuthUser()
     await page.goto('/')
@@ -72,6 +77,8 @@ test.describe('Auth Outage Recovery', () => {
     await expect(page.getByRole('button', { name: 'Try again' })).not.toBeVisible()
     await expect(page.getByLabel('Desktop navigation')).toBeVisible() // Still authenticated
     await expect(page.locator('h1')).toContainText('Queue')
+    expect(refreshCalls).toBe(0)
+    expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBe('test-access-token')
   })
 
   test('handles network errors during auth validation', async ({

@@ -91,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const markDefinitivelyUnauthenticated = useCallback(() => {
     sessionGeneration.current += 1
+    recoveryPromise.current = null
     clearAccessToken()
     clearSessionCache(client)
     setAuthState(prev => ({
@@ -113,164 +114,76 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const recoverSession = useCallback(
     (timeout?: number): Promise<void> => {
-     if (!recoveryPromise.current) {
-       const generation = sessionGeneration.current
-       recoveryPromise.current = (async () => {
-         try {
-           if (isSessionRefreshRejected()) {
-             throw Object.assign(new Error('Session refresh unavailable'), {
-               isAxiosError: true,
-               response: { status: 401 },
-             })
-           }
-           // Validate with the existing access token first. Transient 503 /
-           // network errors on /auth/me must not force a refresh-token
-           // rotation -- the current token may still be valid.
-           const response = await api.get<AuthUser>('/v1/auth/me', {
-             timeout,
-             skipAuthRedirect: true,
-           })
-           if (generation !== sessionGeneration.current) return
-           setAuthState(prev => ({
-             ...prev,
-             status: 'authenticated',
-             isLoading: false,
-             user: response,
-             error: null,
-             retryCount: 0,
-             lastRetryAt: null,
-           }))
-         } catch (error) {
-           if (generation !== sessionGeneration.current) return
-           const authError = createAuthError(error)
-           if (isDefinitiveAuthenticationFailure(error)) {
-             // Access token is expired or revoked. Rotate the refresh cookie
-             // once, then retry /auth/me with the new token.
-             try {
-               await refreshSession({ skipAuthRedirect: true })
-               if (generation !== sessionGeneration.current) return
-               const retryResponse = await api.get<AuthUser>('/v1/auth/me', {
-                 timeout,
-                 skipAuthRedirect: true,
-               })
-               if (generation !== sessionGeneration.current) return
-               setAuthState(prev => ({
-                 ...prev,
-                 status: 'authenticated',
-                 isLoading: false,
-                 user: retryResponse,
-                 error: null,
-                 retryCount: 0,
-                 lastRetryAt: null,
-               }))
-               return
-             } catch (refreshError) {
-               if (generation !== sessionGeneration.current) return
-               if (isDefinitiveAuthenticationFailure(refreshError)) {
-                 markDefinitivelyUnauthenticated()
-               } else {
-                 // Refresh failed with a transient error (503 / network).
-                 // Keep the valid access token and surface the degraded state.
-                 const refreshAuthError = createAuthError(refreshError)
-                 setAuthState(prev => ({
-                   ...prev,
-                   status: refreshAuthError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
-                   isLoading: false,
-                   error: refreshAuthError,
-                   retryCount: prev.retryCount + 1,
-                   lastRetryAt: Date.now(),
-                 }))
-               }
-               throw refreshError
-             }
-           } else {
-             setAuthState(prev => ({
-               ...prev,
-               status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
-               isLoading: false,
-               error: authError,
-               retryCount: prev.retryCount + 1,
-               lastRetryAt: Date.now(),
-             }))
-           }
-           throw error
-         }
-      })().finally(() => {
-        recoveryPromise.current = null
-      })
-     }
-     return recoveryPromise.current
-   }, [markDefinitivelyUnauthenticated]);
-
-   const retryAuth = useCallback(async () => {
-     setAuthState(prev => ({
-       ...prev,
-       isLoading: true,
-       error: null,
-     }))
-
-     try {
-       await recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
-     } catch (error) {
-       const authError = createAuthError(error)
-       setAuthState(prev => ({
-         ...prev,
-         isLoading: false,
-         error: authError,
-       }))
-       throw error
-     }
-   }, [recoverSession])
-
-  const revalidateSession = useCallback(async (timeout?: number) => {
-    const generation = sessionGeneration.current
-    try {
-      const response = await api.get<AuthUser>('/v1/auth/me', {
-        timeout,
-        skipAuthRedirect: true,
-      })
-      if (generation !== sessionGeneration.current) return
-      setAuthState(prev => ({
-        ...prev,
-        status: 'authenticated',
-        isLoading: false,
-        user: response,
-        error: null,
-        retryCount: 0,
-        lastRetryAt: null,
-      }))
-    } catch (error) {
-      if (generation !== sessionGeneration.current) return
-      const authError = createAuthError(error)
-      if (isDefinitiveAuthenticationFailure(error)) {
-        // The persistent session can usually be renewed silently with the
-        // refresh cookie. Only treat the user as logged out when that also fails.
+      if (recoveryPromise.current) return recoveryPromise.current
+      const generation = sessionGeneration.current
+      const attempt = (async () => {
         try {
-          await recoverSession(timeout)
-          return
-        } catch (recoveryError) {
-          if (isDefinitiveAuthenticationFailure(recoveryError)) {
-            markDefinitivelyUnauthenticated()
+          if (isSessionRefreshRejected()) {
+            throw Object.assign(new Error('Session refresh unavailable'), {
+              isAxiosError: true,
+              response: { status: 401 },
+            })
           }
+          // AuthProvider owns this recovery attempt. Suppress the interceptor's
+          // automatic refresh so an exhausted retry cannot rotate the cookie twice.
+          const validate = () => api.get<AuthUser>('/v1/auth/me', {
+            timeout,
+            skipAuthRedirect: true,
+            skipAuthRefresh: true,
+          })
+          let response: AuthUser
+          try {
+            response = await validate()
+          } catch (error) {
+            if (generation !== sessionGeneration.current) return
+            if (!isDefinitiveAuthenticationFailure(error) || isSessionRefreshRejected()) throw error
+            await refreshSession({ skipAuthRedirect: true })
+            if (generation !== sessionGeneration.current) return
+            response = await validate()
+          }
+          if (generation !== sessionGeneration.current) return
+          setAuthState(prev => ({
+            ...prev,
+            status: 'authenticated',
+            isLoading: false,
+            user: response,
+            error: null,
+            retryCount: 0,
+            lastRetryAt: null,
+          }))
+        } catch (error) {
+          if (generation !== sessionGeneration.current) return
+          if (isDefinitiveAuthenticationFailure(error)) {
+            markDefinitivelyUnauthenticated()
+          } else {
+            const authError = createAuthError(error)
+            setAuthState(prev => ({
+              ...prev,
+              status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
+              isLoading: false,
+              error: authError,
+              retryCount: prev.retryCount + 1,
+              lastRetryAt: Date.now(),
+            }))
+          }
+          throw error
         }
-      } else {
-        setAuthState(prev => ({
-          ...prev,
-          status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
-          isLoading: false,
-          error: authError,
-          retryCount: prev.retryCount + 1,
-          lastRetryAt: Date.now(),
-        }))
-      }
-      throw error
-    }
-  }, [markDefinitivelyUnauthenticated, recoverSession])
+      })().finally(() => {
+        // A login/logout may have started a different generation's recovery.
+        if (recoveryPromise.current === attempt) recoveryPromise.current = null
+      })
+      recoveryPromise.current = attempt
+      return attempt
+    }, [markDefinitivelyUnauthenticated])
+
+  const retryAuth = useCallback(() => recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS), [recoverSession])
+  const revalidateSession = recoverSession
 
   useEffect(() => {
     let isMounted = true
     const bootstrapGeneration = sessionGeneration.current
     let retryTimer: number | undefined
+    let bootstrapRetryCount = 0
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
     authChannelRef.current = authChannel
     
@@ -298,58 +211,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const response = await api.get<AuthUser>('/v1/auth/me', {
-          timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
-          skipAuthRedirect: true,
-        })
-        if (isMounted && generation === sessionGeneration.current) {
-          setAuthState(prev => ({
-            ...prev,
-            status: 'authenticated',
-            isLoading: false,
-            user: response,
-            error: null,
-            retryCount: 0,
-            lastRetryAt: null,
-          }))
-        }
+        await recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
       } catch (error) {
         if (!isMounted || generation !== sessionGeneration.current) return
-        
-        const authError = createAuthError(error)
-        
-        if (isDefinitiveAuthenticationFailure(error)) {
-          // A stale or expired access token is routine on a return visit. Try to
-          // renew the session silently with the refresh cookie before surfacing
-          // the login screen for a single-user app.
-          try {
-            await recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
-            return
-          } catch (recoveryError) {
-            if (isDefinitiveAuthenticationFailure(recoveryError)) {
-              markDefinitivelyUnauthenticated()
-              return
-            }
-          }
-        }
+        if (isDefinitiveAuthenticationFailure(error)) return
 
-        // Bounded retry: do not schedule beyond max to stop indefinite spinning
-        // Capture the updated retry count synchronously from the state updater
-        // so the effect does not need to depend on authState.retryCount.
-        let nextRetryCount = 0
-        if (isMounted) {
-          setAuthState(prev => {
-            nextRetryCount = prev.retryCount + 1
-            return {
-              ...prev,
-              status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
-              isLoading: false,
-              error: authError,
-              retryCount: nextRetryCount,
-              lastRetryAt: Date.now(),
-            }
-          })
-        }
+        // Recovery owns auth state; bootstrap owns only the bounded retry timer.
+        const nextRetryCount = ++bootstrapRetryCount
 
         if (!isMounted) return
         if (nextRetryCount <= AUTH_BOOTSTRAP_MAX_RETRIES) {
@@ -383,6 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (accessToken: string) => {
     const generation = ++sessionGeneration.current
+    recoveryPromise.current = null
     setAuthState(prev => ({ ...prev, status: 'checking', isLoading: true, user: null }))
     clearSessionCache(client)
     setAccessToken(accessToken)

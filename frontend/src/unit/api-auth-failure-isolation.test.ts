@@ -68,7 +68,8 @@ it.each([undefined, null, { detail: 'Permission denied' }])(
 )
 
 it('reports a transport failure without request metadata while preserving the session', async () => {
-  await expect(responseError({ message: 'connection closed' })).rejects.toThrow('Network error')
+  const error = { message: 'connection closed' }
+  await expect(responseError(error)).rejects.toBe(error)
   expect(transport.post).not.toHaveBeenCalled()
   expect(getAccessToken()).toBe('current-session')
 })

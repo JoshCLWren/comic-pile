@@ -244,7 +244,9 @@ describe('AuthProvider transient recovery', () => {
     let fail!: (error: Error) => void
     mocks.refreshSession.mockImplementationOnce(() => new Promise((resolve, reject) => { finish = resolve; fail = reject }))
     let pending!: Promise<void>
+    mocks.get.mockRejectedValueOnce(axiosError(401))
     act(() => { pending = auth!.recoverSession() })
+    await waitFor(() => expect(mocks.refreshSession).toHaveBeenCalledOnce())
     act(() => auth!.logout())
     const requestsAtLogout = mocks.get.mock.calls.length
     await act(async () => {
@@ -292,6 +294,7 @@ describe('AuthProvider transient recovery', () => {
     expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/auth/me', {
       timeout: 15000,
       skipAuthRedirect: true,
+      skipAuthRefresh: true,
     })
     
     await act(async () => {
@@ -344,7 +347,6 @@ describe('AuthProvider transient recovery', () => {
     mocks.getAccessToken.mockReturnValue('stale-token')
     mocks.get
       .mockRejectedValueOnce(axiosError(401))
-      .mockRejectedValueOnce(axiosError(401))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     mocks.refreshSession.mockResolvedValueOnce('new-token')
@@ -390,7 +392,6 @@ describe('AuthProvider transient recovery', () => {
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     await waitForPreferencesFetch()
 
-    mocks.get.mockRejectedValueOnce(axiosError(401))
     mocks.get.mockRejectedValueOnce(axiosError(401))
     mocks.refreshSession.mockResolvedValueOnce('new-token')
     mocks.get

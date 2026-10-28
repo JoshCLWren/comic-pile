@@ -44,6 +44,7 @@ export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
 let isRedirectingToLogin = false
 let accessToken: string | null = null
+let credentialGeneration = 0
 let csrfTokenPromise: Promise<string | null> | null = null
 let failedQueue: Array<{
   client: ApiClient
@@ -76,6 +77,7 @@ function writeStoredAccessToken(token: string | null): void {
 }
 
 export function setAccessToken(token: string | null): void {
+  credentialGeneration += 1
   accessToken = token
   writeStoredAccessToken(token)
   // A new explicit token write (login or test setup) allows another cookie probe.
@@ -95,6 +97,7 @@ export function getAccessToken(): string | null {
 }
 
 export function clearAccessToken(): void {
+  credentialGeneration += 1
   accessToken = null
   writeStoredAccessToken(null)
 }
@@ -135,16 +138,18 @@ async function refreshSessionOn(
     return refreshPromise
   }
 
+  const generation = credentialGeneration
   refreshPromise = (async () => {
     try {
       const response = options?.skipAuthRedirect
         ? await client.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
         : await client.post<AuthTokens>('/v1/auth/refresh')
+      if (generation !== credentialGeneration) throw new axios.CanceledError('Session changed during refresh')
       setAccessToken(response.access_token)
       return response.access_token
     } catch (error) {
       // SAFETY: catch clause is unknown; axios interceptor always receives AxiosError.
-      if (isAuthenticationFailure(error as AxiosError)) {
+      if (generation === credentialGeneration && isAuthenticationFailure(error as AxiosError)) {
         markSessionRefreshRejected()
       }
       throw error
@@ -279,6 +284,10 @@ function errorForDiagnosticLog(error: AxiosError): AxiosError | RedactedRequestD
 
 function createRequestInterceptor(client: ApiClient) {
   return async (config: InternalAxiosRequestConfig) => {
+    // Snapshot the credential epoch before dispatching a refresh request.
+    if (getRequestPathname(config.url ?? '') === '/v1/auth/refresh') {
+      Object.assign(config, { credentialGeneration })
+    }
     const token = getAccessToken()
     config.headers = config.headers ?? {}
 
@@ -321,7 +330,7 @@ function createResponseErrorInterceptor(client: ApiClient) {
 
     if (!error.response) {
       console.error('Network Error:', error.message)
-      return Promise.reject(new Error('Network error. Please check your connection and try again.'))
+      return Promise.reject(error)
     }
 
     if (error.response.status === 400) {
@@ -331,10 +340,11 @@ function createResponseErrorInterceptor(client: ApiClient) {
       })
     }
 
-    if (isAuthenticationFailure(error) && !originalRequest._retry) {
+    if (isAuthenticationFailure(error) && !originalRequest._retry && !originalRequest.skipAuthRefresh) {
       const requestPathname = getRequestPathname(originalRequest.url ?? '')
       if (AUTH_ENDPOINT_PATHS.has(requestPathname)) {
-        if (requestPathname === '/v1/auth/refresh' && isAuthenticationFailure(error)) {
+        if (requestPathname === '/v1/auth/refresh' && isAuthenticationFailure(error) &&
+          (originalRequest.credentialGeneration === undefined || originalRequest.credentialGeneration === credentialGeneration)) {
           markSessionRefreshRejected()
           if (!originalRequest.skipAuthRedirect) {
             redirectToLogin()
