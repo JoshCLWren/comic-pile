@@ -51,7 +51,8 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
       session_id: account === 'first' ? 1 : 2, user_id: account === 'first' ? 1 : 2,
       current_die: 6, manual_die: null, pending_thread_id: null, last_rolled_result: null,
       session_mode: { bandwidth: 'balanced', intent: 'random' }, active_thread: null,
-      roll_pool: [], snoozed_threads: [], snoozed_count: 0, skipped_thread_ids: [],
+      bandwidth: { predicted_bandwidth: null, active_bandwidth: null, confidence: null, source: null, mode_version: null },
+      rollable: [], last_read: null, snoozed_threads: [], snoozed_count: 0, skipped_thread_ids: [],
       skipped_threads: [], blocked_count: 0, blocked_threads: [], stale_thread_count: 0, stale_thread: null,
     })
     if (path.endsWith('/threads/')) return respond({ threads: [], next_page_token: null })

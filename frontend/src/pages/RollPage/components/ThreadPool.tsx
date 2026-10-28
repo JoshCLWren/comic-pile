@@ -2,9 +2,9 @@ import { EligibilityExplanation } from '../../../components/EligibilityExplanati
 import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
-import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
 import type { BlockingDependency } from '../../../types'
-import type { RollBootstrapThread, ThreadExclusionReason } from '../../../types/rollBootstrap'
+import type { RollPoolRow, RollBootstrapThread, ThreadExclusionReason } from '../../../types/rollBootstrap'
+import { RollPoolRow as RollPoolRowView } from './RollPoolRow'
 
 const EXCLUSION_REASON_LABELS: Record<ThreadExclusionReason['reason'], string> = {
   completed: 'Read the full series',
@@ -123,7 +123,7 @@ function ExclusionPaginationFooter({
 }
 
 interface ThreadPoolProps {
-  pool: RollBootstrapThread[]
+  pool: RollPoolRow[]
   blockedThreads: RollBootstrapThread[]
   blockedPagination?: RollExclusionPagination
   blockingDependencyMap: Record<number, BlockingDependency[]>
@@ -291,50 +291,15 @@ export function ThreadPool({
             </button>
           </div>
         ) : (
-          pool.map((thread, index) => {
-            const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
-            const routeLabels = (thread.route_labels ?? []).filter(Boolean)
-            const tags = thread.tags ?? []
-            const tagNames = tags.map((tag) => tag.name)
-            return (
-              <div
-                key={thread.id}
-                onClick={() => onThreadClick(thread)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    onThreadClick(thread)
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}. Open series actions.`}
-                className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
-                  }`}
-              >
-                <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
-                  {index + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-stone-200 truncate text-sm">{thread.title}</p>
-                  <p className="truncate text-xs text-stone-400">
-                    {thread.issue_number ? `#${thread.issue_number}` : 'Next unread issue'}
-                  </p>
-                  <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
-                  <ThreadTagChips
-                    tags={tags}
-                    label={`Tags for ${thread.title}`}
-                    className="mt-1"
-                  />
-                  {routeLabels.length ? (
-                    <p className="mt-1 truncate text-[10px] text-sky-300">
-                      Connected to: {routeLabels.join(' · ')}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            )
-          })
+          pool.map((thread, index) => (
+            <RollPoolRowView
+              key={thread.id}
+              row={thread}
+              dieFace={index + 1}
+              isSelected={Boolean(selectedThreadId && Number(selectedThreadId) === thread.id)}
+              onClick={() => onThreadClick(thread)}
+            />
+          ))
         )}
       </div>}
 
