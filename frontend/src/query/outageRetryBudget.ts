@@ -75,7 +75,6 @@ let authDegraded = false
 let outageStartedAt: number | null = null
 let probeRetriesUsed = 0
 let transientFailureTimestamps: number[] = []
-let probeDecisionPending = false
 
 /**
  * Read the transport fields retry classification needs from an unknown error.
@@ -162,7 +161,6 @@ function resetOutageState(): void {
   outageStartedAt = null
   probeRetriesUsed = 0
   transientFailureTimestamps = []
-  probeDecisionPending = false
 }
 
 function consumeProbeRetry(): boolean {
@@ -170,7 +168,6 @@ function consumeProbeRetry(): boolean {
     return false
   }
   probeRetriesUsed += 1
-  probeDecisionPending = true
   return true
 }
 
@@ -221,8 +218,14 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
  *   reason about the upper bound without jitter.
  */
 export function queryRetryDelay(failureCount: number): number {
-  if (probeDecisionPending) {
-    probeDecisionPending = false
+  // TanStack Query evaluates retryDelay BEFORE calling the retry predicate.
+  // A pending second transient failure will become the one shared probe;
+  // compute its delay from the failure window rather than a flag set by the
+  // later shouldRetryQuery callback. Otherwise the probe fires at 1s.
+  if (
+    outageStartedAt !== null
+    || transientFailureTimestamps.length >= QUERY_OUTAGE_BUDGET.outageFailureThreshold - 1
+  ) {
     return QUERY_OUTAGE_BUDGET.probeRetryDelayMs
   }
   const exponent = Math.max(failureCount, 0)
