@@ -317,6 +317,7 @@ async def adopt_reading_order(
     if get_reading_execution_settings().enabled:
         await link_new_plan_to_owned_list(
             db, plan=plan, user_id=current_user.id,
+            adopted_order_id=payload.reading_order_id,
         )
     try:
         await db.commit()
