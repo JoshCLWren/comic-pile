@@ -355,10 +355,12 @@ Rules:
   active worker resolves to its own installation token. Check that condition with
   `python3 .github/scripts/factory_shared_token_retirement.py check`; it derives
   dependents from `.github/factory-expected-workers.json` plus the persisted worker
-  App mapping and exits non-zero when either producer half (the Python fallback, or
-  the secret export and shared git remote in `free-model-factory-run.yml`) is
-  removed while dependents remain, and when no dependents are left but a half is
-  still wired. Retired workers, including retired worker 72, are never dependents.
+  App mapping and exits non-zero when any producer piece (the Python fallback, the
+  `free-model-factory-run.yml` secret export, or its shared git remote wiring) is
+  removed while dependents remain, and when no dependents are left but any piece is
+  still wired. The two workflow pieces are tracked separately, so deleting only the
+  secret export or only the shared remote is an incomplete-retirement violation, not
+  a pass. Retired workers, including retired worker 72, are never dependents.
   `tests/test_issue_3140_shared_token_retirement.py` enforces the same guard in CI.
 - Never push directly to `main`.
 - Never create or convert a draft PR unless Josh explicitly requests a draft.

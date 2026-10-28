@@ -25,9 +25,10 @@ its installation token, so a committed row cannot retire the producer ahead of
 routing support. Retired workers are never dependents: retired worker 72 is not a
 reason to keep the shared token.
 `tests/test_issue_3140_shared_token_retirement.py` fails on premature removal of
-either producer half (the Python fallback, or the secret export plus shared git
-remote wiring in `free-model-factory-run.yml`) while active dependents remain, and
-on overdue removal (no dependents remain but a half is still wired).
+any producer piece while active dependents remain, and on overdue removal (no
+dependents remain but a piece is still wired). The workflow secret export and the
+shared git remote are counted separately, so deleting only one of them is reported
+as an incomplete retirement instead of passing the guard.
 
 ## Bootstrap (already done for worker 48)
 

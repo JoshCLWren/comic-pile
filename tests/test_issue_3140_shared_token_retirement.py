@@ -10,10 +10,13 @@ a reason to keep it. These tests pin the executable form of that condition:
 * a mapping row alone is not enough: the production routing decision must
   already select the installation token, which keeps the census aligned with
   the code that actually pushes;
-* the producer has two halves (Python fallback and workflow wiring) and both are
-  guarded, because a dependent worker pushes through the workflow wiring;
-* the ordering guard catches a premature removal, a half-removed producer, and a
-  removal that became due but was never performed;
+* the producer has three pieces (Python fallback, workflow secret export, and
+  workflow shared remote) and each is guarded separately, because a dependent
+  worker pushes through the workflow and deleting only one workflow piece must
+  not look like a completed retirement;
+* the ordering guard catches a premature removal of any piece, a partly removed
+  producer after retirement, and a removal that became due but was never
+  performed;
 * a completed retirement is consistent and violation-free;
 * the census never mints a token and never reaches GitHub.
 
@@ -182,8 +185,26 @@ def test_incomplete_mapping_row_stays_dependent(monkeypatch: pytest.MonkeyPatch)
     assert OTHER_WORKER not in report["dedicated_workers"]
 
 
+def test_mapping_row_without_private_key_secret_stays_dependent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row missing its own key secret must not borrow worker 48's default secret."""
+    monkeypatch.setattr(worker_app, "worker_entry", _generalized_worker_entry)
+    mapping = _mapping_for(PILOT_WORKER, OTHER_WORKER)
+    partial = _complete_entry(OTHER_WORKER)
+    del partial["private_key_secret"]
+    _workers(mapping)[str(OTHER_WORKER)] = partial
+
+    report = retirement.census(
+        lock=PILOT_ROSTER, mapping=mapping, python_fallback=True, workflow_wiring=True
+    )
+    assert report["decision"] == "retain"
+    assert OTHER_WORKER in report["dependent_workers"]
+    assert OTHER_WORKER not in report["dedicated_workers"]
+
+
 def test_full_fleet_identities_report_removal_is_due(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Once every active worker has its own App, both producer halves are overdue."""
+    """Once every active worker has its own App, every producer piece is overdue."""
     monkeypatch.setattr(worker_app, "worker_entry", _generalized_worker_entry)
     report = retirement.census(
         lock=PILOT_ROSTER,
@@ -194,12 +215,48 @@ def test_full_fleet_identities_report_removal_is_due(monkeypatch: pytest.MonkeyP
 
     assert report["decision"] == "retire"
     assert report["dependent_workers"] == []
+    assert report["shared_workflow_secret_export"] is True
+    assert report["shared_workflow_remote"] is True
     assert report["shared_producer_present"] is True
 
     problems = retirement.violations(report)
-    assert len(problems) == 2
+    assert len(problems) == 3
     assert "Python fallback is still wired" in problems[0]
-    assert "still wired in free-model-factory-run.yml" in problems[1]
+    assert "still exported in free-model-factory-run.yml" in problems[1]
+    assert "still wires the shared git remote" in problems[2]
+
+
+def test_partly_removed_workflow_after_retirement_is_a_violation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting only one workflow piece must not look like a completed retirement."""
+    monkeypatch.setattr(worker_app, "worker_entry", _generalized_worker_entry)
+
+    only_remote_gone = retirement.census(
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=False,
+        workflow_secret_export=True,
+        workflow_remote=False,
+    )
+    assert only_remote_gone["decision"] == "retire"
+    assert only_remote_gone["shared_workflow_wiring"] is False
+    problems = retirement.violations(only_remote_gone)
+    assert len(problems) == 1
+    assert "is still exported in free-model-factory-run.yml" in problems[0]
+
+    only_export_gone = retirement.census(
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=False,
+        workflow_secret_export=False,
+        workflow_remote=True,
+    )
+    assert only_export_gone["decision"] == "retire"
+    assert only_export_gone["shared_workflow_wiring"] is False
+    problems = retirement.violations(only_export_gone)
+    assert len(problems) == 1
+    assert "still wires the shared git remote" in problems[0]
 
 
 def test_completed_retirement_has_no_violations(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -237,10 +294,50 @@ def test_premature_python_fallback_removal_is_a_violation(
     assert str(PILOT_WORKER) not in problems[0]
 
 
+def test_premature_workflow_secret_removal_is_a_violation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting the secret export while workers depend on it must fail the guard."""
+    _pilot_worker(monkeypatch)
+    report = retirement.census(
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=True,
+        workflow_secret_export=False,
+        workflow_remote=True,
+    )
+
+    assert report["decision"] == "retain"
+    problems = retirement.violations(report)
+    assert len(problems) == 1
+    assert "secret export was removed" in problems[0]
+    assert str(OTHER_WORKER) in problems[0]
+
+
+def test_premature_workflow_remote_removal_is_a_violation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting the shared remote while workers depend on it must fail the guard."""
+    _pilot_worker(monkeypatch)
+    report = retirement.census(
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=True,
+        workflow_secret_export=True,
+        workflow_remote=False,
+    )
+
+    assert report["decision"] == "retain"
+    problems = retirement.violations(report)
+    assert len(problems) == 1
+    assert "shared git remote wiring was removed" in problems[0]
+    assert str(OTHER_WORKER) in problems[0]
+
+
 def test_premature_workflow_wiring_removal_is_a_violation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Deleting the workflow wiring while workers depend on it must fail the guard."""
+    """Deleting both workflow pieces while workers depend on them must fail the guard."""
     _pilot_worker(monkeypatch)
     report = retirement.census(
         lock=PILOT_ROSTER,
@@ -250,9 +347,12 @@ def test_premature_workflow_wiring_removal_is_a_violation(
     )
 
     assert report["decision"] == "retain"
+    assert report["shared_workflow_secret_export"] is False
+    assert report["shared_workflow_remote"] is False
     problems = retirement.violations(report)
-    assert len(problems) == 1
-    assert "workflow wiring was removed while active workers still depend" in problems[0]
+    assert len(problems) == 2
+    assert "secret export was removed" in problems[0]
+    assert "shared git remote wiring was removed" in problems[1]
 
 
 def test_retired_worker_72_never_keeps_the_shared_producer_alive(
@@ -309,16 +409,20 @@ def test_workflow_wiring_requires_secret_export_and_remote(tmp_path: Path) -> No
     wired = tmp_path / "wired.yml"
     wired.write_text(_workflow_text(secret=True, remote=True), encoding="utf-8")
     assert retirement.shared_workflow_wiring(wired) is True
+    assert retirement._workflow_components(wired) == (True, True)
 
     no_secret = tmp_path / "no-secret.yml"
     no_secret.write_text(_workflow_text(secret=False, remote=True), encoding="utf-8")
     assert retirement.shared_workflow_wiring(no_secret) is False
+    assert retirement._workflow_components(no_secret) == (False, True)
 
     no_remote = tmp_path / "no-remote.yml"
     no_remote.write_text(_workflow_text(secret=True, remote=False), encoding="utf-8")
     assert retirement.shared_workflow_wiring(no_remote) is False
+    assert retirement._workflow_components(no_remote) == (True, False)
 
     assert retirement.shared_workflow_wiring(tmp_path / "missing.yml") is False
+    assert retirement._workflow_components(tmp_path / "missing.yml") == (False, False)
 
 
 def test_live_repository_satisfies_the_ordering_guard() -> None:
@@ -333,7 +437,12 @@ def test_live_repository_satisfies_the_ordering_guard() -> None:
     if report["active_workers"]:
         assert (report["decision"] == "retain") == bool(report["dependent_workers"])
     assert report["shared_producer_present"] == (
-        report["shared_python_fallback"] and report["shared_workflow_wiring"]
+        report["shared_python_fallback"]
+        and report["shared_workflow_secret_export"]
+        and report["shared_workflow_remote"]
+    )
+    assert report["shared_workflow_wiring"] == (
+        report["shared_workflow_secret_export"] and report["shared_workflow_remote"]
     )
 
 

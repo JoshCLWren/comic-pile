@@ -13,11 +13,14 @@ This module turns that sentence into executable state:
   routing decision in :mod:`factory_worker_github_app` already selects the
   installation token for it. Entries are committed only after live installation
   verification, so mapping completeness is the durable proof of provisioning;
-* the producer itself has two halves that must be removed together: the Python
-  fallback in :mod:`factory_worker_github_app` and the ``free-model-factory-run``
-  workflow wiring that exports the secret and configures the shared git remote.
-  A dependent worker pushes through the workflow wiring, so a probe that only
-  exercises the Python fallback would miss a half-removed producer.
+* the producer itself is three pieces that must be removed together: the Python
+  fallback in :mod:`factory_worker_github_app`, the ``free-model-factory-run``
+  workflow secret export, and the workflow's shared git remote wiring. A dependent
+  worker pushes through the workflow, so a probe that only exercises the Python
+  fallback would miss a half-removed producer. The two workflow pieces are also
+  counted separately: deleting only the remote (or only the export) must not look
+  like a completed retirement, so each piece is required while a dependent remains
+  and absent once the retirement is due.
 
 The census never mints a token and never calls GitHub. It exercises the shared
 fallback through :func:`factory_worker_github_app.resolve_push_credential` and
@@ -62,8 +65,10 @@ class RetirementCensus(TypedDict):
         dedicated_workers: Active workers already on their own installation token.
         dependent_workers: Active workers still resolving to the shared token.
         shared_python_fallback: Whether the Python fallback still answers.
-        shared_workflow_wiring: Whether the factory workflow exports and wires the token.
-        shared_producer_present: Whether both halves of the producer still exist.
+        shared_workflow_secret_export: Whether the workflow still exports the secret.
+        shared_workflow_remote: Whether the workflow still wires the shared remote.
+        shared_workflow_wiring: Whether the workflow exports the secret *and* wires the remote.
+        shared_producer_present: Whether every producer piece still exists.
     """
 
     schema: str
@@ -74,6 +79,8 @@ class RetirementCensus(TypedDict):
     dedicated_workers: list[int]
     dependent_workers: list[int]
     shared_python_fallback: bool
+    shared_workflow_secret_export: bool
+    shared_workflow_remote: bool
     shared_workflow_wiring: bool
     shared_producer_present: bool
 
@@ -150,9 +157,13 @@ def retired_worker_ids(lock: Mapping[str, object]) -> list[int]:
 
 
 def _private_key_secret(entry: Mapping[str, object]) -> str:
-    """Return the private-key secret name for a mapping entry."""
-    configured = str(entry.get("private_key_secret") or "").strip()
-    return configured or "FACTORY_WORKER_48_APP_PRIVATE_KEY"
+    """Return the mapping entry's own private-key secret name, else ``""``.
+
+    A missing name is an incomplete provisioning row. Falling back to another
+    worker's secret would silently lend that worker's identity to a partial row
+    and hide a configuration error, so the census fails closed instead.
+    """
+    return str(entry.get("private_key_secret") or "").strip()
 
 
 def worker_has_dedicated_identity(worker: int, mapping: Mapping[str, object]) -> bool:
@@ -165,6 +176,12 @@ def worker_has_dedicated_identity(worker: int, mapping: Mapping[str, object]) ->
     not yet admit stays on the shared producer, which is why this census cannot
     report a false retirement while the pilot scope is still worker 48 only.
 
+    ``credential_decision`` is pure dictionary routing: it performs no network
+    I/O and signs no JWT (signing and minting live in ``mint_installation_token``,
+    which this census never calls). Passing
+    :data:`factory_worker_github_app.TEST_KEY_SENTINEL` keeps it that way, so the
+    synchronous census stays safe if it is ever invoked without an event loop.
+
     Args:
         worker: Durable worker number.
         mapping: Parsed ``factory-worker-github-apps.json`` content.
@@ -175,7 +192,10 @@ def worker_has_dedicated_identity(worker: int, mapping: Mapping[str, object]) ->
     entry = factory_worker_github_app.worker_entry(mapping, str(worker))
     if entry is None:
         return False
-    env = {_private_key_secret(entry): factory_worker_github_app.TEST_KEY_SENTINEL}
+    key_secret = _private_key_secret(entry)
+    if not key_secret:
+        return False
+    env = {key_secret: factory_worker_github_app.TEST_KEY_SENTINEL}
     decision = factory_worker_github_app.credential_decision(str(worker), env, mapping)
     return decision["source"] == "installation"
 
@@ -195,6 +215,31 @@ def shared_python_fallback() -> bool:
     return source == "pr_rebase" and token == _SENTINEL_TOKEN
 
 
+def _workflow_components(path: Path | None = None) -> tuple[bool, bool]:
+    """Return ``(secret export present, shared remote wiring present)``.
+
+    The two workflow pieces are reported separately because retirement requires
+    both to disappear: keeping either half wired after every worker moved off the
+    shared token is an incomplete cleanup, and the ``check`` guard must catch it.
+
+    Args:
+        path: Workflow path override for tests.
+
+    Returns:
+        A pair of booleans; both are false when the workflow cannot be read.
+    """
+    target = path or default_workflow_path()
+    try:
+        text = target.read_text(encoding="utf-8")
+    except OSError:
+        return False, False
+    secret_export = _SECRET_EXPORT in text
+    remote = any(
+        _REMOTE_STEP in line and SHARED_TOKEN_NAME in line for line in text.splitlines()
+    )
+    return secret_export, remote
+
+
 def shared_workflow_wiring(path: Path | None = None) -> bool:
     """Return whether the factory workflow still supplies the shared producer.
 
@@ -202,7 +247,7 @@ def shared_workflow_wiring(path: Path | None = None) -> bool:
     env exports ``secrets.PR_REBASE_TOKEN`` and a step points ``origin`` at a URL
     containing ``${PR_REBASE_TOKEN}``. Checking only the Python fallback would
     report ``True`` after the workflow half was deleted, so this probe reads the
-    workflow and fails closed when either half of the wiring is gone.
+    workflow and fails closed when either piece of the wiring is gone.
 
     Args:
         path: Workflow path override for tests.
@@ -210,16 +255,8 @@ def shared_workflow_wiring(path: Path | None = None) -> bool:
     Returns:
         True when the workflow still exports the secret and wires the remote.
     """
-    target = path or default_workflow_path()
-    try:
-        text = target.read_text(encoding="utf-8")
-    except OSError:
-        return False
-    if _SECRET_EXPORT not in text:
-        return False
-    return any(
-        _REMOTE_STEP in line and SHARED_TOKEN_NAME in line for line in text.splitlines()
-    )
+    secret_export, remote = _workflow_components(path)
+    return secret_export and remote
 
 
 def census(
@@ -228,6 +265,8 @@ def census(
     mapping: Mapping[str, object] | None = None,
     python_fallback: bool | None = None,
     workflow_wiring: bool | None = None,
+    workflow_secret_export: bool | None = None,
+    workflow_remote: bool | None = None,
     lock_path: Path | None = None,
     mapping_path: Path | None = None,
     workflow_path: Path | None = None,
@@ -238,10 +277,13 @@ def census(
         lock: Parsed roster lock. Loaded from ``lock_path`` when omitted.
         mapping: Parsed worker App mapping. Loaded from ``mapping_path`` when omitted.
         python_fallback: Override for the Python-fallback probe.
-        workflow_wiring: Override for the workflow-wiring probe.
+        workflow_wiring: Override for both workflow pieces; used only when the
+            piece-specific overrides below are omitted.
+        workflow_secret_export: Override for the workflow secret-export probe.
+        workflow_remote: Override for the workflow shared-remote probe.
         lock_path: Roster lock path used only when ``lock`` is omitted.
         mapping_path: App mapping path used only when ``mapping`` is omitted.
-        workflow_path: Workflow path used only when ``workflow_wiring`` is omitted.
+        workflow_path: Workflow path used when a workflow piece is not overridden.
 
     Returns:
         JSON-ready census describing the decision and its dependents.
@@ -262,9 +304,18 @@ def census(
     ]
     dependent = [worker for worker in active if worker not in dedicated]
     fallback = shared_python_fallback() if python_fallback is None else python_fallback
-    wiring = (
-        shared_workflow_wiring(workflow_path) if workflow_wiring is None else workflow_wiring
-    )
+    secret_export = workflow_secret_export
+    remote = workflow_remote
+    if secret_export is None and remote is None:
+        if workflow_wiring is not None:
+            secret_export = remote = workflow_wiring
+        else:
+            secret_export, remote = _workflow_components(workflow_path)
+    elif secret_export is None or remote is None:
+        probed_secret, probed_remote = _workflow_components(workflow_path)
+        secret_export = probed_secret if secret_export is None else secret_export
+        remote = probed_remote if remote is None else remote
+    wiring = secret_export and remote
 
     if not active:
         # A missing roster is not evidence that the producer is unused.
@@ -286,6 +337,8 @@ def census(
         "dedicated_workers": dedicated,
         "dependent_workers": dependent,
         "shared_python_fallback": fallback,
+        "shared_workflow_secret_export": secret_export,
+        "shared_workflow_remote": remote,
         "shared_workflow_wiring": wiring,
         "shared_producer_present": fallback and wiring,
     }
@@ -294,10 +347,11 @@ def census(
 def violations(report: RetirementCensus) -> list[str]:
     """Return ordering violations for a census report.
 
-    Two failures matter: removing either half of the shared producer while an
-    active worker still depends on it, and leaving either half wired after every
-    worker moved off. Both halves are checked separately so a half-removed
-    producer cannot look consistent.
+    Two failures matter: removing any producer piece while an active worker still
+    depends on it, and leaving any piece wired after every worker moved off. The
+    Python fallback, the workflow secret export, and the workflow shared remote
+    are checked separately, so a partly removed producer cannot look consistent
+    even though both workflow pieces sit in the same file.
 
     Args:
         report: Census returned by :func:`census`.
@@ -309,7 +363,8 @@ def violations(report: RetirementCensus) -> list[str]:
     decision = report["decision"]
     dependent = report["dependent_workers"]
     fallback = report["shared_python_fallback"]
-    wiring = report["shared_workflow_wiring"]
+    secret_export = report["shared_workflow_secret_export"]
+    remote = report["shared_workflow_remote"]
     if decision not in _DECISIONS:
         found.append(f"unknown retirement decision: {decision!r}")
         return found
@@ -323,10 +378,17 @@ def violations(report: RetirementCensus) -> list[str]:
                 f"{SHARED_TOKEN_NAME} Python fallback was removed while active workers "
                 f"still depend on it: {dependents}"
             )
-        if not wiring:
+        if not secret_export:
             found.append(
-                f"{SHARED_TOKEN_NAME} workflow wiring was removed while active workers "
-                f"still depend on it: {dependents}"
+                f"{SHARED_TOKEN_NAME} secret export was removed from "
+                f"free-model-factory-run.yml while active workers still depend on it: "
+                f"{dependents}"
+            )
+        if not remote:
+            found.append(
+                f"{SHARED_TOKEN_NAME} shared git remote wiring was removed from "
+                f"free-model-factory-run.yml while active workers still depend on it: "
+                f"{dependents}"
             )
         return found
     if fallback:
@@ -334,10 +396,16 @@ def violations(report: RetirementCensus) -> list[str]:
             f"every active worker has its own installation token but the {SHARED_TOKEN_NAME} "
             "Python fallback is still wired; retire the shared producer"
         )
-    if wiring:
+    if secret_export:
         found.append(
             f"every active worker has its own installation token but {SHARED_TOKEN_NAME} "
-            "is still wired in free-model-factory-run.yml; retire the shared producer"
+            "is still exported in free-model-factory-run.yml; retire the shared producer"
+        )
+    if remote:
+        found.append(
+            f"every active worker has its own installation token but free-model-factory-run.yml "
+            f"still wires the shared git remote with {SHARED_TOKEN_NAME}; retire the shared "
+            "producer"
         )
     return found
 
