@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanEditRoute from '../pages/ReadingPlanEditRoute'
+import { useReadingPlanReader } from '../hooks/useReadingPlans'
 import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
 
@@ -17,6 +18,17 @@ vi.mock('../services/api-continuity-plans', async () => {
       ...actual.continuityPlansApi,
       getReader: vi.fn(),
     },
+  }
+})
+
+// For error-state assertions, supply a settled query state directly. A rejected
+// mocked API promise can produce an unhandled rejection in the shared test
+// harness, even after React Query has rendered its error state.
+vi.mock('../hooks/useReadingPlans', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useReadingPlans')>()
+  return {
+    ...actual,
+    useReadingPlanReader: vi.fn(actual.useReadingPlanReader),
   }
 })
 
@@ -56,7 +68,10 @@ function response(
   return cast<ReadingPlanReaderView>({ execution_mode, sources })
 }
 
-beforeEach(() => getReader.mockReset())
+beforeEach(() => {
+  getReader.mockReset()
+  vi.mocked(useReadingPlanReader).mockRestore()
+})
 
 describe('ReadingPlanEditRoute', () => {
   it('redirects a linked Option E Plan to its explicitly owned List', async () => {
@@ -92,10 +107,14 @@ describe('ReadingPlanEditRoute', () => {
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
-  it('fails closed on a reader request error', async () => {
-    getReader.mockRejectedValue(new Error('Unavailable'))
+  it('fails closed on a reader request error', () => {
+    vi.mocked(useReadingPlanReader).mockReturnValue({
+      isError: true,
+      isPending: false,
+      data: undefined,
+    } as ReturnType<typeof useReadingPlanReader>)
     renderEditRoute()
-    expect(await screen.findByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
