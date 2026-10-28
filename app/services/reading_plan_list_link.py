@@ -16,6 +16,7 @@ from app.repositories import reading_plan_list_link_repository as link_repositor
 
 async def link_new_plan_to_owned_list(
     db: AsyncSession, *, plan: ContinuityPlan, user_id: int,
+    adopted_order_id: int | None = None,
 ) -> int:
     """Create a canonical List and source in the same Plan-creation transaction."""
     existing = await link_repository.linked_list_ids(db, plan_id=plan.id)
@@ -29,6 +30,17 @@ async def link_new_plan_to_owned_list(
             status_code=409,
             detail="Create an owned Reading List before adopting a multi-lane Plan",
         )
+    adopted_issue_ids = None
+    if adopted_order_id is not None and not occurrences:
+        adopted_issue_ids = await link_repository.adopted_order_issue_ids(
+            db, user_id=user_id, reading_order_id=adopted_order_id,
+        )
+        if not adopted_issue_ids:
+            raise HTTPException(
+                status_code=422,
+                detail="Reading Order has no physical issues to adopt",
+            )
     return await link_repository.create_owned_plan_list(
         db, plan=plan, user_id=user_id, rows=occurrences,
+        adopted_issue_ids=adopted_issue_ids,
     )
