@@ -235,7 +235,7 @@ async def update_continuity_plan(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityPlanResponse:
-    """Replace a legacy Plan; Option E edits must use the authoritative List."""
+    """Replace a plan atomically, including rules explicitly owned by that plan."""
     plan = await _get_owned_plan(db, current_user.id, plan_id)
     guard_legacy_plan_edit()
     await validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
