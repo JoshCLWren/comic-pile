@@ -123,8 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                response: { status: 401 },
              })
            }
-           await refreshSession({ skipAuthRedirect: true })
-           if (generation !== sessionGeneration.current) return
+           // Validate with the existing access token first. Transient 503 /
+           // network errors on /auth/me must not force a refresh-token
+           // rotation -- the current token may still be valid.
            const response = await api.get<AuthUser>('/v1/auth/me', {
              timeout,
              skipAuthRedirect: true,
@@ -143,7 +144,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
            if (generation !== sessionGeneration.current) return
            const authError = createAuthError(error)
            if (isDefinitiveAuthenticationFailure(error)) {
-             markDefinitivelyUnauthenticated()
+             // Access token is expired or revoked. Rotate the refresh cookie
+             // once, then retry /auth/me with the new token.
+             try {
+               await refreshSession({ skipAuthRedirect: true })
+               if (generation !== sessionGeneration.current) return
+               const retryResponse = await api.get<AuthUser>('/v1/auth/me', {
+                 timeout,
+                 skipAuthRedirect: true,
+               })
+               if (generation !== sessionGeneration.current) return
+               setAuthState(prev => ({
+                 ...prev,
+                 status: 'authenticated',
+                 isLoading: false,
+                 user: retryResponse,
+                 error: null,
+                 retryCount: 0,
+                 lastRetryAt: null,
+               }))
+             } catch (refreshError) {
+               if (isDefinitiveAuthenticationFailure(refreshError)) {
+                 markDefinitivelyUnauthenticated()
+               } else {
+                 // Refresh failed with a transient error (503 / network).
+                 // Keep the valid access token and surface the degraded state.
+                 const refreshAuthError = createAuthError(refreshError)
+                 setAuthState(prev => ({
+                   ...prev,
+                   status: refreshAuthError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
+                   isLoading: false,
+                   error: refreshAuthError,
+                   retryCount: prev.retryCount + 1,
+                   lastRetryAt: Date.now(),
+                 }))
+               }
+               throw refreshError
+             }
            } else {
              setAuthState(prev => ({
                ...prev,

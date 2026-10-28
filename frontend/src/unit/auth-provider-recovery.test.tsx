@@ -308,6 +308,7 @@ describe('AuthProvider transient recovery', () => {
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     await waitForPreferencesFetch()
 
+    mocks.get.mockRejectedValueOnce(axiosError(401))
     mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
     await act(async () => {
       await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 401 } })
@@ -325,13 +326,15 @@ describe('AuthProvider transient recovery', () => {
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     await waitForPreferencesFetch()
 
-    mocks.refreshSession.mockRejectedValueOnce(axiosError(503))
+    // /auth/me fails with 503 -- recovery must not rotate the refresh token
+    mocks.get.mockRejectedValueOnce(axiosError(503))
     await act(async () => {
       await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 503 } })
     })
 
-    // New behavior: transition to service_unavailable degraded state instead of staying authenticated
+    // Transient /auth/me failure does not rotate the refresh token
     expect(auth?.authState.status).toBe('service_unavailable')
+    expect(mocks.refreshSession).not.toHaveBeenCalled()
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
     // User should still have access to content (ProtectedRoute allows degraded states)
     expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
@@ -340,6 +343,7 @@ describe('AuthProvider transient recovery', () => {
   it('silently recovers the bootstrap session when the access token is rejected', async () => {
     mocks.getAccessToken.mockReturnValue('stale-token')
     mocks.get
+      .mockRejectedValueOnce(axiosError(401))
       .mockRejectedValueOnce(axiosError(401))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
@@ -387,6 +391,7 @@ describe('AuthProvider transient recovery', () => {
     await waitForPreferencesFetch()
 
     mocks.get.mockRejectedValueOnce(axiosError(401))
+    mocks.get.mockRejectedValueOnce(axiosError(401))
     mocks.refreshSession.mockResolvedValueOnce('new-token')
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
@@ -398,5 +403,106 @@ describe('AuthProvider transient recovery', () => {
 
     expect(auth?.authState.status).toBe('authenticated')
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+  })
+
+  it('transient 503 on /auth/me recovers without a refresh call and keeps the session', async () => {
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    renderProvider()
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
+    await waitForPreferencesFetch()
+
+    // /auth/me returns 503 -- recovery must retry /auth/me, not rotate the refresh token
+    mocks.get.mockRejectedValueOnce(axiosError(503))
+    await act(async () => {
+      await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 503 } })
+    })
+
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(mocks.refreshSession).not.toHaveBeenCalled()
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+    expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
+  })
+
+  it('expired token uses one coalesced refresh then retries /auth/me on success', async () => {
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    renderProvider()
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
+    await waitForPreferencesFetch()
+
+    // /auth/me returns 401 (expired token), then refresh succeeds, then /auth/me succeeds
+    mocks.get
+      .mockRejectedValueOnce(axiosError(401))
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    mocks.refreshSession.mockResolvedValueOnce('new-token')
+
+    await act(async () => {
+      await auth!.recoverSession(15000)
+    })
+
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
+    expect(mocks.refreshSession).toHaveBeenCalledTimes(1)
+    expect(mocks.refreshSession).toHaveBeenCalledWith({ skipAuthRedirect: true })
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+  })
+
+  it('refresh failing with 503 does not clear a valid access token', async () => {
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    renderProvider()
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
+    await waitForPreferencesFetch()
+
+    // /auth/me returns 401 (expired), refresh fails with 503 (transient)
+    mocks.get.mockRejectedValueOnce(axiosError(401))
+    mocks.refreshSession.mockRejectedValueOnce(axiosError(503))
+
+    await act(async () => {
+      await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 503 } })
+    })
+
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+    expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
+  })
+
+  it('rapid concurrent recoverSession calls share one in-flight /auth/me validation', async () => {
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    renderProvider()
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
+    await waitForPreferencesFetch()
+
+    // Both /auth/me calls resolve with the same user; the second call should
+    // reuse the single in-flight recovery promise, not start a second validation.
+    let resolveFirst!: (value: { username: string; email: string }) => void
+    let resolveSecond!: (value: { username: string; email: string }) => void
+    mocks.get
+      .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveSecond = resolve }))
+
+    const first = auth!.recoverSession(15000)
+    const second = auth!.recoverSession(15000)
+
+    await act(async () => {
+      resolveFirst({ username: 'reader', email: 'reader@example.com' })
+      await first
+    })
+
+    // The second call reuses the same promise; it resolves without a second /auth/me.
+    await act(async () => {
+      resolveSecond({ username: 'reader', email: 'reader@example.com' })
+      await second
+    })
+
+    expect(mocks.get).toHaveBeenCalledTimes(3) // 2 bootstrap + 1 recovery /auth/me
+    expect(auth?.authState.status).toBe('authenticated')
   })
 })
