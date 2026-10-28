@@ -164,27 +164,30 @@ describe('query outage retry budget (#4271)', () => {
     // within the 10s window, the outage is recognized and queries coordinate
     // through the shared budget instead of retrying independently.
     await advance(1_000)
-    // The ordinary retry budget has been consumed; verify the outage is active
-    // and the probe is the only remaining retry mechanism.
+    // One query's ordinary retry was already queued before the outage was
+    // recognized (the K + 2 bound allows one pre-outage retry). The outage is
+    // active and the single probe retry is consumed.
     expect(getQueryRetryBudgetSnapshot()).toMatchObject({
       outageActive: true,
-      probeRetriesUsed: 0,
+      probeRetriesUsed: 1,
     })
+    // 3 initial requests + 1 ordinary retry queued before outage recognition.
+    expect(transport.calls).toEqual(['a', 'b', 'c', 'a'])
 
     // Probe timing: the shared probe must not fire before its 4-second delay.
     await advance(2_900)
-    // The shared probe has not fired yet (still within the 4-second delay).
-    expect(transport.calls).toEqual(['a', 'b', 'c'])
+    // Still within the 4-second probe delay; no new requests yet.
+    expect(transport.calls).toEqual(['a', 'b', 'c', 'a'])
 
     // Advance past the probe deadline and allow the shared probe to fire.
-    await advance(500)
+    await advance(200)
     // The shared probe fires after its 4-second delay, adding one retry.
-    expect(transport.calls).toEqual(['a', 'b', 'c', 'a'])
+    expect(transport.calls).toEqual(['a', 'b', 'c', 'a', 'b'])
 
-    await advance(30_000 - 4_400)
-    // 3 initial requests + 1 shared probe. Before the budget this burst cost 12
-    // requests.
-    expect(transport.calls).toEqual(['a', 'b', 'c', 'a'])
+    await advance(30_000 - 4_200)
+    // 3 initial + 1 ordinary retry + 1 shared probe = K + 2 = 5. Nothing polls
+    // after the probe fails.
+    expect(transport.calls).toEqual(['a', 'b', 'c', 'a', 'b'])
     expect(screen.getByTestId('status-a')).toHaveTextContent('error')
 
     await advance(120_000)
