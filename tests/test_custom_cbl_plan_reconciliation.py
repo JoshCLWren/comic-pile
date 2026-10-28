@@ -560,6 +560,10 @@ def test_snapshot_queries_are_user_scoped_selects() -> None:
     assert snapshot.lists == [] and snapshot.plans == []
     queries = [str(call.args[0]) for call in db.scalars.call_args_list]
     assert all(query.startswith("SELECT ") and "user_id" in query for query in queries)
+    # Required queries must be present to avoid silent weakening of coverage.
+    assert any("custom_cbl_lists" in q and "user_id" in q for q in queries), "custom_cbl_lists query missing"
+    assert any("continuity_plans" in q and "user_id" in q for q in queries), "continuity_plans query missing"
+    assert any("issues" in q and "user_id" in q for q in queries), "issues query missing"
     # Count is intentionally not hardcoded; load_snapshot may grow new user-scoped queries.
 
 
