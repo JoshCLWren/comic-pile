@@ -7,6 +7,8 @@ import MigrationDialog from '../../components/MigrationDialog'
 import AddSeriesFromComicVineDialog from '../../components/AddSeriesFromComicVineDialog'
 import { IssueToggleList, type IssueToggleListHandle } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
+import { PotentialDuplicateAdvisory } from './PotentialDuplicateAdvisory'
+import { usePotentialDuplicates } from '../../hooks/usePotentialDuplicates'
 import { getManualCreatorCreditList } from '../../types'
 import type { Thread, ThreadListItem } from '../../types'
 import type { QueueFormState, ManualCreatorCredit } from './types'
@@ -359,6 +361,21 @@ export function QueueModals({
   const createTitleError = !isTitleValid(createForm.title)
   const editTitleError = !isTitleValid(editForm.title)
 
+  // Advisory possible-existing-volume checks (#3612). Both run only while
+  // their dialog is open, and neither gates the submit button: a warning is
+  // context for the reader, never a block on a legitimate same-named volume.
+  const createDuplicates = usePotentialDuplicates({
+    title: openModal === 'create' ? createForm.title : '',
+    format: createForm.format,
+    enabled: openModal === 'create',
+  })
+  const editDuplicates = usePotentialDuplicates({
+    title: openModal === 'edit' ? editForm.title : '',
+    format: editForm.format,
+    excludeThreadId: editingThread?.id,
+    enabled: openModal === 'edit' && editingThread != null,
+  })
+
   // "Issues already read" accepts a whole count from zero through the parsed
   // issue total. Fractional or out-of-range entries report inline and keep
   // Create Series disabled instead of being silently clamped (#4181).
@@ -397,6 +414,12 @@ export function QueueModals({
                 Title cannot be empty or whitespace only
               </p>
             )}
+            <PotentialDuplicateAdvisory
+              candidateKey={`create|${createForm.title.trim()}|${createForm.format}`}
+              matches={createDuplicates.matches}
+              isChecking={createDuplicates.isChecking}
+              isError={createDuplicates.isError}
+            />
           </div>
           <div className="space-y-2">
             <label
@@ -609,6 +632,12 @@ export function QueueModals({
                   Title cannot be empty or whitespace only
                 </p>
               )}
+              <PotentialDuplicateAdvisory
+                candidateKey={`edit|${editingThread?.id ?? 'none'}|${editForm.title.trim()}|${editForm.format}`}
+                matches={editDuplicates.matches}
+                isChecking={editDuplicates.isChecking}
+                isError={editDuplicates.isError}
+              />
             </div>
 
             <div className="space-y-2">

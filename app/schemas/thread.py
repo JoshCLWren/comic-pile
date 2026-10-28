@@ -320,3 +320,72 @@ class QueueThreadListResponse(BaseModel):
     threads: list[QueueThreadListItem]
     next_page_token: str | None = None
     active_count: int = Field(0, ge=0)
+
+class PotentialDuplicateMatchType(StrEnum):
+    """How strongly an existing series resembles the proposed series."""
+
+    #: Canonical ComicVine volume identity matches the proposed volume exactly.
+    SAME_COMICVINE_VOLUME = "same_comicvine_volume"
+    #: Title resemblance only; provider identity is absent or different.
+    SIMILAR_TITLE = "similar_title"
+
+
+class PotentialDuplicateMatch(BaseModel):
+    """One existing series that may already represent the proposed series.
+
+    Advisory only: a title resemblance is never treated as identity, and nothing
+    about an existing series is merged, deleted, or rewritten by producing this
+    match.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    thread_id: int = Field(..., description="Stable ID of the reader's existing thread")
+    title: str = Field(..., description="Display title of the existing series")
+    format: str = Field(..., description="Normalized format of the existing series")
+    status: str = Field(..., description="Current status of the existing series")
+    issues_remaining: int = Field(..., ge=0, description="Unread issues on the existing series")
+    total_issues: int | None = Field(
+        None, description="Tracked issue total, or None for counter-based series"
+    )
+    comicvine_volume_id: int | None = Field(
+        None,
+        description=(
+            "ComicVine volume the existing series is confirmed as, when known. "
+            "For a title-only match this is context, never proof of identity."
+        ),
+    )
+    start_year: int | None = Field(
+        None,
+        description="Confirmed ComicVine publication start year, when known",
+    )
+    match_type: PotentialDuplicateMatchType = Field(
+        ...,
+        description=(
+            "``same_comicvine_volume`` only when canonical provider identity matches; "
+            "``similar_title`` is an uncertain suggestion"
+        ),
+    )
+
+
+class CheckPotentialDuplicatesRequest(BaseModel):
+    """Request to check for possible existing volumes before create or rename."""
+
+    title: str = Field(..., min_length=1, max_length=200, description="Proposed series title")
+    format: str = Field(..., min_length=1, max_length=50, description="Proposed series format")
+    comicvine_volume_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Canonical ComicVine volume ID when the candidate has one",
+    )
+    exclude_thread_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Thread to exclude from results, so a rename never warns about itself",
+    )
+
+
+class CheckPotentialDuplicatesResponse(BaseModel):
+    """Possible existing volumes, strongest match first."""
+
+    matches: list[PotentialDuplicateMatch] = Field(default_factory=list)

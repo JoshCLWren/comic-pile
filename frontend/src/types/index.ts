@@ -77,6 +77,40 @@ export interface ThreadUpdatePayload {
   manual_creator_credits?: ManualCreatorCredit[];
 }
 
+/**
+ * How strongly a possible existing volume resembles the candidate series.
+ *
+ * `same_comicvine_volume` is canonical provider identity; `similar_title` is an
+ * uncertain suggestion that never implies identity.
+ */
+export type PotentialDuplicateMatchType = 'same_comicvine_volume' | 'similar_title';
+
+/** One existing series the Add Series or Edit/Rename forms may be duplicating. */
+export interface PotentialDuplicateMatch {
+  thread_id: number;
+  title: string;
+  format: string;
+  status: string;
+  issues_remaining: number;
+  total_issues: number | null;
+  /** ComicVine volume the existing series is confirmed as, when known. */
+  comicvine_volume_id: number | null;
+  /** Confirmed ComicVine publication start year, when known. */
+  start_year: number | null;
+  match_type: PotentialDuplicateMatchType;
+}
+
+export interface CheckPotentialDuplicatesRequest {
+  title: string;
+  format: string;
+  comicvine_volume_id?: number;
+  exclude_thread_id?: number;
+}
+
+export interface CheckPotentialDuplicatesResponse {
+  matches: PotentialDuplicateMatch[];
+}
+
 export interface MoveToPositionPayload {
   id: number;
   position: number;

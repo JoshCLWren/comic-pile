@@ -193,6 +193,31 @@ export const queryKeys = {
   },
   thread: {
     all: ['thread'] as const,
+    /**
+     * Canonical prefix for advisory possible-existing-volume checks (#3612).
+     *
+     * The prefix is the invalidation boundary: creating, renaming, or deleting
+     * a series changes which existing editions the Add Series and Edit/Rename
+     * forms should warn about.
+     */
+    duplicateChecks: () => ['thread', 'potential-duplicates'] as const,
+    /** One advisory lookup, keyed by the normalized candidate identity. */
+    potentialDuplicates: (params: {
+      title: string
+      format: string
+      comicvine_volume_id?: number
+      exclude_thread_id?: number
+    }) =>
+      [
+        'thread',
+        'potential-duplicates',
+        {
+          title: params.title.trim(),
+          format: params.format.trim(),
+          comicvine_volume_id: params.comicvine_volume_id ?? null,
+          exclude_thread_id: params.exclude_thread_id ?? null,
+        },
+      ] as const,
     list: () => ['thread', 'list'] as const,
     summaries: () => ['thread', 'summary'] as const,
     summary: (threadId: number) => ['thread', 'summary', threadId] as const,

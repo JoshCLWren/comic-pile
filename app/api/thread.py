@@ -17,6 +17,8 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models.user import User
 from app.schemas import (
+    CheckPotentialDuplicatesRequest,
+    CheckPotentialDuplicatesResponse,
     MigrateToIssuesRequest,
     QueueThreadListResponse,
     ReactivateRequest,
@@ -269,6 +271,42 @@ async def list_excluded_threads(
         )
     except ServiceError as exc:
         raise _map_service_error(exc) from exc
+
+
+@v1_router.post("/check-duplicates", response_model=CheckPotentialDuplicatesResponse)
+@limiter.limit("120/minute")
+async def check_potential_duplicates(
+    request: Request,
+    check_data: CheckPotentialDuplicatesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CheckPotentialDuplicatesResponse:
+    """Report the reader's series that may already be this volume (#3612).
+
+    Advisory only. A confirmed ComicVine volume is reported as a strong match;
+    title resemblance is reported as an uncertain suggestion so same-titled
+    volumes remain creatable and renameable. Nothing is written, merged, or
+    deleted by checking.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        check_data: Proposed title, format, optional ComicVine volume, and the
+            thread to exclude when checking a rename.
+        current_user: The authenticated reader.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Possible existing volumes, strongest match first.
+    """
+    matches = await thread_service.find_potential_duplicate_matches(
+        db,
+        current_user.id,
+        title=check_data.title,
+        format_value=check_data.format,
+        comicvine_volume_id=check_data.comicvine_volume_id,
+        exclude_thread_id=check_data.exclude_thread_id,
+    )
+    return CheckPotentialDuplicatesResponse(matches=matches)
 
 
 @router.get("/completed", response_class=HTMLResponse)

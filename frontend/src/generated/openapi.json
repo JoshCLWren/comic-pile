@@ -2798,6 +2798,71 @@
         "title": "CatalogSeriesSearchResponse",
         "type": "object"
       },
+      "CheckPotentialDuplicatesRequest": {
+        "description": "Request to check for possible existing volumes before create or rename.",
+        "properties": {
+          "comicvine_volume_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical ComicVine volume ID when the candidate has one",
+            "title": "Comicvine Volume Id"
+          },
+          "exclude_thread_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Thread to exclude from results, so a rename never warns about itself",
+            "title": "Exclude Thread Id"
+          },
+          "format": {
+            "description": "Proposed series format",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Format",
+            "type": "string"
+          },
+          "title": {
+            "description": "Proposed series title",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "format"
+        ],
+        "title": "CheckPotentialDuplicatesRequest",
+        "type": "object"
+      },
+      "CheckPotentialDuplicatesResponse": {
+        "description": "Possible existing volumes, strongest match first.",
+        "properties": {
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/PotentialDuplicateMatch"
+            },
+            "title": "Matches",
+            "type": "array"
+          }
+        },
+        "title": "CheckPotentialDuplicatesResponse",
+        "type": "object"
+      },
       "CollectionExclusionCreate": {
         "description": "Exactly one target: external volume identity, Thread or Issue.",
         "properties": {
@@ -12372,6 +12437,96 @@
         ],
         "title": "PositionRequest",
         "type": "object"
+      },
+      "PotentialDuplicateMatch": {
+        "description": "One existing series that may already represent the proposed series.\n\nAdvisory only: a title resemblance is never treated as identity, and nothing\nabout an existing series is merged, deleted, or rewritten by producing this\nmatch.",
+        "properties": {
+          "comicvine_volume_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ComicVine volume the existing series is confirmed as, when known. For a title-only match this is context, never proof of identity.",
+            "title": "Comicvine Volume Id"
+          },
+          "format": {
+            "description": "Normalized format of the existing series",
+            "title": "Format",
+            "type": "string"
+          },
+          "issues_remaining": {
+            "description": "Unread issues on the existing series",
+            "minimum": 0.0,
+            "title": "Issues Remaining",
+            "type": "integer"
+          },
+          "match_type": {
+            "$ref": "#/components/schemas/PotentialDuplicateMatchType",
+            "description": "``same_comicvine_volume`` only when canonical provider identity matches; ``similar_title`` is an uncertain suggestion"
+          },
+          "start_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confirmed ComicVine publication start year, when known",
+            "title": "Start Year"
+          },
+          "status": {
+            "description": "Current status of the existing series",
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "description": "Stable ID of the reader's existing thread",
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "title": {
+            "description": "Display title of the existing series",
+            "title": "Title",
+            "type": "string"
+          },
+          "total_issues": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tracked issue total, or None for counter-based series",
+            "title": "Total Issues"
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "status",
+          "issues_remaining",
+          "match_type"
+        ],
+        "title": "PotentialDuplicateMatch",
+        "type": "object"
+      },
+      "PotentialDuplicateMatchType": {
+        "description": "How strongly an existing series resembles the proposed series.",
+        "enum": [
+          "same_comicvine_volume",
+          "similar_title"
+        ],
+        "title": "PotentialDuplicateMatchType",
+        "type": "string"
       },
       "PrerequisiteCreate": {
         "additionalProperties": false,
@@ -33223,6 +33378,54 @@
           }
         ],
         "summary": "List Active Threads",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/check-duplicates": {
+      "post": {
+        "description": "Report the reader's series that may already be this volume (#3612).\n\nAdvisory only. A confirmed ComicVine volume is reported as a strong match;\ntitle resemblance is reported as an uncertain suggestion so same-titled\nvolumes remain creatable and renameable. Nothing is written, merged, or\ndeleted by checking.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    check_data: Proposed title, format, optional ComicVine volume, and the\n        thread to exclude when checking a rename.\n    current_user: The authenticated reader.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Possible existing volumes, strongest match first.",
+        "operationId": "check_potential_duplicates_api_v1_threads_check_duplicates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckPotentialDuplicatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckPotentialDuplicatesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Potential Duplicates",
         "tags": [
           "threads",
           "threads"
