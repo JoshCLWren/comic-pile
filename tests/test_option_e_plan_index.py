@@ -78,7 +78,35 @@ async def test_index_uses_list_mode_membership_and_latest_list_timestamp(
     ])
     await async_db.flush()
 
+    # The second Plan has newer *legacy* Plan metadata, but the first
+    # Plan's List was edited more recently. The index must sort by the
+    # authoritative List timestamp, rather than the legacy Plan timestamp.
+    middle = earlier + timedelta(days=5)
+    other_plan = ContinuityPlan(
+        user_id=owner,
+        name="Older list, newer Plan",
+        ordering_mode="strict_sequential",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[],
+        created_at=earlier,
+        updated_at=middle,
+    )
+    other_list = CustomCBLList(
+        user_id=owner, name="Older list, newer Plan", mode="strict",
+        created_at=earlier, updated_at=middle,
+    )
+    async_db.add_all([other_plan, other_list])
+    await async_db.flush()
+    async_db.add(ReadingPlanSource(
+        plan_id=other_plan.id,
+        raw_source_path=f"custom-cbl:{other_list.id}",
+        custom_cbl_list_id=other_list.id,
+    ))
+    await async_db.flush()
+
     items = await list_continuity_plan_items(async_db, user_id=owner)
+    filtered_ids = [value.id for value in items if value.id in {plan.id, other_plan.id}]
+    assert filtered_ids == [plan.id, other_plan.id]
     item = next(value for value in items if value.id == plan.id)
     assert item.ordering_mode == "informational"
     assert item.step_count == 3
