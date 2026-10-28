@@ -870,6 +870,31 @@ describe('CreatorsPage comparison selection URL contract', () => {
     expect(screen.getByLabelText('Select Fiona Staples for comparison')).not.toBeChecked()
   })
 
+  it('canonicalizes a duplicated selection URL instead of leaving repeated keys in place', async () => {
+    selectionState()
+
+    renderPage(undefined, '/creators?keys=creator:7,creator:7,creator:12,creator:12')
+
+    // The repeat collapses in the durable URL too, so Change selection,
+    // Compare, and a reload all carry the same two identities (#4208).
+    await waitFor(() => expect(currentKeysParam()).toBe('creator:7,creator:12'))
+  })
+
+  it('keeps an off-page selection when a visible checkbox is toggled', () => {
+    mockedHook.mockReturnValue(baseState({ items: [BRIAN, STEVE], total: 3, hasMore: true }))
+
+    renderPage(undefined, '/creators?keys=creator:7,creator:13')
+
+    expect(screen.getByText('1 of 4 selected for comparison')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('Select Brian K. Vaughan for comparison'))
+
+    // creator:13 is on a page that is not loaded yet; toggling a visible row
+    // must not delete it, otherwise the selection is unrecoverable (#4208).
+    expect(currentKeysParam()).toBe('creator:13')
+    expect(screen.queryByText(/selected for comparison/)).not.toBeInTheDocument()
+  })
+
   it('drops malformed keys from the URL while preserving valid selections', async () => {
     selectionState()
 

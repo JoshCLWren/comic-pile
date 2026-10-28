@@ -302,42 +302,43 @@ export default function CreatorsPage() {
     refetch: refetchDiscoveries,
   } = useCreatorDiscoveries(viewMode === 'discover')
 
+  const parsedSelectionKeys = useMemo(
+    () => parseSelectionKeys(searchParams.get('keys')),
+    [searchParams],
+  )
+
   // Selections are validated against the creators actually present in the
   // loaded list, so duplicate or unknown/stale keys cannot inflate the
   // counter or consume selection slots (#4208). The four-creator cap applies
   // to the visible selection only: a key that isn't on the current page never
   // occupies a slot, so an unknown key in the URL can't crowd out a valid one.
   const selectedKeys = useMemo(() => {
-    const parsed = parseSelectionKeys(searchParams.get('keys'))
     const visible = new Set(items.map((item) => item.canonical_creator_key))
     const filtered = new Set<string>()
-    for (const key of parsed) {
+    for (const key of parsedSelectionKeys) {
       if (visible.has(key) && filtered.size < MAX_COMPARISON_SELECTION) {
         filtered.add(key)
       }
     }
     return filtered
-  }, [searchParams, items])
+  }, [parsedSelectionKeys, items])
 
-  // Keep the durable `keys` URL honest: drop keys that fail creator-key syntax,
-  // but never delete a valid selection merely because it isn't on the current
-  // page (a creator on page 2, or one filtered out by search). Valid selections
-  // must survive list changes, so a saved URL can't silently lose them (#4208).
-  // Unknown keys stay in the URL because this page can't confirm they aren't
-  // real creators elsewhere in the list; they never occupy a selection slot
-  // since the cap above applies only to visible creators.
+  // Keep the durable `keys` URL canonical: collapse repeated identities, trim
+  // stray whitespace, and drop keys that fail creator-key syntax. A valid key is
+  // never deleted merely because its row is not on the loaded page (a creator on
+  // page 2, or one filtered out by search), so a saved selection survives list
+  // changes, a reload, and a Back/forward round trip (#4208). Unknown but
+  // well-formed keys also stay in the URL because this page cannot confirm they
+  // are not real creators elsewhere in the list; they never occupy a selection
+  // slot because the cap above applies to visible creators only.
   useEffect(() => {
     const rawKeys = searchParams.get('keys')
     if (!rawKeys) return
-    const raw = new Set<string>()
-    for (const candidate of rawKeys.split(',')) {
-      const key = candidate.trim()
-      if (key) raw.add(key)
-    }
     const valid = parseSelectionKeys(rawKeys)
-    const rawKey = Array.from(raw).sort().join(',')
-    const cleanedKey = Array.from(valid).sort().join(',')
-    if (rawKey !== cleanedKey) {
+    const canonical = Array.from(valid).join(',')
+    // Compare the serialized form (not a sorted set) so the rewrite happens once
+    // and lands on exactly the value `updateSelectionUrl` would write back.
+    if (rawKeys !== canonical) {
       updateSelectionUrl(valid)
     }
   }, [searchParams, updateSelectionUrl])
@@ -350,11 +351,14 @@ export default function CreatorsPage() {
   const canCompare = selectionCount >= 2
 
   const handleToggleSelection = (key: string) => {
-    const next = new Set(selectedKeys)
+    // Start from every key the URL carries, not just the visible rows, so
+    // toggling one checkbox never silently drops a valid selection whose row is
+    // on another page or filtered out by the current search (#4208).
+    const next = new Set(parsedSelectionKeys)
     if (next.has(key)) {
       // Selected checkboxes always stay enabled so one creator can be dropped.
       next.delete(key)
-    } else if (next.size < MAX_COMPARISON_SELECTION) {
+    } else if (selectedKeys.size < MAX_COMPARISON_SELECTION) {
       next.add(key)
     } else {
       return

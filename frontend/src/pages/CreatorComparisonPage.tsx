@@ -611,7 +611,7 @@ export default function CreatorComparisonPage() {
             </Link>
             {keys.length > 0 && (
               <Link
-                to={`/creators?keys=${encodeURIComponent(uniqueKeys.join(','))}`}
+                to={creatorsReturnUrl}
                 className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                 style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
               >
@@ -631,8 +631,8 @@ export default function CreatorComparisonPage() {
         <h1 className="mt-1 text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
-<div className={`mt-6 grid gap-6 ${comparisonGridClasses(keys.length)}`}>
-          {[0, 1, 2, 3].slice(0, keys.length).map((i) => (
+<div className={`mt-6 grid gap-6 ${comparisonGridClasses(uniqueKeys.length)}`}>
+          {[0, 1, 2, 3].slice(0, uniqueKeys.length).map((i) => (
             <div key={i} className="h-72 animate-pulse rounded-2xl" style={{ backgroundColor: 'var(--theme-bg-panel)' }} />
           ))}
         </div>
@@ -674,7 +674,7 @@ export default function CreatorComparisonPage() {
           </Link>
           {keys.length > 0 && (
             <Link
-              to={`/creators?keys=${encodeURIComponent(uniqueKeys.join(','))}`}
+              to={creatorsReturnUrl}
               className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
             >
@@ -697,21 +697,18 @@ export default function CreatorComparisonPage() {
   )
 
   const resolvedKeys = new Set(Object.keys(data.comparisons))
-  const missingRequestedCount = uniqueKeys.filter((k: string) => !resolvedKeys.has(k)).length
-  const hasMixedResult = missingRequestedCount > 0 && comparisonItems.length > 0
-
   // Keys that did not resolve to a visible creator, so feedback can name them
   // instead of silently dropping them (#4208).
   const missingKeys = uniqueKeys.filter((k: string) => !resolvedKeys.has(k))
+  const hasMixedResult = missingKeys.length > 0 && comparisonItems.length > 0
 
-  // Build the change selection URL with the currently resolved creator keys
-  const changeSelectionKeys = Array.from(resolvedKeys).join(',')
-  const changeSelectionUrl = `/creators?keys=${encodeURIComponent(changeSelectionKeys)}`
-
-  // Refined return URL: prefer the keys that actually resolved, so unknown or
-  // unavailable identities do not leak back into the selection URL (#4208).
+  // Every route back to the list once the comparison has resolved carries only
+  // the identities that actually resolved, so unknown or unavailable keys are
+  // dropped instead of being handed straight back to the selection URL (#4208).
+  // Before resolution (invalid input or a failed request) the deduped request
+  // set is the best available answer.
   const resolvedReturnUrl =
-    Array.from(resolvedKeys).length > 0
+    resolvedKeys.size > 0
       ? `/creators?keys=${encodeURIComponent(Array.from(resolvedKeys).join(','))}`
       : creatorsReturnUrl
 
@@ -728,7 +725,7 @@ export default function CreatorComparisonPage() {
           </p>
           {comparisonItems.length > 0 && (
             <Link
-              to={changeSelectionUrl}
+              to={resolvedReturnUrl}
               className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
             >
@@ -751,11 +748,9 @@ export default function CreatorComparisonPage() {
             <strong>Note:</strong> One or more requested creators could not be included in this comparison.
             The comparison reflects only the creators available in your library.
           </p>
-          {missingKeys.length > 0 && (
-            <p className="mt-1 text-sm" style={{ color: 'var(--theme-text-primary)' }}>
-              Unknown or unavailable creator keys: {missingKeys.join(', ')}.
-            </p>
-          )}
+          <p className="mt-1 text-sm" style={{ color: 'var(--theme-text-primary)' }}>
+            Unknown or unavailable creator keys: {missingKeys.join(', ')}.
+          </p>
         </div>
       )}
 
@@ -813,9 +808,14 @@ export default function CreatorComparisonPage() {
             None of the selected creators are available in your library — the comparison can
             only include creators with issues credited to them in your library.
           </p>
+          {missingKeys.length > 0 && (
+            <p className="mt-1 text-sm" style={{ color: 'var(--theme-text-primary)' }}>
+              Unknown or unavailable creator keys: {missingKeys.join(', ')}.
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap gap-2">
             <Link
-              to={creatorsReturnUrl}
+              to={resolvedReturnUrl}
               className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               style={{ color: 'var(--theme-text-muted)' }}
             >
@@ -823,7 +823,7 @@ export default function CreatorComparisonPage() {
             </Link>
             {keys.length > 0 && (
               <Link
-                to={`/creators?keys=${encodeURIComponent(uniqueKeys.join(','))}`}
+                to={resolvedReturnUrl}
                 className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                 style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
               >
