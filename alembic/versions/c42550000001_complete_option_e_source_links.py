@@ -80,13 +80,13 @@ def upgrade() -> None:
             name = f"{plan_name} [Plan {plan_id}]" if clash else plan_name
             mode = "strict" if ordering_mode == "strict_sequential" else "loose"
             list_id = db.execute(text(
-                "INSERT INTO custom_cbl_lists (user_id,name,mode) "
-                "VALUES (:u,:n,:m) RETURNING id"
+                "INSERT INTO custom_cbl_lists (user_id,name,mode,created_at,updated_at) "
+                "VALUES (:u,:n,:m,now(),now()) RETURNING id"
             ), {"u": user_id, "n": name, "m": mode}).scalar_one()
             db.execute(text(
                 "INSERT INTO custom_cbl_entries "
-                "(list_id,issue_id,position,gate,skipped,is_checkpoint) "
-                "SELECT :l, ranked.issue_id, ranked.idx,'none',false,ranked.is_checkpoint "
+                "(list_id,issue_id,position,gate,skipped,is_checkpoint,created_at) "
+                "SELECT :l, ranked.issue_id, ranked.idx,'none',false,ranked.is_checkpoint,now() "
                 "FROM (SELECT issue_id,is_checkpoint,"
                 " row_number() OVER (ORDER BY display_position,occurrence_id)-1 AS idx "
                 " FROM reading_plan_issues WHERE plan_id=:p) ranked"
@@ -94,8 +94,8 @@ def upgrade() -> None:
 
         db.execute(text(
             "INSERT INTO reading_plan_sources "
-            "(plan_id,raw_source_path,custom_cbl_list_id) "
-            "VALUES (:p,:path,:l)"
+            "(plan_id,raw_source_path,custom_cbl_list_id,recorded_at) "
+            "VALUES (:p,:path,:l,now())"
         ), {"p": plan_id, "l": list_id, "path": f"custom-cbl:{list_id}"})
 
     # Verify every Plan now resolves to exactly one owned List, including
