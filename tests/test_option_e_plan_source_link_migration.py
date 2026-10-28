@@ -74,10 +74,25 @@ async def test_option_e_backfill_reuses_audited_planetary_and_preserves_other_pl
         ]
         for statement in seeds:
             conn.execute(text(statement))
+        plan_rows_before = conn.execute(text("""
+            SELECT issue_id,display_position,occurrence_id,lane_id
+            FROM reading_plan_issues WHERE plan_id=29 ORDER BY display_position
+        """)).all()
         with Operations.context(MigrationContext.configure(conn)):
             module.upgrade()
             # Replay must be safe and must not create additional Lists.
             module.upgrade()
+        # The audited link is additive: historical Plan membership and order
+        # stay exactly as imported instead of being copied from the List.
+        assert conn.execute(text("""
+            SELECT issue_id,display_position,occurrence_id,lane_id
+            FROM reading_plan_issues WHERE plan_id=29 ORDER BY display_position
+        """)).all() == plan_rows_before
+        assert len(plan_rows_before) == 144
+        assert conn.execute(text("""
+            SELECT count(*) FROM reading_plan_sources
+            WHERE plan_id=29 AND custom_cbl_list_id IS NULL
+        """)).scalar_one() == 1
         rows = conn.execute(text("""
             SELECT p.id, s.custom_cbl_list_id
             FROM continuity_plans p

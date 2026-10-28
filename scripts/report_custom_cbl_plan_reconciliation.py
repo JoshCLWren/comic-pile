@@ -18,11 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models.continuity_plan import ContinuityPlan
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
+from app.models.issue import Issue
 from app.models.reading_plan_membership import (
     ReadingPlanIssue,
     ReadingPlanSource,
     ReadingPlanSourcePlacement,
 )
+from app.models.thread import Thread
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,7 @@ class Snapshot:
     memberships: Sequence[ReadingPlanIssue]
     sources: Sequence[ReadingPlanSource]
     placements: Sequence[ReadingPlanSourcePlacement] = field(default_factory=tuple)
+    issues: Sequence[Issue] = field(default_factory=tuple)
 
 
 def _entry_evidence(row: CustomCBLEntry) -> dict[str, object]:
@@ -164,6 +167,20 @@ def _plan_node_evidence(
     }
 
 
+def _first_unread_position(
+    entries: Sequence[CustomCBLEntry], status_by_issue: dict[int, str]
+) -> int | None:
+    """Return the first unread, unskipped List position without mutating it."""
+    if not status_by_issue:
+        return None
+    for entry in entries:
+        if entry.skipped:
+            continue
+        if status_by_issue.get(entry.issue_id) != "read":
+            return entry.position
+    return None
+
+
 async def load_snapshot(db: AsyncSession, user_id: int) -> Snapshot:
     """Read a user's lists and plans without writing or loading other users' content."""
     lists = (await db.scalars(select(CustomCBLList).where(CustomCBLList.user_id == user_id))).all()
@@ -204,7 +221,14 @@ async def load_snapshot(db: AsyncSession, user_id: int) -> Snapshot:
         if plan_ids
         else []
     )
-    return Snapshot(lists, entries, plans, memberships, sources, placements)
+    issues = (
+        await db.scalars(
+            select(Issue)
+            .join(Thread, Thread.id == Issue.thread_id)
+            .where(Thread.user_id == user_id)
+        )
+    ).all()
+    return Snapshot(lists, entries, plans, memberships, sources, placements, issues)
 
 
 def reconcile(snapshot: Snapshot, user_id: int) -> dict[str, object]:
@@ -224,6 +248,7 @@ def reconcile(snapshot: Snapshot, user_id: int) -> dict[str, object]:
     lists = {row.id: row for row in snapshot.lists}
     owned_list_ids = set(lists)
     plans = {row.id: row for row in snapshot.plans}
+    status_by_issue = {row.id: row.status for row in snapshot.issues}
     links: dict[int, set[int]] = defaultdict(set)
     lists_by_plan: dict[int, set[int]] = defaultdict(set)
     for source in snapshot.sources:
@@ -243,6 +268,7 @@ def reconcile(snapshot: Snapshot, user_id: int) -> dict[str, object]:
                     "list_mode": custom_list.mode,
                     "status": "unpaired_list",
                     "list_count": len(left),
+                    "first_unread_position": _first_unread_position(left, status_by_issue),
                     "entries": [_entry_evidence(row) for row in left],
                     "anomalies": ["unclassified_list_checkpoint_evidence"]
                     if any(row.is_checkpoint or row.checkpoint_target_issue_ids for row in left)
@@ -275,6 +301,7 @@ def reconcile(snapshot: Snapshot, user_id: int) -> dict[str, object]:
                         "status": "ambiguous_link",
                         "resolution": "unresolved",
                         "list_count": len(left),
+                        "first_unread_position": _first_unread_position(left, status_by_issue),
                         "plan_count": len(right),
                         "linked_list_ids": sorted(lists_by_plan[plan_id]),
                         "linked_plan_ids": pair_ids,
@@ -442,6 +469,8 @@ def reconcile(snapshot: Snapshot, user_id: int) -> dict[str, object]:
                     "plan_name": plan.name,
                     "status": "paired",
                     "list_count": len(left),
+                    "first_unread_position": _first_unread_position(left, status_by_issue),
+                    "durable_list_link_ids": sorted(lists_by_plan[plan_id]),
                     "plan_count": len(right),
                     "plan_issues": [
                         {
@@ -565,6 +594,7 @@ def reconcile(snapshot: Snapshot, user_id: int) -> dict[str, object]:
                 "plan_id": plan_id,
                 "plan_name": plan.name,
                 "plan_count": len(issues),
+                "durable_list_link_ids": sorted(lists_by_plan[plan_id]),
                 "issues": evidence,
                 "sources": sources,
                 "source_placements": [
@@ -650,6 +680,8 @@ def main() -> None:
                 f"{row['list_count']} entries; anomalies={row.get('anomalies', [])}"
             )
             for key in (
+                "first_unread_position",
+                "durable_list_link_ids",
                 "list_only",
                 "plan_only",
                 "position_conflicts",

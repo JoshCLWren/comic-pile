@@ -11,6 +11,7 @@ import pytest
 
 from app.models.continuity_plan import ContinuityPlan
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
+from app.models.issue import Issue
 from app.models.reading_plan_membership import (
     ReadingPlanIssue,
     ReadingPlanSource,
@@ -558,8 +559,31 @@ def test_snapshot_queries_are_user_scoped_selects() -> None:
     snapshot = asyncio.run(load_snapshot(db, 9))
     assert snapshot.lists == [] and snapshot.plans == []
     queries = [str(call.args[0]) for call in db.scalars.call_args_list]
-    assert len(queries) == 2
+    assert len(queries) == 3
     assert all(query.startswith("SELECT ") and "user_id" in query for query in queries)
+
+
+def test_first_unread_position_skips_read_and_skipped_entries() -> None:
+    """The census frontier matches unread/unskipped List entries, not raw order."""
+    owner = 9
+    custom_list = CustomCBLList(id=1, user_id=owner, name="Frontier")
+    plan = ContinuityPlan(id=2, user_id=owner, name="Frontier", nodes_json=[])
+    entries = [
+        CustomCBLEntry(id=1, list_id=1, issue_id=10, position=0, skipped=True),
+        CustomCBLEntry(id=2, list_id=1, issue_id=11, position=1, skipped=False),
+        CustomCBLEntry(id=3, list_id=1, issue_id=12, position=2, skipped=False),
+    ]
+    issues = [
+        Issue(id=10, thread_id=1, issue_number="1", position=1, status="unread"),
+        Issue(id=11, thread_id=1, issue_number="2", position=2, status="read"),
+        Issue(id=12, thread_id=1, issue_number="3", position=3, status="unread"),
+    ]
+    source = ReadingPlanSource(id=3, plan_id=2, custom_cbl_list_id=1)
+    rows = reconcile(
+        Snapshot([custom_list], entries, [plan], [], [source], issues=issues), owner
+    )["lists"]
+    assert isinstance(rows, list) and isinstance(rows[0], dict)
+    assert rows[0]["first_unread_position"] == 2
 
 
 def test_unpaired_plan_preserves_all_evidence() -> None:
@@ -593,6 +617,7 @@ def test_unpaired_plan_preserves_all_evidence() -> None:
     assert isinstance(rows, list) and isinstance(rows[0], dict)
     row = rows[0]
     assert row["plan_nodes"] == plan.nodes_json
+    assert row["durable_list_link_ids"] == []
     assert row["issues"] == [
         {
             "issue_id": 10,
