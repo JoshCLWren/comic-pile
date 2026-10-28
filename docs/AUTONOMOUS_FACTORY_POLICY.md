@@ -321,6 +321,7 @@ Rules:
 - A push invalidates `factory:ci` and `factory:ready`; transition the exact new head back to `factory:review` unless review findings already require `factory:changes-requested`.
 - Cross-worker takeover and merge are allowed. The new worker replaces the owner label and may merge work it did not author after every exact-head gate passes.
 - If `gh pr edit` fails because of deprecated Projects Classic GraphQL fields, use the issue-compatible REST label-replacement endpoint with the complete target label set. A POST that only adds labels, or sequential DELETE/POST calls, is not atomic reconciliation.
+- Derived observability labels (currently `factory:merge-conflict`, from GitHub mergeability) are projections, never stages. They never satisfy the workflow-state or owner requirement and never enter `STAGE_LABELS`, stage precedence, `BLOCKED_LABELS`, or queue selection. There is no `factory:approved` label.
 - Before ending any turn, compare the issue, PR, review, CI, lease, and merge state and repair any metadata contradiction discovered.
 
 ## Repository safety

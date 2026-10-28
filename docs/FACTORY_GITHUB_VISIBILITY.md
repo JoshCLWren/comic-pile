@@ -27,6 +27,32 @@ stale owner and stage labels, and apply the single truthful owner and stage in o
 replacement. Sequential remove/add calls and add-only POST requests are not reconciliation because
 other workers can observe contradictory intermediate state.
 
+### Derived observability labels
+
+`factory:merge-conflict` is derived, not authored. The reconciler adds it when GitHub
+reports the exact pull-request head as merge-conflicted (`mergeable` false /
+`CONFLICTING`, or merge state `dirty`/`DIRTY`) and removes it once GitHub reports a
+resolved mergeability. Unresolved mergeability (`null`/`UNKNOWN`, which GitHub returns
+briefly while recomputing after a push) leaves the current label untouched so the
+reconciler never guesses; the next scheduled sweep settles it, which also catches a
+conflict that develops only because the base branch moved. It is maintained for the
+same non-draft factory-managed pull requests the enrollment sweep manages, so
+manual-only and blocked operator holds are never relabeled.
+
+It is observability, not workflow state:
+
+- it is never a stage, so it stays out of `STAGE_LABELS`, stage precedence,
+  `BLOCKED_LABELS`, and queue/claim selection;
+- it never blocks or promotes review, CI, readiness, merge drains, or lease
+  transitions, and it cannot make a PR selectable or unselectable;
+- queue eligibility continues to read GitHub mergeability directly, so the label
+  cannot drift into merge authority;
+- the status dashboard counts it in the PR pipeline "Conflict" tile while keeping
+  it out of its stage list.
+
+There is no `factory:approved` label; controller-authored exact-head markers remain
+the only readiness authority.
+
 The labels are synchronized automatically from existing factory claim, progress, review, ready, release, and needs-human markers. Pull requests on `factory/*` branches are also recognized automatically. A linked issue claim supplies the initial pull-request owner when the branch name starts with `factory/<issue-number>-...`.
 
 Only marker comments from the repository owner, members, or collaborators are trusted. Formal review transitions are accepted from trusted collaborators and CodeRabbit. Public commenters and untrusted fork branches cannot spoof factory ownership or stage labels.
