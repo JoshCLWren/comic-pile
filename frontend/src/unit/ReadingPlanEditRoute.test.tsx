@@ -76,6 +76,13 @@ describe('ReadingPlanEditRoute', () => {
     expect(await screen.findByText('Legacy Plan editor')).toBeInTheDocument()
   })
 
+  it('fails closed when the reader omits its execution mode', async () => {
+    getReader.mockResolvedValue(cast<ReadingPlanReaderView>({ sources: [] }))
+    renderEditRoute()
+    expect(await screen.findByText(/execution mode could not be verified/)).toBeInTheDocument()
+    expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
+  })
+
   it('does not guess authority by name when an Option E List is not owner-resolved', async () => {
     getReader.mockResolvedValue(response('option_e', [
       { raw_source_path: 'custom-cbl:1000018', display_name: null },
