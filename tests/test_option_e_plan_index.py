@@ -162,3 +162,45 @@ async def test_option_e_index_rejects_ambiguous_plan_authority(
     with pytest.raises(HTTPException) as exc:
         await list_continuity_plan_items(async_db, user_id=owner)
     assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_option_e_index_never_accepts_foreign_list_authority(
+    async_db: AsyncSession, default_user: User, option_e: None,
+) -> None:
+    """A cross-owner List link must not authorize or disclose the foreign List."""
+    foreign_owner = User(username="option-e-foreign-authority-owner")
+    async_db.add(foreign_owner)
+    await async_db.flush()
+    now = datetime.now(UTC)
+    plan = ContinuityPlan(
+        user_id=default_user.id,
+        name="Owner's Plan",
+        ordering_mode="strict_sequential",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[],
+        created_at=now,
+        updated_at=now,
+    )
+    foreign_list = CustomCBLList(
+        user_id=foreign_owner.id,
+        name="Private foreign reading order",
+        mode="strict",
+        created_at=now,
+        updated_at=now,
+    )
+    async_db.add_all([plan, foreign_list])
+    await async_db.flush()
+    async_db.add(
+        ReadingPlanSource(
+            plan_id=plan.id,
+            raw_source_path=f"custom-cbl:{foreign_list.id}",
+            custom_cbl_list_id=foreign_list.id,
+        )
+    )
+    await async_db.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        await list_continuity_plan_items(async_db, user_id=default_user.id)
+    assert exc.value.status_code == 409
+    assert "Private foreign reading order" not in str(exc.value.detail)
