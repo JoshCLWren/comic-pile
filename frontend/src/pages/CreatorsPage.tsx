@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
@@ -260,11 +260,6 @@ export default function CreatorsPage() {
   // Deriving instead of mirroring in state keeps the URL authoritative and
   // avoids a restore effect that could overwrite a reader's toggle with a
   // stale URL snapshot.
-  const selectedKeys = useMemo(
-    () => parseSelectionKeys(searchParams.get('keys')),
-    [searchParams],
-  )
-
   // Rewrite only the `keys` parameter so any other context on the URL survives.
   const updateSelectionUrl = useCallback(
     (keys: Set<string>) => {
@@ -307,6 +302,37 @@ export default function CreatorsPage() {
     isError: discoveriesError,
     refetch: refetchDiscoveries,
   } = useCreatorDiscoveries(viewMode === 'discover')
+
+  // Selections are validated against the creators actually present in the
+  // loaded list, so duplicate or unknown/stale keys cannot inflate the
+  // counter or consume selection slots (#4208).
+  const selectedKeys = useMemo(() => {
+    const parsed = parseSelectionKeys(searchParams.get('keys'))
+    if (items.length === 0) return new Set<string>()
+    const visible = new Set(items.map((item) => item.canonical_creator_key))
+    const filtered = new Set<string>()
+    for (const key of parsed) {
+      if (visible.has(key)) filtered.add(key)
+    }
+    return filtered
+  }, [searchParams, items])
+
+  // Drop unknown/stale/duplicate keys from the URL once the list has loaded, so
+  // the durable selection only carries real, visible creators (#4208).
+  useEffect(() => {
+    if (items.length === 0) return
+    const raw = parseSelectionKeys(searchParams.get('keys'))
+    const visible = new Set(items.map((item) => item.canonical_creator_key))
+    const cleaned = new Set<string>()
+    for (const key of raw) {
+      if (visible.has(key)) cleaned.add(key)
+    }
+    const rawKey = Array.from(raw).sort().join(',')
+    const cleanedKey = Array.from(cleaned).sort().join(',')
+    if (rawKey !== cleanedKey) {
+      updateSelectionUrl(cleaned)
+    }
+  }, [items, searchParams, updateSelectionUrl])
 
   const hasItems = items.length > 0
   const ratingsPartial = coverage != null && !coverage.ratings_complete
