@@ -550,7 +550,7 @@ async def test_option_e_reader_uses_owned_list_order_and_membership_not_legacy_p
             f"/api/v1/continuity-plans/{plan_id}/reader"
         )
         list_response = await auth_client.get(
-            f"/api/v1/custom-cbl/{reading_list.id}/reader"
+            f"/api/v1/custom-cbls/{reading_list.id}/reader"
         )
         assert plan_response.status_code == 200, plan_response.text
         assert list_response.status_code == 200, list_response.text
