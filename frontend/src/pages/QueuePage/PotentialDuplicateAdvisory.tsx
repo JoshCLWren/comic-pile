@@ -82,7 +82,7 @@ export function PotentialDuplicateAdvisory({
         <button
           type="button"
           onClick={() => setDismissedKey(advisoryKey)}
-          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 py-1 text-xs font-bold text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)] transition-colors"
+          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 py-1 text-xs font-bold text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-panel)] hover:text-[var(--theme-text-primary)] transition-colors"
           aria-label="Dismiss possible existing series warning"
         >
           Dismiss
