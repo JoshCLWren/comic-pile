@@ -41,6 +41,7 @@ function createMockResponse() {
     json: (body: any) => { calls.json.push(body); res._json = body; return res; },
     end: () => {},
   };
+  res._status = 200; // default like browser
   res._calls = calls;
   return res;
 }
