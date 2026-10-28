@@ -69,9 +69,10 @@ describe('queryClient defaults', () => {
   it('bounds repeated transient failures with one shared outage probe', () => {
     // First failure schedules an ordinary retry; the second recognizes the
     // shared outage and becomes the single probe; the third is suppressed.
+    expect(queryRetryDelay(0)).toBe(QUERY_OUTAGE_BUDGET.retryBaseDelayMs)
     expect(queryRetryPolicy(0, responseError(503))).toBe(true)
-    expect(queryRetryPolicy(1, responseError(503))).toBe(true)
     expect(queryRetryDelay(1)).toBe(QUERY_OUTAGE_BUDGET.probeRetryDelayMs)
+    expect(queryRetryPolicy(1, responseError(503))).toBe(true)
     expect(queryRetryPolicy(2, responseError(503))).toBe(false)
     expect(getQueryRetryBudgetSnapshot()).toMatchObject({
       outageActive: true,
