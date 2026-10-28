@@ -58,8 +58,8 @@ describe('queryClient defaults', () => {
   })
 
   it('retries a single transient failure and recovers without declaring an outage', () => {
-    expect(queryRetryPolicy(0, responseError(503))).toBe(true)
     expect(queryRetryDelay(0)).toBe(QUERY_OUTAGE_BUDGET.retryBaseDelayMs)
+    expect(queryRetryPolicy(0, responseError(503))).toBe(true)
     expect(getQueryRetryBudgetSnapshot()).toMatchObject({
       outageActive: false,
       recentTransientFailures: 1,
