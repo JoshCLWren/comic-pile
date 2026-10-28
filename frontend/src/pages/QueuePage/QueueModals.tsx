@@ -359,6 +359,19 @@ export function QueueModals({
   const createTitleError = !isTitleValid(createForm.title)
   const editTitleError = !isTitleValid(editForm.title)
 
+  // "Issues already read" accepts a whole count from zero through the parsed
+  // issue total. Fractional or out-of-range entries report inline and keep
+  // Create Series disabled instead of being silently clamped (#4181).
+  const lastReadValue = createForm.lastIssueRead
+  const lastReadCount =
+    Number.isInteger(lastReadValue) && lastReadValue >= 0 ? lastReadValue : null
+  const lastReadError =
+    lastReadCount === null
+      ? 'Issues already read must be a whole number of 0 or more.'
+      : issuePreview !== null && lastReadCount > issuePreview
+        ? `Issues already read cannot be more than the ${issuePreview} issues listed above.`
+        : null
+
   return (
     <>
       <Modal isOpen={openModal === 'create'} title="Add Series" onClose={onCloseCreate}>
@@ -484,25 +497,46 @@ export function QueueModals({
               id="create-thread-last-read"
               type="number"
               min="0"
+              step="1"
               max={issuePreview ?? undefined}
-              value={createForm.lastIssueRead}
+              value={Number.isFinite(createForm.lastIssueRead) ? createForm.lastIssueRead : ''}
               onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const value = Number.parseInt(event.target.value, 10) || 0
-                const clampedValue = issuePreview !== null ? Math.min(value, issuePreview) : value
+                // Keep the typed value verbatim so an out-of-range or
+                // fractional entry can report itself instead of being silently
+                // clamped to the nearest accepted count (#4181).
+                const rawValue = event.target.value
                 setCreateForm({
                   ...createForm,
-                  lastIssueRead: clampedValue,
+                  lastIssueRead: rawValue === '' ? 0 : Number(rawValue),
                 })
               }}
-              className="w-full rounded-xl px-3 py-2 text-sm form-control"
+              aria-invalid={lastReadError !== null}
+              aria-describedby={
+                lastReadError !== null ? 'create-thread-last-read-error' : undefined
+              }
+              className={`w-full rounded-xl px-3 py-2 text-sm form-control ${
+                lastReadError !== null
+                  ? 'border-[var(--theme-danger)] focus:border-[var(--theme-focus-ring)] focus:ring-[var(--theme-focus-ring)]/20'
+                  : ''
+              }`}
             />
-            <p className="text-xs text-stone-400">
-              Enter a count from the issue list above, not an issue number.
-            </p>
-            {createForm.lastIssueRead > 0 && issuePreview !== null && (
+            {lastReadError !== null ? (
+              <p
+                id="create-thread-last-read-error"
+                className="text-xs text-[var(--theme-danger)]"
+                role="alert"
+              >
+                {lastReadError}
+              </p>
+            ) : (
               <p className="text-xs text-stone-400">
-                First {Math.min(createForm.lastIssueRead, issuePreview)} issues (in creation order)
-                of {issuePreview} will be marked as read
+                Enter a count from the issue list above, not an issue number.
+              </p>
+            )}
+            {lastReadError === null && createForm.lastIssueRead > 0 && issuePreview !== null && (
+              <p className="text-xs text-stone-400">
+                First {createForm.lastIssueRead} issues (in creation order) of {issuePreview} will
+                be marked as read
               </p>
             )}
           </div>
@@ -536,7 +570,9 @@ export function QueueModals({
           )}
           <button
             type="submit"
-            disabled={isPendingCreate || issueParseError !== null || createTitleError}
+            disabled={
+              isPendingCreate || issueParseError !== null || createTitleError || lastReadError !== null
+            }
             className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {isPendingCreate ? 'Adding...' : 'Create Series'}

@@ -10,6 +10,11 @@ export function useThread(id?: number | null) {
     queryKey: id ? queryKeys.thread.detail(id) : [],
     queryFn: () => threadsApi.get(id!),
     enabled: !!id,
+    // A confirmed edit, rating, or completion in another tab must not leave an
+    // open thread page showing a stale title, progress, or availability
+    // (#4181 / MQA-QUEUE-010). The app disables focus refetch globally, so this
+    // page opts back in and always refreshes when the reader returns to it.
+    refetchOnWindowFocus: 'always',
     // SAFETY: null is the intentional initialData placeholder while the thread
     // query is loading; `initialDataUpdatedAt: 0` forces the initial fetch even
     // under the app's 30s staleTime so a fresh thread always loads on mount.

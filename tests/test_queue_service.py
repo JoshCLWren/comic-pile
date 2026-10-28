@@ -74,6 +74,12 @@ async def _patch_service_boundaries(
     mutation = AsyncMock(return_value={})
     monkeypatch.setattr(queue_service, "_move_to_position", mutation)
 
+    # The service compares the requested ordinal with the displayed Queue rank
+    # (a blocked series displays after every readable one), so the display
+    # lookup is stubbed from the fake thread's raw position (#4181).
+    display = AsyncMock(side_effect=lambda _db, fake_thread: fake_thread.queue_position)
+    monkeypatch.setattr(queue_service, "display_position", display)
+
     to_response = AsyncMock(return_value={"id": thread.id if thread else None})
     monkeypatch.setattr(queue_service, "thread_to_response", to_response)
 

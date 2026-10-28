@@ -123,7 +123,8 @@ export default function QueuePage() {
   const modals = useQueueModalsHook({
     threads,
     onCreated: rollNudge.onCreated,
-    onUpdated: async () => {},
+    // Refetch so a confirmed edit (e.g. a completed series) reconciles the Queue now (#4181).
+    onUpdated: queueLoader.refetch,
     onReactivated: async () => {},
     refetchSession: async () => {
       await refetchSession()

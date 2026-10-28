@@ -138,6 +138,12 @@ export async function invalidateAfterIssueEdit(
     client.invalidateQueries({
       queryKey: queryKeys.queue.pages(),
     }),
+    // Marking issues read (including the last unread issue) changes the
+    // reader's canonical availability answer, so the "Next issue availability"
+    // explanation has to stop serving the pre-edit text (#4181).
+    client.invalidateQueries({
+      queryKey: queryKeys.dependencies.all,
+    }),
   ])
 }
 
