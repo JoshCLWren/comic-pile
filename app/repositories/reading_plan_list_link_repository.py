@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.continuity_plan import ContinuityPlan
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.reading_plan_membership import ReadingPlanIssue, ReadingPlanSource
+from app.models.reading_order import ReadingOrderItem
+from app.models.issue import Issue
+from app.models.thread import Thread
 
 
 async def linked_list_ids(db: AsyncSession, *, plan_id: int) -> set[int]:
@@ -29,9 +32,24 @@ async def plan_member_rows(
     )).all())
 
 
+async def adopted_order_issue_ids(
+    db: AsyncSession, *, user_id: int, reading_order_id: int,
+) -> list[int]:
+    """Expand owned ordered Threads into their complete physical Issue order."""
+    rows = await db.scalars(
+        select(Issue.id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .join(ReadingOrderItem, ReadingOrderItem.thread_id == Thread.id)
+        .where(ReadingOrderItem.reading_order_id == reading_order_id, Thread.user_id == user_id)
+        .order_by(ReadingOrderItem.position, ReadingOrderItem.id, Issue.position, Issue.id)
+    )
+    return list(rows.all())
+
+
 async def create_owned_plan_list(
     db: AsyncSession, *, plan: ContinuityPlan, user_id: int,
     rows: list[ReadingPlanIssue],
+    adopted_issue_ids: list[int] | None = None,
 ) -> int:
     """Write List, issue entries and source atomically in the caller transaction."""
     reading_list = CustomCBLList(
@@ -41,16 +59,21 @@ async def create_owned_plan_list(
     )
     db.add(reading_list)
     await db.flush()
+    membership = (
+        [(issue_id, False) for issue_id in adopted_issue_ids]
+        if adopted_issue_ids is not None
+        else [(row.issue_id, row.is_checkpoint) for row in rows]
+    )
     db.add_all([
         CustomCBLEntry(
             list_id=reading_list.id,
-            issue_id=row.issue_id,
+            issue_id=issue_id,
             position=index,
             gate="none",
             skipped=False,
-            is_checkpoint=row.is_checkpoint,
+            is_checkpoint=checkpoint,
         )
-        for index, row in enumerate(rows)
+        for index, (issue_id, checkpoint) in enumerate(membership)
     ])
     db.add(ReadingPlanSource(
         plan_id=plan.id,
