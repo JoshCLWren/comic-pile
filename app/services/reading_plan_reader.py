@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from comic_pile.dependencies import build_blocking_explanation
 from app.services.reading_plan_source_labels import load_reading_plan_source_names
+from app.services.reading_list_reader import get_reading_list_reader
 from app.repositories import continuity_repository, reading_plan_repository
 from app.services import reading_plan_release_source_service as release_source_service
 from app.services.reading_eligibility_service import (
