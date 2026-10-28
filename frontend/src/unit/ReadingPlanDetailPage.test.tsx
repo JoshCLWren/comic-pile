@@ -242,7 +242,9 @@ describe('ReadingPlanDetailPage', () => {
       sources: [{ ...readerView.sources[0], raw_source_path: 'custom-cbl:9999', display_name: null }],
     })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit plan' }))
+    const unresolvedEdit = await screen.findByRole('button', { name: 'Edit plan' })
+    await waitFor(() => expect(unresolvedEdit).toBeEnabled())
+    fireEvent.click(unresolvedEdit)
     expect(screen.getByText('Editor')).toBeInTheDocument()
     expect(screen.queryByText('Reading List editor')).not.toBeInTheDocument()
   })
