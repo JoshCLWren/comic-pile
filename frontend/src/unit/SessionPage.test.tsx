@@ -365,7 +365,8 @@ it('uses human labels and explicit fallback text for sparse events', () => {
   expect(screen.getByText('Snoozed')).toBeInTheDocument()
   expect(screen.getByText('Restored')).toBeInTheDocument()
   expect(screen.getByText('Thread unavailable')).toBeInTheDocument()
-  expect(screen.getAllByText('No additional event details recorded.')).toHaveLength(2)
+  expect(screen.getByText('No rating')).toBeInTheDocument()
+  expect(screen.getAllByText('No additional event details recorded.')).toHaveLength(1)
 })
 
 // #3574: session-level events have no thread reference, so they must describe

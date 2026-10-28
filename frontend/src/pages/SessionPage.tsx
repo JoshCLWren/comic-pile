@@ -145,7 +145,11 @@ function EventRecord({ event }: { event: DisplayEvent }) {
     event.die != null ? `d${event.die}` : null,
     rollLabel(event),
     event.die_after != null ? `Die after: d${event.die_after}` : null,
-    event.rating != null ? `Rating ${event.rating}` : null,
+    event.rating != null
+      ? `Rating ${event.rating}`
+      : event.type === 'undo' || event.type === 'restore'
+        ? 'No rating'
+        : null,
     event.result == null || event.result > 0 ? selectionLabel(event) : null,
   ].filter((value): value is string => value !== null)
 
@@ -195,9 +199,14 @@ function EventRecord({ event }: { event: DisplayEvent }) {
           ))}
         </ul>
       ) : !isThreadlessEvent(event) && detail ? (
-        <p className="mt-1 text-xs text-stone-400 break-words">{detail}</p>
+        <p className="mt-1 text-xs text-[var(--theme-text-dim)] break-words">{detail}</p>
       ) : !isThreadlessEvent(event) && !hasRecordedDescription ? (
         <p className="mt-1 text-xs text-stone-500">No additional event details recorded.</p>
+      ) : null}
+      {metadata.length > 0 &&
+      (event.type === 'undo' || event.type === 'restore') &&
+      detail ? (
+        <p className="mt-1 text-xs text-[var(--theme-text-dim)] break-words">{detail}</p>
       ) : null}
       {event.queue_move && (
         <p className="mt-1 break-words text-xs text-stone-500">Queue move: {event.queue_move}</p>
@@ -337,7 +346,7 @@ export default function SessionPage() {
             {restoreMutation.isPending ? 'Restoring...' : 'Restore Start'}
           </button>
         </div>
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-[var(--theme-text-dim)]">
           <span className="font-bold text-stone-300">Undo Latest</span> reverses only the newest
           change, and it stays on the newest snapshot until it has been used once.{' '}
           <span className="font-bold text-stone-300">Restore Start</span> rewinds the whole session

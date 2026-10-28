@@ -72,7 +72,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
     <>
     <details className="group bg-white/5 border border-white/10 rounded-2xl overflow-hidden text-left">
       <summary className="min-h-16 p-3 flex items-center gap-3 cursor-pointer list-none focus:ring-2 focus:ring-amber-500">
-        {metadata.image_url && metadata.image_url !== failedImageUrl && (
+        {metadata.image_url && metadata.image_url !== failedImageUrl ? (
           <ImageWithLoading
             src={metadata.image_url}
             alt=""
@@ -80,6 +80,16 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
             className="w-11 h-16 object-cover rounded-md bg-stone-900 shrink-0"
             onError={() => setFailedImageUrl(metadata.image_url)}
           />
+        ) : (
+          <div
+            data-testid="cover-placeholder"
+             className="w-11 h-16 rounded-md bg-[var(--theme-bg-panel)] shrink-0 flex items-center justify-center text-[var(--theme-text-dim)]"
+            aria-hidden="true"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+            </svg>
+          </div>
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
