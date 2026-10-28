@@ -51,10 +51,10 @@ export function createAppQueryClient(): QueryClient {
     if (event.type !== 'updated' || event.action.type !== 'success') {
       return
     }
-    // Ignore manual cache writes (setQueryData, optimistic updates) which
-    // also emit 'success' updates but are not network fetches. Network
-    // successes include a fetchId on the action.
-    if (!('fetchId' in event.action)) {
+    // Manual cache writes (setQueryData, optimistic updates) carry the
+    // 'manual' flag; network success actions do not have a 'fetchId'.
+    // Filtering on fetchId would silently suppress every outage recovery.
+    if (event.action.manual) {
       return
     }
     if (!noteSuccessfulQuery()) {
