@@ -120,3 +120,21 @@ def test_reject_sensitive_or_unrelated_routes(url: str) -> None:
 def test_linux_cpu_counter_is_available() -> None:
     """Read CPU ticks from the current Linux process without estimation."""
     assert cpu_seconds(os.getpid()) >= 0
+
+
+def test_cpu_seconds_uses_psutil_on_macos(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mac CPU time is user+system, never wall-clock elapsed time."""
+    import sys
+    from types import SimpleNamespace
+
+    from scripts import profile_local_traffic as module
+
+    monkeypatch.setattr(module.sys, "platform", "darwin")
+    class FakeProcess:
+        def __init__(self, pid: int) -> None:
+            assert pid == 777
+        def cpu_times(self) -> SimpleNamespace:
+            return SimpleNamespace(user=1.25, system=0.75)
+
+    monkeypatch.setitem(sys.modules, "psutil", SimpleNamespace(Process=FakeProcess))
+    assert module.cpu_seconds(777) == 2.0
