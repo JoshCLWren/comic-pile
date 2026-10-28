@@ -701,7 +701,7 @@ def main() -> None:
                 "linked_list_ids",
                 "linked_plan_ids",
             ):
-                if row.get(key):
+                if row.get(key) is not None:
                     print(f"  {key}: {json.dumps(row[key], sort_keys=True)}")
         for row in result["unpaired_plans"]:
             print(f"Plan {row['plan_id']} {row['plan_name']}: unpaired; {row['plan_count']} issues")
