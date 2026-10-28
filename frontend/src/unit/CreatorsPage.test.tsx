@@ -904,6 +904,39 @@ describe('CreatorsPage comparison selection URL contract', () => {
     await waitFor(() => expect(currentKeysParam()).toBe('creator:7,creator:12'))
   })
 
+  it('carries deduplicated valid keys back through Change selection without inflating the counter', async () => {
+    selectionState()
+
+    renderPage(
+      [{ path: '/creators/compare', element: <CreatorComparisonPage /> }],
+      '/creators?keys=creator:7,creator:7,creator:12,creator:99999999',
+    )
+
+    // The duplicate collapses and the bogus key stays in the URL (this page
+    // cannot confirm it is not a real creator elsewhere in the list), but the
+    // visible counter never counts it (#4208).
+    await waitFor(() => expect(currentKeysParam()).toBe('creator:7,creator:12,creator:99999999'))
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+    expect(screen.getByLabelText('Select Brian K. Vaughan for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Steve McNiven for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Fiona Staples for comparison')).not.toBeChecked()
+    expect(screen.getByRole('button', { name: 'Compare' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Creator Comparison' })).toBeInTheDocument(),
+    )
+    // Change selection returns the deduped set; the bogus key is dropped once
+    // the comparison has resolved which keys are actually available (#4208).
+    fireEvent.click(screen.getByRole('link', { name: 'Change selection' }))
+
+    await waitFor(() => expect(currentKeysParam()).toBe('creator:7,creator:12'))
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+    expect(screen.getByLabelText('Select Brian K. Vaughan for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Steve McNiven for comparison')).toBeChecked()
+  })
+
   it('keeps an off-page selection when a visible checkbox is toggled', () => {
     mockedHook.mockReturnValue(baseState({ items: [BRIAN, STEVE], total: 3, hasMore: true }))
 
