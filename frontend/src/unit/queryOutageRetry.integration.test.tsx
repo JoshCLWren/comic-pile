@@ -23,13 +23,15 @@ import {
  * one burst to 5 requests and stops completely after the shared probe fails.
  */
 
+type TransportResponse = { ok: boolean } | { boundaries: { thread_id: number; available_next: number }[] }
+
 interface Transport {
   calls: string[]
-  fetch: (key: string) => Promise<unknown>
-  respondWith: (handler: (key: string) => Promise<unknown>) => void
+  fetch: (key: string) => Promise<TransportResponse>
+  respondWith: (handler: (key: string) => Promise<TransportResponse>) => void
 }
 
-function createTransport(initial: (key: string) => Promise<unknown>): Transport {
+function createTransport(initial: (key: string) => Promise<TransportResponse>): Transport {
   let handler = initial
   const calls: string[] = []
   return {
@@ -57,7 +59,7 @@ function QueryProbe({
   refetchOnWindowFocus = false,
 }: {
   name: string
-  fetcher: () => Promise<unknown>
+  fetcher: () => Promise<TransportResponse>
   refetchOnWindowFocus?: boolean
 }) {
   const { isError } = useQuery({
@@ -68,7 +70,7 @@ function QueryProbe({
   return <output data-testid={`status-${name}`}>{isError ? 'error' : 'ok'}</output>
 }
 
-function BoundariesProbe({ fetcher }: { fetcher: () => Promise<unknown> }) {
+function BoundariesProbe({ fetcher }: { fetcher: () => Promise<TransportResponse> }) {
   const { data, isError } = useQuery({
     queryKey: queryKeys.dependencies.readingBoundaries([11, 22]),
     queryFn: fetcher,
@@ -80,7 +82,7 @@ function BoundariesProbe({ fetcher }: { fetcher: () => Promise<unknown> }) {
   )
 }
 
-function MutationProbe({ mutationFn }: { mutationFn: () => Promise<unknown> }) {
+function MutationProbe({ mutationFn }: { mutationFn: () => Promise<TransportResponse> }) {
   const mutation = useMutation({ mutationFn })
   const started = useRef(false)
   useEffect(() => {
