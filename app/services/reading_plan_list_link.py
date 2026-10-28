@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_reading_execution_settings
 from app.models.continuity_plan import ContinuityPlan
 from app.repositories import reading_plan_list_link_repository as link_repository
 
@@ -44,3 +45,26 @@ async def link_new_plan_to_owned_list(
         db, plan=plan, user_id=user_id, rows=occurrences,
         adopted_issue_ids=adopted_issue_ids,
     )
+
+
+async def ensure_new_plan_has_authority(
+    db: AsyncSession, *, plan: ContinuityPlan, user_id: int,
+    adopted_order_id: int | None = None,
+) -> None:
+    """Select execution-mode policy in the service; routers just delegate."""
+    if get_reading_execution_settings().enabled:
+        await link_new_plan_to_owned_list(
+            db, plan=plan, user_id=user_id, adopted_order_id=adopted_order_id,
+        )
+
+
+def guard_legacy_plan_edit() -> None:
+    """Prevent a legacy Plan write from forking Option E's issue order."""
+    if get_reading_execution_settings().enabled:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "reading_list_is_authoritative",
+                "message": "Edit the linked Reading List, not the legacy Plan order",
+            },
+        )
