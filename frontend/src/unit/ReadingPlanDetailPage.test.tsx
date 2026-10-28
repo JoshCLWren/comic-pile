@@ -203,7 +203,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockGetReader.mockResolvedValue(readerView)
   mockListOwned.mockResolvedValue([])
-  mockGetOwned.mockResolvedValue(undefined as never)
+  mockGetOwned.mockImplementation(async () => { throw new Error('Unexpected owned Reading List lookup') })
   mockPlanTags.mockResolvedValue({
     target_type: 'ContinuityPlan',
     target_id: 12,
