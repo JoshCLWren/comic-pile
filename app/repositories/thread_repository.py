@@ -4,6 +4,7 @@ All SQLAlchemy access for the ``Thread`` model family lives here. Functions
 return ORM models or plain values; callers (services) own transactions.
 """
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import NotRequired, TypedDict
 
@@ -29,6 +30,7 @@ from app.services.queue_pagination import (
     build_cursor_filter,
     build_sort_order,
 )
+from app.services.title_similarity import normalize_title, significant_title_tokens
 
 
 async def get_thread(db: AsyncSession, thread_id: int) -> Thread | None:
@@ -979,3 +981,156 @@ async def owned_title_exists(db: AsyncSession, user_id: int, title: str) -> bool
         )
         is not None
     )
+
+
+async def find_owned_threads_linked_to_comicvine_volume(
+    db: AsyncSession,
+    user_id: int,
+    comicvine_volume_id: int,
+    *,
+    exclude_thread_id: int | None = None,
+) -> list[Thread]:
+    """Find the reader's threads already confirmed as a specific ComicVine volume.
+
+    This is the canonical-identity lookup behind a strong duplicate warning: a
+    confirmed series mapping means the reader already tracks that exact volume,
+    not merely a similar title.
+
+    Args:
+        db: Database session.
+        user_id: Owner whose library is searched.
+        comicvine_volume_id: ComicVine volume identity to match.
+        exclude_thread_id: Thread to leave out (the series being renamed).
+
+    Returns:
+        Owned threads confirmed as that volume, ordered by thread ID.
+    """
+    query = (
+        select(Thread)
+        .join(ThreadExternalSeriesMapping, Thread.id == ThreadExternalSeriesMapping.thread_id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+        )
+        .where(
+            Thread.user_id == user_id,
+            ThreadExternalSeriesMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "series",
+            ExternalIdentity.external_id == str(comicvine_volume_id),
+        )
+        .order_by(Thread.id)
+    )
+    if exclude_thread_id is not None:
+        query = query.where(Thread.id != exclude_thread_id)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def find_owned_threads_with_similar_titles(
+    db: AsyncSession,
+    user_id: int,
+    title: str,
+    *,
+    exclude_thread_id: int | None = None,
+    candidate_limit: int = 25,
+) -> list[Thread]:
+    """Find owned threads whose titles share meaningful tokens with a candidate.
+
+    The database only narrows the library to plausible candidates; the service
+    scores resemblance and decides which ones are worth warning about. Title
+    tokens are compared case-insensitively so ``"Spider-Man"`` and
+    ``"spider man"`` are found, and a same-titled series in another format is
+    still returned: format is disambiguating context for the reader, not a
+    reason to hide an existing volume.
+
+    Args:
+        db: Database session.
+        user_id: Owner whose library is searched.
+        title: Proposed series title.
+        exclude_thread_id: Thread to leave out (the series being renamed).
+        candidate_limit: Maximum candidates returned for service-side scoring.
+
+    Returns:
+        Candidate threads, ordered by thread ID. Empty when the title has no
+        usable content.
+    """
+    normalized_title = normalize_title(title)
+    if not normalized_title:
+        return []
+
+    tokens = significant_title_tokens(normalized_title)
+    search_terms = tokens or (normalized_title,)
+    query = (
+        select(Thread)
+        .where(
+            Thread.user_id == user_id,
+            or_(
+                *(
+                    func.lower(Thread.title).contains(term, autoescape=True)
+                    for term in search_terms
+                )
+            ),
+        )
+        .order_by(Thread.id)
+        .limit(candidate_limit)
+    )
+    if exclude_thread_id is not None:
+        query = query.where(Thread.id != exclude_thread_id)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def fetch_confirmed_comicvine_series_by_thread(
+    db: AsyncSession,
+    user_id: int,
+    thread_ids: Sequence[int],
+) -> dict[int, tuple[int | None, dict[str, object]]]:
+    """Resolve confirmed ComicVine series context for several owned threads.
+
+    Advisory warnings show each candidate's own volume and publication year so
+    the reader can tell two same-titled runs apart. One batched read keeps a
+    duplicate check a constant number of queries.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads; foreign threads are never returned.
+        thread_ids: Threads whose confirmed series identity should be resolved.
+
+    Returns:
+        Mapping of thread ID to ``(comicvine_volume_id, metadata_json)``. The
+        first confirmed mapping in mapping order wins deterministically. Threads
+        without a confirmed ComicVine series identity are absent.
+    """
+    unique_ids = list(dict.fromkeys(thread_ids))
+    if not unique_ids:
+        return {}
+
+    rows = await db.execute(
+        select(
+            ThreadExternalSeriesMapping.thread_id,
+            ExternalIdentity.external_id,
+            ExternalIdentity.metadata_json,
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+        )
+        .join(Thread, Thread.id == ThreadExternalSeriesMapping.thread_id)
+        .where(
+            Thread.user_id == user_id,
+            Thread.id.in_(unique_ids),
+            ThreadExternalSeriesMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "series",
+        )
+        .order_by(ThreadExternalSeriesMapping.thread_id, ThreadExternalSeriesMapping.id)
+    )
+    identities: dict[int, tuple[int | None, dict[str, object]]] = {}
+    for thread_id, external_id, metadata_json in rows.all():
+        if thread_id in identities:
+            continue
+        volume_id = int(external_id) if external_id.isdigit() else None
+        metadata = metadata_json if isinstance(metadata_json, dict) else {}
+        identities[thread_id] = (volume_id, metadata)
+    return identities

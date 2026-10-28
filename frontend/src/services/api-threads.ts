@@ -1,5 +1,7 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
+  CheckPotentialDuplicatesRequest,
+  CheckPotentialDuplicatesResponse,
   ReactivateThreadPayload,
   RollResponse,
   SetCurrentIssueResponse,
@@ -65,6 +67,15 @@ export function createThreadsApi(client: HttpClient) {
     setPending: (id: number) => client.post<RollResponse>(`/v1/threads/${id}/set-pending`),
     setCurrentIssue: (id: number, issueNumber: string) =>
       client.post<SetCurrentIssueResponse, { issue_number: string }>(`/v1/threads/${id}:setCurrentIssue`, { issue_number: issueNumber }),
+    /**
+     * Advisory existing-volume lookup for an Add Series or Edit/Rename
+     * candidate (#3612). Read-only: it never creates, merges, or renames.
+     */
+    checkPotentialDuplicates: (data: CheckPotentialDuplicatesRequest) =>
+      client.post<CheckPotentialDuplicatesResponse, CheckPotentialDuplicatesRequest>(
+        '/v1/threads/check-duplicates',
+        data,
+      ),
   }
 }
 
