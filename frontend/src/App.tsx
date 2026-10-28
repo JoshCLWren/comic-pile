@@ -82,8 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const bootstrapRetryCountRef = useRef(0)
   const bootstrapTimerRef = useRef<number | null>(null)
   const bootstrapInFlightRef = useRef<Promise<void> | null>(null)
-  const bootstrapGenerationRef = useRef(0)
-  const sharedRecoveryRef = useRef<Promise<void> | null>(null)
   const [authState, setAuthState] = useState<AuthState>({
     status: 'checking',
     isLoading: true,
@@ -96,14 +94,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const markDefinitivelyUnauthenticated = useCallback(() => {
     sessionGeneration.current += 1
-    bootstrapGenerationRef.current = sessionGeneration.current
     if (bootstrapTimerRef.current !== null) {
       window.clearTimeout(bootstrapTimerRef.current)
       bootstrapTimerRef.current = null
     }
     bootstrapInFlightRef.current = null
     bootstrapRetryCountRef.current = 0
-    sharedRecoveryRef.current = null
     clearAccessToken()
     clearSessionCache(client)
     setAuthState(prev => ({
@@ -177,11 +173,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    }, [markDefinitivelyUnauthenticated]);
 
   const retryAuth = useCallback(async () => {
+    // Invalidate any in-flight bootstrap attempt for this session generation
+    // so a stale scheduled request cannot overwrite manual recovery.
+    sessionGeneration.current += 1
     // Cancel any scheduled bootstrap retries for this session generation
     if (bootstrapTimerRef.current !== null) {
       window.clearTimeout(bootstrapTimerRef.current)
       bootstrapTimerRef.current = null
     }
+    bootstrapInFlightRef.current = null
+    bootstrapRetryCountRef.current = 0
     setAuthState(prev => ({
       ...prev,
       isLoading: true,
@@ -249,7 +250,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true
     const bootstrapGeneration = sessionGeneration.current
-    bootstrapGenerationRef.current = bootstrapGeneration
     bootstrapRetryCountRef.current = 0
     if (bootstrapTimerRef.current !== null) {
       window.clearTimeout(bootstrapTimerRef.current)
@@ -364,11 +364,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           scheduleRetry(authError)
         }
       })()
-      bootstrapInFlightRef.current = validationPromise.finally(() => {
-        if (bootstrapInFlightRef.current === validationPromise) {
+      const wrappedValidationPromise = validationPromise.finally(() => {
+        if (bootstrapInFlightRef.current === wrappedValidationPromise) {
           bootstrapInFlightRef.current = null
         }
       })
+      bootstrapInFlightRef.current = wrappedValidationPromise
       return validationPromise
     }
 
@@ -398,7 +399,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (accessToken: string) => {
     const generation = ++sessionGeneration.current
-    bootstrapGenerationRef.current = generation
     bootstrapRetryCountRef.current = 0
     if (bootstrapTimerRef.current !== null) {
       window.clearTimeout(bootstrapTimerRef.current)
