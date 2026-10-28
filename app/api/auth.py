@@ -24,7 +24,6 @@ from app.auth import (
 from app.csrf import ensure_csrf_cookie, is_secure_request
 from app.database import get_db
 from app.middleware import limiter
-from app.services.password_reset_service import handle_forgot_password_request, complete_reset
 from app.models.user import User
 from app.repositories.failed_login_repository import (
     clear_attempts_for_username,
@@ -436,6 +435,8 @@ async def forgot_password(
     outbound email attempt so provider latency cannot distinguish a known
     address from an unknown one. Rate-limited via existing application limiter.
     """
+    from app.services.password_reset_service import handle_forgot_password_request
+
     await handle_forgot_password_request(db, data.email, background_tasks)
     return PasswordResetResponse(message="If an account exists, a reset link has been sent.")
 
@@ -446,5 +447,7 @@ async def reset_password(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> PasswordResetResponse:
     """Complete password reset with atomic token consumption and session revocation."""
+    from app.services.password_reset_service import complete_reset
+
     await complete_reset(db, data.token, data.new_password)
     return PasswordResetResponse(message="Password reset successfully.")
