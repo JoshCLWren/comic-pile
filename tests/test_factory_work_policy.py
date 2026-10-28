@@ -205,6 +205,38 @@ def test_fork_repair_goes_only_to_anonymous_kilo(monkeypatch: pytest.MonkeyPatch
     assert policy.order_candidates_for_worker([repair], "46") == [repair]
 
 
+def test_merge_conflict_label_is_observability_not_stage_or_blocker() -> None:
+    """#3138: the derived label never joins stage, precedence, or blocker policy."""
+    label = "factory:merge-conflict"
+    assert label not in policy.STAGE_LABELS
+    assert label not in policy.STAGE_PRECEDENCE
+    assert label not in policy.BLOCKED_LABELS
+    assert policy.stage_of({label}) is None
+
+
+def test_merge_conflict_label_never_decides_queue_eligibility() -> None:
+    """Queue conflict state comes from GitHub mergeability, never from the label."""
+    labeled_but_clean = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:review", "factory:merge-conflict"],
+    )
+    clean = policy.build_candidates([], [labeled_but_clean])
+    assert [(item.kind, item.number) for item in clean] == [("pr", 2264)]
+    assert clean[0].conflicted is False
+
+    conflicted_without_label = pr_fixture(
+        number=2265,
+        issue=2201,
+        labels=["factory", "factory:unowned", "factory:review"],
+        mergeable="CONFLICTING",
+        merge_state="DIRTY",
+    )
+    conflicted = policy.build_candidates([], [conflicted_without_label])
+    assert [(item.kind, item.number) for item in conflicted] == [("pr", 2265)]
+    assert conflicted[0].conflicted is True
+
+
 def test_build_candidates_marks_cross_repository_prs_as_forks():
     """Fork identity comes from the live cross-repository flag, not the branch name."""
     fork = pr_fixture(number=1390, issue=1391, labels=["factory", "factory:unowned", "factory:review"])

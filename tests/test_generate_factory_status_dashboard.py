@@ -462,6 +462,20 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     assert snapshot["opencode_free_roster"]["freshness"] == "stale"
 
 
+def test_dashboard_counts_the_derived_merge_conflict_label() -> None:
+    """The PR pipeline conflict tile reports the real derived label, not a stage."""
+    assert dashboard.MERGE_CONFLICT_LABEL == "factory:merge-conflict"
+    assert dashboard.MERGE_CONFLICT_LABEL not in dashboard.STAGES
+    prs = [
+        {"labels": [{"name": "factory"}, {"name": "factory:merge-conflict"}]},
+        {"labels": [{"name": "factory"}, {"name": "factory:review"}]},
+        {"labels": [{"name": "factory:conflict"}]},
+    ]
+    assert dashboard.merge_conflict_count(prs) == 1
+    rendered = dashboard.render_dashboard(sample_snapshot())
+    assert "label%3Afactory%3Amerge-conflict" in rendered
+
+
 def test_dashboard_exposes_stale_and_quota_limited_worker_with_fresh_peer() -> None:
     """Fresh provider capacity cannot hide worker-specific heartbeat observations."""
     snapshot = sample_snapshot()

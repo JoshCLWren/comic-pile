@@ -243,8 +243,8 @@ def is_factory_managed_pr(pr: dict[str, Any]) -> bool:
 
     Canonical factory branches always qualify. Local Cursor/fix delivery PRs
     also qualify once they carry the ``factory`` label so Josh-authored work can
-    enter review/repair/drain without rewriting the branch name. Stale
-    ``agent/`` and ``chatgpt/`` branches remain excluded even if mislabeled.
+    enter review/repair/drain without rewriting the branch name. An unlabeled PR
+    stays outside the queue regardless of its branch prefix.
     """
     head = str(pr.get('headRefName') or '')
     if head.startswith('factory/'):

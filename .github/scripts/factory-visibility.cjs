@@ -33,6 +33,9 @@ const DEFINITIONS = {
   'factory:ci': ['1D76DB', 'Review passed and required exact-head checks are being verified'],
   'factory:ready': ['0E8A16', 'All exact-head factory merge gates are satisfied'],
   'factory:blocked': ['B60205', 'A genuine human, credential, or external blocker remains'],
+  // Derived observability label (issue #3138). It is never a stage: it stays out
+  // of STAGE_LABELS, precedence, BLOCKED_LABELS, and queue selection.
+  'factory:merge-conflict': ['E99695', 'GitHub reports the exact pull-request head as merge-conflicted'],
 };
 
 const OWNER_LABELS = [
@@ -69,6 +72,42 @@ const BLOCKED_LABELS = new Set([
   'invalid',
   'duplicate',
 ]);
+
+// Derived observability labels describe GitHub-reported state; they are never
+// stages and never affect precedence, blockers, or queue selection (#3138).
+// The reconciler owns their presence on the exact head, so every label-set
+// replacement rebuilds them from live mergeability instead of inheriting them.
+const MERGE_CONFLICT_LABEL = 'factory:merge-conflict';
+const DERIVED_LABELS = new Set([MERGE_CONFLICT_LABEL]);
+
+// Derive conflict state from GitHub mergeability only. REST reports `mergeable`
+// as a boolean plus `mergeable_state`; `gh`/GraphQL shapes report
+// `MERGEABLE`/`CONFLICTING` plus `mergeStateStatus`. Anything still being
+// computed (`UNKNOWN`/null) is unknown: never guess a conflict the API has not
+// reported, and never erase a label GitHub has not yet resolved.
+const MERGE_CLEAN_STATES = new Set(['CLEAN', 'BEHIND', 'BLOCKED', 'UNSTABLE', 'HAS_HOOKS']);
+
+function mergeConflictState(pullRequest) {
+  const mergeable = pullRequest?.mergeable;
+  const mergeableToken = typeof mergeable === 'string' ? mergeable.toUpperCase() : mergeable;
+  const mergeState = String(
+    pullRequest?.mergeStateStatus ?? pullRequest?.mergeable_state ?? '',
+  ).toUpperCase();
+  if (mergeableToken === false || mergeableToken === 'CONFLICTING') return 'conflict';
+  if (mergeState === 'DIRTY') return 'conflict';
+  if (mergeableToken === true || mergeableToken === 'MERGEABLE') return 'clean';
+  if (MERGE_CLEAN_STATES.has(mergeState)) return 'clean';
+  return 'unknown';
+}
+
+// `null` means "GitHub has not resolved mergeability": callers must preserve the
+// current derived label. An array is the exact derived-label set to apply.
+function derivedLabelsFor(pullRequest) {
+  const state = mergeConflictState(pullRequest);
+  if (state === 'conflict') return [MERGE_CONFLICT_LABEL];
+  if (state === 'clean') return [];
+  return null;
+}
 
 function hasManualOnlyDirective(body) {
   // Referencing this marker in inline or fenced documentation is not an opt-out.
@@ -712,14 +751,21 @@ async function currentLabels(github, context, number) {
   return new Set(response.data.map(label => label.name));
 }
 
-async function reconcileLabels(github, context, number, { owner, stage }) {
+async function reconcileLabels(github, context, number, { owner, stage, derivedLabels }) {
   const current = await currentLabels(github, context, number);
   const next = [...current].filter(
-    label => !isOwnerLabel(label) && !STAGE_LABELS.includes(label),
+    label => !isOwnerLabel(label) && !STAGE_LABELS.includes(label) && !DERIVED_LABELS.has(label),
   );
   if (!next.includes('factory')) next.push('factory');
   if (owner) next.push(owner);
   if (stage) next.push(stage);
+  // `undefined`/`null` preserves the current derived labels. Callers that do not
+  // read live mergeability (review routing, comment markers) must not claim or
+  // erase an observability fact they did not verify.
+  const derived = derivedLabels == null
+    ? [...current].filter(label => DERIVED_LABELS.has(label))
+    : [...new Set(derivedLabels)].filter(label => DERIVED_LABELS.has(label));
+  next.push(...derived);
 
   // A no-op label replacement still consumes API quota and emits a labels event.
   // Compare sets, since GitHub does not promise stable label ordering.
@@ -844,6 +890,9 @@ async function ownerFromLinkedIssue(github, context, pullRequest) {
 }
 
 async function reconcileMissingPrLabels({ github, context }) {
+  // Derived labels must exist before a label-set replacement can apply them;
+  // GitHub silently ignores unknown label names instead of creating them.
+  await ensureLabels(github, context);
   // Normalize both event branches to the same `{ data }` shape: PR events carry
   // exactly the payload's pull request, scheduled sweeps list and paginate open PRs.
   const candidates = context.eventName === 'pull_request_target'
@@ -890,7 +939,16 @@ async function reconcileMissingPrLabels({ github, context }) {
     const owners = [...current].filter(isOwnerLabel);
     const stages = STAGE_LABELS.filter(label => current.has(label));
     const pushed = context.eventName === 'pull_request_target' && context.payload.action === 'synchronize';
-    if (!pushed && current.has('factory') && owners.length === 1 && stages.length === 1) continue;
+    // Merge-conflict is derived observability from live GitHub mergeability, so
+    // it must refresh even when an otherwise complete PR needs no label write.
+    // `null` (unresolved mergeability) keeps the current label and counts as
+    // already-correct, so a partially computed head never triggers a write loop.
+    const derived = derivedLabelsFor(live);
+    const currentDerived = [...current].filter(label => DERIVED_LABELS.has(label));
+    const derivedSettled = derived === null
+      || (derived.length === currentDerived.length && derived.every(label => current.has(label)));
+    if (!pushed && current.has('factory') && owners.length === 1 && stages.length === 1
+      && derivedSettled) continue;
 
     // Repair missing metadata without taking an existing lease or downgrading
     // review/CI state. Never manufacture readiness from green checks alone.
@@ -929,6 +987,7 @@ async function reconcileMissingPrLabels({ github, context }) {
         ? 'factory:local'
         : owners.length === 1 ? owners[0] : 'factory:unowned',
       stage,
+      derivedLabels: derived,
     });
   }
 }
@@ -1046,6 +1105,11 @@ module.exports._test = {
   isOwnerLabel,
   hasManualOnlyDirective,
   BLOCKED_LABELS,
+  STAGE_LABELS,
+  DERIVED_LABELS,
+  MERGE_CONFLICT_LABEL,
+  mergeConflictState,
+  derivedLabelsFor,
   labelsBlockEnrollment,
   livePullRequest,
   reconcileLabels,

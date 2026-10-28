@@ -5,13 +5,17 @@ from __future__ import annotations
 import unittest
 
 from factory_work_policy import (
+    BLOCKED_LABELS,
     FACTORY_NO_DIFF_RETRY_LIMIT,
     FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
+    STAGE_LABELS,
+    STAGE_PRECEDENCE,
     Candidate,
     build_candidates,
     no_diff_attempts_from_comments,
     order_candidates_for_worker,
     parse_no_diff_attempts_from_comments,
+    stage_of,
 )
 
 
@@ -103,6 +107,21 @@ class CompletionAwareOrderingTests(unittest.TestCase):
             [factory_pr(5, mergeable="UNKNOWN", merge_state="DIRTY")],
         )
         self.assertTrue(candidates[0].conflicted)
+
+    def test_merge_conflict_label_is_observability_not_stage_or_blocker(self) -> None:
+        self.assertNotIn("factory:merge-conflict", STAGE_LABELS)
+        self.assertNotIn("factory:merge-conflict", STAGE_PRECEDENCE)
+        self.assertNotIn("factory:merge-conflict", BLOCKED_LABELS)
+        self.assertIsNone(stage_of({"factory:merge-conflict"}))
+
+    def test_merge_conflict_label_never_decides_queue_eligibility(self) -> None:
+        labeled_clean = factory_pr(5)
+        labeled_clean["labels"] = labels(
+            "factory", "factory:unowned", "factory:review", "factory:merge-conflict"
+        )
+        clean = build_candidates([], [labeled_clean])
+        self.assertEqual([(item.kind, item.number) for item in clean], [("pr", 5)])
+        self.assertFalse(clean[0].conflicted)
 
     def test_existing_review_pr_survives_blocked_linked_issue(self) -> None:
         issue_target = issue(2128, "factory:blocked")
@@ -431,12 +450,18 @@ class WipCapTests(unittest.TestCase):
         candidates = build_candidates([], [factory_pr(1, stage="factory:ready")])
         self.assertFalse(any(item.kind == "pr" and item.number == 1 for item in candidates))
 
-    def test_human_branch_with_factory_label_is_not_factory_candidate(self) -> None:
+    def test_labeled_human_branch_is_factory_candidate(self) -> None:
         candidates = build_candidates(
             [],
             [factory_pr(1, branch="chatgpt/human-authored-fix")],
         )
-        self.assertFalse(candidates)
+        # Explicit factory enrollment admits any branch for review/repair.
+        self.assertTrue(candidates)
+
+    def test_unlabeled_human_branch_is_not_factory_candidate(self) -> None:
+        target = factory_pr(1, branch="chatgpt/human-authored-fix")
+        target["labels"] = labels("factory:unowned", "factory:review")
+        self.assertFalse(build_candidates([], [target]))
 
     def test_labeled_cursor_delivery_pr_is_factory_candidate(self) -> None:
         target = factory_pr(

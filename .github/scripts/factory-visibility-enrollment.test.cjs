@@ -29,6 +29,8 @@ async function run({
   // REST response doubles: every read now consumes `result.data`, and label
   // reads are paginated issue REST endpoints rather than github.paginate.
   const issues = {
+    listLabelsForRepo: async () => ({ data: [], headers: {}, status: 200 }),
+    createLabel: async () => ({ data: {}, headers: {}, status: 201 }),
     listLabelsOnIssue: async () => ({
       data: labels.map(name => ({ name })),
       headers: {},
@@ -211,6 +213,76 @@ test('missing factory label preserves current owner and advanced stage', async (
 test('complete metadata is left untouched', async () => {
   const { writes } = await run({ labels: ['factory', 'factory:ci', 'factory:unowned'] });
   assert.deepEqual(writes, []);
+});
+
+test('GitHub mergeability derives factory:merge-conflict on a complete PR', async () => {
+  const { writes } = await run({
+    labels: ['factory', 'factory:review', 'factory:unowned'],
+    liveByNumber: { 1: { mergeable: false, mergeable_state: 'dirty' } },
+  });
+  assert.equal(writes.length, 1);
+  assert.deepEqual(new Set(writes[0].labels),
+    new Set(['factory', 'factory:review', 'factory:unowned', 'factory:merge-conflict']));
+});
+
+test('a clean head clears the derived conflict label', async () => {
+  const { writes } = await run({
+    labels: ['factory', 'factory:review', 'factory:unowned', 'factory:merge-conflict', 'bug'],
+    liveByNumber: { 1: { mergeable: true, mergeable_state: 'clean' } },
+  });
+  assert.equal(writes.length, 1);
+  assert.deepEqual(new Set(writes[0].labels),
+    new Set(['bug', 'factory', 'factory:review', 'factory:unowned']));
+});
+
+test('unresolved mergeability preserves the derived label without a write', async () => {
+  for (const live of [
+    { mergeable: null, mergeable_state: 'unknown' },
+    { mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN' },
+    {},
+  ]) {
+    const { writes } = await run({
+      labels: ['factory', 'factory:review', 'factory:unowned', 'factory:merge-conflict'],
+      liveByNumber: { 1: live },
+    });
+    assert.deepEqual(writes, [], `unknown mergeability must never erase the label: ${JSON.stringify(live)}`);
+  }
+});
+
+test('conflict derivation never consumes the stage slot', async () => {
+  const { writes } = await run({
+    labels: ['factory', 'factory:local'],
+    liveByNumber: { 1: { mergeable: false, mergeable_state: 'dirty' } },
+  });
+  assert.equal(writes.length, 1);
+  const applied = new Set(writes[0].labels);
+  assert.ok(applied.has('factory:merge-conflict'));
+  assert.ok(applied.has('factory:review'));
+  assert.equal([...applied].filter(label => label === 'factory:review').length, 1);
+
+  const advanced = await run({
+    labels: ['factory', 'factory:47', 'factory:changes-requested'],
+    liveByNumber: { 1: { mergeable: false, mergeable_state: 'dirty' } },
+  });
+  assert.equal(advanced.writes.length, 1);
+  const advancedLabels = new Set(advanced.writes[0].labels);
+  assert.ok(advancedLabels.has('factory:changes-requested'));
+  assert.ok(advancedLabels.has('factory:merge-conflict'));
+  assert.ok(!advancedLabels.has('factory:review'));
+});
+
+test('derived label never substitutes for factory enrollment metadata', async () => {
+  const { writes } = await run({
+    labels: ['bug', 'factory:merge-conflict'],
+    liveByNumber: { 1: { mergeable: false, mergeable_state: 'dirty' } },
+  });
+  // The sweep still enrolls an unlabeled PR, but the derived label alone is not
+  // a factory lease or stage: exactly one stage and one owner are written.
+  assert.equal(writes.length, 1);
+  const applied = new Set(writes[0].labels);
+  assert.ok(applied.has('factory'));
+  assert.ok(applied.has('factory:review'));
+  assert.ok(applied.has('factory:unowned'));
 });
 
 test('dependency bots, deleted heads, drafts, and closed PRs are excluded', async () => {

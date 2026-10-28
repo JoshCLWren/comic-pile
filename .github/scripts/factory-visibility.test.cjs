@@ -14,6 +14,11 @@ const {
   restRequestCounts,
   clearRestRequestLog,
   currentLabels,
+  STAGE_LABELS,
+  DERIVED_LABELS,
+  MERGE_CONFLICT_LABEL,
+  mergeConflictState,
+  derivedLabelsFor,
 } = reconcile._test;
 
 function contextFor(eventName, payload) {
@@ -29,6 +34,7 @@ function githubFor({
   comments = [],
   setLabels,
   updateLabel,
+  createLabel,
   commentIssueNumbers,
   extraDefinitions = [],
 } = {}) {
@@ -60,7 +66,10 @@ function githubFor({
       if (commentIssueNumbers) commentIssueNumbers.push(params.issue_number);
       return { data: comments, headers: {}, status: 200 };
     },
-    createLabel: async () => ({ data: {}, headers: {}, status: 201 }),
+    createLabel: async params => {
+      if (createLabel) createLabel(params);
+      return { data: {}, headers: {}, status: 201 };
+    },
     updateLabel: async params => {
       if (updateLabel) updateLabel(params);
       return { data: {}, headers: {}, status: 200 };
@@ -162,6 +171,99 @@ test('unchanged label reconciliation avoids a write regardless of label order', 
     stage: 'factory:review',
   });
   assert.deepEqual(calls, []);
+});
+
+test('merge-conflict is derived observability, never a stage or blocker', () => {
+  assert.equal(MERGE_CONFLICT_LABEL, 'factory:merge-conflict');
+  assert.deepEqual([...DERIVED_LABELS], [MERGE_CONFLICT_LABEL]);
+  assert.ok(!STAGE_LABELS.includes(MERGE_CONFLICT_LABEL));
+  assert.ok(!reconcile._test.BLOCKED_LABELS.has(MERGE_CONFLICT_LABEL));
+  // The label name must never satisfy the owner predicate, so no reconciliation
+  // can mistake it for a next-action lease.
+  assert.equal(ownerFor('merge-conflict'), 'factory:unowned');
+  assert.equal(reconcile._test.isOwnerLabel(MERGE_CONFLICT_LABEL), false);
+});
+
+test('mergeConflictState reads only GitHub mergeability', () => {
+  // REST shape: boolean mergeable plus mergeable_state.
+  assert.equal(mergeConflictState({ mergeable: false, mergeable_state: 'dirty' }), 'conflict');
+  assert.equal(mergeConflictState({ mergeable: true, mergeable_state: 'clean' }), 'clean');
+  assert.equal(mergeConflictState({ mergeable: true, mergeable_state: 'behind' }), 'clean');
+  assert.equal(mergeConflictState({ mergeable: true, mergeable_state: 'blocked' }), 'clean');
+  assert.equal(mergeConflictState({ mergeable: true, mergeable_state: 'unstable' }), 'clean');
+  // `gh`/GraphQL shape: mergeable string plus mergeStateStatus.
+  assert.equal(mergeConflictState({ mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }), 'conflict');
+  assert.equal(mergeConflictState({ mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN' }), 'clean');
+  assert.equal(mergeConflictState({ mergeable: 'UNKNOWN', mergeStateStatus: 'DIRTY' }), 'conflict');
+  // Unresolved mergeability is never guessed.
+  assert.equal(mergeConflictState({ mergeable: null, mergeable_state: 'unknown' }), 'unknown');
+  assert.equal(mergeConflictState({ mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN' }), 'unknown');
+  assert.equal(mergeConflictState({}), 'unknown');
+});
+
+test('derived labels are added and cleared in the same atomic label write', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['bug', 'factory', 'factory:review', 'factory:unowned'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcileLabels(github, contextFor('workflow_dispatch', {}), 12, {
+    owner: 'factory:unowned',
+    stage: 'factory:review',
+    derivedLabels: [MERGE_CONFLICT_LABEL],
+  });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(
+    new Set(calls[0].labels),
+    new Set(['bug', 'factory', 'factory:review', 'factory:unowned', MERGE_CONFLICT_LABEL]),
+  );
+});
+
+test('resolved mergeability clears the derived label without touching stages', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:review', 'factory:47', MERGE_CONFLICT_LABEL, 'infrastructure'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcileLabels(github, contextFor('workflow_dispatch', {}), 12, {
+    owner: 'factory:47',
+    stage: 'factory:review',
+    derivedLabels: [],
+  });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(
+    new Set(calls[0].labels),
+    new Set(['factory', 'factory:review', 'factory:47', 'infrastructure']),
+  );
+});
+
+test('unresolved mergeability preserves the derived label instead of guessing', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:review', 'factory:unowned', MERGE_CONFLICT_LABEL],
+    setLabels: async input => calls.push(input),
+  });
+  // Review/comment routing never reads live mergeability, so it must inherit it.
+  await reconcileLabels(github, contextFor('workflow_dispatch', {}), 12, {
+    owner: 'factory:unowned',
+    stage: 'factory:review',
+    derivedLabels: derivedLabelsFor({}),
+  });
+  assert.deepEqual(calls, []);
+  await reconcileLabels(github, contextFor('workflow_dispatch', {}), 12, {
+    owner: 'factory:unowned',
+    stage: 'factory:review',
+  });
+  assert.deepEqual(calls, []);
+});
+
+test('merge-conflict label definition is created for repository labels', async () => {
+  const created = [];
+  const github = githubFor({ createLabel: async input => created.push(input) });
+  await reconcile({ github, context: contextFor('workflow_dispatch', {}) });
+  const definition = created.find(label => label.name === MERGE_CONFLICT_LABEL);
+  assert.ok(definition, 'derived label must exist before the reconciler applies it');
+  assert.match(definition.description, /merge-conflicted/);
 });
 
 test('transient GitHub failures are retried', async () => {
@@ -618,6 +720,8 @@ test('dismissed review resets to factory:review', async () => {
 
 function enrollGithubFor({ pulls, labelsByPr, comments = [], setLabels }) {
   const api = {
+    listLabelsForRepo: async () => ({ data: [], headers: {}, status: 200 }),
+    createLabel: async () => ({ data: {}, headers: {}, status: 201 }),
     listLabelsOnIssue: async params => ({
       data: (labelsByPr[params.issue_number] || []).map(name => ({ name })),
       headers: {},

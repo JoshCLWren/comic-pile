@@ -30,10 +30,12 @@ STAGES = (
     "factory:review",
     "factory:ci",
     "factory:ready",
-    "factory:conflict",
-    "factory:conflicted",
     "factory:unowned",
 )
+# Derived observability label (issue #3138). It is deliberately absent from
+# STAGES: GitHub mergeability describes the head, it never becomes workflow
+# state, precedence, or a blocker.
+MERGE_CONFLICT_LABEL = "factory:merge-conflict"
 ATTENTION_OUTCOMES = {
     "provider_failure",
     "provider_throttle",
@@ -72,6 +74,15 @@ def label_names(item: Mapping[str, Any]) -> set[str]:
 
 def count_with_label(items: Iterable[Mapping[str, Any]], label: str) -> int:
     return sum(label in label_names(item) for item in items)
+
+
+def merge_conflict_count(prs: Iterable[Mapping[str, Any]]) -> int:
+    """Count pull requests carrying the reconciler-derived conflict label.
+
+    The label is observability only: it never selects, blocks, or reorders work,
+    and it is deliberately absent from ``STAGES``.
+    """
+    return count_with_label(prs, MERGE_CONFLICT_LABEL)
 
 
 def github_search_total(controller: Any, query: str) -> int:
@@ -475,10 +486,7 @@ def collect_snapshot() -> dict[str, Any]:
             "ci": count_with_label(prs, "factory:ci"),
             "ready": count_with_label(prs, "factory:ready"),
             "unowned": count_with_label(prs, "factory:unowned"),
-            "conflict": sum(
-                bool({"factory:conflict", "factory:conflicted"} & label_names(pr))
-                for pr in prs
-            ),
+            "conflict": merge_conflict_count(prs),
         },
         "throughput": {
             "opened_hour": opened_hour,
@@ -722,7 +730,7 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
             ("CI", "ci", "factory%3Aci"),
             ("Ready", "ready", "factory%3Aready"),
             ("Unowned", "unowned", "factory%3Aunowned"),
-            ("Conflict", "conflict", "factory%3Aconflict"),
+            ("Conflict", "conflict", "factory%3Amerge-conflict"),
         ]
     )
     funnel_text = "Latest allocator telemetry unavailable"
