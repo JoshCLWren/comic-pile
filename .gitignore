@@ -229,3 +229,6 @@ openapi.json
 
 # Factory Greptile outcome file (generated, never committed)
 .factory-greptile-outcomes.json
+
+# Local performance replay outputs (may contain private, sanitized traces)
+.profile-local/
