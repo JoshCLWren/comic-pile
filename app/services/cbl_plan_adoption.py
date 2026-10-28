@@ -1227,6 +1227,17 @@ async def adopt_cbl_material_into_reading_plan(
             "Could not claim this reading order because another adoption "
             "for the same list is already in progress."
         )
+    from app.config import get_reading_execution_settings
+    from app.repositories.reading_plan_list_link_repository import linked_list_ids
+    from app.services.reading_plan_list_link import link_new_plan_to_owned_list
+
+    if get_reading_execution_settings().enabled and await linked_list_ids(
+        db, plan_id=plan.id,
+    ):
+        raise AdoptionCommitError(
+            "This Plan uses an authoritative Reading List. Edit that List "
+            "instead of appending issues to the old Plan snapshot."
+        )
 
     merge_report = await _merge_adopted_nodes(
         db,
@@ -1255,6 +1266,8 @@ async def adopt_cbl_material_into_reading_plan(
             nodes=node_models,
             ordering_mode=_plan_ordering_mode(plan),
         )
+        if get_reading_execution_settings().enabled:
+            await link_new_plan_to_owned_list(db, plan=plan, user_id=user_id)
         if receipt is not None and receipt.request_fingerprint != fingerprint:
             await cbl_adoption_receipt_repository.update_receipt_fingerprint(
                 db, receipt, fingerprint
