@@ -20,7 +20,6 @@ branch_labels = None
 depends_on = None
 
 
-
 def upgrade() -> None:
     """Backfill an owned List and immutable List-source record for every Plan."""
     db = op.get_bind()
