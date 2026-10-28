@@ -29,11 +29,13 @@ from scripts.profile_local_traffic import (
     ],
 )
 def test_refuse_non_local_database_targets(url: str) -> None:
+    """Reject non-local PostgreSQL targets before starting a profiler."""
     with pytest.raises(ValueError):
         safe_database_url(url)
 
 
 def test_accept_loopback_and_keep_database_identity_through_proxy() -> None:
+    """Keep a local database's identity when routing through the delay proxy."""
     original = safe_database_url(
         "postgresql+asyncpg://user:local_pw@localhost:5435/comicpile_profile"
     )
@@ -43,6 +45,7 @@ def test_accept_loopback_and_keep_database_identity_through_proxy() -> None:
 
 
 def test_har_strips_host_and_refuses_secret_bearing_query_parameters(tmp_path: Path) -> None:
+    """Remove untrusted origins and deny query strings that could leak secrets."""
     har = {
         "log": {
             "entries": [
@@ -108,10 +111,12 @@ def test_har_strips_host_and_refuses_secret_bearing_query_parameters(tmp_path: P
     ],
 )
 def test_reject_sensitive_or_unrelated_routes(url: str) -> None:
+    """Exclude unauthorized and unrelated API routes from traffic replay."""
     with pytest.raises(ValueError):
         safe_route(url)
 
 
 @pytest.mark.skipif(not os.path.exists("/proc/self/stat"), reason="Linux only")
 def test_linux_cpu_counter_is_available() -> None:
+    """Read CPU ticks from the current Linux process without estimation."""
     assert cpu_seconds(os.getpid()) >= 0
