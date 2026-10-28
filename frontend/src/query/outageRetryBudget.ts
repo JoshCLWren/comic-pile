@@ -218,6 +218,9 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
  *   reason about the upper bound without jitter.
  */
 export function queryRetryDelay(failureCount: number): number {
+  // A failed request from a previous outage window must not slow a fresh,
+  // isolated failure; this delay callback runs before shouldRetryQuery prunes.
+  pruneFailureWindow(Date.now())
   // TanStack Query evaluates retryDelay BEFORE calling the retry predicate.
   // A pending second transient failure will become the one shared probe;
   // compute its delay from the failure window rather than a flag set by the
