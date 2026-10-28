@@ -26,7 +26,7 @@ test.describe('Auth Outage Recovery', () => {
   }) => {
     let refreshCalls = 0
     page.on('request', request => {
-      if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/auth/refresh')) refreshCalls += 1
+      if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/auth/refresh') refreshCalls += 1
     })
     await page.addInitScript(() => localStorage.setItem('auth_token', 'test-access-token'))
     // Step 1: Start with authenticated user
