@@ -65,7 +65,6 @@ function parseSelectionKeys(rawKeys: string | null): Set<string> {
     const key = candidate.trim()
     if (!key || parseCreatorKey(key) === null) continue
     keys.add(key)
-    if (keys.size >= MAX_COMPARISON_SELECTION) break
   }
   return keys
 }
@@ -305,34 +304,43 @@ export default function CreatorsPage() {
 
   // Selections are validated against the creators actually present in the
   // loaded list, so duplicate or unknown/stale keys cannot inflate the
-  // counter or consume selection slots (#4208).
+  // counter or consume selection slots (#4208). The four-creator cap applies
+  // to the visible selection only: a key that isn't on the current page never
+  // occupies a slot, so an unknown key in the URL can't crowd out a valid one.
   const selectedKeys = useMemo(() => {
     const parsed = parseSelectionKeys(searchParams.get('keys'))
-    if (items.length === 0) return new Set<string>()
     const visible = new Set(items.map((item) => item.canonical_creator_key))
     const filtered = new Set<string>()
     for (const key of parsed) {
-      if (visible.has(key)) filtered.add(key)
+      if (visible.has(key) && filtered.size < MAX_COMPARISON_SELECTION) {
+        filtered.add(key)
+      }
     }
     return filtered
   }, [searchParams, items])
 
-  // Drop unknown/stale/duplicate keys from the URL once the list has loaded, so
-  // the durable selection only carries real, visible creators (#4208).
+  // Keep the durable `keys` URL honest: drop keys that fail creator-key syntax,
+  // but never delete a valid selection merely because it isn't on the current
+  // page (a creator on page 2, or one filtered out by search). Valid selections
+  // must survive list changes, so a saved URL can't silently lose them (#4208).
+  // Unknown keys stay in the URL because this page can't confirm they aren't
+  // real creators elsewhere in the list; they never occupy a selection slot
+  // since the cap above applies only to visible creators.
   useEffect(() => {
-    if (items.length === 0) return
-    const raw = parseSelectionKeys(searchParams.get('keys'))
-    const visible = new Set(items.map((item) => item.canonical_creator_key))
-    const cleaned = new Set<string>()
-    for (const key of raw) {
-      if (visible.has(key)) cleaned.add(key)
+    const rawKeys = searchParams.get('keys')
+    if (!rawKeys) return
+    const raw = new Set<string>()
+    for (const candidate of rawKeys.split(',')) {
+      const key = candidate.trim()
+      if (key) raw.add(key)
     }
+    const valid = parseSelectionKeys(rawKeys)
     const rawKey = Array.from(raw).sort().join(',')
-    const cleanedKey = Array.from(cleaned).sort().join(',')
+    const cleanedKey = Array.from(valid).sort().join(',')
     if (rawKey !== cleanedKey) {
-      updateSelectionUrl(cleaned)
+      updateSelectionUrl(valid)
     }
-  }, [items, searchParams, updateSelectionUrl])
+  }, [searchParams, updateSelectionUrl])
 
   const hasItems = items.length > 0
   const ratingsPartial = coverage != null && !coverage.ratings_complete

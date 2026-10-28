@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorsPage from '../pages/CreatorsPage'
@@ -829,5 +829,53 @@ describe('CreatorsPage comparison selection URL contract', () => {
     expect(screen.getByLabelText('Select Brian K. Vaughan for comparison')).toBeChecked()
     expect(screen.getByLabelText('Select Steve McNiven for comparison')).toBeChecked()
     expect(screen.getByRole('button', { name: 'Compare' })).toBeInTheDocument()
+  })
+
+  it('does not let an unknown key consume a selection slot or crowd out a valid one', () => {
+    selectionState()
+
+    renderPage(undefined, '/creators?keys=creator:9999,creator:7,creator:12')
+
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+    expect(screen.getByLabelText('Select Brian K. Vaughan for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Steve McNiven for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Fiona Staples for comparison')).not.toBeChecked()
+    // The unknown key is preserved in the URL (this page can't confirm it isn't a
+    // real creator elsewhere in the list) but never occupies a selection slot.
+    expect(currentKeysParam()).toBe('creator:9999,creator:7,creator:12')
+  })
+
+  it('preserves a valid selection for a creator not on the current page', () => {
+    mockedHook.mockReturnValue(
+      baseState({ items: [BRIAN], total: 2, hasMore: true }),
+    )
+
+    renderPage(undefined, '/creators?keys=creator:7,creator:13')
+
+    expect(screen.getByLabelText('Select Brian K. Vaughan for comparison')).toBeChecked()
+    expect(screen.getByText('1 of 4 selected for comparison')).toBeInTheDocument()
+    // A valid key for a creator not yet loaded must not be deleted from the URL,
+    // so the selection survives list changes and can be checked once loaded (#4208).
+    expect(currentKeysParam()).toBe('creator:7,creator:13')
+  })
+
+  it('deduplicates duplicate keys in the URL without inflating the counter', () => {
+    selectionState()
+
+    renderPage(undefined, '/creators?keys=creator:7,creator:7,creator:12,creator:12')
+
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+    expect(screen.getByLabelText('Select Brian K. Vaughan for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Steve McNiven for comparison')).toBeChecked()
+    expect(screen.getByLabelText('Select Fiona Staples for comparison')).not.toBeChecked()
+  })
+
+  it('drops malformed keys from the URL while preserving valid selections', async () => {
+    selectionState()
+
+    renderPage(undefined, '/creators?keys=creator:7,bogus,creator:12,creator:invalid')
+
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+    await waitFor(() => expect(currentKeysParam()).toBe('creator:7,creator:12'))
   })
 })
