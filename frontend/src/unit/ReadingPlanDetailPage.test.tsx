@@ -306,6 +306,61 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getByText('Editor')).toBeInTheDocument()
   })
 
+  it('rejects duplicate-name lists with matching issues when ambiguity exists', async () => {
+    mockGetReader.mockResolvedValue({ ...readerView, name: 'Planetary / Authority' })
+    mockListOwned.mockResolvedValue([
+      {
+        id: 1000018, 
+        name: 'Planetary / Authority', 
+        issue_count: 3,
+        description: null, 
+        mode: 'strict', 
+        updated_at: '2026-10-27T00:00:00Z',
+      },
+      {
+        id: 1000019, 
+        name: 'Planetary / Authority', 
+        issue_count: 3,
+        description: null, 
+        mode: 'strict', 
+        updated_at: '2026-10-27T00:00:00Z',
+      }
+    ])
+    // Mock both owned lists to have different but valid issues
+    mockGetOwned.mockImplementation((id: number) => {
+      if (id === 1000018) {
+        return Promise.resolve({
+          id: 1000018, name: 'Planetary / Authority', issue_count: 3,
+          description: null, mode: 'strict', user_id: 1,
+          created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-27T00:00:00Z',
+          entries: [600, 601, 602].map((issue_id, index) => ({
+            id: index + 1, position: index, issue_id, thread_id: 1, series_name: 'Planetary',
+            issue_number: String(index + 1), status: 'unread', gate: 'none' as const, skipped: false,
+          })),
+        })
+      } else if (id === 1000019) {
+        return Promise.resolve({
+          id: 1000019, name: 'Planetary / Authority', issue_count: 3,
+          description: null, mode: 'strict', user_id: 1,
+          created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-27T00:00:00Z',
+          entries: [603, 604, 605].map((issue_id, index) => ({
+            id: index + 1, position: index, issue_id, thread_id: 2, series_name: 'Authority',
+            issue_number: String(index + 1), status: 'unread', gate: 'none' as const, skipped: false,
+          })),
+        })
+      }
+      return Promise.reject(new Error('List not found'))
+    })
+    renderPage()
+    const edit = await screen.findByRole('button', { name: 'Edit plan' })
+    await waitFor(() => expect(edit).toBeEnabled())
+    fireEvent.click(edit)
+    expect(screen.getByText('Editor')).toBeInTheDocument()
+    // Verify that neither list was specifically selected due to ambiguity
+    expect(mockGetOwned).not.toHaveBeenCalledWith(1000018)
+    expect(mockGetOwned).not.toHaveBeenCalledWith(1000019)
+  })
+
   it('preserves bracketed prefixes in owned Reading List names', async () => {
     const source = { ...readerView.sources[0], raw_source_path: 'custom-cbl:1000002', source_path: null, display_name: '[Favorites]' }
     mockGetReader.mockResolvedValue({ ...readerView, sources: [source], available_now: readerView.available_now.map((issue) => ({ ...issue, source_paths: [source.raw_source_path] })) })
