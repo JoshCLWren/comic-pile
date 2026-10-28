@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import difflib
+import itertools
 import json
 from pathlib import Path
 import sys
@@ -121,6 +123,15 @@ def main() -> int:
         print(f"{action} deterministic OpenAPI schema: {args.output}")
         return 0
 
+    if args.check and args.output.exists():
+        existing = args.output.read_text(encoding="utf-8")
+        diff = difflib.unified_diff(
+            existing.splitlines(keepends=True),
+            rendered.splitlines(keepends=True),
+            fromfile="checked-in OpenAPI",
+            tofile="generated OpenAPI",
+        )
+        print("".join(itertools.islice(diff, 90)))
     print(
         f"Generated OpenAPI schema is stale: {args.output}\n"
         "Run `python scripts/export_openapi_schema.py` and commit the result."
