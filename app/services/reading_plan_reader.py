@@ -256,7 +256,13 @@ async def get_reading_plan_reader(
     sources = await reading_plan_repository.list_plan_sources(db, plan_id=plan_id_value)
     linked_list_ids = {source.custom_cbl_list_id for source in sources
                        if source.custom_cbl_list_id is not None}
-    if eligibility is not None and linked_list_ids:
+    if eligibility is not None:
+        if not linked_list_ids:
+            # Never silently resurrect stale Plan order after an Option E cutover.
+            raise HTTPException(
+                status_code=409,
+                detail="Reading Plan has no linked authoritative Reading List",
+            )
         if len(linked_list_ids) != 1:
             raise HTTPException(
                 status_code=409, detail="Ambiguous Reading List association",
