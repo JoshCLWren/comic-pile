@@ -10,7 +10,7 @@ import argparse
 import concurrent.futures
 import contextlib
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import json
 import os
 import secrets
@@ -35,12 +35,14 @@ DEFAULT_ROUTES = (
 
 @dataclass(frozen=True)
 class Traffic:
+    """Represent a sanitized API request and its replay offset."""
     url: str
     route: str
     offset: float = 0.0
 
 
 def safe_database_url(value: str) -> parse.SplitResult:
+    """Validate that a PostgreSQL URL targets an explicitly named local database."""
     p = parse.urlsplit(value)
     if p.scheme not in {"postgres", "postgresql", "postgresql+asyncpg"}:
         raise ValueError("Use a PostgreSQL URL")
@@ -54,11 +56,13 @@ def safe_database_url(value: str) -> parse.SplitResult:
 
 
 def proxy_url(p: parse.SplitResult, port: int) -> str:
+    """Route an existing local PostgreSQL connection through the delay proxy."""
     auth = p.netloc.rsplit("@", 1)[0] + "@" if "@" in p.netloc else ""
     return parse.urlunsplit((p.scheme, f"{auth}127.0.0.1:{port}", p.path, p.query, ""))
 
 
 def safe_route(url: str) -> Traffic:
+    """Validate and sanitize a GET-only API route for safe replay."""
     p = parse.urlsplit(url)
     if p.scheme and p.scheme not in {"http", "https"}:
         raise ValueError("Invalid URL scheme")
@@ -76,6 +80,7 @@ def safe_route(url: str) -> Traffic:
 
 
 def read_har(filename: Path) -> tuple[list[Traffic], int]:
+    """Extract safe, chronological GET requests from a HAR capture."""
     entries = json.loads(filename.read_text(encoding="utf-8"))["log"]["entries"]
     if not isinstance(entries, list) or len(entries) > 5000:
         raise ValueError("Invalid or too-large HAR")
@@ -108,6 +113,7 @@ class DelayProxy:
     """Simple PostgreSQL TCP delay injector; delay is per chunk, not per query."""
 
     def __init__(self, host: str, port: int, delay_ms: int) -> None:
+        """Create and start the loopback PostgreSQL TCP delay proxy."""
         self.target = (host, port)
         self.delay = delay_ms / 1000
         self.stop_event = threading.Event()
@@ -123,7 +129,7 @@ class DelayProxy:
         while not self.stop_event.is_set():
             try:
                 client, _ = self.listener.accept()
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
@@ -161,6 +167,7 @@ class DelayProxy:
             b.join(timeout=35)
 
     def close(self) -> None:
+        """Stop the delay proxy and release its listener."""
         self.stop_event.set()
         self.listener.close()
         self.thread.join(timeout=1)
@@ -174,6 +181,7 @@ def cpu_seconds(pid: int) -> float:
 
 
 def free_port() -> int:
+    """Reserve and return an available loopback TCP port."""
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
@@ -181,6 +189,7 @@ def free_port() -> int:
 
 @contextlib.contextmanager
 def api_process(db_url: str, output: Path, label: str):
+    """Run a fresh single-worker local API process for one measured scenario."""
     port = free_port()
     env = dict(os.environ)
     env.update(DATABASE_URL=db_url, TEST_DATABASE_URL=db_url,
@@ -224,12 +233,15 @@ def api_process(db_url: str, output: Path, label: str):
 
 
 class BlockRedirects(request.HTTPRedirectHandler):
+    """Prevent replay authentication and profiling from following redirects."""
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Reject redirects so request targets remain on the local API."""
         return None
 
 
 def http(base: str, path: str, token: str | None,
          method: str = "GET", body: bytes | None = None):
+    """Issue a timed local HTTP request without following redirects."""
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = "Bearer " + token
@@ -247,6 +259,7 @@ def http(base: str, path: str, token: str | None,
 
 
 def get(base: str, item: Traffic, token: str) -> dict:
+    """Collect a single API request's status, latency, and optional query count."""
     try:
         status, _, headers, ms = http(base, item.url, token)
         queries = headers.get("X-App-DB-Queries")
@@ -260,6 +273,7 @@ def get(base: str, item: Traffic, token: str) -> dict:
 
 def burst(base: str, items: list[Traffic], token: str, workers: int,
           speed: float) -> tuple[list[dict], float]:
+    """Replay concurrent requests at their captured relative offsets."""
     t = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         futures = []
@@ -273,6 +287,7 @@ def burst(base: str, items: list[Traffic], token: str, workers: int,
 
 
 def local_token(db_url: str, output: Path, username: str, password: str) -> str:
+    """Authenticate against a disposable local API process before profiling."""
     # Setup in a separate local process so authentication does not warm the profiles.
     with api_process(db_url, output, "setup-auth") as (_, base, _):
         status, data, _, _ = http(
@@ -289,6 +304,7 @@ def local_token(db_url: str, output: Path, username: str, password: str) -> str:
 
 def profile(db_url: str, delay: int, output: Path, items: list[Traffic],
             token: str, workers: int, speed: float, repeats: int) -> dict:
+    """Measure cold, warm, and concurrent API behavior with optional DB latency."""
     db = safe_database_url(db_url)
     proxy = DelayProxy(db.hostname or "127.0.0.1", db.port or 5432, delay) if delay else None
     chosen_url = proxy_url(db, proxy.port) if proxy else db_url
@@ -327,6 +343,7 @@ def profile(db_url: str, delay: int, output: Path, items: list[Traffic],
 
 
 def report_markdown(data: dict) -> str:
+    """Render the measured CPU, wall-time, and request data as Markdown."""
     out = [
         "# Local ComicPile CPU profile",
         "",
@@ -368,6 +385,7 @@ def report_markdown(data: dict) -> str:
 
 
 def main() -> int:
+    """Parse options, enforce local-only safety constraints, and run profiles."""
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--db-url", default=os.getenv("LOCAL_PROFILE_DATABASE_URL", ""))
     ap.add_argument("--username", help="Existing LOCAL test account name")
@@ -409,7 +427,7 @@ def main() -> int:
             raise ValueError("With --token-env, provide its matching LOCAL SECRET_KEY in env")
         args.output.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(args.output, 0o700)
-        output = args.output / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        output = args.output / datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         output.mkdir(mode=0o700)
         if not token:
             print("Authenticating against loopback local test account...")
