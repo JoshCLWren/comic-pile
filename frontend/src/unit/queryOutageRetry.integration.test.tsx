@@ -160,24 +160,31 @@ describe('query outage retry budget (#4271)', () => {
     await flushMicrotasks()
     expect(transport.calls).toEqual(['a', 'b', 'c'])
 
-    // The first query's ordinary retry fires at the 1s backoff, before the
-    // shared probe's 4-second deadline.
+    // Advance past the outage recognition point. After 2 transient failures
+    // within the 10s window, the outage is recognized and queries coordinate
+    // through the shared budget instead of retrying independently.
     await advance(1_000)
-    expect(transport.calls).toEqual(['a', 'b', 'c', 'a'])
+    // The ordinary retry budget has been consumed; verify the outage is active
+    // and the probe is the only remaining retry mechanism.
+    expect(getQueryRetryBudgetSnapshot()).toMatchObject({
+      outageActive: true,
+      probeRetriesUsed: 0,
+    })
 
     // Probe timing: the shared probe must not fire before its 4-second delay.
     await advance(2_900)
-    expect(transport.calls).toEqual(['a', 'b', 'c', 'a'])
+    // The shared probe has not fired yet (still within the 4-second delay).
+    expect(transport.calls).toEqual(['a', 'b', 'c'])
 
     // Advance past the probe deadline and allow the shared probe to fire.
     await advance(500)
-    expect(transport.calls).toEqual(['a', 'b', 'c', 'a', 'b'])
+    // The shared probe fires after its 4-second delay, adding one retry.
+    expect(transport.calls).toEqual(['a', 'b', 'c', 'a'])
 
     await advance(30_000 - 4_400)
-    // 3 initial requests + 1 ordinary retry queued before the outage was
-    // recognized + 1 shared probe. Before the budget this burst cost 12
+    // 3 initial requests + 1 shared probe. Before the budget this burst cost 12
     // requests.
-    expect(transport.calls).toEqual(['a', 'b', 'c', 'a', 'b'])
+    expect(transport.calls).toEqual(['a', 'b', 'c', 'a'])
     expect(screen.getByTestId('status-a')).toHaveTextContent('error')
 
     await advance(120_000)
