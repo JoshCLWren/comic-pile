@@ -14,7 +14,7 @@ import type {
 export function createRollBootstrapApi(client: HttpClient) {
   return {
     get: (timezone?: string) => {
-      if (!timezone) return client.get<RollBootstrapResponse>('/v1/roll/bootstrap')
+      if (!timezone) return client.get<RollBootstrapResponse>('/v2/roll/bootstrap')
       return client.get<RollBootstrapResponse>('/v1/roll/bootstrap', {
         params: { timezone },
       })

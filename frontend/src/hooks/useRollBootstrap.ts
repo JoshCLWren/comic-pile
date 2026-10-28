@@ -41,7 +41,11 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
             queryKeys.roll.bootstrap(),
           ) ?? null
         }
-        return result
+        return {
+    ...result,
+    // Map v2 field to legacy roll_pool for downstream consumers
+    roll_pool: (result as any).rollable ?? [],
+  }
       } catch (err) {
         const normalized =
           err instanceof Error ? err : new Error('Failed to fetch roll bootstrap')
