@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from comic_pile.dependencies import build_blocking_explanation
 from app.services.reading_plan_source_labels import load_reading_plan_source_names
+from app.services.reading_list_reader import get_reading_list_reader
+from app.schemas.reading_list_reader import ReadingListReaderResponse
 from app.repositories import continuity_repository, reading_plan_repository
 from app.services import reading_plan_release_source_service as release_source_service
 from app.services.reading_eligibility_service import (
@@ -176,6 +178,50 @@ def _to_reader_issue(
     )
 
 
+def _project_authoritative_list(
+    reading_list: ReadingListReaderResponse,
+) -> tuple[list[ReadingPlanReaderIssue], ReadingPlanReaderLane, ReadingPlanProgress]:
+    """Project exactly the list the Roll evaluator uses, not a copied Plan order."""
+    rows: list[ReadingPlanReaderIssue] = []
+    for entry in reading_list.entries:
+        blockers = [
+            ReadingPlanBlocker(
+                issue_id=dependency.issue_id,
+                thread_id=dependency.thread_id,
+                thread_title=dependency.thread_title,
+                issue_number=dependency.issue_number,
+                explanation=dependency.label,
+            )
+            for dependency in (
+                entry.explanation.blocking_dependencies if entry.explanation else []
+            )
+            if dependency.issue_id is not None
+        ]
+        rows.append(
+            ReadingPlanReaderIssue(
+                occurrence_id=f"reading-list:{reading_list.list_id}:{entry.issue_id}",
+                issue_id=entry.issue_id,
+                lane_id="reading-list",
+                display_position=entry.position,
+                issue_number=entry.issue_number,
+                thread_id=entry.thread_id,
+                thread_title=entry.series_name,
+                status=entry.status,
+                is_checkpoint=entry.is_checkpoint,
+                availability=entry.availability,
+                blockers=blockers,
+                source_paths=[f"custom-cbl:{reading_list.list_id}"],
+            )
+        )
+    progress = ReadingPlanProgress(
+        total_issues=len(rows),
+        read_issues=sum(row.status == "read" for row in rows),
+    )
+    return rows, ReadingPlanReaderLane(
+        id="reading-list", name="Reading order", order=0, issues=rows,
+    ), progress
+
+
 async def get_reading_plan_reader(
     db: AsyncSession,
     *,
@@ -204,17 +250,74 @@ async def get_reading_plan_reader(
     plan_name = plan.name
     ordering_mode = plan.ordering_mode
     lanes_json = plan.lanes_json
+    # In Option E a persisted, owner-validated List is the sole issue-order
+    # authority. Old Plan membership and ordering_mode remain provenance only.
+    eligibility = await get_execution_eligibility(db, user_id)
+    sources = await reading_plan_repository.list_plan_sources(db, plan_id=plan_id_value)
+    linked_list_ids = {source.custom_cbl_list_id for source in sources
+                       if source.custom_cbl_list_id is not None}
+    if eligibility is not None:
+        if not linked_list_ids:
+            # Never silently resurrect stale Plan order after an Option E cutover.
+            raise HTTPException(
+                status_code=409,
+                detail="Reading Plan has no linked authoritative Reading List",
+            )
+        if len(linked_list_ids) != 1:
+            raise HTTPException(
+                status_code=409, detail="Ambiguous Reading List association",
+            )
+        reading_list = await get_reading_list_reader(
+            db, user_id=user_id, list_id=next(iter(linked_list_ids)),
+        )
+        rows, lane, progress = _project_authoritative_list(reading_list)
+        source_names = await load_reading_plan_source_names(
+            db, user_id=user_id,
+            source_paths=(source.raw_source_path for source in sources),
+        )
+        release_sources = await release_source_service.list_release_sources_for_reader(
+            db, plan_id=plan_id_value, user_id=user_id,
+        )
+        release_candidates = await release_source_service.list_release_candidates_for_reader(
+            db, plan_id=plan_id_value, user_id=user_id,
+        )
+        return ReadingPlanReaderResponse(
+            execution_mode="option_e",
+            plan_id=plan_id_value,
+            name=plan_name,
+            ordering_mode=("strict_sequential" if reading_list.mode == "strict"
+                           else "informational"),
+            progress=progress,
+            available_now=[row for row in rows if row.availability == "available"],
+            blocked_next=[row for row in rows if row.availability == "blocked"],
+            lanes=[lane],
+            sources=[
+                ReadingPlanSourceSnapshot(
+                    id=source.id,
+                    display_name=source_names.get(source.raw_source_path),
+                    raw_source_path=source.raw_source_path,
+                    repository=source.repository,
+                    source_path=source.source_path,
+                    revision_sha=source.revision_sha,
+                    content_hash=source.content_hash,
+                    adopted_at=source.adopted_at,
+                    recorded_at=source.recorded_at,
+                )
+                for source in sources
+            ],
+            release_sources=release_sources,
+            release_candidates=release_candidates,
+        )
+
     identities = await reading_plan_repository.list_plan_issue_identities(
         db, plan_id=plan_id_value
     )
-    eligibility = await get_execution_eligibility(db, user_id)
     incoming_rows = (await reading_plan_repository.list_canonical_incoming_blockers(
         db, user_id=user_id, issue_ids=[row.issue_id for row in identities]
     )) if eligibility is None else []
     incoming: dict[int, list[CanonicalIncomingBlocker]] = defaultdict(list)
     for row in incoming_rows:
         incoming[row.target_issue_id].append(row)
-    sources = await reading_plan_repository.list_plan_sources(db, plan_id=plan_id_value)
     source_names = await load_reading_plan_source_names(
         db, user_id=user_id, source_paths=(source.raw_source_path for source in sources),
     )

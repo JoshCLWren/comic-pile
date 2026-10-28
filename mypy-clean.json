@@ -74,6 +74,7 @@
   "app/repositories/dependency_group_repository.py",
   "app/repositories/dependency_repository.py",
   "app/repositories/failed_login_repository.py",
+  "app/repositories/github_issue_rate_limit_repository.py",
   "app/repositories/health_repository.py",
   "app/repositories/issue_identity_repository.py",
   "app/repositories/issue_repository.py",
@@ -94,6 +95,7 @@
   "app/repositories/reading_list_authoring_repository.py",
   "app/repositories/reading_order_repository.py",
   "app/repositories/reading_overlap_decision_repository.py",
+  "app/repositories/reading_plan_list_link_repository.py",
   "app/repositories/reading_plan_release_source_repository.py",
   "app/repositories/reading_plan_repository.py",
   "app/repositories/reading_session_repository.py",
@@ -191,6 +193,5 @@
   "scripts/mypy_baseline.py",
   "tests/test_factory_dispatch_workflow.py",
   "tests/test_factory_runtime_evidence_workflow.py",
-  "tests/test_mypy_baseline.py",
-  "app/repositories/github_issue_rate_limit_repository.py"
+  "tests/test_mypy_baseline.py"
 ]

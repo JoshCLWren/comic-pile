@@ -76,11 +76,17 @@ async def adopt_cbl_into_existing_reading_plan(
     client_content_hash: str | None = None,
     client_revision_sha: str | None = None,
 ) -> AdoptionCommitResult:
-    """Atomically merge reviewed source material into the exact owned plan.
+    """Legacy Plan-targeted adoption is disabled under Option E authority.
 
-    The target plan must already exist and belong to ``user_id``. This function
-    never creates a Reading Plan and never searches for one by CBL provenance.
+    The target plan must already exist and belong to ``user_id``.
     """
+    from app.config import get_reading_execution_settings
+
+    if get_reading_execution_settings().enabled:
+        raise AdoptionCommitError(
+            "Adopt the CBL into the owned Reading List, not a legacy Plan. "
+            "Plan issue snapshots are no longer reading-order authority."
+        )
     await lock_reader(db, user_id)
     plan = (
         await db.execute(

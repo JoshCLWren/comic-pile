@@ -49,6 +49,10 @@ from app.services.reading_plan_normalization import (
     unlink_dependency_from_plan,
 )
 from app.services.tag_service import purge_target_assignments
+from app.services.reading_plan_list_link import (
+    ensure_new_plan_has_authority,
+    guard_legacy_plan_edit,
+)
 
 router = APIRouter(tags=["continuity-plans"])
 
@@ -103,6 +107,9 @@ async def create_continuity_plan(
             plan=plan,
             nodes=payload.nodes,
             ordering_mode=payload.ordering_mode,
+        )
+        await ensure_new_plan_has_authority(
+            db, plan=plan, user_id=current_user.id,
         )
         await db.commit()
     except ValueError as exc:
@@ -230,6 +237,7 @@ async def update_continuity_plan(
 ) -> ContinuityPlanResponse:
     """Replace a plan atomically, including rules explicitly owned by that plan."""
     plan = await _get_owned_plan(db, current_user.id, plan_id)
+    guard_legacy_plan_edit()
     await validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
     membership_ids = await guard_plan_update(db, plan=plan, payload=payload)
     prior_ordering_mode = plan.ordering_mode
@@ -299,6 +307,10 @@ async def adopt_reading_order(
         plan_name=payload.plan_name,
         lane_id=payload.lane_id,
         lane_name=payload.lane_name,
+    )
+    await ensure_new_plan_has_authority(
+        db, plan=plan, user_id=current_user.id,
+        adopted_order_id=payload.reading_order_id,
     )
     try:
         await db.commit()

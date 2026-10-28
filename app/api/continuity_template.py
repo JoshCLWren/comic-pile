@@ -232,6 +232,11 @@ async def adopt_crossover_template(
             nodes=payload.nodes,
             ordering_mode=payload.ordering_mode,
         )
+        from app.services.reading_plan_list_link import ensure_new_plan_has_authority
+
+        await ensure_new_plan_has_authority(
+            db, plan=plan, user_id=current_user.id,
+        )
         await db.commit()
     except ValueError as exc:
         await db.rollback()
