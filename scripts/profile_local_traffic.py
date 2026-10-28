@@ -9,13 +9,12 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import contextlib
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import socket
-import statistics
 import subprocess
 import sys
 import threading
@@ -66,6 +65,12 @@ def safe_route(url: str) -> Traffic:
         raise ValueError("Only API GET paths can be replayed")
     if "\r" in url or "\n" in url:
         raise ValueError("Invalid URL")
+    # HARs may contain credentials in query strings. Reject, never forward them.
+    sensitive = ("token", "password", "secret", "api_key", "auth", "signature",
+                 "session", "jwt", "client_secret", "access_key")
+    if any(any(part in key.lower() for part in sensitive)
+           for key, _ in parse.parse_qsl(p.query, keep_blank_values=True)):
+        raise ValueError("Sensitive query parameters may not be replayed")
     return Traffic(p.path + ("?" + p.query if p.query else ""), p.path)
 
 
