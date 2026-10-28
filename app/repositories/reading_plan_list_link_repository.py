@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from datetime import datetime
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
@@ -12,6 +14,48 @@ from app.models.reading_order import ReadingOrderItem
 from app.models.issue import Issue
 from app.models.thread import Thread
 
+
+
+async def owned_plan_list_authority_rows(
+    db: AsyncSession, *, user_id: int, plan_ids: list[int],
+) -> list[tuple[int, int, str, datetime]]:
+    """Bulk-load the authoritative Lists for Plans, scoped to the same owner.
+
+    Keep SQL construction in repositories; the service validates exact-one
+    authority and decides whether missing or ambiguous links are fatal.
+    """
+    if not plan_ids:
+        return []
+    rows = (await db.execute(
+        select(
+            ReadingPlanSource.plan_id,
+            CustomCBLList.id,
+            CustomCBLList.mode,
+            CustomCBLList.updated_at,
+        )
+        .join(CustomCBLList, ReadingPlanSource.custom_cbl_list_id == CustomCBLList.id)
+        .where(
+            ReadingPlanSource.plan_id.in_(plan_ids),
+            CustomCBLList.user_id == user_id,
+        )
+    )).all()
+    return [(plan_id, list_id, mode, updated_at)
+            for plan_id, list_id, mode, updated_at in rows]
+
+
+async def owned_list_entry_counts(
+    db: AsyncSession, *, user_id: int, list_ids: list[int],
+) -> dict[int, int]:
+    """Bulk-count physical entries, excluding any unowned List IDs."""
+    if not list_ids:
+        return {}
+    rows = (await db.execute(
+        select(CustomCBLEntry.list_id, func.count())
+        .join(CustomCBLList, CustomCBLEntry.list_id == CustomCBLList.id)
+        .where(CustomCBLEntry.list_id.in_(list_ids), CustomCBLList.user_id == user_id)
+        .group_by(CustomCBLEntry.list_id)
+    )).all()
+    return dict(rows)
 
 async def linked_list_ids(db: AsyncSession, *, plan_id: int) -> set[int]:
     """Read only explicit, stored Plan-to-List source references."""
