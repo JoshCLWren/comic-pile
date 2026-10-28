@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanDetailPage from '../pages/ReadingPlanDetailPage'
 import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-continuity-plans'
+import { customCBLApi } from '../services/api-custom-cbl'
 import { tagsApi } from '../services/api-tags'
 import { cast } from '../utils/cast'
 
@@ -19,6 +20,11 @@ vi.mock('../services/api-continuity-plans', async () => {
       getReader: vi.fn(),
     },
   }
+})
+
+vi.mock('../services/api-custom-cbl', async () => {
+  const actual = await vi.importActual<typeof import('../services/api-custom-cbl')>('../services/api-custom-cbl')
+  return { ...actual, customCBLApi: { ...actual.customCBLApi, list: vi.fn(), get: vi.fn() } }
 })
 
 vi.mock('../services/api-tags', () => ({
@@ -38,6 +44,8 @@ vi.mock('../components/Tags/TagSection', () => ({
 }))
 
 const mockGetReader = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.getReader)
+const mockListOwned = vi.mocked(customCBLApi.list)
+const mockGetOwned = vi.mocked(customCBLApi.get)
 const mockPlanTags = vi.mocked(tagsApi.effectiveForPlan)
 
 function createWrapper() {
@@ -194,6 +202,8 @@ const readerView: ReadingPlanReaderView = {
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetReader.mockResolvedValue(readerView)
+  mockListOwned.mockResolvedValue([])
+  mockGetOwned.mockResolvedValue(undefined as never)
   mockPlanTags.mockResolvedValue({
     target_type: 'ContinuityPlan',
     target_id: 12,
@@ -235,6 +245,61 @@ describe('ReadingPlanDetailPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Edit plan' }))
     expect(screen.getByText('Editor')).toBeInTheDocument()
     expect(screen.queryByText('Reading List editor')).not.toBeInTheDocument()
+  })
+
+  it('opens Planetary / Authority owned Reading List when legacy provenance lost the direct link', async () => {
+    const issues = Array.from({ length: 144 }, (_, index) => ({
+      ...laterIssue,
+      occurrence_id: `planetary-${index}`,
+      issue_id: 20000 + index,
+      display_position: index,
+    }))
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      plan_id: 29,
+      name: 'Planetary / Authority',
+      sources: [{ ...readerView.sources[0], raw_source_path: 'comicvine:4050-18250' }],
+      lanes: [{ ...readerView.lanes[0], issues }],
+    })
+    mockListOwned.mockResolvedValue([{
+      id: 1000018, name: 'Planetary / Authority', issue_count: 145,
+      description: null, mode: 'strict', updated_at: '2026-10-27T00:00:00Z',
+    }])
+    mockGetOwned.mockResolvedValue({
+      id: 1000018, name: 'Planetary / Authority', issue_count: 145,
+      description: null, mode: 'strict', user_id: 1,
+      created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-27T00:00:00Z',
+      entries: [...issues, { ...issues[0], issue_id: 49999 }].map((issue, index) => ({
+        id: index + 1, position: index, issue_id: issue.issue_id,
+        thread_id: issue.thread_id, series_name: 'Planetary',
+        issue_number: String(index + 1), status: 'unread',
+        gate: 'none' as const, skipped: false,
+      })),
+    })
+    renderPage('29')
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit reading order' }))
+    expect(screen.getByText('Reading List editor 1000018')).toBeInTheDocument()
+    expect(mockGetOwned).toHaveBeenCalledWith(1000018)
+  })
+
+  it('rejects same-name lists with unrelated issues or ambiguous owned candidates', async () => {
+    mockGetReader.mockResolvedValue({ ...readerView, name: 'Planetary / Authority' })
+    mockListOwned.mockResolvedValue([{
+      id: 1000018, name: 'Planetary / Authority', issue_count: 3,
+      description: null, mode: 'strict', updated_at: '2026-10-27T00:00:00Z',
+    }])
+    mockGetOwned.mockResolvedValue({
+      id: 1000018, name: 'Planetary / Authority', issue_count: 3,
+      description: null, mode: 'strict', user_id: 1,
+      created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-27T00:00:00Z',
+      entries: [600, 601, 602].map((issue_id, index) => ({
+        id: index + 1, position: index, issue_id, thread_id: 1, series_name: 'Planetary',
+        issue_number: String(index + 1), status: 'unread', gate: 'none' as const, skipped: false,
+      })),
+    })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit plan' }))
+    expect(screen.getByText('Editor')).toBeInTheDocument()
   })
 
   it('preserves bracketed prefixes in owned Reading List names', async () => {
