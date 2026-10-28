@@ -217,7 +217,7 @@ test('does not make a redundant /auth/me call after AuthProvider resolves user',
     (call) => call[0] === '/v1/auth/me',
   )
   expect(authMeCalls).toHaveLength(1)
-  expect(mockApiGet).toHaveBeenCalledWith('/v1/auth/me', { skipAuthRedirect: true, timeout: 15000 })
+  expect(mockApiGet).toHaveBeenCalledWith('/v1/auth/me', { skipAuthRedirect: true, skipAuthRefresh: true, timeout: 15000 })
 })
 
 test('clears authentication when AuthProvider bootstrap returns unauthorized', async () => {

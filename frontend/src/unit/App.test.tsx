@@ -535,6 +535,7 @@ describe('anonymous no-token probe suppression', () => {
       expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
     })
     expect(mockApiGet).toHaveBeenCalledWith('/v1/auth/me', {
+      skipAuthRefresh: true,
       timeout: 15000,
       skipAuthRedirect: true,
     })

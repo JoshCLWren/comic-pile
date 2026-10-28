@@ -9,7 +9,11 @@ import type { AxiosRequestConfig } from 'axios'
 export type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   _retry?: boolean
   _queued?: boolean
+  /** Credential epoch captured internally for refresh response isolation. */
+  credentialGeneration?: number
   skipAuthRedirect?: boolean
+  /** AuthProvider performs the single refresh/retry for its shared validation. */
+  skipAuthRefresh?: boolean
 }
 
 /**
