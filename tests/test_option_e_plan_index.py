@@ -82,6 +82,7 @@ async def test_index_uses_list_mode_membership_and_latest_list_timestamp(
     # Plan's List was edited more recently. The index must sort by the
     # authoritative List timestamp, rather than the legacy Plan timestamp.
     middle = earlier + timedelta(days=5)
+    newer_plan = later + timedelta(days=2)
     other_plan = ContinuityPlan(
         user_id=owner,
         name="Older list, newer Plan",
@@ -89,7 +90,7 @@ async def test_index_uses_list_mode_membership_and_latest_list_timestamp(
         lanes_json=[{"id": "main", "name": "Main", "order": 0}],
         nodes_json=[],
         created_at=earlier,
-        updated_at=middle,
+        updated_at=newer_plan,
     )
     other_list = CustomCBLList(
         user_id=owner, name="Older list, newer Plan", mode="strict",
