@@ -922,10 +922,6 @@ async def list_continuity_plan_items(
     ordered = sorted(rows, key=lambda plan: plan.updated_at, reverse=True)
     plan_ids = [plan.id for plan in ordered]
     paths_by_plan = {plan.id: plan_source_paths(plan) for plan in ordered}
-    source_names = await load_reading_plan_source_names(
-        db, user_id=user_id,
-        source_paths=(path for paths in paths_by_plan.values() for path in paths),
-    )
     if get_reading_execution_settings().enabled and ordered:
         # Owner check is part of the JOIN. Never infer an authority from a
         # matching name or silently fall back to an outdated Plan snapshot.
@@ -958,6 +954,18 @@ async def list_continuity_plan_items(
                 status_code=409,
                 detail="Reading Plan has no linked authoritative Reading List",
             )
+        # Source badges and editor links must expose the actual owned List,
+        # even when historical Plan nodes lack CBL provenance.
+        for plan in ordered:
+            source_path = f"custom-cbl:{authorities[plan.id][0]}"
+            paths_by_plan[plan.id] = [
+                source_path,
+                *(path for path in paths_by_plan[plan.id] if path != source_path),
+            ]
+        source_names = await load_reading_plan_source_names(
+            db, user_id=user_id,
+            source_paths=(path for paths in paths_by_plan.values() for path in paths),
+        )
         list_counts = dict(
             (
                 await db.execute(
@@ -997,6 +1005,10 @@ async def list_continuity_plan_items(
 
     # Legacy serving is explicitly isolated. Its Plan membership remains
     # the source only when Option E is disabled.
+    source_names = await load_reading_plan_source_names(
+        db, user_id=user_id,
+        source_paths=(path for paths in paths_by_plan.values() for path in paths),
+    )
     membership_counts: dict[int, int] = {}
     if ordered:
         membership_counts = dict(
