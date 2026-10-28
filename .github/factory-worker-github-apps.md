@@ -24,9 +24,10 @@ row is complete and `factory_worker_github_app.credential_decision` already sele
 its installation token, so a committed row cannot retire the producer ahead of
 routing support. Retired workers are never dependents: retired worker 72 is not a
 reason to keep the shared token.
-`tests/test_issue_3140_shared_token_retirement.py` fails both on premature removal
-(active dependents remain, shared fallback gone) and on overdue removal (no
-dependents remain, shared fallback still wired).
+`tests/test_issue_3140_shared_token_retirement.py` fails on premature removal of
+either producer half (the Python fallback, or the secret export plus shared git
+remote wiring in `free-model-factory-run.yml`) while active dependents remain, and
+on overdue removal (no dependents remain but a half is still wired).
 
 ## Bootstrap (already done for worker 48)
 

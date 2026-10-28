@@ -10,9 +10,17 @@ a reason to keep it. These tests pin the executable form of that condition:
 * a mapping row alone is not enough: the production routing decision must
   already select the installation token, which keeps the census aligned with
   the code that actually pushes;
-* the ordering guard catches a premature removal and a removal that became due
-  but was never performed;
+* the producer has two halves (Python fallback and workflow wiring) and both are
+  guarded, because a dependent worker pushes through the workflow wiring;
+* the ordering guard catches a premature removal, a half-removed producer, and a
+  removal that became due but was never performed;
+* a completed retirement is consistent and violation-free;
 * the census never mints a token and never reaches GitHub.
+
+Pilot-era expectations live in fixed fixtures below. The live repository is
+checked only through :func:`factory_shared_token_retirement.violations`, so a
+correctly ordered rollout to another worker, or a completed retirement, passes
+without rewriting these tests.
 """
 
 from __future__ import annotations
@@ -21,7 +29,6 @@ import importlib
 import json
 import sys
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -32,23 +39,34 @@ if str(SCRIPTS) not in sys.path:
 retirement = importlib.import_module("factory_shared_token_retirement")
 worker_app = retirement.factory_worker_github_app
 
-REPO = SCRIPTS.parents[1]
-LOCK_PATH = REPO / ".github" / "factory-expected-workers.json"
-MAPPING_PATH = REPO / ".github" / "factory-worker-github-apps.json"
 PILOT_WORKER = 48
+OTHER_WORKER = 11
 RETIRED_WORKER = 72
 
+# Fixed pilot-shaped roster: worker 48 is the pilot, worker 11 is not yet routed.
+PILOT_ROSTER: dict[str, object] = {
+    "expected_workers": [OTHER_WORKER, PILOT_WORKER],
+    "retired_workers": [RETIRED_WORKER],
+}
 
-def _load(path: Path) -> dict[str, Any]:
+
+def _load(path: Path) -> dict[str, object]:
     """Load a repository JSON object for a test."""
     data = json.loads(path.read_text(encoding="utf-8"))
     assert isinstance(data, dict)
-    return data
+    return dict(data)
+
+
+def _workers(mapping: dict[str, object]) -> dict[str, object]:
+    """Return the mutable ``workers`` object of a mapping fixture."""
+    workers = mapping.setdefault("workers", {})
+    assert isinstance(workers, dict)
+    return workers
 
 
 def _generalized_worker_entry(
-    mapping: dict[str, Any], worker: str
-) -> dict[str, Any] | None:
+    mapping: dict[str, object], worker: str
+) -> dict[str, object] | None:
     """Stand-in for a fleet-wide routing gate that admits every mapped worker.
 
     Issue #3139 widens provisioning past the worker-48 pilot. This helper lets
@@ -59,10 +77,26 @@ def _generalized_worker_entry(
     if not isinstance(workers, dict):
         return None
     entry = workers.get(str(worker))
-    return entry if isinstance(entry, dict) else None
+    return dict(entry) if isinstance(entry, dict) else None
 
 
-def _complete_entry(worker: int) -> dict[str, Any]:
+def _pilot_worker_entry(
+    mapping: dict[str, object], worker: str
+) -> dict[str, object] | None:
+    """Routing gate shaped like the worker-48 pilot: only 48 is admitted."""
+    if str(worker) != str(PILOT_WORKER):
+        return None
+    return _generalized_worker_entry(mapping, worker)
+
+
+def _pilot_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Install the pilot routing gate on the production module."""
+    monkeypatch.setattr(worker_app, "worker_entry", _pilot_worker_entry)
+
+
+def _complete_entry(worker: int) -> dict[str, object]:
     """Return a mapping row that looks live-verified for one worker."""
     return {
         "worker": worker,
@@ -77,100 +111,166 @@ def _complete_entry(worker: int) -> dict[str, Any]:
     }
 
 
-def _fleet_mapping(lock: dict[str, Any]) -> dict[str, Any]:
-    """Return a mapping where every active worker has a complete App row."""
-    mapping = _load(MAPPING_PATH)
-    workers = mapping.setdefault("workers", {})
-    assert isinstance(workers, dict)
-    for worker in retirement.active_worker_ids(lock):
-        workers[str(worker)] = _complete_entry(worker)
-    return mapping
+def _mapping_for(*workers: int) -> dict[str, object]:
+    """Return a mapping fixture with a complete App row per worker."""
+    return {"workers": {str(worker): _complete_entry(worker) for worker in workers}}
 
 
-def test_current_roster_still_depends_on_the_shared_producer() -> None:
-    """Today only the worker-48 pilot is off the shared producer."""
-    lock = _load(LOCK_PATH)
-    report = retirement.census(lock=lock, mapping=_load(MAPPING_PATH))
+def _workflow_text(*, secret: bool, remote: bool) -> str:
+    """Return synthetic ``free-model-factory-run.yml`` wiring."""
+    lines = ["jobs:", "  factory:", "    env:"]
+    if secret:
+        lines.append("      PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}")
+    if remote:
+        lines.append(
+            '          git remote set-url origin "https://x-access-token:'
+            '${PR_REBASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"'
+        )
+    return "\n".join(lines) + "\n"
 
-    active = retirement.active_worker_ids(lock)
+
+def test_pilot_scope_retains_the_shared_producer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With only the pilot routed, the producer must stay and stay wired."""
+    _pilot_worker(monkeypatch)
+    report = retirement.census(
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=True,
+        workflow_wiring=True,
+    )
+
     assert report["decision"] == "retain"
     assert report["dedicated_workers"] == [PILOT_WORKER]
-    assert report["dependent_workers"] == [w for w in active if w != PILOT_WORKER]
+    assert report["dependent_workers"] == [OTHER_WORKER]
     assert report["shared_producer_present"] is True
     assert retirement.violations(report) == []
 
 
-def test_retired_worker_72_never_keeps_the_shared_producer_alive() -> None:
-    """A retired worker id is not an active dependency, whatever the mapping says."""
-    lock = _load(LOCK_PATH)
-    assert RETIRED_WORKER in lock["retired_workers"]
-    assert RETIRED_WORKER not in lock["expected_workers"]
+def test_mapping_rows_alone_cannot_retire_the_producer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A complete App row without routing support is still a dependent."""
+    monkeypatch.setattr(
+        worker_app, "worker_entry", lambda _mapping, _worker: None
+    )
+    report = retirement.census(
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=True,
+        workflow_wiring=True,
+    )
 
-    report = retirement.census(lock=lock, mapping=_load(MAPPING_PATH))
-    assert RETIRED_WORKER not in report["active_workers"]
-    assert RETIRED_WORKER not in report["dependent_workers"]
-    assert RETIRED_WORKER not in report["dedicated_workers"]
-
-
-def test_mapping_row_without_routing_support_stays_dependent() -> None:
-    """A non-pilot mapping row cannot retire the producer until routing admits it."""
-    lock = _load(LOCK_PATH)
-    mapping = _load(MAPPING_PATH)
-    workers = mapping.setdefault("workers", {})
-    assert isinstance(workers, dict)
-    workers["11"] = _complete_entry(11)
-
-    report = retirement.census(lock=lock, mapping=mapping)
     assert report["decision"] == "retain"
-    assert 11 in report["dependent_workers"]
-    assert 11 not in report["dedicated_workers"]
+    assert report["dedicated_workers"] == []
+    assert report["dependent_workers"] == [OTHER_WORKER, PILOT_WORKER]
+    assert retirement.violations(report) == []
 
 
 def test_incomplete_mapping_row_stays_dependent(monkeypatch: pytest.MonkeyPatch) -> None:
     """Fail closed when a routed worker is missing part of its App identity."""
     monkeypatch.setattr(worker_app, "worker_entry", _generalized_worker_entry)
-    lock = _load(LOCK_PATH)
-    mapping = _fleet_mapping(lock)
-    workers = mapping["workers"]
-    assert isinstance(workers, dict)
-    broken = _complete_entry(11)
+    mapping = _mapping_for(PILOT_WORKER)
+    broken = _complete_entry(OTHER_WORKER)
     broken["installation_id"] = None
-    workers["11"] = broken
+    _workers(mapping)[str(OTHER_WORKER)] = broken
 
-    report = retirement.census(lock=lock, mapping=mapping)
+    report = retirement.census(
+        lock=PILOT_ROSTER, mapping=mapping, python_fallback=True, workflow_wiring=True
+    )
     assert report["decision"] == "retain"
-    assert 11 in report["dependent_workers"]
-    assert 11 not in report["dedicated_workers"]
+    assert OTHER_WORKER in report["dependent_workers"]
+    assert OTHER_WORKER not in report["dedicated_workers"]
 
 
 def test_full_fleet_identities_report_removal_is_due(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Once every active worker has its own App, the shared producer is overdue."""
+    """Once every active worker has its own App, both producer halves are overdue."""
     monkeypatch.setattr(worker_app, "worker_entry", _generalized_worker_entry)
-    lock = _load(LOCK_PATH)
-    mapping = _fleet_mapping(lock)
+    report = retirement.census(
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=True,
+        workflow_wiring=True,
+    )
 
-    report = retirement.census(lock=lock, mapping=mapping)
     assert report["decision"] == "retire"
     assert report["dependent_workers"] == []
     assert report["shared_producer_present"] is True
 
     problems = retirement.violations(report)
-    assert len(problems) == 1
-    assert "still wired" in problems[0]
+    assert len(problems) == 2
+    assert "Python fallback is still wired" in problems[0]
+    assert "still wired in free-model-factory-run.yml" in problems[1]
 
 
-def test_premature_removal_is_a_violation() -> None:
-    """Deleting the producer while workers depend on it must fail the guard."""
+def test_completed_retirement_has_no_violations(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fully dedicated fleet with both producer halves gone is consistent."""
+    monkeypatch.setattr(worker_app, "worker_entry", _generalized_worker_entry)
     report = retirement.census(
-        lock=_load(LOCK_PATH),
-        mapping=_load(MAPPING_PATH),
-        producer_present=False,
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=False,
+        workflow_wiring=False,
     )
+
+    assert report["decision"] == "retire"
+    assert report["dependent_workers"] == []
+    assert report["shared_producer_present"] is False
+    assert retirement.violations(report) == []
+
+
+def test_premature_python_fallback_removal_is_a_violation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting the Python fallback while workers depend on it must fail the guard."""
+    _pilot_worker(monkeypatch)
+    report = retirement.census(
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=False,
+        workflow_wiring=True,
+    )
+
     assert report["decision"] == "retain"
     problems = retirement.violations(report)
     assert len(problems) == 1
-    assert "was removed while active workers still depend on it" in problems[0]
-    assert str(PILOT_WORKER) not in problems[0].rsplit(": ", 1)[1].replace(" ", "").split(",")
+    assert "Python fallback was removed while active workers still depend" in problems[0]
+    assert str(PILOT_WORKER) not in problems[0]
+
+
+def test_premature_workflow_wiring_removal_is_a_violation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting the workflow wiring while workers depend on it must fail the guard."""
+    _pilot_worker(monkeypatch)
+    report = retirement.census(
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=True,
+        workflow_wiring=False,
+    )
+
+    assert report["decision"] == "retain"
+    problems = retirement.violations(report)
+    assert len(problems) == 1
+    assert "workflow wiring was removed while active workers still depend" in problems[0]
+
+
+def test_retired_worker_72_never_keeps_the_shared_producer_alive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A retired worker id is not an active dependency, whatever the mapping says."""
+    monkeypatch.setattr(worker_app, "worker_entry", _generalized_worker_entry)
+    assert RETIRED_WORKER in retirement.retired_worker_ids(PILOT_ROSTER)
+
+    report = retirement.census(
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER, RETIRED_WORKER),
+        python_fallback=True,
+        workflow_wiring=True,
+    )
+    assert RETIRED_WORKER not in report["active_workers"]
+    assert RETIRED_WORKER not in report["dependent_workers"]
+    assert RETIRED_WORKER not in report["dedicated_workers"]
 
 
 def test_empty_roster_refuses_to_retire() -> None:
@@ -178,7 +278,8 @@ def test_empty_roster_refuses_to_retire() -> None:
     report = retirement.census(
         lock={"expected_workers": [], "retired_workers": [RETIRED_WORKER]},
         mapping={"workers": {}},
-        producer_present=True,
+        python_fallback=True,
+        workflow_wiring=True,
     )
     assert report["decision"] == "retain"
     assert report["active_workers"] == []
@@ -192,12 +293,48 @@ def test_census_never_mints_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
         raise AssertionError("the retirement census must not mint an installation token")
 
     monkeypatch.setattr(worker_app, "mint_installation_token", _forbidden)
+    monkeypatch.setattr(worker_app, "worker_entry", _generalized_worker_entry)
     report = retirement.census(
-        lock=_load(LOCK_PATH),
-        mapping=_load(MAPPING_PATH),
-        producer_present=True,
+        lock=PILOT_ROSTER,
+        mapping=_mapping_for(OTHER_WORKER, PILOT_WORKER),
+        python_fallback=True,
+        workflow_wiring=True,
     )
-    assert report["dedicated_workers"] == [PILOT_WORKER]
+    assert report["decision"] == "retire"
+    assert report["dedicated_workers"] == [OTHER_WORKER, PILOT_WORKER]
+
+
+def test_workflow_wiring_requires_secret_export_and_remote(tmp_path: Path) -> None:
+    """The workflow half is present only when the secret and remote both exist."""
+    wired = tmp_path / "wired.yml"
+    wired.write_text(_workflow_text(secret=True, remote=True), encoding="utf-8")
+    assert retirement.shared_workflow_wiring(wired) is True
+
+    no_secret = tmp_path / "no-secret.yml"
+    no_secret.write_text(_workflow_text(secret=False, remote=True), encoding="utf-8")
+    assert retirement.shared_workflow_wiring(no_secret) is False
+
+    no_remote = tmp_path / "no-remote.yml"
+    no_remote.write_text(_workflow_text(secret=True, remote=False), encoding="utf-8")
+    assert retirement.shared_workflow_wiring(no_remote) is False
+
+    assert retirement.shared_workflow_wiring(tmp_path / "missing.yml") is False
+
+
+def test_live_repository_satisfies_the_ordering_guard() -> None:
+    """The live repo is consistent, whatever stage of the rollout it is at."""
+    report = retirement.census()
+    assert retirement.violations(report) == []
+    assert report["active_workers"] == retirement.active_worker_ids(
+        _load(retirement.default_lock_path())
+    )
+    assert RETIRED_WORKER not in report["active_workers"]
+    assert RETIRED_WORKER not in report["dependent_workers"]
+    if report["active_workers"]:
+        assert (report["decision"] == "retain") == bool(report["dependent_workers"])
+    assert report["shared_producer_present"] == (
+        report["shared_python_fallback"] and report["shared_workflow_wiring"]
+    )
 
 
 def test_cli_plan_and_check_report_the_same_census(
@@ -207,7 +344,7 @@ def test_cli_plan_and_check_report_the_same_census(
     assert retirement.main(["retirement", "plan"]) == 0
     plan = json.loads(capsys.readouterr().out)
     assert plan["schema"] == retirement.SCHEMA
-    assert plan["decision"] == "retain"
+    assert retirement.violations(plan) == []
 
     assert retirement.main(["retirement", "check"]) == 0
     check = json.loads(capsys.readouterr().out)
