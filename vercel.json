@@ -16,6 +16,10 @@
       "use": "@vercel/python"
     },
     {
+      "src": "api/auth/me.ts",
+      "use": "@vercel/node"
+    },
+    {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -25,7 +29,11 @@
   ],
   "routes": [
     {
-      "src": "/api(?:/.*)?",
+      "src": "/api/v1/auth/me",
+      "dest": "/api/auth/me.ts"
+    },
+    {
+      "src": "/api(?:/v1/auth/me)?(?:/.*)?",
       "dest": "/api/index.py"
     },
     {
