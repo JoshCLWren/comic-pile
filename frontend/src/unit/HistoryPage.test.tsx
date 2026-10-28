@@ -57,6 +57,7 @@ it('keeps sessions and navigation without any Export Summary control or internal
       active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 2, last_rating: 4.5 },
       last_rolled_result: 4,
       current_die: 6,
+      start_die: 6,
       snapshot_count: 1,
     }],
     isPending: false,
@@ -95,6 +96,7 @@ it('labels an empty session as No issue selected', () => {
       active_thread: null,
       last_rolled_result: null,
       current_die: 6,
+      start_die: 6,
       snapshot_count: 1,
     }],
     isPending: false,
@@ -126,6 +128,7 @@ it('does not label an active session with a rolled result as abandoned', () => {
       active_thread: { title: 'Saga', format: 'Comic' },
       last_rolled_result: 4,
       current_die: 8,
+      start_die: 8,
       snapshot_count: 3,
     }],
     isPending: false,
@@ -158,6 +161,7 @@ it('leads with comic identity and readable activity summary for a typical rated 
       },
       last_rolled_result: 3,
       current_die: 6,
+      start_die: 6,
       snapshot_count: 2,
     }],
     isPending: false,
@@ -215,6 +219,7 @@ it('keeps the queue position and dice progression on a card without reading acti
       },
       last_rolled_result: 7,
       current_die: 20,
+      start_die: 20,
       snapshot_count: 1,
     }],
     isPending: false,
@@ -250,6 +255,7 @@ it('pluralizes issues read for multi-issue activity', () => {
       },
       last_rolled_result: 7,
       current_die: 20,
+      start_die: 20,
       snapshot_count: 2,
     }],
     isPending: false,
@@ -267,14 +273,17 @@ it('pluralizes issues read for multi-issue activity', () => {
 
 it('renders session rows with metadata, duration, and footer links', () => {
   mockedUseSessions.mockReturnValue({ data: [
-    { id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6 → 8', active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 3, last_rating: 4.5 }, last_rolled_result: 4, current_die: 6, snapshot_count: 2 },
+    { id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6 → 8', active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 3, last_rating: 4.5 }, last_rolled_result: 4, current_die: 6,
+      start_die: 6, snapshot_count: 2 },
     { id: 2, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: null, active_thread: null, snapshot_count: 0 },
-    { id: 3, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T12:30:00Z', ladder_path: '20', active_thread: { title: 'Other', format: 'Manga' }, last_rolled_result: null, current_die: 20, snapshot_count: 1 },
-    { id: 4, started_at: 'bad', ended_at: null, ladder_path: null, active_thread: null },
-    { id: 5, started_at: '2024-01-01T12:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: '', active_thread: { title: 'Zero', format: 'Comic' }, last_rolled_result: 0, current_die: 4, snapshot_count: 0 },
-    { id: 6, started_at: 'bad', ended_at: 'bad', ladder_path: '6', active_thread: null, snapshot_count: 0 },
-    { id: 7, started_at: null, ended_at: 'bad', ladder_path: null, active_thread: null, snapshot_count: null },
-    { id: 8, started_at: 'bad', ended_at: 'bad', ladder_path: null, active_thread: null, snapshot_count: null },
+    { id: 3, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T12:30:00Z', ladder_path: '20', active_thread: { title: 'Other', format: 'Manga' }, last_rolled_result: null, current_die: 20,
+      start_die: 20, snapshot_count: 1 },
+    { id: 4, started_at: 'bad', ended_at: null, ladder_path: null, active_thread: null, start_die: null },
+    { id: 5, started_at: '2024-01-01T12:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: '', active_thread: { title: 'Zero', format: 'Comic' }, last_rolled_result: 0, current_die: 4,
+      start_die: 4, snapshot_count: 0 },
+    { id: 6, started_at: 'bad', ended_at: 'bad', ladder_path: '6', active_thread: null, start_die: 6, snapshot_count: 0 },
+    { id: 7, started_at: null, ended_at: 'bad', ladder_path: null, active_thread: null, start_die: null, snapshot_count: null },
+    { id: 8, started_at: 'bad', ended_at: 'bad', ladder_path: null, active_thread: null, start_die: null, snapshot_count: null },
   ], isPending: false })
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
   expect(screen.getByRole('list')).toBeInTheDocument()
@@ -307,7 +316,7 @@ it('renders loading and error states', () => {
 it('shows Load More button when hasMore is true', () => {
   const loadMore = vi.fn()
   mockedUseSessions.mockReturnValue({
-    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: null }],
+    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, start_die: null, snapshot_count: null }],
     isPending: false,
     isLoadingMore: false,
     hasMore: true,
@@ -323,7 +332,7 @@ it('shows Load More button when hasMore is true', () => {
 
 it('shows loading state when loading more', () => {
   mockedUseSessions.mockReturnValue({
-    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: null }],
+    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, start_die: null, snapshot_count: null }],
     isPending: false,
     isLoadingMore: true,
     hasMore: false,
@@ -337,7 +346,7 @@ it('shows loading state when loading more', () => {
 it('shows retry button on load more error', () => {
   const loadMore = vi.fn()
   mockedUseSessions.mockReturnValue({
-    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: null }],
+    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, start_die: null, snapshot_count: null }],
     isPending: false,
     isLoadingMore: false,
     hasMore: false,
@@ -432,7 +441,8 @@ it('keeps the bounded loading state visible during a user-initiated retry (issue
 it('gives each session-detail link a unique accessible name (issue #3687)', () => {
   mockedUseSessions.mockReturnValue({
     data: [
-      { id: 21, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6', active_thread: { title: 'Saga', format: 'Comic' }, last_rolled_result: 4, current_die: 6, snapshot_count: 1 },
+      { id: 21, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6', active_thread: { title: 'Saga', format: 'Comic' }, last_rolled_result: 4, current_die: 6,
+      start_die: 6, snapshot_count: 1 },
       { id: 22, started_at: '2024-01-02T11:30:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: 0 },
     ],
     isPending: false,
@@ -472,8 +482,8 @@ it('gives each session-detail link a unique accessible name (issue #3687)', () =
 it('keeps detail-link names unique by session id when the start time is unusable (issue #3687)', () => {
   mockedUseSessions.mockReturnValue({
     data: [
-      { id: 4, started_at: 'bad', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: 0 },
-      { id: 8, started_at: null, ended_at: 'bad', ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: null },
+      { id: 4, started_at: 'bad', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, start_die: null, snapshot_count: 0 },
+      { id: 8, started_at: null, ended_at: 'bad', ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, start_die: null, snapshot_count: null },
     ],
     isPending: false,
     isLoadingMore: false,
@@ -488,4 +498,38 @@ it('keeps detail-link names unique by session id when the start time is unusable
   expect(first).toHaveAttribute('href', '/sessions/4')
   expect(second).toHaveAttribute('href', '/sessions/8')
   expect(first.getAttribute('aria-label')).not.toBe(second.getAttribute('aria-label'))
+})
+
+it('reports the session start die in activity line, not the evolving current die (issue #4243)', () => {
+  // The session started with d6 and has a rated activity. Even if the
+  // reader's current session uses a different manual die, the history card
+  // must always show the session's recorded start die.
+  mockedUseSessions.mockReturnValue({
+    data: [{
+      id: 1018071,
+      started_at: '2024-01-01T10:00:00Z',
+      ended_at: '2024-01-01T10:45:00Z',
+      ladder_path: '6 → 8 → 6',
+      active_thread: {
+        title: "Superman's Pal, Jimmy Olsen",
+        format: 'Comic',
+        next_issue_number: '#136',
+        issues_read: 1,
+        last_rating: 4.0,
+      },
+      last_rolled_result: 3,
+      current_die: 6,
+      start_die: 6,
+      snapshot_count: 2,
+    }],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+
+  expect(screen.getByText(/rated 4\.0/)).toBeInTheDocument()
+  expect(screen.getByText('Die size d6')).toBeInTheDocument()
 })
