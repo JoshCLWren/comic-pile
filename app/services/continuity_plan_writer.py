@@ -976,7 +976,7 @@ async def list_continuity_plan_items(
                         for path in paths_by_plan[plan.id]
                         if path in source_names
                     },
-                    updated_at=max(plan.updated_at, list_updated_at),
+                    updated_at=list_updated_at,
                 )
             )
         return sorted(summaries, key=lambda item: item.updated_at, reverse=True)
