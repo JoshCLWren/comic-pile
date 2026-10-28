@@ -60,6 +60,25 @@ describe('AuthProvider with the real Axios interceptor pipeline', () => {
     expect(auth.authState.status).toBe('authenticated')
     expect(getAccessToken()).toBe('existing-token')
   })
+  it('shows manual retry progress while retaining the user and sharing rapid clicks', async () => {
+    await mount()
+    reply(503)
+    await act(async () => { await auth.retryAuth().catch(() => undefined) })
+    let finish!: () => void
+    replies.push(config => new Promise(resolve => {
+      finish = () => resolve({ status: 200, data: user, statusText: 'OK', headers: {}, config })
+    }))
+    let pending!: Promise<void>
+    let second!: Promise<void>
+    act(() => { pending = auth.retryAuth(); second = auth.retryAuth() })
+    await waitFor(() => expect(calls).toHaveLength(2))
+    expect(auth.authState.isLoading).toBe(true)
+    expect(auth.user).toEqual(user)
+    await act(async () => { finish(); await Promise.all([pending, second]) })
+    expect(auth.authState.isLoading).toBe(false)
+    expect(auth.authState.status).toBe('authenticated')
+    expect(calls).toEqual(['get /v1/auth/me', 'get /v1/auth/me'])
+  })
   it.each(['503', 'timeout', 'network'])('preserves the session on %s and recovers without rotation', async failure => {
     await mount()
     if (failure === '503') reply(503)

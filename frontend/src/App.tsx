@@ -176,7 +176,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return attempt
     }, [markDefinitivelyUnauthenticated])
 
-  const retryAuth = useCallback(() => recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS), [recoverSession])
+  const retryAuth = useCallback(() => {
+    setAuthState(prev => ({ ...prev, isLoading: true, error: null }))
+    return recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
+  }, [recoverSession])
   const revalidateSession = recoverSession
 
   useEffect(() => {
