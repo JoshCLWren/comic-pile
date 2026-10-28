@@ -8,12 +8,9 @@ Canonical provider identity remains the strong signal owned by the duplicate
 check service.
 """
 
-import re
-
 #: Minimum title resemblance that still counts as a possible existing volume.
 MIN_TITLE_SIMILARITY = 0.5
 
-_NON_ALPHANUMERIC = re.compile(r"[^0-9a-z]+")
 _MIN_SIGNIFICANT_TOKEN_LENGTH = 3
 _MAX_SIGNIFICANT_TOKENS = 6
 
@@ -25,6 +22,11 @@ def normalize_title(title: str) -> str:
     and ``"spider man"`` normalize to the same value so a hyphenated run is not
     missed by a candidate search.
 
+    Letters and digits from every script are preserved. Comic titles are not
+    ASCII-only: a series such as ``"進撃の巨人"`` or ``"Pokémon"`` must keep its
+    own characters, otherwise normalization would erase the title and the
+    reader would never be warned about an exact duplicate.
+
     Args:
         title: Reader- or provider-supplied display title.
 
@@ -32,7 +34,8 @@ def normalize_title(title: str) -> str:
         The normalized title with single-space separated lowercase tokens, or an
         empty string when the title has no alphanumeric content.
     """
-    return " ".join(_NON_ALPHANUMERIC.sub(" ", title.casefold()).split())
+    cleaned = "".join(character if character.isalnum() else " " for character in title.casefold())
+    return " ".join(cleaned.split())
 
 
 def significant_title_tokens(

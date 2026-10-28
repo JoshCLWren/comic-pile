@@ -359,3 +359,56 @@ async def test_invalid_volume_identity_is_rejected(
         json={"title": "Saga", "format": "Comic", "exclude_thread_id": -1},
     )
     assert bad_exclusion.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_non_latin_title_still_finds_the_owned_series(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A non-Latin title is not normalized away before the library lookup."""
+    existing = await _create_thread(async_db, default_user.id, "進撃の巨人")
+
+    response = await auth_client.post(CHECK_URL, json={"title": "進撃の巨人", "format": "Manga"})
+
+    assert response.status_code == 200
+    matches = response.json()["matches"]
+    assert [match["thread_id"] for match in matches] == [existing.id]
+    assert matches[0]["match_type"] == "similar_title"
+
+
+@pytest.mark.asyncio
+async def test_exact_title_survives_a_busy_common_token(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Older partial matches cannot crowd an exact title out of the search window.
+
+    Only 25 older series are created here, so the fuzzy candidate window would
+    previously end before reaching the newer exact match if it were ordered by
+    thread ID alone. An exact duplicate must always reach the reader.
+    """
+    for index in range(25):
+        await _create_thread(
+            async_db,
+            default_user.id,
+            f"The Saga {index}",
+            queue_position=index + 1,
+        )
+    exact = await _create_thread(
+        async_db,
+        default_user.id,
+        "The Batman",
+        queue_position=30,
+    )
+
+    response = await auth_client.post(CHECK_URL, json={"title": "The Batman", "format": "Comic"})
+
+    assert response.status_code == 200
+    matches = response.json()["matches"]
+    assert exact.id in [match["thread_id"] for match in matches]
+    strongest = next(match for match in matches if match["thread_id"] == exact.id)
+    assert strongest["title"] == "The Batman"
+

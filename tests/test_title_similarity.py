@@ -69,3 +69,23 @@ def test_significant_tokens_skip_stopword_fragments() -> None:
 def test_significant_tokens_fall_back_for_short_titles() -> None:
     """A short title still produces a usable search token."""
     assert significant_title_tokens("v") == ("v",)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("進撃の巨人", "進撃の巨人"),
+        ("  Pokémon  Adventures ", "pokémon adventures"),
+        ("Berserk 進撃", "berserk 進撃"),
+    ],
+)
+def test_normalize_title_preserves_non_latin_letters(raw: str, expected: str) -> None:
+    """A title is not erased merely because it is not written in ASCII (#3612)."""
+    assert normalize_title(raw) == expected
+
+
+def test_non_latin_titles_compare_as_the_same_title() -> None:
+    """An owned non-Latin title still matches an identical candidate."""
+    assert title_similarity("進撃の巨人", "進撃の巨人") == 1.0
+    assert title_similarity("進撃の巨人", "進撃の巨人 2") >= MIN_TITLE_SIMILARITY
+

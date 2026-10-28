@@ -1044,16 +1044,27 @@ async def find_owned_threads_with_similar_titles(
     still returned: format is disambiguating context for the reader, not a
     reason to hide an existing volume.
 
+    Candidates are collected in two passes. The first pass requires *every*
+    significant token, which is the shape an exact title match has, so it is
+    never truncated by the fuzzy window: otherwise 25 older series containing a
+    common word such as "the" could crowd a newer exact "The Batman" out of the
+    limited result set, and the reader would never be warned about an actual
+    duplicate. The second pass relaxes to any token, capped at
+    ``candidate_limit``, and only adds partial-token resemblance.
+
     Args:
         db: Database session.
         user_id: Owner whose library is searched.
         title: Proposed series title.
         exclude_thread_id: Thread to leave out (the series being renamed).
-        candidate_limit: Maximum candidates returned for service-side scoring.
+        candidate_limit: Maximum fuzzy (partial-token) candidates returned for
+            service-side scoring. Complete-token matches are not counted against
+            this window.
 
     Returns:
-        Candidate threads, ordered by thread ID. Empty when the title has no
-        usable content.
+        Candidate threads, complete-token matches first, then fuzzy matches,
+        each group ordered by thread ID. Empty when the title has no usable
+        content.
     """
     normalized_title = normalize_title(title)
     if not normalized_title:
@@ -1061,24 +1072,39 @@ async def find_owned_threads_with_similar_titles(
 
     tokens = significant_title_tokens(normalized_title)
     search_terms = tokens or (normalized_title,)
-    query = (
+
+    scope_filters = [Thread.user_id == user_id]
+    if exclude_thread_id is not None:
+        scope_filters.append(Thread.id != exclude_thread_id)
+
+    complete_query = (
         select(Thread)
         .where(
-            Thread.user_id == user_id,
-            or_(
-                *(
-                    func.lower(Thread.title).contains(term, autoescape=True)
-                    for term in search_terms
-                )
+            *scope_filters,
+            *(
+                func.lower(Thread.title).contains(term, autoescape=True)
+                for term in search_terms
             ),
         )
         .order_by(Thread.id)
-        .limit(candidate_limit)
     )
-    if exclude_thread_id is not None:
-        query = query.where(Thread.id != exclude_thread_id)
-    result = await db.execute(query)
-    return list(result.scalars().all())
+    complete_matches = list((await db.execute(complete_query)).scalars().all())
+    complete_ids = {thread.id for thread in complete_matches}
+
+    fuzzy_query = select(Thread).where(
+        *scope_filters,
+        or_(
+            *(
+                func.lower(Thread.title).contains(term, autoescape=True)
+                for term in search_terms
+            )
+        ),
+    )
+    if complete_ids:
+        fuzzy_query = fuzzy_query.where(Thread.id.notin_(complete_ids))
+    fuzzy_query = fuzzy_query.order_by(Thread.id).limit(candidate_limit)
+    fuzzy_matches = list((await db.execute(fuzzy_query)).scalars().all())
+    return complete_matches + fuzzy_matches
 
 
 async def fetch_confirmed_comicvine_series_by_thread(
