@@ -211,6 +211,9 @@ def api_process(db_url: str, output: Path, label: str):
     env.update(DATABASE_URL=db_url, TEST_DATABASE_URL=db_url,
                TEST_ENVIRONMENT="false", ENVIRONMENT="production",
                SECRET_KEY=os.environ["SECRET_KEY"],
+               # A production-mode app requires an explicit non-wildcard CORS
+               # origin, even for loopback-only profile requests.
+               CORS_ORIGINS=f"http://127.0.0.1:{port}",
                NEON_TOKEN="", NEON_PROJECT_ID="",
                PERF_ALARM_GITHUB_ISSUES_ENABLED="false",
                COMICVINE_API_KEY="", GITHUB_TOKEN="")
