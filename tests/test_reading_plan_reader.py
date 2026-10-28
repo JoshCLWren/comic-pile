@@ -6,6 +6,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_reading_execution_settings
+from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
+from app.models.reading_plan_membership import ReadingPlanSource
 from app.models.dependency import Dependency
 from app.models.custom_cbl import CustomCBLList, CustomCBLEntry
 from app.models.reading_plan_membership import ReadingPlanSource
@@ -497,5 +500,123 @@ async def test_option_e_identically_named_lists_resolve_only_explicit_link(
         assert reader.json()["lanes"][0]["issues"][0]["source_paths"] == [
             f"custom-cbl:{lists[1].id}",
         ]
+    finally:
+        get_reading_execution_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_option_e_reader_uses_owned_list_order_and_membership_not_legacy_plan(
+    auth_client: AsyncClient, async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An edited list is the single authority even when the Plan omits an Issue."""
+    user = await get_or_create_user_async(async_db)
+    first = await _make_issue(
+        async_db, user_id=user.id, title="Planetary", issue_number="1",
+    )
+    second = await _make_issue(
+        async_db, user_id=user.id, title="The Authority", issue_number="1",
+    )
+    list_only = await _make_issue(
+        async_db, user_id=user.id, title="Planetary", issue_number="2",
+    )
+    await async_db.commit()
+    # A deliberately stale Plan has the first two Issues reversed and omits #2.
+    plan_id = await _create_plan(
+        auth_client, "Planetary / Authority",
+        [_node("stale-authority", second.id, 0), _node("stale-planetary", first.id, 1)],
+    )
+    reading_list = CustomCBLList(
+        user_id=user.id, name="Planetary / Authority", mode="strict",
+    )
+    async_db.add(reading_list)
+    await async_db.flush()
+    async_db.add_all([
+        CustomCBLEntry(list_id=reading_list.id, issue_id=first.id, position=0),
+        CustomCBLEntry(list_id=reading_list.id, issue_id=second.id, position=1),
+        CustomCBLEntry(list_id=reading_list.id, issue_id=list_only.id, position=2),
+        ReadingPlanSource(
+            plan_id=plan_id, raw_source_path=f"custom-cbl:{reading_list.id}",
+            custom_cbl_list_id=reading_list.id,
+        ),
+    ])
+    await async_db.commit()
+    monkeypatch.setenv("OPTION_E_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPTION_E_APPROVED_PREVIEW", "local-test-fixture-no-production-approval",
+    )
+    get_reading_execution_settings.cache_clear()
+    try:
+        plan_response = await auth_client.get(
+            f"/api/v1/continuity-plans/{plan_id}/reader"
+        )
+        list_response = await auth_client.get(
+            f"/api/v1/custom-cbl/{reading_list.id}/reader"
+        )
+        assert plan_response.status_code == 200, plan_response.text
+        assert list_response.status_code == 200, list_response.text
+        plan = plan_response.json()
+        canonical = list_response.json()
+        plan_issues = plan["lanes"][0]["issues"]
+        assert [row["issue_id"] for row in plan_issues] == [
+            first.id, second.id, list_only.id,
+        ]
+        assert [row["issue_id"] for row in plan_issues] == [
+            row["issue_id"] for row in canonical["entries"]
+        ]
+        assert [row["availability"] for row in plan_issues] == [
+            row["availability"] for row in canonical["entries"]
+        ]
+        assert plan["progress"]["total_issues"] == 3
+        assert plan["ordering_mode"] == "strict_sequential"
+        assert plan["execution_mode"] == "option_e"
+        assert plan["available_now"][0]["issue_id"] == first.id
+    finally:
+        get_reading_execution_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_option_e_reader_uses_loose_list_mode_not_stale_strict_plan(
+    auth_client: AsyncClient, async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy Plan strict mode cannot reimpose gates on a loose Reading List."""
+    user = await get_or_create_user_async(async_db)
+    first = await _make_issue(
+        async_db, user_id=user.id, title="Absolute Batman", issue_number="1",
+    )
+    second = await _make_issue(
+        async_db, user_id=user.id, title="Absolute Wonder Woman", issue_number="1",
+    )
+    await async_db.commit()
+    plan_id = await _create_plan(
+        auth_client, "Absolute Universe",
+        [_node("a1", first.id, 0), _node("a2", second.id, 1)],
+    )
+    reading_list = CustomCBLList(
+        user_id=user.id, name="Absolute Universe", mode="loose",
+    )
+    async_db.add(reading_list)
+    await async_db.flush()
+    async_db.add_all([
+        CustomCBLEntry(list_id=reading_list.id, issue_id=first.id, position=0),
+        CustomCBLEntry(list_id=reading_list.id, issue_id=second.id, position=1),
+        ReadingPlanSource(
+            plan_id=plan_id, raw_source_path=f"custom-cbl:{reading_list.id}",
+            custom_cbl_list_id=reading_list.id,
+        ),
+    ])
+    await async_db.commit()
+    monkeypatch.setenv("OPTION_E_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPTION_E_APPROVED_PREVIEW", "local-test-fixture-no-production-approval",
+    )
+    get_reading_execution_settings.cache_clear()
+    try:
+        response = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["ordering_mode"] == "informational"
+        assert {row["issue_id"] for row in body["available_now"]} == {
+            first.id, second.id,
+        }
     finally:
         get_reading_execution_settings.cache_clear()
