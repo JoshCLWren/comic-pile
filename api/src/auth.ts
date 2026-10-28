@@ -188,55 +188,46 @@ export default async function authMeHandler(req: Request, res: Response): Promis
     
     // Map specific error types to appropriate HTTP status codes
     if (error instanceof Error) {
-      switch (error.message) {
-        case 'Missing or invalid authorization header':
-          res.status(401).json({
-            error: 'Missing or invalid authorization header'
-          } as ErrorResponse);
-          return;
-        case 'Token has been revoked':
-          res.status(401).json({
-            error: 'Token has been revoked'
-          } as ErrorResponse);
-          return;
-        case 'User not found':
-          res.status(401).json({
-            error: 'User not found'
-          } as ErrorResponse);
-          return;
-        case 'Password changed; please sign in again.':
-          res.status(401).json({
-            error: 'Password changed; please sign in again.'
-          } as ErrorResponse);
-          return;
-        case 'Token verification failed: Invalid or expired token':
-          res.status(401).json({
-            error: 'Invalid or expired token'
-          } as ErrorResponse);
-          return;
-        case 'Token verification failed: Invalid token format':
-          res.status(401).json({
-            error: 'Invalid token format'
-          } as ErrorResponse);
-          return;
-        case 'Token verification failed: Invalid subject claim':
-        case 'Token verification failed: Invalid JTI claim':
-        case 'Token verification failed: Invalid token type':
-          res.status(401).json({
-            error: 'Invalid authentication credentials'
-          } as ErrorResponse);
-          return;
-        default:
-          // Generic server error
-          console.error('Unexpected error in auth/me:', error);
-          res.status(500).json({
-            error: 'Internal server error'
-          } as ErrorResponse);
+      const message = error.message;
+
+      if (message === 'Missing or invalid authorization header') {
+        res.status(401).json({ error: 'Missing or invalid authorization header' } as ErrorResponse);
+        return;
       }
+      if (message === 'Token has been revoked' || message.includes('Token has been revoked')) {
+        res.status(401).json({ error: 'Token has been revoked' } as ErrorResponse);
+        return;
+      }
+      if (message === 'User not found' || message.includes('User not found')) {
+        res.status(401).json({ error: 'User not found' } as ErrorResponse);
+        return;
+      }
+      if (message === 'Password changed; please sign in again.' || message.includes('Password changed')) {
+        res.status(401).json({ error: 'Password changed; please sign in again.' } as ErrorResponse);
+        return;
+      }
+      if (message.startsWith('Token verification failed:')) {
+        if (message.includes('jwt expired') || message.includes('Invalid or expired token')) {
+          res.status(401).json({ error: 'Invalid or expired token' } as ErrorResponse);
+          return;
+        }
+        if (message.includes('Invalid token format')) {
+          res.status(401).json({ error: 'Invalid token format' } as ErrorResponse);
+          return;
+        }
+        if (message.includes('Invalid subject claim') || message.includes('Invalid JTI claim') || message.includes('Invalid token type')) {
+          res.status(401).json({ error: 'Invalid authentication credentials' } as ErrorResponse);
+          return;
+        }
+        res.status(401).json({ error: 'Invalid or expired token' } as ErrorResponse);
+        return;
+      }
+
+      // Generic server error
+      console.error('Unexpected error in auth/me:', error);
+      res.status(500).json({ error: 'Internal server error' } as ErrorResponse);
     } else {
-      res.status(500).json({
-        error: 'Internal server error'
-      } as ErrorResponse);
+      res.status(500).json({ error: 'Internal server error' } as ErrorResponse);
     }
   }
 }
