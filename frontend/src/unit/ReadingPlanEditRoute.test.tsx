@@ -108,6 +108,8 @@ describe('ReadingPlanEditRoute', () => {
   })
 
   it('fails closed on a reader request error', () => {
+    // SAFETY: Only isError, isPending, and data are read by the route in
+    // this test. The remaining React Query result properties are irrelevant.
     vi.mocked(useReadingPlanReader).mockReturnValue({
       isError: true,
       isPending: false,
