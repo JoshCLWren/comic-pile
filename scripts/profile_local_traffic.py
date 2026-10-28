@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import os
+import secrets
 from pathlib import Path
 import socket
 import subprocess
@@ -183,7 +184,11 @@ def api_process(db_url: str, output: Path, label: str):
     port = free_port()
     env = dict(os.environ)
     env.update(DATABASE_URL=db_url, TEST_DATABASE_URL=db_url,
-               TEST_ENVIRONMENT="false", ENVIRONMENT="development")
+               TEST_ENVIRONMENT="false", ENVIRONMENT="production",
+               SECRET_KEY=os.environ["SECRET_KEY"],
+               NEON_TOKEN="", NEON_PROJECT_ID="",
+               PERF_ALARM_GITHUB_ISSUES_ENABLED="false",
+               COMICVINE_API_KEY="", GITHUB_TOKEN="")
     log_path = output / (label + ".server.log")
     with log_path.open("wb") as log:
         os.chmod(log_path, 0o600)
@@ -395,6 +400,13 @@ def main() -> int:
         token = os.getenv(args.token_env, "")
         if not token and (not args.username or not os.getenv(args.password_env)):
             raise ValueError("Supply --username with local password env, or local token env")
+        if not token:
+            # app.config randomizes development JWT secrets on each start.
+            # One ephemeral production-mode signing key must be shared by ALL
+            # local subprocesses so setup credentials remain valid in replays.
+            os.environ["SECRET_KEY"] = secrets.token_urlsafe(48)
+        elif not os.environ.get("SECRET_KEY"):
+            raise ValueError("With --token-env, provide its matching LOCAL SECRET_KEY in env")
         args.output.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(args.output, 0o700)
         output = args.output / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
