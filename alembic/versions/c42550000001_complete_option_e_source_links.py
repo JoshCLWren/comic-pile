@@ -27,6 +27,11 @@ def upgrade() -> None:
         "SELECT p.id, p.user_id, p.name, p.ordering_mode "
         "FROM continuity_plans p ORDER BY p.id"
     )).all()
+    # The two Planetary links below are audited migration identities,
+    # NOT name/membership guesses: production owner #1 and a QA clone.
+    # Match exact owner + Plan + List, then verify expected immutable
+    # issue overlap before linking. Other unlinked Plans get newly owned Lists.
+    audited_links = {(1, 29): 1000018, (23199, 10000029): 11000018}
     for plan_id, user_id, plan_name, ordering_mode in plans:
         linked = db.execute(text(
             "SELECT DISTINCT s.custom_cbl_list_id FROM reading_plan_sources s "
@@ -40,6 +45,28 @@ def upgrade() -> None:
             ), {"l": linked[0], "u": user_id}).scalar()
             if not owned:
                 raise RuntimeError(f"Plan {plan_id} references an unowned Reading List")
+            continue
+        audited_id = audited_links.get((user_id, plan_id))
+        if audited_id is not None:
+            audit = db.execute(text(
+                "SELECT l.id, l.mode, "
+                "(SELECT count(*) FROM reading_plan_issues p WHERE p.plan_id=:p) AS pn, "
+                "(SELECT count(*) FROM custom_cbl_entries e WHERE e.list_id=:l) AS ln, "
+                "(SELECT count(*) FROM reading_plan_issues p "
+                " JOIN custom_cbl_entries e ON e.issue_id=p.issue_id AND e.list_id=:l "
+                " WHERE p.plan_id=:p) AS shared "
+                "FROM custom_cbl_lists l "
+                "WHERE l.id=:l AND l.user_id=:u"
+            ), {"p": plan_id, "l": audited_id, "u": user_id}).one_or_none()
+            if audit is None or tuple(audit)[1:] != ("strict", 144, 145, 144):
+                raise RuntimeError(
+                    f"Audited Plan {plan_id} → List {audited_id} identity has drifted"
+                )
+            db.execute(text(
+                "INSERT INTO reading_plan_sources "
+                "(plan_id,raw_source_path,custom_cbl_list_id,recorded_at) "
+                "VALUES (:p,:path,:l,now())"
+            ), {"p": plan_id, "path": f"custom-cbl:{audited_id}", "l": audited_id})
             continue
         # Always create a new owned List for an unlinked legacy Plan.
         # Never infer authority from names, IDs or overlapping issue sets.
