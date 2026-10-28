@@ -7,6 +7,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dependency import Dependency
+from app.models.custom_cbl import CustomCBLList, CustomCBLEntry
+from app.models.reading_plan_membership import ReadingPlanSource
+from app.config import get_reading_execution_settings
 from app.models.issue import Issue
 from app.models.thread import Thread
 from tests.conftest import get_or_create_user_async
@@ -286,3 +289,109 @@ async def test_reader_preserves_source_provenance(
         "Dark Horse/Hellboy/Seed of Destruction.cbl"
     ]
     assert body["blocked_next"] == []
+
+
+@pytest.mark.asyncio
+async def test_option_e_plan_reader_follows_live_list_not_stale_plan_nodes(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Source-linked Plan, List, and Roll use one order even when old plan data drifts."""
+    user = await get_or_create_user_async(async_db)
+    first = await _make_issue(async_db, user_id=user.id, title="Planetary", issue_number="1")
+    second = await _make_issue(async_db, user_id=user.id, title="Authority", issue_number="1")
+    legacy = await _make_issue(
+        async_db, user_id=user.id, title="Removed legacy plan entry", issue_number="1",
+    )
+    await async_db.commit()
+    plan_id = await _create_plan(
+        auth_client, "Planetary / Authority",
+        [_node("outdated", legacy.id, 0), _node("second", second.id, 1)],
+    )
+    reading_list = CustomCBLList(
+        name="Planetary / Authority", user_id=user.id, mode="strict",
+    )
+    async_db.add(reading_list)
+    await async_db.flush()
+    async_db.add_all([
+        CustomCBLEntry(list_id=reading_list.id, position=0, issue_id=first.id),
+        CustomCBLEntry(list_id=reading_list.id, position=1, issue_id=second.id),
+        ReadingPlanSource(
+            plan_id=plan_id,
+            raw_source_path=f"custom-cbl:{reading_list.id}",
+            custom_cbl_list_id=reading_list.id,
+        ),
+    ])
+    await async_db.commit()
+    monkeypatch.setenv("OPTION_E_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPTION_E_APPROVED_PREVIEW", "local-test-fixture-no-production-approval",
+    )
+    get_reading_execution_settings.cache_clear()
+    try:
+        plan_response = await auth_client.get(
+            f"/api/v1/continuity-plans/{plan_id}/reader",
+        )
+        list_response = await auth_client.get(
+            f"/api/v1/custom-cbls/{reading_list.id}/reader",
+        )
+        assert plan_response.status_code == 200, plan_response.text
+        assert list_response.status_code == 200, list_response.text
+        plan = plan_response.json()
+        source = list_response.json()
+        plan_rows = [row for lane in plan["lanes"] for row in lane["issues"]]
+        assert [row["issue_id"] for row in plan_rows] == [
+            row["issue_id"] for row in source["entries"]
+        ] == [first.id, second.id]
+        assert [row["availability"] for row in plan_rows] == [
+            row["availability"] for row in source["entries"]
+        ] == ["available", "blocked"]
+        assert legacy.id not in [row["issue_id"] for row in plan_rows]
+        assert plan["ordering_mode"] == "strict_sequential"
+        assert plan["progress"] == {"total_issues": 2, "read_issues": 0}
+        assert [row["issue_id"] for row in plan["available_now"]] == [first.id]
+        assert [row["issue_id"] for row in plan["blocked_next"]] == [second.id]
+        assert plan["blocked_next"][0]["blockers"][0]["issue_id"] == first.id
+        from comic_pile.queue import get_bounded_roll_pool_rows
+        roll_pool = await get_bounded_roll_pool_rows(user.id, async_db, 20)
+        assert first.thread_id in [thread.id for thread, *_ in roll_pool]
+        assert second.thread_id not in [thread.id for thread, *_ in roll_pool]
+    finally:
+        get_reading_execution_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_option_e_plan_reader_rejects_two_persisted_list_sources(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two identically named lists cannot be selected by guessing."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, title="Same title", issue_number="1")
+    await async_db.commit()
+    plan_id = await _create_plan(auth_client, "Same title", [_node("a", issue.id, 0)])
+    lists = [
+        CustomCBLList(name="Same title", user_id=user.id, mode="loose")
+        for _ in range(2)
+    ]
+    async_db.add_all(lists)
+    await async_db.flush()
+    async_db.add_all([
+        ReadingPlanSource(
+            plan_id=plan_id,
+            raw_source_path=f"custom-cbl:{item.id}",
+            custom_cbl_list_id=item.id,
+        )
+        for item in lists
+    ])
+    await async_db.commit()
+    monkeypatch.setenv("OPTION_E_ENABLED", "true")
+    monkeypatch.setenv("OPTION_E_APPROVED_PREVIEW", "local-test-fixture-no-production-approval")
+    get_reading_execution_settings.cache_clear()
+    try:
+        response = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
+        assert response.status_code == 409
+    finally:
+        get_reading_execution_settings.cache_clear()
