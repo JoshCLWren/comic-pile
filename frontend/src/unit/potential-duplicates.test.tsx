@@ -62,7 +62,7 @@ const UNCERTAIN_MATCH: PotentialDuplicateMatch = {
   match_type: 'similar_title',
 }
 
-const EDITING_THREAD = {
+const EDITING_THREAD: Thread = {
   id: 7,
   title: 'Saga',
   format: 'Comic',
@@ -77,7 +77,7 @@ const EDITING_THREAD = {
   is_blocked: false,
   is_test: false,
   blocking_reasons: [],
-} as unknown as Thread
+};
 
 function harnessProps(
   overrides: Partial<Parameters<typeof QueueModals>[0]> = {},

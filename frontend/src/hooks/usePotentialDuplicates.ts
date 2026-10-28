@@ -69,9 +69,13 @@ export function usePotentialDuplicates({
   const request: CheckPotentialDuplicatesRequest = {
     title: debouncedTitle,
     format: trimmedFormat,
-    ...(comicvineVolumeId !== undefined ? { comicvine_volume_id: comicvineVolumeId } : {}),
-    ...(excludeThreadId !== undefined ? { exclude_thread_id: excludeThreadId } : {}),
   };
+  if (comicvineVolumeId !== undefined) {
+    request.comicvine_volume_id = comicvineVolumeId;
+  }
+  if (excludeThreadId !== undefined) {
+    request.exclude_thread_id = excludeThreadId;
+  }
 
   const query = useQuery({
     queryKey: queryKeys.thread.potentialDuplicates({
