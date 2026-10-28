@@ -7,6 +7,7 @@ import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
+import { isTransientQueryFailure } from './outageRetryBudget'
 
 /**
  * Centralized cache effects for all React Query mutations in ComicPile.
@@ -45,7 +46,15 @@ export async function resumeQueriesAfterOutage(client: QueryClient): Promise<voi
   await client.refetchQueries(
     {
       type: 'active',
-      predicate: (query) => query.state.status === 'error',
+      predicate: (query) => {
+        if (query.state.status !== 'error') {
+          return false
+        }
+        const error = query.state.error
+        // Only refetch transient failures; deterministic 4xx, auth errors, and
+        // canceled requests are left to the user or manual retry.
+        return isTransientQueryFailure(error)
+      },
     },
     { cancelRefetch: false },
   )
