@@ -518,7 +518,7 @@ it('reports the session start die in activity line, not the evolving current die
         last_rating: 4.0,
       },
       last_rolled_result: 3,
-      current_die: 6,
+      current_die: 20,
       start_die: 6,
       snapshot_count: 2,
     }],
@@ -531,5 +531,5 @@ it('reports the session start die in activity line, not the evolving current die
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
 
   expect(screen.getByText(/rated 4\.0/)).toBeInTheDocument()
-  expect(screen.getByText('Die size d6')).toBeInTheDocument()
+  expect(screen.getByText(/Die size d6/)).toBeInTheDocument()
 })
