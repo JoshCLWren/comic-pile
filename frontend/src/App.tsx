@@ -22,6 +22,7 @@ import { isDefinitiveAuthenticationFailure, createAuthError, type AuthState, cal
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
+import ReadingPlanEditRoute from './pages/ReadingPlanEditRoute'
 import { PreferencesSync } from './hooks/usePreferences'
 import { useAuthDegradedState, ServiceUnavailableWrapper } from './hooks/useAuthDegradedState'
 import type { DiagnosticData } from './hooks/useDiagnostics'
@@ -666,7 +667,7 @@ function AppRoutes() {
           <ProtectedRoute>
             <ServiceUnavailableWrapper>
               <AuthenticatedLayout onBugReportSubmit={submit}>
-                <ContinuityPlannerPage />
+                <ReadingPlanEditRoute legacyEditor={<ContinuityPlannerPage />} />
               </AuthenticatedLayout>
             </ServiceUnavailableWrapper>
           </ProtectedRoute>
