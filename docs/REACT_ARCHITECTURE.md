@@ -81,11 +81,13 @@ Server state is **never** managed with hand-rolled `useState`/`useEffect` fetch
 hooks. The pre-Query pattern (custom hooks with `isMounted` refs and imperative
 `setData` calls) was removed; do not reintroduce it. The canonical patterns:
 
-- `frontend/src/query/queryClient.ts` — the single shared `QueryClient`
-  instance with app defaults (`staleTime` 30s, `gcTime` 5min,
-  `refetchOnWindowFocus: false`, no TanStack retry for 401/auth-403 and other
-  deterministic 4xx, up to 3 retries for transient/network/5xx, mutations
-  `retry: false`).
+- `frontend/src/query/queryClient.ts` — the shared `QueryClient` factory
+  (`createAppQueryClient()`) and the single app instance built from it, with app
+  defaults (`staleTime` 30s, `gcTime` 5min, `refetchOnWindowFocus: false`, no
+  TanStack retry for 401/auth-403 and other deterministic 4xx, up to 3 retries
+  for transient/network/5xx coordinated by the outage budget below, mutations
+  `retry: false`). The factory also wires the success subscription that ends a
+  recognized outage and resumes failed queries.
 - `frontend/src/query/queryKeys.ts` — **all** query-key builders live here as a
   hierarchical per-domain namespace (`queue`, `session`, `roll`, `thread`,
   `dependencies`, `analytics`, ...) with `all` / `list` / `detail` / `page`
@@ -118,6 +120,48 @@ Hook conventions (mirroring the `AGENTS.md` frontend section):
 The repo-level guard test `frontend/src/unit/single-cache-architecture.test.ts`
 fails if `CacheContext`, `CacheProvider`, `useCache`, `SessionContext`, or
 `SessionProvider` are reintroduced under `frontend/src/`.
+
+### Outage-Aware Retry Budget (#4271)
+
+React Query's default retry is per observer. Several screens mounting at once
+(Roll, Queue, Reader) each retry their own failure, so one degraded backend
+turns into an unbounded burst of retried requests — worst of all while the API
+is cold-starting, because every retry keeps the backend busy.
+
+`frontend/src/query/outageRetryBudget.ts` owns the only retry decision for app
+reads. `queryClient.ts` passes its `shouldRetryQuery` / `queryRetryDelay` to the
+client, so every query shares one budget instead of allocating its own:
+
+- Ordinary transient failures keep the historical cap of 3 retries per query
+  with deterministic, capped backoff (`1s`, `2s`, `4s`, capped at `8s`). No
+  jitter, so the upper bound is reproducible in tests and on call.
+- Two transient failures inside a 10s window recognize a **shared outage**. From
+  then on queries stop retrying independently.
+- A recognized outage allows exactly **one probe** after 4s. When that probe
+  fails, automatic retrying stops entirely: no retry timers remain, so nothing
+  polls indefinitely. Work resumes only when a request succeeds or the reader
+  acts (focus, navigation, explicit Retry).
+- The first success after an outage finishes clears the outage state and calls
+  `resumeQueriesAfterOutage` (from `cacheEffects.ts`), which refetches **errored
+  active queries once per distinct query key** — not once per observer.
+- While authentication is degraded (`service_unavailable` / `network_error`),
+  `AuthProvider` owns recovery probing and query retries are suppressed, so the
+  two retry loops cannot race. Auth recovery resumes the failed queries through
+  the same single-key path. `resetQueryRetryBudget()` runs on logout, login, and
+  session rejection so a new session never inherits the previous one's state.
+- Auth failures (401 and the `Not authenticated` 403) and mutations are never
+  retried.
+
+**Deterministic upper bound**: for one concurrent burst of `K` distinct failing
+query keys, the app issues at most `K` initial requests + 1 retry queued before
+the outage is recognized + 1 outage probe = **`K + 2`** requests. After a failed
+probe it issues zero further automatic requests, and any later success refetches
+each remaining failed key at most once.
+
+**Rules**: do not add per-hook `retry` overrides that bypass this budget (the
+documented exception is an idempotent mutation that already declares its own
+bounded retry). Do not add a component-level polling loop to compensate for the
+suppressed retries — recovery is owned by the outage budget and `AuthProvider`.
 
 ### Bounded Thread Queries
 

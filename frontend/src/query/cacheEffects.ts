@@ -30,6 +30,27 @@ export function clearSessionCache(client: QueryClient): void {
   client.clear()
 }
 
+/**
+ * Refetch active queries that failed during a recognized backend outage.
+ *
+ * Called exactly once when a request succeeds again (including the single
+ * outage probe or an auth recovery). Only queries that currently hold an error
+ * result are touched, and TanStack stores one Query per distinct query key, so
+ * the reader gets one request per failed key — never one per observer or one
+ * per invalidation. In-flight fetches are left alone.
+ *
+ * @param client - The app QueryClient.
+ */
+export async function resumeQueriesAfterOutage(client: QueryClient): Promise<void> {
+  await client.refetchQueries(
+    {
+      type: 'active',
+      predicate: (query) => query.state.status === 'error',
+    },
+    { cancelRefetch: false },
+  )
+}
+
 export type ThreadCacheRollback = () => void
 
 export function optimisticallyUpdateThreadCache(

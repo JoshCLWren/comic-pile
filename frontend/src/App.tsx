@@ -3,7 +3,12 @@ import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
-import { clearSessionCache } from './query/cacheEffects'
+import { clearSessionCache, resumeQueriesAfterOutage } from './query/cacheEffects'
+import {
+  markAuthDegraded,
+  markAuthRecovered,
+  resetQueryRetryBudget,
+} from './query/outageRetryBudget'
 import { lazyRoute } from './routes/routeModules'
 import Seo from './seo/Seo'
 import { useRoutePrefetch } from './hooks/useRoutePrefetch'
@@ -91,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const markDefinitivelyUnauthenticated = useCallback(() => {
     sessionGeneration.current += 1
+    resetQueryRetryBudget()
     clearAccessToken()
     clearSessionCache(client)
     setAuthState(prev => ({
@@ -342,8 +348,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [markDefinitivelyUnauthenticated, recoverSession])
 
+  useEffect(() => {
+    if (authState.status === 'service_unavailable' || authState.status === 'network_error') {
+      // The bootstrap/recovery machinery already probes authentication with its
+      // own bounded budget. Independent query retries would multiply that load.
+      markAuthDegraded()
+      return
+    }
+    if (authState.status === 'authenticated' && markAuthRecovered()) {
+      // Resume the queries that failed while degraded once per distinct key.
+      void resumeQueriesAfterOutage(client)
+    }
+  }, [authState.status, client])
+
   const login = async (accessToken: string) => {
     const generation = ++sessionGeneration.current
+    resetQueryRetryBudget()
     setAuthState(prev => ({ ...prev, status: 'checking', isLoading: true, user: null }))
     clearSessionCache(client)
     setAccessToken(accessToken)
