@@ -32,8 +32,17 @@ export default function ReadingPlanEditRoute({ legacyEditor }: { legacyEditor: R
     )
   }
 
-  if (reader.data.execution_mode !== 'option_e') {
+  if (reader.data.execution_mode === 'legacy') {
     return <>{legacyEditor}</>
+  }
+
+  if (reader.data.execution_mode !== 'option_e') {
+    return (
+      <div role="alert">
+        The Reading Plan's execution mode could not be verified. The obsolete Plan editor is unavailable.{' '}
+        <Link to={'/continuity-plans/' + planId}>Return to Reading Plan</Link>
+      </div>
+    )
   }
 
   // The reader only supplies display_name for an owned List source. Never
