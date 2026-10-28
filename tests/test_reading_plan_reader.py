@@ -395,3 +395,107 @@ async def test_option_e_plan_reader_rejects_two_persisted_list_sources(
         assert response.status_code == 409
     finally:
         get_reading_execution_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_option_e_new_plan_is_linked_at_creation_and_legacy_edit_rejected(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """New Plan writes cannot reopen an alternate, editable issue authority."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, title="New series", issue_number="1")
+    await async_db.commit()
+    monkeypatch.setenv("OPTION_E_ENABLED", "true")
+    monkeypatch.setenv("OPTION_E_APPROVED_PREVIEW", "local-test-fixture-no-production-approval")
+    get_reading_execution_settings.cache_clear()
+    try:
+        payload = _plan_payload("Owned Plan", [_node("owned-1", issue.id, 0)])
+        created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+        assert created.status_code == 201, created.text
+        plan_id = created.json()["id"]
+        reader = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
+        assert reader.status_code == 200, reader.text
+        body = reader.json()
+        assert body["execution_mode"] == "option_e"
+        list_sources = [
+            source for source in body["sources"]
+            if source["raw_source_path"].startswith("custom-cbl:")
+        ]
+        assert len(list_sources) == 1
+        list_id = int(list_sources[0]["raw_source_path"].split(":")[1])
+        linked = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/reader")
+        assert linked.status_code == 200
+        assert [entry["issue_id"] for entry in linked.json()["entries"]] == [issue.id]
+        assert [issue_row["issue_id"] for issue_row in body["lanes"][0]["issues"]] == [issue.id]
+        legacy_edit = await auth_client.put(
+            f"/api/v1/continuity-plans/{plan_id}", json=payload,
+        )
+        assert legacy_edit.status_code == 409
+        assert legacy_edit.json()["detail"]["code"] == "reading_list_is_authoritative"
+    finally:
+        get_reading_execution_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_option_e_reader_rejects_plan_missing_explicit_link(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Do not fall back to legacy order for an unconverted active Plan."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, title="Old series", issue_number="1")
+    await async_db.commit()
+    plan_id = await _create_plan(auth_client, "Legacy Plan", [_node("old", issue.id, 0)])
+    monkeypatch.setenv("OPTION_E_ENABLED", "true")
+    monkeypatch.setenv("OPTION_E_APPROVED_PREVIEW", "local-test-fixture-no-production-approval")
+    get_reading_execution_settings.cache_clear()
+    try:
+        reader = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
+        assert reader.status_code == 409
+        assert "no linked authoritative Reading List" in reader.json()["detail"]
+    finally:
+        get_reading_execution_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_option_e_identically_named_lists_resolve_only_explicit_link(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Duplicate names and identical membership never create a guessed authority."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, title="Same series", issue_number="1")
+    await async_db.commit()
+    plan_id = await _create_plan(auth_client, "Same title", [_node("x", issue.id, 0)])
+    lists = [
+        CustomCBLList(user_id=user.id, name="Same title", mode="strict"),
+        CustomCBLList(user_id=user.id, name="Same title", mode="loose"),
+    ]
+    async_db.add_all(lists)
+    await async_db.flush()
+    for item in lists:
+        async_db.add(CustomCBLEntry(
+            list_id=item.id, issue_id=issue.id, position=0,
+        ))
+    async_db.add(ReadingPlanSource(
+        plan_id=plan_id,
+        raw_source_path=f"custom-cbl:{lists[1].id}",
+        custom_cbl_list_id=lists[1].id,
+    ))
+    await async_db.commit()
+    monkeypatch.setenv("OPTION_E_ENABLED", "true")
+    monkeypatch.setenv("OPTION_E_APPROVED_PREVIEW", "local-test-fixture-no-production-approval")
+    get_reading_execution_settings.cache_clear()
+    try:
+        reader = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
+        assert reader.status_code == 200, reader.text
+        assert reader.json()["ordering_mode"] == "informational"
+        assert reader.json()["lanes"][0]["issues"][0]["source_paths"] == [
+            f"custom-cbl:{lists[1].id}",
+        ]
+    finally:
+        get_reading_execution_settings.cache_clear()
