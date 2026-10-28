@@ -156,12 +156,12 @@ export default function HistoryPage() {
       parts.push(`rated ${lastRating.toFixed(1)}`)
     }
 
-    // The current die can differ from the last ladder step when the reader
-    // overrides it manually, so it is reported with the activity while the
-    // ladder itself stays on its own line.
+    // Report the session's recorded start die, not the evolving current die,
+    // so past history never rewrites itself when the reader's current die
+    // setting changes (issue #4243).
     const hasActivity = (issuesRead != null && issuesRead > 0) || lastRating != null
-    if (hasActivity && session.current_die != null) {
-      parts.push(`Die size d${session.current_die}`)
+    if (hasActivity && session.start_die != null) {
+      parts.push(`Die size d${session.start_die}`)
     }
 
     return parts.length > 0 ? parts.join(' · ') : null

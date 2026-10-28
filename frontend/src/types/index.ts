@@ -245,6 +245,7 @@ export interface SessionSummary {
   active_thread: SessionThread | null;
   last_rolled_result: number | null;
   current_die: number | null;
+  start_die: number | null;
   snapshot_count: number | null;
 }
 
