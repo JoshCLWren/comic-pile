@@ -224,6 +224,30 @@ describe('ReadingPlanDetailPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Edit reading order' }))
     expect(screen.getByText('Reading List editor 2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('add-from-cbl')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Add or edit Reading List' })).toHaveAttribute('href', '/reading-lists/2')
+  })
+
+  it('does not expose legacy Plan mutation controls for an unresolved Option E List', async () => {
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      execution_mode: 'option_e',
+      sources: [{ ...readerView.sources[0], raw_source_path: 'custom-cbl:9999', display_name: null }],
+    })
+    renderPage()
+    expect(await screen.findByText(/linked Reading List could not be resolved/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('add-from-cbl')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Add or edit Reading List' })).not.toBeInTheDocument()
+    expect(screen.getByText(/owned Reading List link is required/)).toBeInTheDocument()
+  })
+
+  it('keeps legacy Add from CBL controls only for the legacy reader', async () => {
+    mockGetReader.mockResolvedValue({ ...readerView, execution_mode: 'legacy' })
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Edit plan' })).toBeInTheDocument()
+    expect(screen.getByTestId('add-from-cbl')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Add or edit Reading List' })).not.toBeInTheDocument()
   })
 
   it('does not navigate to an unresolved or foreign Reading List from source paths alone', async () => {
