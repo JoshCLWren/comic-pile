@@ -12,6 +12,7 @@ const mockPool = {
       return { rows: [] };
     }
     if (query.includes('FROM users')) {
+      if (params[0] === 'database-outage') throw new Error('database unavailable');
       if (params[0] === 'testuser') {
         return { rows: [{ id: 1, username: 'testuser', email: 'test@example.com', is_admin: false, password_changed_at: null }] };
       }
@@ -120,4 +121,20 @@ test('Auth/me API Handler Tests', async (t) => {
     assert.equal(res._status, 401);
     assert.deepEqual(res._json, { error: 'Password changed; please sign in again.' });
   });
+  await t.test('should reject refresh credentials', async () => {
+    const token = jwt.sign({ sub: 'testuser', jti: 'refresh-jti', type: 'refresh', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
+    const res = createMockResponse();
+    await authMeHandler(createMockRequest(`Bearer ${token}`) as any, res as any);
+    assert.equal(res._status, 401);
+    assert.deepEqual(res._json, { error: 'Invalid authentication credentials' });
+  });
+
+  await t.test('should map a database failure to 500', async () => {
+    const token = jwt.sign({ sub: 'database-outage', jti: 'valid-jti', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
+    const res = createMockResponse();
+    await authMeHandler(createMockRequest(`Bearer ${token}`) as any, res as any);
+    assert.equal(res._status, 500);
+    assert.deepEqual(res._json, { error: 'Internal server error' });
+  });
+
 });

@@ -1,9 +1,27 @@
-import { PoolClient } from 'pg';
-import { UserResponse } from './authTypes.js';
+import { Pool } from 'pg';
 
-// Repository functions for auth
-export async function isTokenRevoked(db: PoolClient, username: string, jti: string): Promise<boolean> {
-  const result = await db.query(
+/** Persistence data, including the credential epoch used by the service. */
+export interface AuthUserRecord {
+  id: number;
+  username: string;
+  email: string | null;
+  is_admin: boolean;
+  password_changed_at: Date | string | null;
+}
+
+const DATABASE_URL = process.env.DATABASE_URL || '';
+if (!DATABASE_URL) throw new Error('DATABASE_URL environment variable must be set');
+
+const pool = (globalThis as typeof globalThis & { pool?: Pick<Pool, 'query'> }).pool || new Pool({
+  connectionString: DATABASE_URL,
+  max: 2,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
+
+/** Read revocation state without making authorization decisions. */
+export async function isTokenRevoked(username: string, jti: string): Promise<boolean> {
+  const result = await pool.query(
     `SELECT 1 FROM revoked_tokens rt
      JOIN users u ON rt.user_id = u.id
      WHERE u.username = $1 AND rt.jti = $2`,
@@ -12,25 +30,12 @@ export async function isTokenRevoked(db: PoolClient, username: string, jti: stri
   return result.rows.length > 0;
 }
 
-export async function getUserWithPasswordCheck(db: PoolClient, username: string, tokenPc?: number): Promise<{ user: UserResponse; isRevoked: boolean }> {
-  const result = await db.query(
+/** Return stored identity and credential epoch, without HTTP or credential decisions. */
+export async function findAuthUser(username: string): Promise<AuthUserRecord | null> {
+  const result = await pool.query<AuthUserRecord>(
     `SELECT id, username, email, is_admin, password_changed_at
      FROM users
      WHERE username = $1 LIMIT 1`, [username]
   );
-  if (result.rows.length === 0) {
-    throw new Error('User not found');
-  }
-  const row = result.rows[0];
-  const user: UserResponse = {
-    id: row.id,
-    username: row.username,
-    email: row.email,
-    is_admin: row.is_admin,
-  };
-  const userPc = row.password_changed_at
-    ? Math.floor(new Date(row.password_changed_at).getTime() / 1000)
-    : 0;
-  const isRevoked = tokenPc !== undefined && tokenPc < userPc;
-  return { user, isRevoked };
+  return result.rows[0] ?? null;
 }
