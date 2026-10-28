@@ -14,7 +14,7 @@ Verifies the closure-critical contract:
 * When the mapping is unconfigured for IDs, missing any required secret causes
   fallback to ``pr_rebase``.
 * Every other worker stays on the shared ``PR_REBASE_TOKEN`` producer.
-* The persisted worker-App mapping contains only worker 48.
+* The persisted worker-App mapping keeps worker 48\'s identity and tracks the active roster without retiring existing credentials.
 * The worker App is not a trusted marker author.
 """
 from __future__ import annotations
@@ -159,10 +159,12 @@ class Worker48InstallationTokenTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "PR_REBASE_TOKEN is required"):
             app.resolve_push_credential({"FACTORY_WORKER": WORKER_48})
 
-    def test_mapping_contains_only_worker_48(self) -> None:
-        """The persisted mapping is worker 48 only; no other worker is provisioned."""
+    def test_mapping_keeps_worker_48_identity_with_active_roster(self) -> None:
+        """Expanded roster must retain worker 48 and exclude retired worker 72."""
         mapping = json.loads(MAPPING_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(set(mapping["workers"]), {WORKER_48})
+        self.assertIn(WORKER_48, mapping["workers"])
+        self.assertIn("46", mapping["workers"])
+        self.assertNotIn("72", mapping["workers"])
         entry = mapping["workers"][WORKER_48]
         self.assertEqual(entry["display_name"], "Mark Cordova")
         self.assertEqual(entry["app_id"], 5275306)
