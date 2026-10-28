@@ -12,6 +12,7 @@ from scripts.profile_local_traffic import (
     read_har,
     safe_database_url,
     safe_route,
+    server_environment,
 )
 
 
@@ -138,3 +139,22 @@ def test_cpu_seconds_uses_psutil_on_macos(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.setitem(sys.modules, "psutil", SimpleNamespace(Process=FakeProcess))
     assert module.cpu_seconds(777) == 2.0
+
+
+def test_production_profile_sets_non_wildcard_loopback_cors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Production startup requires CORS_ORIGINS even without a browser client."""
+    monkeypatch.setenv("SECRET_KEY", "ephemeral-local-signing-key")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://untrusted.example/prod")
+    monkeypatch.setenv("CORS_ORIGINS", "*")
+    env = server_environment(
+        "postgresql+asyncpg://comicpile:local_password@127.0.0.1:55435/comicpile_profile",
+        8999,
+    )
+    assert env["ENVIRONMENT"] == "production"
+    assert env["CORS_ORIGINS"] == "http://127.0.0.1:8999"
+    assert env["DATABASE_URL"].endswith(":55435/comicpile_profile")
+    assert env["TEST_DATABASE_URL"] == env["DATABASE_URL"]
+    assert env["TEST_ENVIRONMENT"] == "false"
+    assert env["NEON_TOKEN"] == ""
+    assert env["NEON_PROJECT_ID"] == ""
+    assert env["SECRET_KEY"] == "ephemeral-local-signing-key"
