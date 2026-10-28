@@ -215,17 +215,18 @@ describe('ReadingPlanDetailPage', () => {
   it('opens a linked Reading List directly instead of the obsolete plan editor', async () => {
     mockGetReader.mockResolvedValue({
       ...readerView,
+      execution_mode: 'option_e',
       sources: [
         { ...readerView.sources[0], raw_source_path: 'custom-cbl:9999', display_name: null },
         { ...readerView.sources[0], id: 2, raw_source_path: 'custom-cbl:2', display_name: 'Mignolaverse' },
       ],
     })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit reading order' }))
+    expect(await screen.findByRole('link', { name: 'Add or edit Reading List' })).toHaveAttribute('href', '/reading-lists/2')
+    expect(screen.queryByTestId('add-from-cbl')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit reading order' }))
     expect(screen.getByText('Reading List editor 2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument()
-    expect(screen.queryByTestId('add-from-cbl')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Add or edit Reading List' })).toHaveAttribute('href', '/reading-lists/2')
   })
 
   it('does not expose legacy Plan mutation controls for an unresolved Option E List', async () => {
