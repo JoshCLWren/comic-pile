@@ -163,7 +163,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                  retryCount: 0,
                  lastRetryAt: null,
                }))
+               return
              } catch (refreshError) {
+               if (generation !== sessionGeneration.current) return
                if (isDefinitiveAuthenticationFailure(refreshError)) {
                  markDefinitivelyUnauthenticated()
                } else {

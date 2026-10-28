@@ -483,10 +483,10 @@ describe('AuthProvider transient recovery', () => {
     // Both /auth/me calls resolve with the same user; the second call should
     // reuse the single in-flight recovery promise, not start a second validation.
     let resolveFirst!: (value: { username: string; email: string }) => void
-    let resolveSecond!: (value: { username: string; email: string }) => void
-    mocks.get
-      .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve }))
-      .mockImplementationOnce(() => new Promise(resolve => { resolveSecond = resolve }))
+    const sharedRequest = new Promise<{ username: string; email: string }>(resolve => {
+      resolveFirst = resolve
+    })
+    mocks.get.mockImplementationOnce(() => sharedRequest)
 
     const first = auth!.recoverSession(15000)
     const second = auth!.recoverSession(15000)
@@ -498,7 +498,6 @@ describe('AuthProvider transient recovery', () => {
 
     // The second call reuses the same promise; it resolves without a second /auth/me.
     await act(async () => {
-      resolveSecond({ username: 'reader', email: 'reader@example.com' })
       await second
     })
 
