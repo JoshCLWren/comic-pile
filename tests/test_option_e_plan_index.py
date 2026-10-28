@@ -133,3 +133,32 @@ async def test_option_e_index_rejects_unlinked_plan_instead_of_showing_stale_ord
     with pytest.raises(HTTPException) as exc:
         await list_continuity_plan_items(async_db, user_id=default_user.id)
     assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_option_e_index_rejects_ambiguous_plan_authority(
+    async_db: AsyncSession, default_user: User, option_e: None,
+) -> None:
+    """Multiple distinct owned Lists linked to the same Plan must fail clearly."""
+    owner = default_user.id
+    now = datetime.now(UTC)
+    plan = ContinuityPlan(
+        user_id=owner, name="Ambiguous Plan",
+        ordering_mode="strict_sequential",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[], created_at=now, updated_at=now,
+    )
+    async_db.add(plan)
+    await async_db.flush()
+    list_a = CustomCBLList(user_id=owner, name="List A", mode="loose", created_at=now, updated_at=now)
+    list_b = CustomCBLList(user_id=owner, name="List B", mode="strict", created_at=now, updated_at=now)
+    async_db.add_all([list_a, list_b])
+    await async_db.flush()
+    async_db.add_all([
+        ReadingPlanSource(plan_id=plan.id, raw_source_path=f"custom-cbl:{list_a.id}", custom_cbl_list_id=list_a.id),
+        ReadingPlanSource(plan_id=plan.id, raw_source_path=f"custom-cbl:{list_b.id}", custom_cbl_list_id=list_b.id),
+    ])
+    await async_db.flush()
+    with pytest.raises(HTTPException) as exc:
+        await list_continuity_plan_items(async_db, user_id=owner)
+    assert exc.value.status_code == 409

@@ -968,7 +968,7 @@ async def list_continuity_plan_items(
                     id=plan.id,
                     name=plan.name,
                     ordering_mode=active_mode,
-                    lane_count=1,
+                    lane_count=1,  # Option E uses exactly one owned List lane per Plan
                     step_count=list_counts.get(list_id, 0),
                     source_paths=paths_by_plan[plan.id],
                     source_names={
