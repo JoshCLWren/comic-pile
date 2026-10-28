@@ -232,6 +232,13 @@ async def adopt_crossover_template(
             nodes=payload.nodes,
             ordering_mode=payload.ordering_mode,
         )
+        from app.config import get_reading_execution_settings
+        from app.services.reading_plan_list_link import link_new_plan_to_owned_list
+
+        if get_reading_execution_settings().enabled:
+            await link_new_plan_to_owned_list(
+                db, plan=plan, user_id=current_user.id,
+            )
         await db.commit()
     except ValueError as exc:
         await db.rollback()
