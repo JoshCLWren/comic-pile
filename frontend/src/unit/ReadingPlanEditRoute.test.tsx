@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanEditRoute from '../pages/ReadingPlanEditRoute'
 import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-continuity-plans'
+import { cast } from '../utils/cast'
 
 vi.mock('../services/api-continuity-plans', async () => {
   const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
@@ -52,7 +53,7 @@ function response(
   execution_mode: 'option_e' | 'legacy',
   sources: Array<{ raw_source_path: string; display_name: string | null }> = [],
 ): ReadingPlanReaderView {
-  return { execution_mode, sources } as ReadingPlanReaderView
+  return cast<ReadingPlanReaderView>({ execution_mode, sources })
 }
 
 beforeEach(() => getReader.mockReset())
