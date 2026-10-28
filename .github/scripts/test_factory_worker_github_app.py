@@ -53,9 +53,11 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual(app.collision_fallback_name(48), "Michael Spence")
         self.assertEqual(app.faker_names(48, 2), ["Mark Cordova", "Michael Spence"])
 
-    def test_mapping_persists_mark_cordova_and_no_other_worker(self) -> None:
+    def test_mapping_persists_mark_cordova_and_active_roster(self) -> None:
         mapping = json.loads((REPO / ".github/factory-worker-github-apps.json").read_text())
-        self.assertEqual(set(mapping["workers"]), {"48"})
+        self.assertIn("48", mapping["workers"])
+        self.assertIn("46", mapping["workers"])
+        self.assertNotIn("72", mapping["workers"])
         entry = mapping["workers"]["48"]
         self.assertEqual(entry["display_name"], "Mark Cordova")
         self.assertEqual(entry["display_name"], app.bootstrap_display_name(48))
@@ -64,7 +66,6 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual(entry["installation_id"], 170306933)
         self.assertIn("Autonomous ComicPile Factory worker", entry["profile"])
         blob = json.dumps(mapping)
-        self.assertNotIn('"46"', blob)
         self.assertNotIn('"72"', blob)
 
 
