@@ -358,7 +358,7 @@ export default function CreatorsPage() {
     if (next.has(key)) {
       // Selected checkboxes always stay enabled so one creator can be dropped.
       next.delete(key)
-    } else if (selectedKeys.size < MAX_COMPARISON_SELECTION) {
+    } else if (next.size < MAX_COMPARISON_SELECTION) {
       next.add(key)
     } else {
       return
