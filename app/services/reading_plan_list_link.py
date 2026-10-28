@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.continuity_plan import ContinuityPlan
 from app.repositories import reading_plan_list_link_repository as link_repository
 
+
 async def link_new_plan_to_owned_list(
     db: AsyncSession, *, plan: ContinuityPlan, user_id: int,
 ) -> int:
