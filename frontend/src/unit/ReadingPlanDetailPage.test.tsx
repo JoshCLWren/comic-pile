@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -298,7 +298,9 @@ describe('ReadingPlanDetailPage', () => {
       })),
     })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit plan' }))
+    const edit = await screen.findByRole('button', { name: 'Edit plan' })
+    await waitFor(() => expect(edit).toBeEnabled())
+    fireEvent.click(edit)
     expect(screen.getByText('Editor')).toBeInTheDocument()
   })
 
