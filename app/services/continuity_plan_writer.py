@@ -49,10 +49,14 @@ from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.continuity_rules import _would_create_cycle, ensure_owned_continuity_node
+from app.config import get_reading_execution_settings
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
-from app.models.reading_plan_membership import ReadingPlanDependency, ReadingPlanIssue
+from app.models.reading_plan_membership import (
+    ReadingPlanDependency,
+    ReadingPlanIssue,
+)
 from app.models.thread import Thread
 from app.schemas.continuity_plan import (
     ContinuityPlanLane,
@@ -63,6 +67,10 @@ from app.schemas.continuity_plan import (
 )
 from app.schemas.continuity_rule import ContinuityNodeType
 from app.repositories.continuity_repository import plans_for_user
+from app.repositories.reading_plan_list_link_repository import (
+    owned_list_entry_counts,
+    owned_plan_list_authority_rows,
+)
 from app.repositories.reading_plan_repository import distinct_plan_issue_ids
 from app.services.canonical_constraint_compiler import (
     compile_rule_edges,
@@ -904,25 +912,92 @@ async def list_continuity_plan_items(
     *,
     user_id: int,
 ) -> list[ContinuityPlanListItem]:
-    """Return typed Reading Plan list items for one user, newest first."""
+    """List Plans with live List-owned membership/mode under Option E.
+
+    The legacy Plan columns are historical provenance after cutover. Returning
+    them on the index mislabels loose Lists as strict (and vice versa), shows
+    obsolete issue counts, and sorts a recently edited List by an old Plan
+    timestamp. Resolve each owner-scoped authoritative List in a bulk query
+    instead, consistently with the Plan detail reader and Roll evaluator.
+    """
     rows = await plans_for_user(db, user_id=user_id)
     ordered = sorted(rows, key=lambda plan: plan.updated_at, reverse=True)
+    plan_ids = [plan.id for plan in ordered]
+    paths_by_plan = {plan.id: plan_source_paths(plan) for plan in ordered}
+    if get_reading_execution_settings().enabled and ordered:
+        # Owner check is part of the JOIN. Never infer an authority from a
+        # matching name or silently fall back to an outdated Plan snapshot.
+        list_rows = await owned_plan_list_authority_rows(
+            db, user_id=user_id, plan_ids=plan_ids,
+        )
+        authorities: dict[int, tuple[int, str, datetime]] = {}
+        for plan_id, list_id, mode, list_updated_at in list_rows:
+            existing = authorities.get(plan_id)
+            if existing is not None and existing[0] != list_id:
+                raise HTTPException(status_code=409, detail="Ambiguous Reading List association")
+            authorities[plan_id] = (list_id, mode, list_updated_at)
+        if len(authorities) != len(ordered):
+            raise HTTPException(
+                status_code=409,
+                detail="Reading Plan has no linked authoritative Reading List",
+            )
+        # Source badges and editor links must expose the actual owned List,
+        # even when historical Plan nodes lack CBL provenance.
+        for plan in ordered:
+            source_path = f"custom-cbl:{authorities[plan.id][0]}"
+            paths_by_plan[plan.id] = [
+                source_path,
+                *(path for path in paths_by_plan[plan.id] if path != source_path),
+            ]
+        source_names = await load_reading_plan_source_names(
+            db, user_id=user_id,
+            source_paths=(path for paths in paths_by_plan.values() for path in paths),
+        )
+        list_counts = await owned_list_entry_counts(
+            db, user_id=user_id,
+            list_ids=[authority[0] for authority in authorities.values()],
+        )
+        summaries: list[ContinuityPlanListItem] = []
+        for plan in ordered:
+            list_id, list_mode, list_updated_at = authorities[plan.id]
+            active_mode: PlanOrderingMode = (
+                "strict_sequential" if list_mode == "strict" else "informational"
+            )
+            summaries.append(
+                ContinuityPlanListItem(
+                    id=plan.id,
+                    name=plan.name,
+                    ordering_mode=active_mode,
+                    lane_count=1,  # Option E uses exactly one owned List lane per Plan
+                    step_count=list_counts.get(list_id, 0),
+                    source_paths=paths_by_plan[plan.id],
+                    source_names={
+                        path: source_names[path]
+                        for path in paths_by_plan[plan.id]
+                        if path in source_names
+                    },
+                    updated_at=list_updated_at,
+                )
+            )
+        return sorted(summaries, key=lambda item: item.updated_at, reverse=True)
+
+    # Legacy serving is explicitly isolated. Its Plan membership remains
+    # the source only when Option E is disabled.
+    source_names = await load_reading_plan_source_names(
+        db, user_id=user_id,
+        source_paths=(path for paths in paths_by_plan.values() for path in paths),
+    )
     membership_counts: dict[int, int] = {}
     if ordered:
         membership_counts = dict(
             (
                 await db.execute(
                     select(ReadingPlanIssue.plan_id, func.count())
-                    .where(ReadingPlanIssue.plan_id.in_([plan.id for plan in ordered]))
+                    .where(ReadingPlanIssue.plan_id.in_(plan_ids))
                     .group_by(ReadingPlanIssue.plan_id)
                 )
             ).all()
         )
-    paths_by_plan = {plan.id: plan_source_paths(plan) for plan in ordered}
-    source_names = await load_reading_plan_source_names(
-        db, user_id=user_id,
-        source_paths=(path for paths in paths_by_plan.values() for path in paths),
-    )
     return [
         ContinuityPlanListItem(
             id=plan.id,
