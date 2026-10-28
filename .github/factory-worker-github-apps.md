@@ -7,6 +7,27 @@ Worker 48 is provisioned as **Mark Cordova** (`mark-cordova[bot]`), App ID
 `JoshCLWren/comic-pile`, and the three worker-48 repository secrets are configured.
 Workers other than 48 keep using `PR_REBASE_TOKEN` for push and pull-request creation.
 
+## Shared producer retirement (issue #3140)
+
+`PR_REBASE_TOKEN` stays only while an active worker still pushes through it.
+The executable form of that condition lives in
+`.github/scripts/factory_shared_token_retirement.py`:
+
+```sh
+python3 .github/scripts/factory_shared_token_retirement.py plan   # census, always exits 0
+python3 .github/scripts/factory_shared_token_retirement.py check  # ordering guard
+```
+
+The census reads `.github/factory-expected-workers.json` for the active roster and
+this mapping for identities. A worker counts as independent only when its mapping
+row is complete and `factory_worker_github_app.credential_decision` already selects
+its installation token, so a committed row cannot retire the producer ahead of
+routing support. Retired workers are never dependents: retired worker 72 is not a
+reason to keep the shared token.
+`tests/test_issue_3140_shared_token_retirement.py` fails both on premature removal
+(active dependents remain, shared fallback gone) and on overdue removal (no
+dependents remain, shared fallback still wired).
+
 ## Bootstrap (already done for worker 48)
 
 Faker **40.40.0**, locale `en_US`, a brand-new `Faker()` per worker, `seed_instance(worker_number + 100)`, then `name()` as the first call. Worker 48's first `name()` is **Mark Cordova**. That name is persisted in `.github/factory-worker-github-apps.json`. Later reads must not re-roll it.

@@ -351,6 +351,15 @@ Rules:
   workflow token for controller comments and labels; creating the PR with that
   token attributes it to `github-actions[bot]`, which can leave Actions awaiting
   approval and causes CodeRabbit to skip initial review.
+- The shared `PR_REBASE_TOKEN` push/PR producer may be removed only when every
+  active worker resolves to its own installation token. Check that condition with
+  `python3 .github/scripts/factory_shared_token_retirement.py check`; it derives
+  dependents from `.github/factory-expected-workers.json` plus the persisted worker
+  App mapping and exits non-zero on premature removal (worker 48's fallback gone
+  while dependents remain) and on overdue removal (no dependents left while the
+  producer is still wired). Retired workers, including retired worker 72, are never
+  dependents. `tests/test_issue_3140_shared_token_retirement.py` enforces the same
+  guard in CI.
 - Never push directly to `main`.
 - Never create or convert a draft PR unless Josh explicitly requests a draft.
 - Never enable auto-merge.

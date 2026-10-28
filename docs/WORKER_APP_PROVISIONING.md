@@ -23,7 +23,9 @@ installation link and select **only `comic-pile`**.
 Contents and pull requests need write access for pushes, PR creation, and reviews;
 issues need write access for the readable issue/PR handoffs. Metadata is read-only.
 Worker Apps remain outside all trusted-marker allowlists. This tool does not change
-controller authority, schedules, or the shared `PR_REBASE_TOKEN`.
+controller authority, schedules, or the shared `PR_REBASE_TOKEN`. The shared producer
+is retired only when `python3 .github/scripts/factory_shared_token_retirement.py check`
+reports no dependent active worker (issue #3140).
 
 Then run, or have the interactive agent run:
 
