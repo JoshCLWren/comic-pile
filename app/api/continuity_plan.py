@@ -314,6 +314,10 @@ async def adopt_reading_order(
         lane_id=payload.lane_id,
         lane_name=payload.lane_name,
     )
+    if get_reading_execution_settings().enabled:
+        await link_new_plan_to_owned_list(
+            db, plan=plan, user_id=current_user.id,
+        )
     try:
         await db.commit()
     except Exception:
