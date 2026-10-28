@@ -46,22 +46,26 @@ def upgrade() -> None:
                 raise RuntimeError(f"Plan {plan_id} references an unowned Reading List")
             continue
         audited_list = _AUDITED_LINKS.get((int(user_id), int(plan_id)))
+        # The fixed IDs only identify the audited production examples, not all
+        # installations. A missing or mismatched destination takes the ordinary
+        # additive conversion path, never halts an unrelated deployment.
+        verified_list: int | None = None
         if audited_list is not None:
             owned = db.execute(text(
                 "SELECT 1 FROM custom_cbl_lists WHERE id=:l AND user_id=:u"
             ), {"l": audited_list, "u": user_id}).scalar()
-            if not owned:
-                raise RuntimeError(f"Audited List {audited_list} is absent or unowned")
-            plan_n, list_n, shared = db.execute(text(
-                "SELECT (SELECT count(*) FROM reading_plan_issues WHERE plan_id=:p),"
-                " (SELECT count(*) FROM custom_cbl_entries WHERE list_id=:l),"
-                " (SELECT count(*) FROM reading_plan_issues p "
-                " JOIN custom_cbl_entries e ON e.issue_id=p.issue_id AND e.list_id=:l "
-                " WHERE p.plan_id=:p)"
-            ), {"p": plan_id, "l": audited_list}).one()
-            if not plan_n or shared != plan_n or list_n - shared != 1:
-                raise RuntimeError(f"Plan {plan_id} no longer matches its audited List")
-            list_id = audited_list
+            if owned:
+                plan_n, list_n, shared = db.execute(text(
+                    "SELECT (SELECT count(*) FROM reading_plan_issues WHERE plan_id=:p),"
+                    " (SELECT count(*) FROM custom_cbl_entries WHERE list_id=:l),"
+                    " (SELECT count(*) FROM reading_plan_issues p "
+                    " JOIN custom_cbl_entries e ON e.issue_id=p.issue_id AND e.list_id=:l "
+                    " WHERE p.plan_id=:p)"
+                ), {"p": plan_id, "l": audited_list}).one()
+                if plan_n == 144 and list_n == 145 and shared == 144:
+                    verified_list = audited_list
+        if verified_list is not None:
+            list_id = verified_list
         else:
             # A new List keeps the complete legacy issue sequence without touching
             # historical membership/provenance. All presently unlinked plans have
@@ -77,7 +81,8 @@ def upgrade() -> None:
                 "SELECT 1 FROM custom_cbl_lists "
                 "WHERE user_id=:u AND lower(name)=lower(:n) LIMIT 1"
             ), {"u": user_id, "n": plan_name}).scalar()
-            name = f"{plan_name} [Plan {plan_id}]" if clash else plan_name
+            suffix = f" [Plan {plan_id}]"
+            name = f"{plan_name[:200 - len(suffix)]}{suffix}" if clash else plan_name
             mode = "strict" if ordering_mode == "strict_sequential" else "loose"
             list_id = db.execute(text(
                 "INSERT INTO custom_cbl_lists (user_id,name,mode,created_at,updated_at) "
