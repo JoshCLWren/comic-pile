@@ -203,20 +203,29 @@ def free_port() -> int:
         return sock.getsockname()[1]
 
 
-@contextlib.contextmanager
-def api_process(db_url: str, output: Path, label: str):
-    """Run a fresh single-worker local API process for one measured scenario."""
-    port = free_port()
+def server_environment(db_url: str, port: int) -> dict[str, str]:
+    """Return production-path settings scoped to a loopback-only profile server."""
+    safe_database_url(db_url)
+    if not 1 <= port <= 65535:
+        raise ValueError("Invalid local API port")
     env = dict(os.environ)
     env.update(DATABASE_URL=db_url, TEST_DATABASE_URL=db_url,
                TEST_ENVIRONMENT="false", ENVIRONMENT="production",
                SECRET_KEY=os.environ["SECRET_KEY"],
-               # A production-mode app requires an explicit non-wildcard CORS
-               # origin, even for loopback-only profile requests.
+               # Production mode requires a non-wildcard CORS origin even when
+               # the only client is this loopback HTTP replay harness.
                CORS_ORIGINS=f"http://127.0.0.1:{port}",
                NEON_TOKEN="", NEON_PROJECT_ID="",
                PERF_ALARM_GITHUB_ISSUES_ENABLED="false",
                COMICVINE_API_KEY="", GITHUB_TOKEN="")
+    return env
+
+
+@contextlib.contextmanager
+def api_process(db_url: str, output: Path, label: str):
+    """Run a fresh single-worker local API process for one measured scenario."""
+    port = free_port()
+    env = server_environment(db_url, port)
     log_path = output / (label + ".server.log")
     with log_path.open("wb") as log:
         os.chmod(log_path, 0o600)
