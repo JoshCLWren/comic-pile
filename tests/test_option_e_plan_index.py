@@ -1,5 +1,6 @@
 """Contract tests: Option E Plan index must follow owned List authority, never stale Plan metadata."""
 
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -17,7 +18,7 @@ from app.services.continuity_plan_writer import list_continuity_plan_items
 
 
 @pytest.fixture
-def option_e(monkeypatch: pytest.MonkeyPatch) -> None:
+def option_e(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Switch to the same Option E policy as the production reader."""
     monkeypatch.setenv("OPTION_E_ENABLED", "true")
     monkeypatch.setenv("OPTION_E_APPROVED_PREVIEW", "isolated-test-fixture")
