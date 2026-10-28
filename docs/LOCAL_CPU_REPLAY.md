@@ -11,6 +11,30 @@ This is a draft, local-only profiling harness for [#4277](https://github.com/Jos
 
 The script rejects database connections outside localhost/127.0.0.1/::1, explicitly overrides DATABASE_URL and TEST_DATABASE_URL in the child process, listens on 127.0.0.1 only, and never sends replayed API requests to the HAR's original host. It runs the production-style FastAPI startup path against the **local-only database**, but disables the Neon monitor and selected third-party API credentials. A password-based setup generates **one ephemeral JWT signing secret shared across all replay subprocesses**. If providing a preexisting local access token instead, export the matching local SECRET_KEY explicitly. It does not intentionally access Vercel or Neon. Some app endpoints may independently call external services; keep provider credentials disabled or use a network-isolated container if complete offline execution is required.
 
+## Generate a representative synthetic fixture (recommended)
+
+Do not benchmark the five-thread starter database. After applying the migrations
+and running the existing seed_dev_db.py once to create a testuser login, use the
+**disposable** database (whose name must include 'profile'):
+
+    LOCAL_PROFILE_DATABASE_URL='postgresql+asyncpg://comicpile:comicpile_profile_local_only@127.0.0.1:55435/comicpile_profile' \
+      uv run python -m scripts.seed_profile_fixture --username testuser
+
+The fixture is deterministic: **315 additional threads, 7,560 issues, 79
+historical sessions, 632 roll/rate events, 12 custom CBLs with hundreds of
+canonical issue memberships, five legacy reading orders and some explicit
+dependency edges**. Together with the starter data this makes 320 threads.
+It leaves the existing testuser login and its five starter threads intact.
+It aborts if the generated fixture is already present instead of duplicating it.
+All changes are committed in a single transaction; no production data is used.
+
+This fixture imitates *data volume and some relations*, not the exact distribution
+of the production account, the complete Option E graph, shared catalog mappings,
+or ComicVine creator metadata. The larger dataset should improve Queue/Roll SQL
+shape compared with a five-thread smoke test; it cannot fully validate
+production-query behavior. Report missing or unsuccessful routes before relying
+on CPU results.
+
 ## Run the basic profile
 
 Set these two environment variables in your current shell (substitute your actual **local test** database URL and **local test** password):
