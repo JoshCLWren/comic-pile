@@ -252,13 +252,27 @@ export default function ReadingPlanDetailPage() {
               Continue reading
             </Link>
           )}
-          <button
-            type="button"
-            onClick={() => navigate(editableListId != null ? `/reading-lists/${editableListId}` : `/continuity-plans/${planId}/edit`)}
-            className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
-          >
-            {editableListId != null ? 'Edit reading order' : 'Edit plan'}
-          </button>
+          {editableListId != null ? (
+            <button
+              type="button"
+              onClick={() => navigate(`/reading-lists/${editableListId}`)}
+              className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+            >
+              Edit reading order
+            </button>
+          ) : view.execution_mode === 'option_e' ? (
+            <p role="alert" className="text-sm text-[var(--theme-danger)]">
+              The linked Reading List could not be resolved. Editing is unavailable.
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate(`/continuity-plans/${planId}/edit`)}
+              className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+            >
+              Edit plan
+            </button>
+          )}
         </div>
       </header>
 
@@ -411,11 +425,32 @@ export default function ReadingPlanDetailPage() {
         </section>
       )}
 
-      <ReadingPlanAddMaterial
-        planId={planId}
-        planName={view.name}
-        defaultOpen={addFromCblRequested}
-      />
+      {view.execution_mode === 'option_e' ? (
+        <section aria-label="Add reading material" className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4">
+          <h2 className="text-base font-bold text-[var(--theme-text-primary)]">Add to reading order</h2>
+          <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
+            This Plan follows its Reading List. Add issues and import reading material in the List editor, not the retired Plan editor.
+          </p>
+          {editableListId != null ? (
+            <Link
+              to={`/reading-lists/${editableListId}`}
+              className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-bold text-black"
+            >
+              Add or edit Reading List
+            </Link>
+          ) : (
+            <p role="alert" className="mt-2 text-sm text-[var(--theme-danger)]">
+              An owned Reading List link is required before adding issues.
+            </p>
+          )}
+        </section>
+      ) : (
+        <ReadingPlanAddMaterial
+          planId={planId}
+          planName={view.name}
+          defaultOpen={addFromCblRequested}
+        />
+      )}
 
       <section
         aria-label="Reading Plan tags"
