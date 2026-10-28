@@ -22,6 +22,7 @@ from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.issue import Issue
 from app.models.reading_plan_membership import ReadingPlanIssue, ReadingPlanSource
 from app.models.thread import Thread
+from app.services.reading_eligibility_service import load_eligibility_snapshot
 from scripts.report_custom_cbl_plan_reconciliation import Snapshot, reconcile
 from tests.conftest import get_or_create_user_async
 
@@ -287,3 +288,105 @@ async def test_option_e_reader_serves_list_authority_and_first_unread_frontier(
         )
     finally:
         get_reading_execution_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_roll_eligibility_ignores_plan_membership_and_durable_link(
+    async_db: AsyncSession,
+) -> None:
+    """Adding the Plan -> List source must not move the Roll candidate or frontier.
+
+    Roll/Queue eligibility is built from owner-scoped Threads, Issues, Reading
+    Lists, List entries, exclusions, overlap decisions and reader prerequisites.
+    It never reads continuity-plan membership or ``reading_plan_sources``. This
+    loads the same production shape before Plan membership, after the stale
+    144-row membership, and after the durable ``custom-cbl`` source.
+    """
+    user = await get_or_create_user_async(async_db)
+    list_order = _production_order()
+    thread = Thread(
+        user_id=user.id,
+        title="Planetary / Authority",
+        format="comic",
+        issues_remaining=len(list_order) - EARLY_FRONTIER_POSITION,
+        total_issues=len(list_order),
+        queue_position=1,
+        status="active",
+        reading_progress="in_progress",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issues: dict[int, Issue] = {}
+    for index, issue_id in enumerate(list_order):
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number=str(index + 1),
+            position=index + 1,
+            status="read" if index < EARLY_FRONTIER_POSITION else "unread",
+        )
+        async_db.add(issue)
+        issues[issue_id] = issue
+    await async_db.flush()
+    reading_list = CustomCBLList(
+        user_id=user.id,
+        name="Planetary / Authority",
+        mode="strict",
+    )
+    plan = ContinuityPlan(
+        user_id=user.id,
+        name="Planetary / Authority",
+        ordering_mode="strict_sequential",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[],
+    )
+    async_db.add_all([reading_list, plan])
+    await async_db.flush()
+    async_db.add_all([
+        CustomCBLEntry(
+            list_id=reading_list.id,
+            issue_id=issues[issue_id].id,
+            position=index,
+        )
+        for index, issue_id in enumerate(list_order)
+    ])
+    await async_db.flush()
+
+    expected_frontier = issues[list_order[EARLY_FRONTIER_POSITION]].id
+    states = [await load_eligibility_snapshot(async_db, user.id)]
+
+    shared_order = [issue_id for issue_id in list_order if issue_id != MISSING_LIST_ISSUE_ID]
+    stale_plan_order = [*EARLY_PLAN_ORDER, *shared_order[4:]]
+    async_db.add_all([
+        ReadingPlanIssue(
+            plan_id=plan.id,
+            occurrence_id=f"plan-{index}",
+            issue_id=issues[issue_id].id,
+            lane_id="main",
+            display_position=index,
+        )
+        for index, issue_id in enumerate(stale_plan_order)
+    ])
+    await async_db.flush()
+    states.append(await load_eligibility_snapshot(async_db, user.id))
+
+    async_db.add_all([
+        ReadingPlanSource(
+            plan_id=plan.id,
+            raw_source_path="comicvine:4050-18250",
+            custom_cbl_list_id=None,
+        ),
+        ReadingPlanSource(
+            plan_id=plan.id,
+            raw_source_path=f"custom-cbl:{reading_list.id}",
+            custom_cbl_list_id=reading_list.id,
+        ),
+    ])
+    await async_db.flush()
+    states.append(await load_eligibility_snapshot(async_db, user.id))
+
+    for state in states:
+        assert state.candidate_ids() == frozenset({thread.id})
+        assert state.threads[thread.id].eligible is True
+        assert state.threads[thread.id].next_issue_id == expected_frontier
+        assert state.unread_counts[thread.id] == len(list_order) - EARLY_FRONTIER_POSITION
