@@ -182,6 +182,7 @@ async def fetch_rollable_candidates(
             func.coalesce(thread_read_count, 0).label("thread_read_count"),
             func.coalesce(thread_total_count, 0).label("thread_total_count"),
         )
+        .select_from(Thread)
         .outerjoin(Issue, Issue.id == frontier_expression(eligibility))
         .outerjoin(
             IssueExternalIdentityMapping,

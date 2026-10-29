@@ -1,0 +1,284 @@
+{
+  "after": {
+    "events": 0,
+    "issues": [
+      {
+        "id": 1,
+        "read_at": null,
+        "status": "unread"
+      },
+      {
+        "id": 2,
+        "read_at": null,
+        "status": "unread"
+      },
+      {
+        "id": 3,
+        "read_at": null,
+        "status": "unread"
+      },
+      {
+        "id": 4,
+        "read_at": null,
+        "status": "unread"
+      }
+    ],
+    "sessions": [
+      {
+        "active_bandwidth": "balanced",
+        "active_intent": null,
+        "bandwidth_confidence": 0.1,
+        "bandwidth_source": "inferred",
+        "bandwidth_updated_at": "2026-01-04T12:00:00+00:00",
+        "bandwidth_version": "v1",
+        "ended_at": null,
+        "intent_confidence": null,
+        "intent_source": null,
+        "intent_version": null,
+        "manual_die": null,
+        "pending_issue_id": null,
+        "pending_thread_id": null,
+        "pending_thread_updated_at": null,
+        "predicted_bandwidth": "balanced",
+        "predicted_intent": null,
+        "session_mode_correction_guidance": null,
+        "skipped_thread_ids": null,
+        "snoozed_thread_ids": null,
+        "start_die": 6,
+        "started_at": "2026-01-04T12:00:00+00:00",
+        "timezone": null
+      }
+    ],
+    "snapshots": [
+      {
+        "description": "Session start",
+        "schema_version": null,
+        "session_state": {
+          "active_bandwidth": "balanced",
+          "active_intent": null,
+          "bandwidth_confidence": 0.1,
+          "bandwidth_source": "inferred",
+          "bandwidth_version": "v1",
+          "current_die": 6,
+          "intent_confidence": null,
+          "intent_source": null,
+          "intent_version": null,
+          "manual_die": null,
+          "predicted_bandwidth": "balanced",
+          "predicted_intent": null,
+          "snoozed_thread_ids": null,
+          "start_die": 6
+        },
+        "snapshot_kind": "session_start",
+        "thread_states": {
+          "1": {
+            "created_at": "2026-01-04T12:00:00+00:00",
+            "format": "Comic",
+            "is_blocked": false,
+            "is_test": false,
+            "issue_states": [
+              {
+                "id": 1,
+                "number": "1",
+                "position": 1,
+                "read_at": null,
+                "status": "unread"
+              },
+              {
+                "id": 2,
+                "number": "2",
+                "position": 2,
+                "read_at": null,
+                "status": "unread"
+              }
+            ],
+            "issues_remaining": 2,
+            "last_activity_at": "2026-01-04T12:00:00+00:00",
+            "last_rating": null,
+            "next_unread_issue_id": 1,
+            "notes": null,
+            "queue_position": 1,
+            "queue_position_is_manual": false,
+            "reading_progress": null,
+            "status": "active",
+            "title": "Alpha",
+            "total_issues": 2,
+            "user_id": 1,
+            "uses_issue_tracking": true
+          },
+          "2": {
+            "created_at": "2026-01-04T12:00:00+00:00",
+            "format": "Comic",
+            "is_blocked": false,
+            "is_test": false,
+            "issue_states": [
+              {
+                "id": 3,
+                "number": "1",
+                "position": 1,
+                "read_at": null,
+                "status": "unread"
+              },
+              {
+                "id": 4,
+                "number": "2",
+                "position": 2,
+                "read_at": null,
+                "status": "unread"
+              }
+            ],
+            "issues_remaining": 2,
+            "last_activity_at": "2026-01-04T12:00:00+00:00",
+            "last_rating": null,
+            "next_unread_issue_id": 3,
+            "notes": null,
+            "queue_position": 2,
+            "queue_position_is_manual": false,
+            "reading_progress": null,
+            "status": "active",
+            "title": "Beta",
+            "total_issues": 2,
+            "user_id": 1,
+            "uses_issue_tracking": true
+          }
+        }
+      }
+    ]
+  },
+  "before": {
+    "events": 0,
+    "issues": [
+      {
+        "id": 1,
+        "read_at": null,
+        "status": "unread"
+      },
+      {
+        "id": 2,
+        "read_at": null,
+        "status": "unread"
+      },
+      {
+        "id": 3,
+        "read_at": null,
+        "status": "unread"
+      },
+      {
+        "id": 4,
+        "read_at": null,
+        "status": "unread"
+      }
+    ],
+    "sessions": [],
+    "snapshots": []
+  },
+  "contract_version": 1,
+  "request": {
+    "method": "GET",
+    "path": "/api/v2/roll/bootstrap",
+    "query": {}
+  },
+  "response": {
+    "active_thread": null,
+    "bandwidth": {
+      "active_bandwidth": "balanced",
+      "confidence": 0.1,
+      "mode_version": "v1",
+      "predicted_bandwidth": "balanced",
+      "source": "inferred"
+    },
+    "blocked_count": 0,
+    "blocked_threads": [],
+    "current_die": 6,
+    "last_read": null,
+    "last_rolled_result": null,
+    "manual_die": null,
+    "pending_thread_id": null,
+    "roll_recovery": null,
+    "rollable": [
+      {
+        "identity": {
+          "canonical_series_id": null,
+          "series_mapping_state": "unresolved",
+          "source": "unavailable",
+          "state": "unresolved"
+        },
+        "issue": {
+          "canonical_series_title": null,
+          "cover_url": null,
+          "id": 1,
+          "number": "1"
+        },
+        "overflow_routes_count": 0,
+        "reader": {
+          "average_rating": null,
+          "issue_count": 2,
+          "latest_rating": null,
+          "progress_scope": "thread",
+          "rating_count": 0,
+          "read_count": 0
+        },
+        "routes": [],
+        "thread": {
+          "format": "Comic",
+          "id": 1,
+          "last_activity_at": "2026-01-04T12:00:00+00:00",
+          "title": "Alpha"
+        }
+      },
+      {
+        "identity": {
+          "canonical_series_id": null,
+          "series_mapping_state": "unresolved",
+          "source": "unavailable",
+          "state": "unresolved"
+        },
+        "issue": {
+          "canonical_series_title": null,
+          "cover_url": null,
+          "id": 3,
+          "number": "1"
+        },
+        "overflow_routes_count": 0,
+        "reader": {
+          "average_rating": null,
+          "issue_count": 2,
+          "latest_rating": null,
+          "progress_scope": "thread",
+          "rating_count": 0,
+          "read_count": 0
+        },
+        "routes": [],
+        "thread": {
+          "format": "Comic",
+          "id": 2,
+          "last_activity_at": "2026-01-04T12:00:00+00:00",
+          "title": "Beta"
+        }
+      }
+    ],
+    "session_id": 1,
+    "session_mode": {
+      "active_bandwidth": "balanced",
+      "active_intent": null,
+      "bandwidth_confidence": 0.1,
+      "bandwidth_source": "inferred",
+      "bandwidth_version": "v1",
+      "intent_confidence": null,
+      "intent_source": null,
+      "intent_version": null,
+      "predicted_bandwidth": "balanced",
+      "predicted_intent": null,
+      "session_mode_correction_guidance": null
+    },
+    "skipped_thread_ids": [],
+    "skipped_threads": [],
+    "snoozed_count": 0,
+    "snoozed_threads": [],
+    "stale_thread": null,
+    "stale_thread_count": 0,
+    "timezone": null,
+    "user_id": 1
+  },
+  "status": 200
+}
