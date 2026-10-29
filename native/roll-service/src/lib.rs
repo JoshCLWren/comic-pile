@@ -2,6 +2,7 @@
 pub mod auth;
 pub mod config;
 pub mod db;
+pub mod reading_inputs;
 
 use axum::{
     extract::{Request, State},

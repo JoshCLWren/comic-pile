@@ -46,21 +46,23 @@ pub(crate) async fn query_one_optional(
         Err(_) => Err(unavailable()),
         Ok(result) => {
             drop(pending.0.take()); // Complete response consumed: safe to recycle.
-            result.map_err(|error| {
-                if error.is_closed()
-                    || error.as_db_error().is_some_and(|e| {
-                        let code = e.code().code();
-                        code.starts_with("08")
-                            || code.starts_with("53")
-                            || matches!(code, "57P01" | "57P02" | "57P03")
-                    })
-                {
-                    unavailable()
-                } else {
-                    ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-                }
-            })
+            result.map_err(query_error)
         }
+    }
+}
+
+pub(crate) fn query_error(error: tokio_postgres::Error) -> ApiError {
+    if error.is_closed()
+        || error.as_db_error().is_some_and(|e| {
+            let code = e.code().code();
+            code.starts_with("08")
+                || code.starts_with("53")
+                || matches!(code, "57P01" | "57P02" | "57P03")
+        })
+    {
+        unavailable()
+    } else {
+        ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
     }
 }
 
