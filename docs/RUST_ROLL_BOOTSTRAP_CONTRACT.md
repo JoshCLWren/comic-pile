@@ -1,4 +1,16 @@
-# Native Roll bootstrap behavior oracle (v1)
+# GET /api/v2/roll/bootstrap: Python contract/behavior oracle for a Rust implementation
+
+> **API v2 is a URL contract, not Rust.** This document describes the Python
+> implementation of the existing `GET /api/v2/roll/bootstrap` operation so
+> its **same-path** Rust replacement can be checked. The `v1` directory in
+> `tests/fixtures/roll-v2/v1/` is a golden-fixture revision, **not** the public
+> API v1 route. `GET /api/v1/roll/bootstrap` is a distinct operation, tracked
+> by #4350, with its own Python response and SQL oracle. Do not change either
+> endpoint's URL or treat one as the implementation of the other.
+>
+> The language-only cutover contract in #4335 supersedes older notes below
+> referring to component gates or a v1→v2 client migration.
+
 
 The wire contract already exists: FastAPI's `app.openapi()` operation
 `GET /api/v2/roll/bootstrap`, its `RollV2BootstrapResponse` component and referenced
