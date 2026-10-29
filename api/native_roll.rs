@@ -21,7 +21,12 @@ fn app() -> Router {
 async fn main() -> Result<(), Error> {
     // Only the isolated health route is wired here. Native Roll handlers and
     // their database pools belong in the subsequent production cutover PR.
-    vercel_runtime::run(ServiceBuilder::new().layer(VercelLayer::new()).service(app())).await
+    vercel_runtime::run(
+        ServiceBuilder::new()
+            .layer(VercelLayer::new())
+            .service(app()),
+    )
+    .await
 }
 
 #[cfg(test)]
