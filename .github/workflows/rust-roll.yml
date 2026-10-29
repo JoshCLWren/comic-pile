@@ -67,12 +67,12 @@ jobs:
         working-directory: .
         run: uv sync --frozen --all-extras
       - name: Build scalar parity runner
-        run: cargo build --locked --example reading_snapshot
+        run: cargo build --locked --examples
       - name: Python versus Rust scalar parity
         working-directory: .
         env:
           PYTHONPATH: .
-        run: uv run pytest native/roll-service/parity/test_core_inputs.py -q -s --no-cov
+        run: uv run pytest native/roll-service/parity/ -q -s --no-cov
       - name: Release binary
         run: cargo build --release --locked
       - uses: actions/upload-artifact@v7
