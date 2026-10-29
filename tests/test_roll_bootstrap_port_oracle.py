@@ -90,7 +90,8 @@ async def test_record_populated_bootstrap_sql(
 
     # Every populated section must actually be present. Empty sections would
     # still satisfy the shape check below, so assert the records explicitly.
-    assert len(payload["roll_pool"]) >= 8
+    # The fixture starts on d6, so eight eligible threads produce six pool rows.
+    assert len(payload["roll_pool"]) == 6
     assert len(payload["snoozed_threads"]) >= 1
     assert payload["snoozed_count"] >= 1
     assert len(payload["skipped_threads"]) >= 1
