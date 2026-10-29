@@ -340,7 +340,8 @@ pub async fn bootstrap_v2(
         .collect();
     let blocked_threads = summary(&blocked);
 
-    let active_thread = current_active_thread(&conn, user, session.id, session.pending_thread_id).await?;
+    let active_thread =
+        current_active_thread(&conn, user, session.id, session.pending_thread_id).await?;
     let last_roll_result = active_thread
         .as_ref()
         .and_then(|thread| thread.get("last_rolled_result"))
