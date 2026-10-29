@@ -2,6 +2,7 @@
 """Paired read-only last-read projection CPU benchmark, NOT full Roll bootstrap."""
 from __future__ import annotations
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -79,6 +80,32 @@ def sample(kind, db_url, token, session_id, output, label, warm):
                 proc.kill()
                 proc.wait()
 
+def canonical_response(value):
+    """Normalize JSON transport representations without changing semantic values."""
+    if isinstance(value, dict):
+        return {k: canonical_response(v) if k != "read_at" or v is None else
+                datetime.fromisoformat(v.replace("Z", "+00:00")).astimezone(
+                    timezone.utc).isoformat(timespec="microseconds")
+                for k, v in value.items()}
+    if isinstance(value, list):
+        return [canonical_response(v) for v in value]
+    return value
+
+
+def parity_differences(left, right):
+    """Return safe diagnostics: field names and value types, not user data."""
+    if isinstance(left, dict) and isinstance(right, dict):
+        return [
+            {"field": key, "python_type": type(left.get(key)).__name__,
+             "rust_type": type(right.get(key)).__name__,
+             "equal": left.get(key) == right.get(key)}
+            for key in sorted(set(left) | set(right))
+            if left.get(key) != right.get(key)
+        ]
+    return [{"field": "<root>", "python_type": type(left).__name__,
+             "rust_type": type(right).__name__, "equal": False}]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--session-id", type=int, required=True)
@@ -106,7 +133,11 @@ def main():
             metrics, body = sample(kind, db, token, a.session_id, a.output, f"{n}-{kind}", a.warm)
             observed[kind] = body
             results.append({"pair": n, "kind": kind, **metrics})
-        if observed["python"] != observed["rust"]:
+        py_value = canonical_response(observed["python"])
+        rs_value = canonical_response(observed["rust"])
+        if py_value != rs_value:
+            print("Parity differences (field/type only):",
+                  json.dumps(parity_differences(py_value, rs_value)), flush=True)
             raise AssertionError(f"JSON parity failed at pair {n}")
     metrics = ("startup_cpu_ms", "first_cpu_ms", "cold_cpu_ms",
                "warm_cpu_ms", "first_wall_ms", "rss_mb_observed")
