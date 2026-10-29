@@ -2,7 +2,7 @@
 """Profile *complete* local cold invocations with Python CPU stacks.
 
 Starts each fresh Uvicorn process under py-spy (not by attaching after startup),
-sends the first authenticated Roll GET, then compares several warm GETs.
+sends the first authenticated Roll GET, then stops. A separate unprofiled\nwarm-control process serves multiple GETs for comparison.
 The database and HTTP endpoints must remain on loopback. This is an executable
 local approximation, NOT a measurement of Vercel's billable Active CPU.
 """
@@ -23,6 +23,7 @@ import sys
 import time
 
 from scripts.profile_local_traffic import (
+    api_process,
     cpu_seconds,
     free_port,
     get,
@@ -118,7 +119,6 @@ def profile_once(
     port = free_port()
     env = server_environment(db_url, port)
     base = f"http://127.0.0.1:{port}"
-    svg_path = output / f"cold-{iteration}.svg"
     speedscope_path = output / f"cold-{iteration}.speedscope.json"
     log_path = output / f"cold-{iteration}.server.log"
     python_cmd = [
@@ -152,11 +152,6 @@ def profile_once(
                     f"First request status={first['status']} cold={first['cold']}; "
                     "aborting invalid cold profile"
                 )
-            before_warm = cpu_seconds(server_pid)
-            warm_results = [get(base, safe_route(route), token) for _ in range(warm_requests)]
-            warm_cpu = max(0, cpu_seconds(server_pid) - before_warm)
-            if any(r["status"] != 200 for r in warm_results):
-                raise RuntimeError("A warm request failed; discard this run")
             result = {
                 "run": iteration,
                 "startup_cpu_ms": round(startup_cpu * 1000, 2),
@@ -167,10 +162,6 @@ def profile_once(
                 "first_status": first["status"],
                 "first_cold_header": first["cold"],
                 "first_sql_queries": first["db_queries"],
-                "warm_cpu_per_request_ms": round(warm_cpu * 1000 / warm_requests, 2),
-                "warm_wall_mean_ms": round(
-                    sum(r["wall_ms"] for r in warm_results) / warm_requests, 2
-                ),
                 "warm_requests": warm_requests,
                 "speedscope": str(speedscope_path),
                 "server_log": str(log_path),
@@ -184,6 +175,25 @@ def profile_once(
     result["profile_stack_records"] = profile_samples(speedscope_path)
     if result["profile_stack_records"] == 0:
         raise RuntimeError(f"CPU profile had zero stack records; inspect {log_path}")
+
+    # Warm control runs in a separate process without py-spy's sampling overhead.
+    # Its first request performs deferred initialization, then subsequent GETs
+    # measure a genuinely warm application with the same isolated database.
+    with api_process(db_url, output, f"warm-control-{iteration}") as (warm_proc, warm_base, _):
+        warmup = get(warm_base, safe_route(route), token)
+        if warmup["status"] != 200:
+            raise RuntimeError("Warm control failed its initialization GET")
+        before_warm = cpu_seconds(warm_proc.pid)
+        warm_results = [
+            get(warm_base, safe_route(route), token) for _ in range(warm_requests)
+        ]
+        warm_cpu = max(0, cpu_seconds(warm_proc.pid) - before_warm)
+    if any(r["status"] != 200 for r in warm_results):
+        raise RuntimeError("A warm control request failed; discard this run")
+    result["warm_cpu_per_request_ms"] = round(warm_cpu * 1000 / warm_requests, 2)
+    result["warm_wall_mean_ms"] = round(
+        sum(r["wall_ms"] for r in warm_results) / warm_requests, 2
+    )
     return result
 
 
@@ -193,7 +203,8 @@ def summary(results: list[dict]) -> str:
         "# Complete cold-invocation CPU profiles",
         "",
         "Each run starts a NEW Python interpreter under py-spy, serves its first",
-        "authenticated GET, then serves multiple warm GETs in the same process.",
+        "authenticated GET, then stops. Warm controls use a SEPARATE unprofiled",
+        "fresh process after its first request, avoiding sampler overhead.",
         "CPU is Python process user+system time. py-spy samples Python stacks",
         "but cannot attribute all native/runtime CPU; timings are NOT Vercel billing.",
         "",
