@@ -11,9 +11,10 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, ReadingSession, Snapshot, Thread, User
+from app.models import Event, Issue, ReadingSession, Snapshot, Thread, User
 from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
 
 
@@ -231,8 +232,18 @@ async def test_timeline_resolves_live_thread_for_undo_of_roll(
 async def test_undo_of_rate_carries_issue_number_and_rating(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
-    """A restored rated event names its canonical issue and rating (#4330)."""
+    """A real undo copies the rated issue link, number, and rating (#4330)."""
     session, thread = await _make_session_and_thread(async_db, default_user)
+    issue = Issue(
+        thread_id=thread.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=datetime.now(UTC),
+    )
+    async_db.add(issue)
+    await async_db.commit()
+    await async_db.refresh(issue)
 
     rate_event = Event(
         type="rate",
@@ -240,7 +251,7 @@ async def test_undo_of_rate_carries_issue_number_and_rating(
         thread_id=thread.id,
         rating=4.5,
         issues_read=1,
-        issue_id=None,
+        issue_id=issue.id,
         issue_number="1",
     )
     async_db.add(rate_event)
@@ -258,8 +269,17 @@ async def test_undo_of_rate_carries_issue_number_and_rating(
     await async_db.commit()
     await async_db.refresh(snapshot)
 
-    await UndoSnapshotRepository(async_db).create_undo_event(session.id, snapshot)
-    await async_db.commit()
+    undo_response = await auth_client.post(
+        f"/api/v1/undo/{session.id}/undo/{snapshot.id}"
+    )
+    assert undo_response.status_code == 200
+
+    stored_undo = (
+        await async_db.execute(select(Event).where(Event.type == "undo"))
+    ).scalar_one()
+    assert stored_undo.issue_id == issue.id
+    assert stored_undo.issue_number == "1"
+    assert stored_undo.rating == 4.5
 
     response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
     assert response.status_code == 200
