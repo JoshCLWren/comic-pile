@@ -3,7 +3,6 @@
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError as JWTError, jwt
@@ -84,6 +83,8 @@ def hash_password(password: str) -> str:
     Returns:
         Hashed password string.
     """
+    import bcrypt
+
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
@@ -100,6 +101,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     encoded = plain_password.encode("utf-8")
     if len(encoded) > MAX_BCRYPT_PASSWORD_BYTES:
         return False
+    import bcrypt
+
     return bcrypt.checkpw(encoded, hashed_password.encode())
 
 
