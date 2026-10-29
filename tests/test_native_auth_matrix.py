@@ -53,9 +53,6 @@ async def test_python_native_auth_matrix(db: AsyncSession, case: dict) -> None:
             )
             await db.flush()
     claims = dict(case["claims"])
-    claims["exp"] = datetime.now(UTC) + timedelta(
-        seconds=-60 if case.get("expired") else 3600
-    )
     token = "broken" if case.get("malformed") else jwt.encode(claims, SECRET_KEY, ALGORITHM)
     credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
     if case["status"] == 200:

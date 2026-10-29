@@ -102,16 +102,7 @@ async fn shared_python_rust_auth_and_ownership_matrix() {
                 .unwrap();
         }
         drop(connection);
-        let mut claims = case["claims"].clone();
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        claims["exp"] = json!(if case["expired"] == true {
-            now - 60
-        } else {
-            now + 3600
-        });
+        let claims = case["claims"].clone();
         let encoded = token(&claims);
         let bearer = format!("Bearer {encoded}");
         let header = if case["missing"] == true {
@@ -154,7 +145,9 @@ async fn shared_python_rust_auth_and_ownership_matrix() {
         .ok()
         .unwrap();
     assert!(db::require_owned_thread(&state, user, 1).await.is_ok());
-    assert!(db::require_owned_session(&state, user, 1).await.is_ok());
+    assert!(db::require_owned_reading_session(&state, user, 1)
+        .await
+        .is_ok());
     for id in [2, 999] {
         assert_eq!(
             db::require_owned_thread(&state, user, id)
@@ -165,7 +158,7 @@ async fn shared_python_rust_auth_and_ownership_matrix() {
             StatusCode::NOT_FOUND
         );
         assert_eq!(
-            db::require_owned_session(&state, user, id)
+            db::require_owned_reading_session(&state, user, id)
                 .await
                 .err()
                 .unwrap()

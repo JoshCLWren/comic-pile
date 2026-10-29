@@ -83,7 +83,7 @@ pub async fn require_owned_thread(
 }
 
 /// Reading history is owned data, never a substitute for an access credential.
-pub async fn require_owned_session(
+pub async fn require_owned_reading_session(
     state: &AppState,
     user: AuthenticatedUser,
     id: i32,

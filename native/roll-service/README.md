@@ -88,7 +88,7 @@ There is no disabled-user column in the canonical Python model. Refresh tokens
 are rejected; authentication neither rotates cookies nor creates reading history.
 The signing secret must match Python's `SECRET_KEY` before any future integration.
 
-`db::require_owned_thread` and `db::require_owned_session` require that verified
+`db::require_owned_thread` and `db::require_owned_reading_session` require that verified
 identity and scope SQL by `user_id`. Missing and foreign rows both return 404.
 These are foundations for later Roll handlers; no new public probe or partial
 bootstrap endpoint is mounted. Reading-history sessions do not authenticate users.

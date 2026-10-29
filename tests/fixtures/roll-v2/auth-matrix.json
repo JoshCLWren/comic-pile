@@ -4,7 +4,8 @@
     "claims": {
       "sub": "reader",
       "jti": "test-jti",
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -17,7 +18,8 @@
     "claims": {
       "sub": "reader",
       "jti": "test-jti",
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -31,7 +33,8 @@
     "claims": {
       "sub": "reader",
       "jti": "test-jti",
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -45,21 +48,22 @@
     "claims": {
       "sub": "reader",
       "jti": "test-jti",
-      "type": "access"
+      "type": "access",
+      "exp": 1
     },
     "user_exists": true,
     "revoked": false,
     "password_epoch": 0,
     "status": 401,
-    "detail": "Invalid or expired token",
-    "expired": true
+    "detail": "Invalid or expired token"
   },
   {
     "name": "refresh",
     "claims": {
       "sub": "reader",
       "jti": "test-jti",
-      "type": "refresh"
+      "type": "refresh",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -71,7 +75,8 @@
     "name": "missing_jti",
     "claims": {
       "sub": "reader",
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -84,7 +89,8 @@
     "claims": {
       "sub": "reader",
       "jti": "test-jti",
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": true,
@@ -97,7 +103,8 @@
     "claims": {
       "sub": "reader",
       "jti": "test-jti",
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": false,
     "revoked": false,
@@ -110,7 +117,8 @@
     "claims": {
       "sub": "reader",
       "jti": "test-jti",
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -124,7 +132,8 @@
       "sub": "reader",
       "jti": "test-jti",
       "type": "access",
-      "pc": 100
+      "pc": 100,
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -138,7 +147,8 @@
       "sub": "reader",
       "jti": "test-jti",
       "type": "access",
-      "pc": "100"
+      "pc": "100",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -151,7 +161,8 @@
     "claims": {
       "sub": "",
       "jti": "test-jti",
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -164,7 +175,8 @@
     "claims": {
       "sub": 1,
       "jti": "test-jti",
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -177,7 +189,8 @@
     "claims": {
       "sub": "reader",
       "jti": null,
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -190,7 +203,8 @@
     "claims": {
       "sub": "reader",
       "jti": "",
-      "type": "access"
+      "type": "access",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -204,7 +218,8 @@
       "sub": "reader",
       "jti": "test-jti",
       "type": "access",
-      "aud": "other"
+      "aud": "other",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -218,7 +233,8 @@
       "sub": "reader",
       "jti": "test-jti",
       "type": "access",
-      "aud": null
+      "aud": null,
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -232,7 +248,8 @@
       "sub": "reader",
       "jti": "test-jti",
       "type": "access",
-      "at_hash": "unused"
+      "at_hash": "unused",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -246,7 +263,8 @@
       "sub": "reader",
       "jti": "test-jti",
       "type": "access",
-      "iat": "bad"
+      "iat": "bad",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -260,7 +278,8 @@
       "sub": "reader",
       "jti": "test-jti",
       "type": "access",
-      "iat": null
+      "iat": null,
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -274,7 +293,8 @@
       "sub": "reader",
       "jti": "test-jti",
       "type": "access",
-      "nbf": 4102444800
+      "nbf": 4102444800,
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
@@ -289,12 +309,82 @@
       "jti": "test-jti",
       "type": "access",
       "nbf": "1",
-      "iat": "1"
+      "iat": "1",
+      "exp": 4102444800
     },
     "user_exists": true,
     "revoked": false,
     "password_epoch": 0,
     "status": 200,
     "detail": null
+  },
+  {
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 200,
+    "detail": null,
+    "name": "missing_exp"
+  },
+  {
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "exp": "4102444800"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 200,
+    "detail": null,
+    "name": "string_exp"
+  },
+  {
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "exp": "not-a-timestamp"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token",
+    "name": "invalid_exp"
+  },
+  {
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "exp": null
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid token format",
+    "name": "null_exp"
+  },
+  {
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "exp": "1"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token",
+    "name": "expired_string_exp"
   }
 ]
