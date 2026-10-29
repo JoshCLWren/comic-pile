@@ -198,6 +198,61 @@ async fn latest_session_read(
     .transpose()
 }
 
+async fn current_active_thread(
+    conn: &deadpool_postgres::Object,
+    user: AuthenticatedUser,
+    session_id: i32,
+    pending_thread_id: Option<i32>,
+) -> Result<Option<Value>, ApiError> {
+    let Some(thread_id) = pending_thread_id else {
+        return Ok(None);
+    };
+    let row = conn
+        .query_opt(
+            "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
+               t.total_issues,t.reading_progress,t.last_rating,t.next_unread_issue_id,
+               i.issue_number,
+               (SELECT count(*)::int FROM issues read WHERE read.thread_id=t.id AND read.status='read'),
+               (SELECT e.result FROM events e WHERE e.session_id=$2 AND e.selected_thread_id=t.id
+                 AND e.type='roll' ORDER BY e.timestamp DESC,e.id DESC LIMIT 1)
+             FROM threads t LEFT JOIN issues i ON i.id=t.next_unread_issue_id AND i.thread_id=t.id
+             WHERE t.id=$1 AND t.user_id=$3",
+            &[&thread_id, &session_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(unavailable)?;
+    let id: i32 = row.try_get(0).map_err(db::query_error)?;
+    let title: String = row.try_get(1).map_err(db::query_error)?;
+    let format: String = row.try_get(2).map_err(db::query_error)?;
+    let issues_remaining: i32 = row.try_get(3).map_err(db::query_error)?;
+    let queue_position: i32 = row.try_get(4).map_err(db::query_error)?;
+    let total_issues: Option<i32> = row.try_get(5).map_err(db::query_error)?;
+    let reading_progress: Option<String> = row.try_get(6).map_err(db::query_error)?;
+    let last_rating: Option<f64> = row.try_get(7).map_err(db::query_error)?;
+    let next_issue_id: Option<i32> = row.try_get(8).map_err(db::query_error)?;
+    let next_issue_number: Option<String> = row.try_get(9).map_err(db::query_error)?;
+    let issues_read: i32 = row.try_get(10).map_err(db::query_error)?;
+    let last_rolled_result: Option<i32> = row.try_get(11).map_err(db::query_error)?;
+    Ok(Some(json!({
+        "id": id,
+        "title": title,
+        "format": format,
+        "issues_remaining": issues_remaining,
+        "queue_position": queue_position,
+        "last_rolled_result": last_rolled_result,
+        "total_issues": total_issues,
+        "reading_progress": reading_progress,
+        "issues_read": issues_read,
+        "last_rating": last_rating,
+        "tags": [],
+        "issue_id": next_issue_id,
+        "issue_number": next_issue_number,
+        "next_issue_id": next_issue_id,
+        "next_issue_number": next_issue_number
+    })))
+}
+
 pub async fn bootstrap_v2(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -285,18 +340,11 @@ pub async fn bootstrap_v2(
         .collect();
     let blocked_threads = summary(&blocked);
 
-    let active_thread = session
-        .pending_thread_id
-        .and_then(|id| known.get(&id).cloned());
-    let last_roll_result: Option<i32> = if let Some(thread_id) = session.pending_thread_id {
-        conn.query_opt("SELECT e.result FROM events e WHERE e.session_id=$1
-            AND e.selected_thread_id=$2 AND e.type='roll' ORDER BY e.timestamp DESC,e.id DESC LIMIT 1",
-            &[&session.id,&thread_id]).await.map_err(db::query_error)?
-            .map(|row| row.try_get(0).map_err(db::query_error)).transpose()?
-            .flatten()
-    } else {
-        None
-    };
+    let active_thread = current_active_thread(&conn, user, session.id, session.pending_thread_id).await?;
+    let last_roll_result = active_thread
+        .as_ref()
+        .and_then(|thread| thread.get("last_rolled_result"))
+        .and_then(Value::as_i64);
     let mode_source = normalized_source(&session.bandwidth_source);
     let intent_source = normalized_source(&session.intent_source);
     let response = json!({
