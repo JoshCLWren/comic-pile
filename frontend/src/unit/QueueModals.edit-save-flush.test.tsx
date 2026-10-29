@@ -188,7 +188,8 @@ describe('Edit Series discard confirmation', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('warns for queued issue edits alone and discards only after confirmation', async () => {    const user = userEvent.setup()
+  it('warns for queued issue edits alone and discards only after confirmation', async () => {
+    const user = userEvent.setup()
     const close = vi.fn()
     const save = vi.fn()
     render(<Harness onEditSubmit={save} onCloseEdit={close} />)
