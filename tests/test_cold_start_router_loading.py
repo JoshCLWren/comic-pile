@@ -184,6 +184,48 @@ async def test_first_roll_bootstrap_skips_dependency_subrouters(path: str) -> No
     assert PREREQUISITE_SWITCH_PATH not in paths
 
 @pytest.mark.asyncio
+async def test_first_v2_bootstrap_imports_no_legacy_roll_routes() -> None:
+    """The v2 first render loads only its versioned bootstrap handler."""
+    app = create_app(serve_frontend=False, defer_router_imports=True)
+    before = set(_route_paths(app))
+    assert "/api/v2/roll/bootstrap" not in before
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v2/roll/bootstrap")
+
+    # 401 proves the protected handler is reachable on the very first request.
+    assert response.status_code == 401
+    loaded = set(_route_paths(app)) - before - {API_FALLBACK_PATH}
+    assert "/api/v2/roll/bootstrap" in loaded
+    assert not any(
+        path.startswith(("/api/v1/roll", "/api/roll")) for path in loaded
+    )
+    assert PREREQUISITE_SWITCH_PATH not in loaded
+
+
+def test_v2_first_hit_avoids_legacy_roll_module_in_fresh_interpreter() -> None:
+    """A fresh worker must not load app.api.roll transitively for v2 bootstrap."""
+    source = (
+        "import sys; "
+        "from app.main import create_app; "
+        "app=create_app(serve_frontend=False, defer_router_imports=True); "
+        "app.state.register_routers_for_path('/api/v2/roll/bootstrap'); "
+        "print('LEGACY_IMPORTED=' + str('app.api.roll' in sys.modules)); "
+        "print('V2_IMPORTED=' + str('app.api.roll_v2_bootstrap' in sys.modules))"
+    )
+    output = subprocess.run(
+        [sys.executable, "-c", source],
+        capture_output=True,
+        text=True,
+        cwd=REPOSITORY_ROOT,
+        check=True,
+    ).stdout
+    assert "LEGACY_IMPORTED=False" in output
+    assert "V2_IMPORTED=True" in output
+
+
+@pytest.mark.asyncio
 async def test_first_snooze_request_registers_only_the_snooze_mount() -> None:
     """A cold snooze request must not import catalog or delivery."""
     eager_paths = set(_route_paths(create_app(serve_frontend=False)))
