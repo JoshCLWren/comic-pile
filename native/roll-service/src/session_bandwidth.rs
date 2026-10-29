@@ -140,6 +140,16 @@ pub(crate) async fn predict(
                 .or_insert(year);
         }
     }
+    // Each sample group is immutable after collection. Sort it once, not once
+    // per rating, while the bootstrap transaction holds the user's lock.
+    let thread_medians: HashMap<i32, f64> = by_thread
+        .into_iter()
+        .filter_map(|(thread, samples)| median(Some(&samples)).map(|value| (thread, value)))
+        .collect();
+    let issue_medians: HashMap<(i32, i32), f64> = by_issue
+        .into_iter()
+        .filter_map(|(key, samples)| median(Some(&samples)).map(|value| (key, value)))
+        .collect();
     let mut observations = Vec::new();
     for r in rows {
         if r.get::<_, Option<i32>>(2).is_none() || r.get::<_, Option<bool>>(6) != Some(true) {
@@ -148,8 +158,8 @@ pub(crate) async fn predict(
         let thread = r.get::<_, i32>(0);
         let issue = r.get::<_, Option<i32>>(1);
         let observed = issue
-            .and_then(|i| median(by_issue.get(&(thread, i))))
-            .or_else(|| median(by_thread.get(&thread)));
+            .and_then(|i| issue_medians.get(&(thread, i)).copied())
+            .or_else(|| thread_medians.get(&thread).copied());
         let publication = issue
             .and_then(|i| years.get(&("issue".into(), i)))
             .or_else(|| years.get(&("thread".into(), thread)));
@@ -209,5 +219,10 @@ mod tests {
             Some(1965)
         );
         assert_eq!(year(&serde_json::json!({"cover_date":1990})), None);
+        // A single issue observation cannot supply an issue median; its thread's
+        // aggregate remains the fallback, and even-sized samples use the mean.
+        assert_eq!(median(Some(&vec![25.0])), None);
+        assert_eq!(median(Some(&vec![25.0, 5.0, 15.0])), Some(15.0));
+        assert_eq!(median(Some(&vec![25.0, 5.0])), Some(15.0));
     }
 }
