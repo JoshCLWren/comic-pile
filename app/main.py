@@ -55,6 +55,13 @@ logger = logging.getLogger(__name__)
 _NEON_STARTUP_WARNING_MS = 150
 _NEON_STARTUP_TIMEOUT_MS = 500
 
+# Heavy database initialization runs on the first non-ping request, not on the
+# ping-ready path, so it carries its own separately budgeted deadline. Its retry
+# backoff can legitimately exceed the ping-readiness budget.
+_HEAVY_INIT_WARNING_MS = 3000
+_HEAVY_INIT_TIMEOUT_MS = 5000
+
+
 def _log_ignored_startup_alarm_sample(*, duration_ms: float, deployment_id: str | None) -> None:
     """Record the startup sample without importing the GitHub alarm subsystem.
 
@@ -76,13 +83,6 @@ def _log_ignored_startup_alarm_sample(*, duration_ms: float, deployment_id: str 
             "startup_performance_violation": hard_failure,
         },
     )
-
-
-# Heavy database initialization runs on the first non-ping request, not on the
-# ping-ready path, so it carries its own separately budgeted deadline. Its retry
-# backoff can legitimately exceed the ping-readiness budget.
-_HEAVY_INIT_WARNING_MS = 3000
-_HEAVY_INIT_TIMEOUT_MS = 5000
 
 
 # SEO indexability policy (issue #3065). Only the public landing page is a
