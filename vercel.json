@@ -43,7 +43,7 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "/api/v2/roll/bootstrap",
+      "src": "/api/_native_roll/bootstrap",
       "methods": ["GET"],
       "dest": "/api/native_roll.rs"
     },
