@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
+import subprocess
+from pathlib import Path
 import sys
 
 import pytest
@@ -37,8 +40,44 @@ def test_ignored_startup_telemetry_preserves_log_contract_without_alarm_import(
     assert len(matching) == 1
     record = matching[0]
     assert record.levelno == (logging.WARNING if warning else logging.INFO)
-    assert record.operation == "startup.readiness"
-    assert record.duration_ms == duration_ms
-    assert record.deployment_id == "dpl_profile"
-    assert record.startup_performance_violation is warning
+    assert record.__dict__["operation"] == "startup.readiness"
+    assert record.__dict__["duration_ms"] == duration_ms
+    assert record.__dict__["deployment_id"] == "dpl_profile"
+    assert record.__dict__["startup_performance_violation"] is warning
     assert "Performance alarm ignored startup sample" in record.getMessage()
+
+
+def test_startup_event_does_not_import_performance_issue_service() -> None:
+    """Run real startup in a fresh worker and guard the optional import boundary."""
+    script = """
+import asyncio
+import sys
+
+from app.main import create_app
+
+async def main():
+    app = create_app(serve_frontend=False, defer_router_imports=True)
+    async with app.router.lifespan_context(app):
+        assert "app.services.performance_issue_service" not in sys.modules
+        print("startup-import-boundary-ok")
+
+asyncio.run(main())
+"""
+    environment = {
+        **os.environ,
+        "TEST_ENVIRONMENT": "true",
+        "ENVIRONMENT": "test",
+        "NEON_TOKEN": "",
+        "NEON_PROJECT_ID": "",
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[1],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "startup-import-boundary-ok" in result.stdout
