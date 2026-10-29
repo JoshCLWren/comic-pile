@@ -46,7 +46,7 @@ from app.schemas import (
 from app.schemas.tags import TagResponse, TagTargetType
 from app.services.queue_display import display_position, display_positions
 from app.services.reading_effort import publication_year_from_metadata
-from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.errors import ConflictError, ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership_guard import (
     require_frontier_in_thread,
@@ -1401,7 +1401,9 @@ async def reactivate_completed_thread(
     return await thread_to_response(thread, db)
 
 
-async def set_pending_thread(db: AsyncSession, user_id: int, thread_id: int) -> RollResponse:
+async def set_pending_thread(
+    db: AsyncSession, user_id: int, thread_id: int, *, expected_issue_id: int | None = None
+) -> RollResponse:
     """Set a thread as pending for rating (manual selection).
 
     Manual selection sets the pending pointer directly; no random roll is
@@ -1412,6 +1414,7 @@ async def set_pending_thread(db: AsyncSession, user_id: int, thread_id: int) -> 
         db: Database session.
         user_id: Owner that must own the thread.
         thread_id: Primary key of the thread to select.
+        expected_issue_id: Optional identity of the offered Issue, to reject stale plan selections.
 
     Returns:
         RollResponse describing the selected thread.
@@ -1459,6 +1462,12 @@ async def set_pending_thread(db: AsyncSession, user_id: int, thread_id: int) -> 
 
     if thread_issues <= 0:
         raise InvalidRequestError(f"Thread {thread_id} has no issues remaining")
+
+    # A Reading Plan offers a specific Issue, not just its parent series.
+    # Enforce that exact offer before writing session state or the manual roll
+    # event. If another read advances the frontier, never select its successor.
+    if expected_issue_id is not None and thread_issue_id != expected_issue_id:
+        raise ConflictError("This issue is no longer next and available. Refresh the reading plan and try again.")
 
     current_session = await get_or_create(db, user_id=user_id)
     current_session_id = current_session.id

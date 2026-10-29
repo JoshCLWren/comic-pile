@@ -368,6 +368,42 @@
         "title": "Body_import_csv_api_v1_admin_import_csv__post",
         "type": "object"
       },
+      "Body_set_pending_thread_api_threads__thread_id__set_pending_post": {
+        "properties": {
+          "expected_issue_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Issue Id"
+          }
+        },
+        "title": "Body_set_pending_thread_api_threads__thread_id__set_pending_post",
+        "type": "object"
+      },
+      "Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post": {
+        "properties": {
+          "expected_issue_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Issue Id"
+          }
+        },
+        "title": "Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post",
+        "type": "object"
+      },
       "BootstrapAliasCounterSchema": {
         "description": "One aggregated bootstrap alias tally.",
         "properties": {
@@ -34773,6 +34809,15 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
