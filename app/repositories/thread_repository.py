@@ -818,7 +818,7 @@ async def fetch_threads_with_drifted_issue_tracking(
     return list(result.scalars().all())
 
 
-class _MappingHealthRow(TypedDict):
+class MappingHealthRow(TypedDict):
     """Row shape for the batched mapping health query."""
 
     thread_id: int
@@ -832,7 +832,7 @@ class _MappingHealthRow(TypedDict):
 
 async def fetch_comicvine_mapping_health(
     db: AsyncSession, thread_ids: set[int]
-) -> dict[int, _MappingHealthRow]:
+) -> dict[int, MappingHealthRow]:
     """Compute ComicVine mapping health for a set of threads in a single batched query.
 
     Derives health from stored canonical issue mappings only. No live provider calls.
@@ -936,9 +936,9 @@ async def fetch_comicvine_mapping_health(
     result = await db.execute(thread_aggregation)
     rows = result.all()
 
-    health_map: dict[int, _MappingHealthRow] = {}
+    health_map: dict[int, MappingHealthRow] = {}
     for row in rows:
-        health_map[row.thread_id] = _MappingHealthRow(
+        health_map[row.thread_id] = MappingHealthRow(
             thread_id=row.thread_id,
             tracked_issue_count=row.tracked_issue_count,
             confirmed_issue_count=row.confirmed_issue_count,
@@ -951,7 +951,7 @@ async def fetch_comicvine_mapping_health(
     # Ensure all requested thread_ids are present (threads with no issues and issue tracking enabled)
     for tid in thread_ids:
         if tid not in health_map:
-            health_map[tid] = _MappingHealthRow(
+            health_map[tid] = MappingHealthRow(
                 thread_id=tid,
                 tracked_issue_count=0,
                 confirmed_issue_count=0,
