@@ -61,4 +61,14 @@ scripts/capture-production-startup-timing.sh
 
 The script writes a bounded artifact containing portable timestamps and `vercel httpstat` output for a potential-cold root request and two potential-warm follow-ups. Use the captured `X-App-Cold-Request` response header to classify each request and `X-Request-ID` to correlate it with application logs. It does not print response bodies, credentials, environment variables, or user data.
 
+### Request record capture window
+
+Vercel retains runtime logs for **one hour** on the Hobby plan ([runtime log limits](https://vercel.com/docs/logs/runtime)), so slow, cold, and error records must be collected while the deployment is still serving; there is no next-day historical read and no paid retention is enabled for this project. Capture the structured records with the dashboard Logs tab or:
+
+```bash
+vercel logs --environment production --query '<event or route>' --since 1h
+```
+
+Copy `request_id`, `method`, `path`, `status_code`, `process_time_ms`, `cpu_time_ms`, `database_queries`, `database_time_ms`, `cold_request`, and `deployment_id` for every matching row before the window closes. One `cpu_time_ms` value is a single-process sample covering that request window only; repeat the same request and re-capture to see the spread instead of treating one number as a per-request CPU budget.
+
 Thresholds are diagnostic defaults, not availability guarantees. Adjust `SLOW_REQUEST_THRESHOLD_MS` only after collecting a representative baseline, and never use a higher threshold to hide a regression.
