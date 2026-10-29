@@ -264,6 +264,52 @@ pub async fn load_option_inputs(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn decision(continuing: &str, waiting: &str) -> OverlapDecision {
+        OverlapDecision {
+            continuing_volume_id: continuing.into(),
+            waiting_volume_id: waiting.into(),
+        }
+    }
+
+    #[test]
+    fn overlap_validation_rejects_self_and_duplicate_pairs_per_list() {
+        let mut inputs = OptionInputs {
+            core: CoreReadingInputs {
+                threads: vec![],
+                issues: vec![],
+                stored: vec![],
+            },
+            thread_volumes: BTreeMap::new(),
+            lists: vec![],
+            prerequisites: vec![],
+            excluded_issue_ids: BTreeSet::new(),
+            unresolved: vec![],
+        };
+        assert!(inputs.require_resolved().is_ok());
+        inputs.lists.push(ReadingList {
+            list_id: 10,
+            mode: "strict".into(),
+            entries: vec![],
+            overlap_decisions: vec![decision("comicvine:12", "comicvine:12")],
+        });
+        assert!(inputs.require_resolved().is_err());
+        inputs.lists[0].overlap_decisions = vec![
+            decision("comicvine:12", "comicvine:13"),
+            decision("comicvine:12", "comicvine:13"),
+        ];
+        assert!(inputs.require_resolved().is_err());
+        inputs.lists[0].overlap_decisions[1] = decision("comicvine:12", "comicvine:14");
+        assert!(inputs.require_resolved().is_ok());
+        // Deduplication is list-local: another list may approve the same pair.
+        inputs.lists.push(ReadingList {
+            list_id: 11,
+            mode: "strict".into(),
+            entries: vec![],
+            overlap_decisions: vec![decision("comicvine:12", "comicvine:13")],
+        });
+        assert!(inputs.require_resolved().is_ok());
+    }
+
     #[test]
     fn numeric_volume_identity_is_exact_and_unbounded() {
         assert_eq!(
