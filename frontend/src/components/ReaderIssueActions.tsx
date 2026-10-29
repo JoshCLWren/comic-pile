@@ -1,11 +1,9 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMoveToFront } from '../hooks/useQueue'
 import { useReaderProgress } from '../hooks/useReaderProgress'
+import { useSelectReadingIssue } from '../hooks/useSelectReadingIssue'
 import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
-import { resetRollBootstrapAfterManualSelection } from '../query/cacheEffects'
-import { queryClient } from '../query/queryClient'
-import { threadsApi } from '../services/api-threads'
 import { getApiErrorDetail } from '../utils/apiError'
 import { IssueTagRowChips } from './Tags/IssueTagRowChips'
 
@@ -18,24 +16,15 @@ export function ReadNowIssueButton({ issueId, threadId, label = 'Read now', prim
   issueId: number; threadId: number; label?: string; primary?: boolean
 }) {
   const navigate = useNavigate()
-  const inFlight = useRef(false)
-  const [isPending, setIsPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const selection = useSelectReadingIssue(threadId, issueId)
 
   async function handleReadNow() {
-    if (inFlight.current) return
-    inFlight.current = true
-    setIsPending(true)
-    setError(null)
+    if (selection.isPending) return
     try {
-      const response = await threadsApi.setPending(threadId, issueId)
-      await resetRollBootstrapAfterManualSelection(queryClient)
+      const response = await selection.mutateAsync()
       navigate('/', { state: { rollResponse: response } })
-    } catch (reason: unknown) {
-      setError(getApiErrorDetail(reason) || 'Could not select this issue. Refresh and try again.')
-    } finally {
-      inFlight.current = false
-      setIsPending(false)
+    } catch {
+      // useMutation owns the error state, keeping failure visible on this card.
     }
   }
 
@@ -44,14 +33,18 @@ export function ReadNowIssueButton({ issueId, threadId, label = 'Read now', prim
       <button
         type="button"
         onClick={() => void handleReadNow()}
-        disabled={isPending}
+        disabled={selection.isPending}
         className={primary
           ? 'inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50'
           : 'min-h-11 rounded-lg px-3 text-sm font-bold text-[var(--theme-primary-action)] hover:underline disabled:opacity-50'}
       >
-        {isPending ? 'Selecting…' : label}
+        {selection.isPending ? 'Selecting…' : label}
       </button>
-      {error && <span role="alert" className="max-w-xs text-xs text-[var(--theme-danger)]">{error}</span>}
+      {selection.isError && (
+        <span role="alert" className="max-w-xs text-xs text-[var(--theme-error)]">
+          {getApiErrorDetail(selection.error) || 'Could not select this issue. Refresh and try again.'}
+        </span>
+      )}
     </span>
   )
 }
@@ -107,7 +100,7 @@ export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, ava
           </button>
         )}
       </div>
-      {moveError && <p role="alert" className="text-sm text-[var(--theme-danger)]">{moveError}</p>}
+      {moveError && <p role="alert" className="text-sm text-[var(--theme-error)]">{moveError}</p>}
       {progress.isError && <p role="alert" className="text-sm text-[var(--theme-danger)]">Unable to update this issue. Try again.</p>}
     </div>
   )
