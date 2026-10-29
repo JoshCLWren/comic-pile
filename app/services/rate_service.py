@@ -861,6 +861,21 @@ async def rate_thread(
     # Reuse already-computed issues_remaining instead of re-querying.
     resp_issues_remaining = thread_issues_remaining
 
+    # If this is a direct Thread rating without an active session, create one
+    # so that an undo snapshot can be keyed to it. A session-less direct rate
+    # still persists the rating and event, but without a session the existing
+    # undo infrastructure has no bucket to store the delta in.
+    # Create session before flushing rating changes so that the session-creation
+    # commit does not include the rating changes; rating and undo snapshot are
+    # then committed atomically.
+    if current_session is None and is_direct:
+        from comic_pile.reading_session import get_or_create as _get_or_create
+
+        current_session = await _get_or_create(db, user_id)
+        current_session_id = current_session.id
+    else:
+        current_session_id = current_session.id if current_session is not None else None
+
     # Extract next issue number from the already-loaded issue if available,
     # otherwise fall back to a targeted lookup.
     resp_next_unread_issue_number: str | None = None
@@ -873,17 +888,6 @@ async def rate_thread(
                 resp_next_unread_issue_number = next_issue_obj.issue_number
 
     await db.flush()
-    # If this is a direct Thread rating without an active session, create one
-    # so that an undo snapshot can be keyed to it. A session-less direct rate
-    # still persists the rating and event, but without a session the existing
-    # undo infrastructure has no bucket to store the delta in.
-    if current_session is None and is_direct:
-        from comic_pile.reading_session import get_or_create as _get_or_create
-
-        current_session = await _get_or_create(db, user_id)
-        current_session_id = current_session.id
-    else:
-        current_session_id = current_session.id if current_session is not None else None
 
     if current_session is not None:
         # Undo snapshots are keyed by reading session; a direct Thread rate
