@@ -8,7 +8,7 @@ lives in ``app/services/thread_service.py``; query construction lives in
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -466,6 +466,7 @@ async def set_pending_thread(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
+    expected_issue_id: int | None = Body(default=None, embed=True, gt=0),
 ) -> RollResponse:
     """Set a thread as pending for rating (manual selection).
 
@@ -473,7 +474,9 @@ async def set_pending_thread(
         HTTPException: 404 when not found; 400 when inactive, blocked, or out of issues.
     """
     try:
-        return await thread_service.set_pending_thread(db, current_user.id, thread_id)
+        return await thread_service.set_pending_thread(
+            db, current_user.id, thread_id, expected_issue_id=expected_issue_id
+        )
     except ServiceError as exc:
         raise _map_service_error(exc) from exc
 
