@@ -254,18 +254,24 @@ async fn current_active_thread(
     let next_issue_number: Option<String> = row.try_get(9).map_err(db::query_error)?;
     let issues_read: i32 = row.try_get(10).map_err(db::query_error)?;
     let last_rolled_result: Option<i32> = row.try_get(11).map_err(db::query_error)?;
-    let tag_rows = conn.query(
-        "SELECT row_to_json(tag)::text FROM tag_assignments assignment
+    let tag_rows = conn
+        .query(
+            "SELECT row_to_json(tag)::text FROM tag_assignments assignment
          JOIN tags tag ON tag.id=assignment.tag_id
          WHERE assignment.target_type='Thread' AND assignment.target_id=$1
            AND (tag.scope='global' OR (tag.scope='private' AND tag.owner_user_id=$2))
          ORDER BY tag.scope,tag.normalized_name",
-        &[&id,&user.id()],
-    ).await.map_err(db::query_error)?;
-    let tags: Vec<Value> = tag_rows.into_iter().map(|row| {
-        let value: String = row.try_get(0).map_err(db::query_error)?;
-        serde_json::from_str(&value).map_err(|_| unavailable())
-    }).collect::<Result<_, ApiError>>()?;
+            &[&id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let tags: Vec<Value> = tag_rows
+        .into_iter()
+        .map(|row| {
+            let value: String = row.try_get(0).map_err(db::query_error)?;
+            serde_json::from_str(&value).map_err(|_| unavailable())
+        })
+        .collect::<Result<_, ApiError>>()?;
     Ok(Some(json!({
         "id": id,
         "title": title,
@@ -366,8 +372,9 @@ async fn canonical_series_stats(
     if volumes.is_empty() {
         return Ok(stats);
     }
-    let rows = conn.query(
-        r#"WITH mapped AS (
+    let rows = conn
+        .query(
+            r#"WITH mapped AS (
           SELECT DISTINCT i.id,
             regexp_replace(
               coalesce(e.metadata_json::jsonb->'volume'->>'id',
@@ -392,44 +399,56 @@ async fn canonical_series_stats(
           (array_agg(rating ORDER BY timestamp DESC NULLS LAST)
             FILTER (WHERE rating IS NOT NULL))[1]
         FROM rated GROUP BY volume_id"#,
-        &[&user.id(), &volumes],
-    ).await.map_err(db::query_error)?;
+            &[&user.id(), &volumes],
+        )
+        .await
+        .map_err(db::query_error)?;
     for row in rows {
         let id: String = row.try_get(0).map_err(db::query_error)?;
         let read_count: i64 = row.try_get(1).map_err(db::query_error)?;
         let rating_count: i64 = row.try_get(2).map_err(db::query_error)?;
         let average: Option<f64> = row.try_get(3).map_err(db::query_error)?;
         let latest: Option<f64> = row.try_get(4).map_err(db::query_error)?;
-        stats.insert(id, json!({
-            "latest_rating": latest,
-            "average_rating": average,
-            "rating_count": rating_count,
-            "read_count": read_count,
-            "issue_count": Value::Null,
-            "progress_scope": "canonical_series_run"
-        }));
+        stats.insert(
+            id,
+            json!({
+                "latest_rating": latest,
+                "average_rating": average,
+                "rating_count": rating_count,
+                "read_count": read_count,
+                "issue_count": Value::Null,
+                "progress_scope": "canonical_series_run"
+            }),
+        );
     }
-    let catalog = conn.query(
-        "SELECT external_id,metadata_json::text FROM external_identities
+    let catalog = conn
+        .query(
+            "SELECT external_id,metadata_json::text FROM external_identities
          WHERE provider='comicvine' AND entity_type='series'
            AND external_id=ANY($1::text[])",
-        &[&volumes],
-    ).await.map_err(db::query_error)?;
+            &[&volumes],
+        )
+        .await
+        .map_err(db::query_error)?;
     for row in catalog {
         let id: String = row.try_get(0).map_err(db::query_error)?;
         let encoded: String = row.try_get(1).map_err(db::query_error)?;
         let metadata: Value = serde_json::from_str(&encoded).map_err(|_| unavailable())?;
         let count = metadata.get("count_of_issues").and_then(|value| {
-            value.as_u64().or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok()))
+            value
+                .as_u64()
+                .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok()))
         });
-        let entry = stats.entry(id).or_insert_with(|| json!({
-            "latest_rating": Value::Null,
-            "average_rating": Value::Null,
-            "rating_count": 0,
-            "read_count": 0,
-            "issue_count": Value::Null,
-            "progress_scope": "canonical_series_run"
-        }));
+        let entry = stats.entry(id).or_insert_with(|| {
+            json!({
+                "latest_rating": Value::Null,
+                "average_rating": Value::Null,
+                "rating_count": 0,
+                "read_count": 0,
+                "issue_count": Value::Null,
+                "progress_scope": "canonical_series_run"
+            })
+        });
         if let Some(count) = count {
             entry["issue_count"] = json!(count);
         }
@@ -437,14 +456,14 @@ async fn canonical_series_stats(
     Ok(stats)
 }
 
-fn recovery_label(
-    inputs: &option_inputs::OptionInputs,
-    issue_id: i32,
-) -> String {
+fn recovery_label(inputs: &option_inputs::OptionInputs, issue_id: i32) -> String {
     let Some(issue) = inputs.core.issues.iter().find(|issue| issue.id == issue_id) else {
         return "Required issue".into();
     };
-    let title = inputs.core.threads.iter()
+    let title = inputs
+        .core
+        .threads
+        .iter()
         .find(|thread| thread.id == issue.thread_id)
         .map(|thread| thread.title.as_str())
         .unwrap_or("Required issue");
@@ -469,7 +488,8 @@ fn recovery_chains(
     if depth >= 32 || ancestors.contains(&issue_id) {
         return vec![vec![node]];
     }
-    let upstream: Vec<i32> = edges.iter()
+    let upstream: Vec<i32> = edges
+        .iter()
         .filter(|edge| edge.target_issue_id == issue_id)
         .map(|edge| edge.source_issue_id)
         .collect();
@@ -504,23 +524,31 @@ fn pending_roll_recovery(
         return Ok(None);
     };
     let inputs = validated.inputs();
-    let mut pending_issues: Vec<_> = inputs.core.issues.iter()
-        .filter(|issue| issue.thread_id == thread_id && issue.status == "unread"
-            && !inputs.excluded_issue_ids.contains(&issue.id))
+    let mut pending_issues: Vec<_> = inputs
+        .core
+        .issues
+        .iter()
+        .filter(|issue| {
+            issue.thread_id == thread_id
+                && issue.status == "unread"
+                && !inputs.excluded_issue_ids.contains(&issue.id)
+        })
         .collect();
     pending_issues.sort_by_key(|issue| (issue.position, issue.id));
     let Some(target) = pending_issues.first() else {
         return Ok(None);
     };
     let edges = validated.unsatisfied_edges().map_err(|_| unavailable())?;
-    let direct: Vec<_> = edges.iter()
+    let direct: Vec<_> = edges
+        .iter()
         .filter(|edge| edge.target_issue_id == target.id)
         .take(500)
         .collect();
     if direct.is_empty() {
         return Ok(None);
     }
-    let readable: HashSet<i32> = candidates.iter()
+    let readable: HashSet<i32> = candidates
+        .iter()
         .filter(|candidate| !excluded.contains(&candidate.thread_id))
         .map(|candidate| candidate.issue_id)
         .collect();
@@ -550,11 +578,15 @@ fn pending_roll_recovery(
                 "label": label, "is_readable": readable.contains(&source)
             }));
         }
-        for chain in recovery_chains(source,&edges,inputs,&readable,&HashSet::new(),0) {
+        for chain in recovery_chains(source, &edges, inputs, &readable, &HashSet::new(), 0) {
             for node in &chain {
-                let issue_id = node.get("node_id").and_then(Value::as_i64).unwrap_or_default() as i32;
+                let issue_id = node
+                    .get("node_id")
+                    .and_then(Value::as_i64)
+                    .unwrap_or_default() as i32;
                 if node.get("is_readable").and_then(Value::as_bool) == Some(true)
-                    && visited.insert(issue_id) {
+                    && visited.insert(issue_id)
+                {
                     recommended.push(node.clone());
                 }
             }
@@ -564,7 +596,10 @@ fn pending_roll_recovery(
             }
         }
     }
-    let title = inputs.core.threads.iter()
+    let title = inputs
+        .core
+        .threads
+        .iter()
         .find(|thread| thread.id == thread_id)
         .map(|thread| thread.title.as_str())
         .unwrap_or("Selected series");
@@ -621,23 +656,33 @@ pub async fn bootstrap_v2(
         let (thread_id, item) = candidate_item(row)?;
         by_thread.insert(thread_id, item);
     }
-    let volumes: Vec<String> = by_thread.values()
-        .filter_map(|item| item.pointer("/identity/canonical_series_id").and_then(Value::as_str))
-        .map(str::to_owned).collect();
-    let canonical_stats = canonical_series_stats(&conn,user,&volumes).await?;
+    let volumes: Vec<String> = by_thread
+        .values()
+        .filter_map(|item| {
+            item.pointer("/identity/canonical_series_id")
+                .and_then(Value::as_str)
+        })
+        .map(str::to_owned)
+        .collect();
+    let canonical_stats = canonical_series_stats(&conn, user, &volumes).await?;
     let mut rollable = vec![];
     for item in eligible {
         let mut projected = by_thread.remove(&item.thread_id).ok_or_else(unavailable)?;
-        if let Some(volume) = projected.pointer("/identity/canonical_series_id").and_then(Value::as_str) {
+        if let Some(volume) = projected
+            .pointer("/identity/canonical_series_id")
+            .and_then(Value::as_str)
+        {
             let volume = volume.to_owned();
-            projected["reader"] = canonical_stats.get(&volume).cloned().unwrap_or_else(|| json!({
-                "latest_rating": Value::Null,
-                "average_rating": Value::Null,
-                "rating_count": 0,
-                "read_count": 0,
-                "issue_count": Value::Null,
-                "progress_scope": "canonical_series_run"
-            }));
+            projected["reader"] = canonical_stats.get(&volume).cloned().unwrap_or_else(|| {
+                json!({
+                    "latest_rating": Value::Null,
+                    "average_rating": Value::Null,
+                    "rating_count": 0,
+                    "read_count": 0,
+                    "issue_count": Value::Null,
+                    "progress_scope": "canonical_series_run"
+                })
+            });
         } else {
             projected["reader"]["latest_rating"] = Value::Null;
             projected["reader"]["average_rating"] = Value::Null;
@@ -691,7 +736,12 @@ pub async fn bootstrap_v2(
         .collect();
     let blocked_threads = summary(&blocked);
 
-    let roll_recovery = pending_roll_recovery(&validated,session.pending_thread_id,&excluded,&candidates)?;
+    let roll_recovery = pending_roll_recovery(
+        &validated,
+        session.pending_thread_id,
+        &excluded,
+        &candidates,
+    )?;
     let active_thread =
         current_active_thread(&conn, user, session.id, session.pending_thread_id).await?;
     let last_roll_result = active_thread
