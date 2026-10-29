@@ -14,7 +14,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     sync::Arc,
 };
 
