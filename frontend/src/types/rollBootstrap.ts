@@ -23,50 +23,6 @@ export interface RollBootstrapThread {
   tags?: Tag[]
 }
 
-/** Frozen v2 identity confidence for one idle Roll pool row. */
-export type RollPoolIdentityState =
-  | 'confirmed'
-  | 'candidate'
-  | 'unresolved'
-  | 'ambiguous'
-  | 'conflicting'
-
-/** Truthful denominator semantics for a pool row's progress copy. */
-export type RollPoolProgressScope = 'canonical_series_run' | 'thread'
-
-/** One bounded group reference carried by a pool row. `kind` is frozen to `group`. */
-export interface RollPoolRoute {
-  kind: 'group'
-  name: string
-}
-
-/**
- * One idle Roll pool row.
- *
- * The identity fields keep the existing `RollBootstrapThread` contract so
- * selection, manual-pick search, and Roll mutations keep working unchanged.
- * The optional v2 enrichment lets the idle row render cover, canonical
- * identity, ratings, scoped progress, and bounded group context from the single
- * v2 bootstrap response without a per-row request or a v1 join.
- */
-export interface RollPoolRow extends RollBootstrapThread {
-  /** Direct provider image URL, or null when no stored cover exists. */
-  cover_url?: string | null
-  /** Canonical series title when the stored identity resolves it. */
-  canonical_series_title?: string | null
-  identity_state?: RollPoolIdentityState | null
-  series_mapping_state?: RollPoolIdentityState | null
-  latest_rating?: number | null
-  average_rating?: number | null
-  rating_count?: number | null
-  read_count?: number | null
-  /** Full stored provider/catalog run length for canonical rows. */
-  issue_count?: number | null
-  progress_scope?: RollPoolProgressScope | null
-  routes?: RollPoolRoute[]
-  overflow_routes_count?: number
-}
-
 /** One series excluded from the roll pool, with the reason the user can understand. */
 export interface ThreadExclusionReason {
   /**
@@ -217,7 +173,7 @@ export interface RollBootstrapResponse {
   session_mode: SessionMode
   active_thread: SessionThread | null
   roll_recovery?: RollRecoveryInfo | null
-  roll_pool: RollPoolRow[]
+  roll_pool: RollBootstrapThread[]
   snoozed_threads: RollBootstrapThread[]
   snoozed_count: number
   skipped_thread_ids: number[]
