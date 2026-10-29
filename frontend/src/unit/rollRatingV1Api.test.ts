@@ -12,11 +12,11 @@ const protectedRollMutationApi = createProtectedRollMutationApi(client)
 const rollBootstrapApi = createRollBootstrapApi(client)
 
 beforeEach(() => {
-  client.get.mockReset().mockResolvedValue({})
+  client.get.mockReset().mockResolvedValue({ rollable: [] })
   client.post.mockReset().mockResolvedValue({})
 })
 
-it('uses canonical v1 Roll and rating paths for maintained callers', async () => {
+it('keeps Roll mutations on v1 while using native v2 for bootstrap', async () => {
   await rollApi.roll()
   await rollApi.reroll()
   await rollApi.override({ thread_id: 7 })
@@ -35,10 +35,10 @@ it('uses canonical v1 Roll and rating paths for maintained callers', async () =>
     thread_id: 7,
     rating: 4,
   })
-  expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap')
+  expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
 })
 
-it('keeps auth-recovery Roll mutations on canonical v1 paths', async () => {
+it('keeps recovery mutations on v1 but fetches recovery bootstrap from Rust v2', async () => {
   await protectedRollMutationApi.rate({ thread_id: 9, rating: 3 })
   await protectedRollMutationApi.bootstrap()
   await protectedRollMutationApi.snooze()
@@ -48,6 +48,6 @@ it('keeps auth-recovery Roll mutations on canonical v1 paths', async () => {
     { thread_id: 9, rating: 3 },
     { skipAuthRedirect: true },
   )
-  expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap', { skipAuthRedirect: true })
+  expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap', { skipAuthRedirect: true })
   expect(client.post).toHaveBeenCalledWith('/v1/snooze/', undefined, { skipAuthRedirect: true })
 })
