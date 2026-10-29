@@ -1,52 +1,42 @@
 # Die Mode Functionality Analysis - Issue #4279
 
 ## Issue Summary
-Issue #4279 relates to die mode functionality where the HistoryPage was showing the current die instead of the session's start die, causing past history to change when the reader's current die setting changes.
+Issue #4279 relates to die mode persistence and AUTO control behavior on the Roll page:
+- Manual die mode is lost when navigating Queue -> Roll (die resets to AUTO d6) but preserved when navigating Glossary -> Roll
+- Clicking AUTO to clear manual override disables the button without switching; AUTO only takes effect after a reload, eventually resuming d8
+
+This is distinct from HistoryPage die display (issue #4243).
 
 ## Investigation Results
 
-### Issue Status: RESOLVED ✅
+### Issue Status: UNRESOLVED ⚠️
 
-The issue has already been fixed in commit #4258 ([MQA-ROLL-005] History session 'Die size' follows the current die instead of the session's recorded die).
+The cited commit #4258 ([MQA-ROLL-005] History session 'Die size' follows the current die instead of the session's recorded die) fixed HistoryPage display for issue #4243. It does not address manual mode persistence across navigation or immediate AUTO switch. No code changes in this PR address the reported navigation inconsistency or AUTO control delay.
 
-### Root Cause
-The HistoryPage was displaying `session.current_die` which can change during a session (when users manually override the die size), instead of `session.start_die` which is fixed for that session.
+### Root Cause (HistoryPage fix, unrelated to #4279)
+Issue #4243 was caused by HistoryPage displaying `session.current_die` instead of `session.start_die`. This was fixed in commit #4258 in `frontend/src/pages/HistoryPage.tsx`.
 
-### Fix Applied
-**File:** `frontend/src/pages/HistoryPage.tsx`
-**Lines:** 159-165
+### Verification Limits for This PR
+This PR adds documentation only. No code changes were made to Roll page navigation or die-mode mutations.
 
-**Before:**
-```typescript
-// The current die can differ from the last ladder step when the reader
-// overrides it manually, so it is reported with the activity while the
-// ladder itself stays on its own line.
-const hasActivity = (issuesRead != null && issuesRead > 0) || lastRating != null
-if (hasActivity && session.current_die != null) {
-  parts.push(`Die size d${session.current_die}`)
-}
-```
+- The cited `HistoryPage` test (`frontend/src/unit/HistoryPage.test.tsx` lines 503-534) verifies `reports the session start die in activity line, not the evolving current die (issue #4243)`. It renders a mocked session and checks the history label only. It never selects a die, navigates between Queue/Glossary/Roll, or exercises AUTO clearing.
+- No test covers manual mode persistence across Queue -> Roll vs Glossary -> Roll navigation.
+- No test verifies that clicking AUTO immediately clears manual override without requiring a reload.
 
-**After:**
-```typescript
-// Report the session's recorded start die, not the evolving current die,
-// so past history never rewrites itself when the reader's current die
-// setting changes (issue #4243).
-const hasActivity = (issuesRead != null && issuesRead > 0) || lastRating != null
-if (hasActivity && session.start_die != null) {
-  parts.push(`Die size d${session.start_die}`)
-}
-```
+Therefore the verification evidence cited in the original draft does not demonstrate resolution of issue #4279.
 
 ### Verification
-1. **Frontend Tests:** All tests pass, including the specific test case:
+
+1. **Frontend Tests for HistoryPage (issue #4243, not #4279):** All tests pass, including:
    - Test: `reports the session start die in activity line, not the evolving current die (issue #4243)`
    - Location: `frontend/src/unit/HistoryPage.test.tsx` (lines 503-534)
    - Status: ✅ PASSING
+   - Limitation: Does not exercise die selection, navigation, or AUTO control.
 
-2. **Test Case Details:**
-   - Verifies that when a historical session used start_die: 6 but the current session has current_die: 20, the history card shows "Die size d6" not "Die size d20"
-   - Ensures past history is stable and doesn't change based on current settings
+2. **Issue #4279 Verification Gap:**
+   - Manual mode persistence across Queue -> Roll vs Glossary -> Roll has no automated test coverage in this change.
+   - AUTO button immediate switch behavior is not verified by code changes or tests in this PR.
+   - No evidence provided for the reported reproduction steps (A2-A5).
 
 ### Current Die Mode Implementation
 
@@ -68,13 +58,14 @@ if (hasActivity && session.start_die != null) {
 4. **History Stability**: Historical sessions show their original start die, not current settings
 
 ### No Further Action Required
-The issue has been resolved and is working correctly. The die mode functionality is stable and all tests are passing.
+**Not applicable.** The issue described in #4279 remains unresolved. The HistoryPage fix (commit #4258) addresses issue #4243 only.
 
 ### Recommendations
-1. **Monitor** for any additional die mode issues in production
-2. **Consider** adding integration tests for the die mode workflow
-3. **Document** the die mode behavior in the developer documentation
+1. Investigate why manual mode is lost on Queue -> Roll navigation but preserved on Glossary -> Roll. Potential causes include React Query invalidation timing (`invalidateRollBootstrapOnNavigation`), component state reset (`state.currentDie` reinitializes to 6 on mount), or differing navigation caching behavior.
+2. Verify that `useClearManualDie` mutation invalidates bootstrap immediately and triggers UI update without reload. Check if `invalidateAfterRollDieModeUpdate` causes a refetch race or if `state.currentDie` needs syncing from `bootstrap.current_die` after manual mode clears.
+3. Add integration tests covering manual mode persistence across navigation paths and immediate AUTO switch.
+4. Document die mode behavior in developer documentation once fixes are verified.
 
 ---
 *Analysis completed on: 2026-10-28*
-*Status: Issue resolved and verified*
+*Status: Issue #4279 unresolved; documentation corrected to reflect verification limits*
