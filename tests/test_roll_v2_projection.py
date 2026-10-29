@@ -811,6 +811,91 @@ async def test_v2_preserves_fail_open_recovery(
 
 
 @pytest.mark.asyncio
+async def test_projection_fails_open_when_series_aggregate_times_out(
+    async_db: AsyncSession, default_user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A canonical-series statement timeout degrades stats instead of raising 503.
+
+    Issue #4315: asyncpg's command timeout in ``fetch_series_aggregates`` used
+    to surface as ``DatabaseUnavailableError`` and failed the whole bootstrap.
+    The projection must still return every rollable row without series stats.
+    """
+    from app.repositories import roll_v2_projection as projection_repo
+
+    _, issues = await _make_thread(
+        async_db, default_user, title="Timed out", issue_count=3, queue_position=1, read_through=2
+    )
+    for position in range(3):
+        await _confirm_identity(
+            async_db,
+            issues[position],
+            external_id=f"9100-{position}",
+            series_id=9100,
+            series_name="Timed out series",
+        )
+    await _rate(async_db, issues[0], rating=4.5, timestamp=D1)
+    session = await _active_session(async_db, default_user)
+
+    async def _statement_timeout(*args: object, **kwargs: object) -> list[object]:
+        raise TimeoutError("canceling statement due to statement timeout")
+
+    monkeypatch.setattr(projection_repo, "fetch_series_aggregates", _statement_timeout)
+
+    items, last_read, omitted = await get_v2_rollable_projection(
+        async_db,
+        user_id=default_user.id,
+        die_size=6,
+        excluded_thread_ids=[],
+        session_id=session.id,
+    )
+
+    assert omitted == []
+    assert last_read is None
+    assert len(items) == 1
+    item = items[0]
+    assert item.identity.source == "comicvine"
+    assert item.identity.canonical_series_id == "9100"
+    # Degraded but valid: no series-derived stats, and the row still renders.
+    assert item.reader.read_count == 0
+    assert item.reader.rating_count == 0
+    assert item.reader.average_rating is None
+    assert item.reader.latest_rating is None
+
+
+@pytest.mark.asyncio
+async def test_v2_endpoint_fails_open_when_series_aggregate_times_out(
+    auth_client, async_db: AsyncSession, default_user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The HTTP bootstrap returns 200 with degraded stats instead of a 503."""
+    from app.repositories import roll_v2_projection as projection_repo
+
+    _, issues = await _make_thread(
+        async_db, default_user, title="Timed out endpoint", issue_count=2, queue_position=1, read_through=1
+    )
+    for issue in issues:
+        await _confirm_identity(
+            async_db,
+            issue,
+            external_id=f"9200-{issue.position}",
+            series_id=9200,
+            series_name="Timed out endpoint series",
+        )
+
+    async def _statement_timeout(*args: object, **kwargs: object) -> list[object]:
+        raise TimeoutError("canceling statement due to statement timeout")
+
+    monkeypatch.setattr(projection_repo, "fetch_series_aggregates", _statement_timeout)
+
+    response = await auth_client.get("/api/v2/roll/bootstrap")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["rollable"]) == 1
+    assert body["rollable"][0]["identity"]["canonical_series_id"] == "9200"
+    assert body["rollable"][0]["reader"]["read_count"] == 0
+
+
+@pytest.mark.asyncio
 async def test_thread_series_mapping_state_reported(
     async_db: AsyncSession, default_user: User
 ) -> None:
