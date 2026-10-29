@@ -90,6 +90,9 @@ def select_mounts_for_path(path: str, mounts: Sequence[RouterMount]) -> tuple[Ro
     if not segment or segment in EAGER_SEGMENTS:
         return ()
     if segment == "roll":
+        # v2 bootstrap does not need legacy Roll routes or dependency APIs.
+        if path.rstrip("/") == "/api/v2/roll/bootstrap":
+            return tuple(mount for mount in mounts if mount.key == "roll-v2-bootstrap")
         # The dependencies mount declares "roll" only for its composed
         # POST /api/v1/roll/switch-prerequisite endpoint. Ordinary Roll
         # requests must not import every dependency/CBL/continuity router
@@ -112,8 +115,17 @@ def _register_roll(app: FastAPI) -> None:
     # New client resources (e.g. the Roll exclusion drill-down for #3330) are
     # versioned-only: no bare /api/* twin.
     app.include_router(roll.v1_router, prefix="/api/v1/roll", tags=["roll"])
-    # Roll v2: versioned-only, no unversioned alias per #2716
-    app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
+    # v2 bootstrap is a separate cold-path mount, below.
+
+
+
+def _register_roll_v2_bootstrap(app: FastAPI) -> None:
+    """Register only the v2 bootstrap route without importing legacy Roll."""
+    from app.api import roll_v2_bootstrap
+
+    app.include_router(
+        roll_v2_bootstrap.v2_router, prefix="/api/v2/roll", tags=["roll"]
+    )
 
 
 def _register_admin(app: FastAPI) -> None:
@@ -407,6 +419,9 @@ def _register_test_helpers(app: FastAPI) -> None:
 #: fails if a route's segment is missing here.
 _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("roll", frozenset({"roll"}), _register_roll),
+    RouterMount(
+        "roll-v2-bootstrap", frozenset({"roll"}), _register_roll_v2_bootstrap
+    ),
     RouterMount("admin", frozenset({"admin"}), _register_admin),
     RouterMount("analytics", frozenset({"analytics"}), _register_analytics),
     RouterMount("health", frozenset({"health"}), _register_health),
