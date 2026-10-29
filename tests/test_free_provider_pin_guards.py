@@ -245,6 +245,23 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
 
 
 
+def test_workers_68_and_69_openrouter_laguna_are_retired(validate) -> None:
+    """OpenRouter Laguna :free pins retire before free access ends 2026-10-31."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    by_worker = {row["worker"]: row for row in rows}
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
+    assert "68" not in by_worker
+    assert "69" not in by_worker
+    assert 68 in lock["retired_workers"]
+    assert 69 in lock["retired_workers"]
+    assert "poolside/laguna-s-2.1:free" in lock["retired_models"]
+    assert "poolside/laguna-xs-2.1:free" in lock["retired_models"]
+    assert by_worker["11"]["source"] == "nvidia"
+    assert by_worker["11"]["model"] == "poolside/laguna-xs-2.1"
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+
+
 def test_workers_94_95_pin_minimax_m31_flash_and_nvidia_nemotron_35_super_vl(validate) -> None:
     """Workers 94-95 are Harvy debian OpenCode smokes (fix bug + write/run test)."""
     rows = validate.load_roster_rows(validate.MANIFEST)

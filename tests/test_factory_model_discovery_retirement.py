@@ -1460,6 +1460,22 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert 81 not in lock["expected_workers"]
     assert 81 in lock["retired_workers"]
     assert "deepseek-ai/deepseek-v4.1-flash" in lock["retired_models"]
+    # Workers 68/69 retired before OpenRouter Laguna :free access ends 2026-10-31.
+    # NVIDIA worker 11 (poolside/laguna-xs-2.1) and kilo-auto 46 stay pinned.
+    assert "68" not in by_worker
+    assert "69" not in by_worker
+    assert 68 not in lock["expected_workers"]
+    assert 69 not in lock["expected_workers"]
+    assert 68 in lock["retired_workers"]
+    assert 69 in lock["retired_workers"]
+    assert "poolside/laguna-s-2.1:free" in lock["retired_models"]
+    assert "poolside/laguna-xs-2.1:free" in lock["retired_models"]
+    assert "poolside/laguna-s-2.1:free" not in {row["model"] for row in remaining}
+    assert "poolside/laguna-xs-2.1:free" not in {row["model"] for row in remaining}
+    assert by_worker["11"]["source"] == "nvidia"
+    assert by_worker["11"]["model"] == "poolside/laguna-xs-2.1"
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["82"] == {
         "worker": "82",
         "source": "z-ai",
@@ -1665,6 +1681,48 @@ def test_committed_tsv_retires_worker_29_ghost_openrouter_qwen38_27b_free() -> N
     assert "qwen/qwen3.8-27b:free" not in catalogs["openrouter"].model_ids()
     assert "qwen/qwen3.8-27b" in catalogs["openrouter"].model_ids()
     assert not ROSTER.openrouter_model_is_free("qwen/qwen3.8-27b")
+    assert ROSTER.schedule_is_balanced(rows)
+    assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
+
+
+def test_committed_tsv_retires_openrouter_laguna_workers_68_and_69() -> None:
+    """Workers 68/69 retire before OpenRouter Laguna :free access ends 2026-10-31.
+
+    ``poolside/laguna-s-2.1:free`` (w68) and ``poolside/laguna-xs-2.1:free``
+    (w69) lose OpenRouter free access on Sat Oct 31, 2026. The NVIDIA Laguna
+    XS lane (worker 11) and kilo-auto worker 46 stay. Dispatcher minutes for
+    remaining OpenRouter pins 60 and 63 fill the vacated :30/:35 buckets so
+    the ±1 schedule invariant holds without adding, swapping, or re-pinning
+    any other worker.
+    """
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    by_worker = {row["worker"]: row for row in rows}
+    models = {row["model"] for row in rows}
+
+    assert 68 not in lock["expected_workers"]
+    assert 69 not in lock["expected_workers"]
+    assert 68 in lock["retired_workers"]
+    assert 69 in lock["retired_workers"]
+    assert "68" not in by_worker
+    assert "69" not in by_worker
+    assert "poolside/laguna-s-2.1:free" in lock["retired_models"]
+    assert "poolside/laguna-xs-2.1:free" in lock["retired_models"]
+    assert "poolside/laguna-s-2.1:free" not in models
+    assert "poolside/laguna-xs-2.1:free" not in models
+    assert by_worker["11"]["source"] == "nvidia"
+    assert by_worker["11"]["model"] == "poolside/laguna-xs-2.1"
+    assert by_worker["11"]["minute"] == "15"
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["60"]["source"] == "openrouter-free"
+    assert by_worker["60"]["model"] == "cohere/north-mini-code:free"
+    assert by_worker["60"]["minute"] == "30"
+    assert by_worker["63"]["source"] == "openrouter-free"
+    assert by_worker["63"]["model"] == "nvidia/nemotron-3-super-120b-a12b:free"
+    assert by_worker["63"]["minute"] == "35"
+    assert ROSTER.openrouter_model_is_free(by_worker["60"]["model"])
+    assert ROSTER.openrouter_model_is_free(by_worker["63"]["model"])
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 
