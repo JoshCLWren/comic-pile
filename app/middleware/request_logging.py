@@ -252,6 +252,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
     async def log_errors_middleware(request: Request, call_next):
         """Add diagnostics headers and log slow or failed requests with performance budgets."""
         started_at = time.perf_counter()
+        started_process = time.process_time()
         request_id = uuid.uuid4().hex
         request.state.startup_snapshot = next_request_snapshot()
         startup = request.state.startup_snapshot
@@ -304,7 +305,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "query_params": str(request.url.query) if request.url.query else None,
                 "status_code": status_code,
                 "process_time_ms": round(process_time_ms, 2),
-                "wall_time_ms": round(process_time_ms, 2),
+                "wall_time_ms": round((time.process_time() - started_process) * 1000, 2),
                 "database_queries": diagnostics.database_queries,
                 "database_time_ms": round(diagnostics.database_time_ms, 2),
                 "cold_request": startup.cold,
