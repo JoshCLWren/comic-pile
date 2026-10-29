@@ -89,6 +89,17 @@ def select_mounts_for_path(path: str, mounts: Sequence[RouterMount]) -> tuple[Ro
     segment = request_segment(path)
     if not segment or segment in EAGER_SEGMENTS:
         return ()
+    if segment == "roll":
+        # The dependencies mount declares "roll" only for its composed
+        # POST /api/v1/roll/switch-prerequisite endpoint. Ordinary Roll
+        # requests must not import every dependency/CBL/continuity router
+        # on a cold worker just to answer a bootstrap GET.
+        switch_path = path.rstrip("/") == "/api/v1/roll/switch-prerequisite"
+        return tuple(
+            mount
+            for mount in mounts
+            if mount.key == "roll" or (switch_path and mount.key == "dependencies")
+        )
     return tuple(mount for mount in mounts if segment in mount.segments)
 
 
