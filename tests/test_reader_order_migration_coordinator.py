@@ -1093,6 +1093,10 @@ async def test_batch_apply_refuses_group_membership_drift_before_mutation(
         "app.services.explicit_reader_order_migration._explicit_classifications",
         lambda _index: ({}, {}),
     )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
     snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True, snapshot["errors"]
     snapshot = {**snapshot, "status": "safe-to-migrate"}
