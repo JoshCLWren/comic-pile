@@ -6853,6 +6853,16 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_set_pending_thread_api_threads__thread_id__set_pending_post */
+        Body_set_pending_thread_api_threads__thread_id__set_pending_post: {
+            /** Expected Issue Id */
+            expected_issue_id?: number | null;
+        };
+        /** Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post */
+        Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post: {
+            /** Expected Issue Id */
+            expected_issue_id?: number | null;
+        };
         /**
          * BootstrapAliasCounterSchema
          * @description One aggregated bootstrap alias tally.
@@ -24407,7 +24417,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
