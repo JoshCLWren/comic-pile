@@ -167,7 +167,7 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         "dest": "/api/native_roll.rs",
     }
     assert routes[2] == {
-        "src": "/api/_native_roll/bootstrap",
+        "src": "/api/v2/roll/bootstrap",
         "methods": ["GET"],
         "dest": "/api/native_roll.rs",
     }
@@ -312,8 +312,8 @@ def test_node_auth_route_is_isolated_from_python_and_static_routes() -> None:
         ("POST", "/api/v1/auth/me", "/api/index.py"),
         ("POST", "/api/v1/auth/refresh", "/api/index.py"),
         ("GET", "/api/v1/roll/bootstrap", "/api/index.py"),
-        ("GET", "/api/_native_roll/bootstrap", "/api/native_roll.rs"),
-        ("GET", "/api/v2/roll/bootstrap", "/api/index.py"),
+        ("GET", "/api/_native_roll/bootstrap", "/api/index.py"),
+        ("GET", "/api/v2/roll/bootstrap", "/api/native_roll.rs"),
         ("POST", "/api/v2/roll/bootstrap", "/api/index.py"),
         ("GET", "/api/_native_roll/health", "/api/native_roll.rs"),
         ("POST", "/api/_native_roll/health", "/api/index.py"),
