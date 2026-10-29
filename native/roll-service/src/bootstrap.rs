@@ -190,24 +190,7 @@ LEFT JOIN LATERAL (
 WHERE t.user_id=$1 AND i.id=ANY($2::int[])
 "#;
 
-/// One owner-scoped aggregate over distinct read issues for every visible
-/// ComicVine volume. Effective ratings are the latest rate per issue, never
-/// one rating per event or per split thread.
-async fn canonical_series_stats(
-    conn: &deadpool_postgres::Object,
-    user: AuthenticatedUser,
-    volumes: &[String],
-) -> Result<HashMap<String, Value>, ApiError> {
-    let mut stats = HashMap::new();
-    if volumes.is_empty() {
-        return Ok(stats);
-    }
-    let rows = conn.query(
-        r#"WITH mapped AS (
-            SELECT DISTINCT i.id,
-              regexp_replace(
-                coalesce(e.metadata_json::jsonb->'volume'->>'id',
-                         e.metadata_json::jsonb->>'volume_id'), '\.0+
+async fn latest_session_read(
     connection: &deadpool_postgres::Object,
     user: AuthenticatedUser,
     session_id: i32,
@@ -373,313 +356,21 @@ async fn durable_snoozed(
     Ok(excluded)
 }
 
-fn recovery_label(
-    inputs: &option_inputs::OptionInputs,
-    issue_id: i32,
-) -> String {
-    let Some(issue) = inputs.core.issues.iter().find(|issue| issue.id == issue_id) else {
-        return "Required issue".into();
-    };
-    let title = inputs.core.threads.iter()
-        .find(|thread| thread.id == issue.thread_id)
-        .map(|thread| thread.title.as_str())
-        .unwrap_or("Required issue");
-    format!("{title} #{}", issue.issue_number)
-}
-
-fn recovery_chains(
-    issue_id: i32,
-    edges: &[crate::reading_constraints::ConstraintEdge],
-    inputs: &option_inputs::OptionInputs,
-    readable: &HashSet<i32>,
-    ancestors: &HashSet<i32>,
-    depth: usize,
-) -> Vec<Vec<Value>> {
-    let label = recovery_label(inputs, issue_id);
-    let node = json!({
-        "node_type": "issue",
-        "node_id": issue_id,
-        "label": label,
-        "is_readable": readable.contains(&issue_id)
-    });
-    if depth >= 32 || ancestors.contains(&issue_id) {
-        return vec![vec![node]];
-    }
-    let upstream: Vec<i32> = edges.iter()
-        .filter(|edge| edge.target_issue_id == issue_id)
-        .map(|edge| edge.source_issue_id)
-        .collect();
-    if upstream.is_empty() {
-        return vec![vec![node]];
-    }
-    let mut visited = ancestors.clone();
-    visited.insert(issue_id);
-    let mut result = Vec::new();
-    for source in upstream.into_iter().take(500) {
-        for tail in recovery_chains(source, edges, inputs, readable, &visited, depth + 1) {
-            let mut chain = vec![node.clone()];
-            chain.extend(tail);
-            result.push(chain);
-            if result.len() >= 500 {
-                return result;
-            }
-        }
-    }
-    result
-}
-
-/// Keep the existing pending roll intact. Explain only real blocked frontiers,
-/// with actionable leaf issues derived from the *same* authoritative graph.
-fn pending_roll_recovery(
-    validated: &crate::reading_constraints::ValidatedReadingInputs,
-    pending_thread_id: Option<i32>,
-    excluded: &HashSet<i32>,
-    candidates: &[crate::reading_constraints::EligibleFrontier],
-) -> Result<Option<Value>, ApiError> {
-    let Some(thread_id) = pending_thread_id else {
-        return Ok(None);
-    };
-    let inputs = validated.inputs();
-    let mut pending_issues: Vec<_> = inputs.core.issues.iter()
-        .filter(|issue| issue.thread_id == thread_id && issue.status == "unread"
-            && !inputs.excluded_issue_ids.contains(&issue.id))
-        .collect();
-    pending_issues.sort_by_key(|issue| (issue.position, issue.id));
-    let Some(target) = pending_issues.first() else {
-        return Ok(None);
-    };
-    let edges = validated.unsatisfied_edges().map_err(|_| unavailable())?;
-    let direct: Vec<_> = edges.iter()
-        .filter(|edge| edge.target_issue_id == target.id)
-        .take(500)
-        .collect();
-    if direct.is_empty() {
-        return Ok(None);
-    }
-    let readable: HashSet<i32> = candidates.iter()
-        .filter(|candidate| !excluded.contains(&candidate.thread_id))
-        .map(|candidate| candidate.issue_id)
-        .collect();
-    let mut blockers = Vec::new();
-    let mut chains = Vec::new();
-    let mut recommended = Vec::new();
-    let mut visited = HashSet::new();
-    for edge in direct {
-        let source = edge.source_issue_id;
-        let label = recovery_label(inputs, source);
-        blockers.push(json!({
-            "rule_id": Value::Null,
-            "source_type": "issue",
-            "source_id": source,
-            "source_label": label,
-            "satisfaction_type": "item_read",
-            "blocker_type": "item_unread",
-            "satisfied": false,
-            "causing_issue_ids": [source],
-            "causing_member_issue_ids": [],
-            "unread_issue_details": [{"issue_id": source, "label": label}],
-            "note": edge.origin
-        }));
-        if visited.insert(source) {
-            recommended.push(json!({
-                "node_type": "issue", "node_id": source,
-                "label": label, "is_readable": readable.contains(&source)
-            }));
-        }
-        for chain in recovery_chains(source,&edges,inputs,&readable,&HashSet::new(),0) {
-            for node in &chain {
-                let issue_id = node.get("node_id").and_then(Value::as_i64).unwrap_or_default() as i32;
-                if node.get("is_readable").and_then(Value::as_bool) == Some(true)
-                    && visited.insert(issue_id) {
-                    recommended.push(node.clone());
-                }
-            }
-            chains.push(chain);
-            if chains.len() >= 500 {
-                break;
-            }
-        }
-    }
-    let title = inputs.core.threads.iter()
-        .find(|thread| thread.id == thread_id)
-        .map(|thread| thread.title.as_str())
-        .unwrap_or("Selected series");
-    Ok(Some(json!({
-        "original_thread_id": thread_id,
-        "original_thread_title": title,
-        "direct_blockers": blockers,
-        "readable_prerequisites": recommended,
-        "chains": chains,
-        "diagnostics": []
-    })))
-}
-
-pub async fn bootstrap_v2(
-    State(state): State<Arc<AppState>>,
+async fn canonical_series_stats(
+    conn: &deadpool_postgres::Object,
     user: AuthenticatedUser,
-    Query(query): Query<BootstrapQuery>,
-) -> Result<Json<Value>, ApiError> {
-    let active = reading_session::bootstrap(
-        &state,
-        user,
-        query.timezone.as_deref(),
-        SessionPolicy::default(),
-    )
-    .await?;
-    let validated = option_inputs::load_option_inputs(&state, user).await?;
-    let session = &active.session;
-    let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
-    let snoozed = session.snoozed_thread_ids.clone().unwrap_or_default();
-    let mut excluded: HashSet<i32> = skipped.iter().chain(snoozed.iter()).copied().collect();
-    let candidates = validated.eligible_frontiers().map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid reading constraints",
-        )
-    })?;
-    let conn = db::checkout(&state).await?;
-    let candidate_thread_ids: Vec<i32> = candidates.iter().map(|c| c.thread_id).collect();
-    let durable = durable_snoozed(&conn, user, &candidate_thread_ids).await?;
-    excluded.extend(&durable);
-    let eligible: Vec<_> = candidates
-        .iter()
-        .filter(|candidate| !excluded.contains(&candidate.thread_id))
-        .take(active.current_die.max(0) as usize)
-        .collect();
-    let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
-
-    let rows = conn
-        .query(CANDIDATES, &[&user.id(), &ids])
-        .await
-        .map_err(db::query_error)?;
-    let mut by_thread: HashMap<i32, Value> = HashMap::new();
-    for row in &rows {
-        let (thread_id, item) = candidate_item(row)?;
-        by_thread.insert(thread_id, item);
+    volumes: &[String],
+) -> Result<HashMap<String, Value>, ApiError> {
+    let mut stats = HashMap::new();
+    if volumes.is_empty() {
+        return Ok(stats);
     }
-    let volumes: Vec<String> = by_thread.values()
-        .filter_map(|item| item.pointer("/identity/canonical_series_id").and_then(Value::as_str))
-        .map(str::to_owned).collect();
-    let canonical_stats = canonical_series_stats(&conn,user,&volumes).await?;
-    let mut rollable = vec![];
-    for item in eligible {
-        let mut projected = by_thread.remove(&item.thread_id).ok_or_else(unavailable)?;
-        if let Some(volume) = projected.pointer("/identity/canonical_series_id").and_then(Value::as_str) {
-            let volume = volume.to_owned();
-            projected["reader"] = canonical_stats.get(&volume).cloned().unwrap_or_else(|| json!({
-                "latest_rating": Value::Null,
-                "average_rating": Value::Null,
-                "rating_count": 0,
-                "read_count": 0,
-                "issue_count": Value::Null,
-                "progress_scope": "canonical_series_run"
-            }));
-        } else {
-            projected["reader"]["latest_rating"] = Value::Null;
-            projected["reader"]["average_rating"] = Value::Null;
-            projected["reader"]["rating_count"] = json!(0);
-            if projected["reader"]["issue_count"] == json!(0) {
-                projected["reader"]["issue_count"] = Value::Null;
-            }
-        }
-        rollable.push(projected);
-    }
-    let last_read = latest_session_read(&conn, user, session.id).await?;
-
-    let summary_rows = conn
-        .query(
-            "SELECT t.id,t.title,t.format,t.last_activity_at::text,
-          (coalesce(t.last_activity_at,t.created_at) < now() - interval '7 days') AS stale
-         FROM threads t WHERE t.user_id=$1 ORDER BY t.queue_position,t.id",
-            &[&user.id()],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let mut known: HashMap<i32, Value> = HashMap::new();
-    let mut stale = Vec::new();
-    for row in &summary_rows {
-        let id: i32 = row.try_get(0).map_err(db::query_error)?;
-        let stale_flag: Option<bool> = row.try_get(4).map_err(db::query_error)?;
-        let info = thread_value(row)?;
-        let eligible_for_stale = candidates.iter().any(|candidate| candidate.thread_id == id);
-        if stale_flag.unwrap_or(false) && eligible_for_stale && !excluded.contains(&id) {
-            stale.push(info.clone());
-        }
-        known.insert(id, info);
-    }
-    let summary = |ids: &[i32]| {
-        ids.iter()
-            .filter_map(|id| known.get(id).cloned())
-            .take(20)
-            .collect::<Vec<_>>()
-    };
-    let snoozed_threads = summary(&snoozed);
-    let snoozed_count = snoozed.iter().filter(|id| known.contains_key(id)).count();
-    let skipped_threads = summary(&skipped);
-    let eligible_threads: HashSet<i32> = candidates.iter().map(|c| c.thread_id).collect();
-    let blocked: Vec<i32> = validated
-        .inputs()
-        .core
-        .threads
-        .iter()
-        .filter(|thread| thread.status == "active" && !eligible_threads.contains(&thread.id))
-        .map(|thread| thread.id)
-        .collect();
-    let blocked_threads = summary(&blocked);
-
-    let roll_recovery = pending_roll_recovery(&validated,session.pending_thread_id,&excluded,&candidates)?;
-    let active_thread =
-        current_active_thread(&conn, user, session.id, session.pending_thread_id).await?;
-    let last_roll_result = active_thread
-        .as_ref()
-        .and_then(|thread| thread.get("last_rolled_result"))
-        .and_then(Value::as_i64);
-    let mode_source = normalized_source(&session.bandwidth_source);
-    let intent_source = normalized_source(&session.intent_source);
-    let response = json!({
-        "session_id": session.id,
-        "user_id": user.id(),
-        "current_die": active.current_die,
-        "manual_die": session.manual_die,
-        "pending_thread_id": session.pending_thread_id,
-        "last_rolled_result": last_roll_result,
-        "session_mode": {
-            "active_bandwidth": session.active_bandwidth,
-            "predicted_bandwidth": session.predicted_bandwidth,
-            "bandwidth_confidence": session.bandwidth_confidence,
-            "bandwidth_source": mode_source,
-            "bandwidth_version": session.bandwidth_version,
-            "active_intent": session.active_intent,
-            "predicted_intent": session.predicted_intent,
-            "intent_confidence": session.intent_confidence,
-            "intent_source": intent_source,
-            "intent_version": session.intent_version,
-            "session_mode_correction_guidance": session.session_mode_correction_guidance
-        },
-        "active_thread": active_thread,
-        "roll_recovery": roll_recovery,
-        "bandwidth": {
-            "predicted_bandwidth": session.predicted_bandwidth,
-            "active_bandwidth": session.active_bandwidth,
-            "confidence": session.bandwidth_confidence,
-            "source": mode_source,
-            "mode_version": session.bandwidth_version
-        },
-        "rollable": rollable,
-        "last_read": last_read,
-        "snoozed_threads": snoozed_threads,
-        "snoozed_count": snoozed_count,
-        "skipped_thread_ids": skipped,
-        "skipped_threads": skipped_threads,
-        "blocked_count": blocked.len(),
-        "blocked_threads": blocked_threads,
-        "stale_thread_count": stale.len(),
-        "stale_thread": stale.first(),
-        "timezone": session.timezone
-    });
-    Ok(Json(response))
-}
-, '') AS volume_id
+    let rows = conn.query(
+        r#"WITH mapped AS (
+            SELECT DISTINCT i.id,
+              regexp_replace(
+                coalesce(e.metadata_json::jsonb->'volume'->>'id',
+                         e.metadata_json::jsonb->>'volume_id'), '\.0+$', '') AS volume_id
             FROM issues i
             JOIN threads t ON t.id=i.thread_id
             JOIN issue_external_identity_mappings m ON m.issue_id=i.id AND m.status='confirmed'
@@ -1032,6 +723,313 @@ pub async fn bootstrap_v2(
         },
         "active_thread": active_thread,
         "roll_recovery": Value::Null,
+        "bandwidth": {
+            "predicted_bandwidth": session.predicted_bandwidth,
+            "active_bandwidth": session.active_bandwidth,
+            "confidence": session.bandwidth_confidence,
+            "source": mode_source,
+            "mode_version": session.bandwidth_version
+        },
+        "rollable": rollable,
+        "last_read": last_read,
+        "snoozed_threads": snoozed_threads,
+        "snoozed_count": snoozed_count,
+        "skipped_thread_ids": skipped,
+        "skipped_threads": skipped_threads,
+        "blocked_count": blocked.len(),
+        "blocked_threads": blocked_threads,
+        "stale_thread_count": stale.len(),
+        "stale_thread": stale.first(),
+        "timezone": session.timezone
+    });
+    Ok(Json(response))
+}
+
+fn recovery_label(
+    inputs: &option_inputs::OptionInputs,
+    issue_id: i32,
+) -> String {
+    let Some(issue) = inputs.core.issues.iter().find(|issue| issue.id == issue_id) else {
+        return "Required issue".into();
+    };
+    let title = inputs.core.threads.iter()
+        .find(|thread| thread.id == issue.thread_id)
+        .map(|thread| thread.title.as_str())
+        .unwrap_or("Required issue");
+    format!("{title} #{}", issue.issue_number)
+}
+
+fn recovery_chains(
+    issue_id: i32,
+    edges: &[crate::reading_constraints::ConstraintEdge],
+    inputs: &option_inputs::OptionInputs,
+    readable: &HashSet<i32>,
+    ancestors: &HashSet<i32>,
+    depth: usize,
+) -> Vec<Vec<Value>> {
+    let label = recovery_label(inputs, issue_id);
+    let node = json!({
+        "node_type": "issue",
+        "node_id": issue_id,
+        "label": label,
+        "is_readable": readable.contains(&issue_id)
+    });
+    if depth >= 32 || ancestors.contains(&issue_id) {
+        return vec![vec![node]];
+    }
+    let upstream: Vec<i32> = edges.iter()
+        .filter(|edge| edge.target_issue_id == issue_id)
+        .map(|edge| edge.source_issue_id)
+        .collect();
+    if upstream.is_empty() {
+        return vec![vec![node]];
+    }
+    let mut visited = ancestors.clone();
+    visited.insert(issue_id);
+    let mut result = Vec::new();
+    for source in upstream.into_iter().take(500) {
+        for tail in recovery_chains(source, edges, inputs, readable, &visited, depth + 1) {
+            let mut chain = vec![node.clone()];
+            chain.extend(tail);
+            result.push(chain);
+            if result.len() >= 500 {
+                return result;
+            }
+        }
+    }
+    result
+}
+
+/// Keep the existing pending roll intact. Explain only real blocked frontiers,
+/// with actionable leaf issues derived from the *same* authoritative graph.
+fn pending_roll_recovery(
+    validated: &crate::reading_constraints::ValidatedReadingInputs,
+    pending_thread_id: Option<i32>,
+    excluded: &HashSet<i32>,
+    candidates: &[crate::reading_constraints::EligibleFrontier],
+) -> Result<Option<Value>, ApiError> {
+    let Some(thread_id) = pending_thread_id else {
+        return Ok(None);
+    };
+    let inputs = validated.inputs();
+    let mut pending_issues: Vec<_> = inputs.core.issues.iter()
+        .filter(|issue| issue.thread_id == thread_id && issue.status == "unread"
+            && !inputs.excluded_issue_ids.contains(&issue.id))
+        .collect();
+    pending_issues.sort_by_key(|issue| (issue.position, issue.id));
+    let Some(target) = pending_issues.first() else {
+        return Ok(None);
+    };
+    let edges = validated.unsatisfied_edges().map_err(|_| unavailable())?;
+    let direct: Vec<_> = edges.iter()
+        .filter(|edge| edge.target_issue_id == target.id)
+        .take(500)
+        .collect();
+    if direct.is_empty() {
+        return Ok(None);
+    }
+    let readable: HashSet<i32> = candidates.iter()
+        .filter(|candidate| !excluded.contains(&candidate.thread_id))
+        .map(|candidate| candidate.issue_id)
+        .collect();
+    let mut blockers = Vec::new();
+    let mut chains = Vec::new();
+    let mut recommended = Vec::new();
+    let mut visited = HashSet::new();
+    for edge in direct {
+        let source = edge.source_issue_id;
+        let label = recovery_label(inputs, source);
+        blockers.push(json!({
+            "rule_id": Value::Null,
+            "source_type": "issue",
+            "source_id": source,
+            "source_label": label,
+            "satisfaction_type": "item_read",
+            "blocker_type": "item_unread",
+            "satisfied": false,
+            "causing_issue_ids": [source],
+            "causing_member_issue_ids": [],
+            "unread_issue_details": [{"issue_id": source, "label": label}],
+            "note": edge.origin
+        }));
+        if visited.insert(source) {
+            recommended.push(json!({
+                "node_type": "issue", "node_id": source,
+                "label": label, "is_readable": readable.contains(&source)
+            }));
+        }
+        for chain in recovery_chains(source,&edges,inputs,&readable,&HashSet::new(),0) {
+            for node in &chain {
+                let issue_id = node.get("node_id").and_then(Value::as_i64).unwrap_or_default() as i32;
+                if node.get("is_readable").and_then(Value::as_bool) == Some(true)
+                    && visited.insert(issue_id) {
+                    recommended.push(node.clone());
+                }
+            }
+            chains.push(chain);
+            if chains.len() >= 500 {
+                break;
+            }
+        }
+    }
+    let title = inputs.core.threads.iter()
+        .find(|thread| thread.id == thread_id)
+        .map(|thread| thread.title.as_str())
+        .unwrap_or("Selected series");
+    Ok(Some(json!({
+        "original_thread_id": thread_id,
+        "original_thread_title": title,
+        "direct_blockers": blockers,
+        "readable_prerequisites": recommended,
+        "chains": chains,
+        "diagnostics": []
+    })))
+}
+
+pub async fn bootstrap_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Query(query): Query<BootstrapQuery>,
+) -> Result<Json<Value>, ApiError> {
+    let active = reading_session::bootstrap(
+        &state,
+        user,
+        query.timezone.as_deref(),
+        SessionPolicy::default(),
+    )
+    .await?;
+    let validated = option_inputs::load_option_inputs(&state, user).await?;
+    let session = &active.session;
+    let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
+    let snoozed = session.snoozed_thread_ids.clone().unwrap_or_default();
+    let mut excluded: HashSet<i32> = skipped.iter().chain(snoozed.iter()).copied().collect();
+    let candidates = validated.eligible_frontiers().map_err(|_| {
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid reading constraints",
+        )
+    })?;
+    let conn = db::checkout(&state).await?;
+    let candidate_thread_ids: Vec<i32> = candidates.iter().map(|c| c.thread_id).collect();
+    let durable = durable_snoozed(&conn, user, &candidate_thread_ids).await?;
+    excluded.extend(&durable);
+    let eligible: Vec<_> = candidates
+        .iter()
+        .filter(|candidate| !excluded.contains(&candidate.thread_id))
+        .take(active.current_die.max(0) as usize)
+        .collect();
+    let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
+
+    let rows = conn
+        .query(CANDIDATES, &[&user.id(), &ids])
+        .await
+        .map_err(db::query_error)?;
+    let mut by_thread: HashMap<i32, Value> = HashMap::new();
+    for row in &rows {
+        let (thread_id, item) = candidate_item(row)?;
+        by_thread.insert(thread_id, item);
+    }
+    let volumes: Vec<String> = by_thread.values()
+        .filter_map(|item| item.pointer("/identity/canonical_series_id").and_then(Value::as_str))
+        .map(str::to_owned).collect();
+    let canonical_stats = canonical_series_stats(&conn,user,&volumes).await?;
+    let mut rollable = vec![];
+    for item in eligible {
+        let mut projected = by_thread.remove(&item.thread_id).ok_or_else(unavailable)?;
+        if let Some(volume) = projected.pointer("/identity/canonical_series_id").and_then(Value::as_str) {
+            let volume = volume.to_owned();
+            projected["reader"] = canonical_stats.get(&volume).cloned().unwrap_or_else(|| json!({
+                "latest_rating": Value::Null,
+                "average_rating": Value::Null,
+                "rating_count": 0,
+                "read_count": 0,
+                "issue_count": Value::Null,
+                "progress_scope": "canonical_series_run"
+            }));
+        } else {
+            projected["reader"]["latest_rating"] = Value::Null;
+            projected["reader"]["average_rating"] = Value::Null;
+            projected["reader"]["rating_count"] = json!(0);
+            if projected["reader"]["issue_count"] == json!(0) {
+                projected["reader"]["issue_count"] = Value::Null;
+            }
+        }
+        rollable.push(projected);
+    }
+    let last_read = latest_session_read(&conn, user, session.id).await?;
+
+    let summary_rows = conn
+        .query(
+            "SELECT t.id,t.title,t.format,t.last_activity_at::text,
+          (coalesce(t.last_activity_at,t.created_at) < now() - interval '7 days') AS stale
+         FROM threads t WHERE t.user_id=$1 ORDER BY t.queue_position,t.id",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut known: HashMap<i32, Value> = HashMap::new();
+    let mut stale = Vec::new();
+    for row in &summary_rows {
+        let id: i32 = row.try_get(0).map_err(db::query_error)?;
+        let stale_flag: Option<bool> = row.try_get(4).map_err(db::query_error)?;
+        let info = thread_value(row)?;
+        let eligible_for_stale = candidates.iter().any(|candidate| candidate.thread_id == id);
+        if stale_flag.unwrap_or(false) && eligible_for_stale && !excluded.contains(&id) {
+            stale.push(info.clone());
+        }
+        known.insert(id, info);
+    }
+    let summary = |ids: &[i32]| {
+        ids.iter()
+            .filter_map(|id| known.get(id).cloned())
+            .take(20)
+            .collect::<Vec<_>>()
+    };
+    let snoozed_threads = summary(&snoozed);
+    let snoozed_count = snoozed.iter().filter(|id| known.contains_key(id)).count();
+    let skipped_threads = summary(&skipped);
+    let eligible_threads: HashSet<i32> = candidates.iter().map(|c| c.thread_id).collect();
+    let blocked: Vec<i32> = validated
+        .inputs()
+        .core
+        .threads
+        .iter()
+        .filter(|thread| thread.status == "active" && !eligible_threads.contains(&thread.id))
+        .map(|thread| thread.id)
+        .collect();
+    let blocked_threads = summary(&blocked);
+
+    let roll_recovery = pending_roll_recovery(&validated,session.pending_thread_id,&excluded,&candidates)?;
+    let active_thread =
+        current_active_thread(&conn, user, session.id, session.pending_thread_id).await?;
+    let last_roll_result = active_thread
+        .as_ref()
+        .and_then(|thread| thread.get("last_rolled_result"))
+        .and_then(Value::as_i64);
+    let mode_source = normalized_source(&session.bandwidth_source);
+    let intent_source = normalized_source(&session.intent_source);
+    let response = json!({
+        "session_id": session.id,
+        "user_id": user.id(),
+        "current_die": active.current_die,
+        "manual_die": session.manual_die,
+        "pending_thread_id": session.pending_thread_id,
+        "last_rolled_result": last_roll_result,
+        "session_mode": {
+            "active_bandwidth": session.active_bandwidth,
+            "predicted_bandwidth": session.predicted_bandwidth,
+            "bandwidth_confidence": session.bandwidth_confidence,
+            "bandwidth_source": mode_source,
+            "bandwidth_version": session.bandwidth_version,
+            "active_intent": session.active_intent,
+            "predicted_intent": session.predicted_intent,
+            "intent_confidence": session.intent_confidence,
+            "intent_source": intent_source,
+            "intent_version": session.intent_version,
+            "session_mode_correction_guidance": session.session_mode_correction_guidance
+        },
+        "active_thread": active_thread,
+        "roll_recovery": roll_recovery,
         "bandwidth": {
             "predicted_bandwidth": session.predicted_bandwidth,
             "active_bandwidth": session.active_bandwidth,
