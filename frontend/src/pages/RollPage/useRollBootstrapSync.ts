@@ -35,12 +35,15 @@ export function useRollBootstrapSync({
   }, [isBootstrapError, bootstrapError, navigate])
 
   useEffect(() => {
-    if (bootstrap?.current_die) setCurrentDie(bootstrap.current_die)
+    if (bootstrap) {
+      const effectiveDie = bootstrap.manual_die ?? bootstrap.current_die
+      if (effectiveDie) setCurrentDie(effectiveDie)
+    }
     if (bootstrap?.last_rolled_result !== undefined && bootstrap?.last_rolled_result !== null) {
       setRolledResult(bootstrap.last_rolled_result)
       setDiceState('rolled')
     }
-  }, [bootstrap?.current_die, bootstrap?.last_rolled_result, setCurrentDie, setRolledResult, setDiceState])
+  }, [bootstrap?.manual_die, bootstrap?.current_die, bootstrap?.last_rolled_result, setCurrentDie, setRolledResult, setDiceState])
 
   useEffect(() => {
     const staleFromBootstrap = bootstrap?.stale_thread ?? null
