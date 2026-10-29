@@ -1201,14 +1201,23 @@ def test_reconcile_contradictory_labels_repairs_blocked_with_live_lease(
 def test_reconcile_contradictory_labels_skips_manual_only_pr(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A manual-only PR must not be rewritten to factory:unowned + factory:blocked."""
-    hold = pr(
-        3971,
-        "infra/factory-local-hard-stop",
-        "ralph-status:blocked",
+    """A manual-only PR must not be rewritten even when labels are contradictory.
+
+    The held PR carries a live factory:NN lease plus factory:unowned, which
+    reconcile_contradictory_labels would otherwise repair. A blocked-unowned
+    hold is skipped by the BLOCKED_LABELS guard, so it would not uniquely
+    cover is_manual_only(). The sibling uses the same labels without the
+    marker and must still be repaired.
+    """
+    contradictory = (
+        "factory",
+        "factory:unowned",
+        "factory:13",
+        "factory:building",
     )
+    hold = pr(3971, "infra/factory-local-hard-stop", *contradictory)
     hold["body"] = "<!-- factory-execution:manual-only -->\nHold this factory PR.\n"
-    sibling = issue(3005, "factory", "factory:unowned", "factory:building")
+    sibling = pr(3972, "infra/factory-sibling", *contradictory)
     replaced: list[tuple[int, str, str | None]] = []
     monkeypatch.setattr(
         controller,
@@ -1216,8 +1225,8 @@ def test_reconcile_contradictory_labels_skips_manual_only_pr(
         lambda number, owner, stage=None: replaced.append((number, owner, stage)),
     )
 
-    assert controller.reconcile_contradictory_labels([sibling], [hold]) == [3005]
-    assert replaced == [(3005, "factory:unowned", None)]
+    assert controller.reconcile_contradictory_labels([], [hold, sibling]) == [3972]
+    assert replaced == [(3972, "factory:13", "factory:building")]
 
 
 def test_reconcile_contradictory_labels_repairs_done_state(
