@@ -85,7 +85,6 @@ export function IssueRateButton({
       })
       latestSnapshot.current = nextSnapshot
       onSnapshotChange(nextSnapshot)
-      setSavedRating(rating)
       setOpen(false)
       onRated?.({
         issueNumber: issue.issue_number,
