@@ -22,6 +22,12 @@ import subprocess
 import sys
 import time
 
+# Running this file by path sets sys.path[0] to scripts/, not the repo root.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+
 from scripts.profile_local_traffic import (
     api_process,
     cpu_seconds,
@@ -32,9 +38,6 @@ from scripts.profile_local_traffic import (
     safe_route,
     server_environment,
 )
-
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def _find_api_child(profiler_pid: int) -> int | None:
