@@ -1,11 +1,13 @@
 //! Standalone native Roll service foundation. Bootstrap remains in Python until parity gates pass.
 pub mod auth;
+pub mod bootstrap;
 pub mod config;
 pub mod db;
 pub mod option_inputs;
 pub mod reading_constraints;
 pub mod reading_inputs;
 pub mod reading_session;
+mod schemas;
 mod session_bandwidth;
 
 use axum::{
@@ -145,12 +147,18 @@ async fn bound_request(
     response
 }
 
-/// Mount health and stable error boundaries only; no partial-success bootstrap route.
+/// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route(
             "/health",
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
+        )
+        .route(
+            "/api/v2/roll/bootstrap",
+            get(|state: State<Arc<AppState>>, auth_header: String| async move {
+                bootstrap_v2(state, auth_header).await
+            }),
         )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
         .method_not_allowed_fallback(|| async {
