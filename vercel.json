@@ -16,6 +16,10 @@
       "use": "@vercel/python"
     },
     {
+      "src": "api/native_roll.rs",
+      "use": "@vercel/rust"
+    },
+    {
       "src": "api/auth/me.ts",
       "use": "@vercel/node"
     },
@@ -32,6 +36,11 @@
       "src": "/api/v1/auth/me",
       "methods": ["GET"],
       "dest": "/api/auth/me.ts"
+    },
+    {
+      "src": "/api/_native_roll/health",
+      "methods": ["GET"],
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api(?:/.*)?",
