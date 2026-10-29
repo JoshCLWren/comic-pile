@@ -71,7 +71,7 @@ fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
     let issue_number: String = row.try_get(5).map_err(db::query_error)?;
     let metadata: Option<String> = row.try_get(6).map_err(db::query_error)?;
     let mapping_status: Option<String> = row.try_get(7).map_err(db::query_error)?;
-    let series_mapping_status: Option<String> = row.try_get(8).map_err(db::query_error)?;
+    let _series_mapping_status: Option<String> = row.try_get(8).map_err(db::query_error)?;
     let read_count: i64 = row.try_get(9).map_err(db::query_error)?;
     let issue_count: i64 = row.try_get(10).map_err(db::query_error)?;
     let latest_rating: Option<f64> = row.try_get(11).map_err(db::query_error)?;
