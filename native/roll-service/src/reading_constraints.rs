@@ -630,6 +630,80 @@ mod tests {
         }
     }
     #[test]
+    fn option_e_frontier_uses_live_graph_and_next_unread_not_stale_stored_flags() {
+        use crate::reading_inputs::StoredThreadEligibility;
+        fn fixture(strict: bool, skipped: bool, exclude_other: bool) -> OptionInputs {
+            let mut source = inputs();
+            source.core.threads[0].status = "active".into();
+            source.core.threads.push(ReadingThread {
+                id: 9,
+                status: "active".into(),
+                title: "Other series".into(),
+            });
+            source.core.issues.push(ReadingIssue {
+                id: 22,
+                thread_id: 9,
+                position: 1,
+                status: "unread".into(),
+                issue_number: "1".into(),
+            });
+            source.core.stored.extend([
+                StoredThreadEligibility {
+                    thread_id: 8,
+                    next_issue_id: None,
+                    is_blocked: true,
+                    queue_position: 2,
+                },
+                StoredThreadEligibility {
+                    thread_id: 9,
+                    next_issue_id: Some(22),
+                    is_blocked: false,
+                    queue_position: 1,
+                },
+            ]);
+            if strict {
+                source.lists.push(ReadingList {
+                    list_id: 44,
+                    mode: "strict".into(),
+                    entries: vec![
+                        ReadingEntry {
+                            issue_id: 13,
+                            gate: "none".into(),
+                            skipped,
+                        },
+                        ReadingEntry {
+                            issue_id: 22,
+                            gate: "none".into(),
+                            skipped: false,
+                        },
+                    ],
+                    overlap_decisions: vec![],
+                });
+            }
+            if exclude_other {
+                source.excluded_issue_ids.insert(22);
+            }
+            source
+        }
+        let frontiers = |source: OptionInputs| {
+            ValidatedReadingInputs::new(source, &BTreeMap::new())
+                .unwrap()
+                .eligible_frontiers()
+                .unwrap()
+                .into_iter()
+                .map(|candidate| candidate.issue_id)
+                .collect::<Vec<_>>()
+        };
+        // Stale stored blockers/frontier pointers cannot decide eligibility.
+        assert_eq!(frontiers(fixture(false, false, false)), vec![22, 13]);
+        assert_eq!(frontiers(fixture(true, false, false)), vec![13]);
+        // Skipped list entries do not create predecessor gates.
+        assert_eq!(frontiers(fixture(true, true, false)), vec![22, 13]);
+        // Collection exclusions never return excluded issues.
+        assert_eq!(frontiers(fixture(false, false, true)), vec![13]);
+    }
+
+    #[test]
     fn execution_capability_checks_cycles_read_and_excluded_nodes_and_unresolved_references() {
         let valid = ValidatedReadingInputs::new(inputs(), &BTreeMap::new())
             .ok()
