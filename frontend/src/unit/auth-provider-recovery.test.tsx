@@ -686,20 +686,30 @@ describe('bootstrap retry budget and manual recovery race', () => {
     // Simulate StrictMode unmount: cleanup runs, clearing timers and in-flight state.
     unmount()
 
-    // Second mount: fresh bootstrap starts, counter reset, new /auth/me call.
-    renderProvider()
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0)
-    })
-    expect(auth?.authState.status).toBe('authenticated')
-    expect(auth?.user?.username).toBe('reader')
+  // Second mount: fresh bootstrap starts, counter reset, new /auth/me call.
+  renderProvider()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(auth?.authState.status).toBe('authenticated')
+  expect(auth?.user?.username).toBe('reader')
 
-    // Exactly one additional /auth/me call from the second mount's bootstrap.
-    expect(mocks.get).toHaveBeenCalledTimes(callsAfterFirstMount + 1)
-    expect(mocks.get).toHaveBeenLastCalledWith('/v1/auth/me', {
+  const authMeCalls = mocks.get.mock.calls.filter(
+    ([url]) => url === '/v1/auth/me',
+  )
+  const authMeCallsAfterFirstMount = mocks.get.mock.calls
+    .slice(0, callsAfterFirstMount)
+    .filter(([url]) => url === '/v1/auth/me')
+
+  // Exactly one additional /auth/me call from the second mount's bootstrap.
+  expect(authMeCalls.length).toBe(authMeCallsAfterFirstMount.length + 1)
+  expect(authMeCalls[authMeCalls.length - 1]).toEqual([
+    '/v1/auth/me',
+    {
       timeout: 15000,
       skipAuthRedirect: true,
-    })
-    expect(auth?.authState.retryCount).toBe(0)
+    },
+  ])
+  expect(auth?.authState.retryCount).toBe(0)
   }, 15000)
 })
