@@ -44,10 +44,9 @@ async fn native_bootstrap(request: Request) -> Response {
         )
             .into_response(),
     };
-    result.headers_mut().insert(
-        "x-comicpile-api-runtime",
-        HeaderValue::from_static("rust"),
-    );
+    result
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
     result
 }
 
