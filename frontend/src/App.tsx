@@ -275,12 +275,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const scheduleRetry = (authError: ReturnType<typeof createAuthError>) => {
       if (!isMounted) return
       if (bootstrapGeneration !== sessionGeneration.current) return
-      if (bootstrapRetryCountRef.current >= AUTH_BOOTSTRAP_MAX_RETRIES) {
+      
+      // Extract current attempt count synchronously before any state updates
+      const currentAttempt = bootstrapRetryCountRef.current
+      if (currentAttempt >= AUTH_BOOTSTRAP_MAX_RETRIES) {
         return
       }
-      const nextAttempt = bootstrapRetryCountRef.current + 1
+      const nextAttempt = currentAttempt + 1
+      // Store the next attempt count for this session generation
       bootstrapRetryCountRef.current = nextAttempt
-      const retryDelay = calculateRetryDelay(nextAttempt, AUTH_RETRY_BASE_DELAY_MS)
+      
+      // Set auth state with the new retry count - this is the only place
+      // where the UI retry count is updated, ensuring it reflects the actual attempt
       setAuthState(prev => ({
         ...prev,
         status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
@@ -289,11 +295,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         retryCount: nextAttempt,
         lastRetryAt: Date.now(),
       }))
+      
       cancelBootstrapTimers()
+      // Schedule the next validation attempt using the extracted nextAttempt
       bootstrapTimerRef.current = window.setTimeout(() => {
         bootstrapTimerRef.current = null
         void validateSession()
-      }, retryDelay)
+      }, calculateRetryDelay(nextAttempt, AUTH_RETRY_BASE_DELAY_MS))
     }
 
     const validateSession = async () => {
