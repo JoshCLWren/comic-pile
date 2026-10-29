@@ -66,6 +66,9 @@ omit URI/query, headers, tokens, database config and upstream error text. Config
 and credential-bearing state deliberately do not derive Debug. Integration tests
 send secret canaries through headers/query and assert they never appear in process
 logs; they prove health with an unreachable DB and successful SIGTERM shutdown.
+Additional network tests stall a real PostgreSQL handshake to prove the configured
+create timeout, finish an in-flight HTTP handler during drain, enforce the hard
+drain deadline for stuck work, and hold incomplete HTTP headers during SIGTERM.
 
 ## Routing and rollout
 

@@ -14,6 +14,7 @@ use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime, 
 use postgres_native_tls::MakeTlsConnector;
 use serde::Serialize;
 use std::{
+    future::{Future, IntoFuture},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -52,6 +53,40 @@ impl AppState {
             request_timeout: config.request_timeout,
         })
     }
+}
+
+/// Serve until shutdown, drain active requests, and bound even stalled connections.
+pub async fn serve(
+    listener: tokio::net::TcpListener,
+    app: Router,
+    state: Arc<AppState>,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+) -> Result<(), &'static str> {
+    let drain_timeout = state.request_timeout + Duration::from_secs(1);
+    let (shutdown_send, mut shutdown_receive) = tokio::sync::watch::channel(false);
+    let signal_task = tokio::spawn(async move {
+        shutdown.await;
+        let _ = shutdown_send.send(true);
+    });
+    let mut graceful_receive = shutdown_receive.clone();
+    let server = axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            let _ = graceful_receive.changed().await;
+        })
+        .into_future();
+    tokio::pin!(server);
+    let result = tokio::select! {
+        result = &mut server => result.map_err(|_| "HTTP server failed"),
+        _ = shutdown_receive.changed() => {
+            match tokio::time::timeout(drain_timeout, &mut server).await {
+                Ok(result) => result.map_err(|_| "HTTP server failed"),
+                Err(_) => Err("shutdown drain deadline exceeded"),
+            }
+        }
+    };
+    signal_task.abort();
+    state.pool.close();
+    result
 }
 
 /// Python-compatible JSON detail boundary; never serialize a dependency error.

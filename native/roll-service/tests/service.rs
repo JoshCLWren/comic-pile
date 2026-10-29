@@ -148,11 +148,31 @@ async fn health_and_error_envelopes_work_without_database_checkout() {
 }
 
 #[tokio::test]
-async fn unavailable_database_checkout_is_bounded() {
+async fn stalled_database_handshake_hits_configured_create_timeout() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let handshake = tokio::spawn(async move {
+        let (_connection, _) = listener.accept().await.unwrap();
+        std::future::pending::<()>().await;
+    });
     let mut config = config();
+    config.database = format!("postgresql://synthetic:secret@{address}/unused?sslmode=disable")
+        .parse()
+        .unwrap();
     config.pool_timeout = Duration::from_millis(50);
     let state = AppState::new(config).unwrap();
-    let result = tokio::time::timeout(Duration::from_secs(1), state.pool.get()).await;
-    assert!(result.unwrap().is_err());
+    let started = std::time::Instant::now();
+    let result = tokio::time::timeout(Duration::from_secs(1), state.pool.get())
+        .await
+        .unwrap();
+    assert!(matches!(
+        result,
+        Err(deadpool_postgres::PoolError::Timeout(
+            deadpool_postgres::TimeoutType::Create
+        ))
+    ));
+    assert!(started.elapsed() >= Duration::from_millis(40));
+    assert!(started.elapsed() < Duration::from_secs(1));
     assert_eq!(state.pool.status().size, 0);
+    handshake.abort();
 }

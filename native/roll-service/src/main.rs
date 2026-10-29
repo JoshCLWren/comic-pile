@@ -1,6 +1,6 @@
 //! Native process entry point: bind once, drain on SIGINT/SIGTERM, close the pool.
-use comicpile_roll_service::{config::Config, router, AppState};
-use std::{future::IntoFuture, process::ExitCode, sync::Arc, time::Duration};
+use comicpile_roll_service::{config::Config, router, serve, AppState};
+use std::{process::ExitCode, sync::Arc};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -25,31 +25,7 @@ async fn run() -> Result<(), &'static str> {
         .await
         .map_err(|_| "listener bind failed")?;
     tracing::info!(address = %bind, "native Roll listener started");
-    let drain_timeout = state.request_timeout + Duration::from_secs(1);
-    let (shutdown_send, mut shutdown_receive) = tokio::sync::watch::channel(false);
-    let signal_task = tokio::spawn(async move {
-        shutdown_signal().await;
-        let _ = shutdown_send.send(true);
-    });
-    let mut graceful_receive = shutdown_receive.clone();
-    let server = axum::serve(listener, router(state.clone()))
-        .with_graceful_shutdown(async move {
-            let _ = graceful_receive.changed().await;
-        })
-        .into_future();
-    tokio::pin!(server);
-    let result = tokio::select! {
-        result = &mut server => result.map_err(|_| "HTTP server failed"),
-        _ = shutdown_receive.changed() => {
-            match tokio::time::timeout(drain_timeout, &mut server).await {
-                Ok(result) => result.map_err(|_| "HTTP server failed"),
-                Err(_) => Err("shutdown drain deadline exceeded"),
-            }
-        }
-    };
-    signal_task.abort();
-    state.pool.close();
-    result
+    serve(listener, router(state.clone()), state, shutdown_signal()).await
 }
 async fn shutdown_signal() {
     let interrupt = async {
