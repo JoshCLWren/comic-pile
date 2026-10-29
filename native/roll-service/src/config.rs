@@ -39,9 +39,55 @@ pub struct Config {
     pub pool_timeout: Duration,
     pub request_timeout: Duration,
 }
+/// Adapt the application's existing SQLAlchemy/Neon URL for tokio-postgres.
+/// Keep supported connection parameters. Neon channel_binding is accepted by
+/// libpq but rejected by the tokio-postgres URI parser. TLS stays mandatory.
+fn vercel_postgres_url(raw: String) -> String {
+    let raw = raw.trim();
+    let url = [
+        "postgresql+asyncpg://",
+        "postgresql+psycopg://",
+        "postgresql+psycopg2://",
+        "postgres://",
+    ]
+    .iter()
+    .find_map(|prefix| raw.strip_prefix(prefix))
+    .map(|rest| format!("postgresql://{rest}"))
+    .unwrap_or_else(|| raw.to_owned());
+
+    let (base, query) = url.split_once('?').unwrap_or((&url, ""));
+    let mut params: Vec<&str> = query
+        .split('&')
+        .filter(|part| !part.is_empty())
+        .filter(|part| part.split('=').next() != Some("channel_binding"))
+        .collect();
+    if !params.iter().any(|part| part.split('=').next() == Some("sslmode")) {
+        params.push("sslmode=require");
+    }
+    format!("{base}?{}", params.join("&"))
+}
+
 impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
         Self::from_lookup(|name| std::env::var(name).ok())
+    }
+
+    /// Production Vercel Roll entrypoint: existing DATABASE_URL and SECRET_KEY
+    /// unless native-specific overrides are configured.
+    pub fn from_vercel_env() -> Result<Self, ConfigError> {
+        Self::from_vercel_lookup(|name| std::env::var(name).ok())
+    }
+
+    /// Injectable variant for credential-free startup tests.
+    pub fn from_vercel_lookup(get: impl Fn(&str) -> Option<String>) -> Result<Self, ConfigError> {
+        Self::from_lookup(|name| match name {
+            "RUST_ROLL_ENV" => get(name).or_else(|| Some("production".into())),
+            "RUST_ROLL_DATABASE_URL" => get(name)
+                .or_else(|| get("DATABASE_URL"))
+                .map(vercel_postgres_url),
+            "RUST_ROLL_JWT_SECRET" => get(name).or_else(|| get("SECRET_KEY")),
+            _ => get(name),
+        })
     }
 
     /// Injectable lookup keeps tests independent of process-global environment mutations.
@@ -110,5 +156,53 @@ impl Config {
                 60000,
             )?),
         })
+    }
+}
+
+#[cfg(test)]
+mod vercel_tests {
+    use super::*;
+
+    #[test]
+    fn existing_neon_url_and_python_secret_boot_native_config() {
+        let config = Config::from_vercel_lookup(|key| match key {
+            "DATABASE_URL" => Some(concat!(
+                "postgresql+asyncpg://reader:password@ep-example.us-east-2.aws.neon.tech/",
+                "neondb?sslmode=require&channel_binding=require"
+            ).into()),
+            "SECRET_KEY" => Some("synthetic-jwt-key".into()),
+            _ => None,
+        })
+        .expect("Python production environment must bootstrap native Roll");
+        assert_eq!(config.environment, Environment::Production);
+        assert_eq!(config.database.get_ssl_mode(), SslMode::Require);
+        assert_eq!(config.database.get_dbname(), Some("neondb"));
+        assert_eq!(config.jwt_secret.as_bytes(), b"synthetic-jwt-key");
+    }
+
+    #[test]
+    fn native_override_and_sqlalchemy_schemes_preserve_tls() {
+        for scheme in ["postgresql+asyncpg", "postgresql+psycopg", "postgresql+psycopg2", "postgres"] {
+            let url = format!("{scheme}://reader:password@localhost/app?channel_binding=require");
+            let config = Config::from_vercel_lookup(|key| match key {
+                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+                "RUST_ROLL_JWT_SECRET" => Some("native-override".into()),
+                "SECRET_KEY" => Some("python-secret".into()),
+                _ => None,
+            })
+            .expect("known SQLAlchemy dialect should normalize");
+            assert_eq!(config.database.get_ssl_mode(), SslMode::Require);
+            assert_eq!(config.jwt_secret.as_bytes(), b"native-override");
+        }
+    }
+
+    #[test]
+    fn rejects_insecure_production_transport() {
+        let result = Config::from_vercel_lookup(|key| match key {
+            "DATABASE_URL" => Some("postgresql://reader:password@localhost/app?sslmode=disable".into()),
+            "SECRET_KEY" => Some("synthetic".into()),
+            _ => None,
+        });
+        assert!(result.is_err());
     }
 }
