@@ -45,18 +45,20 @@ export function applyIssueReadStatus(
     return snapshot
   }
 
-  const issues = snapshot.issues.map((issue) =>
-    issue.id === issueId
-      ? {
-          ...issue,
-          status: result.status,
-          read_at: result.read_at,
-          ...(result.last_rating === undefined
-            ? {}
-            : { last_rating: result.last_rating }),
-        }
-      : issue,
-  )
+  const issues = snapshot.issues.map((issue) => {
+    if (issue.id !== issueId) {
+      return issue
+    }
+    const updatedIssue: Issue = {
+      ...issue,
+      status: result.status,
+      read_at: result.read_at,
+    }
+    if (result.last_rating !== undefined) {
+      updatedIssue.last_rating = result.last_rating
+    }
+    return updatedIssue
+  })
 
   return {
     issues,

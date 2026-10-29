@@ -355,7 +355,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.exclusions('inactive'),
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(6)
+    expect(invalidateQueries).toHaveBeenCalledTimes(7)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -378,6 +378,10 @@ describe('targeted cache effects', () => {
     })
     // The next undo reads from the snapshot list, so it cannot serve the pre-undo copy.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.undo.all })
+    // An undone rating restores the issue's read state and saved rating, which
+    // no queue/session key covers; the reading-boundary answers must refresh
+    // with the rest of the undo pass (#4204).
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
 
     // SAFETY: mock call args are typed as `unknown[]`; narrowing the first arg
     // to the optional queryKey shape the test then indexes is the checked invariant.
