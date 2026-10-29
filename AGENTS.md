@@ -2,6 +2,16 @@
 
 Guidelines for AI agents working in this codebase.
 
+
+## MANDATORY: API version is not an implementation language (Rust cutover #4335)
+
+The `v1`, `v2`, etc. segments in public HTTP paths refer **only to API contract versions**, not Python, Rust, a new server, or a migration phase. Both Python and Rust can implement any API version. Never describe an operation as "Python v1" or "Rust v2" without explicitly distinguishing the exact path from its **observed/current** runtime.
+
+**A Rust cutover replaces the implementation behind the same HTTP method, URL and aliases.** First trace the live frontend/background/recovery callers to that precise path, its existing FastAPI handler, its generated OpenAPI operation and its actual PostgreSQL statements and transaction behavior. Keep the client's URL and wire contract unchanged; never redirect `/api/v1/...` to `/api/v2/...` as a shortcut to reach Rust. Changing API versions is a separate, deliberate API change, not a language replacement.
+
+PR A must verify the same-path routing, generated contract, focused caller transport and SQL/bind/transaction semantics. After deployment, verify a successful real authenticated production request ran in Rust rather than Python, not just a health check, 401, response header, or READY deployment. PR B removes the **same-path** Python implementation only after proof, with exact-head green CI and Greptile 5/5 for both PRs. Do not infer runtime from a URL version, and do not claim migration from an unused parallel endpoint. Coordinate with active factory claims and permitted production bug fixes; do not bundle unrelated API refactors.
+
+
 ## MANDATORY: Frontend Visual Policy
 
 **Any task that changes frontend code, UI behavior, layout, styling, or visual treatment MUST read `docs/FRONTEND_VISUAL_GRAMMAR.md` before making changes.**
