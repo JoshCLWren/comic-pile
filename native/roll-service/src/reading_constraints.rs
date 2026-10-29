@@ -528,6 +528,24 @@ impl ValidatedReadingInputs {
     pub fn topological_order(&self) -> &[i32] {
         &self.topological_order
     }
+    /// Return all currently unsatisfied incoming edges, including for a
+    /// pending thread held behind prerequisites. Preserve original provenance.
+    pub fn unsatisfied_edges(&self) -> Result<Vec<ConstraintEdge>, ValidationError> {
+        let snapshot = Snapshot::from_inputs(&self.inputs, &BTreeMap::new());
+        let incomplete: HashSet<i32> = self
+            .inputs
+            .core
+            .issues
+            .iter()
+            .filter(|issue| issue.status != "read" && !self.inputs.excluded_issue_ids.contains(&issue.id))
+            .map(|issue| issue.id)
+            .collect();
+        Ok(constraint_edges(&snapshot)?
+            .into_iter()
+            .filter(|edge| incomplete.contains(&edge.source_issue_id))
+            .collect())
+    }
+
     /// Live Option E frontiers. Ignore stale stored blocked/frontier fields:
     /// the validated dependency graph and issue statuses are authoritative.
     /// Exactly one next unread issue per active queue thread can be eligible.
