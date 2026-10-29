@@ -242,34 +242,44 @@ async def test_session_bootstrap_parity(scenario):
                 await c.execute(text("""CREATE FUNCTION wait_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $$
                     BEGIN PERFORM pg_advisory_xact_lock(-731707); RETURN NEW; END $$"""))
                 await c.execute(text("CREATE TRIGGER wait_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION wait_checkpoint()"))
-            # Cancel the native request while its uncommitted checkpoint waits on a controlled lock.
+            # Cancel bootstrap_at in Rust, not the child process: the future must
+            # drop its in-flight transaction while the pool stays alive.
+            # One connection forces the post-cancel checkout to encounter a busy
+            # connection if Pending fails to discard it.
             async with engine.begin() as blocker:
                 await blocker.execute(text("SELECT pg_advisory_xact_lock(-731707)"))
-                pending = asyncio.create_task(native())
+                p = await asyncio.create_subprocess_exec(
+                    str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
+                    env={**env, "RUST_ROLL_TEST_CANCEL_ON_STDIN": "1", "RUST_ROLL_POOL_SIZE": "1"},
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
                 try:
                     for _ in range(200):
                         async with admin.connect() as c:
-                            waiting = await c.scalar(text("SELECT count(*) FROM pg_stat_activity WHERE application_name=:name AND wait_event='advisory'"), {"name": schema})
+                            waiting = await c.scalar(text(
+                                "SELECT count(*) FROM pg_stat_activity "
+                                "WHERE application_name=:name AND wait_event='advisory'"
+                            ), {"name": schema})
                         if waiting:
                             break
                         await asyncio.sleep(0.01)
                     else:
                         pytest.fail("native checkpoint did not reach controlled lock")
-                    pending.cancel()
-                    with pytest.raises(asyncio.CancelledError):
-                        await pending
+                    assert p.stdin is not None
+                    p.stdin.write(b"x")
+                    await p.stdin.drain()
+                    out, err = await asyncio.wait_for(p.communicate(), 10)
+                    assert p.returncode == 0, err.decode()
+                    assert json.loads(out) == {"cancelled": True, "checkout_usable": True}
+                    # The process has exited without releasing the blocking lock.
+                    # No uncommitted session or snapshot can later become visible.
+                    assert await durable() == before_failure
                 finally:
-                    if not pending.done():
-                        pending.cancel()
-                        await asyncio.gather(pending, return_exceptions=True)
-            # Await server-side disconnect/rollback before inspecting durable state.
-            for _ in range(200):
-                async with admin.connect() as c:
-                    active = await c.scalar(text("SELECT count(*) FROM pg_stat_activity WHERE application_name=:name"), {"name": schema})
-                if not active:
-                    break
-                await asyncio.sleep(0.01)
-            assert not active
+                    if p.returncode is None:
+                        p.kill()
+                        await p.wait()
             assert await durable() == before_failure
             async with engine.begin() as c:
                 await c.execute(text("DROP TRIGGER wait_checkpoint ON snapshots"))
