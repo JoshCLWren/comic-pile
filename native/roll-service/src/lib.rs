@@ -1,4 +1,4 @@
-//! Standalone native Roll service foundation. Bootstrap remains in Python until parity gates pass.
+//! Native Roll service with authenticated GET bootstrap and owner-scoped PostgreSQL access.
 pub mod auth;
 pub mod bootstrap;
 pub mod config;
@@ -156,9 +156,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/roll/bootstrap",
-            get(|state: State<Arc<AppState>>, auth_header: String| async move {
-                bootstrap_v2(state, auth_header).await
-            }),
+            get(bootstrap::bootstrap_v2),
         )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
         .method_not_allowed_fallback(|| async {
