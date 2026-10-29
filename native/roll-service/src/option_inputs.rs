@@ -255,10 +255,20 @@ pub async fn load_option_diagnostics(
 pub async fn load_option_inputs(
     state: &AppState,
     user: AuthenticatedUser,
-) -> Result<OptionInputs, ApiError> {
+) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
     let inputs = load_option_diagnostics(state, user).await?;
-    inputs.require_resolved()?;
-    Ok(inputs)
+    crate::reading_constraints::ValidatedReadingInputs::new(inputs, &BTreeMap::new()).map_err(
+        |error| match error {
+            crate::reading_constraints::ValidationError::Cycle { .. } => ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Reading constraint cycle",
+            ),
+            crate::reading_constraints::ValidationError::InvalidSnapshot { .. } => ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Unresolved reading reference",
+            ),
+        },
+    )
 }
 
 #[cfg(test)]
