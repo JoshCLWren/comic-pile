@@ -67,7 +67,10 @@ async fn main() {
             eprintln!("post-cancel checkout or query timed out");
             std::process::exit(1);
         }
-        println!("{}", serde_json::json!({"cancelled":true,"checkout_usable":true}));
+        println!(
+            "{}",
+            serde_json::json!({"cancelled":true,"checkout_usable":true})
+        );
         return;
     }
     let result = if let Ok(id) = std::env::var("RUST_ROLL_TEST_SESSION_ID") {
