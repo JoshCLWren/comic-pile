@@ -8,8 +8,14 @@ use tower::ServiceBuilder;
 use vercel_runtime::{axum::VercelLayer, Error};
 
 fn production_postgres_url(url: String) -> String {
-    // Python's SQLAlchemy dialect name isn't accepted by tokio-postgres.
-    let url = url.replacen("postgresql+asyncpg://", "postgresql://", 1);
+    // Python supports both SQLAlchemy PostgreSQL dialects; tokio-postgres does not.
+    let url = if let Some(rest) = url.strip_prefix("postgresql+asyncpg://") {
+        format!("postgresql://{rest}")
+    } else if let Some(rest) = url.strip_prefix("postgresql+psycopg://") {
+        format!("postgresql://{rest}")
+    } else {
+        url
+    };
     // The native production pool must not silently drop TLS.
     if url
         .split_once('?')
@@ -66,6 +72,10 @@ mod tests {
     fn native_postgres_url_enforces_tls_and_normalizes_sqlalchemy_dialect() {
         assert_eq!(
             production_postgres_url("postgresql+asyncpg://localhost/db".into()),
+            "postgresql://localhost/db?sslmode=require"
+        );
+        assert_eq!(
+            production_postgres_url("postgresql+psycopg://localhost/db".into()),
             "postgresql://localhost/db?sslmode=require"
         );
         assert_eq!(
