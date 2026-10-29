@@ -647,7 +647,8 @@ def reconcile_contradictory_labels(
      repairs:
     - `factory:building + factory:unowned` -> `factory:unowned` (no stage)
     - `ralph-status:in-progress + factory:unowned` -> `factory:unowned`
-    - `ralph-status:blocked` without `factory:blocked` -> `factory:blocked + factory:unowned`
+    - blocked labels (`ralph-status:blocked` and the rest of BLOCKED_LABELS)
+      with no live factory lease are left alone
     - `ralph-status:done` with transient labels -> removed
     """
     issue_items = list_issues() if issues is None else issues
@@ -663,7 +664,13 @@ def reconcile_contradictory_labels(
             continue
         current_labels = labels_of(item)
         owner = owner_of(current_labels)
-        
+        # Operator holds such as ralph-status:blocked with no live factory:NN
+        # lease must not be rewritten to factory:unowned + factory:blocked.
+        if current_labels & BLOCKED_LABELS and (
+            owner is None or owner == 'factory:unowned'
+        ):
+            continue
+
         norm_owner, norm_stage = normalize_target_state(current_labels, owner)
         
         # Check if normalization would actually change anything
