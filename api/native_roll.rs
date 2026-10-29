@@ -111,7 +111,9 @@ mod tests {
         );
         assert_eq!(
             normalized.headers().get("authorization"),
-            Some(&axum::http::HeaderValue::from_static("Bearer synthetic-test-token"))
+            Some(&axum::http::HeaderValue::from_static(
+                "Bearer synthetic-test-token"
+            ))
         );
 
         // Exercise the actual production Axum router; the native runtime marker
