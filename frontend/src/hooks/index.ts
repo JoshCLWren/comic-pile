@@ -12,6 +12,7 @@ export { useCreatorDetail, creatorDetailQueryOptions, CREATOR_DETAIL_PAGE_SIZE }
 export { useCreatorsList, creatorListQueryOptions, CREATOR_LIST_PAGE_SIZE } from './useCreatorsList'
 export type { CreatorListSelection, CreatorListSort, CreatorsListState } from './useCreatorsList'
 export { useDebounce } from './useDebounce'
+export { usePotentialDuplicates, POTENTIAL_DUPLICATE_DEBOUNCE_MS } from './usePotentialDuplicates'
 export { useCrossoverGroups } from './useCrossoverGroups'
 export {
   useCrossoverGroupsList,

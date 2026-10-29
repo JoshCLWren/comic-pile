@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
@@ -65,7 +65,6 @@ function parseSelectionKeys(rawKeys: string | null): Set<string> {
     const key = candidate.trim()
     if (!key || parseCreatorKey(key) === null) continue
     keys.add(key)
-    if (keys.size >= MAX_COMPARISON_SELECTION) break
   }
   return keys
 }
@@ -260,11 +259,6 @@ export default function CreatorsPage() {
   // Deriving instead of mirroring in state keeps the URL authoritative and
   // avoids a restore effect that could overwrite a reader's toggle with a
   // stale URL snapshot.
-  const selectedKeys = useMemo(
-    () => parseSelectionKeys(searchParams.get('keys')),
-    [searchParams],
-  )
-
   // Rewrite only the `keys` parameter so any other context on the URL survives.
   const updateSelectionUrl = useCallback(
     (keys: Set<string>) => {
@@ -308,6 +302,47 @@ export default function CreatorsPage() {
     refetch: refetchDiscoveries,
   } = useCreatorDiscoveries(viewMode === 'discover')
 
+  const parsedSelectionKeys = useMemo(
+    () => parseSelectionKeys(searchParams.get('keys')),
+    [searchParams],
+  )
+
+  // Selections are validated against the creators actually present in the
+  // loaded list, so duplicate or unknown/stale keys cannot inflate the
+  // counter or consume selection slots (#4208). The four-creator cap applies
+  // to the visible selection only: a key that isn't on the current page never
+  // occupies a slot, so an unknown key in the URL can't crowd out a valid one.
+  const selectedKeys = useMemo(() => {
+    const visible = new Set(items.map((item) => item.canonical_creator_key))
+    const filtered = new Set<string>()
+    for (const key of parsedSelectionKeys) {
+      if (visible.has(key) && filtered.size < MAX_COMPARISON_SELECTION) {
+        filtered.add(key)
+      }
+    }
+    return filtered
+  }, [parsedSelectionKeys, items])
+
+  // Keep the durable `keys` URL canonical: collapse repeated identities, trim
+  // stray whitespace, and drop keys that fail creator-key syntax. A valid key is
+  // never deleted merely because its row is not on the loaded page (a creator on
+  // page 2, or one filtered out by search), so a saved selection survives list
+  // changes, a reload, and a Back/forward round trip (#4208). Unknown but
+  // well-formed keys also stay in the URL because this page cannot confirm they
+  // are not real creators elsewhere in the list; they never occupy a selection
+  // slot because the cap above applies to visible creators only.
+  useEffect(() => {
+    const rawKeys = searchParams.get('keys')
+    if (!rawKeys) return
+    const valid = parseSelectionKeys(rawKeys)
+    const canonical = Array.from(valid).join(',')
+    // Compare the serialized form (not a sorted set) so the rewrite happens once
+    // and lands on exactly the value `updateSelectionUrl` would write back.
+    if (rawKeys !== canonical) {
+      updateSelectionUrl(valid)
+    }
+  }, [searchParams, updateSelectionUrl])
+
   const hasItems = items.length > 0
   const ratingsPartial = coverage != null && !coverage.ratings_complete
   const showFirstLoadError = isError && !hasItems
@@ -316,11 +351,17 @@ export default function CreatorsPage() {
   const canCompare = selectionCount >= 2
 
   const handleToggleSelection = (key: string) => {
-    const next = new Set(selectedKeys)
+    // Start from every key the URL carries, not just the visible rows, so
+    // toggling one checkbox never silently drops a valid selection whose row is
+    // on another page or filtered out by the current search (#4208). Unknown or
+    // off-page keys are preserved in the URL but never occupy a comparison
+    // slot, so the four-creator cap is measured against the visible selection
+    // only; otherwise a bogus key in the URL could crowd out a real one.
+    const next = new Set(parsedSelectionKeys)
     if (next.has(key)) {
       // Selected checkboxes always stay enabled so one creator can be dropped.
       next.delete(key)
-    } else if (next.size < MAX_COMPARISON_SELECTION) {
+    } else if (selectedKeys.size < MAX_COMPARISON_SELECTION) {
       next.add(key)
     } else {
       return

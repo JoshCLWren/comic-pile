@@ -1051,6 +1051,103 @@ describe('CreatorComparisonPage metric evidence views (#3460)', () => {
   })
 })
 
+describe('CreatorComparisonPage duplicate and unknown keys (#4208)', () => {
+  function renderTwoResolved(keysQuery: string) {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({ canonical_creator_key: 'creator:7', display_name: 'Brian K. Vaughan' }),
+            'creator:12': makeItem({ canonical_creator_key: 'creator:12', display_name: 'Steve McNiven' }),
+          },
+        }),
+      }),
+    )
+    return renderWithCreatorsList(keysQuery)
+  }
+
+  it('collapses duplicate keys before fetching so a repeated identity still compares', () => {
+    renderTwoResolved('creator:7,creator:7,creator:12,creator:12')
+
+    expect(mockedHook).toHaveBeenCalledWith(['creator:7', 'creator:12'])
+    expect(screen.getByText('Comparing 2 creators')).toBeInTheDocument()
+    expect(screen.queryByText(/Select 2 to 4 creators/)).not.toBeInTheDocument()
+  })
+
+  it('compares the valid creators and names the unknown key instead of blanking', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({ canonical_creator_key: 'creator:7', display_name: 'Brian K. Vaughan' }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:7,creator:7,creator:99999999')
+
+    expect(mockedHook).toHaveBeenCalledWith(['creator:7', 'creator:99999999'])
+    expect(screen.getByText('Comparing 1 creator')).toBeInTheDocument()
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('One or more requested creators could not be included')
+    expect(alert).toHaveTextContent('Unknown or unavailable creator keys: creator:99999999.')
+  })
+
+  it('names every unknown key when none of them resolve', () => {
+    mockedHook.mockReturnValue(baseHook({ data: makeResponse() }))
+
+    renderAt('creator:99999999,creator:88888888')
+
+    expect(
+      screen.getByText(/None of the selected creators are available in your library/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Unknown or unavailable creator keys: creator:99999999, creator:88888888.'),
+    ).toBeInTheDocument()
+  })
+
+  it('drops the unknown key from the Change selection round trip', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({ canonical_creator_key: 'creator:7', display_name: 'Brian K. Vaughan' }),
+          },
+        }),
+      }),
+    )
+    renderWithCreatorsList('creator:7,creator:99999999')
+
+    expect(screen.getByRole('link', { name: 'Change selection' })).toHaveAttribute(
+      'href',
+      '/creators?keys=creator%3A7',
+    )
+
+    fireEvent.click(screen.getByRole('link', { name: 'Change selection' }))
+
+    expect(screen.getByText('Creators list')).toBeInTheDocument()
+    expect(currentKeysParam()).toBe('creator:7')
+  })
+
+  it('drops the unknown key from the Creators breadcrumb', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({ canonical_creator_key: 'creator:7', display_name: 'Brian K. Vaughan' }),
+          },
+        }),
+      }),
+    )
+    renderWithCreatorsList('creator:7,creator:99999999')
+
+    fireEvent.click(screen.getByRole('link', { name: 'Creators' }))
+
+    expect(currentKeysParam()).toBe('creator:7')
+  })
+})
+
 describe('CreatorComparisonPage return paths', () => {
   function renderResolvedComparison() {
     mockedHook.mockReturnValue(

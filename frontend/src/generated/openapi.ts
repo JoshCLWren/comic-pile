@@ -5527,6 +5527,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/check-duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Potential Duplicates
+         * @description Report the reader's series that may already be this volume (#3612).
+         *
+         *     Advisory only. A confirmed ComicVine volume is reported as a strong match;
+         *     title resemblance is reported as an uncertain suggestion so same-titled
+         *     volumes remain creatable and renameable. Nothing is written, merged, or
+         *     deleted by checking.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         check_data: Proposed title, format, optional ComicVine volume, and the
+         *             thread to exclude when checking a rename.
+         *         current_user: The authenticated reader.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         Possible existing volumes, strongest match first.
+         */
+        post: operations["check_potential_duplicates_api_v1_threads_check_duplicates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/completed": {
         parameters: {
             query?: never;
@@ -8032,6 +8067,40 @@ export interface components {
             provider_updated_at?: number | null;
             /** Updated At */
             updated_at: number;
+        };
+        /**
+         * CheckPotentialDuplicatesRequest
+         * @description Request to check for possible existing volumes before create or rename.
+         */
+        CheckPotentialDuplicatesRequest: {
+            /**
+             * Comicvine Volume Id
+             * @description Canonical ComicVine volume ID when the candidate has one
+             */
+            comicvine_volume_id?: number | null;
+            /**
+             * Exclude Thread Id
+             * @description Thread to exclude from results, so a rename never warns about itself
+             */
+            exclude_thread_id?: number | null;
+            /**
+             * Format
+             * @description Proposed series format
+             */
+            format: string;
+            /**
+             * Title
+             * @description Proposed series title
+             */
+            title: string;
+        };
+        /**
+         * CheckPotentialDuplicatesResponse
+         * @description Possible existing volumes, strongest match first.
+         */
+        CheckPotentialDuplicatesResponse: {
+            /** Matches */
+            matches?: components["schemas"]["PotentialDuplicateMatch"][];
         };
         /**
          * CollectionExclusionCreate
@@ -12717,6 +12786,64 @@ export interface components {
             /** New Position */
             new_position: number;
         };
+        /**
+         * PotentialDuplicateMatch
+         * @description One existing series that may already represent the proposed series.
+         *
+         *     Advisory only: a title resemblance is never treated as identity, and nothing
+         *     about an existing series is merged, deleted, or rewritten by producing this
+         *     match.
+         */
+        PotentialDuplicateMatch: {
+            /**
+             * Comicvine Volume Id
+             * @description ComicVine volume the existing series is confirmed as, when known. For a title-only match this is context, never proof of identity.
+             */
+            comicvine_volume_id?: number | null;
+            /**
+             * Format
+             * @description Normalized format of the existing series
+             */
+            format: string;
+            /**
+             * Issues Remaining
+             * @description Unread issues on the existing series
+             */
+            issues_remaining: number;
+            /** @description ``same_comicvine_volume`` only when canonical provider identity matches; ``similar_title`` is an uncertain suggestion */
+            match_type: components["schemas"]["PotentialDuplicateMatchType"];
+            /**
+             * Start Year
+             * @description Confirmed ComicVine publication start year, when known
+             */
+            start_year?: number | null;
+            /**
+             * Status
+             * @description Current status of the existing series
+             */
+            status: string;
+            /**
+             * Thread Id
+             * @description Stable ID of the reader's existing thread
+             */
+            thread_id: number;
+            /**
+             * Title
+             * @description Display title of the existing series
+             */
+            title: string;
+            /**
+             * Total Issues
+             * @description Tracked issue total, or None for counter-based series
+             */
+            total_issues?: number | null;
+        };
+        /**
+         * PotentialDuplicateMatchType
+         * @description How strongly an existing series resembles the proposed series.
+         * @enum {string}
+         */
+        PotentialDuplicateMatchType: "same_comicvine_volume" | "similar_title";
         /**
          * PrerequisiteCreate
          * @description Create one stable pair; provenance is server-controlled.
@@ -23491,6 +23618,39 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+        };
+    };
+    check_potential_duplicates_api_v1_threads_check_duplicates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckPotentialDuplicatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckPotentialDuplicatesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

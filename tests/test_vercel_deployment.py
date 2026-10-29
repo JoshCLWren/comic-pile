@@ -130,12 +130,13 @@ def _route_html_rule() -> dict[str, object]:
 
 
 def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
-    """Ensure production builds independent static and Python outputs."""
+    """Ensure production builds independent static, Node, and Python outputs."""
     config = _load_vercel_config()
     builds = config["builds"]
 
     assert builds == [
         {"src": "api/index.py", "use": "@vercel/python"},
+        {"src": "api/auth/me.ts", "use": "@vercel/node"},
         {
             "src": "package.json",
             "use": "@vercel/static-build",
@@ -154,23 +155,28 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
     """Ensure API and documentation requests cannot be swallowed by the SPA."""
     routes = _routes(_load_vercel_config())
 
-    assert routes[0] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
-    assert routes[1] == {
+    assert routes[0] == {
+        "src": "/api/v1/auth/me",
+        "methods": ["GET"],
+        "dest": "/api/auth/me.ts",
+    }
+    assert routes[1] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
+    assert routes[2] == {
         "src": "/(?:openapi\\.json|docs|redoc|health)",
         "dest": "/api/index.py",
     }
-    assert routes[2]["src"] == "/"
-    assert routes[2]["dest"] == "/index.html"
-    # Route 3 is the /assets/.+ cache headers route (added for edge caching)
-    assert routes[3] == {
+    assert routes[3]["src"] == "/"
+    assert routes[3]["dest"] == "/index.html"
+    # Route 4 is the /assets/.+ cache headers route (added for edge caching)
+    assert routes[4] == {
         "src": "/assets/.+",
         "continue": True,
         "headers": {"Cache-Control": "public, max-age=31536000, immutable"},
     }
-    # Route 4 serves the build's generated route HTML pages (see
+    # Route 5 serves the build's generated route HTML pages (see
     # test_vercel_route_html_rule_serves_every_generated_page).
-    assert routes[4] == _route_html_rule()
-    assert routes[5] == {"handle": "filesystem"}
+    assert routes[5] == _route_html_rule()
+    assert routes[6] == {"handle": "filesystem"}
     assert routes[-1]["src"] == "/(.*)"
     assert routes[-1]["dest"] == "/index.html"
 
@@ -179,7 +185,7 @@ def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
     """Ensure static HTML remains identifiable and receives browser protections."""
     routes = _routes(_load_vercel_config())
 
-    for route in (routes[2], routes[4], routes[-1]):
+    for route in (routes[3], routes[5], routes[-1]):
         headers = _headers(route)
         assert headers["X-ComicPile-Frontend"] == "vercel-static"
         assert headers["Cache-Control"] == "public, max-age=0, must-revalidate"
@@ -195,9 +201,9 @@ def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
 
     # Only the landing route is indexable; every other HTML response the
     # routing layer serves must state its non-indexability.
-    landing_headers = _headers(routes[2])
+    landing_headers = _headers(routes[3])
     assert "X-Robots-Tag" not in landing_headers
-    for route in (routes[4], routes[-1]):
+    for route in (routes[5], routes[-1]):
         assert _headers(route)["X-Robots-Tag"] == "noindex, nofollow"
 
 
@@ -209,7 +215,7 @@ def test_vercel_route_html_rule_serves_every_generated_page() -> None:
     such as ``/creators/compare`` map to ``/creators/compare.html``.
     """
     routes = _routes(_load_vercel_config())
-    html_rule = routes[4]
+    html_rule = routes[5]
 
     assert html_rule == _route_html_rule()
 
@@ -231,7 +237,7 @@ def test_vercel_route_html_rule_lists_exactly_the_generated_alternatives() -> No
     SPA. This assertion fails the configuration change in both directions.
     """
     routes = _routes(_load_vercel_config())
-    src_pattern = str(routes[4]["src"])
+    src_pattern = str(routes[5]["src"])
     suffix = ")(\\.html)?"
 
     assert src_pattern.startswith("/(")
@@ -245,14 +251,69 @@ def test_vercel_route_html_rule_lists_exactly_the_generated_alternatives() -> No
 def test_vercel_dynamic_route_pages_fall_through_to_the_spa_fallback() -> None:
     """Parameterized pages keep the app fallback and SPA noindex robots header."""
     routes = _routes(_load_vercel_config())
-    src_pattern = str(routes[4]["src"])
+    src_pattern = str(routes[5]["src"])
 
     for path in DYNAMIC_ROUTE_PROBES:
         matched = re.fullmatch(src_pattern, path)
         assert matched is None, f"{path} must fall through to the SPA, not a static file"
 
-    assert routes[5] == {"handle": "filesystem"}
+    assert routes[6] == {"handle": "filesystem"}
     fallback = routes[-1]
     assert fallback["src"] == "/(.*)"
     assert fallback["dest"] == "/index.html"
     assert _headers(fallback)["X-Robots-Tag"] == "noindex, nofollow"
+
+
+_RELATIVE_MODULE_SPECIFIER_RE = re.compile(
+    r"""(?:from|import)\s+['"](\.[^'"]+)['"]""",
+)
+
+
+def test_vercel_node_typescript_relative_imports_use_js_extensions() -> None:
+    """Node ESM on Vercel cannot load extensionless relative imports.
+
+    ``@vercel/node`` compiles ``api/auth/me.ts`` to ``me.js`` and leaves import
+    specifiers intact. With ``"type": "module"``, ``from '../src/auth'`` becomes
+    ``ERR_MODULE_NOT_FOUND`` for ``/var/task/api/src/auth`` (issue #4295).
+    """
+    offenders: list[str] = []
+    api_root = REPOSITORY_ROOT / "api"
+    for source in sorted(api_root.rglob("*.ts")):
+        if "node_modules" in source.parts:
+            continue
+        text = source.read_text(encoding="utf-8")
+        for match in _RELATIVE_MODULE_SPECIFIER_RE.finditer(text):
+            specifier = match.group(1)
+            if not specifier.endswith(".js"):
+                relative = source.relative_to(REPOSITORY_ROOT)
+                offenders.append(f"{relative}: {specifier}")
+    assert offenders == [], (
+        "Vercel Node ESM requires relative imports to use .js extensions; "
+        + "; ".join(offenders)
+    )
+
+
+def test_node_auth_route_is_isolated_from_python_and_static_routes() -> None:
+    """Only the GET bootstrap moves to Node; all other API calls stay Python."""
+    routes = _routes(_load_vercel_config())
+    probes = (
+        ("GET", "/api/v1/auth/me", "/api/auth/me.ts"),
+        ("POST", "/api/v1/auth/me", "/api/index.py"),
+        ("POST", "/api/v1/auth/refresh", "/api/index.py"),
+        ("GET", "/api/v1/roll/bootstrap", "/api/index.py"),
+        ("GET", "/api/v2/reading-boundaries", "/api/index.py"),
+        ("GET", "/health", "/api/index.py"),
+        ("GET", "/", "/index.html"),
+    )
+    for method, path, expected in probes:
+        for route in routes:
+            if "src" not in route:
+                continue
+            methods = cast("list[str]", route.get("methods", [method]))
+            if method not in methods:
+                continue
+            if re.fullmatch(str(route["src"]), path):
+                assert route.get("dest") == expected, (method, path)
+                break
+        else:
+            raise AssertionError(f"No route for {method} {path}")

@@ -22,8 +22,9 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.config import get_app_settings
 from app.main import create_app
-from app.router_mounts import EAGER_SEGMENTS, request_segment
+from app.router_mounts import EAGER_SEGMENTS, build_router_mounts, request_segment, select_mounts_for_path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 API_FALLBACK_PATH = "/api/{path:path}"
@@ -125,26 +126,62 @@ def _api_route_signatures(app) -> set[tuple[str, frozenset[str]]]:
 
 
 def test_every_eager_api_route_is_reachable_from_its_selected_mounts() -> None:
-    """A request for any eager API route must load a mount that serves it."""
+    """Each path must register its owner even when mounts share a segment.
+
+    Group by the exact selected mounts, not just the resource segment: Roll's
+    prerequisite switch intentionally needs a different cold router set from
+    ordinary Roll bootstrap requests.
+    """
     eager_signatures = _api_route_signatures(create_app(serve_frontend=False))
     assert eager_signatures
 
-    signatures_by_segment: dict[str, set[tuple[str, frozenset[str]]]] = {}
-    for signature in eager_signatures:
-        signatures_by_segment.setdefault(request_segment(signature[0]), set()).add(signature)
-
-    for segment, expected in signatures_by_segment.items():
-        if segment in EAGER_SEGMENTS:
+    mounts = build_router_mounts(get_app_settings().environment)
+    grouped: dict[
+        tuple[str, ...], tuple[str, set[tuple[str, frozenset[str]]]]
+    ] = {}
+    for signature in sorted(eager_signatures, key=lambda item: item[0]):
+        path = signature[0]
+        if request_segment(path) in EAGER_SEGMENTS:
             continue
-        # One fresh deferred application per resource segment proves the mounts
-        # selected for that segment register every route the eager app exposes.
+        selected = tuple(mount.key for mount in select_mounts_for_path(path, mounts))
+        if selected not in grouped:
+            grouped[selected] = (path, set())
+        grouped[selected][1].add(signature)
+
+    for selected, (sample_path, expected) in grouped.items():
         app = create_app(serve_frontend=False, defer_router_imports=True)
-        sample_path = next(iter(expected))[0]
         app.state.register_routers_for_path(sample_path)
         registered = _route_signatures(app)
         missing = sorted(expected - registered)
-        assert not missing, f"segment {segment!r} is not covered; missing {missing}"
+        assert not missing, (
+            f"mounts {selected!r} for {sample_path!r} miss {missing}"
+        )
 
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/roll/bootstrap",
+        "/api/v1/roll/bootstrap",
+        "/api/v2/roll/bootstrap",
+    ],
+)
+@pytest.mark.asyncio
+async def test_first_roll_bootstrap_skips_dependency_subrouters(path: str) -> None:
+    """A cold Roll GET needs Roll alone, not all continuity/CBL APIs."""
+    app = create_app(serve_frontend=False, defer_router_imports=True)
+    assert PREREQUISITE_SWITCH_PATH not in _route_paths(app)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(path)
+
+    # The Roll router answered (unauthenticated), without the dependency
+    # router whose only /roll endpoint is POST switch-prerequisite.
+    assert response.status_code == 401
+    paths = _route_paths(app)
+    assert path in paths
+    assert PREREQUISITE_SWITCH_PATH not in paths
 
 @pytest.mark.asyncio
 async def test_first_snooze_request_registers_only_the_snooze_mount() -> None:

@@ -30,6 +30,8 @@ from app.repositories import (
 from app.schemas import (
     ComicVineMappingHealth,
     ComicVineMappingStatus,
+    PotentialDuplicateMatch,
+    PotentialDuplicateMatchType,
     QueueSeriesMetadata,
     QueueThreadListItem,
     QueueThreadListResponse,
@@ -62,10 +64,14 @@ from app.services.queue_pagination import (
     normalize_queue_search,
 )
 from app.services.thread_issue_stats import load_issue_stats
+from app.services.title_similarity import MIN_TITLE_SIMILARITY, title_similarity
 from comic_pile.reading_session import get_current_die, get_or_create
 from comic_pile.dependencies import format_blocking_reason, get_blocking_explanations
 
 logger = logging.getLogger(__name__)
+
+#: Maximum possible-existing-volume matches returned by one advisory check.
+MAX_POTENTIAL_DUPLICATE_MATCHES = 5
 
 
 async def _require_owned_thread(
@@ -800,6 +806,116 @@ async def active_threads_html(db: AsyncSession, user_id: int) -> str:
         for thread in threads
     )
     return items or '<p class="text-gray-500 text-center py-4">No active threads available</p>'
+
+
+async def find_potential_duplicate_matches(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    title: str,
+    format_value: str,
+    comicvine_volume_id: int | None = None,
+    exclude_thread_id: int | None = None,
+) -> list[PotentialDuplicateMatch]:
+    """Find the reader's existing series that may already be this volume.
+
+    Canonical ComicVine volume identity is the only strong match. Title
+    resemblance produces an explicitly uncertain suggestion, because real comic
+    volumes legitimately share titles across relaunches, editions, and formats.
+    Publication year, format, and the existing thread's own volume accompany
+    every match as disambiguating context.
+
+    This function is read-only: viewing a warning never merges, deletes, or
+    rewrites reader data.
+
+    Args:
+        db: Database session.
+        user_id: Owner whose library is searched.
+        title: Proposed series title.
+        format_value: Proposed series format (normalized before use).
+        comicvine_volume_id: Canonical ComicVine volume ID when the candidate
+            has one.
+        exclude_thread_id: Thread to leave out, so a rename never warns about
+            the series being renamed.
+
+    Returns:
+        Possible existing volumes, strong matches first, then title matches by
+        descending resemblance.
+    """
+    strong_threads: list[Thread] = []
+    if comicvine_volume_id is not None:
+        strong_threads = await thread_repository.find_owned_threads_linked_to_comicvine_volume(
+            db,
+            user_id,
+            comicvine_volume_id,
+            exclude_thread_id=exclude_thread_id,
+        )
+
+    normalized_format = normalize_format_value(format_value)
+    strong_ids = {thread.id for thread in strong_threads}
+    considered: list[tuple[float, bool, Thread]] = []
+    for thread in await thread_repository.find_owned_threads_with_similar_titles(
+        db,
+        user_id,
+        title,
+        exclude_thread_id=exclude_thread_id,
+    ):
+        if thread.id in strong_ids:
+            continue
+        similarity = title_similarity(title, thread.title)
+        if similarity >= MIN_TITLE_SIMILARITY:
+            considered.append(
+                (similarity, normalize_format_value(thread.format) == normalized_format, thread)
+            )
+
+    # Strong identity matches are always shown. Title resemblance fills the
+    # remaining slots, best first. The proposed format is disambiguating context
+    # only: a same-format edition ranks above a cross-format one at equal
+    # resemblance, and thread ID keeps the order deterministic.
+    considered.sort(key=lambda entry: (-entry[0], not entry[1], entry[2].id))
+    remaining_slots = max(MAX_POTENTIAL_DUPLICATE_MATCHES - len(strong_threads), 0)
+    candidates: list[tuple[Thread, PotentialDuplicateMatchType]] = [
+        (thread, PotentialDuplicateMatchType.SAME_COMICVINE_VOLUME) for thread in strong_threads
+    ] + [
+        (thread, PotentialDuplicateMatchType.SIMILAR_TITLE)
+        for _similarity, _same_format, thread in considered[:remaining_slots]
+    ]
+
+    series_context = await thread_repository.fetch_confirmed_comicvine_series_by_thread(
+        db,
+        user_id,
+        [thread.id for thread, _match_type in candidates],
+    )
+    unread_counts, _next_unread_numbers = await load_issue_stats(
+        [thread for thread, _match_type in candidates], db
+    )
+
+    matches: list[PotentialDuplicateMatch] = []
+    for thread, match_type in candidates:
+        existing_volume_id, metadata = series_context.get(thread.id, (None, {}))
+        start_year = _coerce_publication_year(metadata.get("start_year"))
+        if start_year is None:
+            # Series identities exported from an issue-shaped document may carry
+            # a publication date instead of a provider start year.
+            start_year = publication_year_from_metadata(metadata)
+        matches.append(
+            PotentialDuplicateMatch(
+                thread_id=thread.id,
+                title=thread.title,
+                format=normalize_format_value(thread.format),
+                status=thread.status,
+                issues_remaining=(
+                    unread_counts.get(thread.id, 0)
+                    if thread.uses_issue_tracking()
+                    else thread.issues_remaining
+                ),
+                total_issues=thread.total_issues,
+                comicvine_volume_id=existing_volume_id,
+                start_year=start_year,
+                match_type=match_type,
+            )
+        )
+    return matches
 
 
 async def create_thread_with_retry(

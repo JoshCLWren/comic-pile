@@ -29,7 +29,9 @@ export function isDefinitiveAuthenticationFailure(error: unknown): boolean {
     return false
   }
 
-  return error.response?.status === 401
+  return error.response?.status === 401 || (
+    error.response?.status === 403 && error.response.data?.detail === 'Not authenticated'
+  )
 }
 
 export function isServiceUnavailable(error: unknown): boolean {

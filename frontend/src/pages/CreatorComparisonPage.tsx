@@ -526,13 +526,18 @@ export default function CreatorComparisonPage() {
   // rejected as malformed while the hook would have trimmed it.
   const keys = keysParam ? keysParam.split(',').map((k: string) => k.trim()).filter(Boolean) : []
 
-  // Every in-app route back to the list carries the current identities, so the
-  // reader lands with the same checkboxes selected and can adjust the set
-  // instead of rebuilding it (#3624). The list validates and deduplicates them.
-  const creatorsReturnUrl =
-    keys.length > 0 ? `/creators?keys=${encodeURIComponent(keys.join(','))}` : '/creators'
+  // Deduplicate the raw URL keys up front so a deep link that repeats an
+  // identity (or mixes in an unknown one) does not blank the whole comparison
+  // (#4208). The hook also normalizes, but the page's validation and return
+  // links must use the cleaned set.
+  const uniqueKeys = Array.from(new Set(keys))
 
-  const { data, isPending, isError, error } = useCreatorComparison(keys.length > 0 ? keys : null)
+  // Route back to the list with the cleaned (deduped) identities; refined below
+  // once the comparison resolves which keys are actually available.
+  const creatorsReturnUrl =
+    uniqueKeys.length > 0 ? `/creators?keys=${encodeURIComponent(uniqueKeys.join(','))}` : '/creators'
+
+  const { data, isPending, isError, error } = useCreatorComparison(uniqueKeys.length > 0 ? uniqueKeys : null)
 
   // Metric evidence view state (issue #3460). Clicking any headline metric,
   // distribution bucket, role or series rating opens this drilldown so the
@@ -561,9 +566,8 @@ export default function CreatorComparisonPage() {
     setActiveModal({ isOpen: true, creatorKey, metricType, metricLabel, initialParams: params })
   }
 
-  const invalidSyntax = keys.some((k: string) => parseCreatorKey(k.trim()) === null)
-  const duplicateKeys = keys.length !== new Set(keys).size
-  const inputInvalid = keys.length < 2 || keys.length > 4 || invalidSyntax || duplicateKeys
+  const invalidSyntax = uniqueKeys.some((k: string) => parseCreatorKey(k.trim()) === null)
+  const inputInvalid = uniqueKeys.length < 2 || uniqueKeys.length > 4 || invalidSyntax
 
   if (inputInvalid) {
     // A count problem (fewer than 2 or more than 4 keys) states the accepted
@@ -571,9 +575,9 @@ export default function CreatorComparisonPage() {
     // prompt and the accepted-input explanation both stay discoverable (#3462).
     // Malformed syntax keeps its own readable explanation; duplicate keys fall
     // back to the pre-existing generic prompt.
-    const countExplanation = keys.length > 4
+    const countExplanation = uniqueKeys.length > 4
       ? 'Comparison accepts 2 to 4 creator keys (format creator:<id>, separated by commas). Select 2 to 4 creators from the Creators page to compare them.'
-      : keys.length < 2
+      : uniqueKeys.length < 2
         ? 'Comparison requires 2 to 4 creator keys (format creator:<id>, separated by commas). Select 2 to 4 creators from the Creators page to compare them.'
         : null
     const syntaxExplanation = invalidSyntax
@@ -605,9 +609,9 @@ export default function CreatorComparisonPage() {
             >
               Back to Creators
             </Link>
-            {keys.length > 0 && (
+            {uniqueKeys.length > 0 && (
               <Link
-                to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
+                to={creatorsReturnUrl}
                 className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                 style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
               >
@@ -627,8 +631,8 @@ export default function CreatorComparisonPage() {
         <h1 className="mt-1 text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
-<div className={`mt-6 grid gap-6 ${comparisonGridClasses(keys.length)}`}>
-          {[0, 1, 2, 3].slice(0, keys.length).map((i) => (
+<div className={`mt-6 grid gap-6 ${comparisonGridClasses(uniqueKeys.length)}`}>
+          {[0, 1, 2, 3].slice(0, uniqueKeys.length).map((i) => (
             <div key={i} className="h-72 animate-pulse rounded-2xl" style={{ backgroundColor: 'var(--theme-bg-panel)' }} />
           ))}
         </div>
@@ -668,9 +672,9 @@ export default function CreatorComparisonPage() {
           >
             Back to Creators
           </Link>
-          {keys.length > 0 && (
+          {uniqueKeys.length > 0 && (
             <Link
-              to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
+              to={creatorsReturnUrl}
               className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
             >
@@ -693,16 +697,24 @@ export default function CreatorComparisonPage() {
   )
 
   const resolvedKeys = new Set(Object.keys(data.comparisons))
-  const missingRequestedCount = keys.filter((k: string) => !resolvedKeys.has(k)).length
-  const hasMixedResult = missingRequestedCount > 0 && comparisonItems.length > 0
+  // Keys that did not resolve to a visible creator, so feedback can name them
+  // instead of silently dropping them (#4208).
+  const missingKeys = uniqueKeys.filter((k: string) => !resolvedKeys.has(k))
+  const hasMixedResult = missingKeys.length > 0 && comparisonItems.length > 0
 
-  // Build the change selection URL with the currently resolved creator keys
-  const changeSelectionKeys = Array.from(resolvedKeys).join(',')
-  const changeSelectionUrl = `/creators?keys=${encodeURIComponent(changeSelectionKeys)}`
+  // Every route back to the list once the comparison has resolved carries only
+  // the identities that actually resolved, so unknown or unavailable keys are
+  // dropped instead of being handed straight back to the selection URL (#4208).
+  // Before resolution (invalid input or a failed request) the deduped request
+  // set is the best available answer.
+  const resolvedReturnUrl =
+    resolvedKeys.size > 0
+      ? `/creators?keys=${encodeURIComponent(Array.from(resolvedKeys).join(','))}`
+      : creatorsReturnUrl
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
-      <Breadcrumbs items={[{ label: 'Creators', to: creatorsReturnUrl }, { label: 'Compare' }]} />
+      <Breadcrumbs items={[{ label: 'Creators', to: resolvedReturnUrl }, { label: 'Compare' }]} />
       <header className="mt-4 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
@@ -713,7 +725,7 @@ export default function CreatorComparisonPage() {
           </p>
           {comparisonItems.length > 0 && (
             <Link
-              to={changeSelectionUrl}
+              to={resolvedReturnUrl}
               className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
             >
@@ -735,6 +747,9 @@ export default function CreatorComparisonPage() {
           <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
             <strong>Note:</strong> One or more requested creators could not be included in this comparison.
             The comparison reflects only the creators available in your library.
+          </p>
+          <p className="mt-1 text-sm" style={{ color: 'var(--theme-text-primary)' }}>
+            Unknown or unavailable creator keys: {missingKeys.join(', ')}.
           </p>
         </div>
       )}
@@ -793,9 +808,14 @@ export default function CreatorComparisonPage() {
             None of the selected creators are available in your library — the comparison can
             only include creators with issues credited to them in your library.
           </p>
+          {missingKeys.length > 0 && (
+            <p className="mt-1 text-sm" style={{ color: 'var(--theme-text-primary)' }}>
+              Unknown or unavailable creator keys: {missingKeys.join(', ')}.
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap gap-2">
             <Link
-              to={creatorsReturnUrl}
+              to={resolvedReturnUrl}
               className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               style={{ color: 'var(--theme-text-muted)' }}
             >
@@ -803,7 +823,7 @@ export default function CreatorComparisonPage() {
             </Link>
             {keys.length > 0 && (
               <Link
-                to={`/creators?keys=${encodeURIComponent(keys.join(','))}`}
+                to={resolvedReturnUrl}
                 className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                 style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
               >

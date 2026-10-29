@@ -477,3 +477,42 @@ test('3624 - Change selection returns with editable restored checkboxes', async 
   await expect(page.getByText('1 of 4 selected for comparison')).toBeVisible()
   expect(new URL(page.url()).searchParams.get('keys')).toBe('creator:12')
 })
+
+/**
+ * Issue #4208: the #3624 dedupe/validate contract. A repeated identity must not
+ * be counted twice, and an unknown key must be named instead of blanking the
+ * comparison, consuming a selection slot, or riding back through Change
+ * selection.
+ */
+test('4208 - duplicate and unknown keys are named, never counted or trusted', async ({
+  authenticatedPage,
+}) => {
+  const page = authenticatedPage
+  await page.setViewportSize(DESKTOP_VIEWPORT)
+  await installCreatorsList(page)
+  const compareRequests = await installCreatorComparison(page, {
+    'creator:7': comparisonItem('creator:7', 'Brian K. Vaughan'),
+  })
+
+  // The exact QA deep link: one real creator, one repeated identity, one bogus key.
+  await page.goto('/creators/compare?keys=creator:7,creator:7,creator:99999999')
+
+  await expect(page.getByText('Comparing 1 creator')).toBeVisible({ timeout: 20000 })
+  await expect(page.getByRole('alert')).toContainText('creator:99999999')
+  expect(compareRequests).toHaveLength(1)
+
+  // The unknown key is dropped on the way back instead of being handed over.
+  await page.getByRole('link', { name: 'Change selection' }).click()
+  await expect(page).toHaveURL(/\/creators\?keys=creator%3A7$/)
+  await expect(page.getByText('1 of 4 selected for comparison')).toBeVisible()
+  await expect(page.getByLabel('Select Brian K. Vaughan for comparison')).toBeChecked()
+  await expect(page.getByLabel('Select Steve McNiven for comparison')).not.toBeChecked()
+  expect(new URL(page.url()).searchParams.get('keys')).toBe('creator:7')
+
+  // A duplicated list URL collapses to one identity per creator.
+  await page.goto('/creators?keys=creator:7,creator:7,creator:12,creator:12')
+  await expect(page.getByText('2 of 4 selected for comparison')).toBeVisible()
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('keys'))
+    .toBe('creator:7,creator:12')
+})
