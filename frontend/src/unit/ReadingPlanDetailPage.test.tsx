@@ -209,8 +209,8 @@ const readerView: ReadingPlanReaderView = {
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetReader.mockResolvedValue(readerView)
-  mockSetPending.mockResolvedValue({ thread_id: 4, issue_id: 95 } as Awaited<ReturnType<typeof threadsApi.setPending>>)
-  mockMoveToFront.mockResolvedValue(undefined as Awaited<ReturnType<typeof queueApi.moveToFront>>)
+  mockSetPending.mockResolvedValue(cast<Awaited<ReturnType<typeof threadsApi.setPending>>>({ thread_id: 4, issue_id: 95 }))
+  mockMoveToFront.mockResolvedValue(cast<Awaited<ReturnType<typeof queueApi.moveToFront>>>(undefined))
   mockPlanTags.mockResolvedValue({
     target_type: 'ContinuityPlan',
     target_id: 12,
