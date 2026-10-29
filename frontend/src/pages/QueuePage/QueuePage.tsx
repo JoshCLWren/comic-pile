@@ -150,7 +150,8 @@ export default function QueuePage() {
     activeThreads,
     modals,
     session,
-    positionActionsAvailable: sortBy === 'position',
+    positionActionsAvailable: true, // Position actions always available
+    sortBy,
   })
 
   const handleRepositionConfirm = useCallback(

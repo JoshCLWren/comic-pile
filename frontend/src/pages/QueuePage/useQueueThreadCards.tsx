@@ -25,6 +25,8 @@ interface UseQueueThreadCardsParams {
   session?: SessionCurrent | null
   /** Whether position-based actions (move to front/back, reposition) apply. */
   positionActionsAvailable?: boolean
+  /** Current sort mode to determine drag handle visibility. */
+  sortBy?: 'position' | 'alphabetical' | 'created'
 }
 
 /**
@@ -47,6 +49,7 @@ export function useQueueThreadCards({
   modals,
   session,
   positionActionsAvailable = true,
+  sortBy = 'position',
 }: UseQueueThreadCardsParams) {
   const navigate = useNavigate()
   const boundaryThreadIds = useMemo(() => activeThreads.map((thread) => thread.id), [activeThreads])
@@ -136,10 +139,11 @@ export function useQueueThreadCards({
           onDelete={() => actions.requestDelete(thread)}
           onRemoveFromQueue={() => actions.requestRemove(thread)}
           positionActionsAvailable={positionActionsAvailable}
+          sortBy={sortBy}
         />
       )
     },
-    [actions, activeThreads, boundaryData, boundaryPending, legacyBlockingByThreadId, crossovers, modals, navigate, session, snoozedThreadIds, positionActionsAvailable],
+    [actions, activeThreads, boundaryData, boundaryPending, legacyBlockingByThreadId, crossovers, modals, navigate, session, snoozedThreadIds, positionActionsAvailable, sortBy],
   )
 
   // One shared failure notice belongs above the list; repeating an error and

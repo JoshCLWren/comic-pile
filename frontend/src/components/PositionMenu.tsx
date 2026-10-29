@@ -26,6 +26,7 @@ interface PositionMenuProps {
    */
   snoozeDisabledReason?: string
   onSnooze?: (thread: ThreadListItem) => void
+  sortBy?: 'position' | 'alphabetical' | 'created'
 }
 
 export default function PositionMenu({
@@ -43,6 +44,7 @@ export default function PositionMenu({
   snoozeDisabledReason = SNOOZE_REQUIRES_PENDING_SERIES_REASON,
   onSnooze,
   positionActionsAvailable = true,
+  sortBy = 'position',
 }: PositionMenuProps) {
   const { openThreadId, closeMenu: closeContextMenu, openMenu, toggleMenu } = usePositionMenu()
   const isOpen = openThreadId === thread.id
@@ -211,6 +213,7 @@ export default function PositionMenu({
             label: 'Move to Front',
             icon: '\u2B06',
             ariaLabel: 'Move to front',
+            title: sortBy !== 'position' ? 'Moves to position 1 in position order' : undefined,
             action: () => {
               onMoveToFront(thread.id)
               // The action handler restores focus to this row's trigger once the
@@ -223,6 +226,7 @@ export default function PositionMenu({
             label: 'Reposition\u2026',
             icon: '\u2261',
             ariaLabel: 'Reposition series',
+            title: sortBy !== 'position' ? 'Changes position in position order' : undefined,
             action: () => {
               onReposition(thread)
               // The reposition modal should manage focus restoration.
@@ -233,6 +237,7 @@ export default function PositionMenu({
             label: 'Move to Back',
             icon: '\u2193',
             ariaLabel: 'Move to back',
+            title: sortBy !== 'position' ? 'Moves to last position in position order' : undefined,
             action: () => {
               onMoveToBack(thread.id)
               // Same as Move to Front.
