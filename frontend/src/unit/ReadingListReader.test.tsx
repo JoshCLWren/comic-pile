@@ -43,6 +43,8 @@ it('shows every blocker, exact issue links and list-local skip without enabling 
   expect(screen.getByRole('link', { name: 'Open Starman issue #55' })).toHaveTextContent('Reader prerequisite: waiting on Starman #55')
   expect(screen.getByText(/Skipped only in this list/)).toBeVisible()
   expect(screen.getAllByRole('button', { name: 'Mark read' })).toHaveLength(1)
+  expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(1)
+  expect(screen.getAllByRole('button', { name: 'Move to front' })).toHaveLength(1)
 })
 
 it('marks the exact offered issue and refreshes the reader plus other eligibility surfaces', async () => {
@@ -93,6 +95,8 @@ it('shows read, later, excluded and inactive states without offering unavailable
   expect(screen.getByText('Excluded from your collection')).toBeVisible()
   expect(screen.getByText('Series is inactive')).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Mark read' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
   await waitFor(() => expect(issuesApi.markUnread).toHaveBeenCalledWith(10))
   expect(issuesApi.markRead).not.toHaveBeenCalled()
