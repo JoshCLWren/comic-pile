@@ -10,14 +10,16 @@ const DIE_LABEL_PATTERN = /^d(\d+)$/
  * `POST /roll/clear-manual-die` documents and tests that it answers with the
  * automatic die the ladder resumes at once the manual override is gone
  * (`tests/test_roll_api.py::test_clear_manual_die_returns_correct_current_die_regression`).
- * Reading it here is what lets the Roll page apply the authoritative die
- * immediately instead of guessing or waiting for a bootstrap refetch (#4279).
+ * The endpoint declares `response_class=HTMLResponse` and returns plain text, so
+ * the request is read with `responseType: 'text'` and that text is decoded here
+ * at the I/O boundary. Reading it is what lets the Roll page apply the
+ * authoritative die immediately instead of guessing or waiting for a bootstrap
+ * refetch (#4279).
  *
- * @param label - Raw response body from a die-mode endpoint.
+ * @param label - Plain-text response body from a die-mode endpoint.
  * @returns The die size, or null when the body is not a die label.
  */
-function parseDieLabel(label: unknown): number | null {
-  if (typeof label !== 'string') return null
+function parseDieLabel(label: string): number | null {
   const match = DIE_LABEL_PATTERN.exec(label.trim())
   return match ? Number(match[1]) : null
 }
@@ -37,7 +39,11 @@ export function createRollApi(client: HttpClient) {
     reroll: () => client.post<RollResponse>('/v1/roll/'),
     setDie: (die: number) => client.post<void>('/v1/roll/set-die', null, { params: { die } }),
     clearManualDie: async () =>
-      parseDieLabel(await client.post<unknown>('/v1/roll/clear-manual-die')),
+      parseDieLabel(
+        await client.post<string>('/v1/roll/clear-manual-die', undefined, {
+          responseType: 'text',
+        }),
+      ),
   }
 }
 

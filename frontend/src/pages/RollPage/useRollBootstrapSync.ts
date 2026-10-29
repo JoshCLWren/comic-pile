@@ -50,7 +50,7 @@ export function useRollBootstrapSync({
       setRolledResult(lastRolledResult)
       setDiceState('rolled')
     }
-  }, [manualDie, currentDie, lastRolledResult])
+  }, [manualDie, currentDie, lastRolledResult, setCurrentDie, setRolledResult, setDiceState])
 
   useEffect(() => {
     const staleFromBootstrap = bootstrap?.stale_thread ?? null

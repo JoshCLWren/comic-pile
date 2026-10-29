@@ -17,6 +17,9 @@ beforeEach(() => {
 })
 
 it('uses canonical v1 Roll and rating paths for maintained callers', async () => {
+  // The clear-die endpoint answers with a plain-text die label, so the stub
+  // returns that shape for the canonical-path assertions below.
+  client.post.mockResolvedValue('d6')
   await rollApi.roll()
   await rollApi.reroll()
   await rollApi.override({ thread_id: 7 })
@@ -30,7 +33,9 @@ it('uses canonical v1 Roll and rating paths for maintained callers', async () =>
   expect(client.post).toHaveBeenCalledWith('/v1/roll/override', { thread_id: 7 })
   expect(client.post).toHaveBeenCalledWith('/v1/roll/dismiss-pending')
   expect(client.post).toHaveBeenCalledWith('/v1/roll/set-die', null, { params: { die: 12 } })
-  expect(client.post).toHaveBeenCalledWith('/v1/roll/clear-manual-die')
+  expect(client.post).toHaveBeenCalledWith('/v1/roll/clear-manual-die', undefined, {
+    responseType: 'text',
+  })
   expect(client.post).toHaveBeenCalledWith('/v1/rate/', {
     thread_id: 7,
     rating: 4,
@@ -45,7 +50,7 @@ it('reads the automatic die that clear-manual-die reports (#4279)', async () => 
 })
 
 it('reports no die when the clear-manual-die body is not a die label', async () => {
-  client.post.mockResolvedValueOnce({ detail: 'ok' })
+  client.post.mockResolvedValueOnce('ok')
 
   await expect(rollApi.clearManualDie()).resolves.toBeNull()
 })
