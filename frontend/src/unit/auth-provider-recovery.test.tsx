@@ -799,7 +799,7 @@ describe('bootstrap retry budget and manual recovery race', () => {
 
     // Enable root-level strict mode and verify that the effect runs twice while sharing one request
     // We need to bypass the default test wrapper to put StrictMode at the actual root level
-    const { render } = require('@testing-library/react')
+    const { render } = await vi.importActual<typeof import('@testing-library/react')>('@testing-library/react')
     
     render(
       <StrictMode>
