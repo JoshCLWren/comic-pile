@@ -253,6 +253,77 @@ async fn current_active_thread(
     })))
 }
 
+/// Reconstruct the Python Fibonacci snooze backoff from saved events and
+/// sessions, not just current-session snoozes. A later unsnooze wins.
+async fn durable_snoozed(
+    conn: &deadpool_postgres::Object,
+    user: AuthenticatedUser,
+    candidate_thread_ids: &[i32],
+) -> Result<HashSet<i32>, ApiError> {
+    if candidate_thread_ids.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let rows = conn
+        .query(
+            "SELECT t.id,e.type,extract(epoch from e.timestamp)::float8
+             FROM threads t JOIN events e ON e.thread_id=t.id
+             WHERE t.user_id=$1 AND t.id=ANY($2::int[])
+               AND e.type IN ('snooze','unsnooze')
+               AND (t.last_activity_at IS NULL OR e.timestamp > t.last_activity_at)
+             ORDER BY t.id,e.timestamp,e.id",
+            &[&user.id(), &candidate_thread_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut streaks: HashMap<i32, (i32, f64, Option<f64>)> = HashMap::new();
+    for row in rows {
+        let id: i32 = row.try_get(0).map_err(db::query_error)?;
+        let kind: String = row.try_get(1).map_err(db::query_error)?;
+        let when: f64 = row.try_get(2).map_err(db::query_error)?;
+        let entry = streaks.entry(id).or_insert((0, 0.0, None));
+        if kind == "snooze" {
+            entry.0 = entry.0.saturating_add(1);
+            entry.1 = entry.1.max(when);
+        } else {
+            entry.2 = Some(entry.2.map_or(when, |old| old.max(when)));
+        }
+    }
+    if streaks.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let session_rows = conn
+        .query(
+            "SELECT extract(epoch from started_at)::float8 FROM sessions
+             WHERE user_id=$1 ORDER BY started_at",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let starts: Vec<f64> = session_rows
+        .iter()
+        .map(|row| row.try_get(0).map_err(db::query_error))
+        .collect::<Result<_, _>>()?;
+    let mut excluded = HashSet::new();
+    for (id, (count, latest, unsnoozed)) in streaks {
+        if unsnoozed.is_some_and(|at| at > latest) {
+            continue;
+        }
+        let later = starts.iter().filter(|&&time| time > latest).count() as u64;
+        let pair = ((count as u64) + 1) / 2;
+        let mut previous = 0u64;
+        let mut needed = 1u64;
+        for _ in 0..pair {
+            let next = previous.saturating_add(needed);
+            previous = needed;
+            needed = next;
+        }
+        if later < needed {
+            excluded.insert(id);
+        }
+    }
+    Ok(excluded)
+}
+
 pub async fn bootstrap_v2(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -269,13 +340,17 @@ pub async fn bootstrap_v2(
     let session = &active.session;
     let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
     let snoozed = session.snoozed_thread_ids.clone().unwrap_or_default();
-    let excluded: HashSet<i32> = skipped.iter().chain(snoozed.iter()).copied().collect();
+    let mut excluded: HashSet<i32> = skipped.iter().chain(snoozed.iter()).copied().collect();
     let candidates = validated.eligible_frontiers().map_err(|_| {
         ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Invalid reading constraints",
         )
     })?;
+    let conn = db::checkout(&state).await?;
+    let candidate_thread_ids: Vec<i32> = candidates.iter().map(|c| c.thread_id).collect();
+    let durable = durable_snoozed(&conn, user, &candidate_thread_ids).await?;
+    excluded.extend(&durable);
     let eligible: Vec<_> = candidates
         .iter()
         .filter(|candidate| !excluded.contains(&candidate.thread_id))
@@ -283,7 +358,6 @@ pub async fn bootstrap_v2(
         .collect();
     let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
 
-    let conn = db::checkout(&state).await?;
     let rows = conn
         .query(CANDIDATES, &[&user.id(), &ids])
         .await
@@ -303,7 +377,7 @@ pub async fn bootstrap_v2(
     let summary_rows = conn
         .query(
             "SELECT t.id,t.title,t.format,t.last_activity_at::text,
-          (t.last_activity_at < now() - interval '7 days') AS stale
+          (coalesce(t.last_activity_at,t.created_at) < now() - interval '7 days') AS stale
          FROM threads t WHERE t.user_id=$1 ORDER BY t.queue_position,t.id",
             &[&user.id()],
         )
@@ -315,7 +389,8 @@ pub async fn bootstrap_v2(
         let id: i32 = row.try_get(0).map_err(db::query_error)?;
         let stale_flag: Option<bool> = row.try_get(4).map_err(db::query_error)?;
         let info = thread_value(row)?;
-        if stale_flag.unwrap_or(false) {
+        let eligible_for_stale = candidates.iter().any(|candidate| candidate.thread_id == id);
+        if stale_flag.unwrap_or(false) && eligible_for_stale && !excluded.contains(&id) {
             stale.push(info.clone());
         }
         known.insert(id, info);
@@ -327,7 +402,7 @@ pub async fn bootstrap_v2(
             .collect::<Vec<_>>()
     };
     let snoozed_threads = summary(&snoozed);
-    let snoozed_count = snoozed_threads.len();
+    let snoozed_count = snoozed.iter().filter(|id| known.contains_key(id)).count();
     let skipped_threads = summary(&skipped);
     let eligible_threads: HashSet<i32> = candidates.iter().map(|c| c.thread_id).collect();
     let blocked: Vec<i32> = validated
