@@ -254,6 +254,18 @@ async fn current_active_thread(
     let next_issue_number: Option<String> = row.try_get(9).map_err(db::query_error)?;
     let issues_read: i32 = row.try_get(10).map_err(db::query_error)?;
     let last_rolled_result: Option<i32> = row.try_get(11).map_err(db::query_error)?;
+    let tag_rows = conn.query(
+        "SELECT row_to_json(tag)::text FROM tag_assignments assignment
+         JOIN tags tag ON tag.id=assignment.tag_id
+         WHERE assignment.target_type='Thread' AND assignment.target_id=$1
+           AND (tag.scope='global' OR (tag.scope='private' AND tag.owner_user_id=$2))
+         ORDER BY tag.scope,tag.normalized_name",
+        &[&id,&user.id()],
+    ).await.map_err(db::query_error)?;
+    let tags: Vec<Value> = tag_rows.into_iter().map(|row| {
+        let value: String = row.try_get(0).map_err(db::query_error)?;
+        serde_json::from_str(&value).map_err(|_| unavailable())
+    }).collect::<Result<_, ApiError>>()?;
     Ok(Some(json!({
         "id": id,
         "title": title,
@@ -265,7 +277,7 @@ async fn current_active_thread(
         "reading_progress": reading_progress,
         "issues_read": issues_read,
         "last_rating": last_rating,
-        "tags": [],
+        "tags": tags,
         "issue_id": next_issue_id,
         "issue_number": next_issue_number,
         "next_issue_id": next_issue_id,
