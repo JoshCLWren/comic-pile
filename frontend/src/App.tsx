@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (timeout?: number): Promise<void> => {
      if (!recoveryPromise.current) {
        const generation = sessionGeneration.current
-       recoveryPromise.current = (async () => {
+       const promise = (async () => {
          try {
            if (isSessionRefreshRejected()) {
              throw Object.assign(new Error('Session refresh unavailable'), {
@@ -166,8 +166,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
            throw error
          }
       })().finally(() => {
-        recoveryPromise.current = null
+        if (recoveryPromise.current === promise) {
+          recoveryPromise.current = null
+        }
       })
+      recoveryPromise.current = promise
      }
      return recoveryPromise.current
    }, [markDefinitivelyUnauthenticated]);

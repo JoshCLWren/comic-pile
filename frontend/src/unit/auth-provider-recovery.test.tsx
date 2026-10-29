@@ -562,6 +562,7 @@ describe('bootstrap retry budget and manual recovery race', () => {
 
     // Let the manual retry complete
     await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
       resolveManualRetry({ username: 'manual', email: 'manual@example.com' })
       await vi.advanceTimersByTimeAsync(0)
     })
