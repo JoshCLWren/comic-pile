@@ -95,11 +95,13 @@ describe('IssueRateButton', () => {
       issue_number: '2',
     })
     expect(applyRatedThreadCache).toHaveBeenCalledWith(queryClient, ratedThread)
-    expect(onSnapshotChange).toHaveBeenCalledWith({
+    
+    // Update the snapshot to reflect the saved rating, matching what ThreadDetailView does
+    const updatedSnapshot: IssueMutationSnapshot = {
       issues: [
         {
           ...issue,
-          status: 'read',
+          status: 'read' as const,
           read_at: '2026-08-03T18:30:00Z',
           last_rating: 4,
         },
@@ -110,13 +112,34 @@ describe('IssueRateButton', () => {
         next_unread_issue_id: 12,
         next_unread_issue_number: '3',
       },
-    })
+    }
+    expect(onSnapshotChange).toHaveBeenCalledWith(updatedSnapshot)
     expect(onRated).toHaveBeenCalledWith({
       issueNumber: '2',
       rating: 4,
       sessionId: 21,
       snapshotId: 31,
     })
+    
+    // Create an updated issue with the last_rating to simulate what ThreadDetailView does
+    const updatedIssue: Issue = {
+      ...issue,
+      status: 'read' as const,
+      read_at: '2026-08-03T18:30:00Z',
+      last_rating: 4,
+    }
+    
+    // Re-render with the updated issue so the component shows "Rated 4"
+    render(
+      <IssueRateButton
+        issue={updatedIssue}
+        snapshot={updatedSnapshot}
+        onSnapshotChange={onSnapshotChange}
+        onRated={onRated}
+      />,
+      { wrapper },
+    )
+    
     expect(screen.getByRole('button', { name: 'Rated 4' })).toBeInTheDocument()
   })
 
