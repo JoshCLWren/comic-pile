@@ -1,0 +1,1271 @@
+{
+  "components": {
+    "schemas": {
+      "ActiveThreadInfo": {
+        "description": "Schema for active thread information in session response.",
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "DEPRECATED: Always equals next_issue_id. Use next_issue_id instead.",
+            "title": "Issue Id"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "DEPRECATED: Always equals next_issue_number. Use next_issue_number instead.",
+            "title": "Issue Number"
+          },
+          "issues_read": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issues Read"
+          },
+          "issues_remaining": {
+            "title": "Issues Remaining",
+            "type": "integer"
+          },
+          "last_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rating"
+          },
+          "last_rolled_result": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rolled Result"
+          },
+          "next_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The next unread issue ID to read",
+            "title": "Next Issue Id"
+          },
+          "next_issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The next unread issue number (e.g., '5', 'Annual 1')",
+            "title": "Next Issue Number"
+          },
+          "queue_position": {
+            "title": "Queue Position",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Progress"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagResponse"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_issues": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Issues"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "last_rolled_result"
+        ],
+        "title": "ActiveThreadInfo",
+        "type": "object"
+      },
+      "BlockingDependency": {
+        "description": "One unread Issue required by a list or explicit prerequisite.",
+        "properties": {
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "label"
+        ],
+        "title": "BlockingDependency",
+        "type": "object"
+      },
+      "ContinuityBlocker": {
+        "description": "One unsatisfied continuity constraint with factual blocker evidence.",
+        "properties": {
+          "blocker_type": {
+            "enum": [
+              "item_unread",
+              "members_unread",
+              "selected_members_unread",
+              "crossover_order",
+              "crossover_order_series"
+            ],
+            "title": "Blocker Type",
+            "type": "string"
+          },
+          "causing_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Causing Issue Ids",
+            "type": "array"
+          },
+          "causing_member_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Causing Member Issue Ids",
+            "type": "array"
+          },
+          "crossover_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crossover Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
+          },
+          "satisfaction_type": {
+            "enum": [
+              "item_read",
+              "all_members_read",
+              "checkpoint",
+              "selected_members_read",
+              "converged"
+            ],
+            "title": "Satisfaction Type",
+            "type": "string"
+          },
+          "satisfied": {
+            "const": false,
+            "default": false,
+            "title": "Satisfied",
+            "type": "boolean"
+          },
+          "sequence_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence Position"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "integer"
+          },
+          "source_label": {
+            "title": "Source Label",
+            "type": "string"
+          },
+          "source_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "unread_issue_details": {
+            "items": {
+              "$ref": "#/components/schemas/UnreadIssueDetail"
+            },
+            "title": "Unread Issue Details",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_type",
+          "source_id",
+          "source_label",
+          "satisfaction_type",
+          "blocker_type"
+        ],
+        "title": "ContinuityBlocker",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "RollBootstrapResponse": {
+        "description": "Bounded bootstrap payload for the Roll initial render.\n\nReturns only the retained data required for the first interactive screen.\nDoes not include the full queue, collection data, or secondary detail panels.",
+        "properties": {
+          "active_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveThreadInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_threads": {
+            "title": "Available Threads",
+            "type": "integer"
+          },
+          "bandwidth": {
+            "$ref": "#/components/schemas/SessionBandwidthState"
+          },
+          "blocked_count": {
+            "title": "Blocked Count",
+            "type": "integer"
+          },
+          "blocked_threads": {
+            "items": {
+              "$ref": "#/components/schemas/RollBootstrapThread"
+            },
+            "title": "Blocked Threads",
+            "type": "array"
+          },
+          "current_die": {
+            "title": "Current Die",
+            "type": "integer"
+          },
+          "excluded_count": {
+            "title": "Excluded Count",
+            "type": "integer"
+          },
+          "excluded_threads": {
+            "items": {
+              "$ref": "#/components/schemas/ThreadExclusionReason"
+            },
+            "title": "Excluded Threads",
+            "type": "array"
+          },
+          "inactive_count": {
+            "default": 0,
+            "title": "Inactive Count",
+            "type": "integer"
+          },
+          "inactive_threads": {
+            "items": {
+              "$ref": "#/components/schemas/ThreadExclusionReason"
+            },
+            "title": "Inactive Threads",
+            "type": "array"
+          },
+          "last_rolled_result": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rolled Result"
+          },
+          "manual_die": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Die"
+          },
+          "pending_thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Thread Id"
+          },
+          "roll_pool": {
+            "items": {
+              "$ref": "#/components/schemas/RollBootstrapThread"
+            },
+            "title": "Roll Pool",
+            "type": "array"
+          },
+          "roll_recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RollRecoveryInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "integer"
+          },
+          "session_mode": {
+            "$ref": "#/components/schemas/SessionMode"
+          },
+          "skipped_thread_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Skipped Thread Ids",
+            "type": "array"
+          },
+          "skipped_threads": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RollBootstrapThread"
+            },
+            "title": "Skipped Threads",
+            "type": "array"
+          },
+          "snoozed_count": {
+            "title": "Snoozed Count",
+            "type": "integer"
+          },
+          "snoozed_threads": {
+            "items": {
+              "$ref": "#/components/schemas/RollBootstrapThread"
+            },
+            "title": "Snoozed Threads",
+            "type": "array"
+          },
+          "stale_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RollBootstrapThread"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stale_thread_count": {
+            "title": "Stale Thread Count",
+            "type": "integer"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          },
+          "total_threads": {
+            "title": "Total Threads",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_id",
+          "user_id",
+          "current_die",
+          "manual_die",
+          "pending_thread_id",
+          "last_rolled_result",
+          "session_mode",
+          "active_thread",
+          "bandwidth",
+          "roll_pool",
+          "snoozed_threads",
+          "snoozed_count",
+          "blocked_count",
+          "blocked_threads",
+          "stale_thread_count",
+          "stale_thread",
+          "total_threads",
+          "available_threads",
+          "excluded_count"
+        ],
+        "title": "RollBootstrapResponse",
+        "type": "object"
+      },
+      "RollBootstrapThread": {
+        "description": "Lightweight thread summary for the roll bootstrap pool.",
+        "properties": {
+          "blocking_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking Reasons",
+            "type": "array"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "route_labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Route Labels",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagResponse"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "format"
+        ],
+        "title": "RollBootstrapThread",
+        "type": "object"
+      },
+      "RollRecoveryChainNode": {
+        "description": "One labeled issue or crossover step in a prerequisite chain.",
+        "properties": {
+          "is_readable": {
+            "title": "Is Readable",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id",
+          "label",
+          "is_readable"
+        ],
+        "title": "RollRecoveryChainNode",
+        "type": "object"
+      },
+      "RollRecoveryDiagnostic": {
+        "description": "One bounded-traversal diagnostic suitable for reader-facing explanation.",
+        "properties": {
+          "code": {
+            "enum": [
+              "cycle_detected",
+              "depth_limit_exceeded",
+              "node_limit_exceeded"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "node_type",
+          "node_id"
+        ],
+        "title": "RollRecoveryDiagnostic",
+        "type": "object"
+      },
+      "RollRecoveryInfo": {
+        "description": "Structured recovery context for a pending roll that became blocked.",
+        "properties": {
+          "chains": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/RollRecoveryChainNode"
+              },
+              "type": "array"
+            },
+            "title": "Chains",
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/RollRecoveryDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "direct_blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityBlocker"
+            },
+            "title": "Direct Blockers",
+            "type": "array"
+          },
+          "original_thread_id": {
+            "title": "Original Thread Id",
+            "type": "integer"
+          },
+          "original_thread_title": {
+            "title": "Original Thread Title",
+            "type": "string"
+          },
+          "readable_prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/RollRecoveryPrerequisite"
+            },
+            "title": "Readable Prerequisites",
+            "type": "array"
+          }
+        },
+        "required": [
+          "original_thread_id",
+          "original_thread_title"
+        ],
+        "title": "RollRecoveryInfo",
+        "type": "object"
+      },
+      "RollRecoveryPrerequisite": {
+        "description": "One currently readable prerequisite recommended for a blocked active roll.",
+        "properties": {
+          "is_readable": {
+            "default": true,
+            "title": "Is Readable",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "integer"
+          },
+          "node_type": {
+            "enum": [
+              "issue",
+              "crossover"
+            ],
+            "title": "Node Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id",
+          "label"
+        ],
+        "title": "RollRecoveryPrerequisite",
+        "type": "object"
+      },
+      "SessionBandwidthState": {
+        "description": "Canonical ephemeral bandwidth state for the active reading session.\n\nEvery field is always present but nullable so legacy sessions that predate\nbandwidth tracking serialize to a stable, safe shape instead of a missing\nor partially shaped object. This is the single canonical source consumed by\nlater weighting and UI work.",
+        "properties": {
+          "active_bandwidth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "light",
+                  "balanced",
+                  "deep"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Bandwidth"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "mode_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Version"
+          },
+          "predicted_bandwidth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "light",
+                  "balanced",
+                  "deep"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Bandwidth"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "inferred",
+                  "manual",
+                  "snooze",
+                  "quiz"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "predicted_bandwidth",
+          "active_bandwidth",
+          "confidence",
+          "source",
+          "mode_version"
+        ],
+        "title": "SessionBandwidthState",
+        "type": "object"
+      },
+      "SessionMode": {
+        "description": "Canonical session mode state for Roll bootstrap and frontend rendering.\n\nDescribes the active and predicted reading bandwidth and intent, together\nwith the confidence, source, and version metadata needed for the reading-\nmode UI. When all fields are ``None`` the session is in the legacy null\nstate and the frontend should treat it as the default balanced mode.",
+        "properties": {
+          "active_bandwidth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Current active bandwidth: light, balanced, deep, or null for legacy",
+            "title": "Active Bandwidth"
+          },
+          "active_intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Current active intent: balanced, momentum, familiar, explore, random, or null",
+            "title": "Active Intent"
+          },
+          "bandwidth_confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confidence in the bandwidth prediction",
+            "title": "Bandwidth Confidence"
+          },
+          "bandwidth_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "inferred",
+                  "manual",
+                  "snooze",
+                  "quiz"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Origin of the bandwidth value: inference, manual override, snooze, or quiz",
+            "title": "Bandwidth Source"
+          },
+          "bandwidth_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Version tag for the bandwidth inference algorithm",
+            "title": "Bandwidth Version"
+          },
+          "intent_confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confidence in the intent prediction",
+            "title": "Intent Confidence"
+          },
+          "intent_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "inferred",
+                  "manual",
+                  "snooze",
+                  "quiz"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Origin of the intent value: inferred, manual, snooze, or quiz",
+            "title": "Intent Source"
+          },
+          "intent_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Version tag for the intent inference algorithm",
+            "title": "Intent Version"
+          },
+          "predicted_bandwidth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Algorithm-predicted bandwidth for this session",
+            "title": "Predicted Bandwidth"
+          },
+          "predicted_intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Algorithm-predicted intent for this session",
+            "title": "Predicted Intent"
+          },
+          "session_mode_correction_guidance": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Compact guidance when mode differs from prediction (null when no correction)",
+            "title": "Session Mode Correction Guidance"
+          }
+        },
+        "title": "SessionMode",
+        "type": "object"
+      },
+      "TagResponse": {
+        "description": "A tag response.",
+        "properties": {
+          "color": {
+            "title": "Color",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "normalized_name": {
+            "title": "Normalized Name",
+            "type": "string"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "normalized_name",
+          "scope",
+          "owner_user_id",
+          "color",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TagResponse",
+        "type": "object"
+      },
+      "ThreadExclusionReason": {
+        "description": "One series excluded from the roll pool, with the reason the user can understand.\n\n``blocking_reasons`` and ``blocking_dependencies`` carry the live eligibility\nexplanation for blocked series so a paginated exclusion page (issue #3330)\ncan explain the wait without a second per-thread lookup.",
+        "properties": {
+          "blocking_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/BlockingDependency"
+            },
+            "title": "Blocking Dependencies",
+            "type": "array"
+          },
+          "blocking_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking Reasons",
+            "type": "array"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "reason": {
+            "enum": [
+              "blocked",
+              "snoozed",
+              "skipped",
+              "completed",
+              "not_in_queue"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "reason"
+        ],
+        "title": "ThreadExclusionReason",
+        "type": "object"
+      },
+      "UnreadIssueDetail": {
+        "description": "Structured label for one unread issue causing a continuity block.",
+        "properties": {
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "label"
+        ],
+        "title": "UnreadIssueDetail",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/roll/bootstrap": {
+      "get": {
+        "description": "Return bounded bootstrap data for the Roll initial render.\n\nReplaces the need for separate session, full-thread-library, and stale-thread requests\nby returning only the retained data required for the first interactive screen.\n\nArgs:\n    current_user: The authenticated user.\n    db: Async database session.\n    timezone: Optional browser-resolved IANA timezone identifier captured once\n        per active reading session. Invalid or unusable values leave the field\n        unset and never break the roll.\n\nReturns:\n    RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.",
+        "operationId": "roll_bootstrap_api_v1_roll_bootstrap_get",
+        "parameters": [
+          {
+            "description": "Browser IANA timezone identifier",
+            "in": "query",
+            "name": "timezone",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Browser IANA timezone identifier",
+              "title": "Timezone"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollBootstrapResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Roll Bootstrap",
+        "tags": [
+          "roll",
+          "roll"
+        ]
+      }
+    }
+  }
+}
