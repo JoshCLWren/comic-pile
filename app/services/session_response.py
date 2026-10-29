@@ -573,6 +573,7 @@ async def build_session_event_details(
         elif event.type == "session_mode":
             event_data.description = _session_mode_description(event)
         elif event.type in ("reorder", "undo", "restore"):
+            event_data.rating = event.rating
             word = _event_word(event.type)
             if thread_deleted:
                 desc_parts = [f"{word} {_deleted_title(thread_title)}"]

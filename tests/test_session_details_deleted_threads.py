@@ -225,3 +225,46 @@ async def test_timeline_resolves_live_thread_for_undo_of_roll(
     assert len(undo_events) == 1
     assert undo_events[0]["thread_title"] == "Saga"
     assert undo_events[0]["thread_deleted"] is False
+
+
+@pytest.mark.asyncio
+async def test_undo_of_rate_carries_issue_number_and_rating(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """A restored rated event names its canonical issue and rating (#4330)."""
+    session, thread = await _make_session_and_thread(async_db, default_user)
+
+    rate_event = Event(
+        type="rate",
+        session_id=session.id,
+        thread_id=thread.id,
+        rating=4.5,
+        issues_read=1,
+        issue_id=None,
+        issue_number="1",
+    )
+    async_db.add(rate_event)
+    await async_db.commit()
+    await async_db.refresh(rate_event)
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=rate_event.id,
+        thread_states={str(thread.id): {"title": "Saga", "queue_position": 1}},
+        session_state={"current_die": 6},
+        description="After rating",
+    )
+    async_db.add(snapshot)
+    await async_db.commit()
+    await async_db.refresh(snapshot)
+
+    await UndoSnapshotRepository(async_db).create_undo_event(session.id, snapshot)
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    undo_events = [event for event in response.json()["events"] if event["type"] == "undo"]
+    assert len(undo_events) == 1
+    assert undo_events[0]["thread_title"] == "Saga"
+    assert undo_events[0]["issue_number"] == "1"
+    assert undo_events[0]["rating"] == 4.5
