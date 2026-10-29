@@ -79,9 +79,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient()
   const sessionGeneration = useRef(0)
   const authChannelRef = useRef<BroadcastChannel | null>(null)
+  // Synchronous bootstrap retry bookkeeping. The retry scheduler reads the
+  // attempt ordinal immediately after deciding to retry, and React is not
+  // required to evaluate a state updater synchronously, so the counter must
+  // never be derived from `authState`.
   const bootstrapRetryCountRef = useRef(0)
   const bootstrapTimerRef = useRef<number | null>(null)
-  const bootstrapInFlightRef = useRef<Promise<void> | null>(null)
+  // Shared across effect instances so a StrictMode remount joins the probe that
+  // is already in flight instead of issuing a duplicate /v1/auth/me request.
+  const bootstrapInFlightRef = useRef<Promise<boolean> | null>(null)
+  // Automatic retry is enabled while the bootstrap effect owns recovery. A
+  // manual "Try again", login, or logout takes ownership so a pending or
+  // in-flight automatic attempt cannot race the user's action.
+  const bootstrapAutoRetryRef = useRef(false)
   const [authState, setAuthState] = useState<AuthState>({
     status: 'checking',
     isLoading: true,
@@ -92,14 +102,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
   const recoveryPromise = useRef<Promise<void> | null>(null)
 
-  const markDefinitivelyUnauthenticated = useCallback(() => {
-    sessionGeneration.current += 1
+  const cancelBootstrapRetry = useCallback(() => {
     if (bootstrapTimerRef.current !== null) {
       window.clearTimeout(bootstrapTimerRef.current)
       bootstrapTimerRef.current = null
     }
+  }, [])
+
+  const markDefinitivelyUnauthenticated = useCallback(() => {
+    sessionGeneration.current += 1
+    cancelBootstrapRetry()
     bootstrapInFlightRef.current = null
     bootstrapRetryCountRef.current = 0
+    bootstrapAutoRetryRef.current = false
+    recoveryPromise.current = null
     clearAccessToken()
     clearSessionCache(client)
     setAuthState(prev => ({
@@ -111,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       retryCount: 0,
       lastRetryAt: null,
     }))
-  }, [client])
+  }, [cancelBootstrapRetry, client])
 
   const clearAuthError = useCallback(() => {
     setAuthState(prev => ({
@@ -122,74 +138,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const recoverSession = useCallback(
     (timeout?: number): Promise<void> => {
-     if (!recoveryPromise.current) {
-       const generation = sessionGeneration.current
-       const promise = (async () => {
-         try {
-           if (isSessionRefreshRejected()) {
-             throw Object.assign(new Error('Session refresh unavailable'), {
-               isAxiosError: true,
-               response: { status: 401 },
-             })
-           }
-           await refreshSession({ skipAuthRedirect: true })
-           if (generation !== sessionGeneration.current) return
-           const response = await api.get<AuthUser>('/v1/auth/me', {
-             timeout,
-             skipAuthRedirect: true,
-           })
-           if (generation !== sessionGeneration.current) return
-           setAuthState(prev => ({
-             ...prev,
-             status: 'authenticated',
-             isLoading: false,
-             user: response,
-             error: null,
-             retryCount: 0,
-             lastRetryAt: null,
-           }))
-         } catch (error) {
-           if (generation !== sessionGeneration.current) return
-           const authError = createAuthError(error)
-           if (isDefinitiveAuthenticationFailure(error)) {
-             markDefinitivelyUnauthenticated()
-           } else {
-             setAuthState(prev => ({
-               ...prev,
-               status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
-               isLoading: false,
-               error: authError,
-               retryCount: prev.retryCount + 1,
-               lastRetryAt: Date.now(),
-             }))
-           }
-           throw error
-         }
+      if (recoveryPromise.current) return recoveryPromise.current
+      const generation = sessionGeneration.current
+      const promise = (async () => {
+        try {
+          if (isSessionRefreshRejected()) {
+            throw Object.assign(new Error('Session refresh unavailable'), {
+              isAxiosError: true,
+              response: { status: 401 },
+            })
+          }
+          await refreshSession({ skipAuthRedirect: true })
+          if (generation !== sessionGeneration.current) return
+          const response = await api.get<AuthUser>('/v1/auth/me', {
+            timeout,
+            skipAuthRedirect: true,
+          })
+          if (generation !== sessionGeneration.current) return
+          // A successful recovery ends the bootstrap outage: a retry scheduled
+          // by an older attempt must never fire against a healthy session.
+          cancelBootstrapRetry()
+          bootstrapRetryCountRef.current = 0
+          setAuthState(prev => ({
+            ...prev,
+            status: 'authenticated',
+            isLoading: false,
+            user: response,
+            error: null,
+            retryCount: 0,
+            lastRetryAt: null,
+          }))
+        } catch (error) {
+          if (generation !== sessionGeneration.current) return
+          const authError = createAuthError(error)
+          if (isDefinitiveAuthenticationFailure(error)) {
+            markDefinitivelyUnauthenticated()
+          } else {
+            setAuthState(prev => ({
+              ...prev,
+              status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
+              isLoading: false,
+              error: authError,
+              retryCount: prev.retryCount + 1,
+              lastRetryAt: Date.now(),
+            }))
+          }
+          throw error
+        }
       })().finally(() => {
+        // A login/logout may have started a different generation's recovery.
         if (recoveryPromise.current === promise) {
           recoveryPromise.current = null
         }
       })
       recoveryPromise.current = promise
-     }
-     return recoveryPromise.current
-   }, [markDefinitivelyUnauthenticated]);
+      return promise
+    }, [cancelBootstrapRetry, markDefinitivelyUnauthenticated]);
 
   const retryAuth = useCallback(async () => {
-    // Invalidate any in-flight bootstrap attempt for this session generation
-    // so a stale scheduled request cannot overwrite manual recovery.
-    sessionGeneration.current += 1
-    // Clear any cached recovery promise from the previous generation.
-    // This prevents a stale in-flight recovery from resolving without
-    // updating state (which would leave isLoading=true indefinitely).
-    recoveryPromise.current = null
-    // Cancel any scheduled bootstrap retries for this session generation
-    if (bootstrapTimerRef.current !== null) {
-      window.clearTimeout(bootstrapTimerRef.current)
-      bootstrapTimerRef.current = null
-    }
-    bootstrapInFlightRef.current = null
+    // Manual recovery takes over from the automatic budget: cancel the pending
+    // timer before touching the recovery promise so the timer and the manual
+    // action cannot issue concurrent /v1/auth/me requests for this session.
+    cancelBootstrapRetry()
     bootstrapRetryCountRef.current = 0
+    bootstrapAutoRetryRef.current = false
+    const generation = sessionGeneration.current
     setAuthState(prev => ({
       ...prev,
       isLoading: true,
@@ -197,17 +210,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }))
 
     try {
+      // If a bootstrap probe is still in flight, wait for it instead of
+      // starting a second concurrent request, then recover only if it failed.
+      const pendingBootstrap = bootstrapInFlightRef.current
+      if (pendingBootstrap) {
+        const recovered = await pendingBootstrap
+        if (generation !== sessionGeneration.current) return
+        if (recovered) return
+      }
       await recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
     } catch (error) {
-      const authError = createAuthError(error)
-      setAuthState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: authError,
-      }))
+      if (generation === sessionGeneration.current) {
+        setAuthState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: createAuthError(error),
+        }))
+      }
       throw error
     }
-  }, [recoverSession])
+  }, [cancelBootstrapRetry, recoverSession])
 
   const revalidateSession = useCallback(async (timeout?: number) => {
     const generation = sessionGeneration.current
@@ -217,6 +239,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         skipAuthRedirect: true,
       })
       if (generation !== sessionGeneration.current) return
+      // A successful revalidation also ends any pending bootstrap retry.
+      cancelBootstrapRetry()
+      bootstrapRetryCountRef.current = 0
       setAuthState(prev => ({
         ...prev,
         status: 'authenticated',
@@ -252,41 +277,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       throw error
     }
-  }, [markDefinitivelyUnauthenticated, recoverSession])
+  }, [cancelBootstrapRetry, markDefinitivelyUnauthenticated, recoverSession])
 
   useEffect(() => {
-    let isMounted = true
     const bootstrapGeneration = sessionGeneration.current
     bootstrapRetryCountRef.current = 0
-    if (bootstrapTimerRef.current !== null) {
-      window.clearTimeout(bootstrapTimerRef.current)
-      bootstrapTimerRef.current = null
-    }
+    bootstrapAutoRetryRef.current = true
+    cancelBootstrapRetry()
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
     authChannelRef.current = authChannel
-    
-    const cancelBootstrapTimers = () => {
-      if (bootstrapTimerRef.current !== null) {
-        window.clearTimeout(bootstrapTimerRef.current)
-        bootstrapTimerRef.current = null
-      }
-    }
 
-    const scheduleRetry = (authError: ReturnType<typeof createAuthError>) => {
-      if (!isMounted) return
+    const scheduleRetry = (error: unknown) => {
+      if (!bootstrapAutoRetryRef.current) return
       if (bootstrapGeneration !== sessionGeneration.current) return
-      
-      // Extract current attempt count synchronously before any state updates
+      // Read the synchronous attempt ordinal; never infer it from a React
+      // state updater that may not have run yet.
       const currentAttempt = bootstrapRetryCountRef.current
-      if (currentAttempt >= AUTH_BOOTSTRAP_MAX_RETRIES) {
-        return
-      }
+      if (currentAttempt >= AUTH_BOOTSTRAP_MAX_RETRIES) return
       const nextAttempt = currentAttempt + 1
-      // Store the next attempt count for this session generation
       bootstrapRetryCountRef.current = nextAttempt
-      
-      // Set auth state with the new retry count - this is the only place
-      // where the UI retry count is updated, ensuring it reflects the actual attempt
+      const authError = createAuthError(error)
       setAuthState(prev => ({
         ...prev,
         status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
@@ -295,31 +305,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         retryCount: nextAttempt,
         lastRetryAt: Date.now(),
       }))
-      
-      cancelBootstrapTimers()
-      // Schedule the next validation attempt using the extracted nextAttempt
+      cancelBootstrapRetry()
       bootstrapTimerRef.current = window.setTimeout(() => {
         bootstrapTimerRef.current = null
         void validateSession()
       }, calculateRetryDelay(nextAttempt, AUTH_RETRY_BASE_DELAY_MS))
     }
 
-    const validateSession = async () => {
-      if (!isMounted) return
-      if (bootstrapGeneration !== sessionGeneration.current) return
-      if (bootstrapInFlightRef.current) {
-        return bootstrapInFlightRef.current
-      }
+    const validateSession = async (): Promise<boolean> => {
+      if (bootstrapGeneration !== sessionGeneration.current) return false
+      // One coordinated attempt per bootstrap generation: a timer callback and
+      // a StrictMode remount must join the in-flight probe, not issue a second.
+      if (bootstrapInFlightRef.current) return bootstrapInFlightRef.current
       const isPublicAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
       if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN && isPublicAuthPage) {
+        cancelBootstrapRetry()
         bootstrapRetryCountRef.current = 0
-        cancelBootstrapTimers()
         setAuthState(prev => ({
           ...prev,
           status: 'unauthenticated',
           isLoading: false,
         }))
-        return
+        return false
       }
       
       if (window.__COMIC_PILE_ACCESS_TOKEN) {
@@ -332,16 +339,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const validationPromise = (async () => {
+      const attempt = (async (): Promise<boolean> => {
         try {
           const response = await api.get<AuthUser>('/v1/auth/me', {
             timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
             skipAuthRedirect: true,
           })
-          if (!isMounted || bootstrapGeneration !== sessionGeneration.current) return
-          cancelBootstrapTimers()
+          if (bootstrapGeneration !== sessionGeneration.current) return false
+          cancelBootstrapRetry()
           bootstrapRetryCountRef.current = 0
-          bootstrapInFlightRef.current = null
           setAuthState(prev => ({
             ...prev,
             status: 'authenticated',
@@ -351,41 +357,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             retryCount: 0,
             lastRetryAt: null,
           }))
+          return true
         } catch (error) {
-          if (!isMounted || bootstrapGeneration !== sessionGeneration.current) return
-          
-          const authError = createAuthError(error)
+          if (bootstrapGeneration !== sessionGeneration.current) return false
           
           if (isDefinitiveAuthenticationFailure(error)) {
+            // A stale access token is routine on a return visit. Try the
+            // refresh cookie before surfacing the login screen.
             try {
               await recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
-              if (!isMounted || bootstrapGeneration !== sessionGeneration.current) return
-              cancelBootstrapTimers()
+              if (bootstrapGeneration !== sessionGeneration.current) return false
+              cancelBootstrapRetry()
               bootstrapRetryCountRef.current = 0
-              bootstrapInFlightRef.current = null
-              return
+              return true
             } catch (recoveryError) {
-              if (!isMounted || bootstrapGeneration !== sessionGeneration.current) return
+              if (bootstrapGeneration !== sessionGeneration.current) return false
               if (isDefinitiveAuthenticationFailure(recoveryError)) {
-                bootstrapInFlightRef.current = null
-                markDefinitivelyUnauthenticated()
-                return
+                // recoverSession already marked the session unauthenticated.
+                return false
               }
+              // Transient recovery failure: retry from the transient error so
+              // the degraded state reports 503/network instead of a stale 401.
+              scheduleRetry(recoveryError)
+              return false
             }
           }
 
-          if (!isMounted || bootstrapGeneration !== sessionGeneration.current) return
-          bootstrapInFlightRef.current = null
-          scheduleRetry(authError)
+          scheduleRetry(error)
+          return false
         }
       })()
-      const wrappedValidationPromise = validationPromise.finally(() => {
-        if (bootstrapInFlightRef.current === wrappedValidationPromise) {
-          bootstrapInFlightRef.current = null
-        }
+      bootstrapInFlightRef.current = attempt
+      void attempt.then(() => {
+        if (bootstrapInFlightRef.current === attempt) bootstrapInFlightRef.current = null
       })
-      bootstrapInFlightRef.current = wrappedValidationPromise
-      return validationPromise
+      return attempt
     }
 
     if (authChannel) {
@@ -399,37 +405,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void validateSession()
     
     return () => {
-      isMounted = false
-      if (bootstrapTimerRef.current !== null) {
-        window.clearTimeout(bootstrapTimerRef.current)
-        bootstrapTimerRef.current = null
-      }
-      bootstrapInFlightRef.current = null
+      // Leaving this effect (including StrictMode's simulated remount) stops
+      // automatic scheduling; an already in-flight probe is allowed to finish
+      // so a remount can join it instead of issuing a duplicate request.
+      bootstrapAutoRetryRef.current = false
+      cancelBootstrapRetry()
       authChannel?.close()
       if (authChannelRef.current === authChannel) {
         authChannelRef.current = null
       }
     }
-  }, [markDefinitivelyUnauthenticated, recoverSession])
+  }, [cancelBootstrapRetry, markDefinitivelyUnauthenticated, recoverSession])
 
   const login = async (accessToken: string) => {
     const generation = ++sessionGeneration.current
-    bootstrapRetryCountRef.current = 0
-    if (bootstrapTimerRef.current !== null) {
-      window.clearTimeout(bootstrapTimerRef.current)
-      bootstrapTimerRef.current = null
-    }
+    cancelBootstrapRetry()
     bootstrapInFlightRef.current = null
+    bootstrapRetryCountRef.current = 0
+    bootstrapAutoRetryRef.current = false
+    recoveryPromise.current = null
     setAuthState(prev => ({ ...prev, status: 'checking', isLoading: true, user: null }))
     clearSessionCache(client)
     setAccessToken(accessToken)
     try {
       const response = await api.get<AuthUser>('/v1/auth/me', { skipAuthRedirect: true })
       if (generation !== sessionGeneration.current) return
-      if (bootstrapTimerRef.current !== null) {
-        window.clearTimeout(bootstrapTimerRef.current)
-        bootstrapTimerRef.current = null
-      }
+      cancelBootstrapRetry()
       bootstrapRetryCountRef.current = 0
       setAuthState(prev => ({
         ...prev,
@@ -443,6 +444,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       if (generation !== sessionGeneration.current) return
       const authError = createAuthError(error)
+      // Preserve the freshly issued session only when the hydration failure is
+      // positively identified as a transient outage (503 / network). A
+      // definitive 401 — or an unclassifiable validation failure — keeps the
+      // legacy invalid-credentials behavior: clear the token and log out.
       if (isDefinitiveAuthenticationFailure(error) || authError === null) {
         clearAccessToken()
         clearSessionCache(client)
@@ -454,6 +459,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           error: authError,
         }))
       } else {
+        // Preserve session for service/network failures (degraded state)
         setAuthState(prev => ({
           ...prev,
           status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',

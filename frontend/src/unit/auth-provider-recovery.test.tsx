@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { act, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -536,51 +537,41 @@ describe('bootstrap retry budget and manual recovery race', () => {
     expect(mocks.get).toHaveBeenCalledTimes(3)
   }, 15000)
 
-  it('stale bootstrap response after manual recovery does not overwrite authenticated state', async () => {
+  it('manual recovery during an in-flight bootstrap joins it instead of probing twice', async () => {
     vi.useFakeTimers()
     let resolveSlowBootstrap!: (user: { username: string; email: string }) => void
-    let resolveManualRetry!: (user: { username: string; email: string }) => void
 
-    // Bootstrap starts, then hangs (slow response)
-    // Manual retryAuth succeeds first
-    // Then the slow bootstrap resolves with a different user - should be ignored
-    // Mock refreshSession to succeed for manual retry
-    mocks.refreshSession.mockResolvedValue('new-token')
     mocks.get
       .mockImplementationOnce(() => new Promise(resolve => { resolveSlowBootstrap = resolve })) // slow bootstrap
-      .mockImplementationOnce(() => new Promise(resolve => { resolveManualRetry = resolve })) // manual retry /auth/me
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 }) // preferences
 
     renderProvider()
 
-    // Don't advance timers yet - bootstrap is in-flight but slow
+    // Do not advance timers: the initial bootstrap probe is in flight.
 
-    // User clicks "Try again" before bootstrap resolves
+    // User clicks "Try again" before the bootstrap resolves.
     const manualRetryPromise = act(async () => {
       await auth!.retryAuth()
     })
-
-    // Yield until the mocked manual-retry request has started so the resolver is assigned
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0)
-    })
-    resolveManualRetry({ username: 'manual', email: 'manual@example.com' })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
 
+    // The manual retry joined the in-flight probe: exactly one concurrent
+    // /v1/auth/me request was issued for this session.
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')).toHaveLength(1)
+
+    await act(async () => {
+      resolveSlowBootstrap({ username: 'reader', email: 'reader@example.com' })
+      await vi.advanceTimersByTimeAsync(0)
+    })
     await manualRetryPromise
 
-    // Now the slow bootstrap resolves with a DIFFERENT user
-    await act(async () => {
-      resolveSlowBootstrap({ username: 'stale', email: 'stale@example.com' })
-      await vi.advanceTimersByTimeAsync(0)
-    })
-
-    // State should remain the manual retry user, not the stale bootstrap user
+    // The single shared probe authenticates; no duplicate request was added.
     expect(auth?.authState.status).toBe('authenticated')
-    expect(auth?.user?.username).toBe('manual')
-    expect(auth?.user?.email).toBe('manual@example.com')
+    expect(auth?.user?.username).toBe('reader')
+    expect(auth?.authState.isLoading).toBe(false)
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')).toHaveLength(1)
   }, 15000)
 
   it('manual retryAuth while recoverSession is in-flight does not hang isLoading', async () => {
@@ -711,5 +702,120 @@ describe('bootstrap retry budget and manual recovery race', () => {
     },
   ])
   expect(auth?.authState.retryCount).toBe(0)
+  }, 15000)
+
+  it('manual Try again does not resume the automatic retry budget after it fails', async () => {
+    vi.useFakeTimers()
+    mocks.get.mockRejectedValue(axiosError(503))
+
+    renderProvider()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(1)
+    expect(mocks.get).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await auth!.retryAuth().catch(() => undefined)
+    })
+    expect(auth?.authState.isLoading).toBe(false)
+
+    const callsAfterManualRetry = mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me').length
+    // Manual recovery owns the budget now: no further automatic probe may fire.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')).toHaveLength(callsAfterManualRetry)
+    expect(auth?.authState.status).toBe('service_unavailable')
+  }, 15000)
+
+  it('a successful resume revalidation cancels the pending bootstrap retry', async () => {
+    vi.useFakeTimers()
+    mocks.get
+      .mockRejectedValueOnce(axiosError(503)) // initial bootstrap probe
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' }) // resume revalidation
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 }) // preferences
+
+    renderProvider()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(1)
+
+    await act(async () => {
+      await auth!.revalidateSession(15000)
+    })
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.authState.retryCount).toBe(0)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    // Only the failed bootstrap probe and the successful revalidation probe.
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')).toHaveLength(2)
+  }, 15000)
+
+  it('a 401 followed by a transient recovery probe retries instead of logging out', async () => {
+    vi.useFakeTimers()
+    mocks.getAccessToken.mockReturnValue('stale-token')
+    mocks.get
+      .mockRejectedValueOnce(axiosError(401)) // bootstrap probe sees a stale token
+      .mockRejectedValueOnce(axiosError(503)) // recovery /auth/me stays unavailable
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' }) // automatic retry succeeds
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 }) // preferences
+
+    renderProvider()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    // The 401 must not log the user out while the recovery probe is transient.
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(auth?.authState.retryCount).toBe(1)
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+  }, 15000)
+
+  it('StrictMode double-mount performs a single initial bootstrap probe', async () => {
+    vi.useFakeTimers()
+    mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+
+    render(
+      <StrictMode>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <AuthProvider>
+            <Consumer />
+          </AuthProvider>
+        </QueryClientProvider>
+      </StrictMode>,
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')).toHaveLength(1)
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.authState.retryCount).toBe(0)
   }, 15000)
 })
