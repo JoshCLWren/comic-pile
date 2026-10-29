@@ -38,7 +38,7 @@ jobs:
           node-version: '24'
       - run: npm ci
       - run: npm run build
-      - run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --esModuleInterop --strict --skipLibCheck auth/me.ts
+      - run: npx tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --strict --skipLibCheck auth/me.ts
       - run: npm test
 
   factory-pr-auth:
