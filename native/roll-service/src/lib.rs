@@ -1,5 +1,6 @@
-//! Standalone native Roll service foundation. Bootstrap remains in Python until parity gates pass.
+//! Native Roll service with authenticated GET bootstrap and owner-scoped PostgreSQL access.
 pub mod auth;
+pub mod bootstrap;
 pub mod config;
 pub mod db;
 pub mod option_inputs;
@@ -145,12 +146,16 @@ async fn bound_request(
     response
 }
 
-/// Mount health and stable error boundaries only; no partial-success bootstrap route.
+/// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route(
             "/health",
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
+        )
+        .route(
+            "/api/v2/roll/bootstrap",
+            get(bootstrap::bootstrap_v2),
         )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
         .method_not_allowed_fallback(|| async {
