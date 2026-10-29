@@ -16,6 +16,36 @@ export type ThreadListItem = components['schemas']['QueueThreadListItem']
 export type Thread = components['schemas']['ThreadResponse']
 
 /**
+ * Successful `POST /v1/rate/` response (#2720).
+ *
+ * The rate contract is additive: it keeps every `ThreadResponse` top-level
+ * field so a rate result stays thread-shaped wherever it is cached, and adds
+ * the `roll_reconciliation.session last-read` record built from committed
+ * post-rate state. Typing the mutation response here keeps the reconciliation
+ * data on the wire instead of dropping it at the service boundary.
+ */
+export type RateResponsePayload = components['schemas']['RateResponse']
+
+/** The session last-read record shared by the v2 bootstrap and rate responses. */
+export type RollLastReadPayload = NonNullable<
+  NonNullable<components['schemas']['RollReconciliation']>['last_read']
+>
+
+/** Optional canonical-series reader context the last-read strip may join with. */
+export interface LastReadSeriesStats {
+  /** Canonical-series average rating, or null while identity/stats are unavailable. */
+  averageRating: number | null
+  /** Number of the reader's ratings contributing to the average. */
+  ratingCount: number | null
+  /** Issues the reader has read in the canonical series, or thread-scope count. */
+  readCount: number | null
+  /** Full stored provider/catalog run length; never an owned-issue proxy. */
+  issueCount: number | null
+  /** Which scope `readCount`/`issueCount` describe. */
+  scope: 'canonical_series_run' | 'thread'
+}
+
+/**
  * Read the manual creator credits off a thread-shaped object without a cast.
  *
  * The generated client schema is regenerated from the OpenAPI document, and
