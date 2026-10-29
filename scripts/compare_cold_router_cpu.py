@@ -2,7 +2,8 @@
 """Pair cold Roll CPU measurements for baseline vs a pinned router fix.
 
 Both variants run from the SAME temporary worktree and virtual environment.
-Only app/router_mounts.py is swapped. Measurements are uninstrumented process
+Selected app files are swapped from pinned Git refs; new files can be absent
+in the baseline. Profiling scripts are copied into the disposable worktree. Measurements are uninstrumented process
 user+system CPU, not Vercel billing. No production database or API is accessed.
 """
 
@@ -14,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import statistics
 import subprocess
 import sys
@@ -46,6 +48,19 @@ def _git(*args: str, cwd: Path = ROOT) -> str:
     return result.stdout
 
 
+def _blob_at(ref: str, path: str) -> str | None:
+    """Read one pinned Git blob; new modules may be absent in the baseline."""
+    result = subprocess.run(
+        ["git", "show", f"{ref}:{path}"], cwd=ROOT,
+        capture_output=True, text=True, check=False, timeout=45,
+    )
+    if result.returncode == 0:
+        return result.stdout
+    if result.returncode == 128 and "does not exist" in result.stderr:
+        return None
+    raise RuntimeError(f"Cannot read {path!r} at {ref!r}: {result.stderr.strip()}")
+
+
 def pair_order(pair: int) -> tuple[str, str]:
     """Alternate experiment order to reduce cache/warmup bias."""
     return ("baseline", "fixed") if pair % 2 else ("fixed", "baseline")
@@ -64,7 +79,7 @@ def summarize(results: list[dict]) -> str:
         "# Paired cold Roll CPU comparison",
         "",
         "Both variants ran in the same temporary worktree and Python environment.",
-        "Only app/router_mounts.py was exchanged between runs.",
+        "Only the selected source files were exchanged between runs.",
         "Startup + first-request CPU are measured without CPU instrumentation.",
         "Positive 'saved' values favor the fixed router. NOT Vercel billing.",
         "",
@@ -134,10 +149,18 @@ def compare(args: argparse.Namespace) -> int:
     password = os.getenv("LOCAL_PROFILE_PASSWORD")
     if not password:
         raise ValueError("Set LOCAL_PROFILE_PASSWORD for the disposable test user")
-    original = _git("show", f"HEAD:{ROUTER_PATH}")
-    patched = _git("show", f"{FIX_COMMIT}:{ROUTER_PATH}")
-    if original == patched:
-        raise RuntimeError("Baseline router equals the proposed fix; not an A/B test")
+    paths = tuple(args.changed_paths)
+    if not paths or len(paths) != len(set(paths)):
+        raise ValueError("Provide a unique nonempty set of source files")
+    for path in paths:
+        if not path.startswith("app/") or path.startswith("app/../") or ".." in Path(path).parts:
+            raise ValueError(f"Only app/ source files may be compared: {path}")
+    blobs = {
+        variant: {path: _blob_at(ref, path) for path in paths}
+        for variant, ref in (("baseline", args.baseline_ref), ("fixed", args.fixed_ref))
+    }
+    if blobs["baseline"] == blobs["fixed"]:
+        raise RuntimeError("Selected files are identical; not an A/B test")
 
     os.environ["SECRET_KEY"] = secrets.token_urlsafe(48)
     output = (ROOT / ".profile-local" / (
@@ -153,15 +176,26 @@ def compare(args: argparse.Namespace) -> int:
 
     with tempfile.TemporaryDirectory(prefix="comicpile-cold-ab-") as tmp:
         checkout = Path(tmp) / "checkout"
-        _git("worktree", "add", "--detach", str(checkout), "HEAD")
+        _git("worktree", "add", "--detach", str(checkout), args.baseline_ref)
         try:
-            router_file = checkout / ROUTER_PATH
+            # The profiling branch may not have been merged into the candidate
+            # branch yet. Copy only the local test harness into the worktree.
+            for script in (
+                "profile_local_traffic.py",
+                "profile_cold_invocation.py",
+                "compare_cold_router_cpu.py",
+            ):
+                shutil.copy2(ROOT / "scripts" / script, checkout / "scripts" / script)
             for pair in range(1, args.pairs + 1):
                 for variant in pair_order(pair):
-                    router_file.write_text(
-                        original if variant == "baseline" else patched,
-                        encoding="utf-8",
-                    )
+                    for path in paths:
+                        target = checkout / path
+                        blob = blobs[variant][path]
+                        if blob is None:
+                            target.unlink(missing_ok=True)
+                        else:
+                            target.parent.mkdir(parents=True, exist_ok=True)
+                            target.write_text(blob, encoding="utf-8")
                     # CPU is measured in a fresh API subprocess in the worker;
                     # parent or worker startup overhead is excluded.
                     child_output = checkout / ".profile-local" / f"{pair}-{variant}"
@@ -196,7 +230,7 @@ def compare(args: argparse.Namespace) -> int:
     report = summarize(results)
     for filename, data in [
         ("report.md", report),
-        ("report.json", json.dumps({"fix_commit": FIX_COMMIT, "measurements": results}, indent=2)),
+        ("report.json", json.dumps({"baseline_ref": args.baseline_ref, "fixed_ref": args.fixed_ref, "changed_paths": list(paths), "measurements": results}, indent=2)),
     ]:
         p = output / filename
         p.write_text(data + ("" if data.endswith("\n") else "\n"), encoding="utf-8")
@@ -211,6 +245,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-url", default=os.getenv("LOCAL_PROFILE_DATABASE_URL", ""))
     parser.add_argument("--username", default="testuser")
+    parser.add_argument("--baseline-ref", default="HEAD")
+    parser.add_argument("--fixed-ref", default=FIX_COMMIT)
+    parser.add_argument("--changed-paths", nargs="+", default=[ROUTER_PATH])
     parser.add_argument("--pairs", type=int, default=5)
     parser.add_argument("--warm-requests", type=int, default=5)
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
