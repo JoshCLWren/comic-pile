@@ -803,7 +803,7 @@ async def test_production_shaped_v1_v2_comparison_harness(
             finally:
                 recorder.end_projection()
 
-        monkeypatch.setattr("app.api.roll.get_v2_rollable_projection", _counted_projection)
+        monkeypatch.setattr("app.api.roll_v2_bootstrap.get_v2_rollable_projection", _counted_projection)
 
         recorder.reset()
         v2_normal, v2_normal_ms = await _timed_get(auth_client, V2_PATH)
@@ -905,7 +905,7 @@ async def test_production_shaped_v1_v2_comparison_harness(
             finally:
                 recorder.end_projection()
 
-        monkeypatch.setattr("app.api.roll.get_v2_rollable_projection", _counted_d100_projection)
+        monkeypatch.setattr("app.api.roll_v2_bootstrap.get_v2_rollable_projection", _counted_d100_projection)
 
         recorder.reset()
         v2_d100, v2_d100_ms = await _timed_get(auth_client, V2_PATH)
@@ -1137,9 +1137,9 @@ async def _rollable_threads(db: AsyncSession, user: User) -> list[Thread]:
 
 def _projection_symbol() -> Callable[..., Awaitable[object]]:
     """Return the current v2 projection callable used by the API module."""
-    from app.api import roll
+    from app.api import roll_v2_bootstrap
 
-    symbol: Callable[..., Awaitable[object]] = roll.get_v2_rollable_projection
+    symbol: Callable[..., Awaitable[object]] = roll_v2_bootstrap.get_v2_rollable_projection
     return symbol
 
 
