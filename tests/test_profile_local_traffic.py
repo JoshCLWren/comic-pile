@@ -13,6 +13,7 @@ from scripts.profile_local_traffic import (
     safe_database_url,
     safe_route,
     server_environment,
+    response_header,
 )
 
 
@@ -158,3 +159,9 @@ def test_production_profile_sets_non_wildcard_loopback_cors(monkeypatch: pytest.
     assert env["NEON_TOKEN"] == ""
     assert env["NEON_PROJECT_ID"] == ""
     assert env["SECRET_KEY"] == "ephemeral-local-signing-key"
+
+
+def test_response_header_case_normalization() -> None:
+    for key in ('x-app-db-queries', 'X-App-Db-Queries', 'X-APP-DB-QUERIES'):
+        assert response_header({key: '27'}, 'X-App-DB-Queries') == '27'
+    assert response_header({}, 'X-App-DB-Queries') is None
