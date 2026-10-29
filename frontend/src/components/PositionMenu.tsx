@@ -211,16 +211,39 @@ export default function PositionMenu({
   // so we can focus the first menu item after the menu renders.
   const openedFromKeyboardRef = useRef(false)
 
+  // Focuses the first real menu button. `menuItemsRef.current` is a sparse
+  // array: a non-position sort renders an explanation row at index 0 that has
+  // no button ref, so a plain `[0]?.focus()` would leave focus on the trigger.
+  const focusFirstMenuItem = useCallback(() => {
+    const items = menuItemsRef.current
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (item) {
+        item.focus()
+        return
+      }
+    }
+  }, [])
+
   const handleTriggerKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
       e.preventDefault()
       e.stopPropagation()
       clickFromKeyboardRef.current = true
+      const menuAlreadyOpen = isOpen
       openedFromKeyboardRef.current = true
       openMenu(thread.id)
       window.setTimeout(() => {
         clickFromKeyboardRef.current = false
       }, 100)
+
+      if (menuAlreadyOpen) {
+        // `openMenu` keeps the same thread id, so `isOpen` stays true and the
+        // focus effect below never re-runs. Enter the menu directly instead of
+        // trapping focus on the trigger (#4290 review).
+        openedFromKeyboardRef.current = false
+        window.setTimeout(focusFirstMenuItem, 0)
+      }
     }
   }
 
@@ -233,19 +256,8 @@ export default function PositionMenu({
 
     // Wait for the menu to render in the next tick, then focus first button.
     // setTimeout(0) works in both browser and jsdom test environment.
-    setTimeout(() => {
-      // menuItemsRef.current is a sparse array (index 0 is a hole for explanation div).
-      // Use a for loop to find the first non-null/non-undefined button.
-      const items = menuItemsRef.current
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i]
-        if (item) {
-          item.focus()
-          break
-        }
-      }
-    }, 0)
-  }, [isOpen])
+    window.setTimeout(focusFirstMenuItem, 0)
+  }, [isOpen, focusFirstMenuItem])
 
   const menuItems: Array<{
     label: string

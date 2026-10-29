@@ -189,29 +189,23 @@ export default function QueueThreadCard({
       )}
       <div className="relative flex min-w-0 flex-1 items-start gap-2 @2xl:gap-3">
         <div className="flex shrink-0 items-center gap-1 pt-0.5">
-          {positionActionsAvailable && sortBy === 'position' ? (
-            <>
-              <Tooltip content="Drag to reorder within the queue.">
-                <button
-                  type="button"
-                  className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--theme-text-dim)] hover:bg-white/5 hover:text-[var(--theme-text-muted)] transition-colors text-lg @2xl:h-8 @2xl:w-8"
-                  draggable
-                  onDragStart={onDragStart}
-                  onDragEnd={onDragEnd}
-                  aria-label="Drag to reorder"
-                >
-                  ⠿
-                </button>
-              </Tooltip>
-              <span className="w-6 text-right text-xs font-bold tabular-nums text-[var(--theme-text-dim)]">
-                #{thread.queue_position ?? index + 1}
-              </span>
-            </>
-          ) : (
-            <div className="w-11 flex justify-center">
-              <span className="text-[var(--theme-text-dim)] text-lg">📄</span>
-            </div>
+          {positionActionsAvailable && sortBy === 'position' && (
+            <Tooltip content="Drag to reorder within the queue.">
+              <button
+                type="button"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--theme-text-dim)] hover:bg-white/5 hover:text-[var(--theme-text-muted)] transition-colors text-lg @2xl:h-8 @2xl:w-8"
+                draggable
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                aria-label="Drag to reorder"
+              >
+                ⠿
+              </button>
+            </Tooltip>
           )}
+          <span className="w-6 text-right text-xs font-bold tabular-nums text-[var(--theme-text-dim)]">
+            #{thread.queue_position ?? index + 1}
+          </span>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">

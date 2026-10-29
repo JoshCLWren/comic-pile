@@ -150,7 +150,6 @@ export default function QueuePage() {
     activeThreads,
     modals,
     session,
-    positionActionsAvailable: true, // Position actions always available
     sortBy,
   })
 

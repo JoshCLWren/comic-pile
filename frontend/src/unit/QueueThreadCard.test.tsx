@@ -684,6 +684,22 @@ describe('QueueThreadCard', () => {
     expect(screen.queryByRole('region', { name: 'Crossovers' })).not.toBeInTheDocument()
   })
 
+  it('shows the true queue position and hides the drag handle outside Position sort (MQA-QUEUE-006)', () => {
+    const positionCard = renderCard(createMockThread({ queue_position: 22 }), { sortBy: 'position' })
+
+    expect(screen.getByText('#22')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Drag to reorder' })).toBeInTheDocument()
+
+    positionCard.unmount()
+
+    // The drag handle disappears because dragging only reorders position
+    // order, but the reader keeps the true saved position label.
+    renderCard(createMockThread({ queue_position: 22 }), { sortBy: 'alphabetical' })
+
+    expect(screen.queryByRole('button', { name: 'Drag to reorder' })).not.toBeInTheDocument()
+    expect(screen.getByText('#22')).toBeInTheDocument()
+  })
+
   it('handles keyboard, drag, blocked dependency, and all position-menu callbacks', async () => {
     const user = userEvent.setup()
     // SAFETY: every callback name is paired with a vi.fn of the same arity

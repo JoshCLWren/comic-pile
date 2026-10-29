@@ -175,8 +175,20 @@ describe('Edit Series discard confirmation', () => {
     expect(close).not.toHaveBeenCalled()
   })
 
-  it('warns for queued issue edits alone and discards only after confirmation', async () => {
+  it('prompts before discarding a dirty draft closed with the dialog close control', async () => {
     const user = userEvent.setup()
+    const close = vi.fn()
+    render(<Harness onEditSubmit={vi.fn()} onCloseEdit={close} />)
+    await user.type(screen.getByLabelText('Notes'), ' updated')
+    await user.click(screen.getByRole('button', { name: 'Close modal' }))
+    const prompt = screen.getByRole('dialog', { name: 'Discard changes?' })
+    expect(close).not.toHaveBeenCalled()
+    await user.click(within(prompt).getByRole('button', { name: 'Discard changes' }))
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('warns for queued issue edits alone and discards only after confirmation', async () => {    const user = userEvent.setup()
     const close = vi.fn()
     const save = vi.fn()
     render(<Harness onEditSubmit={save} onCloseEdit={close} />)

@@ -1026,7 +1026,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
 
   expect(screen.getByText(/You do not need to add earlier issues/i)).toBeInTheDocument()
   expect(screen.getByText(/not an issue number/i)).toBeInTheDocument()
-  expect(screen.getByLabelText('Issues already read (optional)')).toHaveValue(0)
+  expect(screen.getByLabelText('Issues already read (optional)')).toHaveValue('')
 
   await user.click(screen.getByRole('button', { name: /create series/i }))
 
@@ -1037,6 +1037,42 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   expect(mockedIssuesApi.create).toHaveBeenCalledWith(78, '71')
   expect(mockedIssuesApi.markRead).not.toHaveBeenCalled()
   expect(mockedIssuesApi.bulkMarkRead).not.toHaveBeenCalled()
+})
+
+  it('reports a negative Already read count instead of silently coercing it (MQA-QUEUE-008)', async () => {
+  const user = userEvent.setup()
+  const create = vi.fn()
+  mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
+  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
+  await user.type(screen.getByLabelText('Title'), 'Negative Read')
+  await user.type(screen.getByLabelText('Issues'), '1-3')
+
+  const alreadyRead = screen.getByLabelText(/Issues already read/i)
+  await user.type(alreadyRead, '-1')
+
+  // The typed value stays visible instead of being rewritten to 1, and the
+  // invalid count reports inline while Create Series stays disabled.
+  expect(alreadyRead).toHaveValue('-1')
+  expect(screen.getByRole('alert')).toHaveTextContent(/whole number of 0 or more/i)
+  expect(screen.getByRole('button', { name: /create series/i })).toBeDisabled()
+
+  await user.clear(alreadyRead)
+  await user.type(alreadyRead, '2')
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /create series/i })).toBeEnabled()
+
+  await user.clear(alreadyRead)
+  await user.type(alreadyRead, '1.5')
+  expect(screen.getByRole('alert')).toHaveTextContent(/whole number of 0 or more/i)
+  expect(screen.getByRole('button', { name: /create series/i })).toBeDisabled()
+
+  await user.clear(alreadyRead)
+  await user.type(alreadyRead, '4')
+  expect(screen.getByRole('alert')).toHaveTextContent(/cannot be more than the 3 issues/i)
+  expect(screen.getByRole('button', { name: /create series/i })).toBeDisabled()
+  expect(create).not.toHaveBeenCalled()
 })
 
   it('handles reactivation success and failure from completed threads', async () => {
