@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query'
 import { rollApi } from '../services/api-roll'
 import type { RollApi } from '../services/apiTypes'
 import type { OverrideRollPayload } from '../types'
-import { invalidateAfterRollDieModeUpdate } from '../query/cacheEffects'
+import { invalidateAfterRollDieModeUpdate, applyClearedManualDie } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 
 function getRollApi(api?: RollApi): RollApi {
@@ -68,7 +68,13 @@ export function useClearManualDie(api?: RollApi) {
   const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
     mutationFn: () => rollApiInstance.clearManualDie(),
-    onSuccess: async () => {
+    onSuccess: async (automaticDie) => {
+      // The clear response carries the automatic die the ladder resumes at, so
+      // the die readout and the Auto/Manual mode move together instead of
+      // waiting for the invalidation's bootstrap refetch (#4279).
+      if (automaticDie !== null) {
+        applyClearedManualDie(queryClient, automaticDie)
+      }
       await invalidateAfterRollDieModeUpdate(queryClient)
     },
   })

@@ -238,6 +238,28 @@ it('explains automatic and manual die modes on mobile', async () => {
   expect(within(dieModal).getByRole('button', { name: /^auto$/i })).toBeInTheDocument()
 })
 
+it('wires the header AUTO control to the clear-manual-die mutation (#4279)', async () => {
+  const user = userEvent.setup()
+  const clearManualDie = vi.fn().mockResolvedValue(8)
+  // SAFETY: Test stub for useClearManualDie; cast is safe because only mutate/isPending are accessed.
+  vi.mocked(useClearManualDie).mockReturnValue(
+    cast<ReturnType<typeof useClearManualDie>>({ mutate: clearManualDie, isPending: false }),
+  )
+  mockedUseRollBootstrap.mockReturnValue({
+    data: { ...bootstrap, current_die: 20, manual_die: 20 },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+
+  renderRollPage()
+
+  await user.click(screen.getByTitle(/exit manual mode/i))
+
+  await waitFor(() => expect(clearManualDie).toHaveBeenCalledTimes(1))
+})
+
 it('shows a retry action when bootstrap loading fails', async () => {
   const user = userEvent.setup()
   const refetch = vi.fn()

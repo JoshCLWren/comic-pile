@@ -38,6 +38,18 @@ it('uses canonical v1 Roll and rating paths for maintained callers', async () =>
   expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap')
 })
 
+it('reads the automatic die that clear-manual-die reports (#4279)', async () => {
+  client.post.mockResolvedValueOnce('d8')
+
+  await expect(rollApi.clearManualDie()).resolves.toBe(8)
+})
+
+it('reports no die when the clear-manual-die body is not a die label', async () => {
+  client.post.mockResolvedValueOnce({ detail: 'ok' })
+
+  await expect(rollApi.clearManualDie()).resolves.toBeNull()
+})
+
 it('keeps auth-recovery Roll mutations on canonical v1 paths', async () => {
   await protectedRollMutationApi.rate({ thread_id: 9, rating: 3 })
   await protectedRollMutationApi.bootstrap()

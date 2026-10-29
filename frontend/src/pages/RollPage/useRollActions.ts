@@ -16,7 +16,7 @@ import type { RatingThread, ThreadMetadata } from './types'
 
 interface RollMutations {
   setDieMutation: { mutate: (die: number) => Promise<void>; isPending: boolean }
-  clearManualDieMutation: { mutate: () => Promise<void>; isPending: boolean }
+  clearManualDieMutation: { mutate: () => Promise<number | null | void>; isPending: boolean }
   rollMutation: { mutate: () => Promise<RollResponse>; isPending: boolean }
   snoozeMutation: {
     mutate: (expectedPendingThreadId?: number) => Promise<SnoozeMutationOutcome>
@@ -284,7 +284,10 @@ export function useRollActions({
 
   async function handleClearManualDie() {
     try {
-      setCurrentDie(6)
+      // The mutation applies the server's automatic die to the bootstrap cache,
+      // which drives both the die readout and the Auto/Manual mode. Never guess
+      // the value here: `bootstrap.current_die` is the pinned die while manual
+      // mode is active, and d6 is not the ladder's answer (#4279).
       await clearManualDieMutation.mutate()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))

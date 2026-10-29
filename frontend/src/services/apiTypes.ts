@@ -8,7 +8,11 @@ export interface RollApi {
   skip: () => Promise<RollResponse>
   reroll: () => Promise<RollResponse>
   setDie: (die: number) => Promise<void>
-  clearManualDie: () => Promise<void>
+  /**
+   * Clear the manual die override. Resolves with the automatic die the ladder
+   * resumes at (null when the response body is not a die label).
+   */
+  clearManualDie: () => Promise<number | null>
 }
 
 export interface ProtectedRollMutationApi {

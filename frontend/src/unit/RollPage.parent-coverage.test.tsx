@@ -1290,15 +1290,20 @@ describe('RollPage parent handlers', () => {
 
   it('renders manual-die mode and a failed die change in the modal', async () => {
     bootstrapData.manual_die = 4
+    // Backend invariant: bootstrap.current_die is already the pinned die while
+    // manual mode is active, so the readout must show the d4 the reader pinned
+    // rather than the suspended automatic d6 (#4279).
+    bootstrapData.current_die = 4
     render(<RollPage />)
     expect(screen.getByRole('button', { name: 'Auto' })).toHaveAttribute('title', 'Exit manual mode (currently d4)')
 
-    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /current die d4, manual mode/i }))
     const modal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
     spies.setDie.mockRejectedValueOnce(new Error('die failed'))
     await userEvent.setup().click(within(modal).getByRole('button', { name: 'd4' }))
     expect(spies.setDie).toHaveBeenCalledWith(4)
     expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
     bootstrapData.manual_die = null
+    bootstrapData.current_die = 6
   })
 })
