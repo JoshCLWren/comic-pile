@@ -109,16 +109,23 @@ export default function PositionMenu({
 
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        const firstItem = menuItemsRef.current[0]
+        const firstItem = menuItemsRef.current.find((item) => item !== null)
         if (document.activeElement === triggerRef.current) {
           firstItem?.focus()
         } else {
           const currentIndex = menuItemsRef.current.findIndex((item) => item === document.activeElement)
-          const nextItem = menuItemsRef.current[currentIndex + 1]
+          let nextIndex = currentIndex + 1
+          // Skip null entries (explanation divs don't have refs)
+          while (nextIndex < menuItemsRef.current.length && menuItemsRef.current[nextIndex] === null) {
+            nextIndex++
+          }
+          const nextItem = menuItemsRef.current[nextIndex]
           if (nextItem) {
             nextItem.focus()
           } else {
-            firstItem?.focus()
+            // Wrap to the beginning
+            const firstButton = menuItemsRef.current.find((item) => item !== null)
+            firstButton?.focus()
           }
         }
       }
@@ -127,7 +134,7 @@ export default function PositionMenu({
         e.preventDefault()
         const items = menuItemsRef.current.filter(Boolean)
         const currentIndex = items.findIndex((item) => item === document.activeElement)
-        const prevItem = items[currentIndex - 1]
+        let prevItem = items[currentIndex - 1]
         if (prevItem) {
           prevItem.focus()
         } else {
@@ -191,7 +198,11 @@ export default function PositionMenu({
       window.setTimeout(() => {
         clickFromKeyboardRef.current = false
       }, 100)
-      setTimeout(() => menuItemsRef.current[0]?.focus(), 0)
+      setTimeout(() => {
+        // Find the first actual button element (skip explanation divs)
+        const firstButton = menuItemsRef.current.find((item) => item !== null)
+        firstButton?.focus()
+      }, 0)
     }
   }
 

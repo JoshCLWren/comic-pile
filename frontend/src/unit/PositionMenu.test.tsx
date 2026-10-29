@@ -736,4 +736,112 @@ describe('PositionMenu', () => {
     expect(triggers[0]).toHaveAttribute('aria-expanded', 'true')
     expect(triggers[1]).toHaveAttribute('aria-expanded', 'false')
   })
+
+  it('navigates menu items with arrow keys when explanation note is present (alphabetical sort)', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+        positionActionsAvailable
+        sortBy="alphabetical"
+      />
+    )
+
+    const trigger = screen.getByRole('button', { name: /series actions/i })
+    trigger.focus()
+    await user.keyboard('{Enter}')
+
+    // The explanation note should be visible
+    expect(screen.getByText('These actions change the saved position order')).toBeInTheDocument()
+
+    // First menu item should be focused (skipping the explanation note)
+    const menuItems = screen.getAllByRole('menuitem')
+    expect(document.activeElement).toBe(menuItems[0])
+
+    // Navigate down through all items
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[1])
+
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[2])
+
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[3])
+
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[4])
+
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[5])
+
+    // Should wrap to the first item
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(menuItems[0])
+  })
+
+  it('navigates menu items with arrow keys when explanation note is present (created sort)', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+        positionActionsAvailable
+        sortBy="created"
+      />
+    )
+
+    const trigger = screen.getByRole('button', { name: /series actions/i })
+    trigger.focus()
+    await user.keyboard('{Enter}')
+
+    // The explanation note should be visible
+    expect(screen.getByText('These actions change the saved position order')).toBeInTheDocument()
+
+    // First menu item should be focused (skipping the explanation note)
+    const menuItems = screen.getAllByRole('menuitem')
+    expect(document.activeElement).toBe(menuItems[0])
+
+    // Navigate up from first item should go to trigger
+    await user.keyboard('{ArrowUp}')
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('focuses first button item when opening menu from keyboard with explanation note present', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+        positionActionsAvailable
+        sortBy="alphabetical"
+      />
+    )
+
+    const trigger = screen.getByRole('button', { name: /series actions/i })
+    trigger.focus()
+    await user.keyboard('{ArrowDown}') // Open menu
+
+    // The explanation note should be visible
+    expect(screen.getByText('These actions change the saved position order')).toBeInTheDocument()
+
+    // First menu item should be focused (skipping the explanation note)
+    const menuItems = screen.getAllByRole('menuitem')
+    expect(document.activeElement).toBe(menuItems[0])
+  })
 })
