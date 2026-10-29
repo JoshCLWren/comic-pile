@@ -2,8 +2,7 @@
 //! No Python hop and no synthetic "success" values for missing database rows.
 use crate::{
     auth::AuthenticatedUser,
-    db,
-    option_inputs,
+    db, option_inputs,
     reading_session::{self, SessionPolicy},
     ApiError, AppState,
 };
@@ -25,7 +24,10 @@ pub struct BootstrapQuery {
 }
 
 fn unavailable() -> ApiError {
-    ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid native Roll response")
+    ApiError(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Invalid native Roll response",
+    )
 }
 
 fn thread_value(row: &tokio_postgres::Row) -> Result<Value, ApiError> {
@@ -42,7 +44,9 @@ fn thread_value(row: &tokio_postgres::Row) -> Result<Value, ApiError> {
 }
 
 fn normalized_source(value: &Option<String>) -> Option<&str> {
-    value.as_deref().filter(|v| matches!(*v, "inferred" | "manual" | "snooze" | "quiz"))
+    value
+        .as_deref()
+        .filter(|v| matches!(*v, "inferred" | "manual" | "snooze" | "quiz"))
 }
 
 fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
@@ -186,9 +190,12 @@ async fn latest_session_read(
         let thread_id: Option<i32> = row.try_get(2).map_err(db::query_error)?;
         let thread_title: Option<String> = row.try_get(3).map_err(db::query_error)?;
         let read_at: Option<String> = row.try_get(4).map_err(db::query_error)?;
-        Ok(json!({"issue_id":issue_id,"issue_number":issue_number,"thread_id":thread_id,
-            "thread_title":thread_title,"read_at":read_at}))
-    }).transpose()
+        Ok(
+            json!({"issue_id":issue_id,"issue_number":issue_number,"thread_id":thread_id,
+            "thread_title":thread_title,"read_at":read_at}),
+        )
+    })
+    .transpose()
 }
 
 pub async fn bootstrap_v2(
@@ -208,64 +215,88 @@ pub async fn bootstrap_v2(
     let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
     let snoozed = session.snoozed_thread_ids.clone().unwrap_or_default();
     let excluded: HashSet<i32> = skipped.iter().chain(snoozed.iter()).copied().collect();
-    let candidates = validated
-        .eligible_frontiers()
-        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid reading constraints"))?;
-    let eligible: Vec<_> = candidates.iter()
+    let candidates = validated.eligible_frontiers().map_err(|_| {
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid reading constraints",
+        )
+    })?;
+    let eligible: Vec<_> = candidates
+        .iter()
         .filter(|candidate| !excluded.contains(&candidate.thread_id))
         .take(active.current_die.max(0) as usize)
         .collect();
     let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
 
     let conn = db::checkout(&state).await?;
-    let rows = conn.query(CANDIDATES, &[&user.id(),&ids]).await.map_err(db::query_error)?;
+    let rows = conn
+        .query(CANDIDATES, &[&user.id(), &ids])
+        .await
+        .map_err(db::query_error)?;
     let mut by_thread: HashMap<i32, Value> = HashMap::new();
     for row in &rows {
         let (thread_id, item) = candidate_item(row)?;
-        by_thread.insert(thread_id,item);
+        by_thread.insert(thread_id, item);
     }
     let mut rollable = vec![];
     for item in eligible {
         let projected = by_thread.remove(&item.thread_id).ok_or_else(unavailable)?;
         rollable.push(projected);
     }
-    let last_read = latest_session_read(&conn,user,session.id).await?;
+    let last_read = latest_session_read(&conn, user, session.id).await?;
 
-    let summary_rows = conn.query(
-        "SELECT t.id,t.title,t.format,t.last_activity_at::text,
+    let summary_rows = conn
+        .query(
+            "SELECT t.id,t.title,t.format,t.last_activity_at::text,
           (t.last_activity_at < now() - interval '7 days') AS stale
          FROM threads t WHERE t.user_id=$1 ORDER BY t.queue_position,t.id",
-        &[&user.id()],
-    ).await.map_err(db::query_error)?;
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
     let mut known: HashMap<i32, Value> = HashMap::new();
     let mut stale = Vec::new();
     for row in &summary_rows {
         let id: i32 = row.try_get(0).map_err(db::query_error)?;
         let stale_flag: Option<bool> = row.try_get(4).map_err(db::query_error)?;
         let info = thread_value(row)?;
-        if stale_flag.unwrap_or(false) { stale.push(info.clone()); }
+        if stale_flag.unwrap_or(false) {
+            stale.push(info.clone());
+        }
         known.insert(id, info);
     }
     let summary = |ids: &[i32]| {
-        ids.iter().filter_map(|id| known.get(id).cloned()).take(20).collect::<Vec<_>>()
+        ids.iter()
+            .filter_map(|id| known.get(id).cloned())
+            .take(20)
+            .collect::<Vec<_>>()
     };
     let snoozed_threads = summary(&snoozed);
     let snoozed_count = snoozed_threads.len();
     let skipped_threads = summary(&skipped);
     let eligible_threads: HashSet<i32> = candidates.iter().map(|c| c.thread_id).collect();
-    let blocked: Vec<i32> = validated.inputs().core.threads.iter()
+    let blocked: Vec<i32> = validated
+        .inputs()
+        .core
+        .threads
+        .iter()
         .filter(|thread| thread.status == "active" && !eligible_threads.contains(&thread.id))
-        .map(|thread| thread.id).collect();
+        .map(|thread| thread.id)
+        .collect();
     let blocked_threads = summary(&blocked);
 
-    let active_thread = session.pending_thread_id.and_then(|id| known.get(&id).cloned());
+    let active_thread = session
+        .pending_thread_id
+        .and_then(|id| known.get(&id).cloned());
     let last_roll_result: Option<i32> = if let Some(thread_id) = session.pending_thread_id {
         conn.query_opt("SELECT e.result FROM events e WHERE e.session_id=$1
             AND e.selected_thread_id=$2 AND e.type='roll' ORDER BY e.timestamp DESC,e.id DESC LIMIT 1",
             &[&session.id,&thread_id]).await.map_err(db::query_error)?
             .map(|row| row.try_get(0).map_err(db::query_error)).transpose()?
             .flatten()
-    } else {None};
+    } else {
+        None
+    };
     let mode_source = normalized_source(&session.bandwidth_source);
     let intent_source = normalized_source(&session.intent_source);
     let response = json!({
