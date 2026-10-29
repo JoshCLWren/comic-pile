@@ -357,6 +357,7 @@ async def get_v2_rollable_projection(
 
     stats: dict[int, _SeriesStats] = {volume_id: _SeriesStats() for volume_id in volumes}
     aggregate_rows: list[projection_repo.SeriesAggregateRow] = []
+    aggregate_ok = False
     series_ms = 0.0
     series_status = "empty"
     if volumes:
@@ -365,6 +366,7 @@ async def get_v2_rollable_projection(
             aggregate_rows = await projection_repo.fetch_series_aggregates(
                 db, user_id=user_id, volume_ids=volumes
             )
+            aggregate_ok = True
             series_status = "ok"
         except (TimeoutError, sqlalchemy_exc.TimeoutError, sqlalchemy_exc.DBAPIError) as error:
             # Fail open (issue #4315): a slow or unavailable canonical-series
@@ -475,7 +477,7 @@ async def get_v2_rollable_projection(
             state=issue_state,
             series_mapping_state=series_state,
         )
-        if volume_id is not None:
+        if volume_id is not None and aggregate_ok:
             entry = stats[volume_id]
             ratings = sorted(entry.effective.values(), key=lambda item: (item[1], item[0]))
             average = (
@@ -505,6 +507,9 @@ async def get_v2_rollable_projection(
                 progress_scope=ProgressScope.CANONICAL_SERIES_RUN,
             )
         else:
+            # No canonical-series aggregate (unknown volume, or the aggregate
+            # timed out/failed open in issue #4315): report the always-available
+            # thread-scoped progress rather than a false zero series count.
             total = group.thread_total_count
             rollable_reader = RollableReader(
                 latest_rating=None,
