@@ -634,4 +634,72 @@ describe('bootstrap retry budget and manual recovery race', () => {
     expect(auth?.authState.isLoading).toBe(false)
     expect(auth?.user?.username).toBe('recovered')
   }, 15000)
+
+  it('logout during bootstrap cancels the scheduled retry and ignores stale responses', async () => {
+    vi.useFakeTimers()
+    const error503 = axiosError(503)
+    // Initial bootstrap fails with 503, which schedules a retry.
+    mocks.get.mockRejectedValueOnce(error503)
+
+    renderProvider()
+
+    // Flush the initial bootstrap attempt: 503 -> degraded state with a retry scheduled.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(auth?.authState.retryCount).toBe(1)
+    expect(mocks.get).toHaveBeenCalledTimes(1)
+
+    // User logs out while a retry timer is scheduled.
+    act(() => auth!.logout())
+    expect(auth?.authState.status).toBe('unauthenticated')
+    expect(auth?.authState.user).toBeNull()
+    expect(auth?.authState.retryCount).toBe(0)
+
+    // Advance well beyond the scheduled retry delay. No more /auth/me calls should happen
+    // because the timer was cancelled and the generation was incremented.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(mocks.get).toHaveBeenCalledTimes(1)
+    expect(auth?.authState.status).toBe('unauthenticated')
+  }, 15000)
+
+  it('remount (StrictMode simulation) resets bootstrap without duplicate state corruption', async () => {
+    vi.useFakeTimers()
+    mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+
+    // First mount: bootstrap succeeds.
+    const { unmount } = renderProvider()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.user?.username).toBe('reader')
+    const callsAfterFirstMount = mocks.get.mock.calls.length
+
+    // Simulate StrictMode unmount: cleanup runs, clearing timers and in-flight state.
+    unmount()
+
+    // Second mount: fresh bootstrap starts, counter reset, new /auth/me call.
+    renderProvider()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.user?.username).toBe('reader')
+
+    // Exactly one additional /auth/me call from the second mount's bootstrap.
+    expect(mocks.get).toHaveBeenCalledTimes(callsAfterFirstMount + 1)
+    expect(mocks.get).toHaveBeenLastCalledWith('/v1/auth/me', {
+      timeout: 15000,
+      skipAuthRedirect: true,
+    })
+    expect(auth?.authState.retryCount).toBe(0)
+  }, 15000)
 })
