@@ -42,18 +42,47 @@ from scripts.profile_local_traffic import (  # noqa: E402
 )
 
 
-def _await_server(proc: subprocess.Popen, port: int, timeout: float = 60) -> None:
+def cold_server_command(port: int, stats_path: Path) -> list[str]:
+    """Launch as a module so Python can import api.index from the repo root.
+
+    Running scripts/profile_cold_server.py by filename sets sys.path[0] to
+    scripts/ rather than the repo root, breaking the app import on macOS.
+    """
+    return [
+        sys.executable,
+        "-m",
+        "scripts.profile_cold_server",
+        "--port",
+        str(port),
+        "--output",
+        str(stats_path),
+    ]
+
+
+def _server_failure(message: str, log_path: Path) -> RuntimeError:
+    """Include the actual traceback in console output instead of hiding it."""
+    try:
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        diagnostic = "\n".join(lines[-35:])
+    except OSError:
+        diagnostic = "(server log unavailable)"
+    return RuntimeError(f"{message}; log: {log_path}\n{diagnostic}")
+
+
+def _await_server(
+    proc: subprocess.Popen, port: int, log_path: Path, timeout: float = 60
+) -> None:
     """Wait for TCP readiness without sending a warming HTTP request."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            raise RuntimeError("Profiled API exited before readiness; inspect its server log")
+            raise _server_failure("Profiled API exited before readiness", log_path)
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.2):
                 return
         except OSError:
             time.sleep(0.04)
-    raise TimeoutError("Cold API startup exceeded 60 seconds; inspect server log")
+    raise _server_failure("Cold API startup exceeded 60 seconds", log_path)
 
 
 def _stop_profile(proc: subprocess.Popen) -> None:
@@ -132,10 +161,7 @@ def _record_cpu_call_graph(
     base = f"http://127.0.0.1:{port}"
     stats_path = (output / f"cold-{iteration}.pstats").resolve()
     log_path = output / f"cold-{iteration}.server.log"
-    command = [
-        sys.executable, str(ROOT / "scripts" / "profile_cold_server.py"),
-        "--port", str(port), "--output", str(stats_path),
-    ]
+    command = cold_server_command(port, stats_path)
     with log_path.open("wb") as log:
         os.chmod(log_path, 0o600)
         proc = subprocess.Popen(
@@ -147,7 +173,7 @@ def _record_cpu_call_graph(
             stderr=subprocess.STDOUT,
         )
         try:
-            _await_server(proc, port)
+            _await_server(proc, port, log_path)
             first = get(base, safe_route(route), token)
             if first["status"] != 200 or not first["cold"]:
                 raise RuntimeError(
