@@ -18,6 +18,9 @@ class IssueResponse(BaseModel):
     position: int
     status: str
     read_at: datetime | None
+    # Most recent rating saved for this specific issue (#4204). ``None`` means
+    # the issue has not been rated since per-issue ratings were introduced.
+    last_rating: float | None = None
     created_at: datetime
 
 

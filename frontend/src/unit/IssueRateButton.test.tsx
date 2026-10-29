@@ -7,7 +7,7 @@ import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutation
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { rateApi } from '../services/api-rate'
-import type { Issue, Thread } from '../types'
+import type { Issue, RateResult, Thread } from '../types'
 
 vi.mock('../services/api-rate', () => ({
   rateApi: { rate: vi.fn() },
@@ -61,21 +61,25 @@ describe('IssueRateButton', () => {
   })
 
   it('rates the row directly and reconciles the issue and thread cache', async () => {
-    const ratedThread: Thread = {
+    const ratedThread: RateResult = {
       ...thread,
       issues_remaining: 1,
       next_unread_issue_id: 12,
       next_unread_issue_number: '3',
       last_rating: 4,
+      session_id: 21,
+      undo_snapshot_id: 31,
     }
     vi.mocked(rateApi.rate).mockResolvedValue(ratedThread)
     const onSnapshotChange = vi.fn()
+    const onRated = vi.fn()
 
     render(
       <IssueRateButton
         issue={issue}
         snapshot={snapshot}
         onSnapshotChange={onSnapshotChange}
+        onRated={onRated}
       />,
       { wrapper },
     )
@@ -92,7 +96,14 @@ describe('IssueRateButton', () => {
     })
     expect(applyRatedThreadCache).toHaveBeenCalledWith(queryClient, ratedThread)
     expect(onSnapshotChange).toHaveBeenCalledWith({
-      issues: [{ ...issue, status: 'read', read_at: '2026-08-03T18:30:00Z' }],
+      issues: [
+        {
+          ...issue,
+          status: 'read',
+          read_at: '2026-08-03T18:30:00Z',
+          last_rating: 4,
+        },
+      ],
       thread: {
         ...thread,
         issues_remaining: 1,
@@ -100,7 +111,27 @@ describe('IssueRateButton', () => {
         next_unread_issue_number: '3',
       },
     })
+    expect(onRated).toHaveBeenCalledWith({
+      issueNumber: '2',
+      rating: 4,
+      sessionId: 21,
+      snapshotId: 31,
+    })
     expect(screen.getByRole('button', { name: 'Rated 4' })).toBeInTheDocument()
+  })
+
+  it('restores the saved rating for this issue instead of the thread latest rating', () => {
+    render(
+      <IssueRateButton
+        issue={{ ...issue, last_rating: 5 }}
+        snapshot={{ issues: [{ ...issue, last_rating: 5 }], thread }}
+        onSnapshotChange={vi.fn()}
+      />,
+      { wrapper },
+    )
+
+    expect(screen.getByRole('button', { name: 'Rated 5' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Rate' })).not.toBeInTheDocument()
   })
 
   it('shows an error and keeps the issue unread when the server rejects the rating', async () => {

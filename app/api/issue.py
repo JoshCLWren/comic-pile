@@ -131,6 +131,7 @@ def issue_to_response(issue: Issue) -> IssueResponse:
     issue_position = issue.position
     issue_status = issue.status
     read_at = issue.read_at
+    last_rating = issue.last_rating
     created_at = issue.created_at
 
     return IssueResponse(
@@ -140,6 +141,7 @@ def issue_to_response(issue: Issue) -> IssueResponse:
         position=issue_position,
         status=issue_status,
         read_at=read_at,
+        last_rating=last_rating,
         created_at=created_at,
     )
 

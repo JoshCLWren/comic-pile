@@ -339,12 +339,23 @@ export async function invalidateComicVineImportStatus(
  * TanStack Query refetches invalidated active queries — callers must not also
  * call `refetch()` for a key this helper already refreshes.
  */
-export async function invalidateAfterUndo(client: QueryClient): Promise<void> {
+export async function invalidateAfterUndo(
+  client: QueryClient,
+  threadId?: number,
+): Promise<void> {
   await Promise.all([
     invalidateAfterQueueMovement(client),
     client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
+    // A rating undone from a Thread row restores that row's own read state and
+    // saved rating, which no queue/session key covers (#4204).
+    ...(threadId === undefined
+      ? []
+      : [
+          client.invalidateQueries({ queryKey: queryKeys.thread.detail(threadId) }),
+          client.invalidateQueries({ queryKey: queryKeys.thread.issuePages(threadId) }),
+        ]),
   ])
 }
 

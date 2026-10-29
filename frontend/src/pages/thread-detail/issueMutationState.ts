@@ -13,6 +13,8 @@ export interface IssueReadStatusResult {
   issues_remaining: number
   next_unread_issue_id: number | null
   next_unread_issue_number: string | null
+  /** Present only when the action saved a rating for this issue. */
+  last_rating?: number | null
 }
 
 /**
@@ -30,7 +32,10 @@ export function applyIssueReadStatus(
   }
 
   const issueIsUnchanged =
-    currentIssue.status === result.status && currentIssue.read_at === result.read_at
+    currentIssue.status === result.status &&
+    currentIssue.read_at === result.read_at &&
+    (result.last_rating === undefined ||
+      (currentIssue.last_rating ?? null) === result.last_rating)
   const threadIsUnchanged =
     snapshot.thread.issues_remaining === result.issues_remaining &&
     snapshot.thread.next_unread_issue_id === result.next_unread_issue_id &&
@@ -42,7 +47,14 @@ export function applyIssueReadStatus(
 
   const issues = snapshot.issues.map((issue) =>
     issue.id === issueId
-      ? { ...issue, status: result.status, read_at: result.read_at }
+      ? {
+          ...issue,
+          status: result.status,
+          read_at: result.read_at,
+          ...(result.last_rating === undefined
+            ? {}
+            : { last_rating: result.last_rating }),
+        }
       : issue,
   )
 

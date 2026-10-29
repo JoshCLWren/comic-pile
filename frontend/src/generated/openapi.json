@@ -11720,6 +11720,17 @@
             "title": "Issue Number",
             "type": "string"
           },
+          "last_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rating"
+          },
           "position": {
             "title": "Position",
             "type": "integer"
@@ -13171,6 +13182,17 @@
               }
             ]
           },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -13189,6 +13211,17 @@
               }
             ],
             "title": "Total Issues"
+          },
+          "undo_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Undo Snapshot Id"
           }
         },
         "required": [

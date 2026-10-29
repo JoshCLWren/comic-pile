@@ -90,18 +90,61 @@ async def test_direct_rate_without_session_persists_and_advances_frontier(
         select(Event).where(Event.type == "rate").where(Event.thread_id == thread.id)
     )
     event = event_result.scalar_one()
-    assert event.session_id is None
+    # A direct rating now creates the reading session its undo record needs, so
+    # the event belongs to that session even though no Roll was launched.
+    assert event.session_id is not None
     assert event.issue_id == issues["1"].id
     assert event.issue_number == "1"
-    assert event.die is None
     assert event.die_after is None
     assert event.source_roll_event_id is None
+    assert data["session_id"] == event.session_id
+    assert data["undo_snapshot_id"] is not None
 
-    # The direct path must not fabricate a Roll session or an undo snapshot.
+    # One session and a session-start checkpoint plus the rating's undo record.
     session_count = await async_db.scalar(select(func.count()).select_from(ReadingSession))
     snapshot_count = await async_db.scalar(select(func.count()).select_from(Snapshot))
-    assert session_count == 0
-    assert snapshot_count == 0
+    assert session_count == 1
+    assert snapshot_count == 2
+    assert issues["1"].last_rating == 4.0
+
+
+@pytest.mark.asyncio
+async def test_each_issue_row_keeps_its_own_saved_rating(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Rated rows return their own rating, not the thread's latest rating."""
+    thread, issues = await _create_issue_tracked_thread(async_db, default_user.id)
+
+    first = await auth_client.post(
+        "/api/v1/rate/",
+        json={
+            "rating": 5.0,
+            "thread_id": thread.id,
+            "direct": True,
+            "issue_number": "1",
+        },
+    )
+    second = await auth_client.post(
+        "/api/v1/rate/",
+        json={
+            "rating": 2.0,
+            "thread_id": thread.id,
+            "direct": True,
+            "issue_number": "2",
+        },
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["last_rating"] == 2.0
+
+    listed = await auth_client.get(f"/api/v1/threads/{thread.id}/issues")
+    assert listed.status_code == 200
+    rating_by_number = {
+        row["issue_number"]: row["last_rating"] for row in listed.json()["issues"]
+    }
+    assert rating_by_number == {"1": 5.0, "2": 2.0, "3": None}
 
 
 @pytest.mark.asyncio
@@ -183,11 +226,15 @@ async def test_direct_rate_records_undo_snapshot_and_undo_restores_state(
         },
     )
     assert response.status_code == 200
-    assert response.json()["next_unread_issue_number"] == "1"
+    response_data = response.json()
+    assert response_data["next_unread_issue_number"] == "1"
+    assert response_data["session_id"] == session.id
+    assert response_data["undo_snapshot_id"] is not None
 
     await async_db.refresh(thread)
     await async_db.refresh(issues["2"])
     assert issues["2"].status == "read"
+    assert issues["2"].last_rating == 3.0
     assert thread.next_unread_issue_id == issues["1"].id
 
     snapshots_response = await auth_client.get(f"/api/v1/undo/{session.id}/snapshots")
@@ -195,6 +242,7 @@ async def test_direct_rate_records_undo_snapshot_and_undo_restores_state(
     snapshots = snapshots_response.json()["snapshots"]
     assert len(snapshots) == 1
     assert snapshots[0]["description"] == "After rating"
+    assert snapshots[0]["id"] == response_data["undo_snapshot_id"]
 
     undo_response = await auth_client.post(
         f"/api/v1/undo/{session.id}/undo/{snapshots[0]['id']}"
@@ -205,6 +253,7 @@ async def test_direct_rate_records_undo_snapshot_and_undo_restores_state(
     await async_db.refresh(issues["2"])
     assert issues["2"].status == "unread"
     assert issues["2"].read_at is None
+    assert issues["2"].last_rating is None
     assert thread.next_unread_issue_id == issues["1"].id
     assert thread.issues_remaining == 3
     assert thread.last_rating is None

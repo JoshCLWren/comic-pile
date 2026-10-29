@@ -30,6 +30,7 @@ class SnapshotIssueState(TypedDict):
     status: str
     position: NotRequired[int]
     read_at: NotRequired[str | None]
+    last_rating: NotRequired[float | None]
     catalog_issue_id: NotRequired[int | None]
 
 

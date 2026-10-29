@@ -82,6 +82,7 @@ ISSUE_FIELDS = {
     "position",
     "status",
     "read_at",
+    "last_rating",
     "created_at",
 }
 BLOCKING_EXPLANATION_FIELDS = {
@@ -250,9 +251,9 @@ def test_thread_detail_preserves_the_complete_thread_contract() -> None:
 
 
 def test_issue_list_item_contract_is_exact_and_named() -> None:
-    """Issue-list items expose only the documented 7-field screen contract."""
+    """Issue-list items expose only the documented 8-field screen contract."""
     assert set(IssueResponse.model_fields) == ISSUE_FIELDS
-    assert len(IssueResponse.model_fields) == 7
+    assert len(IssueResponse.model_fields) == 8
     assert set(IssueListResponse.model_fields) == {
         "issues",
         "next_page_token",

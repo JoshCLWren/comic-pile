@@ -119,18 +119,25 @@ async def resolve_current_session(db: AsyncSession, user_id: int) -> ReadingSess
     return session
 
 
-async def _ensure_initialized_bandwidth(db: AsyncSession, session: ReadingSession) -> ReadingSession:
+async def _ensure_initialized_bandwidth(
+    db: AsyncSession,
+    session: ReadingSession,
+    *,
+    commit: bool = True,
+) -> ReadingSession:
     """Apply one-time inferred bandwidth initialization to a reusable session.
 
     Sessions already recording bandwidth state pass through untouched so
-    bootstrap requests never recompute or overwrite explicit overrides. The
-    commit here persists exactly the initialization write; the configured
-    session factory does not expire instances on commit, so the returned
-    session stays usable for the caller.
+    bootstrap requests never recompute or overwrite explicit overrides. By
+    default the commit here persists exactly the initialization write; the
+    configured session factory does not expire instances on commit, so the
+    returned session stays usable for the caller. Callers that must bundle
+    other work into one transaction pass ``commit=False`` and own the commit.
 
     Args:
         db: Async database session used for initialization persistence.
         session: The resolved current reading session.
+        commit: Whether to commit the initialization write immediately.
 
     Returns:
         The same session with initialized (or preserved) bandwidth state.
@@ -138,7 +145,8 @@ async def _ensure_initialized_bandwidth(db: AsyncSession, session: ReadingSessio
     if session.bandwidth_source is not None:
         return session
     initialized = await initialize_session_bandwidth(db, session)
-    await db.commit()
+    if commit:
+        await db.commit()
     return initialized
 
 
@@ -210,8 +218,24 @@ async def should_start_new(db: AsyncSession, user_id: int) -> bool:
     return await resolve_current_session(db, user_id) is None
 
 
-async def create_session_start_snapshot(db: AsyncSession, session: ReadingSession) -> None:
-    """Create a consistent full-library checkpoint at session start."""
+async def create_session_start_snapshot(
+    db: AsyncSession,
+    session: ReadingSession,
+    *,
+    commit: bool = True,
+) -> Snapshot:
+    """Create a consistent full-library checkpoint at session start.
+
+    Args:
+        db: Async database session used for the checkpoint.
+        session: Session whose start state is captured.
+        commit: Whether to commit the checkpoint immediately. Pass ``False``
+            when the caller must persist the checkpoint atomically with other
+            writes, such as the rating that created the session (#4204).
+
+    Returns:
+        The added session-start snapshot.
+    """
     result = await db.execute(
         select(Thread)
         .where(Thread.user_id == session.user_id)
@@ -265,6 +289,7 @@ async def create_session_start_snapshot(db: AsyncSession, session: ReadingSessio
                     "status": issue.status,
                     "read_at": issue.read_at.isoformat() if issue.read_at else None,
                     "position": issue.position,
+                    "last_rating": issue.last_rating,
                 }
                 for issue in issues
             ]
@@ -313,8 +338,12 @@ async def create_session_start_snapshot(db: AsyncSession, session: ReadingSessio
         schema_version=start_version,
     )
     db.add(snapshot)
-    await db.commit()
-    await db.refresh(session)
+    if commit:
+        await db.commit()
+        await db.refresh(session)
+    else:
+        await db.flush()
+    return snapshot
 
 
 async def get_or_create(
@@ -323,6 +352,7 @@ async def get_or_create(
     *,
     existing_user: User | None = None,
     timezone: str | None = None,
+    commit: bool = True,
 ) -> ReadingSession:
     """Get the authoritative active session or create one race-safely.
 
@@ -334,6 +364,11 @@ async def get_or_create(
         timezone: Optional browser-resolved IANA timezone identifier to set on
             the new session when one is created. Ignored when reusing an existing
             session.
+        commit: Whether created session state may be committed inside this
+            helper. Pass ``False`` when the caller must atomically commit
+            session creation with a later action, such as a rating and its undo
+            snapshot (#4204). Reused sessions are never committed as a side
+            effect of resolution.
 
     Returns:
         The authoritative current Session, creating one when none exists.
@@ -353,14 +388,19 @@ async def get_or_create(
             if not user:
                 user = User(id=user_id, username=f"user_{user_id}")
                 db.add(user)
-                await db.commit()
+                if commit:
+                    await db.commit()
+                else:
+                    await db.flush()
 
             active_session, candidate_count = await _resolve_current_session_with_candidate_count(
                 db,
                 user_id,
             )
             if active_session:
-                active_session = await _ensure_initialized_bandwidth(db, active_session)
+                active_session = await _ensure_initialized_bandwidth(
+                    db, active_session, commit=commit
+                )
                 _log_session_resolution(
                     user_id=user_id,
                     session=active_session,
@@ -386,7 +426,9 @@ async def get_or_create(
                     await _resolve_current_session_with_candidate_count(db, user_id)
                 )
                 if active_session:
-                    active_session = await _ensure_initialized_bandwidth(db, active_session)
+                    active_session = await _ensure_initialized_bandwidth(
+                        db, active_session, commit=commit
+                    )
                     _log_session_resolution(
                         user_id=user_id,
                         session=active_session,
@@ -400,9 +442,12 @@ async def get_or_create(
                 # Phase 2 (issue #1708): initialize inferred bandwidth exactly
                 # once, atomically with the session-start snapshot commit.
                 await initialize_session_bandwidth(db, new_session)
-                await create_session_start_snapshot(db, new_session)
-                await db.commit()
-                await db.refresh(new_session)
+                await create_session_start_snapshot(db, new_session, commit=False)
+                if commit:
+                    await db.commit()
+                    await db.refresh(new_session)
+                else:
+                    await db.flush()
                 _log_session_resolution(
                     user_id=user_id,
                     session=new_session,

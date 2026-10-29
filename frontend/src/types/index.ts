@@ -16,6 +16,15 @@ export type ThreadListItem = components['schemas']['QueueThreadListItem']
 export type Thread = components['schemas']['ThreadResponse']
 
 /**
+ * A successful rating returns the updated thread plus the reading-session
+ * resources that own its undo record, so the rated row can offer Undo in place.
+ */
+export interface RateResult extends Thread {
+  session_id?: number | null;
+  undo_snapshot_id?: number | null;
+}
+
+/**
  * Read the manual creator credits off a thread-shaped object without a cast.
  *
  * The generated client schema is regenerated from the OpenAPI document, and
@@ -381,6 +390,8 @@ export interface Issue {
   status: 'unread' | 'read';
   /** ISO 8601 timestamp when the issue was marked as read (null if unread) */
   read_at: string | null;
+  /** Most recent rating saved for this specific issue, if it has been rated */
+  last_rating?: number | null;
   /** ISO 8601 timestamp when the issue was created */
   created_at: string;
 }

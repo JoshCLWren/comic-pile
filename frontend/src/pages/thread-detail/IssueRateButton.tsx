@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { rateApi } from '../../services/api-rate'
 import type { Issue } from '../../types'
@@ -13,6 +13,13 @@ interface IssueRateButtonProps {
   issue: Issue
   snapshot: IssueMutationSnapshot
   onSnapshotChange: (snapshot: IssueMutationSnapshot) => void
+  /** Notify the Thread page that a row rating can be undone in place. */
+  onRated?: (result: {
+    issueNumber: string
+    rating: number
+    sessionId: number | null
+    snapshotId: number | null
+  }) => void
 }
 
 const RATING_VALUES = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
@@ -33,16 +40,23 @@ export function IssueRateButton({
   issue,
   snapshot,
   onSnapshotChange,
+  onRated,
 }: IssueRateButtonProps) {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The saved label belongs to this issue, not to the thread's latest rating:
+  // each row restores its own last rating after a reload (#4204).
   const [savedRating, setSavedRating] = useState<number | null>(
-    snapshot.thread.last_rating != null ? snapshot.thread.last_rating : null,
+    issue.last_rating ?? null,
   )
   // A rating always marks its issue read. Keep the newest snapshot so two rows
   // rated in quick succession both land in the visible issue list.
   const latestSnapshot = useRef(snapshot)
   latestSnapshot.current = snapshot
+
+  useEffect(() => {
+    setSavedRating(issue.last_rating ?? null)
+  }, [issue.id, issue.last_rating])
 
   const mutation = useMutation({
     mutationFn: (rating: number) =>
@@ -67,11 +81,18 @@ export function IssueRateButton({
         issues_remaining: thread.issues_remaining,
         next_unread_issue_id: thread.next_unread_issue_id ?? null,
         next_unread_issue_number: thread.next_unread_issue_number ?? null,
+        last_rating: rating,
       })
       latestSnapshot.current = nextSnapshot
       onSnapshotChange(nextSnapshot)
       setSavedRating(rating)
       setOpen(false)
+      onRated?.({
+        issueNumber: issue.issue_number,
+        rating,
+        sessionId: thread.session_id ?? null,
+        snapshotId: thread.undo_snapshot_id ?? null,
+      })
     },
     onError: () => {
       setError('Failed to rate')

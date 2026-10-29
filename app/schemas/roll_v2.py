@@ -180,3 +180,8 @@ class RateResponse(ThreadResponse):
     """
 
     roll_reconciliation: RollReconciliation | None = None
+    # Session and snapshot that own this rating's undo record. The Thread page
+    # uses them to offer an immediate Undo beside the row that was rated
+    # (#4204); they are null only when no session was involved.
+    session_id: int | None = None
+    undo_snapshot_id: int | None = None

@@ -38,6 +38,7 @@ import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
 import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
 import { IssueRateButton } from './thread-detail/IssueRateButton'
+import { IssueRatingUndoNotice } from './thread-detail/IssueRatingUndoNotice'
 import { CblComicFinder } from '../components/CblSourceFinder'
 import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
@@ -133,6 +134,14 @@ export default function ThreadDetailView() {
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set())
   const [bulkNotice, setBulkNotice] = useState<string | null>(null)
+  // The most recent row rating stays undoable in place, tied to the exact
+  // snapshot returned by that rating (#4204).
+  const [lastRatingUndo, setLastRatingUndo] = useState<{
+    issueNumber: string
+    rating: number
+    sessionId: number
+    snapshotId: number
+  } | null>(null)
   // The issue the current URL names (`?issue=<id>`), while it still holds focus.
   // Keeping this in React state lets the arrival highlight follow re-renders and
   // disappear on blur instead of leaving imperative styles on a detached node.
@@ -169,6 +178,7 @@ export default function ThreadDetailView() {
       setBulkSelectMode(false)
       setSelectedIssueIds(new Set())
       setBulkNotice(null)
+      setLastRatingUndo(null)
       setTagEditorIssue(null)
     } else if (location.key !== lastLocationKeyRef.current) {
       // Back/Forward or other in-thread navigation: reset arrival state so the
@@ -618,6 +628,17 @@ export default function ThreadDetailView() {
               </div>
             </div>
 
+            {lastRatingUndo && (
+              <IssueRatingUndoNotice
+                threadId={thread.id}
+                issueNumber={lastRatingUndo.issueNumber}
+                rating={lastRatingUndo.rating}
+                sessionId={lastRatingUndo.sessionId}
+                snapshotId={lastRatingUndo.snapshotId}
+                onUndone={() => setLastRatingUndo(null)}
+              />
+            )}
+
             {!issuesExpanded && (
               <p className="text-xs text-stone-500">
                 {thread.next_unread_issue_number
@@ -742,6 +763,18 @@ export default function ThreadDetailView() {
                                 issue={issue}
                                 snapshot={{ issues, thread }}
                                 onSnapshotChange={handleIssueSnapshotChange}
+                                onRated={(result) => {
+                                  setLastRatingUndo(
+                                    result.sessionId != null && result.snapshotId != null
+                                      ? {
+                                          issueNumber: result.issueNumber,
+                                          rating: result.rating,
+                                          sessionId: result.sessionId,
+                                          snapshotId: result.snapshotId,
+                                        }
+                                      : null,
+                                  )
+                                }}
                               />
                             </div>
                           </div>
