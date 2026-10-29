@@ -206,7 +206,20 @@ export default function PositionMenu({
     // reason can reach the reader on hover (#3260).
     title?: string
     action: () => void
+    // When true, renders as a non-interactive explanation row instead of a menuitem
+    isExplanation?: boolean
   }> = [
+    // Explanation note when position actions are available but not in position sort
+    ...(positionActionsAvailable && sortBy !== 'position'
+      ? [{
+          label: 'These actions change the saved position order',
+          icon: '',
+          ariaLabel: '',
+          disabled: true,
+          action: () => {},
+          isExplanation: true,
+        }]
+      : []),
     ...(positionActionsAvailable
       ? [
           {
@@ -328,29 +341,40 @@ export default function PositionMenu({
             aria-label="Series actions"
           >
             {menuItems.map((item, index) => (
-              <button
-                key={item.label}
-                ref={(el) => { menuItemsRef.current[index] = el }}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  item.action()
-                }}
-                aria-label={item.ariaLabel}
-                disabled={item.disabled}
-                title={item.title}
-                className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
-                  item.disabled
-                    ? 'text-stone-600 cursor-not-allowed'
-                    : item.destructive
-                      ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
-                      : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
-                }`}
-                role="menuitem"
-              >
-                <span className="text-base">{item.icon}</span>
-                <span className="font-medium">{item.label}</span>
-              </button>
+              item.isExplanation ? (
+                <div
+                  key={item.label}
+                  className="px-4 py-3 text-left text-xs text-stone-500 border-b border-white/10"
+                  role="separator"
+                  aria-label={item.label}
+                >
+                  {item.label}
+                </div>
+              ) : (
+                <button
+                  key={item.label}
+                  ref={(el) => { menuItemsRef.current[index] = el }}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    item.action()
+                  }}
+                  aria-label={item.ariaLabel}
+                  disabled={item.disabled}
+                  title={item.title}
+                  className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
+                    item.disabled
+                      ? 'text-stone-600 cursor-not-allowed'
+                      : item.destructive
+                        ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
+                        : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
+                  }`}
+                  role="menuitem"
+                >
+                  <span className="text-base">{item.icon}</span>
+                  <span className="font-medium">{item.label}</span>
+                </button>
+              )
             ))}
           </div>
         </OverlayPortal>

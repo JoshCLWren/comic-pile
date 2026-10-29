@@ -794,12 +794,31 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     refetch: vi.fn(),
   }))
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+
+  // Switch to Recently added (created) sort
   await user.click(screen.getByRole('button', { name: 'Recently added' }))
   const cards = screen.getAllByTestId('queue-thread-item')
   expect(cards[0]).toHaveTextContent('New')
+
+  // Assert that drag handles are hidden outside position sort
+  expect(screen.queryAllByRole('button', { name: 'Drag to reorder' })).toHaveLength(0)
+
+  // Assert that position actions are still in the menu but with explanation note
+  await user.click(screen.getAllByRole('button', { name: /series actions/i })[0])
+  expect(screen.getByRole('menuitem', { name: /move to front/i })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: /reposition/i })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: /move to back/i })).toBeInTheDocument()
+  // The explanation note should be visible in the menu
+  expect(screen.getByRole('separator', { name: /these actions change the saved position order/i })).toBeInTheDocument()
+  await user.keyboard('{Escape}')
+
+  // Switch back to Position sort to test drag reorder failure feedback
+  await user.click(screen.getByRole('button', { name: 'Position' }))
+  const positionCards = screen.getAllByTestId('queue-thread-item')
   const dragButtons = screen.getAllByRole('button', { name: 'Drag to reorder' })
+  expect(dragButtons.length).toBeGreaterThan(0)
   fireEvent.dragStart(dragButtons[0]!, { dataTransfer: { effectAllowed: '', setData: vi.fn() } })
-  const targetCard = cards[1]!
+  const targetCard = positionCards[1]!
   fireEvent.dragOver(targetCard)
   fireEvent.drop(targetCard, { dataTransfer: { getData: () => '1' } })
   await waitFor(() => expect(move.mutate).toHaveBeenCalled())
@@ -842,7 +861,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.click(screen.getByTestId('position-slider-cancel'))
 })
 
-  it('offers position actions only in Position sort while keeping Remove from Queue (#3771)', async () => {
+  it('offers position actions in all sorts with explanation outside Position sort (#3771)', async () => {
   const user = userEvent.setup()
   mockedUseQueueThreads.mockReturnValue({
     data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 4 }],
@@ -853,26 +872,29 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const openMenu = async () => user.click(screen.getByRole('button', { name: /series actions/i }))
 
-  // Position sort (the default) keeps every position action.
+  // Position sort (the default) keeps every position action without explanation.
   await openMenu()
   expect(screen.getByRole('menuitem', { name: /move to front/i })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: /reposition/i })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: /move to back/i })).toBeInTheDocument()
+  expect(screen.queryByRole('separator', { name: /these actions change the saved position order/i })).not.toBeInTheDocument()
   await user.keyboard('{Escape}')
 
-  // Title and Recently added orders do not display queue_position, so those
-  // actions cannot change what the reader sees and must not be offered.
+  // Title and Recently added orders show position actions with explanation note.
   for (const sortLabel of ['Title', 'Recently added']) {
     await user.click(screen.getByRole('button', { name: sortLabel }))
     await openMenu()
-    expect(screen.queryByRole('menuitem', { name: /move to front/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: /reposition/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: /move to back/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /move to front/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /reposition/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /move to back/i })).toBeInTheDocument()
+    // Explanation note is visible for non-position sorts.
+    expect(screen.getByRole('separator', { name: /these actions change the saved position order/i })).toBeInTheDocument()
 
     // Unrelated row actions stay available.
     await user.click(screen.getByRole('menuitem', { name: /remove from queue/i }))
     expect(screen.getByTestId('remove-thread-dialog')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /cancel/i }))
+    await user.keyboard('{Escape}')
   }
 })
 
