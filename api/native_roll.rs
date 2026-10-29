@@ -25,7 +25,9 @@ fn production_postgres_url(url: String) -> String {
 
 fn config() -> Result<Config, comicpile_roll_service::config::ConfigError> {
     Config::from_lookup(|name| match name {
-        "RUST_ROLL_ENV" => std::env::var(name).ok().or_else(|| Some("production".into())),
+        "RUST_ROLL_ENV" => std::env::var(name)
+            .ok()
+            .or_else(|| Some("production".into())),
         "RUST_ROLL_DATABASE_URL" => std::env::var(name)
             .ok()
             .or_else(|| std::env::var("DATABASE_URL").ok())
