@@ -31,17 +31,33 @@ async fn main() -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{app, native_health};
-
-    #[test]
-    fn native_health_router_does_not_require_application_state() {
-        let _router = app();
-    }
+    use super::app;
+    use axum::{
+        body::{to_bytes, Body},
+        http::{header, Request, StatusCode},
+    };
+    use tower::Service;
 
     #[tokio::test]
-    async fn native_probe_reports_rust_without_config_or_database() {
+    async fn native_probe_serves_json_without_config_or_database() {
+        let mut router = app();
+        let request = Request::builder()
+            .method("GET")
+            .uri("/api/_native_roll/health")
+            .body(Body::empty())
+            .expect("valid request");
+        let response = router.call(request).await.expect("health response");
+
+        assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
-            native_health().await.0,
+            response.headers().get(header::CONTENT_TYPE),
+            Some(&axum::http::HeaderValue::from_static("application/json"))
+        );
+        let body = to_bytes(response.into_body(), 1024)
+            .await
+            .expect("health JSON");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).expect("valid JSON"),
             serde_json::json!({"status": "ok", "runtime": "rust", "service": "roll"})
         );
     }
