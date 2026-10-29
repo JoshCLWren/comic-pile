@@ -22,14 +22,27 @@ async fn native_health() -> Json<serde_json::Value> {
 
 static ROLL_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
 
-async fn native_bootstrap(request: Request) -> Response {
+async fn native_bootstrap(mut request: Request) -> Response {
+    // The isolated native path keeps Python serving the user-facing endpoint
+    // until the Rust runtime passes the real production startup check.
+    if request.uri().path() == "/api/_native_roll/bootstrap" {
+        let target = match request.uri().query() {
+            Some(query) => format!("/api/v2/roll/bootstrap?{query}"),
+            None => "/api/v2/roll/bootstrap".to_owned(),
+        };
+        *request.uri_mut() = target.parse().expect("valid native bootstrap URI");
+    }
     // Cold-start the native Roll pool only for authenticated bootstrap traffic.
     // Keep health independent of DB secrets and failures.
     let mut result = match ROLL_STATE.get_or_init(|| {
         Config::from_vercel_env()
             .and_then(AppState::new)
             .map(Arc::new)
-            .map_err(|err| err.0)
+            .map_err(|err| {
+                // ConfigError is a static, credential-free message.
+                eprintln!("native_roll initialisation failed: {err}");
+                err.0
+            })
     }) {
         Ok(state) => {
             let mut router = roll_router(state.clone());
@@ -54,6 +67,7 @@ fn app() -> Router {
     Router::new()
         .route("/api/_native_roll/health", get(native_health))
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
+        .route("/api/_native_roll/bootstrap", get(native_bootstrap))
 }
 
 #[tokio::main]
