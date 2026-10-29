@@ -381,6 +381,7 @@ describe('auth state race condition regression', () => {
   test('auth state updates immediately after login - no redirect loop', async () => {
     mockApiGet
       .mockRejectedValueOnce(unauthenticatedError())
+      .mockRejectedValueOnce(unauthenticatedError())
       .mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
 
     renderWithAuth('/login')
@@ -407,6 +408,7 @@ describe('auth state race condition regression', () => {
 
   test('auth state updates immediately after register - no redirect loop', async () => {
     mockApiGet
+      .mockRejectedValueOnce(unauthenticatedError())
       .mockRejectedValueOnce(unauthenticatedError())
       .mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
 

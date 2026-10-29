@@ -331,7 +331,7 @@ function createResponseErrorInterceptor(client: ApiClient) {
       })
     }
 
-    if (isAuthenticationFailure(error) && !originalRequest._retry) {
+    if (isAuthenticationFailure(error) && !originalRequest._retry && !originalRequest.skipAuthRefresh) {
       const requestPathname = getRequestPathname(originalRequest.url ?? '')
       if (AUTH_ENDPOINT_PATHS.has(requestPathname)) {
         if (requestPathname === '/v1/auth/refresh' && isAuthenticationFailure(error)) {

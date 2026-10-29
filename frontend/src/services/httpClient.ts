@@ -10,6 +10,7 @@ export type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   _retry?: boolean
   _queued?: boolean
   skipAuthRedirect?: boolean
+  skipAuthRefresh?: boolean
 }
 
 /**

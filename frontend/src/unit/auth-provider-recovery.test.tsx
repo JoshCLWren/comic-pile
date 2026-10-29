@@ -245,7 +245,9 @@ describe('AuthProvider transient recovery', () => {
     let fail!: (error: Error) => void
     mocks.refreshSession.mockImplementationOnce(() => new Promise((resolve, reject) => { finish = resolve; fail = reject }))
     let pending!: Promise<void>
+    mocks.get.mockRejectedValueOnce(axiosError(401))
     act(() => { pending = auth!.recoverSession() })
+    await waitFor(() => expect(mocks.refreshSession).toHaveBeenCalledOnce())
     act(() => auth!.logout())
     const requestsAtLogout = mocks.get.mock.calls.length
     await act(async () => {
@@ -309,6 +311,7 @@ describe('AuthProvider transient recovery', () => {
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     await waitForPreferencesFetch()
 
+    mocks.get.mockRejectedValueOnce(axiosError(401))
     mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
     await act(async () => {
       await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 401 } })
@@ -326,13 +329,15 @@ describe('AuthProvider transient recovery', () => {
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     await waitForPreferencesFetch()
 
-    mocks.refreshSession.mockRejectedValueOnce(axiosError(503))
+    // /auth/me fails with 503 -- recovery must not rotate the refresh token
+    mocks.get.mockRejectedValueOnce(axiosError(503))
     await act(async () => {
       await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 503 } })
     })
 
-    // New behavior: transition to service_unavailable degraded state instead of staying authenticated
+    // Transient /auth/me failure does not rotate the refresh token
     expect(auth?.authState.status).toBe('service_unavailable')
+    expect(mocks.refreshSession).not.toHaveBeenCalled()
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
     // User should still have access to content (ProtectedRoute allows degraded states)
     expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
@@ -341,6 +346,7 @@ describe('AuthProvider transient recovery', () => {
   it('silently recovers the bootstrap session when the access token is rejected', async () => {
     mocks.getAccessToken.mockReturnValue('stale-token')
     mocks.get
+      .mockRejectedValueOnce(axiosError(401))
       .mockRejectedValueOnce(axiosError(401))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
@@ -357,7 +363,9 @@ describe('AuthProvider transient recovery', () => {
 
   it('only shows the login screen when silent recovery also fails', async () => {
     mocks.getAccessToken.mockReturnValue('stale-token')
-    mocks.get.mockRejectedValueOnce(axiosError(401))
+    mocks.get
+      .mockRejectedValueOnce(axiosError(401))
+      .mockRejectedValueOnce(axiosError(401))
     mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
 
     renderProvider()
@@ -400,6 +408,529 @@ describe('AuthProvider transient recovery', () => {
     expect(auth?.authState.status).toBe('authenticated')
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
   })
+
+  it('transient 503 on /auth/me recovers without a refresh call and keeps the session', async () => {
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    renderProvider()
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
+    await waitForPreferencesFetch()
+
+    // /auth/me returns 503 -- recovery must retry /auth/me, not rotate the refresh token
+    mocks.get.mockRejectedValueOnce(axiosError(503))
+    await act(async () => {
+      await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 503 } })
+    })
+
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(mocks.refreshSession).not.toHaveBeenCalled()
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+    expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
+  })
+
+  it('expired token uses one coalesced refresh then retries /auth/me on success', async () => {
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    renderProvider()
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
+    await waitForPreferencesFetch()
+
+    // /auth/me returns 401 (expired token), then refresh succeeds, then /auth/me succeeds
+    mocks.get
+      .mockRejectedValueOnce(axiosError(401))
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    mocks.refreshSession.mockResolvedValueOnce('new-token')
+
+    await act(async () => {
+      await auth!.recoverSession(15000)
+    })
+
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
+    expect(mocks.refreshSession).toHaveBeenCalledTimes(1)
+    expect(mocks.refreshSession).toHaveBeenCalledWith({ skipAuthRedirect: true })
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+  })
+
+  it('refresh failing with 503 does not clear a valid access token', async () => {
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    renderProvider()
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
+    await waitForPreferencesFetch()
+
+    // /auth/me returns 401 (expired), refresh fails with 503 (transient)
+    mocks.get.mockRejectedValueOnce(axiosError(401))
+    mocks.refreshSession.mockRejectedValueOnce(axiosError(503))
+
+    await act(async () => {
+      await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 503 } })
+    })
+
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+    expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
+  })
+
+  it('rapid concurrent recoverSession calls share one in-flight /auth/me validation', async () => {
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+    renderProvider()
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
+    await waitForPreferencesFetch()
+
+    // Both /auth/me calls resolve with the same user; the second call should
+    // reuse the single in-flight recovery promise, not start a second validation.
+    let resolveFirst!: (value: { username: string; email: string }) => void
+    const sharedRequest = new Promise<{ username: string; email: string }>(resolve => {
+      resolveFirst = resolve
+    })
+    mocks.get.mockImplementationOnce(() => sharedRequest)
+
+    const first = auth!.recoverSession(15000)
+    const second = auth!.recoverSession(15000)
+
+    await act(async () => {
+      resolveFirst({ username: 'reader', email: 'reader@example.com' })
+      await first
+    })
+
+    // The second call reuses the same promise; it resolves without a second /auth/me.
+    await act(async () => {
+      await second
+    })
+
+    expect(mocks.get).toHaveBeenCalledTimes(3) // 2 bootstrap + 1 recovery /auth/me
+    expect(auth?.authState.status).toBe('authenticated')
+  })
+})
+
+describe('bootstrap retry budget and manual recovery race', () => {
+  beforeEach(() => {
+    auth = null
+    mocks.get.mockReset()
+    mocks.post.mockReset()
+    mocks.patch.mockReset()
+    mocks.clearAccessToken.mockReset()
+    mocks.setAccessToken.mockReset()
+    mocks.getAccessToken.mockReset()
+    mocks.readStoredAccessToken.mockReset()
+    mocks.refreshSession.mockReset()
+    mocks.isSessionRefreshRejected.mockReset()
+    mocks.getAccessToken.mockReturnValue('test-token')
+    mocks.isSessionRefreshRejected.mockReturnValue(false)
+    delete window.__COMIC_PILE_ACCESS_TOKEN
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('exhausts retry budget at 5 retries for persistent 503 and stops scheduling', async () => {
+    vi.useFakeTimers()
+    // Simulate 6 calls: 1 initial + 5 retries, all failing with 503
+    // The 7th call should never happen
+    const error503 = axiosError(503)
+    for (let i = 0; i < 6; i++) {
+      mocks.get.mockRejectedValueOnce(error503)
+    }
+
+    renderProvider()
+
+    // Initial bootstrap attempt fails
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(auth?.authState.retryCount).toBe(1)
+
+    // Retry 1 (~1s)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(2)
+
+    // Retry 2 (~2s)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2200)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(3)
+
+    // Retry 3 (~4s)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4400)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(4)
+
+    // Retry 4 (~8s)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8800)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(5)
+
+    // Retry 5 (~16s) - this is the final retry
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(17600)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(5) // Should stay at 5, not go to 6
+    expect(auth?.authState.status).toBe('service_unavailable')
+
+    // Advance well beyond the final retry - no more calls should be made
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    // Should only have 6 calls: 1 initial + 5 retries
+    expect(mocks.get).toHaveBeenCalledTimes(6)
+  }, 15000)
+
+  it('manual retryAuth clears stale in-flight recovery and succeeds', async () => {
+    vi.useFakeTimers()
+    // Bootstrap starts with a 503 failure that will schedule a retry
+    // Manual retryAuth should succeed on its own attempt
+    mocks.get
+      .mockRejectedValueOnce(axiosError(503)) // initial bootstrap
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' }) // manual retry succeeds
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 }) // preferences
+
+    renderProvider()
+
+    // Initial bootstrap fails
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(auth?.authState.isLoading).toBe(false)
+
+    // User clicks "Try again" while a retry is scheduled
+    // This should clear the stale recovery and run a fresh one
+    await act(async () => {
+      await auth!.retryAuth()
+    })
+
+    // Should succeed and transition to authenticated
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.authState.isLoading).toBe(false)
+    expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
+
+    // Should have made 3 calls: initial bootstrap, manual retry, preferences
+    expect(mocks.get).toHaveBeenCalledTimes(3)
+  }, 15000)
+
+  it('manual recovery during an in-flight bootstrap joins it instead of probing twice', async () => {
+    vi.useFakeTimers()
+    let resolveSlowBootstrap!: (user: { username: string; email: string }) => void
+
+    mocks.get
+      .mockImplementationOnce(() => new Promise(resolve => { resolveSlowBootstrap = resolve })) // slow bootstrap
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 }) // preferences
+
+    renderProvider()
+
+    // Do not advance timers: the initial bootstrap probe is in flight.
+
+    // User clicks "Try again" before the bootstrap resolves.
+    const manualRetryPromise = act(async () => {
+      await auth!.retryAuth()
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    // The manual retry joined the in-flight probe: exactly one concurrent
+    // /v1/auth/me request was issued for this session.
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')).toHaveLength(1)
+
+    await act(async () => {
+      resolveSlowBootstrap({ username: 'reader', email: 'reader@example.com' })
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await manualRetryPromise
+
+    // The single shared probe authenticates; no duplicate request was added.
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.user?.username).toBe('reader')
+    expect(auth?.authState.isLoading).toBe(false)
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')).toHaveLength(1)
+  }, 15000)
+
+  it('manual retryAuth while recoverSession is in-flight does not hang isLoading', async () => {
+    vi.useFakeTimers()
+    let resolveRecovery!: (user: { username: string; email: string }) => void
+
+    // First call: initial bootstrap fails with 503
+    // Second call: recoverSession (triggered by retryAuth) - we'll make it slow
+    mocks.refreshSession.mockResolvedValue('new-token')
+    mocks.get
+      .mockRejectedValueOnce(axiosError(503))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveRecovery = resolve }))
+      .mockResolvedValueOnce({ username: 'recovered', email: 'recovered@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+
+    renderProvider()
+
+    // Initial bootstrap fails - flush the useEffect
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    // Wait for state to update
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // Verify auth is set
+    expect(auth).not.toBeNull()
+    expect(auth?.authState.status).toBe('service_unavailable')
+
+    // User clicks "Try again" - this calls recoverSession
+    const retryPromise = act(async () => {
+      await auth!.retryAuth()
+    })
+
+    // At this point, recoverSession is in-flight (waiting on resolveRecovery)
+    // The retryAuth should not hang even though recoverSession hasn't resolved yet
+    // Because retryAuth cleared recoveryPromise and started a fresh one
+
+    // Yield until the mocked recovery request has started so the resolver is assigned
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    resolveRecovery({ username: 'recovered', email: 'recovered@example.com' })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    await retryPromise
+
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.authState.isLoading).toBe(false)
+    expect(auth?.user?.username).toBe('recovered')
+  }, 15000)
+
+  it('logout during bootstrap cancels the scheduled retry and ignores stale responses', async () => {
+    vi.useFakeTimers()
+    const error503 = axiosError(503)
+    // Initial bootstrap fails with 503, which schedules a retry.
+    mocks.get.mockRejectedValueOnce(error503)
+
+    renderProvider()
+
+    // Flush the initial bootstrap attempt: 503 -> degraded state with a retry scheduled.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(auth?.authState.retryCount).toBe(1)
+    expect(mocks.get).toHaveBeenCalledTimes(1)
+
+    // User logs out while a retry timer is scheduled.
+    act(() => auth!.logout())
+    expect(auth?.authState.status).toBe('unauthenticated')
+    expect(auth?.authState.user).toBeNull()
+    expect(auth?.authState.retryCount).toBe(0)
+
+    // Advance well beyond the scheduled retry delay. No more /auth/me calls should happen
+    // because the timer was cancelled and the generation was incremented.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(mocks.get).toHaveBeenCalledTimes(1)
+    expect(auth?.authState.status).toBe('unauthenticated')
+  }, 15000)
+
+  it('remount (StrictMode simulation) resets bootstrap without duplicate state corruption', async () => {
+    vi.useFakeTimers()
+    mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+
+    // First mount: bootstrap succeeds.
+    const { unmount } = renderProvider()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.user?.username).toBe('reader')
+    const callsAfterFirstMount = mocks.get.mock.calls.length
+
+    // Simulate StrictMode unmount: cleanup runs, clearing timers and in-flight state.
+    unmount()
+
+  // Second mount: fresh bootstrap starts, counter reset, new /auth/me call.
+  renderProvider()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(auth?.authState.status).toBe('authenticated')
+  expect(auth?.user?.username).toBe('reader')
+
+  const authMeCalls = mocks.get.mock.calls.filter(
+    ([url]) => url === '/v1/auth/me',
+  )
+  const authMeCallsAfterFirstMount = mocks.get.mock.calls
+    .slice(0, callsAfterFirstMount)
+    .filter(([url]) => url === '/v1/auth/me')
+
+  // Exactly one additional /auth/me call from the second mount's bootstrap.
+  expect(authMeCalls.length).toBe(authMeCallsAfterFirstMount.length + 1)
+  expect(authMeCalls[authMeCalls.length - 1]).toEqual([
+    '/v1/auth/me',
+    {
+      timeout: 15000,
+      skipAuthRedirect: true,
+    },
+  ])
+  expect(auth?.authState.retryCount).toBe(0)
+  }, 15000)
+
+  it('manual Try again does not resume the automatic retry budget after it fails', async () => {
+    vi.useFakeTimers()
+    mocks.get.mockRejectedValue(axiosError(503))
+
+    renderProvider()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(1)
+    expect(mocks.get).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await auth!.retryAuth().catch(() => undefined)
+    })
+    expect(auth?.authState.isLoading).toBe(false)
+
+    const callsAfterManualRetry = mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me').length
+    // Manual recovery owns the budget now: no further automatic probe may fire.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')).toHaveLength(callsAfterManualRetry)
+    expect(auth?.authState.status).toBe('service_unavailable')
+  }, 15000)
+
+  it('a successful resume revalidation cancels the pending bootstrap retry', async () => {
+    vi.useFakeTimers()
+    mocks.get
+      .mockRejectedValueOnce(axiosError(503)) // initial bootstrap probe
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' }) // resume revalidation
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 }) // preferences
+
+    renderProvider()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(1)
+
+    await act(async () => {
+      await auth!.revalidateSession(15000)
+    })
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.authState.retryCount).toBe(0)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    // Only the failed bootstrap probe and the successful revalidation probe.
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')).toHaveLength(2)
+  }, 15000)
+
+  it('a 401 followed by a transient recovery probe retries instead of logging out', async () => {
+    vi.useFakeTimers()
+    mocks.getAccessToken.mockReturnValue('stale-token')
+    mocks.get
+      .mockRejectedValueOnce(axiosError(401)) // bootstrap probe sees a stale token
+      .mockRejectedValueOnce(axiosError(503)) // recovery /auth/me stays unavailable
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' }) // automatic retry succeeds
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 }) // preferences
+
+    renderProvider()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    // The 401 must not log the user out while the recovery probe is transient.
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(auth?.authState.retryCount).toBe(1)
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+  }, 15000)
+
+  it('StrictMode double-mount performs a single initial bootstrap probe', async () => {
+    vi.useFakeTimers()
+    mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+
+    // Enable root-level strict mode and verify that the effect runs twice while sharing one request
+    // We need to bypass the default test wrapper to put StrictMode at the actual root level
+    const { render } = await vi.importActual<typeof import('@testing-library/react')>('@testing-library/react')
+    
+    render(
+      <StrictMode>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <AuthProvider>
+            <Consumer />
+          </AuthProvider>
+        </QueryClientProvider>
+      </StrictMode>,
+      { wrapper: undefined } // Bypass the default test wrapper
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')).toHaveLength(1)
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.authState.retryCount).toBe(0)
+  }, 15000)
 })
 
 describe('bootstrap retry budget and manual recovery race', () => {

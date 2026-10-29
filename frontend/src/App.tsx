@@ -3,7 +3,12 @@ import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
-import { clearSessionCache } from './query/cacheEffects'
+import { clearSessionCache, resumeQueriesAfterOutage } from './query/cacheEffects'
+import {
+  markAuthDegraded,
+  markAuthRecovered,
+  resetQueryRetryBudget,
+} from './query/outageRetryBudget'
 import { lazyRoute } from './routes/routeModules'
 import Seo from './seo/Seo'
 import { useRoutePrefetch } from './hooks/useRoutePrefetch'
@@ -116,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     bootstrapRetryCountRef.current = 0
     bootstrapAutoRetryRef.current = false
     recoveryPromise.current = null
+    resetQueryRetryBudget()
     clearAccessToken()
     clearSessionCache(client)
     setAuthState(prev => ({
@@ -140,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (timeout?: number): Promise<void> => {
       if (recoveryPromise.current) return recoveryPromise.current
       const generation = sessionGeneration.current
-      const promise = (async () => {
+      const attempt = (async () => {
         try {
           if (isSessionRefreshRejected()) {
             throw Object.assign(new Error('Session refresh unavailable'), {
@@ -148,12 +154,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               response: { status: 401 },
             })
           }
-          await refreshSession({ skipAuthRedirect: true })
-          if (generation !== sessionGeneration.current) return
-          const response = await api.get<AuthUser>('/v1/auth/me', {
+          // AuthProvider owns this recovery attempt. Suppress the interceptor's
+          // automatic refresh so an exhausted retry cannot rotate the cookie twice.
+          const validate = () => api.get<AuthUser>('/v1/auth/me', {
             timeout,
             skipAuthRedirect: true,
+            skipAuthRefresh: true,
           })
+          let response: AuthUser
+          try {
+            response = await validate()
+          } catch (error) {
+            if (generation !== sessionGeneration.current) return
+            if (!isDefinitiveAuthenticationFailure(error) || isSessionRefreshRejected()) throw error
+            await refreshSession({ skipAuthRedirect: true })
+            if (generation !== sessionGeneration.current) return
+            response = await validate()
+          }
           if (generation !== sessionGeneration.current) return
           // A successful recovery ends the bootstrap outage: a retry scheduled
           // by an older attempt must never fire against a healthy session.
@@ -170,10 +187,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }))
         } catch (error) {
           if (generation !== sessionGeneration.current) return
-          const authError = createAuthError(error)
           if (isDefinitiveAuthenticationFailure(error)) {
             markDefinitivelyUnauthenticated()
           } else {
+            const authError = createAuthError(error)
             setAuthState(prev => ({
               ...prev,
               status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
@@ -187,13 +204,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       })().finally(() => {
         // A login/logout may have started a different generation's recovery.
-        if (recoveryPromise.current === promise) {
-          recoveryPromise.current = null
-        }
+        if (recoveryPromise.current === attempt) recoveryPromise.current = null
       })
-      recoveryPromise.current = promise
-      return promise
-    }, [cancelBootstrapRetry, markDefinitivelyUnauthenticated]);
+      recoveryPromise.current = attempt
+      return attempt
+    }, [cancelBootstrapRetry, markDefinitivelyUnauthenticated])
 
   const retryAuth = useCallback(async () => {
     // Manual recovery takes over from the automatic budget: cancel the pending
@@ -231,53 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [cancelBootstrapRetry, recoverSession])
 
-  const revalidateSession = useCallback(async (timeout?: number) => {
-    const generation = sessionGeneration.current
-    try {
-      const response = await api.get<AuthUser>('/v1/auth/me', {
-        timeout,
-        skipAuthRedirect: true,
-      })
-      if (generation !== sessionGeneration.current) return
-      // A successful revalidation also ends any pending bootstrap retry.
-      cancelBootstrapRetry()
-      bootstrapRetryCountRef.current = 0
-      setAuthState(prev => ({
-        ...prev,
-        status: 'authenticated',
-        isLoading: false,
-        user: response,
-        error: null,
-        retryCount: 0,
-        lastRetryAt: null,
-      }))
-    } catch (error) {
-      if (generation !== sessionGeneration.current) return
-      const authError = createAuthError(error)
-      if (isDefinitiveAuthenticationFailure(error)) {
-        // The persistent session can usually be renewed silently with the
-        // refresh cookie. Only treat the user as logged out when that also fails.
-        try {
-          await recoverSession(timeout)
-          return
-        } catch (recoveryError) {
-          if (isDefinitiveAuthenticationFailure(recoveryError)) {
-            markDefinitivelyUnauthenticated()
-          }
-        }
-      } else {
-        setAuthState(prev => ({
-          ...prev,
-          status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
-          isLoading: false,
-          error: authError,
-          retryCount: prev.retryCount + 1,
-          lastRetryAt: Date.now(),
-        }))
-      }
-      throw error
-    }
-  }, [cancelBootstrapRetry, markDefinitivelyUnauthenticated, recoverSession])
+  const revalidateSession = recoverSession
 
   useEffect(() => {
     const bootstrapGeneration = sessionGeneration.current
@@ -417,6 +386,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [cancelBootstrapRetry, markDefinitivelyUnauthenticated, recoverSession])
 
+  useEffect(() => {
+    if (authState.status === 'service_unavailable' || authState.status === 'network_error') {
+      // The bootstrap/recovery machinery already probes authentication with its
+      // own bounded budget. Independent query retries would multiply that load.
+      markAuthDegraded()
+      return
+    }
+    if (authState.status === 'authenticated' && markAuthRecovered()) {
+      // Resume the queries that failed while degraded once per distinct key.
+      void resumeQueriesAfterOutage(client)
+    }
+  }, [authState.status, client])
+
   const login = async (accessToken: string) => {
     const generation = ++sessionGeneration.current
     cancelBootstrapRetry()
@@ -424,6 +406,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     bootstrapRetryCountRef.current = 0
     bootstrapAutoRetryRef.current = false
     recoveryPromise.current = null
+    resetQueryRetryBudget()
     setAuthState(prev => ({ ...prev, status: 'checking', isLoading: true, user: null }))
     clearSessionCache(client)
     setAccessToken(accessToken)
