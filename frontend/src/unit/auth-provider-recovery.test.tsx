@@ -797,6 +797,10 @@ describe('bootstrap retry budget and manual recovery race', () => {
     vi.useFakeTimers()
     mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
 
+    // Enable root-level strict mode and verify that the effect runs twice while sharing one request
+    // We need to bypass the default test wrapper to put StrictMode at the actual root level
+    const { render } = require('@testing-library/react')
+    
     render(
       <StrictMode>
         <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -805,6 +809,7 @@ describe('bootstrap retry budget and manual recovery race', () => {
           </AuthProvider>
         </QueryClientProvider>
       </StrictMode>,
+      { wrapper: undefined } // Bypass the default test wrapper
     )
 
     await act(async () => {
