@@ -1,0 +1,22 @@
+[package]
+name = "comicpile-vercel-native"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+axum = "0.8"
+comicpile-roll-service = { path = "native/roll-service" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tower = "0.5"
+vercel_runtime = { version = "2.4", features = ["axum"] }
+
+[[bin]]
+name = "native_roll"
+path = "api/native_roll.rs"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3
