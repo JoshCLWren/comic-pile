@@ -39,9 +39,11 @@ pub struct Config {
     pub pool_timeout: Duration,
     pub request_timeout: Duration,
 }
-/// Adapt the application's existing SQLAlchemy/Neon URL for tokio-postgres.
-/// Keep supported connection parameters. Neon channel_binding is accepted by
-/// libpq but rejected by the tokio-postgres URI parser. TLS stays mandatory.
+/// Adapt SQLAlchemy/Neon URLs for tokio-postgres. The production DATABASE_URL
+/// can contain libpq/driver options that tokio-postgres does not recognize.
+/// This endpoint needs the authority, database, credentials and TLS. Drop only
+/// query options: never log or alter any credential-bearing URI components.
+/// Explicit insecure sslmode remains rejected by production validation.
 fn vercel_postgres_url(raw: String) -> String {
     let raw = raw.trim();
     let url = [
@@ -56,18 +58,18 @@ fn vercel_postgres_url(raw: String) -> String {
     .unwrap_or_else(|| raw.to_owned());
 
     let (base, query) = url.split_once('?').unwrap_or((&url, ""));
-    let mut params: Vec<&str> = query
+    let mode = query
         .split('&')
-        .filter(|part| !part.is_empty())
-        .filter(|part| part.split('=').next() != Some("channel_binding"))
-        .collect();
-    if !params
-        .iter()
-        .any(|part| part.split('=').next() == Some("sslmode"))
-    {
-        params.push("sslmode=require");
-    }
-    format!("{base}?{}", params.join("&"))
+        .filter_map(|part| part.split_once('='))
+        .find_map(|(key, value)| (key == "sslmode").then_some(value))
+        .unwrap_or("require");
+    // native-tls validates server certificates and hostnames even though
+    // tokio-postgres uses its Require variant for the encrypted connection.
+    let mode = match mode {
+        "verify-ca" | "verify-full" => "require",
+        other => other,
+    };
+    format!("{base}?sslmode={mode}")
 }
 
 impl Config {
@@ -205,6 +207,27 @@ mod vercel_tests {
             assert_eq!(config.database.get_ssl_mode(), SslMode::Require);
             assert_eq!(config.jwt_secret.as_bytes(), b"native-override");
         }
+    }
+
+    #[test]
+    fn vercel_neon_extra_parameters_do_not_break_config_parse() {
+        let config = Config::from_vercel_lookup(|key| match key {
+            "DATABASE_URL" => Some(
+                concat!(
+                    "postgresql+asyncpg://reader:p%40ssword@ep-example.us-east-2.aws.neon.tech/",
+                    "neondb?sslmode=verify-full&channel_binding=require&gssencmode=disable",
+                    "&sslrootcert=%2Ftmp%2Fcert&application_name=the-reader"
+                )
+                .into(),
+            ),
+            "SECRET_KEY" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .expect("production URL with driver-only options must be accepted");
+        assert_eq!(config.database.get_ssl_mode(), SslMode::Require);
+        assert_eq!(config.database.get_user(), Some("reader"));
+        assert_eq!(config.database.get_password(), Some(b"p@ssword".as_slice()));
+        assert_eq!(config.database.get_dbname(), Some("neondb"));
     }
 
     #[test]
