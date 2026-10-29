@@ -13,7 +13,13 @@ function verifyToken(token: string): {
   pc?: number;
 } {
   try {
-    const payload = jwt.verify(token, SECRET_KEY) as any;
+    const payload = jwt.verify(token, SECRET_KEY, { algorithms: ['HS256'] }) as {
+      sub?: unknown;
+      jti?: unknown;
+      type?: unknown;
+      exp?: number;
+      pc?: number;
+    };
     
     // Validate required claims
     if (!payload.sub || typeof payload.sub !== 'string') {
@@ -28,13 +34,22 @@ function verifyToken(token: string): {
       throw new Error('Invalid token type');
     }
     
-    return {
+    const claims: {
+      sub: string;
+      jti: string;
+      type: string;
+      exp: number;
+      pc?: number;
+    } = {
       sub: payload.sub,
       jti: payload.jti,
-      type: payload.type,
-      exp: payload.exp,
-      pc: payload.pc
+      type: 'access',
+      exp: typeof payload.exp === 'number' ? payload.exp : 0,
     };
+    if (typeof payload.pc === 'number') {
+      claims.pc = payload.pc;
+    }
+    return claims;
   } catch (error) {
     throw new Error(`Token verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }

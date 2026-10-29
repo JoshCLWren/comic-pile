@@ -5,6 +5,13 @@ interface ErrorResponse {
   error: string;
 }
 
+function errnoCode(error: Error): string | undefined {
+  if ('code' in error && typeof error.code === 'string') {
+    return error.code;
+  }
+  return undefined;
+}
+
 /** Map HTTP input and authentication outcomes at the transport boundary. */
 export default async function authMeHandler(req: Request, res: Response): Promise<void> {
   try {
@@ -49,10 +56,13 @@ export default async function authMeHandler(req: Request, res: Response): Promis
         return;
       }
 
-      // Generic server error
-      console.error('Unexpected error in auth/me');
+      // Generic server error. Log only the error class — never the message,
+      // which can include connection strings or token material.
+      const code = errnoCode(error);
+      console.error('Unexpected error in auth/me', error.name, code ?? '');
       res.status(500).json({ error: 'Internal server error' } as ErrorResponse);
     } else {
+      console.error('Unexpected error in auth/me');
       res.status(500).json({ error: 'Internal server error' } as ErrorResponse);
     }
   }
