@@ -1,90 +1,101 @@
-//! Vercel's official Rust Function bridge for the Roll cutover.
-//! The diagnostic route proves native ingress before the bootstrap response is switched.
-//! Other /api routes must continue to use Python until their individual cutovers.
-use axum::{routing::get, Json};
-use comicpile_roll_service::{config::Config, router, AppState};
-use std::sync::Arc;
-use tower::ServiceBuilder;
+//! Vercel's native Rust ingress for the Roll endpoint cutover.
+//! The health probe never reads database configuration.
+use axum::{
+    extract::Request,
+    http::{HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
+    routing::get,
+    Json, Router,
+};
+use comicpile_roll_service::{config::Config, router as roll_router, AppState};
+use std::sync::{Arc, OnceLock};
+use tower::{Service, ServiceBuilder};
 use vercel_runtime::{axum::VercelLayer, Error};
 
-fn production_postgres_url(url: String) -> String {
-    // Python supports both SQLAlchemy PostgreSQL dialects; tokio-postgres does not.
-    let url = if let Some(rest) = url.strip_prefix("postgresql+asyncpg://") {
-        format!("postgresql://{rest}")
-    } else if let Some(rest) = url.strip_prefix("postgresql+psycopg://") {
-        format!("postgresql://{rest}")
-    } else {
-        url
-    };
-    // The native production pool must not silently drop TLS.
-    if url
-        .split_once('?')
-        .is_some_and(|(_, query)| query.split('&').any(|part| part.starts_with("sslmode=")))
-    {
-        url
-    } else if url.contains('?') {
-        format!("{url}&sslmode=require")
-    } else {
-        format!("{url}?sslmode=require")
-    }
+async fn native_health() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "status": "ok",
+        "runtime": "rust",
+        "service": "roll"
+    }))
 }
 
-fn config() -> Result<Config, comicpile_roll_service::config::ConfigError> {
-    Config::from_lookup(|name| match name {
-        "RUST_ROLL_ENV" => std::env::var(name)
-            .ok()
-            .or_else(|| Some("production".into())),
-        "RUST_ROLL_DATABASE_URL" => std::env::var(name)
-            .ok()
-            .or_else(|| std::env::var("DATABASE_URL").ok())
-            .map(production_postgres_url),
-        // Python's signed access tokens use SECRET_KEY, not JWT_SECRET.
-        "RUST_ROLL_JWT_SECRET" => std::env::var(name)
-            .ok()
-            .or_else(|| std::env::var("SECRET_KEY").ok()),
-        _ => std::env::var(name).ok(),
-    })
+static ROLL_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
+
+async fn native_bootstrap(request: Request) -> Response {
+    // Cold-start the native Roll pool only for authenticated bootstrap traffic.
+    // Keep health independent of DB secrets and failures.
+    let mut result = match ROLL_STATE.get_or_init(|| {
+        Config::from_vercel_env()
+            .and_then(AppState::new)
+            .map(Arc::new)
+            .map_err(|err| err.0)
+    }) {
+        Ok(state) => {
+            let mut router = roll_router(state.clone());
+            match router.call(request).await {
+                Ok(response) => response,
+                Err(never) => match never {},
+            }
+        }
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"detail": "Native Roll unavailable"})),
+        )
+            .into_response(),
+    };
+    result.headers_mut().insert(
+        "x-comicpile-api-runtime",
+        HeaderValue::from_static("rust"),
+    );
+    result
+}
+
+fn app() -> Router {
+    Router::new()
+        .route("/api/_native_roll/health", get(native_health))
+        .route("/api/v2/roll/bootstrap", get(native_bootstrap))
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let state = Arc::new(AppState::new(config()?)?);
-    // This route is a native runtime probe, NOT the migrated Roll bootstrap.
-    // Do not route GET /api/v2/roll/bootstrap here until its full handler exists.
-    let app = router(state).route(
-        "/api/_native_roll/health",
-        get(|| async {
-            Json(serde_json::json!({
-                "status": "ok",
-                "runtime": "rust",
-                "service": "roll"
-            }))
-        }),
-    );
-    vercel_runtime::run(ServiceBuilder::new().layer(VercelLayer::new()).service(app)).await
+    vercel_runtime::run(
+        ServiceBuilder::new()
+            .layer(VercelLayer::new())
+            .service(app()),
+    )
+    .await
 }
 
 #[cfg(test)]
 mod tests {
-    use super::production_postgres_url;
+    use super::app;
+    use axum::{
+        body::{to_bytes, Body},
+        http::{header, Request, StatusCode},
+    };
+    use tower::Service;
 
-    #[test]
-    fn native_postgres_url_enforces_tls_and_normalizes_sqlalchemy_dialect() {
+    #[tokio::test]
+    async fn native_probe_serves_json_without_config_or_database() {
+        let mut router = app();
+        let request = Request::builder()
+            .method("GET")
+            .uri("/api/_native_roll/health")
+            .body(Body::empty())
+            .expect("valid request");
+        let response = router.call(request).await.expect("health response");
+        assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
-            production_postgres_url("postgresql+asyncpg://localhost/db".into()),
-            "postgresql://localhost/db?sslmode=require"
+            response.headers().get(header::CONTENT_TYPE),
+            Some(&axum::http::HeaderValue::from_static("application/json"))
         );
+        let body = to_bytes(response.into_body(), 1024)
+            .await
+            .expect("health JSON");
         assert_eq!(
-            production_postgres_url("postgresql+psycopg://localhost/db".into()),
-            "postgresql://localhost/db?sslmode=require"
-        );
-        assert_eq!(
-            production_postgres_url("postgresql://localhost/db?application_name=roll".into()),
-            "postgresql://localhost/db?application_name=roll&sslmode=require"
-        );
-        assert_eq!(
-            production_postgres_url("postgresql://localhost/db?sslmode=require".into()),
-            "postgresql://localhost/db?sslmode=require"
+            serde_json::from_slice::<serde_json::Value>(&body).expect("valid JSON"),
+            serde_json::json!({"status": "ok", "runtime": "rust", "service": "roll"})
         );
     }
 }
