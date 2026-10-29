@@ -15,6 +15,13 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONTROLLER_PATH = REPO_ROOT / ".github/scripts/factory-work-controller.py"
+_BLOCKED_LABELS_FOR_RECONCILE_SKIP = (
+    "duplicate",
+    "factory:blocked",
+    "invalid",
+    "ralph-status:blocked",
+    "wontfix",
+)
 
 
 @pytest.fixture(scope="module")
@@ -1132,8 +1139,11 @@ def test_reconcile_contradictory_labels_repairs_building_unowned(
 def test_reconcile_contradictory_labels_repairs_blocked_unowned(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Verify ralph-status:blocked + factory:unowned is repaired to factory:blocked + factory:unowned."""
-    issues = [issue(3006, "ralph-status:blocked", "factory:unowned")]
+    """ralph-status:blocked holds without a live factory lease are not rewritten."""
+    issues = [
+        issue(3006, "ralph-status:blocked"),
+        issue(3011, "ralph-status:blocked", "factory:unowned"),
+    ]
     replaced: list[tuple[int, str, str | None]] = []
     monkeypatch.setattr(
         controller,
@@ -1141,8 +1151,51 @@ def test_reconcile_contradictory_labels_repairs_blocked_unowned(
         lambda number, owner, stage=None: replaced.append((number, owner, stage)),
     )
 
-    assert controller.reconcile_contradictory_labels(issues, []) == [3006]
-    assert replaced == [(3006, "factory:unowned", "factory:blocked")]
+    assert controller.reconcile_contradictory_labels(issues, []) == []
+    assert replaced == []
+
+
+@pytest.mark.parametrize("blocked_label", _BLOCKED_LABELS_FOR_RECONCILE_SKIP)
+def test_reconcile_contradictory_labels_skips_each_blocked_label_without_factory_labels(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, blocked_label: str
+) -> None:
+    """Every BLOCKED_LABELS member with no factory labels must produce no writes."""
+    assert set(_BLOCKED_LABELS_FOR_RECONCILE_SKIP) == set(controller.BLOCKED_LABELS)
+    issues = [issue(4000, blocked_label)]
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels(issues, []) == []
+    assert replaced == []
+
+
+def test_reconcile_contradictory_labels_repairs_blocked_with_live_lease(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A live factory:NN lease on a blocked item is still normalized."""
+    issues = [
+        issue(
+            3010,
+            "ralph-status:blocked",
+            "factory",
+            "factory:unowned",
+            "factory:13",
+            "factory:building",
+        )
+    ]
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels(issues, []) == [3010]
+    assert replaced == [(3010, "factory:13", "factory:building")]
 
 
 def test_reconcile_contradictory_labels_skips_manual_only_pr(
@@ -1155,7 +1208,7 @@ def test_reconcile_contradictory_labels_skips_manual_only_pr(
         "ralph-status:blocked",
     )
     hold["body"] = "<!-- factory-execution:manual-only -->\nHold this factory PR.\n"
-    sibling = issue(3006, "ralph-status:blocked", "factory:unowned")
+    sibling = issue(3005, "factory", "factory:unowned", "factory:building")
     replaced: list[tuple[int, str, str | None]] = []
     monkeypatch.setattr(
         controller,
@@ -1163,8 +1216,8 @@ def test_reconcile_contradictory_labels_skips_manual_only_pr(
         lambda number, owner, stage=None: replaced.append((number, owner, stage)),
     )
 
-    assert controller.reconcile_contradictory_labels([sibling], [hold]) == [3006]
-    assert replaced == [(3006, "factory:unowned", "factory:blocked")]
+    assert controller.reconcile_contradictory_labels([sibling], [hold]) == [3005]
+    assert replaced == [(3005, "factory:unowned", None)]
 
 
 def test_reconcile_contradictory_labels_repairs_done_state(
