@@ -250,6 +250,7 @@ pub async fn bootstrap_v2(
         ids.iter().filter_map(|id| known.get(id).cloned()).take(20).collect::<Vec<_>>()
     };
     let snoozed_threads = summary(&snoozed);
+    let snoozed_count = snoozed_threads.len();
     let skipped_threads = summary(&skipped);
     let eligible_threads: HashSet<i32> = candidates.iter().map(|c| c.thread_id).collect();
     let blocked: Vec<i32> = validated.inputs().core.threads.iter()
@@ -299,7 +300,7 @@ pub async fn bootstrap_v2(
         "rollable": rollable,
         "last_read": last_read,
         "snoozed_threads": snoozed_threads,
-        "snoozed_count": snoozed_threads.len(),
+        "snoozed_count": snoozed_count,
         "skipped_thread_ids": skipped,
         "skipped_threads": skipped_threads,
         "blocked_count": blocked.len(),
