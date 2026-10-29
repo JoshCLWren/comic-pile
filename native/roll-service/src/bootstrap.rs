@@ -373,6 +373,147 @@ async fn durable_snoozed(
     Ok(excluded)
 }
 
+fn recovery_label(
+    inputs: &option_inputs::OptionInputs,
+    issue_id: i32,
+) -> String {
+    let Some(issue) = inputs.core.issues.iter().find(|issue| issue.id == issue_id) else {
+        return "Required issue".into();
+    };
+    let title = inputs.core.threads.iter()
+        .find(|thread| thread.id == issue.thread_id)
+        .map(|thread| thread.title.as_str())
+        .unwrap_or("Required issue");
+    format!("{title} #{}", issue.issue_number)
+}
+
+fn recovery_chains(
+    issue_id: i32,
+    edges: &[crate::reading_constraints::ConstraintEdge],
+    inputs: &option_inputs::OptionInputs,
+    readable: &HashSet<i32>,
+    ancestors: &HashSet<i32>,
+    depth: usize,
+) -> Vec<Vec<Value>> {
+    let label = recovery_label(inputs, issue_id);
+    let node = json!({
+        "node_type": "issue",
+        "node_id": issue_id,
+        "label": label,
+        "is_readable": readable.contains(&issue_id)
+    });
+    if depth >= 32 || ancestors.contains(&issue_id) {
+        return vec![vec![node]];
+    }
+    let upstream: Vec<i32> = edges.iter()
+        .filter(|edge| edge.target_issue_id == issue_id)
+        .map(|edge| edge.source_issue_id)
+        .collect();
+    if upstream.is_empty() {
+        return vec![vec![node]];
+    }
+    let mut visited = ancestors.clone();
+    visited.insert(issue_id);
+    let mut result = Vec::new();
+    for source in upstream.into_iter().take(500) {
+        for tail in recovery_chains(source, edges, inputs, readable, &visited, depth + 1) {
+            let mut chain = vec![node.clone()];
+            chain.extend(tail);
+            result.push(chain);
+            if result.len() >= 500 {
+                return result;
+            }
+        }
+    }
+    result
+}
+
+/// Keep the existing pending roll intact. Explain only real blocked frontiers,
+/// with actionable leaf issues derived from the *same* authoritative graph.
+fn pending_roll_recovery(
+    validated: &crate::reading_constraints::ValidatedReadingInputs,
+    pending_thread_id: Option<i32>,
+    excluded: &HashSet<i32>,
+    candidates: &[crate::reading_constraints::EligibleFrontier],
+) -> Result<Option<Value>, ApiError> {
+    let Some(thread_id) = pending_thread_id else {
+        return Ok(None);
+    };
+    let inputs = validated.inputs();
+    let mut pending_issues: Vec<_> = inputs.core.issues.iter()
+        .filter(|issue| issue.thread_id == thread_id && issue.status == "unread"
+            && !inputs.excluded_issue_ids.contains(&issue.id))
+        .collect();
+    pending_issues.sort_by_key(|issue| (issue.position, issue.id));
+    let Some(target) = pending_issues.first() else {
+        return Ok(None);
+    };
+    let edges = validated.unsatisfied_edges().map_err(|_| unavailable())?;
+    let direct: Vec<_> = edges.iter()
+        .filter(|edge| edge.target_issue_id == target.id)
+        .take(500)
+        .collect();
+    if direct.is_empty() {
+        return Ok(None);
+    }
+    let readable: HashSet<i32> = candidates.iter()
+        .filter(|candidate| !excluded.contains(&candidate.thread_id))
+        .map(|candidate| candidate.issue_id)
+        .collect();
+    let mut blockers = Vec::new();
+    let mut chains = Vec::new();
+    let mut recommended = Vec::new();
+    let mut visited = HashSet::new();
+    for edge in direct {
+        let source = edge.source_issue_id;
+        let label = recovery_label(inputs, source);
+        blockers.push(json!({
+            "rule_id": Value::Null,
+            "source_type": "issue",
+            "source_id": source,
+            "source_label": label,
+            "satisfaction_type": "item_read",
+            "blocker_type": "item_unread",
+            "satisfied": false,
+            "causing_issue_ids": [source],
+            "causing_member_issue_ids": [],
+            "unread_issue_details": [{"issue_id": source, "label": label}],
+            "note": edge.origin
+        }));
+        if visited.insert(source) {
+            recommended.push(json!({
+                "node_type": "issue", "node_id": source,
+                "label": label, "is_readable": readable.contains(&source)
+            }));
+        }
+        for chain in recovery_chains(source,&edges,inputs,&readable,&HashSet::new(),0) {
+            for node in &chain {
+                let issue_id = node.get("node_id").and_then(Value::as_i64).unwrap_or_default() as i32;
+                if node.get("is_readable").and_then(Value::as_bool) == Some(true)
+                    && visited.insert(issue_id) {
+                    recommended.push(node.clone());
+                }
+            }
+            chains.push(chain);
+            if chains.len() >= 500 {
+                break;
+            }
+        }
+    }
+    let title = inputs.core.threads.iter()
+        .find(|thread| thread.id == thread_id)
+        .map(|thread| thread.title.as_str())
+        .unwrap_or("Selected series");
+    Ok(Some(json!({
+        "original_thread_id": thread_id,
+        "original_thread_title": title,
+        "direct_blockers": blockers,
+        "readable_prerequisites": recommended,
+        "chains": chains,
+        "diagnostics": []
+    })))
+}
+
 pub async fn bootstrap_v2(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -486,6 +627,7 @@ pub async fn bootstrap_v2(
         .collect();
     let blocked_threads = summary(&blocked);
 
+    let roll_recovery = pending_roll_recovery(&validated,session.pending_thread_id,&excluded,&candidates)?;
     let active_thread =
         current_active_thread(&conn, user, session.id, session.pending_thread_id).await?;
     let last_roll_result = active_thread
@@ -515,7 +657,7 @@ pub async fn bootstrap_v2(
             "session_mode_correction_guidance": session.session_mode_correction_guidance
         },
         "active_thread": active_thread,
-        "roll_recovery": Value::Null,
+        "roll_recovery": roll_recovery,
         "bandwidth": {
             "predicted_bandwidth": session.predicted_bandwidth,
             "active_bandwidth": session.active_bandwidth,
