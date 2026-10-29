@@ -284,7 +284,7 @@ export function useRollActions({
 
   async function handleClearManualDie() {
     try {
-      setCurrentDie(bootstrap?.current_die ?? 6)
+      setCurrentDie(6)
       await clearManualDieMutation.mutate()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))
