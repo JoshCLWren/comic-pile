@@ -1,721 +1,312 @@
-//! V2 bootstrap endpoint implementation matching Python contract.
-
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
+//! Authenticated Roll v2 bootstrap using the already merged native session and Option E loaders.
+//! No Python hop and no synthetic "success" values for missing database rows.
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    option_inputs,
+    reading_session::{self, SessionPolicy},
+    ApiError, AppState,
 };
-use deadpool_postgres::{Pool, Row};
-use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgRow;
-use std::sync::Arc;
-use tracing::{error, info, warn};
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    Json,
+};
+use serde::Deserialize;
+use serde_json::{json, Value};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    sync::Arc,
+};
 
-use crate::auth::{authenticate_request, AuthUser};
-use crate::schemas::{RollV2BootstrapResponse, RollableItem, RollableRoute};
-
-/// V2 bootstrap request body (currently empty, reserved for future extensions).
-#[derive(Deserialize)]
-pub struct BootstrapRequest {}
-
-/// V2 bootstrap response body.
-#[derive(Serialize)]
-pub struct BootstrapResponse {
-    pub response: RollV2BootstrapResponse,
-    pub tracing: Option<String>,
+#[derive(Deserialize, Default)]
+pub struct BootstrapQuery {
+    pub timezone: Option<String>,
 }
 
-/// Extract timezone from request header.
-fn extract_timezone(header: &str) -> Option<String> {
-    let header = header.trim();
-    if header.is_empty() {
-        return None;
-    }
-    // Validate timezone format (basic check for IANA timezone)
-    if header.len() > 100 {
-        return None;
-    }
-    Some(header.to_string())
+fn unavailable() -> ApiError {
+    ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid native Roll response")
 }
 
-/// Build session bandwidth state from config.
-fn build_bandwidth_state(
-    predicted: &str,
-    active: &str,
-    confidence: f64,
-    source: &str,
-    version: &str,
-) -> crate::schemas::SessionBandwidthState {
-    crate::schemas::SessionBandwidthState {
-        predicted_bandwidth: predicted.to_string(),
-        active_bandwidth: active.to_string(),
-        confidence,
-        source: source.to_string(),
-        mode_version: version.to_string(),
-    }
-}
-
-/// Build session mode state.
-fn build_session_mode(
-    active_bandwidth: &str,
-    predicted_bandwidth: &str,
-    bandwidth_confidence: f64,
-    bandwidth_source: &str,
-    bandwidth_version: &str,
-    active_intent: &str,
-    predicted_intent: &str,
-    intent_confidence: f64,
-    intent_source: &str,
-    intent_version: &str,
-    correction_guidance: Option<&str>,
-) -> crate::schemas::SessionMode {
-    crate::schemas::SessionMode {
-        active_bandwidth: active_bandwidth.to_string(),
-        predicted_bandwidth: predicted_bandwidth.to_string(),
-        bandwidth_confidence,
-        bandwidth_source: bandwidth_source.to_string(),
-        bandwidth_version: bandwidth_version.to_string(),
-        active_intent: active_intent.to_string(),
-        predicted_intent: predicted_intent.to_string(),
-        intent_confidence,
-        intent_source: intent_source.to_string(),
-        intent_version: intent_version.to_string(),
-        session_mode_correction_guidance: correction_guidance.map(|s| s.to_string()),
-    }
-}
-
-/// Build active thread info.
-fn build_active_thread(
-    id: i64,
-    title: &str,
-    format: &str,
-    last_rolled_result: Option<i32>,
-) -> crate::schemas::ActiveThreadInfo {
-    crate::schemas::ActiveThreadInfo {
-        id,
-        title: title.to_string(),
-        format: format.to_string(),
-        last_rolled_result,
-    }
-}
-
-/// Build roll recovery info.
-fn build_roll_recovery(
-    pending_thread_id: Option<i64>,
-    pending_thread_title: Option<&str>,
-    excluded_thread_ids: Vec<i64>,
-) -> crate::schemas::RollRecoveryInfo {
-    crate::schemas::RollRecoveryInfo {
-        pending_thread_id,
-        pending_thread_title: pending_thread_title.map(|s| s.to_string()),
-        excluded_thread_ids,
-    }
-}
-
-/// Build rollable thread.
-fn build_rollable_thread(
-    id: i64,
-    title: &str,
-    format: &str,
-    last_activity_at: Option<&str>,
-) -> crate::schemas::RollableThread {
-    crate::schemas::RollableThread::new(
-        id,
-        title.to_string(),
-        format.to_string(),
-        last_activity_at.map(|s| s.to_string()),
-    )
-}
-
-/// Build rollable item.
-fn build_rollable_item(
-    thread: crate::schemas::RollableThread,
-    issue: crate::schemas::RollableIssue,
-    identity: crate::schemas::RollableIdentity,
-    reader: crate::schemas::RollableReader,
-    routes: Vec<crate::schemas::RollableRoute>,
-    overflow_routes_count: i32,
-) -> crate::schemas::RollableItem {
-    crate::schemas::RollableItem::new(thread, issue, identity, reader, routes, overflow_routes_count)
-}
-
-/// Build roll last read info.
-fn build_roll_last_read(
-    issue_id: Option<i64>,
-    issue_number: Option<&str>,
-    thread_id: Option<i64>,
-    thread_title: Option<&str>,
-    read_at: Option<&str>,
-) -> crate::schemas::RollLastRead {
-    crate::schemas::RollLastRead::new(
-        issue_id,
-        issue_number.map(|s| s.to_string()),
-        thread_id,
-        thread_title.map(|s| s.to_string()),
-        read_at.map(|s| s.to_string()),
-    )
-}
-
-/// Fetch current session for user.
-async fn fetch_session(
-    pool: &Pool,
-    user_id: i64,
-) -> Result<Row, String> {
-    let row = sqlx::query(
-        r#"
-        SELECT
-            id,
-            start_die,
-            manual_die,
-            timezone,
-            active_bandwidth,
-            bandwidth_confidence,
-            bandwidth_source,
-            bandwidth_version,
-            active_intent,
-            intent_confidence,
-            intent_source,
-            intent_version,
-            session_mode_correction_guidance,
-            pending_thread_id,
-            snoozed_thread_ids,
-            skipped_thread_ids
-        FROM reading_sessions
-        WHERE user_id = $1 AND ended_at IS NULL
-        ORDER BY started_at DESC
-        LIMIT 1
-        "#,
-    )
-    .bind(user_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch session: {}", e))?;
-
-    Ok(row)
-}
-
-/// Fetch current die size for session.
-async fn fetch_current_die(
-    pool: &Pool,
-    session_id: i64,
-) -> Result<i32, String> {
-    let row = sqlx::query(
-        r#"
-        SELECT
-            CASE
-                WHEN manual_die IS NOT NULL THEN manual_die
-                ELSE start_die
-            END as die_size
-        FROM reading_sessions
-        WHERE id = $1
-        "#,
-    )
-    .bind(session_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch current die: {}", e))?;
-
-    let die_size: i32 = row.get("die_size");
-    Ok(die_size)
-}
-
-/// Fetch active thread for session.
-async fn fetch_active_thread(
-    pool: &Pool,
-    session_id: i64,
-) -> Result<Option<Row>, String> {
-    let row = sqlx::query(
-        r#"
-        SELECT
-            t.id,
-            t.title,
-            t.format,
-            t.last_rolled_result
-        FROM reading_sessions rs
-        JOIN threads t ON rs.pending_thread_id = t.id
-        WHERE rs.id = $1
-        "#,
-    )
-    .bind(session_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch active thread: {}", e))?;
-
-    Ok(row)
-}
-
-/// Fetch rollable candidates (bounded by die size).
-async fn fetch_rollable_candidates(
-    pool: &Pool,
-    user_id: i64,
-    die_size: i32,
-    excluded_thread_ids: Vec<i64>,
-) -> Result<Vec<Row>, String> {
-    let excluded_list = if excluded_thread_ids.is_empty() {
-        String::new()
-    } else {
-        format!(" AND t.id NOT IN ({})", excluded_thread_ids.join(", "))
-    };
-
-    let rows = sqlx::query(
-        r#"
-        SELECT
-            t.id,
-            t.title,
-            t.format,
-            t.last_activity_at,
-            i.id as issue_id,
-            i.issue_number,
-            i.status as issue_status,
-            ARRAY(
-                SELECT DISTINCT dg.name
-                FROM dependency_group_memberships dgm
-                JOIN dependency_groups dg ON dgm.group_id = dg.id
-                WHERE dgm.thread_id = t.id
-                LIMIT 3
-            ) as route_labels
-        FROM threads t
-        LEFT JOIN issues i ON i.thread_id = t.id AND i.status = 'unread'
-        WHERE t.user_id = $1
-          AND t.status = 'active'
-          AND t.queue_position >= 1
-          AND t.id NOT IN (
-              SELECT thread_id FROM reading_sessions
-              WHERE user_id = $1 AND ended_at IS NULL
-              AND pending_thread_id = t.id
-          )
-          $2
-        ORDER BY t.queue_position, t.id
-        LIMIT $3
-        "#,
-    )
-    .bind(user_id)
-    .bind(&excluded_list)
-    .bind(die_size)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch rollable candidates: {}", e))?;
-
-    Ok(rows)
-}
-
-/// Fetch snoozed threads.
-async fn fetch_snoozed_threads(
-    pool: &Pool,
-    user_id: i64,
-    limit: usize,
-) -> Result<Vec<Row>, String> {
-    let rows = sqlx::query(
-        r#"
-        SELECT
-            id,
-            title,
-            format,
-            last_activity_at
-        FROM threads
-        WHERE user_id = $1 AND status = 'snoozed'
-        ORDER BY updated_at DESC
-        LIMIT $2
-        "#,
-    )
-    .bind(user_id)
-    .bind(limit as i32)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch snoozed threads: {}", e))?;
-
-    Ok(rows)
-}
-
-/// Fetch skipped thread IDs.
-async fn fetch_skipped_thread_ids(
-    pool: &Pool,
-    session_id: i64,
-) -> Result<Vec<i64>, String> {
-    let row = sqlx::query(
-        r#"
-        SELECT skipped_thread_ids
-        FROM reading_sessions
-        WHERE id = $1
-        "#,
-    )
-    .bind(session_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch skipped thread IDs: {}", e))?;
-
-    let skipped_ids: Vec<i64> = row.get("skipped_thread_ids");
-    Ok(skipped_ids)
-}
-
-/// Fetch blocked thread count.
-async fn fetch_blocked_count(
-    pool: &Pool,
-    user_id: i64,
-) -> Result<i32, String> {
-    let row = sqlx::query(
-        r#"
-        SELECT COUNT(*) as count
-        FROM threads
-        WHERE user_id = $1 AND status = 'blocked'
-        "#,
-    )
-    .bind(user_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch blocked count: {}", e))?;
-
-    let count: i32 = row.get("count");
-    Ok(count)
-}
-
-/// Fetch stale thread count.
-async fn fetch_stale_thread_count(
-    pool: &Pool,
-    user_id: i64,
-) -> Result<i32, String> {
-    let row = sqlx::query(
-        r#"
-        SELECT COUNT(*) as count
-        FROM threads
-        WHERE user_id = $1 AND status = 'stale'
-        "#,
-    )
-    .bind(user_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch stale thread count: {}", e))?;
-
-    let count: i32 = row.get("count");
-    Ok(count)
-}
-
-/// Fetch latest rate event in session (last read).
-async fn fetch_last_read(
-    pool: &Pool,
-    session_id: i64,
-) -> Result<Option<Row>, String> {
-    let row = sqlx::query(
-        r#"
-        SELECT
-            e.issue_id,
-            COALESCE(i.issue_number, e.issue_number) as issue_number,
-            e.thread_id,
-            t.title as thread_title,
-            e.timestamp
-        FROM events e
-        LEFT JOIN issues i ON e.issue_id = i.id
-        LEFT JOIN threads t ON e.thread_id = t.id AND t.user_id = e.session_id
-        WHERE e.session_id = $1
-          AND e.type = 'rate'
-        ORDER BY e.timestamp DESC, e.id DESC
-        LIMIT 1
-        "#,
-    )
-    .bind(session_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch last read: {}", e))?;
-
-    Ok(row)
-}
-
-/// Main bootstrap endpoint handler.
-pub async fn bootstrap_v2(
-    state: State<Arc<AppState>>,
-    auth_header: String,
-) -> Result<Json<BootstrapResponse>, Response> {
-    // Authenticate user
-    let auth_user = match authenticate_request(&auth_header, &state.jwt_secret).await {
-        Ok(user) => user,
-        Err(_) => {
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({
-                    "detail": "Unauthorized"
-                })),
-            )
-            .into_response();
-        }
-    };
-
-    let user_id = auth_user.user_id;
-
-    // Fetch current session
-    let session_row = match fetch_session(&state.pool, user_id).await {
-        Ok(row) => row,
-        Err(e) => {
-            error!("Failed to fetch session for user {}: {}", user_id, e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "detail": format!("Internal server error: {}", e)
-                })),
-            )
-            .into_response();
-        }
-    };
-
-    let session_id: i64 = session_row.get("id");
-    let start_die: i32 = session_row.get("start_die");
-    let manual_die: Option<i32> = session_row.get("manual_die");
-    let timezone: Option<String> = session_row.get("timezone");
-    let active_bandwidth: String = session_row.get("active_bandwidth");
-    let bandwidth_confidence: f64 = session_row.get("bandwidth_confidence");
-    let bandwidth_source: String = session_row.get("bandwidth_source");
-    let bandwidth_version: String = session_row.get("bandwidth_version");
-    let active_intent: String = session_row.get("active_intent");
-    let intent_confidence: f64 = session_row.get("intent_confidence");
-    let intent_source: String = session_row.get("intent_source");
-    let intent_version: String = session_row.get("intent_version");
-    let correction_guidance: Option<String> = session_row.get("session_mode_correction_guidance");
-    let pending_thread_id: Option<i64> = session_row.get("pending_thread_id");
-
-    // Fetch current die size
-    let current_die = match fetch_current_die(&state.pool, session_id).await {
-        Ok(die) => die,
-        Err(e) => {
-            error!("Failed to fetch current die for session {}: {}", session_id, e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "detail": format!("Internal server error: {}", e)
-                })),
-            )
-            .into_response();
-        }
-    };
-
-    // Fetch active thread
-    let active_thread_row = match fetch_active_thread(&state.pool, session_id).await {
-        Ok(row) => row,
-        Err(e) => {
-            error!("Failed to fetch active thread for session {}: {}", session_id, e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "detail": format!("Internal server error: {}", e)
-                })),
-            )
-            .into_response();
-        }
-    };
-
-    let active_thread = match active_thread_row {
-        Some(row) => {
-            let id: i64 = row.get("id");
-            let title: String = row.get("title");
-            let format: String = row.get("format");
-            let last_rolled_result: Option<i32> = row.get("last_rolled_result");
-            Some(build_active_thread(id, &title, &format, last_rolled_result))
-        }
-        None => None,
-    };
-
-    // Fetch rollable candidates
-    let skipped_thread_ids = match fetch_skipped_thread_ids(&state.pool, session_id).await {
-        Ok(ids) => ids,
-        Err(e) => {
-            warn!("Failed to fetch skipped thread IDs for session {}: {}", session_id, e);
-            Vec::new()
-        }
-    };
-
-    let rollable_rows = match fetch_rollable_candidates(
-        &state.pool,
-        user_id,
-        current_die,
-        skipped_thread_ids.clone(),
-    )
-    .await
-    {
-        Ok(rows) => rows,
-        Err(e) => {
-            error!("Failed to fetch rollable candidates for user {}: {}", user_id, e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "detail": format!("Internal server error: {}", e)
-                })),
-            )
-            .into_response();
-        }
-    };
-
-    // Build rollable items
-    let mut rollable_items: Vec<crate::schemas::RollableItem> = Vec::new();
-    for row in &rollable_rows {
-        let id: i64 = row.get("id");
-        let title: String = row.get("title");
-        let format: String = row.get("format");
-        let last_activity_at: Option<String> = row.get("last_activity_at");
-        let issue_id: Option<i64> = row.get("issue_id");
-        let issue_number: Option<String> = row.get("issue_number");
-        let issue_status: Option<String> = row.get("issue_status");
-        let route_labels: Option<Vec<String>> = row.get("route_labels");
-
-        let thread = build_rollable_thread(id, &title, &format, last_activity_at.as_deref());
-
-        let issue = crate::schemas::RollableIssue {
-            id: issue_id,
-            number: issue_number,
-            canonical_series_title: None, // TODO: Fetch from mappings
-            cover_url: None, // TODO: Fetch from mappings
-        };
-
-        let identity = crate::schemas::RollableIdentity {
-            source: "unavailable".to_string(),
-            canonical_series_id: None,
-            state: "candidate".to_string(),
-            series_mapping_state: "unresolved".to_string(),
-        };
-
-        let reader = crate::schemas::RollableReader {
-            latest_rating: None,
-            average_rating: None,
-            rating_count: None,
-            read_count: None,
-            issue_count: None,
-            progress_scope: "THREAD".to_string(),
-        };
-
-        let routes = route_labels
-            .unwrap_or_default()
-            .into_iter()
-            .map(|name| crate::schemas::RollableRoute {
-                kind: "group".to_string(),
-                name,
-            })
-            .collect();
-
-        let item = build_rollable_item(
-            thread,
-            issue,
-            identity,
-            reader,
-            routes,
-            0,
-        );
-
-        rollable_items.push(item);
-    }
-
-    // Fetch snoozed threads
-    let snoozed_rows = match fetch_snoozed_threads(&state.pool, user_id, RollV2BootstrapResponse::SUMMARY_LIMIT).await {
-        Ok(rows) => rows,
-        Err(e) => {
-            warn!("Failed to fetch snoozed threads for user {}: {}", user_id, e);
-            Vec::new()
-        }
-    };
-
-    let snoozed_threads: Vec<crate::schemas::RollableThread> = snoozed_rows
-        .into_iter()
-        .map(|row| {
-            let id: i64 = row.get("id");
-            let title: String = row.get("title");
-            let format: String = row.get("format");
-            let last_activity_at: Option<String> = row.get("last_activity_at");
-            build_rollable_thread(id, &title, &format, last_activity_at.as_deref())
-        })
-        .collect();
-
-    // Fetch blocked count
-    let blocked_count = match fetch_blocked_count(&state.pool, user_id).await {
-        Ok(count) => count,
-        Err(e) => {
-            warn!("Failed to fetch blocked count for user {}: {}", user_id, e);
-            0
-        }
-    };
-
-    // Fetch stale thread count
-    let stale_thread_count = match fetch_stale_thread_count(&state.pool, user_id).await {
-        Ok(count) => count,
-        Err(e) => {
-            warn!("Failed to fetch stale thread count for user {}: {}", user_id, e);
-            0
-        }
-    };
-
-    // Fetch last read
-    let last_read_row = match fetch_last_read(&state.pool, session_id).await {
-        Ok(row) => row,
-        Err(e) => {
-            warn!("Failed to fetch last read for session {}: {}", session_id, e);
-            None
-        }
-    };
-
-    let last_read = match last_read_row {
-        Some(row) => {
-            let issue_id: Option<i64> = row.get("issue_id");
-            let issue_number: Option<String> = row.get("issue_number");
-            let thread_id: Option<i64> = row.get("thread_id");
-            let thread_title: Option<String> = row.get("thread_title");
-            let timestamp: Option<String> = row.get("timestamp");
-
-            Some(build_roll_last_read(issue_id, issue_number.as_deref(), thread_id, thread_title.as_deref(), timestamp.as_deref()))
-        }
-        None => None,
-    };
-
-    // Build response
-    let response = crate::schemas::RollV2BootstrapResponse {
-        session_id,
-        user_id,
-        current_die,
-        manual_die,
-        pending_thread_id,
-        last_rolled_result: active_thread.as_ref().and_then(|t| t.last_rolled_result),
-        session_mode: build_session_mode(
-            &active_bandwidth,
-            &active_bandwidth,
-            bandwidth_confidence,
-            &bandwidth_source,
-            &bandwidth_version,
-            &active_intent,
-            &active_intent,
-            intent_confidence,
-            &intent_source,
-            &intent_version,
-            correction_guidance.as_deref(),
-        ),
-        active_thread,
-        roll_recovery: Some(build_roll_recovery(
-            pending_thread_id,
-            None, // TODO: Fetch pending thread title
-            skipped_thread_ids,
-        )),
-        bandwidth: build_bandwidth_state(
-            &active_bandwidth,
-            &active_bandwidth,
-            bandwidth_confidence,
-            &bandwidth_source,
-            &bandwidth_version,
-        ),
-        rollable: rollable_items,
-        last_read,
-        snoozed_threads,
-        snoozed_count: snoozed_threads.len() as i32,
-        skipped_thread_ids,
-        skipped_threads: Vec::new(), // TODO: Fetch skipped threads
-        blocked_count,
-        blocked_threads: Vec::new(), // TODO: Fetch blocked threads
-        stale_thread_count,
-        stale_thread: None, // TODO: Fetch stale thread
-        timezone,
-    };
-
-    info!(
-        user_id = user_id,
-        session_id = session_id,
-        rollable_count = rollable_items.len(),
-        "V2 bootstrap successful"
-    );
-
-    Ok(Json(BootstrapResponse {
-        response,
-        tracing: None,
+fn thread_value(row: &tokio_postgres::Row) -> Result<Value, ApiError> {
+    let id: i32 = row.try_get(0).map_err(db::query_error)?;
+    let title: String = row.try_get(1).map_err(db::query_error)?;
+    let format: String = row.try_get(2).map_err(db::query_error)?;
+    let last_activity_at: Option<String> = row.try_get(3).map_err(db::query_error)?;
+    Ok(json!({
+        "id": id,
+        "title": title,
+        "format": format,
+        "last_activity_at": last_activity_at
     }))
+}
+
+fn normalized_source(value: &Option<String>) -> Option<&str> {
+    value.as_deref().filter(|v| matches!(*v, "inferred" | "manual" | "snooze" | "quiz"))
+}
+
+fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
+    let thread_id: i32 = row.try_get(0).map_err(db::query_error)?;
+    let issue_id: i32 = row.try_get(4).map_err(db::query_error)?;
+    let issue_number: String = row.try_get(5).map_err(db::query_error)?;
+    let metadata: Option<String> = row.try_get(6).map_err(db::query_error)?;
+    let mapping_status: Option<String> = row.try_get(7).map_err(db::query_error)?;
+    let series_mapping_status: Option<String> = row.try_get(8).map_err(db::query_error)?;
+    let read_count: i64 = row.try_get(9).map_err(db::query_error)?;
+    let issue_count: i64 = row.try_get(10).map_err(db::query_error)?;
+    let latest_rating: Option<f64> = row.try_get(11).map_err(db::query_error)?;
+    let average_rating: Option<f64> = row.try_get(12).map_err(db::query_error)?;
+    let rating_count: i64 = row.try_get(13).map_err(db::query_error)?;
+    let routes: Vec<String> = row.try_get(14).map_err(db::query_error)?;
+    let meta: Value = metadata
+        .as_deref()
+        .and_then(|m| serde_json::from_str(m).ok())
+        .unwrap_or(Value::Null);
+    let volume = meta.get("volume");
+    let canonical_id = volume
+        .and_then(|v| v.get("id"))
+        .or_else(|| meta.get("volume_id"))
+        .and_then(|id| match id {
+            Value::String(s) if !s.is_empty() => Some(s.to_owned()),
+            Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        });
+    let canonical_title = volume
+        .and_then(|v| v.get("name"))
+        .or_else(|| meta.get("volume_name"))
+        .and_then(Value::as_str);
+    let cover = meta
+        .get("image_url")
+        .or_else(|| meta.get("primary_image"))
+        .or_else(|| meta.get("image").and_then(|i| i.get("original_url")))
+        .and_then(Value::as_str)
+        .filter(|s| s.starts_with("https://") || s.starts_with("http://"))
+        .filter(|s| !s.split('/').nth(2).unwrap_or("").contains('@'));
+    let source = if canonical_id.is_some() && mapping_status.as_deref() == Some("confirmed") {
+        "comicvine"
+    } else {
+        "unavailable"
+    };
+    let identity_state = match mapping_status.as_deref() {
+        Some("confirmed") if source == "comicvine" => "confirmed",
+        Some("candidate") => "candidate",
+        Some("ambiguous") => "ambiguous",
+        Some("conflicting") => "conflicting",
+        _ => "unresolved",
+    };
+    let series_state = match series_mapping_status.as_deref() {
+        Some("confirmed") => "confirmed",
+        Some("candidate") => "candidate",
+        Some("ambiguous") => "ambiguous",
+        Some("conflicting") => "conflicting",
+        _ => "unresolved",
+    };
+    let overflow = routes.len().saturating_sub(3);
+    let item = json!({
+        "thread": thread_value(row)?,
+        "issue": {
+            "id": issue_id,
+            "number": issue_number,
+            "canonical_series_title": canonical_title,
+            "cover_url": cover
+        },
+        "identity": {
+            "source": source,
+            "canonical_series_id": if source == "comicvine" {canonical_id} else {None},
+            "state": identity_state,
+            "series_mapping_state": series_state
+        },
+        "reader": {
+            "latest_rating": latest_rating,
+            "average_rating": average_rating,
+            "rating_count": rating_count,
+            "read_count": read_count,
+            "issue_count": issue_count,
+            "progress_scope": "thread"
+        },
+        "routes": routes.iter().take(3).map(|name| json!({"kind":"group","name":name})).collect::<Vec<_>>(),
+        "overflow_routes_count": overflow
+    });
+    Ok((thread_id, item))
+}
+
+const CANDIDATES: &str = r#"
+SELECT t.id, t.title, t.format, t.last_activity_at::text, i.id, i.issue_number,
+ mapping.metadata::text, mapping.status, series_mapping.status,
+ (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id AND owned.status='read'),
+ (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id),
+ (SELECT e.rating::double precision FROM events e JOIN sessions s ON s.id=e.session_id
+    WHERE s.user_id=$1 AND e.thread_id=t.id AND e.type='rate' AND e.rating IS NOT NULL
+    ORDER BY e.timestamp DESC,e.id DESC LIMIT 1),
+ (SELECT avg(e.rating)::double precision FROM events e JOIN sessions s ON s.id=e.session_id
+    WHERE s.user_id=$1 AND e.thread_id=t.id AND e.type='rate' AND e.rating IS NOT NULL),
+ (SELECT count(*) FROM events e JOIN sessions s ON s.id=e.session_id
+    WHERE s.user_id=$1 AND e.thread_id=t.id AND e.type='rate' AND e.rating IS NOT NULL),
+ COALESCE((SELECT array_agg(names.name ORDER BY names.name) FROM (
+    SELECT DISTINCT g.name FROM dependency_groups g
+    JOIN dependency_group_memberships m ON m.group_id=g.id
+    WHERE g.user_id=$1 AND (m.thread_id=t.id OR m.issue_id=i.id)
+ ) names),ARRAY[]::text[])
+FROM issues i
+JOIN threads t ON t.id=i.thread_id
+LEFT JOIN LATERAL (
+    SELECT e.metadata_json AS metadata,m.status
+    FROM issue_external_identity_mappings m JOIN external_identities e ON e.id=m.external_identity_id
+    WHERE m.issue_id=i.id AND m.status<>'rejected'
+      AND e.provider='comicvine' AND e.entity_type='issue'
+    ORDER BY (m.status='confirmed') DESC,m.confidence DESC NULLS LAST,m.id LIMIT 1
+) mapping ON TRUE
+LEFT JOIN LATERAL (
+    SELECT m.status FROM thread_external_series_mappings m
+    JOIN external_identities e ON e.id=m.external_identity_id
+    WHERE m.thread_id=t.id AND m.status<>'rejected'
+      AND e.provider='comicvine' AND e.entity_type='series'
+    ORDER BY (m.status='confirmed') DESC,m.confidence DESC NULLS LAST,m.id LIMIT 1
+) series_mapping ON TRUE
+WHERE t.user_id=$1 AND i.id=ANY($2::int[])
+"#;
+
+async fn latest_session_read(
+    connection: &deadpool_postgres::Object,
+    user: AuthenticatedUser,
+    session_id: i32,
+) -> Result<Option<Value>, ApiError> {
+    let row = connection.query_opt(
+        "SELECT e.issue_id,coalesce(i.issue_number,e.issue_number),t.id,t.title,e.timestamp::text
+         FROM events e LEFT JOIN issues i ON i.id=e.issue_id
+         LEFT JOIN threads t ON t.id=coalesce(i.thread_id,e.thread_id) AND t.user_id=$2
+         WHERE e.session_id=$1 AND e.type='rate'
+           AND EXISTS (SELECT 1 FROM sessions s WHERE s.id=e.session_id AND s.user_id=$2)
+         ORDER BY e.timestamp DESC,e.id DESC LIMIT 1",
+        &[&session_id,&user.id()],
+    ).await.map_err(db::query_error)?;
+    row.map(|row| {
+        let issue_id: Option<i32> = row.try_get(0).map_err(db::query_error)?;
+        let issue_number: Option<String> = row.try_get(1).map_err(db::query_error)?;
+        let thread_id: Option<i32> = row.try_get(2).map_err(db::query_error)?;
+        let thread_title: Option<String> = row.try_get(3).map_err(db::query_error)?;
+        let read_at: Option<String> = row.try_get(4).map_err(db::query_error)?;
+        Ok(json!({"issue_id":issue_id,"issue_number":issue_number,"thread_id":thread_id,
+            "thread_title":thread_title,"read_at":read_at}))
+    }).transpose()
+}
+
+pub async fn bootstrap_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Query(query): Query<BootstrapQuery>,
+) -> Result<Json<Value>, ApiError> {
+    let active = reading_session::bootstrap(
+        &state,
+        user,
+        query.timezone.as_deref(),
+        SessionPolicy::default(),
+    )
+    .await?;
+    let validated = option_inputs::load_option_inputs(&state, user).await?;
+    let session = &active.session;
+    let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
+    let snoozed = session.snoozed_thread_ids.clone().unwrap_or_default();
+    let excluded: HashSet<i32> = skipped.iter().chain(snoozed.iter()).copied().collect();
+    let candidates = validated
+        .eligible_frontiers()
+        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid reading constraints"))?;
+    let eligible: Vec<_> = candidates.iter()
+        .filter(|candidate| !excluded.contains(&candidate.thread_id))
+        .take(active.current_die.max(0) as usize)
+        .collect();
+    let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
+
+    let conn = db::checkout(&state).await?;
+    let rows = conn.query(CANDIDATES, &[&user.id(),&ids]).await.map_err(db::query_error)?;
+    let mut by_thread: HashMap<i32, Value> = HashMap::new();
+    for row in &rows {
+        let (thread_id, item) = candidate_item(row)?;
+        by_thread.insert(thread_id,item);
+    }
+    let mut rollable = vec![];
+    for item in eligible {
+        let projected = by_thread.remove(&item.thread_id).ok_or_else(unavailable)?;
+        rollable.push(projected);
+    }
+    let last_read = latest_session_read(&conn,user,session.id).await?;
+
+    let summary_rows = conn.query(
+        "SELECT t.id,t.title,t.format,t.last_activity_at::text,
+          (t.last_activity_at < now() - interval '7 days') AS stale
+         FROM threads t WHERE t.user_id=$1 ORDER BY t.queue_position,t.id",
+        &[&user.id()],
+    ).await.map_err(db::query_error)?;
+    let mut known: HashMap<i32, Value> = HashMap::new();
+    let mut stale = Vec::new();
+    for row in &summary_rows {
+        let id: i32 = row.try_get(0).map_err(db::query_error)?;
+        let stale_flag: Option<bool> = row.try_get(4).map_err(db::query_error)?;
+        let info = thread_value(row)?;
+        if stale_flag.unwrap_or(false) { stale.push(info.clone()); }
+        known.insert(id, info);
+    }
+    let summary = |ids: &[i32]| {
+        ids.iter().filter_map(|id| known.get(id).cloned()).take(20).collect::<Vec<_>>()
+    };
+    let snoozed_threads = summary(&snoozed);
+    let skipped_threads = summary(&skipped);
+    let eligible_threads: HashSet<i32> = candidates.iter().map(|c| c.thread_id).collect();
+    let blocked: Vec<i32> = validated.inputs().core.threads.iter()
+        .filter(|thread| thread.status == "active" && !eligible_threads.contains(&thread.id))
+        .map(|thread| thread.id).collect();
+    let blocked_threads = summary(&blocked);
+
+    let active_thread = session.pending_thread_id.and_then(|id| known.get(&id).cloned());
+    let last_roll_result: Option<i32> = if let Some(thread_id) = session.pending_thread_id {
+        conn.query_opt("SELECT e.result FROM events e WHERE e.session_id=$1
+            AND e.selected_thread_id=$2 AND e.type='roll' ORDER BY e.timestamp DESC,e.id DESC LIMIT 1",
+            &[&session.id,&thread_id]).await.map_err(db::query_error)?
+            .map(|row| row.try_get(0).map_err(db::query_error)).transpose()?
+            .flatten()
+    } else {None};
+    let mode_source = normalized_source(&session.bandwidth_source);
+    let intent_source = normalized_source(&session.intent_source);
+    let response = json!({
+        "session_id": session.id,
+        "user_id": user.id(),
+        "current_die": active.current_die,
+        "manual_die": session.manual_die,
+        "pending_thread_id": session.pending_thread_id,
+        "last_rolled_result": last_roll_result,
+        "session_mode": {
+            "active_bandwidth": session.active_bandwidth,
+            "predicted_bandwidth": session.predicted_bandwidth,
+            "bandwidth_confidence": session.bandwidth_confidence,
+            "bandwidth_source": mode_source,
+            "bandwidth_version": session.bandwidth_version,
+            "active_intent": session.active_intent,
+            "predicted_intent": session.predicted_intent,
+            "intent_confidence": session.intent_confidence,
+            "intent_source": intent_source,
+            "intent_version": session.intent_version,
+            "session_mode_correction_guidance": session.session_mode_correction_guidance
+        },
+        "active_thread": active_thread,
+        "roll_recovery": Value::Null,
+        "bandwidth": {
+            "predicted_bandwidth": session.predicted_bandwidth,
+            "active_bandwidth": session.active_bandwidth,
+            "confidence": session.bandwidth_confidence,
+            "source": mode_source,
+            "mode_version": session.bandwidth_version
+        },
+        "rollable": rollable,
+        "last_read": last_read,
+        "snoozed_threads": snoozed_threads,
+        "snoozed_count": snoozed_threads.len(),
+        "skipped_thread_ids": skipped,
+        "skipped_threads": skipped_threads,
+        "blocked_count": blocked.len(),
+        "blocked_threads": blocked_threads,
+        "stale_thread_count": stale.len(),
+        "stale_thread": stale.first(),
+        "timezone": session.timezone
+    });
+    Ok(Json(response))
 }
