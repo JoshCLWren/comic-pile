@@ -166,7 +166,7 @@ The execution loader rejects unresolved references. The explicitly diagnostic
 `load_option_diagnostics` preserves owned entry/dependency IDs for parity tools;
 never feed that unchecked result into an eligibility evaluator. Foreign object
 metadata is never loaded, and every execution consumer must use the checked
-loader. Graph cycle validation is the separate #4306 gate.
+loader. The checked execution loader also enforces the global cycle-validation gate below.
 
 With a disposable local PostgreSQL URL in `RUST_ROLL_TEST_DATABASE_URL`:
 
@@ -184,3 +184,36 @@ read inactive prerequisite sources, historical dependencies, foreign exclusions,
 and prerequisites touching a foreign account in either direction. It performs
 no production reads or writes. An existing private real-data snapshot is not
 bundled; no assertion here claims verification against production records.
+
+### Global stored-constraint validation (#4306)
+
+`load_option_inputs` now returns `ValidatedReadingInputs`, whose private constructor
+state can only be obtained after reference checks and global cycle validation.
+Candidate projection must consume this checked type. Diagnostic snapshots remain
+available solely for parity tooling. No endpoint or production routing is changed.
+
+`reading_constraints::validate` ports Python's natural series order, strict/loose
+lists, hold and after_previous gates, exact per-list volume overlaps, and explicit
+prerequisites. Read and excluded issues remain in the graph; skipped placements
+are omitted. Missing references and stranded prerequisite sources fail closed.
+It returns stable minimum-ID topological order or a concrete cycle with origins
+and prerequisite provenance. Unknown list names use stable numeric labels; the
+adapter accepts an optional list-name map for reader-facing explanations. Public
+HTTP failures remain generic and do not expose graph contents.
+
+The topology and residual cycle walk are iterative. Strict order uses the same
+transitive reduction as Python, keeping ordinary long lists linear in edge count.
+The offline `constraint_validation` example reads sanitized JSON lines from stdin;
+it needs no database, credentials or Python subprocess at runtime.
+
+```sh
+cargo build --locked --examples
+cd ../..
+PYTHONPATH=. uv run pytest native/roll-service/parity/test_constraint_validation.py -q --no-cov
+```
+
+CI automatically runs this matrix in the existing native parity lane. It compares
+complete order/error/path/provenance payloads against Python across 250 seeded
+cross-list graphs, corrupt inputs, and 20,000-entry acyclic and residual-cycle
+fixtures. Existing database loader parity verifies owner scoping and ignored
+historical dependencies before this pure validator runs.
