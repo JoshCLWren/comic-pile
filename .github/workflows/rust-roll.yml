@@ -4,12 +4,26 @@ on:
   pull_request:
     paths:
       - 'native/roll-service/**'
+      # Python is the behavioral oracle; include its transitive application inputs.
+      - 'app/**'
+      - 'comic_pile/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.python-version'
+      - 'tests/test_native_roll_workflow.py'
       - '.github/workflows/rust-roll.yml'
       - 'tests/fixtures/roll-v2/auth-matrix.json'
   push:
     branches: [main]
     paths:
       - 'native/roll-service/**'
+      # Python is the behavioral oracle; include its transitive application inputs.
+      - 'app/**'
+      - 'comic_pile/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.python-version'
+      - 'tests/test_native_roll_workflow.py'
       - '.github/workflows/rust-roll.yml'
       - 'tests/fixtures/roll-v2/auth-matrix.json'
   workflow_dispatch:
