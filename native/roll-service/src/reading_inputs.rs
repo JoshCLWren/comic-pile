@@ -35,7 +35,7 @@ pub struct CoreReadingInputs {
 }
 
 // Include inactive threads and read issues; natural position defines series order.
-async fn load_core_transaction(
+pub(crate) async fn load_core_transaction(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
 ) -> Result<CoreReadingInputs, tokio_postgres::Error> {
@@ -73,7 +73,7 @@ async fn load_core_transaction(
         stored,
     })
 }
-fn valid_references(inputs: &CoreReadingInputs) -> bool {
+pub(crate) fn valid_references(inputs: &CoreReadingInputs) -> bool {
     let owners: HashMap<_, _> = inputs.issues.iter().map(|i| (i.id, i.thread_id)).collect();
     inputs.stored.iter().all(|s| {
         s.next_issue_id

@@ -38,6 +38,6 @@ def test_oracle_changes_trigger_native_parity(event: str, changed_path: str) -> 
     assert any(fnmatchcase(changed_path, pattern) for pattern in paths), changed_path
     steps = config["jobs"]["rust-roll"]["steps"]
     assert any(
-        "pytest native/roll-service/parity/test_core_inputs.py" in step.get("run", "")
+        "pytest native/roll-service/parity/" in step.get("run", "")
         for step in steps
     )

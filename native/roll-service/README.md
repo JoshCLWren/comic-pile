@@ -144,3 +144,43 @@ the latter includes startup and authentication. These are diagnostic timings, no
 equivalent-workload performance claims (#4312 owns that gate). The native loader
 uses two data queries plus BEGIN/ROLLBACK; authentication queries are additional.
 Exclusions, volume resolution, lists and prerequisites remain scoped to #4305.
+
+### Complete Option E input loader (#4305)
+
+`option_inputs::load_option_inputs` reads the core scalars and remaining constraints
+in one bounded, repeatable-read, read-only transaction. Nine bulk data queries
+cover owned lists/curated placements, reader prerequisites, confirmed and catalog
+volume evidence, per-list overlap decisions, durable exclusions and catalog issue
+volumes. No historical dependency, stored frontier or blocked flag chooses
+eligibility. No production route exposes these intermediate inputs.
+
+Volume exclusion matching intentionally differs from overlap resolution: any
+confirmed/catalog identity can match an exclusion, while an overlap requires
+exactly one distinct Comic Vine series key. Candidate mappings are ignored.
+Numeric `4050-` IDs lose leading zeroes without machine-integer overflow;
+provider names use Unicode case folding. Missing or ambiguous volume evidence
+stays unknown. Entries preserve skipped/hold/after_previous intent and repeated
+issue placements across different lists.
+
+The execution loader rejects unresolved references. The explicitly diagnostic
+`load_option_diagnostics` preserves owned entry/dependency IDs for parity tools;
+never feed that unchecked result into an eligibility evaluator. Foreign object
+metadata is never loaded, and every execution consumer must use the checked
+loader. Graph cycle validation is the separate #4306 gate.
+
+With a disposable local PostgreSQL URL in `RUST_ROLL_TEST_DATABASE_URL`:
+
+```sh
+cargo build --locked --examples
+cd ../..
+PYTHONPATH=. uv run pytest native/roll-service/parity/ -q -s --no-cov
+```
+
+The Option E parity test creates/drops a unique schema, loads the same synthetic
+records through Python and Rust, and compares every constraint and diagnostic.
+It includes conflicting and equivalent volume mappings, canonical issue volumes,
+strict/loose lists, curated insertion order, duplicate placements, skipped gates,
+read inactive prerequisite sources, historical dependencies, foreign exclusions,
+and prerequisites touching a foreign account in either direction. It performs
+no production reads or writes. An existing private real-data snapshot is not
+bundled; no assertion here claims verification against production records.
