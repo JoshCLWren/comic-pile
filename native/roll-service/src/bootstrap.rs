@@ -49,6 +49,22 @@ fn normalized_source(value: &Option<String>) -> Option<&str> {
         .filter(|v| matches!(*v, "inferred" | "manual" | "snooze" | "quiz"))
 }
 
+/// Python's canonical mapping-state rules use *all distinct mappings*,
+/// not the single highest-confidence metadata row selected for display.
+fn identity_state(confirmed: i64, candidate: i64) -> &'static str {
+    if confirmed > 1 {
+        "conflicting"
+    } else if confirmed == 1 {
+        "confirmed"
+    } else if candidate > 1 {
+        "ambiguous"
+    } else if candidate == 1 {
+        "candidate"
+    } else {
+        "unresolved"
+    }
+}
+
 fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
     let thread_id: i32 = row.try_get(0).map_err(db::query_error)?;
     let issue_id: i32 = row.try_get(4).map_err(db::query_error)?;
@@ -62,6 +78,10 @@ fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
     let average_rating: Option<f64> = row.try_get(12).map_err(db::query_error)?;
     let rating_count: i64 = row.try_get(13).map_err(db::query_error)?;
     let routes: Vec<String> = row.try_get(14).map_err(db::query_error)?;
+    let issue_confirmed: i64 = row.try_get(15).map_err(db::query_error)?;
+    let issue_candidates: i64 = row.try_get(16).map_err(db::query_error)?;
+    let series_confirmed: i64 = row.try_get(17).map_err(db::query_error)?;
+    let series_candidates: i64 = row.try_get(18).map_err(db::query_error)?;
     let meta: Value = metadata
         .as_deref()
         .and_then(|m| serde_json::from_str(m).ok())
@@ -91,20 +111,8 @@ fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
     } else {
         "unavailable"
     };
-    let identity_state = match mapping_status.as_deref() {
-        Some("confirmed") if source == "comicvine" => "confirmed",
-        Some("candidate") => "candidate",
-        Some("ambiguous") => "ambiguous",
-        Some("conflicting") => "conflicting",
-        _ => "unresolved",
-    };
-    let series_state = match series_mapping_status.as_deref() {
-        Some("confirmed") => "confirmed",
-        Some("candidate") => "candidate",
-        Some("ambiguous") => "ambiguous",
-        Some("conflicting") => "conflicting",
-        _ => "unresolved",
-    };
+    let issue_state = identity_state(issue_confirmed, issue_candidates);
+    let series_state = identity_state(series_confirmed, series_candidates);
     let overflow = routes.len().saturating_sub(3);
     let item = json!({
         "thread": thread_value(row)?,
@@ -117,7 +125,7 @@ fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
         "identity": {
             "source": source,
             "canonical_series_id": if source == "comicvine" {canonical_id} else {None},
-            "state": identity_state,
+            "state": issue_state,
             "series_mapping_state": series_state
         },
         "reader": {
@@ -150,7 +158,19 @@ SELECT t.id, t.title, t.format, t.last_activity_at::text, i.id, i.issue_number,
     SELECT DISTINCT g.name FROM dependency_groups g
     JOIN dependency_group_memberships m ON m.group_id=g.id
     WHERE g.user_id=$1 AND (m.thread_id=t.id OR m.issue_id=i.id)
- ) names),ARRAY[]::text[])
+ ) names),ARRAY[]::text[]),
+ (SELECT count(DISTINCT e.external_id) FILTER (WHERE m.status='confirmed')
+   FROM issue_external_identity_mappings m JOIN external_identities e ON e.id=m.external_identity_id
+   WHERE m.issue_id=i.id AND m.status<>'rejected' AND e.provider='comicvine' AND e.entity_type='issue'),
+ (SELECT count(DISTINCT e.external_id) FILTER (WHERE m.status IN ('candidate','unresolved'))
+   FROM issue_external_identity_mappings m JOIN external_identities e ON e.id=m.external_identity_id
+   WHERE m.issue_id=i.id AND m.status<>'rejected' AND e.provider='comicvine' AND e.entity_type='issue'),
+ (SELECT count(DISTINCT e.external_id) FILTER (WHERE m.status='confirmed')
+   FROM thread_external_series_mappings m JOIN external_identities e ON e.id=m.external_identity_id
+   WHERE m.thread_id=t.id AND m.status<>'rejected' AND e.provider='comicvine' AND e.entity_type='series'),
+ (SELECT count(DISTINCT e.external_id) FILTER (WHERE m.status IN ('candidate','unresolved'))
+   FROM thread_external_series_mappings m JOIN external_identities e ON e.id=m.external_identity_id
+   WHERE m.thread_id=t.id AND m.status<>'rejected' AND e.provider='comicvine' AND e.entity_type='series')
 FROM issues i
 JOIN threads t ON t.id=i.thread_id
 LEFT JOIN LATERAL (
