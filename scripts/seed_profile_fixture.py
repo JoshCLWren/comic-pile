@@ -12,6 +12,8 @@ from datetime import UTC, datetime, timedelta
 import os
 import random
 
+from urllib import parse
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -20,6 +22,20 @@ from scripts.profile_local_traffic import safe_database_url
 PREFIX = "CPU Profile Series "
 LIST_PREFIX = "CPU Profile Reading List "
 RANDOM_SEED = 4277
+
+
+def async_database_url(value: str) -> str:
+    """Convert any accepted local PostgreSQL URL to the asyncpg driver.
+
+    ``safe_database_url`` accepts plain ``postgres://`` and ``postgresql://``
+    schemes for compatibility with common local connection strings, but
+    SQLAlchemy's async engine requires the ``postgresql+asyncpg://`` driver
+    scheme, matching ``DatabaseSettings.async_url``.
+    """
+    parsed = safe_database_url(value)
+    if parsed.scheme == "postgresql+asyncpg":
+        return value
+    return parse.urlunsplit(parsed._replace(scheme="postgresql+asyncpg"))
 
 
 async def seed(
@@ -60,7 +76,7 @@ async def seed(
     )
 
     rnd = random.Random(RANDOM_SEED)
-    engine = create_async_engine(db_url, pool_size=2, max_overflow=0)
+    engine = create_async_engine(async_database_url(db_url), pool_size=2, max_overflow=0)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as db, db.begin():

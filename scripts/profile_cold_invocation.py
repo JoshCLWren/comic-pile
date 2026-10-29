@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Profile a complete ComicPile cold invocation, including first-request imports.
 
+Run as a module from the repository root (the scripts package must import):
+``uv run python -m scripts.profile_cold_invocation ...``
+
 Requires no sudo on macOS. cProfile instruments a fresh Python/Uvicorn process
 from BEFORE importing Uvicorn until its first authenticated GET completes.
 Separate uninstrumented cold/warm controls report real process CPU time because
@@ -14,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import UTC, datetime
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -25,12 +29,7 @@ import subprocess
 import sys
 import time
 
-# Executing by filename makes scripts/ sys.path[0] rather than repo root.
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from scripts.profile_local_traffic import (  # noqa: E402
+from scripts.profile_local_traffic import (
     api_process,
     cpu_seconds,
     free_port,
@@ -40,6 +39,11 @@ from scripts.profile_local_traffic import (  # noqa: E402
     safe_route,
     server_environment,
 )
+
+# Executing by filename leaves the repo root off sys.path and cannot import
+# scripts.*. Run as a module from the repository root, e.g.
+# `uv run python -m scripts.profile_cold_invocation ...`
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def cold_server_command(port: int, stats_path: Path) -> list[str]:
@@ -276,8 +280,10 @@ def main() -> int:
             raise ValueError("Runs must be 1-10 and warm requests 1-50")
         if not os.environ.get(args.password_env):
             raise ValueError(f"Set LOCAL test password in: {args.password_env}")
-        if sys.platform == "darwin":
-            import psutil  # noqa: F401
+        if sys.platform == "darwin" and importlib.util.find_spec("psutil") is None:
+            raise RuntimeError(
+                "On macOS run: uv run --with psutil python -m scripts.profile_cold_invocation ..."
+            )
         # Distinct temporary signing key, shared only by loopback subprocesses.
         os.environ["SECRET_KEY"] = secrets.token_urlsafe(48)
         args.output.mkdir(parents=True, exist_ok=True, mode=0o700)

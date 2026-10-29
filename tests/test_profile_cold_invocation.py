@@ -42,7 +42,8 @@ def test_cpu_profile_writes_call_graph_and_hot_function_report(tmp_path: Path) -
     assert "Top 50 functions by CUMULATIVE CPU" in top_path.read_text()
     assert "_workload" in top_path.read_text()
     assert profile_function_count(output) > 0
-    assert pstats.Stats(str(output)).total_calls > 0
+    stats_profile = pstats.Stats(str(output)).get_stats_profile()
+    assert stats_profile.func_profiles
 
 
 def test_invalid_cpu_profile_is_rejected(tmp_path: Path) -> None:

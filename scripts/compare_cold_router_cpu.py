@@ -21,12 +21,12 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+from scripts.profile_cold_invocation import _measure_unprofiled
+from scripts.profile_local_traffic import local_token, safe_database_url
 
-from scripts.profile_cold_invocation import _measure_unprofiled  # noqa: E402
-from scripts.profile_local_traffic import local_token, safe_database_url  # noqa: E402
+# Run as a module from the repository root so the scripts package imports:
+# `uv run python -m scripts.compare_cold_router_cpu ...`
+ROOT = Path(__file__).resolve().parents[1]
 
 ROUTER_PATH = "app/router_mounts.py"
 FIX_COMMIT = "e03b13f330fcf477f1a35b3e3caf9afbefee6195"
@@ -48,17 +48,18 @@ def _git(*args: str, cwd: Path = ROOT) -> str:
     return result.stdout
 
 
-def _blob_at(ref: str, path: str) -> str | None:
-    """Read one pinned Git blob; new modules may be absent in the baseline."""
-    result = subprocess.run(
-        ["git", "show", f"{ref}:{path}"], cwd=ROOT,
-        capture_output=True, text=True, check=False, timeout=45,
-    )
-    if result.returncode == 0:
-        return result.stdout
-    if result.returncode == 128 and "does not exist" in result.stderr:
+def _blob_at(ref: str, path: str, cwd: Path = ROOT) -> str | None:
+    """Read one pinned Git blob; new modules may be absent in the baseline.
+
+    Existence is checked against the selected tree with ``git ls-tree``.
+    Matching ``git show`` stderr text cannot distinguish a genuinely absent
+    path from the "exists on disk, but not in <commit>" case that refuses
+    valid comparisons of newly added app modules.
+    """
+    in_tree = _git("ls-tree", ref, "--", path, cwd=cwd).strip()
+    if not in_tree:
         return None
-    raise RuntimeError(f"Cannot read {path!r} at {ref!r}: {result.stderr.strip()}")
+    return _git("show", f"{ref}:{path}", cwd=cwd)
 
 
 def pair_order(pair: int) -> tuple[str, str]:
@@ -123,16 +124,33 @@ def summarize(results: list[dict]) -> str:
     return "\n".join(out) + "\n"
 
 
+def worker_command(
+    output: Path, variant: str, pair: int, warm_requests: int
+) -> list[str]:
+    """Build the child worker command without any database URL argument.
+
+    The password-bearing URL travels only in the child's environment, so
+    other local users cannot read it from the process argument list.
+    """
+    return [
+        sys.executable, "-m", "scripts.compare_cold_router_cpu",
+        "--worker", "--variant", variant, "--pair", str(pair),
+        "--warm-requests", str(warm_requests), "--output", str(output),
+    ]
+
+
 def run_worker(args: argparse.Namespace) -> int:
     """Measure one variant in a clean Python process in the temporary worktree."""
-    safe_database_url(args.db_url)
+    # The database URL arrives via the environment, never the command line.
+    db_url = os.environ.get("LOCAL_PROFILE_DATABASE_URL", "")
+    safe_database_url(db_url)
     token = os.environ.get("LOCAL_PROFILE_ACCESS_TOKEN", "")
     if not token or not os.environ.get("SECRET_KEY"):
         raise RuntimeError("Local ephemeral token and signing key were not supplied")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True, mode=0o700)
     result = _measure_unprofiled(
-        args.db_url, token, "/api/v2/roll/bootstrap", output,
+        db_url, token, "/api/v2/roll/bootstrap", output,
         args.pair, args.warm_requests,
     )
     print(json.dumps({"variant": args.variant, "pair": args.pair, **result}))
@@ -171,7 +189,12 @@ def compare(args: argparse.Namespace) -> int:
 
     print("Authenticating against disposable loopback database...", flush=True)
     token = local_token(args.db_url, output, args.username, password)
-    environment = dict(os.environ, LOCAL_PROFILE_ACCESS_TOKEN=token)
+    environment = dict(
+        os.environ,
+        LOCAL_PROFILE_ACCESS_TOKEN=token,
+        # Keep the password-bearing URL out of the worker's visible argv.
+        LOCAL_PROFILE_DATABASE_URL=args.db_url,
+    )
     results: list[dict] = []
 
     with tempfile.TemporaryDirectory(prefix="comicpile-cold-ab-") as tmp:
@@ -199,15 +222,9 @@ def compare(args: argparse.Namespace) -> int:
                     # CPU is measured in a fresh API subprocess in the worker;
                     # parent or worker startup overhead is excluded.
                     child_output = checkout / ".profile-local" / f"{pair}-{variant}"
-                    command = [
-                        sys.executable, "-m", "scripts.compare_cold_router_cpu",
-                        "--worker", "--db-url", args.db_url,
-                        "--variant", variant, "--pair", str(pair),
-                        "--warm-requests", str(args.warm_requests),
-                        "--output", str(child_output),
-                    ]
                     child = subprocess.run(
-                        command, cwd=checkout, env=environment,
+                        worker_command(child_output, variant, pair, args.warm_requests),
+                        cwd=checkout, env=environment,
                         capture_output=True, text=True, timeout=180,
                         check=False,
                     )

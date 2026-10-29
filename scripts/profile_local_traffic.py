@@ -9,8 +9,10 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import contextlib
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import importlib.util
 import json
 import os
 import secrets
@@ -136,9 +138,14 @@ class DelayProxy:
             threading.Thread(target=self._bridge, args=(client,), daemon=True).start()
 
     def _forward(self, src: socket.socket, dst: socket.socket) -> None:
+        """Copy one direction until EOF; polling keeps idle pools connected."""
         try:
+            src.settimeout(0.5)
             while not self.stop_event.is_set():
-                packet = src.recv(65536)
+                try:
+                    packet = src.recv(65536)
+                except TimeoutError:
+                    continue
                 if not packet:
                     break
                 if self.delay:
@@ -159,12 +166,20 @@ class DelayProxy:
             client.close()
             return
         with client, upstream:
+            # The connect timeout must not survive as a read timeout, or an
+            # idle pooled upstream dies after ten quiet seconds. Accepted
+            # sockets can also inherit the listener's short accept timeout.
+            upstream.settimeout(None)
+            client.settimeout(None)
             a = threading.Thread(target=self._forward, args=(client, upstream), daemon=True)
             b = threading.Thread(target=self._forward, args=(upstream, client), daemon=True)
             a.start()
             b.start()
-            a.join(timeout=35)
-            b.join(timeout=35)
+            # Bridges stay open until EOF in either direction; the forwarders
+            # wake on stop_event so close() still ends them promptly. Timed
+            # joins used to sever connections that were mid-conversation.
+            a.join()
+            b.join()
 
     def close(self) -> None:
         """Stop the delay proxy and release its listener."""
@@ -222,8 +237,20 @@ def server_environment(db_url: str, port: int) -> dict[str, str]:
 
 
 @contextlib.contextmanager
-def api_process(db_url: str, output: Path, label: str):
-    """Run a fresh single-worker local API process for one measured scenario."""
+def api_process(
+    db_url: str, output: Path, label: str
+) -> Iterator[tuple[subprocess.Popen, str, dict[str, float]]]:
+    """Run a fresh single-worker local API process for one measured scenario.
+
+    Args:
+        db_url: Loopback PostgreSQL URL for the child API process.
+        output: Directory that receives the child's server log file.
+        label: Stable name prefix for the child's server log file.
+
+    Returns:
+        A context manager yielding the API process, its loopback HTTP base
+        URL, and startup wall/CPU measurements as ``{"wall_ms", "cpu_seconds"}``.
+    """
     port = free_port()
     env = server_environment(db_url, port)
     log_path = output / (label + ".server.log")
@@ -268,8 +295,19 @@ class BlockRedirects(request.HTTPRedirectHandler):
 
 
 def http(base: str, path: str, token: str | None,
-         method: str = "GET", body: bytes | None = None):
-    """Issue a timed local HTTP request without following redirects."""
+         method: str = "GET", body: bytes | None = None) -> tuple[int, bytes, dict[str, str], float]:
+    """Issue a timed local HTTP request without following redirects.
+
+    Args:
+        base: Loopback base URL of the local API process under test.
+        path: Already-validated request path (may include a query string).
+        token: Optional bearer token for authorized local requests.
+        method: HTTP method; replay never forwards mutating methods.
+        body: Optional JSON request body for the local login call.
+
+    Returns:
+        (HTTP status, raw body bytes, response headers, wall milliseconds).
+    """
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = "Bearer " + token
@@ -291,8 +329,18 @@ def response_header(headers: dict[str, str], name: str) -> str | None:
     return next((value for key, value in headers.items() if key.lower() == name.lower()), None)
 
 
-def get(base: str, item: Traffic, token: str) -> dict:
-    """Collect a single API request's status, latency, and optional query count."""
+def get(base: str, item: Traffic, token: str) -> dict[str, object]:
+    """Collect a single API request's status, latency, and optional query count.
+
+    Args:
+        base: Loopback base URL of the local API process under test.
+        item: One sanitized request to replay.
+        token: Bearer token issued for the same local database.
+
+    Returns:
+        A row with ``route``, ``status``, ``wall_ms``, ``db_queries``,
+        ``cold``, and an ``error`` type name only when the request failed.
+    """
     try:
         status, _, headers, ms = http(base, item.url, token)
         queries = response_header(headers, "X-App-DB-Queries")
@@ -305,8 +353,19 @@ def get(base: str, item: Traffic, token: str) -> dict:
 
 
 def burst(base: str, items: list[Traffic], token: str, workers: int,
-          speed: float) -> tuple[list[dict], float]:
-    """Replay concurrent requests at their captured relative offsets."""
+          speed: float) -> tuple[list[dict[str, object]], float]:
+    """Replay concurrent requests at their captured relative offsets.
+
+    Args:
+        base: Loopback base URL of the local API process under test.
+        items: Sanitized requests with their captured relative offsets.
+        token: Bearer token issued for the same local database.
+        workers: Concurrent HTTP client threads (1-16).
+        speed: Multiplier that accelerates the captured request timing.
+
+    Returns:
+        (one row per request in submission order, whole-burst wall seconds).
+    """
     t = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         futures = []
@@ -336,8 +395,23 @@ def local_token(db_url: str, output: Path, username: str, password: str) -> str:
 
 
 def profile(db_url: str, delay: int, output: Path, items: list[Traffic],
-            token: str, workers: int, speed: float, repeats: int) -> dict:
-    """Measure cold, warm, and concurrent API behavior with optional DB latency."""
+            token: str, workers: int, speed: float, repeats: int) -> dict[str, object]:
+    """Measure cold, warm, and concurrent API behavior with optional DB latency.
+
+    Args:
+        db_url: Loopback PostgreSQL URL hardened by safe_database_url.
+        delay: Simulated per-TCP-chunk database latency in milliseconds.
+        output: Directory that receives the child server logs.
+        items: Sanitized requests replayed sequentially and concurrently.
+        token: Bearer token issued for the same local database.
+        workers: Concurrent HTTP client threads for the two bursts.
+        speed: Multiplier that accelerates the captured request timing.
+        repeats: Isolated sequential measurements per unique route.
+
+    Returns:
+        One profile dictionary covering startup, cold auth, sequential,
+        warm-burst, and fresh-burst samples, plus failure rows per request.
+    """
     db = safe_database_url(db_url)
     proxy = DelayProxy(db.hostname or "127.0.0.1", db.port or 5432, delay) if delay else None
     chosen_url = proxy_url(db, proxy.port) if proxy else db_url
@@ -376,7 +450,16 @@ def profile(db_url: str, delay: int, output: Path, items: list[Traffic],
 
 
 def report_markdown(data: dict) -> str:
-    """Render the measured CPU, wall-time, and request data as Markdown."""
+    """Render the measured CPU, wall-time, and request data as Markdown.
+
+    Args:
+        data: The assembled profile payload with one entry per configured
+            database delay, including per-request result rows for both bursts.
+
+    Returns:
+        Markdown that shows CPU, wall time, and separate warm/fresh failure
+        counts for every delay scenario.
+    """
     out = [
         "# Local ComicPile CPU profile",
         "",
@@ -384,17 +467,22 @@ def report_markdown(data: dict) -> str:
         "The delay proxy adds latency per PostgreSQL TCP packet/chunk, not per SQL query.",
         "Concurrent samples report whole-process CPU only; do not assign it to individual calls.",
         "",
-        "| Delay/chunk | Startup CPU | Auth cold CPU | Warm burst CPU | Fresh burst CPU | Warm wall | Failed GETs |",
-        "|---:|---:|---:|---:|---:|---:|---:|",
+        "| Delay/chunk | Startup CPU | Auth cold CPU | Warm burst CPU | Fresh burst CPU | Warm wall"
+        " | Failed warm GETs | Failed fresh GETs |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for entry in data["profiles"]:
         warm = entry["warm_burst"]
-        failed = sum(r["status"] < 200 or r["status"] >= 400 for r in warm["responses"])
+        fresh = entry["fresh_burst"]
+        failed = sum(bool(r["status"] < 200 or r["status"] >= 400) for r in warm["responses"])
+        fresh_failed = sum(
+            bool(r["status"] < 200 or r["status"] >= 400) for r in fresh["responses"]
+        )
         out.append(
             f"| {entry['delay_ms_per_tcp_chunk']}ms | {entry['startup']['cpu_seconds']:.3f}s"
             f" | {entry['cold_auth']['cpu_seconds']:.3f}s"
-            f" | {warm['cpu_seconds']:.3f}s | {entry['fresh_burst']['cpu_seconds']:.3f}s"
-            f" | {warm['wall_seconds']:.2f}s | {failed} |"
+            f" | {warm['cpu_seconds']:.3f}s | {fresh['cpu_seconds']:.3f}s"
+            f" | {warm['wall_seconds']:.2f}s | {failed} | {fresh_failed} |"
         )
     out.extend(["", "## Isolated last-iteration route samples", "",
                 "| Delay/chunk | Route | CPU | Wall | SQL queries | Status |",
@@ -437,13 +525,11 @@ def main() -> int:
         if sys.platform not in {"darwin", "linux"}:
             raise ValueError("This profiler supports macOS or Linux")
         if sys.platform == "darwin":
-            try:
-                import psutil  # noqa: F401
-            except ImportError as exc:
+            if importlib.util.find_spec("psutil") is None:
                 raise RuntimeError(
                     "On macOS run: uv run --with psutil python "
                     "scripts/profile_local_traffic.py ..."
-                ) from exc
+                )
         if not 1 <= args.workers <= 16 or args.speed < 1 or args.repeats < 2:
             raise ValueError("workers must be 1-16, speed >=1 and repeats >=2")
         delays = [int(x) for x in args.delays.split(",")]
