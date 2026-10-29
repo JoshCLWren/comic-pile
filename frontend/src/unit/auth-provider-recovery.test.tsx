@@ -560,10 +560,12 @@ describe('bootstrap retry budget and manual recovery race', () => {
       await auth!.retryAuth()
     })
 
-    // Let the manual retry complete
+    // Yield until the mocked manual-retry request has started so the resolver is assigned
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
-      resolveManualRetry({ username: 'manual', email: 'manual@example.com' })
+    })
+    resolveManualRetry({ username: 'manual', email: 'manual@example.com' })
+    await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
 
@@ -617,9 +619,12 @@ describe('bootstrap retry budget and manual recovery race', () => {
     // The retryAuth should not hang even though recoverSession hasn't resolved yet
     // Because retryAuth cleared recoveryPromise and started a fresh one
 
-    // Resolve the recovery
+    // Yield until the mocked recovery request has started so the resolver is assigned
     await act(async () => {
-      resolveRecovery({ username: 'recovered', email: 'recovered@example.com' })
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    resolveRecovery({ username: 'recovered', email: 'recovered@example.com' })
+    await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
 
