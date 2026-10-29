@@ -3,7 +3,7 @@
 //! This models the canonical evaluate() algorithm, not cycle validation.
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::io::{self, Read};
+use std::io::{self, BufRead, Read, Write};
 
 #[derive(Deserialize)]
 struct Snapshot {
@@ -206,6 +206,19 @@ fn evaluate(input: Snapshot) -> Result<Vec<Eligibility>, String> {
 }
 
 fn main() {
+    if std::env::args().any(|arg| arg == "--stream") {
+        let stdin = io::stdin();
+        let mut stdout = io::stdout().lock();
+        for line in stdin.lock().lines() {
+            let raw = line.expect("read input line");
+            let snapshot: Snapshot = serde_json::from_str(&raw).expect("parse snapshot");
+            let result = evaluate(snapshot).expect("evaluate snapshot");
+            writeln!(stdout, "{}", serde_json::to_string(&result).expect("serialize"))
+                .expect("write result");
+            stdout.flush().expect("flush result");
+        }
+        return;
+    }
     let mut raw = String::new();
     io::stdin().read_to_string(&mut raw).expect("read stdin");
     let snapshot: Snapshot = serde_json::from_str(&raw).expect("parse snapshot");
