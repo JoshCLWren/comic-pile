@@ -824,3 +824,110 @@ pub async fn bootstrap_v2(
     });
     Ok(Json(response))
 }
+
+#[cfg(test)]
+mod recovery_diagnostic_tests {
+    use super::recovery_chains;
+    use crate::{
+        option_inputs::OptionInputs,
+        reading_constraints::ConstraintEdge,
+        reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread},
+    };
+    use std::collections::{BTreeMap, BTreeSet, HashSet};
+
+    fn inputs() -> OptionInputs {
+        OptionInputs {
+            core: CoreReadingInputs {
+                threads: vec![ReadingThread {
+                    id: 7,
+                    status: "active".into(),
+                    title: "Test Series".into(),
+                }],
+                issues: (1..=40)
+                    .map(|id| ReadingIssue {
+                        id,
+                        thread_id: 7,
+                        position: id,
+                        status: "unread".into(),
+                        issue_number: id.to_string(),
+                    })
+                    .collect(),
+                stored: vec![],
+            },
+            thread_volumes: BTreeMap::new(),
+            lists: vec![],
+            prerequisites: vec![],
+            excluded_issue_ids: BTreeSet::new(),
+            unresolved: vec![],
+        }
+    }
+
+    fn edge(source: i32, target: i32) -> ConstraintEdge {
+        ConstraintEdge {
+            source_issue_id: source,
+            target_issue_id: target,
+            origin: "reading_order".into(),
+            prerequisite_origin: None,
+            provenance: vec![],
+        }
+    }
+
+    #[test]
+    fn long_recovery_chain_warns_instead_of_silently_hiding_readable_leaves() {
+        let inputs = inputs();
+        let edges: Vec<_> = (1..=34).map(|id| edge(id + 1, id)).collect();
+        let mut diagnostics = vec![];
+        let chains = recovery_chains(
+            1,
+            &edges,
+            &inputs,
+            &HashSet::new(),
+            &HashSet::new(),
+            0,
+            &mut diagnostics,
+        );
+        assert_eq!(chains.len(), 1);
+        assert_eq!(chains[0].len(), 33);
+        assert_eq!(
+            diagnostics,
+            vec![serde_json::json!({
+                "code": "depth_limit_exceeded",
+                "node_type": "issue",
+                "node_id": 33,
+                "limit": 32
+            })]
+        );
+    }
+
+    #[test]
+    fn ordinary_recovery_is_warning_free_but_cycles_report_diagnostics() {
+        let inputs = inputs();
+        let mut diagnostics = vec![];
+        let chains = recovery_chains(
+            1,
+            &[edge(2, 1)],
+            &inputs,
+            &HashSet::from([2]),
+            &HashSet::new(),
+            0,
+            &mut diagnostics,
+        );
+        assert!(diagnostics.is_empty());
+        assert_eq!(chains[0].len(), 2);
+        assert_eq!(chains[0][1]["is_readable"], true);
+
+        let chains = recovery_chains(
+            1,
+            &[edge(2, 1), edge(1, 2)],
+            &inputs,
+            &HashSet::new(),
+            &HashSet::new(),
+            0,
+            &mut diagnostics,
+        );
+        assert_eq!(chains[0].len(), 3);
+        assert_eq!(diagnostics[0]["code"], "cycle_detected");
+        assert_eq!(diagnostics[0]["node_id"], 1);
+        assert_eq!(diagnostics[0]["limit"], serde_json::Value::Null);
+    }
+}
