@@ -78,7 +78,7 @@ export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, ava
       <div className="flex flex-wrap items-start gap-1">
         {available && (
           <>
-            <ReadNowIssueButton issueId={issueId} threadId={threadId} />
+            <ReadNowIssueButton issueId={issueId} threadId={threadId} primary />
             <button
               type="button"
               disabled={moveToFront.isPending}
