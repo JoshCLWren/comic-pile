@@ -47,19 +47,54 @@ def test_ignored_startup_telemetry_preserves_log_contract_without_alarm_import(
     assert "Performance alarm ignored startup sample" in record.getMessage()
 
 
-def test_startup_event_does_not_import_performance_issue_service() -> None:
-    """Run real startup in a fresh worker and guard the optional import boundary."""
+def test_startup_event_records_alarm_event_without_importing_alarm_service() -> None:
+    """Run real startup in a fresh worker and guard both halves of the contract.
+
+    The negative half (no optional alarm import) and the positive half (the
+    startup sample is still recorded) must be asserted together: checking only
+    the import boundary would still pass if the telemetry call were deleted.
+    """
     script = """
 import asyncio
+import logging
 import sys
 
 from app.main import create_app
+from app.performance_budgets import STARTUP_TIMEOUT_MS
+
+class Collector(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.records = []
+
+    def emit(self, record):
+        self.records.append(record)
 
 async def main():
+    collector = Collector()
+    startup_logger = logging.getLogger("app.main")
+    startup_logger.setLevel(logging.INFO)
+    startup_logger.addHandler(collector)
     app = create_app(serve_frontend=False, defer_router_imports=True)
     async with app.router.lifespan_context(app):
         assert "app.services.performance_issue_service" not in sys.modules
-        print("startup-import-boundary-ok")
+    matches = [
+        record
+        for record in collector.records
+        if getattr(record, "event", None) == "performance_alarm_ignored_startup"
+    ]
+    assert len(matches) == 1, [getattr(r, "event", None) for r in collector.records]
+    record = matches[0]
+    assert record.__dict__["operation"] == "startup.readiness"
+    assert record.__dict__["startup_performance_violation"] is (
+        record.__dict__["duration_ms"] >= STARTUP_TIMEOUT_MS
+    )
+    expected_level = (
+        logging.WARNING if record.__dict__["startup_performance_violation"] else logging.INFO
+    )
+    assert record.levelno == expected_level
+    assert "startup.readiness" in record.getMessage()
+    print("startup-import-boundary-ok")
 
 asyncio.run(main())
 """
