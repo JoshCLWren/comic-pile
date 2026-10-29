@@ -33,6 +33,8 @@ def run_fixture(snapshot):
             "eligible": result.eligible,
             "blockers": [asdict(b) for b in result.blockers],
         })
+    # Dataclass asdict retains tuples; JSON transport converts them to arrays.
+    python = json.loads(json.dumps(python))
     if rust != python:
         raise AssertionError(
             "Rust/Python mismatch: " + json.dumps({"python": python, "rust": rust}, indent=2))
