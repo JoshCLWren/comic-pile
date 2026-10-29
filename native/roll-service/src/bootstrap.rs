@@ -470,6 +470,20 @@ fn recovery_label(inputs: &option_inputs::OptionInputs, issue_id: i32) -> String
     format!("{title} #{}", issue.issue_number)
 }
 
+/// Report bounded recovery walks so the UI never treats an incomplete chain
+/// as an unavailable prerequisite. These codes match the Python response.
+fn recovery_diagnostic(diagnostics: &mut Vec<Value>, code: &str, issue_id: i32, limit: Option<usize>) {
+    let diagnostic = json!({
+        "code": code,
+        "node_type": "issue",
+        "node_id": issue_id,
+        "limit": limit
+    });
+    if !diagnostics.contains(&diagnostic) {
+        diagnostics.push(diagnostic);
+    }
+}
+
 fn recovery_chains(
     issue_id: i32,
     edges: &[crate::reading_constraints::ConstraintEdge],
@@ -477,6 +491,7 @@ fn recovery_chains(
     readable: &HashSet<i32>,
     ancestors: &HashSet<i32>,
     depth: usize,
+    diagnostics: &mut Vec<Value>,
 ) -> Vec<Vec<Value>> {
     let label = recovery_label(inputs, issue_id);
     let node = json!({
@@ -485,7 +500,12 @@ fn recovery_chains(
         "label": label,
         "is_readable": readable.contains(&issue_id)
     });
-    if depth >= 32 || ancestors.contains(&issue_id) {
+    if ancestors.contains(&issue_id) {
+        recovery_diagnostic(diagnostics, "cycle_detected", issue_id, None);
+        return vec![vec![node]];
+    }
+    if depth >= 32 {
+        recovery_diagnostic(diagnostics, "depth_limit_exceeded", issue_id, Some(32));
         return vec![vec![node]];
     }
     let upstream: Vec<i32> = edges
@@ -499,12 +519,13 @@ fn recovery_chains(
     let mut visited = ancestors.clone();
     visited.insert(issue_id);
     let mut result = Vec::new();
-    for source in upstream.into_iter().take(500) {
-        for tail in recovery_chains(source, edges, inputs, readable, &visited, depth + 1) {
+    for source in upstream {
+        for tail in recovery_chains(source, edges, inputs, readable, &visited, depth + 1, diagnostics) {
             let mut chain = vec![node.clone()];
             chain.extend(tail);
             result.push(chain);
             if result.len() >= 500 {
+                recovery_diagnostic(diagnostics, "node_limit_exceeded", issue_id, Some(500));
                 return result;
             }
         }
@@ -555,6 +576,7 @@ fn pending_roll_recovery(
     let mut blockers = Vec::new();
     let mut chains = Vec::new();
     let mut recommended = Vec::new();
+    let mut diagnostics = Vec::new();
     let mut visited = HashSet::new();
     for edge in direct {
         let source = edge.source_issue_id;
@@ -578,7 +600,15 @@ fn pending_roll_recovery(
                 "label": label, "is_readable": readable.contains(&source)
             }));
         }
-        for chain in recovery_chains(source, &edges, inputs, &readable, &HashSet::new(), 0) {
+        for chain in recovery_chains(
+            source,
+            &edges,
+            inputs,
+            &readable,
+            &HashSet::new(),
+            0,
+            &mut diagnostics,
+        ) {
             for node in &chain {
                 let issue_id = node
                     .get("node_id")
@@ -592,6 +622,7 @@ fn pending_roll_recovery(
             }
             chains.push(chain);
             if chains.len() >= 500 {
+                recovery_diagnostic(&mut diagnostics, "node_limit_exceeded", source, Some(500));
                 break;
             }
         }
@@ -609,7 +640,7 @@ fn pending_roll_recovery(
         "direct_blockers": blockers,
         "readable_prerequisites": recommended,
         "chains": chains,
-        "diagnostics": []
+        "diagnostics": diagnostics
     })))
 }
 
