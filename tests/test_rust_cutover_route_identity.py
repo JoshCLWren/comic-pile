@@ -14,35 +14,95 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_SERVICES = ROOT / "frontend" / "src" / "services"
+VERCEL_CONFIG = ROOT / "vercel.json"
+
+
+@dataclass(frozen=True)
+class _VercelRoute:
+    """One validated entry from the ``routes`` array in ``vercel.json``.
+
+    ``src`` is ``None`` for non-matching entries such as ``handle: filesystem``.
+    """
+
+    src: str | None
+    dest: str | None
+    methods: tuple[str, ...]
 
 
 def _service(name: str) -> str:
     return (FRONTEND_SERVICES / name).read_text(encoding="utf-8")
 
 
+def _json_object(value: object, context: str) -> dict[str, object]:
+    """Return ``value`` as a JSON object, rejecting any other JSON shape."""
+    if not isinstance(value, dict):
+        raise AssertionError(f"{context} must be a JSON object, got {type(value).__name__}")
+    result: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise AssertionError(f"{context} contains a non-string key")
+        result[key] = item
+    return result
+
+
+def _load_routes() -> list[_VercelRoute]:
+    """Decode and validate ``vercel.json`` routing instead of trusting its shape."""
+    document = _json_object(
+        json.loads(VERCEL_CONFIG.read_text(encoding="utf-8")),
+        "vercel.json",
+    )
+    raw_routes = document.get("routes")
+    if not isinstance(raw_routes, list):
+        raise AssertionError("vercel.json must define a routes array")
+
+    routes: list[_VercelRoute] = []
+    for index, raw_route in enumerate(raw_routes):
+        context = f"vercel.json routes[{index}]"
+        route = _json_object(raw_route, context)
+        src = route.get("src")
+        if src is not None and not isinstance(src, str):
+            raise AssertionError(f"{context}.src must be a string when present")
+        dest = route.get("dest")
+        if dest is not None and not isinstance(dest, str):
+            raise AssertionError(f"{context}.dest must be a string when present")
+
+        methods: list[str] = []
+        raw_methods = route.get("methods")
+        if raw_methods is not None:
+            if not isinstance(raw_methods, list):
+                raise AssertionError(f"{context}.methods must be an array when present")
+            for raw_method in raw_methods:
+                if not isinstance(raw_method, str):
+                    raise AssertionError(f"{context}.methods entries must be strings")
+                methods.append(raw_method)
+
+        routes.append(_VercelRoute(src=src, dest=dest, methods=tuple(methods)))
+    return routes
+
+
 def _route_destination(method: str, path: str) -> str:
     """Resolve the first matching Vercel route, respecting HTTP method."""
-    config: dict[str, Any] = json.loads(
-        (ROOT / "vercel.json").read_text(encoding="utf-8")
-    )
-    for route in config["routes"]:
-        pattern = route.get("src")
-        if not isinstance(pattern, str):
+    # ``src`` entries are Vercel path patterns (e.g. "/api(?:/.*)?"), so match
+    # the whole path as the platform does rather than comparing raw strings.
+    for route in _load_routes():
+        if route.src is None or re.fullmatch(route.src, path) is None:
             continue
-        if re.fullmatch(pattern, path) is None:
+        if route.methods and method not in route.methods:
             continue
-        if method not in route.get("methods", [method]):
-            continue
-        destination = route.get("dest")
-        if isinstance(destination, str):
-            return destination
+        if route.dest is not None:
+            return route.dest
     raise AssertionError(f"Missing production routing for {method} {path}")
+
+
+def _count_client_url(source: str, url: str) -> int:
+    """Count client calls to ``url`` without depending on the quote style used."""
+    return len(re.findall(rf"""['"`]{re.escape(url)}['"`]""", source))
 
 
 def test_roll_primary_and_recovery_call_original_api_v1_contract() -> None:
@@ -51,8 +111,8 @@ def test_roll_primary_and_recovery_call_original_api_v1_contract() -> None:
     recovery = _service("protectedRollMutationApi.ts")
 
     # Both ordinary/with-timezone calls and the recovery path are real users.
-    assert primary.count("'/v1/roll/bootstrap'") == 2
-    assert recovery.count("'/v1/roll/bootstrap'") == 1
+    assert _count_client_url(primary, "/v1/roll/bootstrap") == 2
+    assert _count_client_url(recovery, "/v1/roll/bootstrap") == 1
     assert "/v2/roll/bootstrap" not in primary
     assert "/v2/roll/bootstrap" not in recovery
 
