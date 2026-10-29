@@ -109,22 +109,40 @@ export default function PositionMenu({
 
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        const firstItem = menuItemsRef.current.find((item) => item !== null)
+        const items = menuItemsRef.current
+        // Helper to find first button (skip holes and nulls)
+        const findFirstButton = () => {
+          for (let i = 0; i < items.length; i++) {
+            if (items[i]) return items[i]
+          }
+          return null
+        }
+        const firstButton = findFirstButton()
+
         if (document.activeElement === triggerRef.current) {
-          firstItem?.focus()
+          firstButton?.focus()
         } else {
-          const currentIndex = menuItemsRef.current.findIndex((item) => item === document.activeElement)
+          // Find current index in sparse array
+          let currentIndex = -1
+          for (let i = 0; i < items.length; i++) {
+            if (items[i] === document.activeElement) {
+              currentIndex = i
+              break
+            }
+          }
+          if (currentIndex === -1) {
+            firstButton?.focus()
+            return
+          }
+          // Find next button
           let nextIndex = currentIndex + 1
-          // Skip null entries (explanation divs don't have refs)
-          while (nextIndex < menuItemsRef.current.length && menuItemsRef.current[nextIndex] === null) {
+          while (nextIndex < items.length && !items[nextIndex]) {
             nextIndex++
           }
-          const nextItem = menuItemsRef.current[nextIndex]
-          if (nextItem) {
-            nextItem.focus()
+          if (nextIndex < items.length) {
+            items[nextIndex]?.focus()
           } else {
-            // Wrap to the beginning
-            const firstButton = menuItemsRef.current.find((item) => item !== null)
+            // Wrap to first button
             firstButton?.focus()
           }
         }
@@ -189,22 +207,45 @@ export default function PositionMenu({
     toggleMenu(thread.id)
   }
 
+  // Tracks whether the menu was opened via keyboard (Enter/Space/ArrowDown)
+  // so we can focus the first menu item after the menu renders.
+  const openedFromKeyboardRef = useRef(false)
+
   const handleTriggerKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
       e.preventDefault()
       e.stopPropagation()
       clickFromKeyboardRef.current = true
+      openedFromKeyboardRef.current = true
       openMenu(thread.id)
       window.setTimeout(() => {
         clickFromKeyboardRef.current = false
       }, 100)
-      setTimeout(() => {
-        // Find the first actual button element (skip explanation divs)
-        const firstButton = menuItemsRef.current.find((item) => item !== null)
-        firstButton?.focus()
-      }, 0)
     }
   }
+
+  // Focus the first menu item after the menu opens from keyboard.
+  // This runs after the menu has rendered (since it watches isOpen).
+  useEffect(() => {
+    if (!isOpen || !openedFromKeyboardRef.current) return
+
+    openedFromKeyboardRef.current = false
+
+    // Wait for the menu to render in the next tick, then focus first button.
+    // setTimeout(0) works in both browser and jsdom test environment.
+    setTimeout(() => {
+      // menuItemsRef.current is a sparse array (index 0 is a hole for explanation div).
+      // Use a for loop to find the first non-null/non-undefined button.
+      const items = menuItemsRef.current
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item) {
+          item.focus()
+          break
+        }
+      }
+    }, 0)
+  }, [isOpen])
 
   const menuItems: Array<{
     label: string
