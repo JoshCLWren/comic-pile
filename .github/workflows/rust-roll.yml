@@ -1,0 +1,40 @@
+name: Native Rust Roll
+
+on:
+  pull_request:
+    paths:
+      - 'native/roll-service/**'
+      - '.github/workflows/rust-roll.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'native/roll-service/**'
+      - '.github/workflows/rust-roll.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-roll:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: native/roll-service
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Formatting
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Unit and integration tests
+        run: cargo test --locked --all-targets
+      - name: Release binary
+        run: cargo build --release --locked
+      - uses: actions/upload-artifact@v7
+        with:
+          name: comicpile-roll-service-linux-x86_64
+          path: native/roll-service/target/release/comicpile-roll-service
+          if-no-files-found: error
