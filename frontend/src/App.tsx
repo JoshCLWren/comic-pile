@@ -176,6 +176,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Invalidate any in-flight bootstrap attempt for this session generation
     // so a stale scheduled request cannot overwrite manual recovery.
     sessionGeneration.current += 1
+    // Clear any cached recovery promise from the previous generation.
+    // This prevents a stale in-flight recovery from resolving without
+    // updating state (which would leave isLoading=true indefinitely).
+    recoveryPromise.current = null
     // Cancel any scheduled bootstrap retries for this session generation
     if (bootstrapTimerRef.current !== null) {
       window.clearTimeout(bootstrapTimerRef.current)

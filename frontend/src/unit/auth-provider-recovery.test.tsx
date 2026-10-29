@@ -400,3 +400,232 @@ describe('AuthProvider transient recovery', () => {
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
   })
 })
+
+describe('bootstrap retry budget and manual recovery race', () => {
+  beforeEach(() => {
+    auth = null
+    mocks.get.mockReset()
+    mocks.post.mockReset()
+    mocks.patch.mockReset()
+    mocks.clearAccessToken.mockReset()
+    mocks.setAccessToken.mockReset()
+    mocks.getAccessToken.mockReset()
+    mocks.readStoredAccessToken.mockReset()
+    mocks.refreshSession.mockReset()
+    mocks.isSessionRefreshRejected.mockReset()
+    mocks.getAccessToken.mockReturnValue('test-token')
+    mocks.isSessionRefreshRejected.mockReturnValue(false)
+    delete window.__COMIC_PILE_ACCESS_TOKEN
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('exhausts retry budget at 5 retries for persistent 503 and stops scheduling', async () => {
+    vi.useFakeTimers()
+    // Simulate 6 calls: 1 initial + 5 retries, all failing with 503
+    // The 7th call should never happen
+    const error503 = axiosError(503)
+    for (let i = 0; i < 6; i++) {
+      mocks.get.mockRejectedValueOnce(error503)
+    }
+
+    renderProvider()
+
+    // Initial bootstrap attempt fails
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(auth?.authState.retryCount).toBe(1)
+
+    // Retry 1 (~1s)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(2)
+
+    // Retry 2 (~2s)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2200)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(3)
+
+    // Retry 3 (~4s)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4400)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(4)
+
+    // Retry 4 (~8s)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8800)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(5)
+
+    // Retry 5 (~16s) - this is the final retry
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(17600)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.retryCount).toBe(5) // Should stay at 5, not go to 6
+    expect(auth?.authState.status).toBe('service_unavailable')
+
+    // Advance well beyond the final retry - no more calls should be made
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    // Should only have 6 calls: 1 initial + 5 retries
+    expect(mocks.get).toHaveBeenCalledTimes(6)
+  }, 15000)
+
+  it('manual retryAuth clears stale in-flight recovery and succeeds', async () => {
+    vi.useFakeTimers()
+    // Bootstrap starts with a 503 failure that will schedule a retry
+    // Manual retryAuth should succeed on its own attempt
+    mocks.get
+      .mockRejectedValueOnce(axiosError(503)) // initial bootstrap
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' }) // manual retry succeeds
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 }) // preferences
+
+    renderProvider()
+
+    // Initial bootstrap fails
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(auth?.authState.isLoading).toBe(false)
+
+    // User clicks "Try again" while a retry is scheduled
+    // This should clear the stale recovery and run a fresh one
+    await act(async () => {
+      await auth!.retryAuth()
+    })
+
+    // Should succeed and transition to authenticated
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.authState.isLoading).toBe(false)
+    expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
+
+    // Should have made 3 calls: initial bootstrap, manual retry, preferences
+    expect(mocks.get).toHaveBeenCalledTimes(3)
+  }, 15000)
+
+  it('stale bootstrap response after manual recovery does not overwrite authenticated state', async () => {
+    vi.useFakeTimers()
+    let resolveSlowBootstrap!: (user: { username: string; email: string }) => void
+    let resolveManualRetry!: (user: { username: string; email: string }) => void
+
+    // Bootstrap starts, then hangs (slow response)
+    // Manual retryAuth succeeds first
+    // Then the slow bootstrap resolves with a different user - should be ignored
+    // Mock refreshSession to succeed for manual retry
+    mocks.refreshSession.mockResolvedValue('new-token')
+    mocks.get
+      .mockImplementationOnce(() => new Promise(resolve => { resolveSlowBootstrap = resolve })) // slow bootstrap
+      .mockImplementationOnce(() => new Promise(resolve => { resolveManualRetry = resolve })) // manual retry /auth/me
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 }) // preferences
+
+    renderProvider()
+
+    // Don't advance timers yet - bootstrap is in-flight but slow
+
+    // User clicks "Try again" before bootstrap resolves
+    const manualRetryPromise = act(async () => {
+      await auth!.retryAuth()
+    })
+
+    // Let the manual retry complete
+    await act(async () => {
+      resolveManualRetry({ username: 'manual', email: 'manual@example.com' })
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    await manualRetryPromise
+
+    // Now the slow bootstrap resolves with a DIFFERENT user
+    await act(async () => {
+      resolveSlowBootstrap({ username: 'stale', email: 'stale@example.com' })
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    // State should remain the manual retry user, not the stale bootstrap user
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.user?.username).toBe('manual')
+    expect(auth?.user?.email).toBe('manual@example.com')
+  }, 15000)
+
+  it('manual retryAuth while recoverSession is in-flight does not hang isLoading', async () => {
+    vi.useFakeTimers()
+    let resolveRecovery!: (user: { username: string; email: string }) => void
+
+    // First call: initial bootstrap fails with 503
+    // Second call: recoverSession (triggered by retryAuth) - we'll make it slow
+    mocks.refreshSession.mockResolvedValue('new-token')
+    mocks.get
+      .mockRejectedValueOnce(axiosError(503))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveRecovery = resolve }))
+      .mockResolvedValueOnce({ username: 'recovered', email: 'recovered@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
+
+    renderProvider()
+
+    // Initial bootstrap fails - flush the useEffect
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    // Wait for state to update
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // Verify auth is set
+    expect(auth).not.toBeNull()
+    expect(auth?.authState.status).toBe('service_unavailable')
+
+    // User clicks "Try again" - this calls recoverSession
+    const retryPromise = act(async () => {
+      await auth!.retryAuth()
+    })
+
+    // At this point, recoverSession is in-flight (waiting on resolveRecovery)
+    // The retryAuth should not hang even though recoverSession hasn't resolved yet
+    // Because retryAuth cleared recoveryPromise and started a fresh one
+
+    // Resolve the recovery
+    await act(async () => {
+      resolveRecovery({ username: 'recovered', email: 'recovered@example.com' })
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    await retryPromise
+
+    expect(auth?.authState.status).toBe('authenticated')
+    expect(auth?.authState.isLoading).toBe(false)
+    expect(auth?.user?.username).toBe('recovered')
+  }, 15000)
+})
