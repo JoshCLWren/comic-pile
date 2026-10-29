@@ -286,14 +286,19 @@ def http(base: str, path: str, token: str | None,
             return exc.code, exc.read(), dict(exc.headers), (time.perf_counter() - t) * 1000
 
 
+def response_header(headers: dict[str, str], name: str) -> str | None:
+    """Retrieve an HTTP response header without depending on its casing."""
+    return next((value for key, value in headers.items() if key.lower() == name.lower()), None)
+
+
 def get(base: str, item: Traffic, token: str) -> dict:
     """Collect a single API request's status, latency, and optional query count."""
     try:
         status, _, headers, ms = http(base, item.url, token)
-        queries = headers.get("X-App-DB-Queries")
+        queries = response_header(headers, "X-App-DB-Queries")
         return {"route": item.route, "status": status, "wall_ms": round(ms, 2),
                 "db_queries": int(queries) if queries and queries.isdigit() else None,
-                "cold": headers.get("X-App-Cold-Request") == "1"}
+                "cold": response_header(headers, "X-App-Cold-Request") == "1"}
     except (OSError, TimeoutError, ValueError) as exc:
         return {"route": item.route, "status": 0, "wall_ms": None,
                 "db_queries": None, "cold": False, "error": type(exc).__name__}
