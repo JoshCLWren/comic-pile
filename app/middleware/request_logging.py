@@ -304,6 +304,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "query_params": str(request.url.query) if request.url.query else None,
                 "status_code": status_code,
                 "process_time_ms": round(process_time_ms, 2),
+                "wall_time_ms": round(process_time_ms, 2),
                 "database_queries": diagnostics.database_queries,
                 "database_time_ms": round(diagnostics.database_time_ms, 2),
                 "cold_request": startup.cold,
