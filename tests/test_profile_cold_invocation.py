@@ -5,11 +5,19 @@ from __future__ import annotations
 import cProfile
 from pathlib import Path
 import pstats
+import subprocess
+import sys
 import time
 
 import pytest
 
-from scripts.profile_cold_invocation import profile_function_count, summary
+from scripts.profile_cold_invocation import (
+    ROOT,
+    _server_failure,
+    cold_server_command,
+    profile_function_count,
+    summary,
+)
 from scripts.profile_cold_server import save_profile
 
 
@@ -62,3 +70,29 @@ def test_report_separates_unprofiled_cpu_from_instrumented_stacks() -> None:
     assert ".profile-local/cold-1.top.txt" in output
     assert "NOT Vercel billing" in output
     assert "unprofiled processes" in output
+
+
+def test_cold_server_launch_imports_from_repo_root(tmp_path: Path) -> None:
+    """A file-path launch would make api.index unavailable from scripts/."""
+    command = cold_server_command(55449, (tmp_path / "cold.pstats").resolve())
+    assert command[:3] == [sys.executable, "-m", "scripts.profile_cold_server"]
+    result = subprocess.run(
+        [*command, "--help"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--port" in result.stdout
+    assert "--output" in result.stdout
+
+
+def test_cold_server_failure_prints_original_log_traceback(tmp_path: Path) -> None:
+    """A failed child must reveal the cause in the first command output."""
+    log = tmp_path / "crashed.server.log"
+    log.write_text("Traceback (most recent call last):\\nModuleNotFoundError: No module named 'api'\\n")
+    message = str(_server_failure("Profiled API exited before readiness", log))
+    assert "ModuleNotFoundError: No module named 'api'" in message
+    assert str(log) in message
