@@ -472,7 +472,12 @@ fn recovery_label(inputs: &option_inputs::OptionInputs, issue_id: i32) -> String
 
 /// Report bounded recovery walks so the UI never treats an incomplete chain
 /// as an unavailable prerequisite. These codes match the Python response.
-fn recovery_diagnostic(diagnostics: &mut Vec<Value>, code: &str, issue_id: i32, limit: Option<usize>) {
+fn recovery_diagnostic(
+    diagnostics: &mut Vec<Value>,
+    code: &str,
+    issue_id: i32,
+    limit: Option<usize>,
+) {
     let diagnostic = json!({
         "code": code,
         "node_type": "issue",
@@ -520,7 +525,15 @@ fn recovery_chains(
     visited.insert(issue_id);
     let mut result = Vec::new();
     for source in upstream {
-        for tail in recovery_chains(source, edges, inputs, readable, &visited, depth + 1, diagnostics) {
+        for tail in recovery_chains(
+            source,
+            edges,
+            inputs,
+            readable,
+            &visited,
+            depth + 1,
+            diagnostics,
+        ) {
             let mut chain = vec![node.clone()];
             chain.extend(tail);
             result.push(chain);
