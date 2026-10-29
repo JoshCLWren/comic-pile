@@ -34,8 +34,9 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
         now = datetime.now(UTC)
+        username = f"nr_{uuid4().hex[:16]}"
         async with AsyncSession(engine, expire_on_commit=False) as db:
-            owner = User(username=f"native-reader-{name}")
+            owner = User(username=username)
             stranger = User(username=f"other-reader-{name}")
             db.add_all([owner, stranger])
             await db.flush()
@@ -97,7 +98,7 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
             foreign_id = foreign.id
             await db.commit()
 
-        token = jwt.encode({"sub":f"native-reader-{name}","jti":"native-http-fixture",
+        token = jwt.encode({"sub":username,"jti":"native-http-fixture",
                             "type":"access","exp":int((now+timedelta(hours=1)).timestamp())},
                            SECRET,"HS256")
         query = f"options=-csearch_path%3D{name}"
