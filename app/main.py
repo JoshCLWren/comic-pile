@@ -34,6 +34,7 @@ from app.middleware.request_logging import add_request_logging_middleware
 from app.performance_budgets import (
     PerformanceWarning,
     StartupBudgetError,
+    STARTUP_TIMEOUT_MS,
     enforce_startup_budget,
     get_performance_budget_manager,
     run_bounded,
@@ -53,11 +54,35 @@ logger = logging.getLogger(__name__)
 # reach a pathological cold start.
 _NEON_STARTUP_WARNING_MS = 150
 _NEON_STARTUP_TIMEOUT_MS = 500
+
 # Heavy database initialization runs on the first non-ping request, not on the
 # ping-ready path, so it carries its own separately budgeted deadline. Its retry
 # backoff can legitimately exceed the ping-readiness budget.
 _HEAVY_INIT_WARNING_MS = 3000
 _HEAVY_INIT_TIMEOUT_MS = 5000
+
+
+def _log_ignored_startup_alarm_sample(*, duration_ms: float, deployment_id: str | None) -> None:
+    """Record the startup sample without importing the GitHub alarm subsystem.
+
+    Startup readiness samples cannot file GitHub issues, so importing the large
+    optional issue-filing service at every cold start costs CPU for no benefit.
+    Preserve the existing event shape, threshold and severity for observability.
+    """
+    hard_failure = duration_ms >= STARTUP_TIMEOUT_MS
+    logger.log(
+        logging.WARNING if hard_failure else logging.INFO,
+        "Performance alarm ignored startup sample: %s took %.2f ms",
+        "startup.readiness",
+        duration_ms,
+        extra={
+            "event": "performance_alarm_ignored_startup",
+            "operation": "startup.readiness",
+            "duration_ms": duration_ms,
+            "deployment_id": deployment_id,
+            "startup_performance_violation": hard_failure,
+        },
+    )
 
 
 # SEO indexability policy (issue #3065). Only the public landing page is a
@@ -852,19 +877,12 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                     },
                 )
             finally:
-                # Startup readiness samples are evaluated for telemetry but do
-                # not file issues (issue #3552). Cold-start work is tracked
-                # separately.
-                try:
-                    from app.services import performance_issue_service as perf_issues
-
-                    perf_issues.handle_startup_telemetry(
-                        duration_ms=readiness_ms,
-                        operation="startup.readiness",
-                        deployment_id=ready_snapshot.deployment_id,
-                    )
-                except Exception as exc:
-                    logger.debug("Startup performance issue evaluation skipped: %s", exc)
+                # Startup samples can never file an issue (#3552), so avoid
+                # importing the optional alarm subsystem into every new worker.
+                _log_ignored_startup_alarm_sample(
+                    duration_ms=readiness_ms,
+                    deployment_id=ready_snapshot.deployment_id,
+                )
             logger.warning(
                 "Lightweight application startup completed (ping-ready) in %.2f ms heavy_initialized=%s",
                 readiness_ms,
