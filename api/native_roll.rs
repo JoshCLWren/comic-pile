@@ -1,8 +1,15 @@
-//! Vercel's official Rust Function bridge for the Roll cutover.
-//! The native ingress diagnostic must not initialize the Roll database or auth state.
-//! GET /api/v2/roll/bootstrap remains routed to Python until its own cutover.
-use axum::{routing::get, Json, Router};
-use tower::ServiceBuilder;
+//! Vercel's native Rust ingress for the Roll endpoint cutover.
+//! The health probe never reads database configuration.
+use axum::{
+    extract::Request,
+    http::{HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
+    routing::get,
+    Json, Router,
+};
+use comicpile_roll_service::{config::Config, router as roll_router, AppState};
+use std::sync::{Arc, OnceLock};
+use tower::{Service, ServiceBuilder};
 use vercel_runtime::{axum::VercelLayer, Error};
 
 async fn native_health() -> Json<serde_json::Value> {
@@ -13,14 +20,45 @@ async fn native_health() -> Json<serde_json::Value> {
     }))
 }
 
+static ROLL_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
+
+async fn native_bootstrap(request: Request) -> Response {
+    // Cold-start the native Roll pool only for authenticated bootstrap traffic.
+    // Keep health independent of DB secrets and failures.
+    let mut result = match ROLL_STATE.get_or_init(|| {
+        Config::from_vercel_env()
+            .and_then(AppState::new)
+            .map(Arc::new)
+            .map_err(|err| err.0)
+    }) {
+        Ok(state) => {
+            let mut router = roll_router(state.clone());
+            match router.call(request).await {
+                Ok(response) => response,
+                Err(never) => match never {},
+            }
+        }
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"detail": "Native Roll unavailable"})),
+        )
+            .into_response(),
+    };
+    result.headers_mut().insert(
+        "x-comicpile-api-runtime",
+        HeaderValue::from_static("rust"),
+    );
+    result
+}
+
 fn app() -> Router {
-    Router::new().route("/api/_native_roll/health", get(native_health))
+    Router::new()
+        .route("/api/_native_roll/health", get(native_health))
+        .route("/api/v2/roll/bootstrap", get(native_bootstrap))
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    // Only the isolated health route is wired here. Native Roll handlers and
-    // their database pools belong in the subsequent production cutover PR.
     vercel_runtime::run(
         ServiceBuilder::new()
             .layer(VercelLayer::new())
@@ -47,7 +85,6 @@ mod tests {
             .body(Body::empty())
             .expect("valid request");
         let response = router.call(request).await.expect("health response");
-
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(header::CONTENT_TYPE),
