@@ -1,5 +1,7 @@
 //! Standalone native Roll service foundation. Bootstrap remains in Python until parity gates pass.
+pub mod auth;
 pub mod config;
+pub mod db;
 
 use axum::{
     extract::{Request, State},
@@ -97,7 +99,27 @@ struct ErrorBody {
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.0, Json(ErrorBody { detail: self.1 })).into_response()
+        if self.0 == StatusCode::SERVICE_UNAVAILABLE && self.1 == "Database temporarily unavailable"
+        {
+            return (
+                self.0,
+                [("Retry-After", "30")],
+                Json(serde_json::json!({"error": {
+                    "code": "database_unavailable",
+                    "message": "Database temporarily unavailable. Please retry.",
+                    "status": "SERVICE_UNAVAILABLE"
+                }})),
+            )
+                .into_response();
+        }
+        let mut response = (self.0, Json(ErrorBody { detail: self.1 })).into_response();
+        if self.0 == StatusCode::UNAUTHORIZED {
+            response.headers_mut().insert(
+                axum::http::header::WWW_AUTHENTICATE,
+                axum::http::HeaderValue::from_static("Bearer"),
+            );
+        }
+        response
     }
 }
 

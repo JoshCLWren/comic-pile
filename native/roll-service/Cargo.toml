@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 axum = "0.8"
 deadpool-postgres = "0.14"
+jsonwebtoken = { version = "9", default-features = false }
 native-tls = "0.2"
 postgres-native-tls = "0.5"
 serde = { version = "1", features = ["derive"] }
