@@ -51,7 +51,7 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.getByText('1 in play')).toBeVisible()
     expect(screen.getByText('#12')).toBeVisible()
     expect(screen.getByRole('button', {
-      name: /Die face 1: Amazing Adventures, issue 12, ongoing, groups Secret War\. Open series actions\./i,
+      name: /Die face 1: Amazing Adventures, issue 12, connected to Secret War\. Open series actions\./i,
     })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Shuffle queue' })).toHaveAccessibleDescription(
       /complete active queue/i,
@@ -59,11 +59,11 @@ describe('ThreadPool eligible mappings', () => {
 
     const dieFace = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     const titleText = dieFace.querySelector('p:nth-of-type(1)')
-    const issueText = screen.getByText('#12')
+    const issueText = dieFace.querySelector('p:nth-of-type(2)')
     expect(titleText?.textContent).toBe('Amazing Adventures')
     expect(issueText?.textContent).toBe('#12')
-    expect(titleText).toHaveClass('font-bold', 'text-sm')
-    expect(issueText).toHaveClass('text-xs', 'font-semibold')
+    expect(titleText).toHaveClass('font-bold', 'text-sm', 'text-stone-200')
+    expect(issueText).toHaveClass('text-xs', 'text-stone-400')
     expect(issueText).not.toHaveClass('font-bold', 'text-sm')
     expect(
       titleText && issueText
@@ -130,13 +130,13 @@ describe('ThreadPool eligible mappings', () => {
     )
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
-    expect(row).toHaveAccessibleName(/groups Secret War, Civil War/i)
+    expect(row).toHaveAccessibleName(/connected to Secret War, Civil War/i)
 
-    const routeCue = screen.getByText(/Groups · Secret War · Civil War/i)
+    const routeCue = screen.getByText(/Connected to: Secret War · Civil War/i)
     expect(routeCue).toBeVisible()
     const cueText = routeCue.textContent ?? ''
     expect(cueText.toLowerCase()).not.toMatch(/blocked|prerequisite|read .* first|required/i)
-    expect(routeCue.textContent).toContain('Groups ·')
+    expect(routeCue.textContent).toContain('Connected to:')
   })
 
   it('keeps thread actions available via a clear row affordance', () => {
@@ -153,13 +153,9 @@ describe('ThreadPool eligible mappings', () => {
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     expect(row).toHaveAccessibleName(/Open series actions/i)
-    // The implementation shows all information visually and uses aria-label for
-    // screen readers. The comic-first row may hide purely decorative visuals
-    // (the cover placeholder icon) from assistive tech, but no informational
-    // text may be hidden behind aria-hidden="true".
-    for (const hidden of row.querySelectorAll('[aria-hidden="true"]')) {
-      expect(hidden.textContent?.trim() ?? '').toBe('')
-    }
+    // The implementation shows all information visually and uses aria-label for screen
+    // readers; no elements are hidden with aria-hidden="true" as all content is visible.
+    expect(row.querySelector('[aria-hidden="true"]')).toBeNull()
 
     row.click()
     expect(onThreadClick).toHaveBeenCalledWith({ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' })
@@ -195,8 +191,8 @@ describe('ThreadPool eligible mappings', () => {
       </MemoryRouter>,
     )
 
-    const routeCue = screen.getByText(/Groups ·/)
-    expect(routeCue.textContent).toBe('Groups · Secret War · Civil War')
+    const routeCue = screen.getByText(/Connected to:/)
+    expect(routeCue.textContent).toBe('Connected to: Secret War · Civil War')
     // `truncate` only takes effect on the block itself, so the cue must not be
     // wrapped in an inline span that silently drops the ellipsis.
     expect(routeCue.tagName).toBe('P')
@@ -204,7 +200,7 @@ describe('ThreadPool eligible mappings', () => {
     expect(routeCue.querySelector('span')).toBeNull()
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
-    expect(row).toHaveAccessibleName(/groups Secret War, Civil War/i)
+    expect(row).toHaveAccessibleName(/connected to Secret War, Civil War/i)
   })
 
   it('omits the route cue entirely when every route label is empty', () => {
@@ -223,8 +219,8 @@ describe('ThreadPool eligible mappings', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.queryByText(/Groups ·/)).toBeNull()
+    expect(screen.queryByText(/Connected to:/)).toBeNull()
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
-    expect(row).not.toHaveAccessibleName(/groups/i)
+    expect(row).not.toHaveAccessibleName(/connected to/i)
   })
 })
