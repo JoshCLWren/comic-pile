@@ -3,6 +3,7 @@ import { beforeEach, vi } from 'vitest'
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from '../query/queryClient'
+import { resetQueryRetryBudget } from '../query/outageRetryBudget'
 import { isFunction } from '../utils/runtimeChecks'
 
 // Tests run against the same process-wide `queryClient` singleton the app uses
@@ -23,6 +24,9 @@ queryClient.setDefaultOptions({
 
 beforeEach(() => {
   queryClient.clear()
+  // The outage retry budget is module-level state; reset it so one test's
+  // recognized outage or auth-degraded window cannot leak into the next.
+  resetQueryRetryBudget()
 })
 
 vi.mock('@testing-library/react', async (importOriginal) => {

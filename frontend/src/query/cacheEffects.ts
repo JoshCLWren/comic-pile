@@ -7,6 +7,7 @@ import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
+import { isTransientQueryFailure } from './outageRetryBudget'
 
 /**
  * Centralized cache effects for all React Query mutations in ComicPile.
@@ -28,6 +29,35 @@ import { isObject } from '../utils/runtimeChecks'
  */
 export function clearSessionCache(client: QueryClient): void {
   client.clear()
+}
+
+/**
+ * Refetch active queries that failed during a recognized backend outage.
+ *
+ * Called exactly once when a request succeeds again (including the single
+ * outage probe or an auth recovery). Only queries that currently hold an error
+ * result are touched, and TanStack stores one Query per distinct query key, so
+ * the reader gets one request per failed key — never one per observer or one
+ * per invalidation. In-flight fetches are left alone.
+ *
+ * @param client - The app QueryClient.
+ */
+export async function resumeQueriesAfterOutage(client: QueryClient): Promise<void> {
+  await client.refetchQueries(
+    {
+      type: 'active',
+      predicate: (query) => {
+        if (query.state.status !== 'error') {
+          return false
+        }
+        const error = query.state.error
+        // Only refetch transient failures; deterministic 4xx, auth errors, and
+        // canceled requests are left to the user or manual retry.
+        return isTransientQueryFailure(error)
+      },
+    },
+    { cancelRefetch: false },
+  )
 }
 
 export type ThreadCacheRollback = () => void
