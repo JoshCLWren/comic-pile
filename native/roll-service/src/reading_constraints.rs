@@ -309,7 +309,7 @@ fn strict_covers(
     covers
 }
 /// Exact Python ordering rules with iterative topological sort and cycle traversal.
-pub fn validate(snapshot: &Snapshot) -> Result<Vec<i32>, ValidationError> {
+fn constraint_edges(snapshot: &Snapshot) -> Result<BTreeSet<ConstraintEdge>, ValidationError> {
     snapshot.check_references()?;
     let mut edges = BTreeSet::new();
     let threads: HashMap<_, _> = snapshot.threads.iter().map(|t| (t.thread_id, t)).collect();
@@ -407,6 +407,11 @@ pub fn validate(snapshot: &Snapshot) -> Result<Vec<i32>, ValidationError> {
             provenance: p.provenance.clone(),
         });
     }
+    Ok(edges)
+}
+
+pub fn validate(snapshot: &Snapshot) -> Result<Vec<i32>, ValidationError> {
+    let edges = constraint_edges(snapshot)?;
     let mut adjacency: BTreeMap<i32, Vec<ConstraintEdge>> = snapshot
         .issues
         .iter()
@@ -490,6 +495,13 @@ pub fn validate(snapshot: &Snapshot) -> Result<Vec<i32>, ValidationError> {
     }
     Err(invalid("Residual graph has no cycle"))
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EligibleFrontier {
+    pub thread_id: i32,
+    pub issue_id: i32,
+    pub queue_position: i32,
+}
+
 /// Only this type may be consumed by future native eligible-candidate projection.
 /// Private fields prevent raw/incomplete loader data from masquerading as validated.
 pub struct ValidatedReadingInputs {
@@ -515,6 +527,65 @@ impl ValidatedReadingInputs {
     }
     pub fn topological_order(&self) -> &[i32] {
         &self.topological_order
+    }
+    /// Live Option E frontiers. Ignore stale stored blocked/frontier fields:
+    /// the validated dependency graph and issue statuses are authoritative.
+    /// Exactly one next unread issue per active queue thread can be eligible.
+    pub fn eligible_frontiers(&self) -> Result<Vec<EligibleFrontier>, ValidationError> {
+        let snapshot = Snapshot::from_inputs(&self.inputs, &BTreeMap::new());
+        let edges = constraint_edges(&snapshot)?;
+        let excluded = &self.inputs.excluded_issue_ids;
+        let incomplete: HashSet<i32> = self
+            .inputs
+            .core
+            .issues
+            .iter()
+            .filter(|issue| issue.status != "read" && !excluded.contains(&issue.id))
+            .map(|issue| issue.id)
+            .collect();
+        let blocked: HashSet<i32> = edges
+            .iter()
+            .filter(|edge| incomplete.contains(&edge.source_issue_id))
+            .map(|edge| edge.target_issue_id)
+            .collect();
+
+        let mut next_unread: BTreeMap<i32, (i32, i32)> = BTreeMap::new();
+        for issue in &self.inputs.core.issues {
+            if issue.status != "unread" || excluded.contains(&issue.id) {
+                continue;
+            }
+            let key = (issue.position, issue.id);
+            let first = next_unread.entry(issue.thread_id).or_insert(key);
+            if key < *first {
+                *first = key;
+            }
+        }
+        let active: HashSet<i32> = self
+            .inputs
+            .core
+            .threads
+            .iter()
+            .filter(|thread| thread.status == "active")
+            .map(|thread| thread.id)
+            .collect();
+
+        let mut candidates: Vec<EligibleFrontier> = self
+            .inputs
+            .core
+            .stored
+            .iter()
+            .filter(|stored| active.contains(&stored.thread_id) && stored.queue_position >= 1)
+            .filter_map(|stored| {
+                let (_, issue_id) = next_unread.get(&stored.thread_id)?;
+                (!blocked.contains(issue_id)).then_some(EligibleFrontier {
+                    thread_id: stored.thread_id,
+                    issue_id: *issue_id,
+                    queue_position: stored.queue_position,
+                })
+            })
+            .collect();
+        candidates.sort_by_key(|candidate| (candidate.queue_position, candidate.thread_id));
+        Ok(candidates)
     }
 }
 
