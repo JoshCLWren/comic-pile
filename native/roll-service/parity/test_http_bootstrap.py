@@ -37,7 +37,7 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         username = f"nr_{uuid4().hex[:16]}"
         async with AsyncSession(engine, expire_on_commit=False) as db:
             owner = User(username=username)
-            stranger = User(username=f"other-reader-{name}")
+            stranger = User(username=f"other_{uuid4().hex[:16]}")
             db.add_all([owner, stranger])
             await db.flush()
             t = Thread(user_id=owner.id, title="Known Series", format="Comic",
