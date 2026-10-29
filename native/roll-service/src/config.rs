@@ -61,7 +61,10 @@ fn vercel_postgres_url(raw: String) -> String {
         .filter(|part| !part.is_empty())
         .filter(|part| part.split('=').next() != Some("channel_binding"))
         .collect();
-    if !params.iter().any(|part| part.split('=').next() == Some("sslmode")) {
+    if !params
+        .iter()
+        .any(|part| part.split('=').next() == Some("sslmode"))
+    {
         params.push("sslmode=require");
     }
     format!("{base}?{}", params.join("&"))
@@ -166,10 +169,13 @@ mod vercel_tests {
     #[test]
     fn existing_neon_url_and_python_secret_boot_native_config() {
         let config = Config::from_vercel_lookup(|key| match key {
-            "DATABASE_URL" => Some(concat!(
-                "postgresql+asyncpg://reader:password@ep-example.us-east-2.aws.neon.tech/",
-                "neondb?sslmode=require&channel_binding=require"
-            ).into()),
+            "DATABASE_URL" => Some(
+                concat!(
+                    "postgresql+asyncpg://reader:password@ep-example.us-east-2.aws.neon.tech/",
+                    "neondb?sslmode=require&channel_binding=require"
+                )
+                .into(),
+            ),
             "SECRET_KEY" => Some("synthetic-jwt-key".into()),
             _ => None,
         })
@@ -182,7 +188,12 @@ mod vercel_tests {
 
     #[test]
     fn native_override_and_sqlalchemy_schemes_preserve_tls() {
-        for scheme in ["postgresql+asyncpg", "postgresql+psycopg", "postgresql+psycopg2", "postgres"] {
+        for scheme in [
+            "postgresql+asyncpg",
+            "postgresql+psycopg",
+            "postgresql+psycopg2",
+            "postgres",
+        ] {
             let url = format!("{scheme}://reader:password@localhost/app?channel_binding=require");
             let config = Config::from_vercel_lookup(|key| match key {
                 "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
@@ -199,7 +210,9 @@ mod vercel_tests {
     #[test]
     fn rejects_insecure_production_transport() {
         let result = Config::from_vercel_lookup(|key| match key {
-            "DATABASE_URL" => Some("postgresql://reader:password@localhost/app?sslmode=disable".into()),
+            "DATABASE_URL" => {
+                Some("postgresql://reader:password@localhost/app?sslmode=disable".into())
+            }
             "SECRET_KEY" => Some("synthetic".into()),
             _ => None,
         });
