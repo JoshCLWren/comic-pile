@@ -27,12 +27,14 @@ test.describe('Issue #4140: Roll → Queue navigation optimization', () => {
       total_issues: 3,
     })
 
-    // Track HTTP requests to /api/v1/roll/bootstrap
-    let bootstrapRequests = 0
+    // Idle Roll has exactly one bootstrap source. Count both paths so a
+    // regression that reintroduces the v1 fetch fails here (#2719).
+    let legacyBootstrapRequests = 0
+    let v2BootstrapRequests = 0
     page.on('request', (request) => {
-      if (request.url().includes('/api/v1/roll/bootstrap') && request.method() === 'GET') {
-        bootstrapRequests++
-      }
+      if (request.method() !== 'GET') return
+      if (request.url().includes('/api/v1/roll/bootstrap')) legacyBootstrapRequests++
+      if (request.url().includes('/api/v2/roll/bootstrap')) v2BootstrapRequests++
     })
 
     // 1. Roll once to enter the rating view
@@ -41,7 +43,8 @@ test.describe('Issue #4140: Roll → Queue navigation optimization', () => {
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 20000 })
     
     // Initial bootstrap request should have been made
-    expect(bootstrapRequests).toBe(1)
+    expect(v2BootstrapRequests).toBe(1)
+    expect(legacyBootstrapRequests).toBe(0)
 
     // 2. Click the "Back to Queue" button
     await page.getByTestId('roll-back-to-queue').click()
@@ -50,7 +53,8 @@ test.describe('Issue #4140: Roll → Queue navigation optimization', () => {
     await waitForQueueReady(page)
 
     // 3. Verify no additional bootstrap request was made during navigation
-    expect(bootstrapRequests).toBe(1)
+    expect(v2BootstrapRequests).toBe(1)
+    expect(legacyBootstrapRequests).toBe(0)
   })
 
   test('Back to Queue preserves pending selection for #3761 regression', async ({

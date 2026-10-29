@@ -41,6 +41,10 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
             queryKeys.roll.bootstrap(),
           ) ?? null
         }
+
+        // The API boundary already normalized the single v2 bootstrap response
+        // (session chrome plus comic-first pool rows), so the cache holds the
+        // authoritative view with no second source to join.
         return result
       } catch (err) {
         const normalized =

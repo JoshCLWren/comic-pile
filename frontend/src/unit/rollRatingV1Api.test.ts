@@ -4,6 +4,7 @@ import { createRollApi } from '../services/api-roll'
 import { createProtectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { createRollBootstrapApi } from '../services/rollBootstrapApi'
 import { createHttpClientStub } from './httpClientStub'
+import { makeRollV2Bootstrap } from './rollV2BootstrapFixture'
 
 const client = createHttpClientStub()
 const rateApi = createRateApi(client)
@@ -12,7 +13,7 @@ const protectedRollMutationApi = createProtectedRollMutationApi(client)
 const rollBootstrapApi = createRollBootstrapApi(client)
 
 beforeEach(() => {
-  client.get.mockReset().mockResolvedValue({})
+  client.get.mockReset().mockResolvedValue(makeRollV2Bootstrap())
   client.post.mockReset().mockResolvedValue({})
 })
 
@@ -35,10 +36,10 @@ it('uses canonical v1 Roll and rating paths for maintained callers', async () =>
     thread_id: 7,
     rating: 4,
   })
-  expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap')
+  expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
 })
 
-it('keeps auth-recovery Roll mutations on canonical v1 paths', async () => {
+it('keeps auth-recovery Roll mutations on canonical v1 paths with the v2 bootstrap read', async () => {
   await protectedRollMutationApi.rate({ thread_id: 9, rating: 3 })
   await protectedRollMutationApi.bootstrap()
   await protectedRollMutationApi.snooze()
@@ -48,6 +49,6 @@ it('keeps auth-recovery Roll mutations on canonical v1 paths', async () => {
     { thread_id: 9, rating: 3 },
     { skipAuthRedirect: true },
   )
-  expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap', { skipAuthRedirect: true })
+  expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap', { skipAuthRedirect: true })
   expect(client.post).toHaveBeenCalledWith('/v1/snooze/', undefined, { skipAuthRedirect: true })
 })

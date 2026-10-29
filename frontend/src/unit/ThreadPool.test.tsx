@@ -94,7 +94,7 @@ describe('ThreadPool Component', () => {
     const dieFaces = screen.getAllByRole('button', { name: /die face/i })
     dieFaces.forEach((element) => {
       const label = element.getAttribute('aria-label') || ''
-      expect(label).toMatch(/connected to/i)
+      expect(label).toMatch(/groups Main Story/i)
       expect(label).not.toMatch(/\broutes\b/i)
       expect(element.textContent).toMatch(/The Amazing Spider-Man|Batman/)
       expect(element).not.toHaveTextContent(/Issue \d+/i)
@@ -334,7 +334,7 @@ describe('ThreadPool Component', () => {
 
     expect(
       screen.getByRole('button', {
-        name: /Die face 1: Amazing Spider-Man, tagged Physical, Annual\. Open series actions\./,
+        name: /Die face 1: Amazing Spider-Man, Mainline, tagged Physical, Annual\. Open series actions\./,
       }),
     ).toBeInTheDocument()
   })
