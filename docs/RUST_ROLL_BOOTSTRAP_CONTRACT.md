@@ -42,7 +42,8 @@ All happy-path fixtures use Option E enabled with a local-only approval referenc
 Unless specified, Alpha and Beta each have two unread issues, queue positions
 1 and 2, no mappings, and a recent existing d6 reading session with uninitialized
 bandwidth. `before` and `after` capture reading-session fields, issue read state,
-event count, and full undo snapshot content.
+event count, full undo snapshot content, and live thread state including queue
+positions, counters, cached frontier, read progress, rating and activity time.
 
 | Fixture | Distinguishing setup / behavior |
 | --- | --- |

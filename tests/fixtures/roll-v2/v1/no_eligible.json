@@ -28,7 +28,8 @@
         "timezone": null
       }
     ],
-    "snapshots": []
+    "snapshots": [],
+    "threads": []
   },
   "before": {
     "events": 0,
@@ -59,7 +60,8 @@
         "timezone": null
       }
     ],
-    "snapshots": []
+    "snapshots": [],
+    "threads": []
   },
   "contract_version": 1,
   "request": {

@@ -143,6 +143,30 @@
           }
         }
       }
+    ],
+    "threads": [
+      {
+        "id": 1,
+        "issues_remaining": 2,
+        "last_activity_at": "2026-01-04T12:00:00+00:00",
+        "last_rating": null,
+        "next_unread_issue_id": 1,
+        "queue_position": 1,
+        "reading_progress": null,
+        "status": "active",
+        "total_issues": 2
+      },
+      {
+        "id": 2,
+        "issues_remaining": 2,
+        "last_activity_at": "2026-01-04T12:00:00+00:00",
+        "last_rating": null,
+        "next_unread_issue_id": 3,
+        "queue_position": 2,
+        "reading_progress": null,
+        "status": "active",
+        "total_issues": 2
+      }
     ]
   },
   "before": {
@@ -170,7 +194,31 @@
       }
     ],
     "sessions": [],
-    "snapshots": []
+    "snapshots": [],
+    "threads": [
+      {
+        "id": 1,
+        "issues_remaining": 2,
+        "last_activity_at": "2026-01-04T12:00:00+00:00",
+        "last_rating": null,
+        "next_unread_issue_id": 1,
+        "queue_position": 1,
+        "reading_progress": null,
+        "status": "active",
+        "total_issues": 2
+      },
+      {
+        "id": 2,
+        "issues_remaining": 2,
+        "last_activity_at": "2026-01-04T12:00:00+00:00",
+        "last_rating": null,
+        "next_unread_issue_id": 3,
+        "queue_position": 2,
+        "reading_progress": null,
+        "status": "active",
+        "total_issues": 2
+      }
+    ]
   },
   "contract_version": 1,
   "request": {

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import create_access_token, create_refresh_token, revoke_token
 from app.config import get_reading_execution_settings
 from app.main import app
-from app.models import Event, Issue, ReadingSession, Snapshot, User
+from app.models import Event, Issue, ReadingSession, Snapshot, Thread, User
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.schemas.roll_v2 import RollV2BootstrapResponse
@@ -137,6 +137,30 @@ async def _state(db: AsyncSession, owner: int) -> dict[str, object]:
                 )
             }
             for row in sessions
+        ],
+        "threads": [
+            {
+                key: getattr(row, key)
+                for key in (
+                    "id",
+                    "queue_position",
+                    "status",
+                    "total_issues",
+                    "issues_remaining",
+                    "next_unread_issue_id",
+                    "reading_progress",
+                    "last_rating",
+                    "last_activity_at",
+                )
+            }
+            for row in (
+                await db.scalars(
+                    select(Thread)
+                    .where(Thread.user_id == owner)
+                    .order_by(Thread.id)
+                    .execution_options(populate_existing=True)
+                )
+            ).all()
         ],
         "events": await db.scalar(select(func.count()).select_from(Event)),
         "snapshots": [
@@ -383,3 +407,18 @@ async def test_auth_failure_golden(
         ),
     }
     assert actual == json.loads((FIXTURES / f"auth_{case}.json").read_text())
+
+
+async def test_oracle_detects_live_queue_mutation(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Changing live queue order must change evidence even without a new snapshot."""
+    thread, _ = await _make_thread(
+        async_db, default_user, title="Queue guard", issue_count=1, queue_position=1
+    )
+    before = await _state(async_db, default_user.id)
+    thread.queue_position = 2
+    await async_db.flush()
+    after = await _state(async_db, default_user.id)
+    assert before["threads"] != after["threads"]
+    assert before["snapshots"] == after["snapshots"]
