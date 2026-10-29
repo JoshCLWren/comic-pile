@@ -179,7 +179,7 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         "continue": True,
         "headers": {"Cache-Control": "public, max-age=31536000, immutable"},
     }
-    # Route 5 serves the build's generated route HTML pages (see
+    # Route 6 serves the build's generated route HTML pages (see
     # test_vercel_route_html_rule_serves_every_generated_page).
     assert routes[6] == _route_html_rule()
     assert routes[7] == {"handle": "filesystem"}
@@ -300,7 +300,7 @@ def test_vercel_node_typescript_relative_imports_use_js_extensions() -> None:
 
 
 def test_node_auth_route_is_isolated_from_python_and_static_routes() -> None:
-    """Keep auth GET in Node and only native diagnostic GET in Rust; other APIs use Python."""
+    """Keep auth GET in Node, native probe GET in Rust, and other APIs in Python."""
     routes = _routes(_load_vercel_config())
     probes = (
         ("GET", "/api/v1/auth/me", "/api/auth/me.ts"),
