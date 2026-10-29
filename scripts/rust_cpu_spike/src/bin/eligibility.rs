@@ -193,12 +193,11 @@ fn evaluate(input: Snapshot) -> Result<Vec<Eligibility>, String> {
         let next = frontiers.get(&t.thread_id).copied();
         let mut blockers = next.and_then(|id| restrictions.remove(&id)).unwrap_or_default();
         blockers.sort_by(|a, b| {
-            let key = |b: &Blocker| (
-                b.kind.as_str(), b.list_id.unwrap_or(-1),
-                b.gate_issue_id.unwrap_or(-1), b.prerequisite_id.unwrap_or(-1),
-                b.waiting_on_issue_ids.as_slice()
-            );
-            key(a).cmp(&key(b))
+            a.kind.cmp(&b.kind)
+                .then_with(|| a.list_id.unwrap_or(-1).cmp(&b.list_id.unwrap_or(-1)))
+                .then_with(|| a.gate_issue_id.unwrap_or(-1).cmp(&b.gate_issue_id.unwrap_or(-1)))
+                .then_with(|| a.prerequisite_id.unwrap_or(-1).cmp(&b.prerequisite_id.unwrap_or(-1)))
+                .then_with(|| a.waiting_on_issue_ids.cmp(&b.waiting_on_issue_ids))
         });
         output.push(Eligibility { thread_id: t.thread_id, next_issue_id: next,
                                   eligible: next.is_some() && blockers.is_empty(), blockers });
