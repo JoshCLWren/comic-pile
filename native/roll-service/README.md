@@ -114,3 +114,33 @@ both Rust integration tests and `tests/test_native_auth_matrix.py`, pinning vali
 credentials and exact auth rejection status/detail/challenge across languages.
 Python tests use the existing isolated database fixtures. Run them with the
 repository's disposable `TEST_DATABASE_URL` and `DATABASE_URL`, never a live library.
+
+### Core scalar reading loader (#4304)
+
+`reading_inputs::load_core_inputs` requires an opaque authenticated identity and
+uses two parameterized bulk SELECTs inside a bounded repeatable-read, read-only
+transaction. It includes inactive threads, empty threads, and read issues. Threads
+are ordered by identity; issues by thread, natural position, then identity. Queue
+position, stored next-issue pointers and blocked flags are retained as diagnostics,
+never used to choose eligibility. Missing or cross-thread pointers fail closed;
+failed or canceled transactions discard their physical pool connection.
+
+The local parity example is a CLI only, with no public HTTP route. On a disposable
+PostgreSQL database (schema creation privileges required):
+
+```bash
+cd native/roll-service
+cargo build --locked --example reading_snapshot
+cd ../..
+PYTHONPATH=. uv run pytest native/roll-service/parity/test_core_inputs.py -q -s --no-cov
+```
+
+Set `RUST_ROLL_TEST_DATABASE_URL` to that disposable database. The test creates and
+removes a unique synthetic schema, compares scalar identity/status/order and stored
+queue diagnostics with Python `load_shadow_inputs`, and injects invalid pointers
+only inside that schema. Both loaders use read-only repeatable-read transactions.
+The test prints Python oracle CPU/wall time and native child-process CPU/wall time;
+the latter includes startup and authentication. These are diagnostic timings, not
+equivalent-workload performance claims (#4312 owns that gate). The native loader
+uses two data queries plus BEGIN/ROLLBACK; authentication queries are additional.
+Exclusions, volume resolution, lists and prerequisites remain scoped to #4305.
