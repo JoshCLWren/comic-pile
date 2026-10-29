@@ -16,10 +16,10 @@ from app.models import Event, Issue, ReadingSession, Snapshot, Thread, User
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.schemas.roll_v2 import RollV2BootstrapResponse
-from tests.test_roll_v2_projection import _make_thread
 
 FIXTURES = Path(__file__).parent / "fixtures" / "roll-v2" / "v1"
 NOW = datetime(2026, 1, 4, 12, tzinfo=UTC)
+D1 = datetime(2026, 1, 1, tzinfo=UTC)
 CASES = (
     "new_session",
     "existing_session",
@@ -95,6 +95,45 @@ def _canonical(value: object, ids: dict[str, dict[int, int]], context: str = "")
         else:
             result[key] = _canonical(item, ids, str(key))
     return result
+
+
+async def _make_thread(
+    db: AsyncSession,
+    user: User,
+    *,
+    title: str,
+    issue_count: int,
+    queue_position: int,
+    read_through: int = 0,
+) -> tuple[Thread, list[Issue]]:
+    """Create an owned thread with contiguous issues and a next pointer."""
+    thread = Thread(
+        user_id=user.id,
+        title=title,
+        format="Comic",
+        issues_remaining=issue_count - read_through,
+        total_issues=issue_count,
+        queue_position=queue_position,
+        status="active",
+    )
+    db.add(thread)
+    await db.flush()
+    issues = []
+    for position in range(1, issue_count + 1):
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number=str(position),
+            position=position,
+            status="read" if position <= read_through else "unread",
+            read_at=D1 if position <= read_through else None,
+        )
+        db.add(issue)
+        issues.append(issue)
+    await db.flush()
+    if issue_count and read_through < issue_count:
+        thread.next_unread_issue_id = issues[read_through].id
+    await db.flush()
+    return thread, issues
 
 
 async def _state(db: AsyncSession, owner: int) -> dict[str, object]:
