@@ -12,6 +12,7 @@ import contextlib
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from http.client import HTTPMessage
 import importlib.util
 import json
 import os
@@ -22,6 +23,7 @@ import subprocess
 import sys
 import threading
 import time
+from typing import IO
 from urllib import error, parse, request
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -289,8 +291,29 @@ def api_process(
 
 class BlockRedirects(request.HTTPRedirectHandler):
     """Prevent replay authentication and profiling from following redirects."""
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        """Reject redirects so request targets remain on the local API."""
+
+    def redirect_request(
+        self,
+        req: request.Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+        newurl: str,
+    ) -> request.Request | None:
+        """Reject redirects so request targets remain on the local API.
+
+        Args:
+            req: Request that produced the redirect response.
+            fp: Response body stream supplied by urllib.
+            code: HTTP redirect status code.
+            msg: HTTP redirect reason phrase.
+            headers: Response headers from the redirect.
+            newurl: Absolute redirect target that would be followed.
+
+        Returns:
+            Always ``None``, which stops urllib from following the redirect.
+        """
         return None
 
 
