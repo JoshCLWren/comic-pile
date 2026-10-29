@@ -28,7 +28,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-from scripts.profile_local_traffic import (
+from scripts.profile_local_traffic import (  # noqa: E402
     api_process,
     cpu_seconds,
     free_port,
