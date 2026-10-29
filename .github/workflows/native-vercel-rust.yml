@@ -28,3 +28,9 @@ jobs:
         run: cargo check --manifest-path Cargo.toml --all-targets
       - name: Run native function tests
         run: cargo test --manifest-path Cargo.toml --all-targets
+      - name: Print generated root lockfile for committed reproducibility
+        run: |
+          echo "COMICPILE_LOCK_BEGIN"
+          base64 -w0 Cargo.lock
+          echo
+          echo "COMICPILE_LOCK_END"
