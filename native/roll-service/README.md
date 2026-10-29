@@ -78,3 +78,39 @@ Roll. The complete native bootstrap must pass JSON/status/state parity,
 performance, frontend/E2E, exact-head CI and Greptile 5/5 gates before #4313 can
 review deployment and exercise ingress rollback. Never route public bootstrap
 traffic to this foundation's 404.
+
+## Authentication and owned reads
+
+`auth::AuthenticatedUser` is an Axum extractor with an opaque identity. It
+verifies HS256 access credentials, optional NumericDate claims, JTI revocation,
+user existence and the password-change epoch using Python's current semantics.
+There is no disabled-user column in the canonical Python model. Refresh tokens
+are rejected; authentication neither rotates cookies nor creates reading history.
+The signing secret must match Python's `SECRET_KEY` before any future integration.
+
+`db::require_owned_thread` and `db::require_owned_session` require that verified
+identity and scope SQL by `user_id`. Missing and foreign rows both return 404.
+These are foundations for later Roll handlers; no new public probe or partial
+bootstrap endpoint is mounted. Reading-history sessions do not authenticate users.
+
+Pool acquisition and query execution have bounded deadlines with no automatic
+retries. Completed queries return connections to the pool; canceled/timed-out
+queries discard the physical connection so pending PostgreSQL work cannot leak
+into subsequent requests. Query/programming errors stay 500, while connection,
+resource and pool failures return the sanitized Python database-unavailable 503
+envelope and `Retry-After: 30`. Credentials and dependency messages are never logged.
+
+Tests require a **disposable local PostgreSQL** connection (the Rust SQL tests use
+connection-local temporary tables and never alter application tables):
+
+```sh
+export RUST_ROLL_TEST_DATABASE_URL=postgresql://localhost/native_auth_test
+cargo test --locked --all-targets
+```
+
+Missing test configuration fails instead of silently skipping integration tests.
+CI provisions PostgreSQL. `tests/fixtures/roll-v2/auth-matrix.json` is consumed by
+both Rust integration tests and `tests/test_native_auth_matrix.py`, pinning valid
+credentials and exact auth rejection status/detail/challenge across languages.
+Python tests use the existing isolated database fixtures. Run them with the
+repository's disposable `TEST_DATABASE_URL` and `DATABASE_URL`, never a live library.

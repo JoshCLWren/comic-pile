@@ -1,0 +1,300 @@
+[
+  {
+    "name": "valid",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 200,
+    "detail": null
+  },
+  {
+    "name": "missing",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Not authenticated",
+    "missing": true
+  },
+  {
+    "name": "malformed",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token",
+    "malformed": true
+  },
+  {
+    "name": "expired",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token",
+    "expired": true
+  },
+  {
+    "name": "refresh",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "refresh"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid authentication credentials"
+  },
+  {
+    "name": "missing_jti",
+    "claims": {
+      "sub": "reader",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Token has been revoked"
+  },
+  {
+    "name": "revoked",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": true,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Token has been revoked"
+  },
+  {
+    "name": "deleted",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access"
+    },
+    "user_exists": false,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "User not found"
+  },
+  {
+    "name": "password_changed",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 100,
+    "status": 401,
+    "detail": "Password changed; please sign in again."
+  },
+  {
+    "name": "password_current",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "pc": 100
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 100,
+    "status": 200,
+    "detail": null
+  },
+  {
+    "name": "password_string",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "pc": "100"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 100,
+    "status": 200,
+    "detail": null
+  },
+  {
+    "name": "bad_subject",
+    "claims": {
+      "sub": "",
+      "jti": "test-jti",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid authentication credentials"
+  },
+  {
+    "name": "numeric_subject",
+    "claims": {
+      "sub": 1,
+      "jti": "test-jti",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token"
+  },
+  {
+    "name": "null_jti",
+    "claims": {
+      "sub": "reader",
+      "jti": null,
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token"
+  },
+  {
+    "name": "empty_jti",
+    "claims": {
+      "sub": "reader",
+      "jti": "",
+      "type": "access"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Token has been revoked"
+  },
+  {
+    "name": "audience",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "aud": "other"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token"
+  },
+  {
+    "name": "null_audience",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "aud": null
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token"
+  },
+  {
+    "name": "at_hash",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "at_hash": "unused"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token"
+  },
+  {
+    "name": "bad_iat",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "iat": "bad"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token"
+  },
+  {
+    "name": "null_iat",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "iat": null
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid token format"
+  },
+  {
+    "name": "future_nbf",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "nbf": 4102444800
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 401,
+    "detail": "Invalid or expired token"
+  },
+  {
+    "name": "numeric_date_string",
+    "claims": {
+      "sub": "reader",
+      "jti": "test-jti",
+      "type": "access",
+      "nbf": "1",
+      "iat": "1"
+    },
+    "user_exists": true,
+    "revoked": false,
+    "password_epoch": 0,
+    "status": 200,
+    "detail": null
+  }
+]
