@@ -873,13 +873,25 @@ async def rate_thread(
                 resp_next_unread_issue_number = next_issue_obj.issue_number
 
     await db.flush()
+    # If this is a direct Thread rating without an active session, create one
+    # so that an undo snapshot can be keyed to it. A session-less direct rate
+    # still persists the rating and event, but without a session the existing
+    # undo infrastructure has no bucket to store the delta in.
+    if current_session is None and is_direct:
+        from comic_pile.reading_session import get_or_create as _get_or_create
+
+        current_session = await _get_or_create(db, user_id)
+        current_session_id = current_session.id
+    else:
+        current_session_id = current_session.id if current_session is not None else None
+
     if current_session is not None:
         # Undo snapshots are keyed by reading session; a direct Thread rate
         # submitted without a session has no session to key an undo record to,
         # so it persists the rating/event without fabricating session state.
         await snapshot_thread_states(
             db,
-            current_session.id,
+            current_session_id,
             event.id,
             user_id,
             commit=False,

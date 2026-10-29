@@ -36,7 +36,9 @@ export function IssueRateButton({
 }: IssueRateButtonProps) {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [savedRating, setSavedRating] = useState<number | null>(null)
+  const [savedRating, setSavedRating] = useState<number | null>(
+    snapshot.thread.last_rating != null ? snapshot.thread.last_rating : null,
+  )
   // A rating always marks its issue read. Keep the newest snapshot so two rows
   // rated in quick succession both land in the visible issue list.
   const latestSnapshot = useRef(snapshot)
