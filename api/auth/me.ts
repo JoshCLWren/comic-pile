@@ -1,3 +1,3 @@
-import authMeHandler from '../src/auth';
+import authMeHandler from '../src/auth.js';
 
 export default authMeHandler;

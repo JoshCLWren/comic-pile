@@ -264,6 +264,35 @@ def test_vercel_dynamic_route_pages_fall_through_to_the_spa_fallback() -> None:
     assert _headers(fallback)["X-Robots-Tag"] == "noindex, nofollow"
 
 
+_RELATIVE_MODULE_SPECIFIER_RE = re.compile(
+    r"""(?:from|import)\s+['"](\.[^'"]+)['"]""",
+)
+
+
+def test_vercel_node_typescript_relative_imports_use_js_extensions() -> None:
+    """Node ESM on Vercel cannot load extensionless relative imports.
+
+    ``@vercel/node`` compiles ``api/auth/me.ts`` to ``me.js`` and leaves import
+    specifiers intact. With ``"type": "module"``, ``from '../src/auth'`` becomes
+    ``ERR_MODULE_NOT_FOUND`` for ``/var/task/api/src/auth`` (issue #4295).
+    """
+    offenders: list[str] = []
+    api_root = REPOSITORY_ROOT / "api"
+    for source in sorted(api_root.rglob("*.ts")):
+        if "node_modules" in source.parts:
+            continue
+        text = source.read_text(encoding="utf-8")
+        for match in _RELATIVE_MODULE_SPECIFIER_RE.finditer(text):
+            specifier = match.group(1)
+            if not specifier.endswith(".js"):
+                relative = source.relative_to(REPOSITORY_ROOT)
+                offenders.append(f"{relative}: {specifier}")
+    assert offenders == [], (
+        "Vercel Node ESM requires relative imports to use .js extensions; "
+        + "; ".join(offenders)
+    )
+
+
 def test_node_auth_route_is_isolated_from_python_and_static_routes() -> None:
     """Only the GET bootstrap moves to Node; all other API calls stay Python."""
     routes = _routes(_load_vercel_config())
