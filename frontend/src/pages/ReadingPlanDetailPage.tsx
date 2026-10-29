@@ -1,5 +1,5 @@
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle, displayReadingListName } from '../utils/cblSourceDisplay'
-import { ReaderIssueActions } from '../components/ReaderIssueActions'
+import { ReaderIssueActions, ReadNowIssueButton } from '../components/ReaderIssueActions'
 import { useState } from 'react'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -245,12 +245,12 @@ export default function ReadingPlanDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {continueIssue && (
-            <Link
-              to={`/thread/${continueIssue.thread_id}`}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black hover:bg-[var(--theme-primary-action-hover)]"
-            >
-              Continue reading
-            </Link>
+            <ReadNowIssueButton
+              issueId={continueIssue.issue_id}
+              threadId={continueIssue.thread_id}
+              label="Read next issue"
+              primary
+            />
           )}
           {editableListId != null ? (
             <button
