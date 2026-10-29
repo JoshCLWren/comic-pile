@@ -95,6 +95,16 @@ def test_retired_fixed_models_are_replaced_by_catalog_free_slots() -> None:
     # qwen/qwen3.8-27b:free pin left OpenRouter; the slot stays unused.
     assert "29" in REMOVED_WORKERS
     assert "29" not in rows_by_worker
+    # Workers 68/69 retired before OpenRouter Laguna :free access ends 2026-10-31.
+    assert "68" in REMOVED_WORKERS
+    assert "69" in REMOVED_WORKERS
+    assert "68" not in rows_by_worker
+    assert "69" not in rows_by_worker
+    assert "poolside/laguna-s-2.1:free" in RETIRED_FIXED_MODELS
+    assert "poolside/laguna-xs-2.1:free" in RETIRED_FIXED_MODELS
+    assert rows_by_worker["11"][1] == "nvidia"
+    assert rows_by_worker["11"][2] == "poolside/laguna-xs-2.1"
+    assert rows_by_worker["46"][1] == "kilo-auto"
 
 
 def test_catalog_selection_fails_closed_when_every_candidate_is_cooling() -> None:
