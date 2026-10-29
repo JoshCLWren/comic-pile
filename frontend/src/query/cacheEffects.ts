@@ -350,6 +350,9 @@ export async function invalidateAfterUndo(
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
     // A rating undone from a Thread row restores that row's own read state and
     // saved rating, which no queue/session key covers (#4204).
+    // Also refresh dependency queries so the "Next issue availability" explanation
+    // reflects the post-undo state, since rating an issue refreshes those queries.
+    client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
     ...(threadId === undefined
       ? []
       : [

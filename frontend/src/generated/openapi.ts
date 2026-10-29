@@ -12389,6 +12389,8 @@ export interface components {
             id: number;
             /** Issue Number */
             issue_number: string;
+            /** Last Rating */
+            last_rating?: number | null;
             /** Position */
             position: number;
             /** Read At */
@@ -13111,12 +13113,16 @@ export interface components {
             /** Reading Progress */
             reading_progress?: string | null;
             roll_reconciliation?: components["schemas"]["RollReconciliation"] | null;
+            /** Session Id */
+            session_id?: number | null;
             /** Status */
             status: string;
             /** Title */
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+            /** Undo Snapshot Id */
+            undo_snapshot_id?: number | null;
         };
         /**
          * ReactivateRequest
