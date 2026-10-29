@@ -74,7 +74,7 @@ describe('IssueRateButton', () => {
     const onSnapshotChange = vi.fn()
     const onRated = vi.fn()
 
-    render(
+    const { rerender } = render(
       <IssueRateButton
         issue={issue}
         snapshot={snapshot}
@@ -130,14 +130,13 @@ describe('IssueRateButton', () => {
     }
     
     // Re-render with the updated issue so the component shows "Rated 4"
-    render(
+    rerender(
       <IssueRateButton
         issue={updatedIssue}
         snapshot={updatedSnapshot}
         onSnapshotChange={onSnapshotChange}
         onRated={onRated}
       />,
-      { wrapper },
     )
     
     expect(screen.getByRole('button', { name: 'Rated 4' })).toBeInTheDocument()
