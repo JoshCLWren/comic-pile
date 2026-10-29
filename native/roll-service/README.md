@@ -217,3 +217,51 @@ complete order/error/path/provenance payloads against Python across 250 seeded
 cross-list graphs, corrupt inputs, and 20,000-entry acyclic and residual-cycle
 fixtures. Existing database loader parity verifies owner scoping and ignored
 historical dependencies before this pure validator runs.
+
+## Native reading-session bootstrap (#4307)
+
+`reading_session::bootstrap` is an authenticated internal service entry point for
+response assembly. It is deliberately not mounted as a partial public bootstrap
+endpoint. Pass a validated `SessionPolicy` with the Python backend's
+`SESSION_GAP_HOURS` and `START_DIE` settings (defaults 6 hours and d6). The injectable
+`bootstrap_at` clock exists for deterministic parity; production callers use
+`bootstrap`. The runtime image must include IANA `tzdata` at `/usr/share/zoneinfo`,
+the same database used by Python `ZoneInfo`.
+
+The read-only `resolve_current_session` accepts a caller-owned transaction. It
+includes recent event and pending-issue activity, prefers pending work, and uses
+activity/start/id tie breakers. Bootstrap holds Python's per-user advisory
+transaction lock, rechecks authority, initializes missing bandwidth once, and
+creates a full-library session-start snapshot in the same commit as the new
+session. It preserves initialized/manual bandwidth, intent, pending context,
+snoozes/skips, and the suspended automatic die. Browser timezone is captured only
+when absent, after the checkpoint, as in Python. It never writes roll/rate/cancel
+events, issue status, thread queue positions, or snoozes.
+
+History-based bandwidth uses bounded batched owner-scoped queries, observed
+issue/thread median precedence, confirmed identity era fallbacks, and the Python
+v1 inference rules. A savepoint permits the same neutral balanced fallback when
+inference fails without committing an aborted transaction. Deadlock retries are
+bounded to three attempts inside one overall deadline. Failed/cancelled work
+discards the connection, rolling back session and checkpoint together.
+
+`parity/test_session_bootstrap.py` runs Python and Rust on the same seeded initial
+state in a unique disposable schema, rolls back Python, then compares every
+persisted session field and snapshot payload. It tests fresh/reused/expired
+sessions, pending context, recent cancellation activity, cutoff equality,
+manual/automatic dice, modes, timezone validation, observed/era bandwidth,
+foreign/missing session IDs, repeated GETs, concurrent first creation, checkpoint
+failure, and request cancellation before commit. It also asserts threads,
+issues, and events remain unchanged. Timestamp spelling is normalized; values,
+nulls, ordering, and state are not discarded. No production data is used.
+
+```sh
+cargo build --locked --examples
+PYTHONPATH=. uv run pytest native/roll-service/parity/test_session_bootstrap.py -q --no-cov
+```
+
+Run the Python command from the repository root with
+`RUST_ROLL_TEST_DATABASE_URL` pointing at disposable PostgreSQL, as in CI. The
+existing Native Rust Roll workflow discovers this parity file automatically.
+Full response projection, recovery, and routing remain the separately scoped
+#4308–#4314 work; no production routing or preview deployment changes are made.
