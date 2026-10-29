@@ -8,6 +8,7 @@ level (``ERROR``) suppressed WARNING-level records.
 
 import asyncio
 import logging
+import time
 
 import pytest
 from fastapi import FastAPI
@@ -105,6 +106,39 @@ async def test_middleware_emits_structured_performance_warning(
     assert record.__dict__["path"] == "/slow"
     assert record.__dict__["status_code"] == 200
     assert record.__dict__["database_queries"] == 0
+
+
+@pytest.mark.asyncio
+async def test_middleware_reports_process_cpu_time_without_mislabeling_wall_time(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """CPU time comes from process_time and is never named as wall time."""
+    monkeypatch.setenv("SLOW_REQUEST_THRESHOLD_MS", "1")
+    readings = iter([100.0, 100.25])
+    monkeypatch.setattr(time, "process_time", lambda: next(readings, 100.25))
+    app = FastAPI()
+    add_request_logging_middleware(app, "test")
+
+    @app.get("/cpu")
+    async def cpu_route() -> dict[str, str]:
+        """Return after a short sleep so the request crosses the threshold."""
+        await asyncio.sleep(0.01)
+        return {"status": "ok"}
+
+    caplog.set_level(logging.WARNING, logger="app.middleware.request_logging")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/cpu")
+        assert response.status_code == 200
+
+    records = _find_performance_warning_records(caplog)
+    assert len(records) == 1
+    extras = records[0].__dict__
+    assert extras["cpu_time_ms"] == 250.0
+    assert "wall_time_ms" not in extras
+    assert extras["process_time_ms"] >= 0.0
 
 
 @pytest.mark.asyncio
