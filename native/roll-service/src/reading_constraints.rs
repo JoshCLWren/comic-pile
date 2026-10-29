@@ -537,7 +537,9 @@ impl ValidatedReadingInputs {
             .core
             .issues
             .iter()
-            .filter(|issue| issue.status != "read" && !self.inputs.excluded_issue_ids.contains(&issue.id))
+            .filter(|issue| {
+                issue.status != "read" && !self.inputs.excluded_issue_ids.contains(&issue.id)
+            })
             .map(|issue| issue.id)
             .collect();
         Ok(constraint_edges(&snapshot)?
