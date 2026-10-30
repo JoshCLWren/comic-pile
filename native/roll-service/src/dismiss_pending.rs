@@ -8,34 +8,16 @@
 //! (#3763). The dismissed series is referenced through ``selected_thread_id``
 //! so the record survives a later deletion of the series.
 //! #![forbid(unsafe_code)]
-use crate::{auth::AuthenticatedUser, db, reading_session, AppState};
+use crate::{auth::AuthenticatedUser, db, reading_session, ApiError, AppState};
 use axum::{
     extract::State,
     http::StatusCode,
-    Json,
 };
 use deadpool_postgres::Object;
-use serde_json::{json, Value};
+
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio_postgres::IsolationLevel;
-
-/// Public API error type; mirrors the pattern used by `skip_roll`.
-#[derive(Debug)]
-struct ApiError(pub StatusCode, pub &'static str);
-impl std::fmt::Display for ApiError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.0, self.1)
-    }
-}
-impl std::error::Error for ApiError {}
-
-fn internal() -> ApiError {
-    ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-}
-
-fn conflict() -> ApiError {
-    ApiError(StatusCode::CONFLICT, "No pending roll to dismiss. Roll first.")
-}
 
 fn unavailable() -> ApiError {
     ApiError(
@@ -58,85 +40,65 @@ async fn mutate(
         .isolation_level(IsolationLevel::ReadCommitted)
         .start()
         .await
-        .map_err(|e| {
-            let code = e.code().map(|c| c.code()).unwrap_or_default();
-            if code.starts_with("08")
-                || code.starts_with("53")
-                || matches!(code, "57P01" | "57P02" | "57P03")
-            {
-                ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database temporarily unavailable")
-            } else {
-                ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-            }
-        })?;
+        .map_err(query_error)?;
 
     tx.batch_execute("SET LOCAL TIME ZONE 'UTC'")
         .await
-        .map_err(|e| {
-            let code = e.code().map(|c| c.code()).unwrap_or_default();
-            if code.starts_with("08")
-                || code.starts_with("53")
-                || matches!(code, "57P01" | "57P02" | "57P03")
-            {
-                ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database temporarily unavailable")
-            } else {
-                ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-            }
-        })?;
+        .map_err(query_error)?;
 
     // persist a dismiss event so the session timeline records the cancellation
     // (issue #3763). Without this event the dismissal was silently absent.
-    let event_now = now_seconds();
     tx.execute(
-        "INSERT INTO events (type, timestamp, session_id, thread_id)
+        "INSERT INTO events (type, timestamp, session_id, selected_thread_id)
          VALUES ('dismiss', to_timestamp($1), $2, $3)",
-        &[&event_now, &session.id, &session.pending_thread_id],
+        &[&now, &session.id, &session.pending_thread_id],
     )
     .await
-    .map_err(|e| {
-        let code = e.code().map(|c| c.code()).unwrap_or_default();
-        if code.starts_with("08")
-            || code.starts_with("53")
-            || matches!(code, "57P01" | "57P02" | "57P03")
-        {
-            ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database temporarily unavailable")
-        } else {
-            ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-        }
-    })?;
+        .map_err(query_error)?;
 
     // Clear the pending thread on the session.
     tx.execute(
         "UPDATE sessions SET pending_thread_id = NULL, pending_thread_updated_at = to_timestamp($2)
          WHERE id = $1 AND user_id = $3",
-        &[&session.id, &event_now, &user.id()],
+        &[&session.id, &now, &user.id()],
     )
     .await
-    .map_err(|e| {
-        let code = e.code().map(|c| c.code()).unwrap_or_default();
-        if code.starts_with("08")
-            || code.starts_with("53")
-            || matches!(code, "57P01" | "57P02" | "57P03")
-        {
-            ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database temporarily unavailable")
-        } else {
-            ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-        }
-    })?;
+        .map_err(query_error)?;
 
-    tx.commit().await.map_err(|e| {
-        let code = e.code().map(|c| c.code()).unwrap_or_default();
-        if code.starts_with("08")
-            || code.starts_with("53")
-            || matches!(code, "57P01" | "57P02" | "57P03")
-        {
-            ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database temporarily unavailable")
-        } else {
-            ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-        }
-    })?;
+    tx.commit().await.map_err(query_error)?;
 
     Ok(())
+}
+
+/// Public handler for dismissing a pending roll.
+pub async fn dismiss_pending(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+) -> Result<StatusCode, ApiError> {
+    let now = now_seconds();
+    let active = reading_session::bootstrap(&state, user.clone(), None, reading_session::SessionPolicy::default()).await?;
+    let session = active.session;
+
+    let mut pending = PendingConn(Some(db::checkout(&state).await?));
+    let result = tokio::time::timeout(
+        state.request_timeout,
+        mutate(
+            &state,
+            user,
+            &session,
+            now,
+            pending.0.as_mut().unwrap(),
+        ),
+    )
+    .await;
+    match result {
+        Err(_) => Err(unavailable()),
+        Ok(Ok(())) => {
+            drop(pending.0.take());
+            Ok(StatusCode::NO_CONTENT)
+        }
+        Ok(Err(err)) => Err(err),
+    }
 }
 
 /// Helper to manage a checked-out database connection with deterministic drop.
