@@ -149,7 +149,7 @@ async fn bound_request(
     let response = tokio::time::timeout(state.request_timeout, next.run(request))
         .await
         .unwrap_or_else(|_| {
-            ApiError(StatusCode::SERVICE_UNAVAILABLE, "Request timed out").into_response()
+            ApiError(StatusCode::SERVICE_UNAVAILABLE, std::borrow::Cow::Borrowed("Request timed out")).into_response()
         });
     // No URI, query, headers, credentials, SQL or upstream error strings in request logs.
     tracing::info!(method = %method, status = response.status().as_u16(), elapsed_ms = started.elapsed().as_millis() as u64, "request completed");
@@ -166,9 +166,9 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v1/rate", post(rate::rate))
         .route("/api/rate", post(rate::rate))
-        .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
+        .fallback(|| async { ApiError(StatusCode::NOT_FOUND, std::borrow::Cow::Borrowed("Not Found")) })
         .method_not_allowed_fallback(|| async {
-            ApiError(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")
+            ApiError(StatusCode::METHOD_NOT_ALLOWED, std::borrow::Cow::Borrowed("Method Not Allowed"))
         })
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
         .with_state(state)

@@ -7,7 +7,7 @@ use tokio_postgres::{types::ToSql, Row};
 fn unavailable() -> ApiError {
     ApiError(
         StatusCode::SERVICE_UNAVAILABLE,
-        "Database temporarily unavailable",
+        std::borrow::Cow::Borrowed("Database temporarily unavailable"),
     )
 }
 
@@ -62,7 +62,7 @@ pub(crate) fn query_error(error: tokio_postgres::Error) -> ApiError {
     {
         unavailable()
     } else {
-        ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+        ApiError(StatusCode::INTERNAL_SERVER_ERROR, std::borrow::Cow::Borrowed("Internal Server Error"))
     }
 }
 
@@ -80,7 +80,7 @@ pub async fn require_owned_thread(
         &[&id, &user.id()],
     )
     .await?
-    .ok_or(ApiError(StatusCode::NOT_FOUND, "Thread not found"))?;
+    .ok_or(ApiError(StatusCode::NOT_FOUND, std::borrow::Cow::Borrowed("Thread not found")))?;
     Ok(())
 }
 
@@ -98,7 +98,7 @@ pub async fn require_owned_reading_session(
         &[&id, &user.id()],
     )
     .await?
-    .ok_or(ApiError(StatusCode::NOT_FOUND, "Session not found"))?;
+    .ok_or(ApiError(StatusCode::NOT_FOUND, std::borrow::Cow::Borrowed("Session not found")))?;
     Ok(())
 }
 

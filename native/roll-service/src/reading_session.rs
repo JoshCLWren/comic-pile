@@ -80,7 +80,7 @@ pub struct SessionBootstrap {
 fn corrupt() -> ApiError {
     ApiError(
         StatusCode::INTERNAL_SERVER_ERROR,
-        "Invalid reading session state",
+        std::borrow::Cow::Borrowed("Invalid reading session state"),
     )
 }
 pub(crate) fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {
@@ -212,14 +212,14 @@ pub async fn bootstrap_at(
     .await
     .unwrap_or(Err(ApiError(
         StatusCode::SERVICE_UNAVAILABLE,
-        "Database temporarily unavailable",
+        std::borrow::Cow::Borrowed("Database temporarily unavailable"),
     )))
 }
 fn session_error(error: tokio_postgres::Error) -> ApiError {
     if error.code() == Some(&tokio_postgres::error::SqlState::T_R_DEADLOCK_DETECTED) {
         ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Reading session deadlock",
+            std::borrow::Cow::Borrowed("Reading session deadlock"),
         )
     } else {
         db::query_error(error)
@@ -268,7 +268,7 @@ async fn bootstrap_once(
         {
             return Err(ApiError(
                 StatusCode::UNAUTHORIZED,
-                "Could not validate credentials",
+                std::borrow::Cow::Borrowed("Could not validate credentials"),
             ));
         }
         let existing = resolve_current_session(&tx, user, now, policy).await?;
@@ -354,7 +354,7 @@ async fn bootstrap_once(
     match result {
         Err(_) => Err(ApiError(
             StatusCode::SERVICE_UNAVAILABLE,
-            "Database temporarily unavailable",
+            std::borrow::Cow::Borrowed("Database temporarily unavailable"),
         )),
         Ok(result) => {
             if result.is_ok() {

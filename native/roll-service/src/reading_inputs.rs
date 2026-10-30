@@ -115,7 +115,7 @@ pub async fn load_core_inputs(
     match result {
         Err(_) => Err(ApiError(
             StatusCode::SERVICE_UNAVAILABLE,
-            "Database temporarily unavailable",
+            std::borrow::Cow::Borrowed("Database temporarily unavailable"),
         )),
         Ok(Err(error)) => Err(db::query_error(error)),
         Ok(Ok(inputs)) => {
@@ -123,7 +123,7 @@ pub async fn load_core_inputs(
             if !valid_references(&inputs) {
                 return Err(ApiError(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Unresolved reading reference",
+                    std::borrow::Cow::Borrowed("Unresolved reading reference"),
                 ));
             }
             tracing::info!(

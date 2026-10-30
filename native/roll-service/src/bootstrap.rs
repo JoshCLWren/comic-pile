@@ -27,7 +27,7 @@ pub struct BootstrapQuery {
 fn unavailable() -> ApiError {
     ApiError(
         StatusCode::INTERNAL_SERVER_ERROR,
-        "Invalid native Roll response",
+        std::borrow::Cow::Borrowed("Invalid native Roll response"),
     )
 }
 
@@ -735,7 +735,7 @@ pub async fn bootstrap_v2(
     let candidates = validated.eligible_frontiers().map_err(|_| {
         ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid reading constraints",
+            std::borrow::Cow::Borrowed("Invalid reading constraints"),
         )
     })?;
     let conn = db::checkout(&state).await?;

@@ -71,7 +71,7 @@ impl OptionInputs {
         {
             Err(ApiError(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Unresolved reading reference",
+                std::borrow::Cow::Borrowed("Unresolved reading reference"),
             ))
         } else {
             Ok(())
@@ -236,7 +236,7 @@ pub async fn load_option_diagnostics(
     match result {
         Err(_) => Err(ApiError(
             StatusCode::SERVICE_UNAVAILABLE,
-            "Database temporarily unavailable",
+            std::borrow::Cow::Borrowed("Database temporarily unavailable"),
         )),
         Ok(Err(error)) => Err(db::query_error(error)),
         Ok(Ok(inputs)) => {
@@ -261,11 +261,11 @@ pub async fn load_option_inputs(
         |error| match error {
             crate::reading_constraints::ValidationError::Cycle { .. } => ApiError(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Reading constraint cycle",
+                std::borrow::Cow::Borrowed("Reading constraint cycle"),
             ),
             crate::reading_constraints::ValidationError::InvalidSnapshot { .. } => ApiError(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Unresolved reading reference",
+                std::borrow::Cow::Borrowed("Unresolved reading reference"),
             ),
         },
     )

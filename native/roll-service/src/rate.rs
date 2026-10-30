@@ -67,7 +67,7 @@ pub struct RollLastRead {
 fn unavailable() -> ApiError {
     ApiError(
         StatusCode::INTERNAL_SERVER_ERROR,
-        "Invalid rate response",
+        std::borrow::Cow::Borrowed("Invalid rate response"),
     )
 }
 
@@ -87,12 +87,12 @@ fn thread_value(row: &tokio_postgres::Row) -> Result<Value, ApiError> {
 }
 
 /// Normalize format value to match Python behavior
-fn normalize_format_value(format: &str) -> String {
+pub fn normalize_format_value(format: &str) -> String {
     format.to_lowercase().replace(' ', "_")
 }
 
 /// Get rating limits from config
-fn get_rating_limits(state: &AppState) -> (f64, f64, f64) {
+pub fn get_rating_limits(state: &AppState) -> (f64, f64, f64) {
     (state.rating_min, state.rating_max, state.rating_threshold)
 }
 
@@ -112,7 +112,7 @@ pub async fn rate(
     if rate_request.rating < rating_min || rate_request.rating > rating_max {
         return Err(ApiError(
             StatusCode::BAD_REQUEST,
-            &format!("Rating must be between {} and {}", rating_min, rating_max),
+            std::borrow::Cow::Owned(format!("Rating must be between {} and {}", rating_min, rating_max)),
         ));
     }
     
@@ -122,7 +122,7 @@ pub async fn rate(
         if !rate_request.direct {
             return Err(ApiError(
                 StatusCode::BAD_REQUEST,
-                "thread_id is required for a direct Thread rating",
+                std::borrow::Cow::Borrowed("thread_id is required for a direct Thread rating"),
             ));
         }
         
@@ -135,7 +135,7 @@ pub async fn rate(
             .map_err(db::query_error)?
             .ok_or_else(|| ApiError(
                 StatusCode::NOT_FOUND,
-                &format!("Thread {} not found", thread_id),
+                std::borrow::Cow::Owned(format!("Thread {} not found", thread_id)),
             ))?;
         
         row.try_get(0).map_err(db::query_error)?
@@ -153,7 +153,7 @@ pub async fn rate(
             Some(row) => row.try_get(0).map_err(db::query_error)?,
             None => return Err(ApiError(
                 StatusCode::BAD_REQUEST,
-                "No active session. Please roll the dice first.",
+                std::borrow::Cow::Borrowed("No active session. Please roll the dice first."),
             )),
         };
         
@@ -188,13 +188,13 @@ pub async fn rate(
                         Some(tid) => tid,
                         None => return Err(ApiError(
                             StatusCode::BAD_REQUEST,
-                            "No active thread. Please roll the dice first.",
+                            std::borrow::Cow::Borrowed("No active thread. Please roll the dice first."),
                         )),
                     }
                 }
                 None => return Err(ApiError(
                     StatusCode::BAD_REQUEST,
-                    "No active thread. Please roll the dice first.",
+                    std::borrow::Cow::Borrowed("No active thread. Please roll the dice first."),
                 )),
             };
             thread_id
@@ -214,7 +214,7 @@ pub async fn rate(
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError(
             StatusCode::NOT_FOUND,
-            &format!("Thread {} not found", thread_id),
+            std::borrow::Cow::Owned(format!("Thread {} not found", thread_id)),
         ))?;
     
     let thread_id_val: i32 = thread_row.try_get(0).map_err(db::query_error)?;
@@ -238,7 +238,7 @@ pub async fn rate(
     if issues_remaining <= 0 {
         return Err(ApiError(
             StatusCode::BAD_REQUEST,
-            &format!("Thread {} has no issues remaining", thread_id),
+            std::borrow::Cow::Owned(format!("Thread {} has no issues remaining", thread_id)),
         ));
     }
     
@@ -283,7 +283,7 @@ pub async fn rate(
                     if total_issues > 1000 {
                         return Err(ApiError(
                             StatusCode::BAD_REQUEST,
-                            &format!("Total issues ({}) exceeds reasonable limit", total_issues),
+                            std::borrow::Cow::Owned(format!("Total issues ({}) exceeds reasonable limit", total_issues)),
                         ));
                     }
                     
@@ -321,7 +321,7 @@ pub async fn rate(
                 } else {
                     return Err(ApiError(
                         StatusCode::BAD_REQUEST,
-                        &format!("Non-numeric issue '{}' not found in thread. Add it via Edit Thread first.", issue_number),
+                        std::borrow::Cow::Owned(format!("Non-numeric issue '{}' not found in thread. Add it via Edit Thread first.", issue_number)),
                     ));
                 }
             }
@@ -423,8 +423,10 @@ pub async fn rate(
         .map_err(db::query_error)?;
     
     let next_unread_issue_id = next_issue_row
+        .as_ref()
         .and_then(|row| row.try_get::<_, i32>(0).ok());
     let next_unread_issue_number = next_issue_row
+        .as_ref()
         .and_then(|row| row.try_get::<_, String>(0).ok());
     
     // Build response

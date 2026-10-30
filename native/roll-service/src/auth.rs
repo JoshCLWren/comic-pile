@@ -20,7 +20,7 @@ impl AuthenticatedUser {
 }
 
 fn unauthorized(detail: &'static str) -> ApiError {
-    ApiError(StatusCode::UNAUTHORIZED, detail)
+    ApiError(StatusCode::UNAUTHORIZED, std::borrow::Cow::Borrowed(detail))
 }
 
 fn bearer(parts: &Parts) -> Result<&str, ApiError> {
@@ -125,7 +125,7 @@ pub async fn authenticate(state: &AppState, token: &str) -> Result<Authenticated
     } else {
         integer(&claims.password_epoch).ok_or(ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal Server Error",
+            std::borrow::Cow::Borrowed("Internal Server Error"),
         ))?
     };
     if password_epoch < row.get::<_, i64>(1) {
