@@ -639,7 +639,7 @@ mod tests {
             ]
         }))
         .unwrap();
-        let mut inputs = assemble_snapshot(snapshot).unwrap();
+        let mut inputs = assemble_snapshot(snapshot).ok().unwrap();
         assert!(inputs.require_resolved().is_ok());
         assert_eq!(inputs.lists.len(), 2);
         assert_eq!(inputs.lists[0].entries[0].issue_id, 10);
@@ -669,7 +669,7 @@ mod tests {
             "exclusions": [], "issue_volumes": []
         }))
         .unwrap();
-        let inputs = assemble_snapshot(snapshot).unwrap();
+        let inputs = assemble_snapshot(snapshot).ok().unwrap();
         assert!(inputs.require_resolved().is_ok());
         assert!(inputs.core.issues.is_empty());
     }
