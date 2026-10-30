@@ -10,10 +10,10 @@ from comic_pile.reading_session import get_or_create, resolve_current_session, s
 
 
 @pytest.mark.asyncio
-async def test_pending_activity_keeps_long_running_session_current(
+async def test_pending_activity_does_not_extend_six_hour_session(
     async_db: AsyncSession, default_user: User
 ) -> None:
-    """A recent pending roll keeps a session current even when it started hours ago."""
+    """A recent pending roll does not extend a six-hour session."""
     thread = Thread(
         title="Pending Activity",
         format="comic",
@@ -38,16 +38,16 @@ async def test_pending_activity_keeps_long_running_session_current(
 
     resolved = await get_or_create(async_db, default_user.id)
 
-    assert resolved.id == session.id
-    assert resolved.start_die == 12
+    assert resolved.id != session.id
+    assert resolved.start_die == 6
     assert await should_start_new(async_db, default_user.id) is False
 
 
 @pytest.mark.asyncio
-async def test_pending_session_beats_newer_blank_duplicate(
+async def test_expired_pending_session_does_not_beat_newer_session(
     async_db: AsyncSession, default_user: User
 ) -> None:
-    """A pending comic remains authoritative over a later blank duplicate session."""
+    """A pending comic in an expired session cannot override a newer session."""
     thread = Thread(
         title="Fantastic Four",
         format="comic",
@@ -90,16 +90,16 @@ async def test_pending_session_beats_newer_blank_duplicate(
     resolved = await resolve_current_session(async_db, default_user.id)
 
     assert resolved is not None
-    assert resolved.id == reading_session.id
-    assert resolved.pending_thread_id == thread.id
-    assert resolved.id != blank_session.id
+    assert resolved.id == blank_session.id
+    assert resolved.pending_thread_id is None
+    assert resolved.id != reading_session.id
 
 
 @pytest.mark.asyncio
-async def test_recent_reading_activity_beats_older_blank_unended_session(
+async def test_recent_events_do_not_override_newer_session(
     async_db: AsyncSession, default_user: User
 ) -> None:
-    """Recent durable activity wins when competing sessions have no pending context."""
+    """The newest unended session wins irrespective of activity on older sessions."""
     reading_session = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(hours=5),
         start_die=20,
@@ -126,8 +126,8 @@ async def test_recent_reading_activity_beats_older_blank_unended_session(
     resolved = await resolve_current_session(async_db, default_user.id)
 
     assert resolved is not None
-    assert resolved.id == reading_session.id
-    assert resolved.id != blank_session.id
+    assert resolved.id == blank_session.id
+    assert resolved.id != reading_session.id
 
 
 @pytest.mark.asyncio
@@ -149,3 +149,50 @@ async def test_stale_unended_history_does_not_prevent_new_session(
     created = await get_or_create(async_db, default_user.id)
     assert created.id != stale_session.id
     assert created.start_die == 6
+
+
+@pytest.mark.asyncio
+async def test_session_expiry_ignores_recent_events_and_future_start(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """An unended old session expires even when it has fresh activity."""
+    now = datetime.now(UTC)
+    old = ReadingSession(
+        user_id=default_user.id,
+        started_at=now - timedelta(hours=6, minutes=1),
+        start_die=12,
+    )
+    future = ReadingSession(
+        user_id=default_user.id,
+        started_at=now + timedelta(hours=1),
+        start_die=20,
+    )
+    async_db.add_all([old, future])
+    await async_db.flush()
+    async_db.add(Event(
+        session_id=old.id,
+        type="rate",
+        timestamp=now,
+        die=12,
+        die_after=20,
+    ))
+    await async_db.commit()
+    assert await resolve_current_session(async_db, default_user.id) is None
+    created = await get_or_create(async_db, default_user.id)
+    assert created.id not in {old.id, future.id}
+    assert created.start_die == 6
+
+
+@pytest.mark.asyncio
+async def test_session_before_expiry_remains_active(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """An unended 5h59m session remains active in its original window."""
+    current = ReadingSession(
+        user_id=default_user.id,
+        started_at=datetime.now(UTC) - timedelta(hours=5, minutes=59),
+        start_die=8,
+    )
+    async_db.add(current)
+    await async_db.commit()
+    assert (await resolve_current_session(async_db, default_user.id)).id == current.id
