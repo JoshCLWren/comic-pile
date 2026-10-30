@@ -7,20 +7,12 @@ import type {
   Tag,
 } from '../../services/api-tags'
 import { sourceLabel } from './sourceLabels'
-
-/**
- * Destination route for an inheritance source (issue #3032).
- *
- * Threads and Reading Plans have stable detail routes. Issue-typed sources in
- * v1 are always the queried object itself (issues inherit from threads and
- * plans, never from other issues), so they render as text rather than a link.
- */
-export function sourceRoute(source: InheritanceSource): string | null {
-  if (source.target_type === 'Thread') return `/thread/${source.target_id}`
-  if (source.target_type === 'ContinuityPlan')
-    return `/continuity-plans/${source.target_id}`
-  return null
-}
+import {
+  sourceRoute,
+  sourceTagEditorPath,
+  sourceTagEditorTarget,
+  tagEditorSearch,
+} from './sourceNavigation'
 
 /**
  * Tag color dot. Sized to match the tag-color dots used elsewhere in the
@@ -39,29 +31,50 @@ function ColorDot({ color, label }: { color: string; label: string }) {
 }
 
 /**
- * Source list for inherited tags (issues #3032, #3428, #3431, #3557).
+ * Source list for inherited tags (issues #3032, #3428, #3431, #3557, #4332).
  *
- * Each entry carries a reader-facing label. A source whose destination is the
- * page currently on screen is rendered as plain text: an issue editor opened
- * from its thread page must not offer a link back to that same page, which
- * looked like a no-op. Genuine other-thread and Reading-Plan sources keep
- * their navigation. Labels use human nouns, never backend type names.
+ * Each entry carries a reader-facing label and every navigable source is a
+ * genuine link to that source's tag editor. A source whose destination is the
+ * page currently on screen stays a link too: the destination swaps in the
+ * `tagEditor` request so following it opens the source's editor instead of
+ * re-entering the same page with no visible effect (issue #3428). Labels use
+ * human nouns, never backend type names.
  */
-function SourcesList({ tagName, sources }: { tagName: string; sources: InheritanceSource[] }) {
+export function InheritanceSources({
+  tagName,
+  sources,
+  onNavigate,
+}: {
+  tagName: string
+  sources: InheritanceSource[]
+  /** Called when a source link is activated so a hosting dialog can close. */
+  onNavigate?: () => void
+}) {
   const location = useLocation()
   return (
     <ul className="mt-1 flex flex-wrap gap-1 pl-2" aria-label={`Sources for ${tagName}`}>
       {sources.map((source) => {
-        const route = sourceRoute(source)
         const label = sourceLabel(source)
+        const route = sourceRoute(source)
+        const editorPath = sourceTagEditorPath(source)
         const isCurrentPage = route !== null && route === location.pathname
         return (
           <li key={`${source.target_type}:${source.target_id}`}>
-            {route && !isCurrentPage ? (
+            {route && editorPath ? (
               <Link
-                to={route}
-                className="block max-w-full truncate rounded-lg border border-[var(--theme-border)] px-2 py-0.5 text-[11px] font-semibold text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-                title={`Open ${label}`}
+                to={
+                  isCurrentPage
+                    ? `${route}${tagEditorSearch(
+                        location.search,
+                        sourceTagEditorTarget(source),
+                      )}`
+                    : editorPath
+                }
+                replace={isCurrentPage}
+                onClick={onNavigate}
+                aria-label={`${isCurrentPage ? 'Edit tags on' : 'Open'} ${label}`}
+                title={`${isCurrentPage ? 'Edit tags on' : 'Open'} ${label}`}
+                className="block max-w-full truncate rounded-lg border border-[var(--theme-border)] px-2 py-0.5 text-[11px] font-semibold text-[var(--theme-text-muted)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               >
                 {label}
               </Link>
@@ -86,6 +99,8 @@ interface DirectChipProps {
   onRemove?: (tag: Tag) => void
   /** Inheritance sources beyond the queried object itself, if any. */
   extraSources?: InheritanceSource[]
+  /** Called when a source link is activated so a hosting dialog can close. */
+  onSourceNavigate?: () => void
 }
 
 /**
@@ -98,7 +113,7 @@ interface DirectChipProps {
  * truncating the name. The remove affordance stays inside the pill because it
  * is the chip's own action, not descriptive state.
  */
-function DirectChip({ tag, canEdit, onRemove, extraSources }: DirectChipProps) {
+function DirectChip({ tag, canEdit, onRemove, extraSources, onSourceNavigate }: DirectChipProps) {
   const [expanded, setExpanded] = useState(false)
   const hasExtraSources = !!extraSources && extraSources.length > 0
 
@@ -140,7 +155,11 @@ function DirectChip({ tag, canEdit, onRemove, extraSources }: DirectChipProps) {
         )}
       </div>
       {expanded && hasExtraSources && (
-        <SourcesList tagName={tag.name} sources={extraSources} />
+        <InheritanceSources
+          tagName={tag.name}
+          sources={extraSources}
+          onNavigate={onSourceNavigate}
+        />
       )}
     </li>
   )
@@ -148,6 +167,7 @@ function DirectChip({ tag, canEdit, onRemove, extraSources }: DirectChipProps) {
 
 interface InheritedChipProps {
   entry: EffectiveTag
+  onSourceNavigate?: () => void
 }
 
 /**
@@ -164,7 +184,7 @@ interface InheritedChipProps {
  * visible without relying on color perception and without stealing width
  * from the name.
  */
-function InheritedChip({ entry }: InheritedChipProps) {
+function InheritedChip({ entry, onSourceNavigate }: InheritedChipProps) {
   const [expanded, setExpanded] = useState(false)
   const { tag, sources } = entry
 
@@ -191,7 +211,13 @@ function InheritedChip({ entry }: InheritedChipProps) {
           via {sources.length} {sources.length === 1 ? 'source' : 'sources'}
         </button>
       </div>
-      {expanded && <SourcesList tagName={tag.name} sources={sources} />}
+      {expanded && (
+        <InheritanceSources
+          tagName={tag.name}
+          sources={sources}
+          onNavigate={onSourceNavigate}
+        />
+      )}
     </li>
   )
 }
@@ -211,6 +237,8 @@ export interface TagChipsProps {
   canRemoveTag?: (tag: Tag) => boolean
   onRetry?: () => void
   label?: string
+  /** Called when an inheritance-source link is activated. */
+  onSourceNavigate?: () => void
 }
 
 /**
@@ -235,6 +263,7 @@ export function TagChips({
   canRemoveTag,
   onRetry,
   label = 'Tags',
+  onSourceNavigate,
 }: TagChipsProps) {
   // A failed load is reported before the empty state: a query that errored with
   // no cached data has not been shown to be tagless, and the viewer needs the
@@ -301,10 +330,15 @@ export function TagChips({
                 ?.sources.filter(
                   (source) => `${source.target_type}:${source.target_id}` !== selfKey,
                 )}
+              onSourceNavigate={onSourceNavigate}
             />
           ))}
           {inherited.map((entry) => (
-            <InheritedChip key={entry.tag.id} entry={entry} />
+            <InheritedChip
+              key={entry.tag.id}
+              entry={entry}
+              onSourceNavigate={onSourceNavigate}
+            />
           ))}
         </ul>
       )}

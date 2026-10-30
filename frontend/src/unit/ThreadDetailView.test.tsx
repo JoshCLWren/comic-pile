@@ -142,6 +142,18 @@ it('auto-opens the edit modal when arriving with openEditModal state', async () 
   expect(screen.getByDisplayValue('Saga')).toBeInTheDocument()
 })
 
+it('opens the thread tag editor from an inherited-source link (issue #4332)', async () => {
+  locationState.search = '?tagEditor=thread'
+  renderPage()
+
+  // A Thread-inherited source on this page resolves to `?tagEditor=thread`, so
+  // the thread's own editor opens instead of the link re-entering the page.
+  await waitFor(() =>
+    expect(screen.getByRole('heading', { name: 'Tags · Saga' })).toBeInTheDocument(),
+  )
+  expect(screen.getByLabelText('New tag name')).toBeInTheDocument()
+})
+
 it('does not fetch issues before the Issues section expands', async () => {
   // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({

@@ -11,7 +11,8 @@ import {
 } from '../services/api-tags'
 import { queryKeys } from '../query/queryKeys'
 import { tagErrorMessage } from '../components/Tags/tagErrors'
-import { sourceRoute, TagChips } from '../components/Tags/TagChips'
+import { TagChips } from '../components/Tags/TagChips'
+import { sourceRoute } from '../components/Tags/sourceNavigation'
 import { sourceLabel } from '../components/Tags/sourceLabels'
 import type { EffectiveTagsResponse } from '../services/api-tags'
 
@@ -220,11 +221,11 @@ describe('tag chips (issue #3032)', () => {
     const sources = screen.getByRole('list', { name: /sources for horror/i })
     expect(within(sources).getByRole('link', { name: /b\.p\.r\.d\./i })).toHaveAttribute(
       'href',
-      '/thread/3',
+      '/thread/3?tagEditor=thread',
     )
     expect(within(sources).getByRole('link', { name: /mignolaverse/i })).toHaveAttribute(
       'href',
-      '/continuity-plans/9',
+      '/continuity-plans/9?tagEditor=plan',
     )
   })
 
@@ -425,8 +426,8 @@ describe('inheritance source labels (issues #3431, #3557)', () => {
   })
 })
 
-describe('inheritance source self-links (issue #3428, #3557)', () => {
-  it('renders a source pointing at the current page as text, never a dead link', async () => {
+describe('inheritance source self-links (issue #3428, #3557, #4332)', () => {
+  it('gives a source pointing at the current page an editor-opening effect', async () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter initialEntries={['/thread/3']}>
@@ -439,14 +440,16 @@ describe('inheritance source self-links (issue #3428, #3557)', () => {
     )
 
     const sources = screen.getByRole('list', { name: /sources for horror/i })
-    // The issue editor was opened from thread 3, so navigating "to" that
-    // thread would have no visible effect.
-    expect(within(sources).getByText('Thread: B.P.R.D.')).toBeInTheDocument()
-    expect(within(sources).queryByRole('link', { name: /thread: b\.p\.r\.d\./i })).toBeNull()
-    // Genuine other-object sources still navigate.
+    // The issue editor was opened from thread 3, so a plain `/thread/3` link
+    // would be a no-op. The source stays navigable and opens that thread's tag
+    // editor, where the inherited assignment can actually be edited.
     expect(
-      within(sources).getByRole('link', { name: /reading plan: mignolaverse/i }),
-    ).toHaveAttribute('href', '/continuity-plans/9')
+      within(sources).getByRole('link', { name: /edit tags on thread: b\.p\.r\.d\./i }),
+    ).toHaveAttribute('href', '/thread/3?tagEditor=thread')
+    // Genuine other-object sources navigate too, with their own editor open.
+    expect(
+      within(sources).getByRole('link', { name: /open reading plan: mignolaverse/i }),
+    ).toHaveAttribute('href', '/continuity-plans/9?tagEditor=plan')
   })
 
   it('keeps the thread source a link off that thread page', async () => {
@@ -463,9 +466,9 @@ describe('inheritance source self-links (issue #3428, #3557)', () => {
 
     expect(
       within(screen.getByRole('list', { name: /sources for horror/i })).getByRole('link', {
-        name: /thread: b\.p\.r\.d\./i,
+        name: /open thread: b\.p\.r\.d\./i,
       }),
-    ).toHaveAttribute('href', '/thread/3')
+    ).toHaveAttribute('href', '/thread/3?tagEditor=thread')
   })
 })
 

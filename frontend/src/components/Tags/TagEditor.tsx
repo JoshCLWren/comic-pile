@@ -23,7 +23,7 @@ import {
   type Tag,
   type TagTargetType,
 } from '../../services/api-tags'
-import { TagChips } from './TagChips'
+import { TagChips, InheritanceSources } from './TagChips'
 import { tagErrorMessage } from './tagErrors'
 
 export interface TagEditorProps {
@@ -152,6 +152,12 @@ export function TagEditor({
   const [manageName, setManageName] = useState('')
   const [manageColor, setManageColor] = useState('')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  // Picker rows whose inheritance sources are expanded. The sources are real
+  // links to the object that owns the assignment (issue #4332), so a reader
+  // told to "open a source to edit them" can actually follow one.
+  const [expandedPickerSourcesTagId, setExpandedPickerSourcesTagId] = useState<
+    number | null
+  >(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
 
@@ -172,6 +178,17 @@ export function TagEditor({
     (effective.data?.effective_tags ?? [])
       .filter((entry) => !entry.direct)
       .map((entry) => [entry.tag.id, entry.sources]),
+  )
+  /**
+   * True when any effective tag has a source beyond this target. Only then is
+   * the "open a source to edit them" guidance truthful and useful; a Thread
+   * editor (threads have no parents) must not advertise a source section that
+   * cannot exist (issue #4332).
+   */
+  const hasInheritanceSources = (effective.data?.effective_tags ?? []).some((entry) =>
+    entry.sources.some(
+      (source) => source.target_type !== targetType || source.target_id !== targetId,
+    ),
   )
   const targetNoun =
     targetType === 'ContinuityPlan' ? 'reading plan' : targetType.toLowerCase()
@@ -551,11 +568,14 @@ export function TagEditor({
               canRemoveTag={(tag) => tag.scope === 'private' || !!isAdmin}
               onRemoveDirect={(tag) => void handleRemove(tag)}
               onRetry={() => void effective.refetch()}
+              onSourceNavigate={onClose}
             />
           </div>
-          <p className="mt-1 text-xs text-[var(--theme-text-dim)]">
-            Inherited tags are read-only here — open a source to edit them.
-          </p>
+          {hasInheritanceSources && (
+            <p className="mt-1 text-xs text-[var(--theme-text-dim)]">
+              Inherited tags are read-only here — open a source to edit them.
+            </p>
+          )}
         </section>
 
         <section aria-label="Add an existing tag" className="min-w-0">
@@ -613,15 +633,27 @@ export function TagEditor({
                             Added
                           </span>
                         ) : inheritedFrom ? (
-                          // Already effective through inheritance (issue #3426):
-                          // annotated, and not offered as a plain Add so the
-                          // viewer cannot silently double-tag with it.
-                          <span
-                            className="shrink-0 text-[11px] text-[var(--theme-text-dim)]"
+                          // Already effective through inheritance (issues
+                          // #3426, #4332): annotated, never offered as a plain
+                          // Add so the viewer cannot silently double-tag, and
+                          // the annotation discloses the real source links
+                          // instead of being inert text.
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedPickerSourcesTagId((current) =>
+                                current === tag.id ? null : tag.id,
+                              )
+                            }
+                            aria-expanded={expandedPickerSourcesTagId === tag.id}
+                            aria-label={`${
+                              expandedPickerSourcesTagId === tag.id ? 'Hide' : 'Show'
+                            } inheritance sources for tag ${tag.name}`}
                             title={`Inherited from ${formatSourceNames(inheritedFrom)}`}
+                            className="shrink-0 font-semibold text-[11px] text-[var(--theme-text-dim)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                           >
                             Inherited
-                          </span>
+                          </button>
                         ) : (
                           <button
                             type="button"
@@ -643,6 +675,13 @@ export function TagEditor({
                           </button>
                         )}
                       </span>
+                      {inheritedFrom && expandedPickerSourcesTagId === tag.id && (
+                        <InheritanceSources
+                          tagName={tag.name}
+                          sources={inheritedFrom}
+                          onNavigate={onClose}
+                        />
+                      )}
                     </li>
                   )
                 })}
