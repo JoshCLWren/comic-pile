@@ -41,10 +41,21 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
             db.add_all([owner, stranger])
             await db.flush()
             t = Thread(user_id=owner.id, title="Known Series", format="Comic",
-                       queue_position=1, issues_remaining=1, total_issues=2)
+                       queue_position=1, issues_remaining=1, total_issues=2,
+                       last_activity_at=now-timedelta(days=8))
+            stale_other = Thread(user_id=owner.id, title="Other stale series", format="Comic",
+                                 queue_position=2, issues_remaining=1,
+                                 last_activity_at=now-timedelta(days=9))
+            stale_snoozed = Thread(user_id=owner.id, title="Snoozed stale series", format="Comic",
+                                   queue_position=3, issues_remaining=1,
+                                   last_activity_at=now-timedelta(days=10))
+            stale_skipped = Thread(user_id=owner.id, title="Skipped stale series", format="Comic",
+                                   queue_position=4, issues_remaining=1,
+                                   last_activity_at=now-timedelta(days=10))
             foreign = Thread(user_id=stranger.id, title="Private",
-                             format="Comic", queue_position=1, issues_remaining=1)
-            db.add_all([t, foreign])
+                             format="Comic", queue_position=1, issues_remaining=1,
+                             last_activity_at=now-timedelta(days=10))
+            db.add_all([t, foreign, stale_other, stale_snoozed, stale_skipped])
             await db.flush()
             read = Issue(thread_id=t.id, issue_number="1", position=1,
                          status="read", read_at=now-timedelta(minutes=10))
@@ -52,6 +63,8 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
             foreign_issue = Issue(thread_id=foreign.id, issue_number="1",
                                   position=1, status="unread")
             db.add_all([read, next_issue, foreign_issue])
+            for stale in (stale_other, stale_snoozed, stale_skipped):
+                db.add(Issue(thread_id=stale.id, issue_number="1", position=1, status="unread"))
             await db.flush()
             t.next_unread_issue_id = next_issue.id
             external = ExternalIdentity(
@@ -84,6 +97,7 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
                 pending_thread_updated_at=now-timedelta(minutes=2),
                 bandwidth_source="manual",active_bandwidth="balanced",
                 predicted_bandwidth="light",
+                snoozed_thread_ids=[stale_snoozed.id], skipped_thread_ids=[stale_skipped.id],
             )
             db.add(session)
             await db.flush()
@@ -123,7 +137,10 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         assert body["active_thread"]["tags"][0]["name"] == "Favorites"
         assert body["last_rolled_result"] == 3
         assert body["timezone"] == "America/Chicago"
-        assert len(body["rollable"]) == 1
+        assert len(body["rollable"]) == 2
+        assert body["stale_thread_count"] == 2
+        assert body["stale_thread"]["id"] in {t.id, stale_other.id}
+        assert body["stale_thread"]["id"] not in {foreign_id, stale_snoozed.id, stale_skipped.id}
         candidate = body["rollable"][0]
         assert candidate["thread"]["id"] == t.id
         assert candidate["thread"]["id"] != foreign_id

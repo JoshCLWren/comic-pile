@@ -183,6 +183,7 @@ dependencies = [
  "jsonwebtoken",
  "native-tls",
  "postgres-native-tls",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
