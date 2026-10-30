@@ -7,6 +7,8 @@ These assertions deliberately do not require an authenticated Rust fixture.
 import json
 from pathlib import Path
 
+from fastapi.routing import APIRoute
+
 from app.main import app
 
 
@@ -22,7 +24,9 @@ def test_python_exposes_no_roll_bootstrap_get_handlers() -> None:
     matches = [
         route.path
         for route in app.routes
-        if route.path in BOOTSTRAP_PATHS and "GET" in getattr(route, "methods", set())
+        if isinstance(route, APIRoute)
+        and route.path in BOOTSTRAP_PATHS
+        and "GET" in route.methods
     ]
     assert matches == []
     paths = app.openapi()["paths"]
