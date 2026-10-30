@@ -15,6 +15,8 @@ interface SeriesSkipGroup {
   /** Durable series identity; same-named volumes stay separate. */
   threadId: number
   seriesName: string
+  /** Reader-facing label, disambiguated when two volumes share a name. */
+  label: string
   entryCount: number
   skippedCount: number
 }
@@ -24,6 +26,11 @@ interface SeriesSkipGroup {
  *
  * Reader order stays untouched: the ordered issue list remains authoritative,
  * and a series choice only writes the existing per-issue skip intent.
+ *
+ * Reader-owned titles can collide because two volumes may share a series name.
+ * Colliding names get the same readable `(run 1)`, `(run 2)`, ... suffix the
+ * CBL naming convention uses, so the visible label and the checkbox name always
+ * identify one volume instead of two identical controls.
  *
  * @param entries - Every entry currently in the draft.
  * @returns One group per series in first-appearance order.
@@ -35,12 +42,28 @@ function groupBySeries(entries: CustomCBLEntry[]): SeriesSkipGroup[] {
     if (existing) existing.push(entry)
     else groups.set(entry.thread_id, [entry])
   }
-  return Array.from(groups.entries()).map(([threadId, seriesEntries]) => ({
-    threadId,
-    seriesName: seriesEntries[0]!.series_name,
-    entryCount: seriesEntries.length,
-    skippedCount: seriesEntries.filter((entry) => entry.skipped).length,
-  }))
+  const nameCounts = new Map<string, number>()
+  for (const seriesEntries of groups.values()) {
+    const seriesName = seriesEntries[0]!.series_name
+    nameCounts.set(seriesName, (nameCounts.get(seriesName) ?? 0) + 1)
+  }
+  const runsByName = new Map<string, number>()
+  return Array.from(groups.entries()).map(([threadId, seriesEntries]) => {
+    const seriesName = seriesEntries[0]!.series_name
+    let label = seriesName
+    if ((nameCounts.get(seriesName) ?? 0) > 1) {
+      const run = (runsByName.get(seriesName) ?? 0) + 1
+      runsByName.set(seriesName, run)
+      label = `${seriesName} (run ${run})`
+    }
+    return {
+      threadId,
+      seriesName,
+      label,
+      entryCount: seriesEntries.length,
+      skippedCount: seriesEntries.filter((entry) => entry.skipped).length,
+    }
+  })
 }
 
 /**
@@ -90,11 +113,11 @@ export default function ReadingListSeriesSkipControls({
                 checked={group.skippedCount === group.entryCount}
                 indeterminate={group.skippedCount > 0 && group.skippedCount < group.entryCount}
                 disabled={disabled}
-                label={`Skip ${group.seriesName} series in this list`}
+                label={`Skip ${group.label} series in this list`}
                 onChange={(skip) => onSeriesSkipChange(group.threadId, skip)}
               />
               <span className="min-w-0 truncate text-sm font-semibold text-[var(--theme-text-primary)]">
-                {group.seriesName}
+                {group.label}
               </span>
             </div>
             <span className="shrink-0 text-xs text-[var(--theme-text-muted)]">

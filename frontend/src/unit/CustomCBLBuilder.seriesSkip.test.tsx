@@ -57,6 +57,22 @@ const threeIssueList = {
   ],
 }
 
+/**
+ * Two different volumes titled "Starman" plus one unambiguous series.
+ *
+ * Reader-owned titles can collide, so the controls must still identify the
+ * volume each one skips.
+ */
+const sameNameVolumesList = {
+  ...existingList,
+  issue_count: 3,
+  entries: [
+    { ...existingList.entries[0]!, id: 94, position: 0, issue_id: 26370, thread_id: 180, series_name: 'Starman', issue_number: '1' },
+    { ...existingList.entries[0]!, id: 95, position: 1, issue_id: 26371, thread_id: 181, series_name: 'Starman', issue_number: '2' },
+    { ...existingList.entries[1]!, id: 96, position: 2 },
+  ],
+}
+
 describe('saved-list editor series skip controls', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -126,5 +142,32 @@ describe('saved-list editor series skip controls', () => {
         checkpoint_issue_ids: [],
       })
     })
+  })
+
+  it('identifies same-named volumes by run in the label and accessible name', async () => {
+    mocks.get.mockResolvedValue(sameNameVolumesList)
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    await screen.findByText('Starman #1')
+
+    // The ambiguous name alone must not remain as a control.
+    expect(screen.queryByLabelText('Skip Starman series in this list')).not.toBeInTheDocument()
+    const firstRun = screen.getByLabelText('Skip Starman (run 1) series in this list')
+    const secondRun = screen.getByLabelText('Skip Starman (run 2) series in this list')
+    expect(screen.getByText('Starman (run 1)')).toBeInTheDocument()
+    expect(screen.getByText('Starman (run 2)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Skip All-Star Comics series in this list')).toBeInTheDocument()
+
+    // Skipping the second volume never touches the first volume's issue.
+    fireEvent.click(secondRun)
+    expect(screen.getByLabelText('Skip Starman #2 in this list')).toBeChecked()
+    expect(screen.getByLabelText('Skip Starman #1 in this list')).not.toBeChecked()
+    expect(firstRun).not.toBeChecked()
+    expect(secondRun).toBeChecked()
+
+    fireEvent.click(firstRun)
+    expect(screen.getByLabelText('Skip Starman #1 in this list')).toBeChecked()
+    expect(secondRun).toBeChecked()
   })
 })
