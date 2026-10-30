@@ -7,7 +7,7 @@ use crate::{
 };
 use axum::{extract::State, http::StatusCode, Json};
 use deadpool_postgres::Object;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
@@ -93,7 +93,7 @@ struct SnoozeCorrectionInfo {
 }
 
 #[derive(Debug, Serialize)]
-struct SessionResponse {
+pub struct SessionResponse {
     id: i32,
     started_at: String,
     ended_at: Option<String>,
@@ -124,8 +124,11 @@ struct SessionResponse {
 struct Pending(Option<Object>);
 impl Drop for Pending {
     fn drop(&mut self) {
+        // Let `Object`'s own Drop return the connection to the pool.
+        // Do not call a non-existent `Object::take`; just take the option out
+        // so the inner `Object` is dropped here.
         if let Some(conn) = self.0.take() {
-            drop(Object::take(conn));
+            drop(conn);
         }
     }
 }
@@ -195,7 +198,7 @@ async fn mutate(
         .await
         .map_err(db::query_error)?
         .get(0);
-    let mut session_json: Value = serde_json::from_str(&session_row).map_err(|_| internal())?;
+    let session_json: Value = serde_json::from_str(&session_row).map_err(|_| internal())?;
 
     // Determine new die
     let manual_die: Option<i32> = session_json.get("manual_die").and_then(|v| v.as_i64()).map(|v| v as i32);
@@ -303,7 +306,7 @@ async fn mutate(
         let rows = tx
             .query(
                 "SELECT id, title FROM threads WHERE id = ANY($1::int[]) AND user_id = $2",
-                &[&updated_snoozed as &[i32], &user.id()],
+                &[&&updated_snoozed[..], &user.id()],
             )
             .await
             .map_err(db::query_error)?;
@@ -324,7 +327,7 @@ async fn mutate(
         let rows = tx
             .query(
                 "SELECT id, title FROM threads WHERE id = ANY($1::int[]) AND user_id = $2",
-                &[&skipped_ids as &[i32], &user.id()],
+                &[&&skipped_ids[..], &user.id()],
             )
             .await
             .map_err(db::query_error)?;
