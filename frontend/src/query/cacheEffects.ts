@@ -5,6 +5,7 @@ import type { IssueListResponse } from '../services/api-issues'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
+import type { RateResponsePayload } from '../types'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
 import { isTransientQueryFailure } from './outageRetryBudget'
@@ -100,6 +101,9 @@ export async function applyRatedThreadCache(
 ): Promise<void> {
   client.setQueryData(queryKeys.thread.detail(thread.id), thread)
   client.setQueryData(queryKeys.thread.summary(thread.id), thread)
+
+  const lastRead = (thread as RateResponsePayload).roll_reconciliation?.last_read ?? null
+  client.setQueryData(queryKeys.roll.lastRead(), lastRead)
 
   await Promise.all([
     client.invalidateQueries({
