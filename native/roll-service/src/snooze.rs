@@ -223,17 +223,16 @@ async fn mutate(
     // Load thread for active info
     let thread_row = tx
         .query_opt(
-            "SELECT id, title, format, issues_remaining, queue_position FROM threads WHERE id = $1 AND user_id = $2",
+            "SELECT id, title, format, issues_remaining FROM threads WHERE id = $1 AND user_id = $2",
             &[&pending_thread_id, &user.id()],
         )
         .await
         .map_err(db::query_error)?;
-    let (thread_title, thread_format, thread_issues, thread_queue) = if let Some(row) = thread_row {
+    let (thread_title, thread_format, thread_issues) = if let Some(row) = thread_row {
         (
             row.get::<_, String>(1),
             row.get::<_, String>(2),
             row.get::<_, i32>(3),
-            row.get::<_, i32>(4),
         )
     } else {
         // Thread missing
@@ -243,6 +242,19 @@ async fn mutate(
             "Pending thread not found",
         ));
     };
+    // Dense display position matching legacy dense_positions.
+    let pos_rows = tx
+        .query(
+            "SELECT id FROM threads WHERE user_id = $1 AND status = 'active' ORDER BY is_blocked, queue_position, id",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let thread_queue = pos_rows
+        .iter()
+        .position(|r| r.get::<_, i32>(0) == pending_thread_id)
+        .map(|i| i as i32 + 1)
+        .unwrap_or(0);
 
     // Find last roll result
     let roll_result: Option<i32> = tx
@@ -269,39 +281,102 @@ async fn mutate(
         updated_snoozed.push(pending_thread_id);
     }
 
-    // Determine bandwidth correction (stub: no change)
-    let active_bandwidth_str = session_json
+    // Original bandwidth state before correction.
+    let original_active_bw = session_json
         .get("active_bandwidth")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-    let bandwidth_confidence = session_json
+        .unwrap_or("balanced")
+        .to_string();
+    let original_confidence = session_json
         .get("bandwidth_confidence")
-        .and_then(|v| v.as_f64());
-    let predicted_bandwidth_str = session_json
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.5);
+    let original_predicted_bw = session_json
         .get("predicted_bandwidth")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| original_active_bw.clone());
+
+    // Recent snooze evidence for consecutive count + last direction.
+    let recent_rows = tx
+        .query(
+            "SELECT die, die_after FROM events WHERE session_id = $1 AND type = 'snooze' ORDER BY timestamp DESC, id DESC LIMIT 10",
+            &[&session.id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let consecutive_snoozes = recent_rows.len() as i32 + 1;
+    let last_snooze_direction: Option<String> = if recent_rows.is_empty() {
+        None
+    } else {
+        let prev_die: i32 = recent_rows[0].try_get::<_, Option<i32>>(0).ok().flatten().unwrap_or(6);
+        let prev_after: i32 = recent_rows[0].try_get::<_, Option<i32>>(1).ok().flatten().unwrap_or(8);
+        if prev_after > prev_die {
+            Some("heavier".to_string())
+        } else if prev_after < prev_die {
+            Some("lighter".to_string())
+        } else {
+            None
+        }
+    };
+
+    // Candidate effort defaults to balanced (no effort model yet).
+    let candidate_effort = "balanced";
+
+    let correction_result = compute_snooze_correction(
+        &original_active_bw,
+        original_confidence,
+        &original_predicted_bw,
+        candidate_effort,
+        consecutive_snoozes,
+        last_snooze_direction.as_deref(),
+    );
+
+    let corrected_active_bw = correction_result.active_bandwidth.clone();
+    let corrected_confidence = correction_result.active_confidence;
+    let corrected_predicted_bw = correction_result.predicted_bandwidth.clone();
 
     let correction = SnoozeCorrectionInfo {
-        bandwidth_changed: false,
-        active_bandwidth: active_bandwidth_str.clone(),
-        active_confidence: bandwidth_confidence,
-        predicted_bandwidth: predicted_bandwidth_str.clone(),
-        reason_code: "no_correction",
-        suggest_clarification: false,
+        bandwidth_changed: correction_result.bandwidth_changed,
+        active_bandwidth: Some(corrected_active_bw.clone()),
+        active_confidence: Some(corrected_confidence),
+        predicted_bandwidth: Some(corrected_predicted_bw.clone()),
+        reason_code: correction_result.reason_code,
+        suggest_clarification: correction_result.suggest_clarification,
     };
+
+    // Values used for response bandwidth state.
+    let active_bandwidth_str = Some(corrected_active_bw.clone());
+    let bandwidth_confidence = Some(corrected_confidence);
+    let predicted_bandwidth_str = Some(corrected_predicted_bw.clone());
+
+    // Source roll event id
+    let source_roll_event_id: Option<i32> = tx
+        .query_opt(
+            "SELECT id FROM events WHERE session_id = $1 AND type = 'roll' AND selected_thread_id = $2 ORDER BY timestamp DESC, id DESC LIMIT 1",
+            &[&session.id, &pending_thread_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .map(|r| r.get(0));
 
     // Record snooze event
     let now = now_seconds()?;
+    // confidence_before captured before mutation
+    let confidence_before = original_confidence;
     let context = json!({
-        "bandwidth_before": active_bandwidth_str,
-        "bandwidth_after": active_bandwidth_str,
+        "bandwidth_before": original_active_bw,
+        "bandwidth_after": corrected_active_bw,
+        "confidence_before": confidence_before,
+        "confidence_after": corrected_confidence,
         "bandwidth_source": "snooze",
-        "reason_code": "no_correction",
+        "reason_code": correction_result.reason_code,
+        "consecutive_snoozes": consecutive_snoozes,
+        "suggest_clarification": correction_result.suggest_clarification,
     });
     tx.execute(
-        "INSERT INTO events (type, timestamp, session_id, thread_id, die, die_after, context) VALUES ('snooze', to_timestamp($1), $2, $3, $4, $5, $6::json)",
-        &[&now, &session.id, &pending_thread_id, &current_die, &new_die, &context.to_string()],
+        "INSERT INTO events (type, timestamp, session_id, thread_id, die, die_after, context, source_roll_event_id) VALUES ('snooze', to_timestamp($1), $2, $3, $4, $5, $6::json, $7)",
+        &[&now, &session.id, &pending_thread_id, &current_die, &new_die, &context.to_string(), &source_roll_event_id],
     )
     .await
     .map_err(db::query_error)?;
@@ -309,8 +384,8 @@ async fn mutate(
     // Update session
     let snoozed_json = serde_json::to_string(&updated_snoozed).map_err(|_| internal())?;
     tx.execute(
-        "UPDATE sessions SET snoozed_thread_ids = $2::json, pending_thread_id = NULL, pending_thread_updated_at = NULL WHERE id = $1 AND user_id = $3",
-        &[&session.id, &snoozed_json, &user.id()],
+        "UPDATE sessions SET snoozed_thread_ids = $2::json, pending_thread_id = NULL, pending_thread_updated_at = NULL, active_bandwidth = $4, bandwidth_confidence = $5, bandwidth_source = 'snooze', predicted_bandwidth = COALESCE(predicted_bandwidth, $6) WHERE id = $1 AND user_id = $3",
+        &[&session.id, &snoozed_json, &user.id(), &corrected_active_bw, &corrected_confidence, &original_active_bw],
     )
     .await
     .map_err(db::query_error)?;
@@ -535,5 +610,150 @@ fn normalize_format(value: &str) -> String {
         "comic" | "comics" => "Comic".into(),
         "digital" => "Digital".into(),
         _ => v.into(),
+    }
+}
+
+struct CorrectionResult {
+    active_bandwidth: String,
+    active_confidence: f64,
+    bandwidth_changed: bool,
+    reason_code: &'static str,
+    suggest_clarification: bool,
+    predicted_bandwidth: String,
+}
+
+fn bandwidth_index(level: &str) -> i32 {
+    match level {
+        "light" => 0,
+        "balanced" => 1,
+        "deep" => 2,
+        _ => 1,
+    }
+}
+
+fn compute_snooze_correction(
+    current_bandwidth: &str,
+    current_confidence: f64,
+    predicted_bandwidth: &str,
+    candidate_effort_level: &str,
+    consecutive_snoozes: i32,
+    last_snooze_direction: Option<&str>,
+) -> CorrectionResult {
+    let current_idx = bandwidth_index(current_bandwidth);
+    let candidate_idx = bandwidth_index(candidate_effort_level);
+
+    // Contradictory snooze pattern
+    if consecutive_snoozes >= 3 && last_snooze_direction.is_some() {
+        let dir = last_snooze_direction.unwrap();
+        if dir != "heavier" && candidate_idx >= current_idx {
+            return CorrectionResult {
+                active_bandwidth: current_bandwidth.to_string(),
+                active_confidence: (current_confidence - 0.15).max(0.0),
+                bandwidth_changed: false,
+                reason_code: "clarification_needed",
+                suggest_clarification: true,
+                predicted_bandwidth: predicted_bandwidth.to_string(),
+            };
+        }
+        if dir != "lighter" && candidate_idx <= current_idx {
+            return CorrectionResult {
+                active_bandwidth: current_bandwidth.to_string(),
+                active_confidence: (current_confidence - 0.15).max(0.0),
+                bandwidth_changed: false,
+                reason_code: "clarification_needed",
+                suggest_clarification: true,
+                predicted_bandwidth: predicted_bandwidth.to_string(),
+            };
+        }
+    }
+
+    // Heavy candidate snooze: shift toward lighter bandwidth
+    if candidate_idx > current_idx {
+        let (new_bandwidth, new_confidence) = if current_bandwidth == "balanced" {
+            ("light".to_string(), (current_confidence + 0.1).min(1.0))
+        } else if current_bandwidth == "deep" {
+            ("balanced".to_string(), (current_confidence + 0.05).min(1.0))
+        } else {
+            (current_bandwidth.to_string(), (current_confidence - 0.1).max(0.0))
+        };
+        if new_bandwidth != current_bandwidth {
+            return CorrectionResult {
+                active_bandwidth: new_bandwidth,
+                active_confidence: new_confidence,
+                bandwidth_changed: true,
+                reason_code: "heavy_snooze_shift",
+                suggest_clarification: false,
+                predicted_bandwidth: predicted_bandwidth.to_string(),
+            };
+        }
+        return CorrectionResult {
+            active_bandwidth: new_bandwidth,
+            active_confidence: new_confidence,
+            bandwidth_changed: false,
+            reason_code: "light_snooze_deflate",
+            suggest_clarification: false,
+            predicted_bandwidth: predicted_bandwidth.to_string(),
+        };
+    }
+
+    // Light candidate snooze: degrade confidence or shift toward deeper
+    if candidate_idx < current_idx {
+        let (new_bandwidth, new_confidence) = if current_bandwidth == "balanced" {
+            ("deep".to_string(), (current_confidence + 0.05).min(1.0))
+        } else if current_bandwidth == "light" {
+            ("balanced".to_string(), (current_confidence + 0.05).min(1.0))
+        } else {
+            (current_bandwidth.to_string(), (current_confidence - 0.1).max(0.0))
+        };
+        if new_bandwidth != current_bandwidth {
+            return CorrectionResult {
+                active_bandwidth: new_bandwidth,
+                active_confidence: new_confidence,
+                bandwidth_changed: true,
+                reason_code: "light_snooze_deflate",
+                suggest_clarification: false,
+                predicted_bandwidth: predicted_bandwidth.to_string(),
+            };
+        }
+        return CorrectionResult {
+            active_bandwidth: new_bandwidth,
+            active_confidence: new_confidence,
+            bandwidth_changed: false,
+            reason_code: "light_snooze_deflate",
+            suggest_clarification: false,
+            predicted_bandwidth: predicted_bandwidth.to_string(),
+        };
+    }
+
+    // Same-level candidate
+    CorrectionResult {
+        active_bandwidth: current_bandwidth.to_string(),
+        active_confidence: (current_confidence - 0.05).max(0.0),
+        bandwidth_changed: false,
+        reason_code: "confidence_degrade",
+        suggest_clarification: false,
+        predicted_bandwidth: predicted_bandwidth.to_string(),
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn correction_heavy_candidate_shifts_lighter() {
+        let r = compute_snooze_correction("balanced", 0.5, "balanced", "deep", 1, None);
+        assert!(r.bandwidth_changed);
+        assert_eq!(r.active_bandwidth, "light");
+        assert_eq!(r.reason_code, "heavy_snooze_shift");
+    }
+
+    #[test]
+    fn correction_no_change_stays_no_correction_for_same_level() {
+        // same level candidate degrades confidence
+        let r = compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 1, None);
+        assert!(!r.bandwidth_changed);
+        assert_eq!(r.reason_code, "confidence_degrade");
     }
 }
