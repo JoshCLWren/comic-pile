@@ -5,6 +5,8 @@ import type { IssueListResponse } from '../services/api-issues'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
+import type { RateResponsePayload } from '../types'
+import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
 import { isTransientQueryFailure } from './outageRetryBudget'
@@ -96,10 +98,23 @@ export function optimisticallyUpdateThreadCache(
 
 export async function applyRatedThreadCache(
   client: QueryClient,
-  thread: Thread,
+  thread: RateResponsePayload,
 ): Promise<void> {
   client.setQueryData(queryKeys.thread.detail(thread.id), thread)
   client.setQueryData(queryKeys.thread.summary(thread.id), thread)
+
+  // #2720: seed the session last-read projection from the committed rate
+  // response before the authoritative bootstrap refresh lands. Only write when
+  // the server actually sent a record, so a response without reconciliation
+  // data cannot clobber a newer last read already in the cache.
+  const lastRead = thread.roll_reconciliation?.last_read
+  if (lastRead) {
+    client.setQueryData(queryKeys.roll.lastRead(), thread)
+    const bootstrap = client.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap())
+    if (bootstrap) {
+      client.setQueryData(queryKeys.roll.bootstrap(), { ...bootstrap, last_read: lastRead })
+    }
+  }
 
   await Promise.all([
     client.invalidateQueries({

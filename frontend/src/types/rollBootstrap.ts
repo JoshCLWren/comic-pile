@@ -2,6 +2,7 @@ import type {
   BlockingDependency,
   ReadingBandwidth,
   ReadingIntent,
+  RollLastReadPayload,
   SessionMode,
   SessionThread,
 } from './index'
@@ -183,6 +184,12 @@ export interface RollBootstrapResponse {
   stale_thread_count: number
   stale_thread: RollBootstrapThread | null
   timezone?: string | null
+  /**
+   * Session last-read projection (#2720). The retained v1 bootstrap does not
+   * send it, so the field stays optional; the dedicated `roll.lastRead` cache
+   * seeded by a rate response is the authoritative client-side fallback.
+   */
+  last_read?: RollLastReadPayload | null
 
   // Issue #3125: exclusion transparency — every series not in the pool is
   // explained so the user can see why options vanish.

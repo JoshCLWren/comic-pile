@@ -175,6 +175,16 @@ export const queryKeys = {
     all: ['roll'] as const,
     bootstrap: () => ['roll', 'bootstrap'] as const,
     /**
+     * Canonical session-scoped last-read cache (issue #2720). A successful
+     * rate seeds it synchronously from the mutation response's
+     * `roll_reconciliation.last_read` — before the authoritative bootstrap
+     * refresh lands — and a later rating replaces it in place. It is a
+     * cache-only projection of the v2 `last_read` contract, so a normal v2
+     * bootstrap invalidation may refresh the authoritative value afterward
+     * without clobbering a newer rate.
+     */
+    lastRead: () => ['roll', 'last-read'] as const,
+    /**
      * Canonical key for one paginated Roll exclusion category (issue #3330).
      * The offset cursor lives in `pageParam`, never in the key, so loading the
      * next page of blocked or out-of-pool series appends instead of resetting.
