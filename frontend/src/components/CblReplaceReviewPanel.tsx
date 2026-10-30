@@ -52,6 +52,11 @@ interface SeriesGroup {
   state: 'checked' | 'unchecked' | 'indeterminate'
 }
 
+interface SplitSeriesGroupsResult {
+  groups: SeriesGroup[]
+  manual: ReplaceEntry[]
+}
+
 interface ReplaceGraphImpact {
   /** Dependencies (`waits on` edges) in the saved list. */
   beforeEdges: number
@@ -152,7 +157,7 @@ function graphImpact(
 function splitSeriesGroups(
   after: ReplaceEntry[],
   selected: Set<number>,
-): { groups: SeriesGroup[]; manual: ReplaceEntry[] } {
+) {
   const groups = new Map<string, ReplaceEntry[]>()
   const manual: ReplaceEntry[] = []
 
@@ -166,6 +171,7 @@ function splitSeriesGroups(
     }
   }
 
+  // SAFETY: The returned object matches the SplitSeriesGroupsResult structure exactly
   return {
     groups: Array.from(groups.entries()).map(([id, entries]) => {
       const first = entries[0]!
@@ -180,7 +186,7 @@ function splitSeriesGroups(
       return { id, label, entries, selectedCount, state }
     }),
     manual,
-  }
+  } satisfies SplitSeriesGroupsResult
 }
 
 /**
