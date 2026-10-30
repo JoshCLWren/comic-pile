@@ -175,58 +175,45 @@ async fn bound_request(
     response
 }
 
-/// Extract JWT token from Authorization header
-fn extract_jwt_token(headers: &http::HeaderMap) -> Result<String, ApiError> {
+/// Extract Bearer token from the Authorization header.
+fn extract_jwt_token(headers: &axum::http::HeaderMap) -> Result<String, ApiError> {
     let auth_header = headers
         .get("authorization")
         .ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "Missing authorization header"))?;
-    
+
     let auth_str = auth_header
         .to_str()
         .map_err(|_| ApiError(StatusCode::UNAUTHORIZED, "Invalid authorization header"))?;
-    
-    if !auth_str.starts_with("Bearer ") {
-        return Err(ApiError(StatusCode::UNAUTHORIZED, "Invalid authorization header format"));
-    }
-    
-    Ok(auth_str[7..].to_string())
-}
 
-/// Parse JWT token to extract user ID
-fn parse_jwt_token(token: &str, jwt_secret: &JwtSecret) -> Result<i32, ApiError> {
-    let validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
-    let token_data = jsonwebtoken::decode::<serde_json::Value>(token, &jwt_secret.0, &validation)
-        .map_err(|_| ApiError(StatusCode::UNAUTHORIZED, "Invalid token"))?;
-    
-    let user_id = token_data
-        .claims
-        .get("sub")
-        .and_then(|sub| sub.as_i64())
-        .ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "Invalid token payload"))?;
-    
-    Ok(user_id as i32)
+    if !auth_str.starts_with("Bearer ") {
+        return Err(ApiError(
+            StatusCode::UNAUTHORIZED,
+            "Invalid authorization header format",
+        ));
+    }
+
+    Ok(auth_str[7..].to_string())
 }
 
 /// Authenticated POST roll endpoint at v1 exact contract.
 async fn roll_v1_post(State(state): State<Arc<AppState>>, request: Request) -> Result<Response, ApiError> {
-    // Extract JWT token from Authorization header
+    // Reuse the shared auth path: signature, revocation, and password-epoch
+    // checks are identical to every other native Roll endpoint.
     let token = extract_jwt_token(request.headers())?;
-    
-    // Parse JWT token to get user ID
-    let user_id = parse_jwt_token(&token, &state.jwt_secret)?;
-    
+    let _user = crate::auth::authenticate(&state, &token).await?;
+
     // Extract the request body
     let bytes = axum::body::to_bytes(request.into_body(), 1024 * 1024)
         .await
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "Failed to read request body"))?;
-    
-    let roll_request: RollRequest = serde_json::from_slice(&bytes)
+
+    let _roll_request: RollRequest = serde_json::from_slice(&bytes)
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "Invalid request body"))?;
-    
+
     // Get database connection from pool
-    let mut client = state.pool.get().await
+    let _client = state.pool.get().await
         .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database connection failed"))?;
-    
+
     // TODO: Implement actual roll logic
     // This is a placeholder implementation that needs to be replaced with:
     // 1. ✅ JWT token extraction to get user ID
@@ -237,7 +224,7 @@ async fn roll_v1_post(State(state): State<Arc<AppState>>, request: Request) -> R
     // 6. Perform thread selection
     // 7. Create Event and RecommendationContext
     // 8. Build RollResponse
-    
+
     // For now, return a simple success response with the runtime marker
     Ok((
         StatusCode::OK,

@@ -51,6 +51,16 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "/api/v1/roll/",
+      "methods": ["POST"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/roll/",
+      "methods": ["POST"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "/api(?:/.*)?",
       "dest": "/api/index.py"
     },
