@@ -213,6 +213,43 @@ def _resolve_log_level(environment: str) -> int:
     return _default_log_level(environment)
 
 
+class _RequestDiagnosticFormatter(logging.Formatter):
+    """Appends structured diagnostic ``extra`` fields to the log message.
+
+    ``logging.basicConfig`` without a formatter prints only ``%(message)s``,
+    so the ``cpu_time_ms``, ``request_id``, ``database_queries`` and other
+    fields carried through ``extra`` never reach the log text. This formatter
+    appends them so operators can collect the measurements referenced in
+    docs/PRODUCTION_STARTUP_DIAGNOSTICS.md.
+    """
+
+    _DIAGNOSTIC_FIELDS: tuple[str, ...] = (
+        "request_id",
+        "method",
+        "path",
+        "status_code",
+        "process_time_ms",
+        "cpu_time_ms",
+        "database_queries",
+        "database_time_ms",
+        "cold_request",
+        "deployment_id",
+        "event",
+        "startup_duration_ms",
+    )
+
+    def format(self, record: logging.LogRecord) -> str:
+        message = super().format(record)
+        extras = [
+            f"{field}={getattr(record, field)!r}"
+            for field in self._DIAGNOSTIC_FIELDS
+            if getattr(record, field, None) is not None
+        ]
+        if extras:
+            message = f"{message} [{' '.join(extras)}]"
+        return message
+
+
 def _configure_logging(environment: str) -> None:
     """Configure root logging unless a handler is already installed.
 
@@ -224,7 +261,12 @@ def _configure_logging(environment: str) -> None:
     """
     if logging.getLogger().hasHandlers():
         return
-    logging.basicConfig(level=_resolve_log_level(environment))
+    handler = logging.StreamHandler()
+    handler.setFormatter(_RequestDiagnosticFormatter())
+    logging.basicConfig(
+        level=_resolve_log_level(environment),
+        handlers=[handler],
+    )
 
 
 _db_settings = get_database_settings()
