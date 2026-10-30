@@ -428,6 +428,7 @@ jobs:
       REDIS_URL: redis://redis:6379/0
       PGUSER: postgres
       COVERAGE_FILE: .coverage.${{ matrix.shard }}
+      RUST_SQL_ORACLE_DIR: artifacts/rust-sql-oracle
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
@@ -494,6 +495,14 @@ jobs:
           # coverage-gate job combines every shard and enforces the 90% total.
           pytest $FILES -o addopts="" \
             --cov=comic_pile --cov-branch --cov-report= --cov-fail-under=0
+
+      - name: Upload synthetic Rust port SQL oracle
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-sql-oracle-${{ matrix.shard }}
+          path: artifacts/rust-sql-oracle/*.json
+          if-no-files-found: ignore
 
       - name: Upload shard coverage data
         if: always()

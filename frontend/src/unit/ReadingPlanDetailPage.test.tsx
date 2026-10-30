@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanDetailPage from '../pages/ReadingPlanDetailPage'
 import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-continuity-plans'
 import { tagsApi } from '../services/api-tags'
+import { threadsApi } from '../services/api-threads'
+import { queueApi } from '../services/api-queue'
 import { cast } from '../utils/cast'
 
 vi.mock('../services/api-continuity-plans', async () => {
@@ -19,6 +21,16 @@ vi.mock('../services/api-continuity-plans', async () => {
       getReader: vi.fn(),
     },
   }
+})
+
+vi.mock('../services/api-threads', async () => {
+  const actual = await vi.importActual<typeof import('../services/api-threads')>('../services/api-threads')
+  return { ...actual, threadsApi: { ...actual.threadsApi, setPending: vi.fn() } }
+})
+
+vi.mock('../services/api-queue', async () => {
+  const actual = await vi.importActual<typeof import('../services/api-queue')>('../services/api-queue')
+  return { ...actual, queueApi: { ...actual.queueApi, moveToFront: vi.fn() } }
 })
 
 vi.mock('../services/api-tags', () => ({
@@ -39,6 +51,8 @@ vi.mock('../components/Tags/TagSection', () => ({
 
 const mockGetReader = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.getReader)
 const mockPlanTags = vi.mocked(tagsApi.effectiveForPlan)
+const mockSetPending = vi.mocked(threadsApi.setPending)
+const mockMoveToFront = vi.mocked(queueApi.moveToFront)
 
 function createWrapper() {
   const client = new QueryClient({
@@ -62,6 +76,7 @@ function renderPage(planId = '12') {
         <Route path="/continuity-plans/:id/edit" element={<div>Editor</div>} />
         <Route path="/reading-lists/:id" element={<ReadingListEditorTarget />} />
         <Route path="/thread/:id" element={<div>Thread page</div>} />
+        <Route path="/" element={<div>Roll screen</div>} />
       </Routes>
     </MemoryRouter>,
     { wrapper: createWrapper() },
@@ -194,6 +209,8 @@ const readerView: ReadingPlanReaderView = {
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetReader.mockResolvedValue(readerView)
+  mockSetPending.mockResolvedValue(cast<Awaited<ReturnType<typeof threadsApi.setPending>>>({ thread_id: 4, issue_id: 95 }))
+  mockMoveToFront.mockResolvedValue(cast<Awaited<ReturnType<typeof queueApi.moveToFront>>>(undefined))
   mockPlanTags.mockResolvedValue({
     target_type: 'ContinuityPlan',
     target_id: 12,
@@ -203,6 +220,44 @@ beforeEach(() => {
 })
 
 describe('ReadingPlanDetailPage', () => {
+
+  it('starts the exact eligible issue from the header in Roll, without marking it read', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Read next issue' }))
+    await waitFor(() => expect(mockSetPending).toHaveBeenCalledWith(4, 95))
+    expect(await screen.findByText('Roll screen')).toBeInTheDocument()
+    expect(mockMoveToFront).not.toHaveBeenCalled()
+  })
+
+  it('moves an eligible series to the front without starting a pending roll', async () => {
+    renderPage()
+    const available = await screen.findByTestId('available-now')
+    fireEvent.click(within(available).getByRole('button', { name: 'Move to front' }))
+    await waitFor(() => expect(mockMoveToFront).toHaveBeenCalledWith(4))
+    expect(await within(available).findByRole('button', { name: 'Moved to front' })).toBeInTheDocument()
+    expect(mockSetPending).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
+  })
+
+  it('does not offer direct selection or queue movement on blocked or upcoming issues', async () => {
+    renderPage()
+    const blocked = await screen.findByTestId('blocked-next')
+    expect(within(blocked).queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+    expect(within(blocked).queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 upcoming issues' }))
+    const upcoming = screen.getByTestId('upcoming-material')
+    expect(within(upcoming).queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+    expect(within(upcoming).queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
+  })
+
+  it('shows a stale-frontier error and stays on the plan instead of opening the wrong issue', async () => {
+    mockSetPending.mockRejectedValue(new Error('This issue is no longer next and available. Refresh the reading plan and try again.'))
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Read next issue' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('This issue is no longer next')
+    expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
+  })
+
   it('uses readable source names in issue rows and keeps provenance in details', async () => {
     const source = { ...readerView.sources[0], raw_source_path: 'custom-cbl:1000002', source_path: null, display_name: 'Mignolaverse' }
     mockGetReader.mockResolvedValue({ ...readerView, sources: [source], available_now: readerView.available_now.map((issue) => ({ ...issue, source_paths: [source.raw_source_path] })) })
@@ -289,7 +344,7 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getByText('Marvel/Age of Apocalypse.cbl')).not.toBeVisible()
     fireEvent.click(screen.getByText('Source details'))
     expect(screen.getByText('Marvel/Age of Apocalypse.cbl')).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Continue reading' })).toHaveAttribute('href', '/thread/4')
+    expect(screen.getByRole('button', { name: 'Read next issue' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Edit plan' })).toBeInTheDocument()
     expect(screen.queryByText(/ContinuityRule/i)).not.toBeInTheDocument()
     // Release following is secondary, hidden until explicitly requested.

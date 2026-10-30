@@ -113,8 +113,8 @@ async fn health_and_error_envelopes_work_without_database_checkout() {
         (
             "GET",
             "/api/v2/roll/bootstrap",
-            StatusCode::NOT_FOUND,
-            serde_json::json!({"detail": "Not Found"}),
+            StatusCode::UNAUTHORIZED,
+            serde_json::json!({"detail": "Not authenticated"}),
         ),
         (
             "POST",

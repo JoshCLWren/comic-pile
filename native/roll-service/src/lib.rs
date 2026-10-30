@@ -1,5 +1,13 @@
-//! Standalone native Roll service foundation. Bootstrap remains in Python until parity gates pass.
+//! Native Roll service with authenticated GET bootstrap and owner-scoped PostgreSQL access.
+pub mod auth;
+pub mod bootstrap;
 pub mod config;
+pub mod db;
+pub mod option_inputs;
+pub mod reading_constraints;
+pub mod reading_inputs;
+pub mod reading_session;
+mod session_bandwidth;
 
 use axum::{
     extract::{Request, State},
@@ -97,7 +105,27 @@ struct ErrorBody {
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.0, Json(ErrorBody { detail: self.1 })).into_response()
+        if self.0 == StatusCode::SERVICE_UNAVAILABLE && self.1 == "Database temporarily unavailable"
+        {
+            return (
+                self.0,
+                [("Retry-After", "30")],
+                Json(serde_json::json!({"error": {
+                    "code": "database_unavailable",
+                    "message": "Database temporarily unavailable. Please retry.",
+                    "status": "SERVICE_UNAVAILABLE"
+                }})),
+            )
+                .into_response();
+        }
+        let mut response = (self.0, Json(ErrorBody { detail: self.1 })).into_response();
+        if self.0 == StatusCode::UNAUTHORIZED {
+            response.headers_mut().insert(
+                axum::http::header::WWW_AUTHENTICATE,
+                axum::http::HeaderValue::from_static("Bearer"),
+            );
+        }
+        response
     }
 }
 
@@ -118,13 +146,14 @@ async fn bound_request(
     response
 }
 
-/// Mount health and stable error boundaries only; no partial-success bootstrap route.
+/// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route(
             "/health",
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
         )
+        .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
         .method_not_allowed_fallback(|| async {
             ApiError(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")

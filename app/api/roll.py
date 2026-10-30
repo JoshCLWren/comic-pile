@@ -1107,6 +1107,7 @@ async def roll_v2_bootstrap(
     Returns:
         RollV2BootstrapResponse with v2 contract including rollable and last_read.
     """
+    trace = RollPhaseTrace()
     # Reuse the existing bootstrap logic to get v1 data
     user_id = current_user.id
     current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
@@ -1123,6 +1124,7 @@ async def roll_v2_bootstrap(
         except Exception:
             logger.exception("Failed to update session timezone from browser value %s", timezone)
 
+    trace.mark("session")
     current_session_id = current_session.id
 
     bandwidth_state = build_session_bandwidth_state(
@@ -1136,6 +1138,7 @@ async def roll_v2_bootstrap(
     _, active_thread = await get_session_with_thread_safe(current_session_id, db)
 
     die_size = await get_current_die_for_session(current_session, db)
+    trace.mark("session_detail")
     manual_die = current_session.manual_die
     pending_thread_id = current_session.pending_thread_id
     session_mode = SessionMode(
@@ -1169,22 +1172,17 @@ async def roll_v2_bootstrap(
             | derived_snoozed_ids
         ),
     )
+    trace.mark("recovery")
 
-    # Bounded v2 projection (issue #2717): rollable[] and session last-read
-    # come from three bulk read-model round trips with no per-row queries.
-    # Session/recovery/partition semantics above stay identical to #2716.
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
     skipped_ids = list(current_session.skipped_thread_ids or [])
     effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
     excluded_thread_ids = sorted(set(effective_snoozed_ids) | set(skipped_ids))
-    rollable, last_read, _omitted_thread_ids = await get_v2_rollable_projection(
-        db,
-        user_id=user_id,
-        die_size=die_size,
-        excluded_thread_ids=excluded_thread_ids,
-        session_id=current_session_id,
-    )
 
+    # Summaries run before the bounded projection so the projection's series
+    # aggregate is the final database work of the request. If that aggregate
+    # trips the statement timeout, the projection fails open and no later
+    # query can re-surface the broken connection as a 503 (issue #4315).
     summary = await RollService(db).load_bootstrap_thread_data(
         user_id=user_id,
         die_size=die_size,
@@ -1194,6 +1192,19 @@ async def roll_v2_bootstrap(
         summary_limit=RollV2BootstrapResponse.summary_limit,
         include_pool=False,
     )
+    trace.mark("summary")
+
+    # Bounded v2 projection (issue #2717): rollable[] and session last-read
+    # come from three bulk read-model round trips with no per-row queries.
+    # Session/recovery/partition semantics above stay identical to #2716.
+    rollable, last_read, _omitted_thread_ids = await get_v2_rollable_projection(
+        db,
+        user_id=user_id,
+        die_size=die_size,
+        excluded_thread_ids=excluded_thread_ids,
+        session_id=current_session_id,
+    )
+    trace.mark("rollable_projection")
     snoozed_threads = [
         RollableThread.model_validate(row.model_dump()) for row in summary.snoozed_threads
     ]
@@ -1211,7 +1222,24 @@ async def roll_v2_bootstrap(
         else None
     )
 
-    return RollV2BootstrapResponse(
+    # Keep the existing Roll screen's direct visible tags and out-of-pool
+    # transparency in the canonical v2 contract, not a frontend fallback.
+    visible_rows = [
+        *(item.thread for item in rollable),
+        *snoozed_threads,
+        *skipped_threads,
+        *blocked_threads,
+    ]
+    if stale_thread is not None:
+        visible_rows.append(stale_thread)
+    tags_by_thread = await TagInheritanceService(db).get_threads_direct_tags(
+        user_id, [row.id for row in visible_rows]
+    )
+    for row in visible_rows:
+        row.tags = tags_by_thread.get(row.id, [])
+
+    library = summary.library
+    response = RollV2BootstrapResponse(
         current_die=die_size,
         manual_die=manual_die,
         pending_thread_id=pending_thread_id,
@@ -1222,6 +1250,12 @@ async def roll_v2_bootstrap(
         bandwidth=bandwidth_state,
         rollable=rollable,  # New v2 field replacing roll_pool
         last_read=last_read,  # New nullable session-scoped field
+        total_threads=library.total_threads,
+        available_threads=len(library.available_ids),
+        excluded_count=len(library.excluded),
+        excluded_threads=list(library.excluded.values()),
+        inactive_count=len(library.inactive),
+        inactive_threads=library.inactive,
         snoozed_threads=snoozed_threads,
         snoozed_count=len(snoozed_threads),
         skipped_thread_ids=skipped_ids,
@@ -1234,6 +1268,9 @@ async def roll_v2_bootstrap(
         user_id=user_id,
         timezone=current_session.timezone,
     )
+    trace.mark("response")
+    trace.emit(logger)
+    return response
 
 
 @router.get(

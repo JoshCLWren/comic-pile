@@ -17,7 +17,7 @@ from collections.abc import Iterable, Sequence
 from datetime import datetime
 from typing import TypedDict
 
-from sqlalchemy import Text, and_, bindparam, func, or_, select, text
+from sqlalchemy import Text, and_, any_, bindparam, func, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -182,6 +182,7 @@ async def fetch_rollable_candidates(
             func.coalesce(thread_read_count, 0).label("thread_read_count"),
             func.coalesce(thread_total_count, 0).label("thread_total_count"),
         )
+        .select_from(Thread)
         .outerjoin(Issue, Issue.id == frontier_expression(eligibility))
         .outerjoin(
             IssueExternalIdentityMapping,
@@ -267,6 +268,13 @@ async def fetch_series_aggregates(
     latest event per distinct issue (effective rating, #1401) and aggregate
     per volume in Python. Empty input performs no query.
 
+    The volume id is normalized once per identity row and matched against one
+    array bind (issue #4315). The previous implementation OR'd four JSON
+    containment predicates per volume, so a d100 bootstrap built roughly 400
+    unindexable ``metadata_json::jsonb @>`` clauses and then ran two correlated
+    scalar subqueries per returned row. This version is a single array
+    predicate plus one hash join to the catalog series row.
+
     Args:
         db: Async database session.
         user_id: Owner of the issues.
@@ -277,38 +285,6 @@ async def fetch_series_aggregates(
     """
     if not volume_ids:
         return []
-    conditions = []
-    for index, volume_id in enumerate(volume_ids):
-        conditions.append(
-            text(
-                f"(external_identities.metadata_json::jsonb @> CAST(:vol_a_{index} AS jsonb)"
-                f" OR external_identities.metadata_json::jsonb @> CAST(:vol_b_{index} AS jsonb)"
-                f" OR external_identities.metadata_json::jsonb @> CAST(:vol_c_{index} AS jsonb)"
-                f" OR external_identities.metadata_json::jsonb @> CAST(:vol_d_{index} AS jsonb))"
-            ).bindparams(
-                bindparam(
-                    f"vol_a_{index}",
-                    value=f'{{"volume": {{"id": {volume_id}}}}}',
-                    type_=Text,
-                ),
-                bindparam(
-                    f"vol_b_{index}",
-                    value=f'{{"volume_id": {volume_id}}}',
-                    type_=Text,
-                ),
-                bindparam(
-                    f"vol_c_{index}",
-                    value=f'{{"volume": {{"id": "{volume_id}"}}}}',
-                    type_=Text,
-                ),
-                bindparam(
-                    f"vol_d_{index}",
-                    value=f'{{"volume_id": "{volume_id}"}}',
-                    type_=Text,
-                ),
-            )
-        )
-    volume_match = or_(*conditions)
     # JSON numeric IDs can stringify as "20764.0" while stored catalog IDs
     # use "20764". Normalize integral numeric text without unsafe numeric casts.
     catalog_volume_id = func.regexp_replace(
@@ -319,25 +295,10 @@ async def fetch_series_aggregates(
         r"\.0+$",
         "",
     )
-    series_name_sq = (
-        select(SeriesIdentity.metadata_json["name"].as_string())
-        .where(
-            SeriesIdentity.provider == "comicvine",
-            SeriesIdentity.entity_type == "series",
-            SeriesIdentity.external_id == catalog_volume_id,
-        )
-        .correlate(ExternalIdentity)
-        .scalar_subquery()
-    )
-    series_count_sq = (
-        select(SeriesIdentity.metadata_json["count_of_issues"].as_string())
-        .where(
-            SeriesIdentity.provider == "comicvine",
-            SeriesIdentity.entity_type == "series",
-            SeriesIdentity.external_id == catalog_volume_id,
-        )
-        .correlate(ExternalIdentity)
-        .scalar_subquery()
+    requested_volume_ids = bindparam(
+        "roll_projection_volume_ids",
+        value=[str(volume_id) for volume_id in volume_ids],
+        type_=ARRAY(Text),
     )
     query = (
         select(
@@ -345,8 +306,10 @@ async def fetch_series_aggregates(
             ExternalIdentity.metadata_json,
             Event.rating,
             Event.timestamp,
-            series_name_sq.label("series_name"),
-            series_count_sq.label("series_issue_count"),
+            SeriesIdentity.metadata_json["name"].as_string().label("series_name"),
+            SeriesIdentity.metadata_json["count_of_issues"]
+            .as_string()
+            .label("series_issue_count"),
         )
         .select_from(Issue)
         .join(Thread, Thread.id == Issue.thread_id)
@@ -366,6 +329,14 @@ async def fetch_series_aggregates(
             ),
         )
         .outerjoin(
+            SeriesIdentity,
+            and_(
+                SeriesIdentity.provider == "comicvine",
+                SeriesIdentity.entity_type == "series",
+                SeriesIdentity.external_id == catalog_volume_id,
+            ),
+        )
+        .outerjoin(
             Event,
             and_(
                 Event.issue_id == Issue.id,
@@ -375,7 +346,7 @@ async def fetch_series_aggregates(
         )
         .where(Thread.user_id == user_id)
         .where(Issue.status == "read")
-        .where(volume_match)
+        .where(catalog_volume_id == any_(requested_volume_ids))
         .order_by(Issue.id, Event.timestamp.desc().nullslast(), Event.id.desc().nullslast())
     )
     result = await db.execute(query)

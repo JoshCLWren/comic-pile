@@ -153,7 +153,8 @@ async def test_get_or_create_deadlock_retry_succeeds(
     async_db: AsyncSession, default_user: User
 ) -> None:
     """Test get_or_create retries on deadlock and succeeds (session.py:160-167)."""
-    from sqlalchemy import delete
+    from sqlalchemy import delete, func, select
+    from app.models import Snapshot
 
     await async_db.execute(delete(ReadingSession))
     await async_db.commit()
@@ -173,7 +174,13 @@ async def test_get_or_create_deadlock_retry_succeeds(
 
     assert result is not None
     assert result.start_die == 6
-    assert call_count == 3
+    # Each attempt commits the session and checkpoint in one transaction.
+    assert call_count == 2
+    assert await async_db.scalar(select(func.count()).select_from(ReadingSession)) == 1
+    checkpoints = (await async_db.scalars(select(Snapshot))).all()
+    assert len(checkpoints) == 1
+    assert checkpoints[0].session_id == result.id
+    assert checkpoints[0].snapshot_kind == "session_start"
 
 
 @pytest.mark.asyncio

@@ -15,6 +15,14 @@ export interface TagSectionProps {
   isAdmin?: boolean
   /** Eyebrow label for the section. */
   title?: string
+  /**
+   * Controlled editor visibility. Omit for the default internally managed
+   * state; detail pages pass this to honor a `?tagEditor=` deep link from an
+   * inherited-source link (issue #4332).
+   */
+  editorOpen?: boolean
+  /** Required with `editorOpen` so the page can reflect open/close in the URL. */
+  onEditorOpenChange?: (open: boolean) => void
 }
 
 /**
@@ -30,8 +38,15 @@ export function TagSection({
   targetLabel,
   isAdmin,
   title = 'Tags',
+  editorOpen,
+  onEditorOpenChange,
 }: TagSectionProps) {
-  const [editorOpen, setEditorOpen] = useState(false)
+  const [internalEditorOpen, setInternalEditorOpen] = useState(false)
+  const open = editorOpen ?? internalEditorOpen
+  const setOpen = (next: boolean) => {
+    if (editorOpen === undefined) setInternalEditorOpen(next)
+    onEditorOpenChange?.(next)
+  }
   const [failure, setFailure] = useState<string | null>(null)
   const effective = useEffectiveTags(targetType, targetId)
   const unassign = useUnassignTag()
@@ -48,7 +63,7 @@ export function TagSection({
           type="button"
           onClick={() => {
             setFailure(null)
-            setEditorOpen(true)
+            setOpen(true)
           }}
           className="rounded-lg border border-[var(--theme-border)] px-2.5 py-1 text-xs font-bold text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
         >
@@ -83,8 +98,8 @@ export function TagSection({
         targetType={targetType}
         targetId={targetId}
         targetLabel={targetLabel}
-        isOpen={editorOpen}
-        onClose={() => setEditorOpen(false)}
+        isOpen={open}
+        onClose={() => setOpen(false)}
         isAdmin={canManageGlobals}
       />
     </div>

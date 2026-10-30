@@ -65,14 +65,14 @@ try {
   }
 
   const bootstrapResponse = await page.request.get(
-    new URL('/api/v1/roll/bootstrap', target).toString(),
+    new URL('/api/v2/roll/bootstrap', target).toString(),
     { headers: { Authorization: `Bearer ${accessToken}` } },
   )
   if (!bootstrapResponse.ok()) {
     throw new Error(`Roll bootstrap failed with ${bootstrapResponse.status()}.`)
   }
   const bootstrap = await bootstrapResponse.json()
-  const poolTitles = (bootstrap.roll_pool ?? []).map((thread) => thread.title)
+  const poolTitles = (bootstrap.rollable ?? []).map((item) => item.thread.title)
   const unexpectedTitles = poolTitles.filter((title) => !seededTitles.has(title))
   if (poolTitles.length === 0 || unexpectedTitles.length > 0) {
     throw new Error(

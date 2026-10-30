@@ -1,5 +1,5 @@
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle, displayReadingListName } from '../utils/cblSourceDisplay'
-import { ReaderIssueActions } from '../components/ReaderIssueActions'
+import { ReaderIssueActions, ReadNowIssueButton } from '../components/ReaderIssueActions'
 import { useState } from 'react'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -7,6 +7,11 @@ import Breadcrumbs from '../components/Breadcrumbs'
 import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
 import { NewReleasesSection } from '../components/NewReleasesSection'
 import { TagSection } from '../components/Tags/TagSection'
+import {
+  TAG_EDITOR_PLAN,
+  TAG_EDITOR_QUERY_PARAM,
+  tagEditorSearch,
+} from '../components/Tags/sourceNavigation'
 import { useReadingPlanReader } from '../hooks/useReadingPlans'
 import {
   readingPlanModeLabel,
@@ -149,8 +154,15 @@ function IssueRow({ issue, sourceNames }: { issue: ReadingPlanReaderIssue; sourc
 export default function ReadingPlanDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const addFromCblRequested = searchParams.get('addFrom') === 'cbl'
+  const planTagEditorRequested =
+    searchParams.get(TAG_EDITOR_QUERY_PARAM) === TAG_EDITOR_PLAN
+  const setPlanTagEditorOpen = (open: boolean) => {
+    setSearchParams(tagEditorSearch(searchParams.toString(), open ? TAG_EDITOR_PLAN : null), {
+      replace: true,
+    })
+  }
   const [showReleaseTracking, setShowReleaseTracking] = useState(false)
   const [visibleBlockedCount, setVisibleBlockedCount] = useState(3)
   const [showUpcoming, setShowUpcoming] = useState(false)
@@ -245,12 +257,12 @@ export default function ReadingPlanDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {continueIssue && (
-            <Link
-              to={`/thread/${continueIssue.thread_id}`}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black hover:bg-[var(--theme-primary-action-hover)]"
-            >
-              Continue reading
-            </Link>
+            <ReadNowIssueButton
+              issueId={continueIssue.issue_id}
+              threadId={continueIssue.thread_id}
+              label="Read next issue"
+              primary
+            />
           )}
           {editableListId != null ? (
             <button
@@ -456,7 +468,13 @@ export default function ReadingPlanDetailPage() {
         aria-label="Reading Plan tags"
         className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4"
       >
-        <TagSection targetType="ContinuityPlan" targetId={planId} targetLabel={view.name} />
+        <TagSection
+          targetType="ContinuityPlan"
+          targetId={planId}
+          targetLabel={view.name}
+          editorOpen={planTagEditorRequested}
+          onEditorOpenChange={setPlanTagEditorOpen}
+        />
       </section>
 
       <section aria-labelledby="reading-order-heading">

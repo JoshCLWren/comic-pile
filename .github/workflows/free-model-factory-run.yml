@@ -354,8 +354,14 @@ jobs:
               # Models are selected at execution, after OpenCode 2 installation.
               catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
               bash scripts/opencode-model-catalog.sh opencode verbose refresh > "$catalog"
+              comments_file="$RUNNER_TEMP/factory-opencode-attempt-comments.json"
+              if ! gh api --paginate --slurp \
+                "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" > "$comments_file"; then
+                printf 'control_plane_failure\tFactory cooldown evidence could not be read\n' > "$discovery_outcome"
+                exit 1
+              fi
               result="$(python3 .github/scripts/factory_live_opencode.py \
-                --catalog "$catalog" --worker "$WORKER" \
+                --catalog "$catalog" --worker "$WORKER" --comments "$comments_file" \
                 --rotation "${GITHUB_RUN_NUMBER:-0}")"
               model="$(jq -er '.model' <<< "$result")"
               runtime_model="$(jq -er '.runtime_model' <<< "$result")"
@@ -835,6 +841,14 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/fixed-model-smoke.log"
           status=${PIPESTATUS[0]}
           set -e
+          python3 .github/scripts/factory_live_opencode.py \
+            --smoke-log "$RUNNER_TEMP/fixed-model-smoke.log" \
+            --runtime-model "$RUNTIME_MODEL" \
+            --outcome-file "$RUNNER_TEMP/factory-discovery-outcome"
+          if [[ -f "$RUNNER_TEMP/factory-discovery-outcome" ]] && \
+            grep -q '^model_unavailable' "$RUNNER_TEMP/factory-discovery-outcome"; then
+            exit 1
+          fi
           if [[ "$DEEPSEEK_MODE" != normal && "$status" -ne 0 ]]; then
             if grep -Eiq 'FreeTierError|403|401|Forbidden|Unauthorized' "$RUNNER_TEMP/fixed-model-smoke.log"; then
               printf 'provider_failure\tPinned DeepSeek rejected %s authentication (401/403)\n' "$DEEPSEEK_MODE" > "$RUNNER_TEMP/factory-discovery-outcome"
@@ -1084,6 +1098,14 @@ jobs:
           fi
           attempt_body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nOutcome: %s\nAttempt outcome: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
             "$attempt_marker" "$WORKER" "$MODEL" "$SOURCE" "$outcome" "$attempt_outcome" "$attempt_detail" "$now" "$GITHUB_RUN_ID")"
+          # Keep a run-specific failure snapshot: later successes overwrite the worker record.
+          if [[ "$SOURCE" == opencode-free && "$attempt_outcome" == model_unavailable ]]; then
+            unavailable_marker="<!-- factory-model-unavailable:v1 run=${GITHUB_RUN_ID} -->"
+            snapshot_body="$(printf '%s\n' "$attempt_body" | tail -n +2)"
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+              -f body="${unavailable_marker}
+          ${snapshot_body}" >/dev/null
+          fi
           attempt_comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
             | jq -r --arg marker "$attempt_marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
           existing_run=''

@@ -85,6 +85,25 @@ function rollLabel(event: DisplayEvent): string | null {
 }
 
 /**
+ * Whether a trailing description extra repeats a structured field the card
+ * already prints.
+ *
+ * `app/services/session_response.py` appends an undone event's rating and issue
+ * number to the undo description. The card also renders those values from
+ * `rating` and `issue_number`, so a restored rated event stated each value
+ * twice (#4330). An extra stays when the card does not print the value
+ * elsewhere, such as an issue number with no resolvable thread title.
+ */
+function repeatsStructuredField(event: DisplayEvent, extra: string): boolean {
+  if (event.rating != null && /^rating\b/i.test(extra)) return true
+  return (
+    event.issue_number != null &&
+    Boolean(event.thread_title || event.thread_deleted) &&
+    extra === `#${event.issue_number}`
+  )
+}
+
+/**
  * Reader-facing detail line for an event card, or `null` when the description
  * only repeats what the card already prints.
  *
@@ -92,8 +111,9 @@ function rollLabel(event: DisplayEvent): string | null {
  * followed by optional ` · `-separated extras, so an undo/restore card showed
  * the word "Restored" in the eyebrow and again in its description while the
  * title line already carried the thread name. Two cards that differed only in
- * that repeated word read as duplicates (#3300). Only the redundant leading
- * segment is dropped; trailing extras such as `#12` stay visible.
+ * that repeated word read as duplicates (#3300). The redundant leading segment
+ * is dropped, and extras already shown as structured fields are dropped too;
+ * other trailing extras such as `#12` stay visible.
  */
 function eventDetail(event: DisplayEvent): string | null {
   const description = event.description?.trim()
@@ -102,7 +122,8 @@ function eventDetail(event: DisplayEvent): string | null {
   if (event.type === 'undo' || event.type === 'restore') {
     const [head, ...extras] = description.split(' · ')
     if (head.startsWith(`${eventLabel(event.type)} `)) {
-      return extras.join(' · ') || null
+      const detailExtras = extras.filter((extra) => !repeatsStructuredField(event, extra))
+      return detailExtras.join(' · ') || null
     }
   }
 

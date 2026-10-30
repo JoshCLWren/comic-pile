@@ -17,6 +17,11 @@ import PlannerLanes from './continuity-planner/PlannerLanes'
 import PlannerFooter from './continuity-planner/PlannerFooter'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { TagSection } from '../components/Tags/TagSection'
+import {
+  TAG_EDITOR_PLAN,
+  TAG_EDITOR_QUERY_PARAM,
+  tagEditorSearch,
+} from '../components/Tags/sourceNavigation'
 
 interface ContinuityPlannerPageProps {
   /** Injectable component used to render the "Add from CBL" material source; defaults to the production {@link ReadingPlanAddMaterial}. */
@@ -34,8 +39,15 @@ export default function ContinuityPlannerPage({
 }: ContinuityPlannerPageProps = {}) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const addFromCblRequested = searchParams.get('addFrom') === 'cbl'
+  const planTagEditorRequested =
+    searchParams.get(TAG_EDITOR_QUERY_PARAM) === TAG_EDITOR_PLAN
+  const setPlanTagEditorOpen = (open: boolean) => {
+    setSearchParams(tagEditorSearch(searchParams.toString(), open ? TAG_EDITOR_PLAN : null), {
+      replace: true,
+    })
+  }
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const isInvalidRoute =
@@ -136,6 +148,8 @@ export default function ContinuityPlannerPage({
             targetType="ContinuityPlan"
             targetId={planId}
             targetLabel={editor.savedName || editor.name || 'Reading Plan'}
+            editorOpen={planTagEditorRequested}
+            onEditorOpenChange={setPlanTagEditorOpen}
           />
         </section>
       )}

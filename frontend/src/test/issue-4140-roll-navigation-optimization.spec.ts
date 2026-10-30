@@ -3,11 +3,11 @@
  *
  * Acceptance contract (from the issue): after rolling and navigating to Queue
  * via the "Back to Queue" button, no HTTP request should be made to
- * `/api/v1/roll/bootstrap` during navigation. When returning to Roll,
+ * `/api/v2/roll/bootstrap` during navigation. When returning to Roll,
  * the pending selection should be preserved without a stale empty-dice flash.
  *
  * This test verifies:
- * 1. When leaving Roll via the back to queue button, no HTTP request is made to `/api/v1/roll/bootstrap`
+ * 1. When leaving Roll via the back to queue button, no HTTP request is made to `/api/v2/roll/bootstrap`
  * 2. When returning to Roll after navigating away, the pending selection is preserved
  */
 import { expect } from '@playwright/test'
@@ -27,10 +27,10 @@ test.describe('Issue #4140: Roll → Queue navigation optimization', () => {
       total_issues: 3,
     })
 
-    // Track HTTP requests to /api/v1/roll/bootstrap
+    // Track HTTP requests to /api/v2/roll/bootstrap
     let bootstrapRequests = 0
     page.on('request', (request) => {
-      if (request.url().includes('/api/v1/roll/bootstrap') && request.method() === 'GET') {
+      if (request.url().includes('/api/v2/roll/bootstrap') && request.method() === 'GET') {
         bootstrapRequests++
       }
     })

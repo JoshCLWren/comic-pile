@@ -1,5 +1,6 @@
 import type { SessionMode, SessionThread } from './index'
-import type { RollRecoveryInfo } from './rollBootstrap'
+import type { RollRecoveryInfo, ThreadExclusionReason } from './rollBootstrap'
+import type { Tag } from '../services/api-tags'
 
 export type { RollBootstrapResponse, RollBootstrapThread } from './rollBootstrap'
 
@@ -26,6 +27,7 @@ export interface RollV2Thread {
   title: string
   format: string
   last_activity_at?: string | null
+  tags: Tag[]
 }
 
 /** Required next-unread issue row. V2 never returns `issue: null`. */
@@ -115,6 +117,12 @@ export interface RollV2BootstrapResponse {
   stale_thread_count: number
   stale_thread: RollV2Thread | null
   timezone?: string | null
+  total_threads: number
+  available_threads: number
+  excluded_count: number
+  excluded_threads: ThreadExclusionReason[]
+  inactive_count: number
+  inactive_threads: ThreadExclusionReason[]
 }
 
 /** Additive rate response: ThreadResponse fields plus roll reconciliation. */

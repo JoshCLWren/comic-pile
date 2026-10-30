@@ -387,12 +387,12 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
             const isSimpleRange = Boolean(rangeMatch) && Number(rangeMatch![1]) === 1
 
             if (isSimpleRange) {
-              const requestedLastRead = Number(createForm.lastIssueRead) || 0
+              const requestedLastRead = Number(createForm.lastIssueRead)
               const lastRead = Math.max(0, Math.min(requestedLastRead, issuesRemaining))
               await issuesApi.migrateThread(result.id, lastRead, issuesRemaining)
             } else {
               const issueListResponse = await issuesApi.create(result.id, createForm.issues.trim())
-              const requestedLastRead = Number(createForm.lastIssueRead) || 0
+              const requestedLastRead = Number(createForm.lastIssueRead)
               const lastRead = Math.max(
                 0,
                 Math.min(requestedLastRead, issueListResponse.issues.length),

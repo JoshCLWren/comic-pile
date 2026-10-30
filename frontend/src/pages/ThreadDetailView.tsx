@@ -4,7 +4,7 @@ import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { ReadingBoundaryExplanation } from '../components/ReadingBoundaryExplanation'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { CrossoverTags } from '../components/CrossoverTags'
@@ -41,6 +41,11 @@ import { IssueRateButton } from './thread-detail/IssueRateButton'
 import { IssueRatingUndoNotice } from './thread-detail/IssueRatingUndoNotice'
 import { CblComicFinder } from '../components/CblSourceFinder'
 import { CreatorInput } from '../pages/QueuePage/QueueModals'
+import {
+  TAG_EDITOR_QUERY_PARAM,
+  TAG_EDITOR_THREAD,
+  tagEditorSearch,
+} from '../components/Tags/sourceNavigation'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
 function IssueCreator({
@@ -69,6 +74,7 @@ function IssueCreator({
 export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
+  const navigate = useNavigate()
   const client = useQueryClient()
   const updateMutation = useUpdateThread()
   const activeThreadIdRef = useRef<number | null>(null)
@@ -81,6 +87,27 @@ export default function ThreadDetailView() {
   const parsedThreadId = id ? Number(id) : NaN
   const threadId =
     Number.isInteger(parsedThreadId) && parsedThreadId > 0 ? parsedThreadId : null
+
+  // Inherited-source links arrive as `/thread/<id>?tagEditor=thread` so a
+  // source that points at this very page (for example a thread tag inherited
+  // by one of its issues) still has a visible effect: it opens the thread's
+  // own tag editor instead of re-entering the same page (issue #4332).
+  const threadTagEditorRequested =
+    new URLSearchParams(location.search).get(TAG_EDITOR_QUERY_PARAM) ===
+    TAG_EDITOR_THREAD
+  const setThreadTagEditorOpen = (open: boolean) => {
+    navigate(
+      {
+        pathname: location.pathname || `/thread/${threadId ?? ''}`,
+        search: tagEditorSearch(
+          location.search,
+          open ? TAG_EDITOR_THREAD : null,
+        ),
+        hash: location.hash,
+      },
+      { replace: true },
+    )
+  }
 
   const boundaryQuery = useReadingBoundaries(threadId ? [threadId] : [])
   // Canonical explanations are only produced while the evaluator is enabled.
@@ -217,6 +244,11 @@ export default function ThreadDetailView() {
   // is visually identifiable. Issue ids are canonical, so identically numbered
   // comics in other series cannot be targeted by mistake.
   useEffect(() => {
+    // The thread tag editor can be opened by an inherited-source link while a
+    // deep link names an issue row. The editor owns focus then; scrolling and
+    // focusing the row behind the modal would steal focus out of the dialog
+    // (issue #4332). Closing the editor restores the normal arrival behavior.
+    if (threadTagEditorRequested) return
     if (!issuesExpanded || requestedIssueId <= 0) {
       setDeepLinkedIssueId(null)
       focusedIssueRef.current = null
@@ -245,7 +277,14 @@ export default function ThreadDetailView() {
     focusedIssueRef.current = requestedIssueId
     setDeepLinkedIssueId(requestedIssueId)
     setDeepLinkNotice(null)
-  }, [issuesExpanded, requestedIssueId, issuesQuery, hasIssueParam, location.key])
+  }, [
+    issuesExpanded,
+    requestedIssueId,
+    issuesQuery,
+    hasIssueParam,
+    location.key,
+    threadTagEditorRequested,
+  ])
 
   function handleToggleBulkSelect() {
     setBulkSelectMode((previous) => {
@@ -594,6 +633,8 @@ export default function ThreadDetailView() {
             targetType="Thread"
             targetId={thread.id}
             targetLabel={thread.title}
+            editorOpen={threadTagEditorRequested}
+            onEditorOpenChange={setThreadTagEditorOpen}
           />
         </div>
 

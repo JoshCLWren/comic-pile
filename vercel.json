@@ -13,7 +13,14 @@
   "builds": [
     {
       "src": "api/index.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "excludeFiles": "{target/**,native/**/target/**}"
+      }
+    },
+    {
+      "src": "api/native_roll.rs",
+      "use": "@vercel/rust"
     },
     {
       "src": "api/auth/me.ts",
@@ -32,6 +39,16 @@
       "src": "/api/v1/auth/me",
       "methods": ["GET"],
       "dest": "/api/auth/me.ts"
+    },
+    {
+      "src": "/api/_native_roll/health",
+      "methods": ["GET"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/roll/bootstrap",
+      "methods": ["GET"],
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api(?:/.*)?",

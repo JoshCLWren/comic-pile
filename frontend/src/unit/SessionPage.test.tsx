@@ -523,6 +523,36 @@ it('drops a restore description that only repeats the card label but keeps its e
   expect(screen.queryByText('No additional event details recorded.')).not.toBeInTheDocument()
 })
 
+// #4330: undoing a rated issue copies the rating and issue number onto the undo
+// event, and the description repeats them. The restored card must print each
+// value once instead of restating it in the detail line.
+it('renders a restored rated event with its issue number and rating once', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 26, started_at: '2024-01-01', ended_at: null, start_die: 6, current_die: 6,
+    ladder_path: 'd6', narrative_summary: {},
+    events: [{
+      id: 51,
+      timestamp: '2024-01-01T13:04:03Z',
+      type: 'undo',
+      thread_title: 'Batman',
+      issue_number: '1',
+      rating: 4.5,
+      description: 'Restored Batman · rating 4.5 · #1',
+    }],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(screen.getByText('Restored')).toBeInTheDocument()
+  expect(
+    screen.getByText((_text, node) => node?.textContent === 'Batman · #1'),
+  ).toBeInTheDocument()
+  const eventDetails = within(screen.getByRole('list', { name: 'Event details' }))
+  expect(eventDetails.getByText('Rating 4.5')).toBeInTheDocument()
+  expect(screen.queryByText('rating 4.5 · #1')).not.toBeInTheDocument()
+  expect(screen.queryByText('rating 4.5')).not.toBeInTheDocument()
+})
+
 // #3300: minute-precision rendering collapsed distinct events into one block of
 // identical timestamps, which is what made the reported pairs look duplicated.
 it('separates same-minute timeline events with second precision', () => {

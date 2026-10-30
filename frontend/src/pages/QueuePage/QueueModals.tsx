@@ -308,12 +308,21 @@ export function QueueModals({
   const editIssueListRef = useRef<IssueToggleListHandle>(null)
   const [hasPendingIssueEdits, setHasPendingIssueEdits] = useState(false)
   const [showDiscardPrompt, setShowDiscardPrompt] = useState(false)
+  // Verbatim "Issues already read" text. A numeric input sanitizes a lone "-"
+  // to an empty value, so "-1" used to become "01" and silently coerce to 1
+  // with no inline error (#4181 / MQA-QUEUE-008). Holding the typed text keeps
+  // invalid entries visible so they can report themselves and block Create.
+  const [lastReadInput, setLastReadInput] = useState('')
 
   useEffect(() => {
     if (openModal !== 'edit') {
       setHasPendingIssueEdits(false)
       setShowDiscardPrompt(false)
     }
+  }, [openModal])
+
+  useEffect(() => {
+    if (openModal !== 'create') setLastReadInput('')
   }, [openModal])
 
   const initialCredits = editingThread ? getManualCreatorCreditList(editingThread) : []
@@ -377,11 +386,14 @@ export function QueueModals({
   })
 
   // "Issues already read" accepts a whole count from zero through the parsed
-  // issue total. Fractional or out-of-range entries report inline and keep
-  // Create Series disabled instead of being silently clamped (#4181).
-  const lastReadValue = createForm.lastIssueRead
-  const lastReadCount =
-    Number.isInteger(lastReadValue) && lastReadValue >= 0 ? lastReadValue : null
+  // issue total. Fractional, negative, or out-of-range entries report inline
+  // and keep Create Series disabled instead of being silently clamped (#4181).
+  const trimmedLastRead = lastReadInput.trim()
+  const lastReadCount = trimmedLastRead === ''
+    ? 0
+    : /^\d+$/.test(trimmedLastRead)
+      ? Number(trimmedLastRead)
+      : null
   const lastReadError =
     lastReadCount === null
       ? 'Issues already read must be a whole number of 0 or more.'
@@ -518,19 +530,21 @@ export function QueueModals({
             </label>
             <input
               id="create-thread-last-read"
-              type="number"
-              min="0"
-              step="1"
-              max={issuePreview ?? undefined}
-              value={Number.isFinite(createForm.lastIssueRead) ? createForm.lastIssueRead : ''}
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="0"
+              value={lastReadInput}
               onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                // Keep the typed value verbatim so an out-of-range or
-                // fractional entry can report itself instead of being silently
-                // clamped to the nearest accepted count (#4181).
+                // Keep the typed value verbatim so an out-of-range, negative,
+                // or fractional entry can report itself instead of being
+                // silently clamped to an accepted count (#4181).
                 const rawValue = event.target.value
+                setLastReadInput(rawValue)
+                const trimmed = rawValue.trim()
                 setCreateForm({
                   ...createForm,
-                  lastIssueRead: rawValue === '' ? 0 : Number(rawValue),
+                  lastIssueRead: /^\d+$/.test(trimmed) ? Number(trimmed) : 0,
                 })
               }}
               aria-invalid={lastReadError !== null}
@@ -556,9 +570,9 @@ export function QueueModals({
                 Enter a count from the issue list above, not an issue number.
               </p>
             )}
-            {lastReadError === null && createForm.lastIssueRead > 0 && issuePreview !== null && (
+            {lastReadError === null && lastReadCount !== null && lastReadCount > 0 && issuePreview !== null && (
               <p className="text-xs text-stone-400">
-                First {createForm.lastIssueRead} issues (in creation order) of {issuePreview} will
+                First {lastReadCount} issues (in creation order) of {issuePreview} will
                 be marked as read
               </p>
             )}

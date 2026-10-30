@@ -26,6 +26,7 @@ interface PositionMenuProps {
    */
   snoozeDisabledReason?: string
   onSnooze?: (thread: ThreadListItem) => void
+  sortBy?: 'position' | 'alphabetical' | 'created'
 }
 
 export default function PositionMenu({
@@ -43,6 +44,7 @@ export default function PositionMenu({
   snoozeDisabledReason = SNOOZE_REQUIRES_PENDING_SERIES_REASON,
   onSnooze,
   positionActionsAvailable = true,
+  sortBy = 'position',
 }: PositionMenuProps) {
   const { openThreadId, closeMenu: closeContextMenu, openMenu, toggleMenu } = usePositionMenu()
   const isOpen = openThreadId === thread.id
@@ -107,16 +109,41 @@ export default function PositionMenu({
 
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        const firstItem = menuItemsRef.current[0]
+        const items = menuItemsRef.current
+        // Helper to find first button (skip holes and nulls)
+        const findFirstButton = () => {
+          for (let i = 0; i < items.length; i++) {
+            if (items[i]) return items[i]
+          }
+          return null
+        }
+        const firstButton = findFirstButton()
+
         if (document.activeElement === triggerRef.current) {
-          firstItem?.focus()
+          firstButton?.focus()
         } else {
-          const currentIndex = menuItemsRef.current.findIndex((item) => item === document.activeElement)
-          const nextItem = menuItemsRef.current[currentIndex + 1]
-          if (nextItem) {
-            nextItem.focus()
+          // Find current index in sparse array
+          let currentIndex = -1
+          for (let i = 0; i < items.length; i++) {
+            if (items[i] === document.activeElement) {
+              currentIndex = i
+              break
+            }
+          }
+          if (currentIndex === -1) {
+            firstButton?.focus()
+            return
+          }
+          // Find next button
+          let nextIndex = currentIndex + 1
+          while (nextIndex < items.length && !items[nextIndex]) {
+            nextIndex++
+          }
+          if (nextIndex < items.length) {
+            items[nextIndex]?.focus()
           } else {
-            firstItem?.focus()
+            // Wrap to first button
+            firstButton?.focus()
           }
         }
       }
@@ -125,7 +152,7 @@ export default function PositionMenu({
         e.preventDefault()
         const items = menuItemsRef.current.filter(Boolean)
         const currentIndex = items.findIndex((item) => item === document.activeElement)
-        const prevItem = items[currentIndex - 1]
+        let prevItem = items[currentIndex - 1]
         if (prevItem) {
           prevItem.focus()
         } else {
@@ -180,18 +207,57 @@ export default function PositionMenu({
     toggleMenu(thread.id)
   }
 
+  // Tracks whether the menu was opened via keyboard (Enter/Space/ArrowDown)
+  // so we can focus the first menu item after the menu renders.
+  const openedFromKeyboardRef = useRef(false)
+
+  // Focuses the first real menu button. `menuItemsRef.current` is a sparse
+  // array: a non-position sort renders an explanation row at index 0 that has
+  // no button ref, so a plain `[0]?.focus()` would leave focus on the trigger.
+  const focusFirstMenuItem = useCallback(() => {
+    const items = menuItemsRef.current
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (item) {
+        item.focus()
+        return
+      }
+    }
+  }, [])
+
   const handleTriggerKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
       e.preventDefault()
       e.stopPropagation()
       clickFromKeyboardRef.current = true
+      const menuAlreadyOpen = isOpen
+      openedFromKeyboardRef.current = true
       openMenu(thread.id)
       window.setTimeout(() => {
         clickFromKeyboardRef.current = false
       }, 100)
-      setTimeout(() => menuItemsRef.current[0]?.focus(), 0)
+
+      if (menuAlreadyOpen) {
+        // `openMenu` keeps the same thread id, so `isOpen` stays true and the
+        // focus effect below never re-runs. Enter the menu directly instead of
+        // trapping focus on the trigger (#4290 review).
+        openedFromKeyboardRef.current = false
+        window.setTimeout(focusFirstMenuItem, 0)
+      }
     }
   }
+
+  // Focus the first menu item after the menu opens from keyboard.
+  // This runs after the menu has rendered (since it watches isOpen).
+  useEffect(() => {
+    if (!isOpen || !openedFromKeyboardRef.current) return
+
+    openedFromKeyboardRef.current = false
+
+    // Wait for the menu to render in the next tick, then focus first button.
+    // setTimeout(0) works in both browser and jsdom test environment.
+    window.setTimeout(focusFirstMenuItem, 0)
+  }, [isOpen, focusFirstMenuItem])
 
   const menuItems: Array<{
     label: string
@@ -204,13 +270,27 @@ export default function PositionMenu({
     // reason can reach the reader on hover (#3260).
     title?: string
     action: () => void
+    // When true, renders as a non-interactive explanation row instead of a menuitem
+    isExplanation?: boolean
   }> = [
+    // Explanation note when position actions are available but not in position sort
+    ...(positionActionsAvailable && sortBy !== 'position'
+      ? [{
+          label: 'These actions change the saved position order',
+          icon: '',
+          ariaLabel: '',
+          disabled: true,
+          action: () => {},
+          isExplanation: true,
+        }]
+      : []),
     ...(positionActionsAvailable
       ? [
           {
             label: 'Move to Front',
             icon: '\u2B06',
             ariaLabel: 'Move to front',
+            title: sortBy !== 'position' ? 'Moves to position 1 in position order' : undefined,
             action: () => {
               onMoveToFront(thread.id)
               // The action handler restores focus to this row's trigger once the
@@ -223,6 +303,7 @@ export default function PositionMenu({
             label: 'Reposition\u2026',
             icon: '\u2261',
             ariaLabel: 'Reposition series',
+            title: sortBy !== 'position' ? 'Changes position in position order' : undefined,
             action: () => {
               onReposition(thread)
               // The reposition modal should manage focus restoration.
@@ -233,6 +314,7 @@ export default function PositionMenu({
             label: 'Move to Back',
             icon: '\u2193',
             ariaLabel: 'Move to back',
+            title: sortBy !== 'position' ? 'Moves to last position in position order' : undefined,
             action: () => {
               onMoveToBack(thread.id)
               // Same as Move to Front.
@@ -323,29 +405,40 @@ export default function PositionMenu({
             aria-label="Series actions"
           >
             {menuItems.map((item, index) => (
-              <button
-                key={item.label}
-                ref={(el) => { menuItemsRef.current[index] = el }}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  item.action()
-                }}
-                aria-label={item.ariaLabel}
-                disabled={item.disabled}
-                title={item.title}
-                className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
-                  item.disabled
-                    ? 'text-stone-600 cursor-not-allowed'
-                    : item.destructive
-                      ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
-                      : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
-                }`}
-                role="menuitem"
-              >
-                <span className="text-base">{item.icon}</span>
-                <span className="font-medium">{item.label}</span>
-              </button>
+              item.isExplanation ? (
+                <div
+                  key={item.label}
+                  className="px-4 py-3 text-left text-xs text-stone-500 border-b border-white/10"
+                  role="separator"
+                  aria-label={item.label}
+                >
+                  {item.label}
+                </div>
+              ) : (
+                <button
+                  key={item.label}
+                  ref={(el) => { menuItemsRef.current[index] = el }}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    item.action()
+                  }}
+                  aria-label={item.ariaLabel}
+                  disabled={item.disabled}
+                  title={item.title}
+                  className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
+                    item.disabled
+                      ? 'text-stone-600 cursor-not-allowed'
+                      : item.destructive
+                        ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
+                        : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
+                  }`}
+                  role="menuitem"
+                >
+                  <span className="text-base">{item.icon}</span>
+                  <span className="font-medium">{item.label}</span>
+                </button>
+              )
             ))}
           </div>
         </OverlayPortal>

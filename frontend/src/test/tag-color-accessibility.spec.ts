@@ -22,7 +22,16 @@ for (const width of [375, 1280]) {
     await expect(group.locator('[tabindex="0"]')).toHaveCount(1)
     await page.getByRole('textbox', { name: 'New tag name', exact: true }).fill('A'.repeat(100))
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-    await first.press('Escape')
+    const dialog = page.getByRole('dialog')
+    for (let index = 0; index < 12; index += 1) {
+      await page.keyboard.press('Tab')
+      await expect.poll(() => dialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
+    }
+    for (let index = 0; index < 12; index += 1) {
+      await page.keyboard.press('Shift+Tab')
+      await expect.poll(() => dialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
+    }
+    await page.keyboard.press('Escape')
     await expect(group).toHaveCount(0)
   })
 }
