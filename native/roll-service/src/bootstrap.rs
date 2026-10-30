@@ -46,7 +46,8 @@ fn thread_value(row: &tokio_postgres::Row) -> Result<Value, ApiError> {
         "id": id,
         "title": title,
         "format": format,
-        "last_activity_at": last_activity_at
+        "last_activity_at": last_activity_at,
+        "tags": []
     }))
 }
 
@@ -681,6 +682,40 @@ fn pending_roll_recovery(
     })))
 }
 
+
+/** One owner-scoped bulk tag read for every visible Roll row. */
+async fn visible_thread_tags(
+    conn: &deadpool_postgres::Object,
+    user: AuthenticatedUser,
+    ids: &[i32],
+) -> Result<HashMap<i32, Vec<Value>>, ApiError> {
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let rows = conn
+        .query(
+            "SELECT assignment.target_id, row_to_json(tag)::text
+             FROM tag_assignments assignment
+             JOIN tags tag ON tag.id = assignment.tag_id
+             WHERE assignment.target_type = 'Thread'
+               AND assignment.target_id = ANY($2::int[])
+               AND (tag.scope = 'global'
+                    OR (tag.scope = 'private' AND tag.owner_user_id = $1))
+             ORDER BY assignment.target_id, tag.scope, tag.normalized_name",
+            &[&user.id(), &ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut by_id: HashMap<i32, Vec<Value>> = HashMap::new();
+    for row in rows {
+        let thread_id: i32 = row.try_get(0).map_err(db::query_error)?;
+        let raw: String = row.try_get(1).map_err(db::query_error)?;
+        let tag = serde_json::from_str(&raw).map_err(|_| unavailable())?;
+        by_id.entry(thread_id).or_default().push(tag);
+    }
+    Ok(by_id)
+}
+
 pub async fn bootstrap_v2(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -766,7 +801,8 @@ pub async fn bootstrap_v2(
     let summary_rows = conn
         .query(
             "SELECT t.id,t.title,t.format,t.last_activity_at::text,
-          (coalesce(t.last_activity_at,t.created_at) < now() - interval '7 days') AS stale
+          (coalesce(t.last_activity_at,t.created_at) < now() - interval '7 days') AS stale,
+          t.status,t.queue_position,coalesce(t.is_blocked,false)
          FROM threads t WHERE t.user_id=$1 ORDER BY t.queue_position,t.id",
             &[&user.id()],
         )
@@ -774,6 +810,12 @@ pub async fn bootstrap_v2(
         .map_err(db::query_error)?;
     let mut known: HashMap<i32, Value> = HashMap::new();
     let mut stale = Vec::new();
+    let eligible_threads: HashSet<i32> = candidates.iter().map(|c| c.thread_id).collect();
+    let mut blocked: Vec<i32> = Vec::new();
+    let mut exclusions: Vec<Value> = Vec::new();
+    let mut inactive: Vec<Value> = Vec::new();
+    let mut total_threads = 0_usize;
+    let mut available_threads = 0_usize;
     for row in &summary_rows {
         let id: i32 = row.try_get(0).map_err(db::query_error)?;
         let stale_flag: Option<bool> = row.try_get(4).map_err(db::query_error)?;
@@ -781,6 +823,45 @@ pub async fn bootstrap_v2(
         let eligible_for_stale = candidates.iter().any(|candidate| candidate.thread_id == id);
         if stale_flag.unwrap_or(false) && eligible_for_stale && !excluded.contains(&id) {
             stale.push(info.clone());
+        }
+        let status: String = row.try_get(5).map_err(db::query_error)?;
+        let queue_position: i32 = row.try_get(6).map_err(db::query_error)?;
+        let stored_blocked: bool = row.try_get(7).map_err(db::query_error)?;
+        if status == "active" || status == "completed" {
+            total_threads += 1;
+            let blocked_now = stored_blocked
+                || (status == "active" && queue_position >= 1 && !eligible_threads.contains(&id));
+            let (reason, detail): (&str, Option<&str>) = if status == "completed" {
+                ("completed", Some("Read the full series"))
+            } else if blocked_now {
+                blocked.push(id);
+                ("blocked", None)
+            } else if snoozed.contains(&id) {
+                ("snoozed", Some("Snoozed in current session"))
+            } else if durable.contains(&id) {
+                ("snoozed", Some("Snoozed by cross-session backoff"))
+            } else if skipped.contains(&id) {
+                ("skipped", Some("Skipped in current session"))
+            } else if queue_position < 1 {
+                ("not_in_queue", Some("Not in the active queue"))
+            } else {
+                available_threads += 1;
+                ("available", None)
+            };
+            if reason != "available" {
+                let explanation = json!({
+                    "thread_id": id,
+                    "title": info["title"],
+                    "format": info["format"],
+                    "reason": reason,
+                    "detail": detail,
+                    "last_activity_at": info["last_activity_at"]
+                });
+                if reason == "completed" || reason == "not_in_queue" {
+                    inactive.push(explanation.clone());
+                }
+                exclusions.push(explanation);
+            }
         }
         known.insert(id, info);
     }
@@ -790,19 +871,10 @@ pub async fn bootstrap_v2(
             .take(20)
             .collect::<Vec<_>>()
     };
-    let snoozed_threads = summary(&snoozed);
+    let mut snoozed_threads = summary(&snoozed);
     let snoozed_count = snoozed.iter().filter(|id| known.contains_key(id)).count();
-    let skipped_threads = summary(&skipped);
-    let eligible_threads: HashSet<i32> = candidates.iter().map(|c| c.thread_id).collect();
-    let blocked: Vec<i32> = validated
-        .inputs()
-        .core
-        .threads
-        .iter()
-        .filter(|thread| thread.status == "active" && !eligible_threads.contains(&thread.id))
-        .map(|thread| thread.id)
-        .collect();
-    let blocked_threads = summary(&blocked);
+    let mut skipped_threads = summary(&skipped);
+    let mut blocked_threads = summary(&blocked);
 
     let roll_recovery = pending_roll_recovery(
         &validated,
@@ -818,7 +890,48 @@ pub async fn bootstrap_v2(
         .and_then(Value::as_i64);
     let mode_source = normalized_source(&session.bandwidth_source);
     let intent_source = normalized_source(&session.intent_source);
-    let stale_thread = choose_stale_thread(&stale, &mut rand::rng());
+    let mut stale_thread = choose_stale_thread(&stale, &mut rand::rng()).cloned();
+    let mut tag_ids: Vec<i32> = rollable.iter()
+        .filter_map(|item| item.pointer("/thread/id").and_then(Value::as_i64))
+        .map(|id| id as i32)
+        .collect();
+    for row in snoozed_threads.iter().chain(skipped_threads.iter()).chain(blocked_threads.iter()) {
+        if let Some(id) = row["id"].as_i64() {
+            tag_ids.push(id as i32);
+        }
+    }
+    if let Some(ref row) = stale_thread {
+        if let Some(id) = row["id"].as_i64() {
+            tag_ids.push(id as i32);
+        }
+    }
+    tag_ids.sort_unstable();
+    tag_ids.dedup();
+    let tags_by_thread = visible_thread_tags(&conn, user, &tag_ids).await?;
+    let attach_tags = |thread: &mut Value| {
+        if let Some(id) = thread["id"].as_i64() {
+            thread["tags"] = json!(tags_by_thread.get(&(id as i32)).cloned().unwrap_or_default());
+        }
+    };
+    for item in &mut rollable {
+        attach_tags(&mut item["thread"]);
+    }
+    for row in &mut snoozed_threads {
+        attach_tags(row);
+    }
+    for row in &mut skipped_threads {
+        attach_tags(row);
+    }
+    for row in &mut blocked_threads {
+        attach_tags(row);
+    }
+    if let Some(ref mut row) = stale_thread {
+        attach_tags(row);
+    }
+    let excluded_count = exclusions.len();
+    let inactive_count = inactive.len();
+    exclusions.truncate(20);
+    inactive.truncate(20);
     let response = json!({
         "session_id": session.id,
         "user_id": user.id(),
@@ -858,6 +971,12 @@ pub async fn bootstrap_v2(
         "blocked_threads": blocked_threads,
         "stale_thread_count": stale.len(),
         "stale_thread": stale_thread,
+        "total_threads": total_threads,
+        "available_threads": available_threads,
+        "excluded_count": excluded_count,
+        "excluded_threads": exclusions,
+        "inactive_count": inactive_count,
+        "inactive_threads": inactive,
         "timezone": session.timezone
     });
     Ok(Json(response))
