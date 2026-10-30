@@ -8,7 +8,7 @@
 //! (#3763). The dismissed series is referenced through ``selected_thread_id``
 //! so the record survives a later deletion of the series.
 //! #![forbid(unsafe_code)]
-use crate::{auth::AuthenticatedUser, db, reading_session, ApiError};
+use crate::{auth::AuthenticatedUser, db, reading_session, ApiError, AppState};
 use axum::{
     extract::State,
     http::StatusCode,
