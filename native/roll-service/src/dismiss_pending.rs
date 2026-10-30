@@ -8,7 +8,7 @@
 //! (#3763). The dismissed series is referenced through ``selected_thread_id``
 //! so the record survives a later deletion of the series.
 //! #![forbid(unsafe_code)]
-use crate::{auth::AuthenticatedUser, db, reading_session, ApiError, AppState};
+use crate::{auth::AuthenticatedUser, db, reading_session, ApiError};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -29,7 +29,6 @@ fn unavailable() -> ApiError {
 /// Mutating transaction for the dismiss-pending flow.
 #[allow(clippy::too_many_arguments)]
 async fn mutate(
-    _state: &AppState,
     user: AuthenticatedUser,
     session: &reading_session::ReadingSession,
     now: f64,
@@ -86,7 +85,6 @@ pub async fn dismiss_pending(
     let result = tokio::time::timeout(
         state.request_timeout,
         mutate(
-            &state,
             user,
             &session,
             now,
@@ -109,7 +107,7 @@ struct PendingConn(Option<Object>);
 impl Drop for PendingConn {
     fn drop(&mut self) {
         if let Some(connection) = self.0.take() {
-            drop(Object::take(connection));
+            drop(connection);
         }
     }
 }
