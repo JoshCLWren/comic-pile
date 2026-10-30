@@ -28,7 +28,7 @@ from app.services.roll_v2_projection import (
     extract_volume,
     get_v2_rollable_projection,
 )
-from app.schemas.roll_v2 import IdentityState, RollableItem, RollLastRead
+from app.schemas.roll_v2 import IdentityState, ProgressScope, RollableItem, RollLastRead
 
 D1 = datetime(2026, 1, 1, tzinfo=UTC)
 D2 = datetime(2026, 1, 2, tzinfo=UTC)
@@ -808,6 +808,167 @@ async def test_v2_preserves_fail_open_recovery(
     assert body["pending_thread_id"] == thread.id
     assert body["roll_recovery"] is None
     assert isinstance(body["rollable"], list)
+
+
+@pytest.mark.asyncio
+async def test_projection_fails_open_when_series_aggregate_times_out(
+    async_db: AsyncSession, default_user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A canonical-series statement timeout degrades stats instead of raising 503.
+
+    Issue #4315: asyncpg's command timeout in ``fetch_series_aggregates`` used
+    to surface as ``DatabaseUnavailableError`` and failed the whole bootstrap.
+    The projection must still return every rollable row without series stats.
+    """
+    from app.repositories import roll_v2_projection as projection_repo
+
+    _, issues = await _make_thread(
+        async_db, default_user, title="Timed out", issue_count=3, queue_position=1, read_through=2
+    )
+    for position in range(3):
+        await _confirm_identity(
+            async_db,
+            issues[position],
+            external_id=f"9100-{position}",
+            series_id=9100,
+            series_name="Timed out series",
+        )
+    await _rate(async_db, issues[0], rating=4.5, timestamp=D1)
+    session = await _active_session(async_db, default_user)
+
+    async def _statement_timeout(*args: object, **kwargs: object) -> list[object]:
+        raise TimeoutError("canceling statement due to statement timeout")
+
+    monkeypatch.setattr(projection_repo, "fetch_series_aggregates", _statement_timeout)
+
+    items, last_read, omitted = await get_v2_rollable_projection(
+        async_db,
+        user_id=default_user.id,
+        die_size=6,
+        excluded_thread_ids=[],
+        session_id=session.id,
+    )
+
+    assert omitted == []
+    assert last_read is None
+    assert len(items) == 1
+    item = items[0]
+    assert item.identity.source == "comicvine"
+    assert item.identity.canonical_series_id == "9100"
+    # Degraded but truthful: a missing aggregate must not be reported as a
+    # confirmed empty series history (Greptile P1 on #4364). The row reports
+    # the thread-scoped progress that the candidate query already returned.
+    assert item.reader.progress_scope == ProgressScope.THREAD
+    assert item.reader.read_count == 2
+    assert item.reader.issue_count == 3
+    assert item.reader.rating_count == 0
+    assert item.reader.average_rating is None
+    assert item.reader.latest_rating is None
+
+
+@pytest.mark.asyncio
+async def test_v2_endpoint_fails_open_when_series_aggregate_times_out(
+    auth_client, async_db: AsyncSession, default_user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The HTTP bootstrap returns 200 with degraded stats instead of a 503."""
+    from app.repositories import roll_v2_projection as projection_repo
+
+    _, issues = await _make_thread(
+        async_db, default_user, title="Timed out endpoint", issue_count=2, queue_position=1, read_through=1
+    )
+    for issue in issues:
+        await _confirm_identity(
+            async_db,
+            issue,
+            external_id=f"9200-{issue.position}",
+            series_id=9200,
+            series_name="Timed out endpoint series",
+        )
+
+    async def _statement_timeout(*args: object, **kwargs: object) -> list[object]:
+        raise TimeoutError("canceling statement due to statement timeout")
+
+    monkeypatch.setattr(projection_repo, "fetch_series_aggregates", _statement_timeout)
+
+    response = await auth_client.get("/api/v2/roll/bootstrap")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["rollable"]) == 1
+    assert body["rollable"][0]["identity"]["canonical_series_id"] == "9200"
+    assert body["rollable"][0]["reader"]["progress_scope"] == "thread"
+    assert body["rollable"][0]["reader"]["read_count"] == 1
+    assert body["rollable"][0]["reader"]["issue_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_v2_endpoint_fails_open_when_series_aggregate_is_really_cancelled(
+    auth_client, async_db: AsyncSession, default_user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A real PostgreSQL statement cancellation degrades stats instead of 503.
+
+    Greptile P2 on #4364: the timeout tests above raise ``TimeoutError`` from
+    Python before any SQL is issued, so they never exercise driver-level
+    cancellation. Here PostgreSQL itself cancels a real statement inside the
+    aggregate call with a server-side ``statement_timeout`` (SQLSTATE 57014,
+    surfaced by SQLAlchemy as ``DBAPIError``). The endpoint must still return
+    200, the aggregate-side session must stay usable through request cleanup,
+    and the next request must succeed.
+    """
+    from sqlalchemy import text
+
+    from app.repositories import roll_v2_projection as projection_repo
+
+    _, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Cancelled endpoint",
+        issue_count=3,
+        queue_position=1,
+        read_through=2,
+    )
+    for issue in issues:
+        await _confirm_identity(
+            async_db,
+            issue,
+            external_id=f"9300-{issue.position}",
+            series_id=9300,
+            series_name="Cancelled endpoint series",
+        )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+
+    async def _cancelled_aggregate(
+        db: AsyncSession, *, user_id: int, volume_ids: list[int]
+    ) -> list[object]:
+        savepoint = await db.begin_nested()
+        try:
+            await db.execute(text("SET LOCAL statement_timeout = '100ms'"))
+            await db.execute(text("SELECT pg_sleep(5)"))
+        finally:
+            await savepoint.rollback()
+        raise AssertionError("PostgreSQL did not cancel the aggregate statement")
+
+    monkeypatch.setattr(projection_repo, "fetch_series_aggregates", _cancelled_aggregate)
+
+    response = await auth_client.get("/api/v2/roll/bootstrap")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["rollable"]) == 1
+    assert body["rollable"][0]["identity"]["canonical_series_id"] == "9300"
+    assert body["rollable"][0]["reader"]["progress_scope"] == "thread"
+    assert body["rollable"][0]["reader"]["read_count"] == 2
+    assert body["rollable"][0]["reader"]["issue_count"] == 3
+
+    # The cancelled statement must not poison the session: a fresh bootstrap
+    # after cleanup still returns a complete, correctly ordered payload.
+    follow_up = await auth_client.get("/api/v2/roll/bootstrap")
+
+    assert follow_up.status_code == 200
+    follow_up_body = follow_up.json()
+    assert len(follow_up_body["rollable"]) == 1
+    assert follow_up_body["rollable"][0]["issue"]["id"] == issues[2].id
+    assert follow_up_body["rollable"][0]["identity"]["canonical_series_id"] == "9300"
 
 
 @pytest.mark.asyncio

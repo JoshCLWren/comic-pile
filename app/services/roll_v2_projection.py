@@ -11,14 +11,22 @@ No per-row queries exist: identity, cover, rating, progress, and route data
 all come from these bulk rows. ComicVine is never called synchronously;
 missing stored metadata yields nulls. Threads with no next unread issue are
 omitted and reported as omitted so callers can prove they hold no roll target.
+
+A canonical-series aggregate timeout or database failure fails open (issue
+#4315): rollable rows keep their thread-scoped progress instead of turning the
+whole bootstrap into a 503, and one per-query timing line names the cost of
+every statement in the projection.
 """
 
 from __future__ import annotations
 
+import logging
+import time
 from datetime import datetime
 from typing import Literal
 from urllib.parse import urlsplit
 
+from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.reading_eligibility_service import get_execution_eligibility
@@ -39,6 +47,13 @@ from app.schemas.roll_v2 import (
 )
 
 MAX_ROUTES = 3
+
+#: Projection wall time above which the per-query timing line is promoted from
+#: debug to warning. Production keeps only warnings, so a slow bootstrap leaves
+#: an actionable record that names the offending statement (issue #4315).
+SLOW_PROJECTION_WARNING_MS = 1000.0
+
+logger = logging.getLogger(__name__)
 
 
 def _integer(value: object) -> int | None:
@@ -272,8 +287,14 @@ async def get_v2_rollable_projection(
         Tuple of (rollable items, session last-read or None, omitted thread
         ids that held no next unread issue).
     """
+    started_at = time.perf_counter()
+
+    eligibility_started_at = time.perf_counter()
     eligibility = await get_execution_eligibility(db, user_id)
+    eligibility_ms = (time.perf_counter() - eligibility_started_at) * 1000
+
     eligibility_args = {"eligibility": eligibility} if eligibility is not None else {}
+    candidates_started_at = time.perf_counter()
     candidate_rows = await projection_repo.fetch_rollable_candidates(
         db,
         user_id=user_id,
@@ -281,6 +302,16 @@ async def get_v2_rollable_projection(
         excluded_thread_ids=excluded_thread_ids,
         **eligibility_args,
     )
+    candidates_ms = (time.perf_counter() - candidates_started_at) * 1000
+
+    # Resolve last-read before the series aggregate so a degraded aggregate
+    # never strands the session context. Both are independent reads.
+    last_read_started_at = time.perf_counter()
+    last_read_row = await projection_repo.fetch_session_last_read(
+        db, session_id=session_id, user_id=user_id
+    )
+    last_read_ms = (time.perf_counter() - last_read_started_at) * 1000
+
     if eligibility is not None:
         for row in candidate_rows:
             frontier = eligibility.threads[row["thread_id"]].next_issue_id
@@ -325,10 +356,31 @@ async def get_v2_rollable_projection(
             volumes.append(volume_id)
 
     stats: dict[int, _SeriesStats] = {volume_id: _SeriesStats() for volume_id in volumes}
+    aggregate_rows: list[projection_repo.SeriesAggregateRow] = []
+    aggregate_ok = False
+    series_ms = 0.0
+    series_status = "empty"
     if volumes:
-        aggregate_rows = await projection_repo.fetch_series_aggregates(
-            db, user_id=user_id, volume_ids=volumes
-        )
+        series_started_at = time.perf_counter()
+        try:
+            aggregate_rows = await projection_repo.fetch_series_aggregates(
+                db, user_id=user_id, volume_ids=volumes
+            )
+            aggregate_ok = True
+            series_status = "ok"
+        except (TimeoutError, sqlalchemy_exc.TimeoutError, sqlalchemy_exc.DBAPIError) as error:
+            # Fail open (issue #4315): a slow or unavailable canonical-series
+            # aggregate must never turn the whole Roll bootstrap into a 503.
+            # Rollable rows still carry thread-scoped progress without it.
+            series_status = f"unavailable:{type(error).__name__}"
+            logger.warning(
+                "roll.v2_series_aggregates_unavailable volumes=%d elapsed_ms=%.2f error=%s",
+                len(volumes),
+                (time.perf_counter() - series_started_at) * 1000,
+                type(error).__name__,
+            )
+        finally:
+            series_ms = (time.perf_counter() - series_started_at) * 1000
         for agg_row in aggregate_rows:
             volume_id, _ = extract_volume(agg_row["identity_metadata"])
             if volume_id is None or volume_id not in stats:
@@ -425,7 +477,7 @@ async def get_v2_rollable_projection(
             state=issue_state,
             series_mapping_state=series_state,
         )
-        if volume_id is not None:
+        if volume_id is not None and aggregate_ok:
             entry = stats[volume_id]
             ratings = sorted(entry.effective.values(), key=lambda item: (item[1], item[0]))
             average = (
@@ -455,6 +507,9 @@ async def get_v2_rollable_projection(
                 progress_scope=ProgressScope.CANONICAL_SERIES_RUN,
             )
         else:
+            # No canonical-series aggregate (unknown volume, or the aggregate
+            # timed out/failed open in issue #4315): report the always-available
+            # thread-scoped progress rather than a false zero series count.
             total = group.thread_total_count
             rollable_reader = RollableReader(
                 latest_rating=None,
@@ -477,9 +532,6 @@ async def get_v2_rollable_projection(
             )
         )
 
-    last_read_row = await projection_repo.fetch_session_last_read(
-        db, session_id=session_id, user_id=user_id
-    )
     last_read: RollLastRead | None = None
     if last_read_row is not None and (
         last_read_row["issue_id"] is not None or last_read_row["thread_id"] is not None
@@ -492,4 +544,23 @@ async def get_v2_rollable_projection(
             thread_title=last_read_row["thread_title"],
             read_at=read_at if isinstance(read_at, datetime) else None,
         )
+    total_ms = (time.perf_counter() - started_at) * 1000
+    # One compact line per bootstrap names each statement's cost so a slow
+    # production request identifies the offending query directly (issue #4315).
+    log_level = logging.WARNING if total_ms >= SLOW_PROJECTION_WARNING_MS else logging.DEBUG
+    logger.log(
+        log_level,
+        "roll.v2_projection_timing total_ms=%.2f eligibility_ms=%.2f candidates_ms=%.2f "
+        "candidate_threads=%d series_ms=%.2f series_volumes=%d series_rows=%d "
+        "last_read_ms=%.2f series_status=%s",
+        total_ms,
+        eligibility_ms,
+        candidates_ms,
+        len(order),
+        series_ms,
+        len(volumes),
+        len(aggregate_rows),
+        last_read_ms,
+        series_status,
+    )
     return rollable, last_read, omitted_thread_ids
