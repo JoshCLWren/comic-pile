@@ -228,9 +228,9 @@ endpoint. Pass a validated `SessionPolicy` with the Python backend's
 `bootstrap`. The runtime image must include IANA `tzdata` at `/usr/share/zoneinfo`,
 the same database used by Python `ZoneInfo`.
 
-The read-only `resolve_current_session` accepts a caller-owned transaction. It
-includes recent event and pending-issue activity, prefers pending work, and uses
-activity/start/id tie breakers. Bootstrap holds Python's per-user advisory
+The read-only `resolve_current_session` accepts a caller-owned transaction. It uses a fixed interval from session start (six hours by default),
+not a sliding inactivity window. Pending context and later events never extend
+expiry. When multiple valid unended sessions exist, the newest start/id wins. Bootstrap holds Python's per-user advisory
 transaction lock, rechecks authority, initializes missing bandwidth once, and
 creates a full-library session-start snapshot in the same commit as the new
 session. It preserves initialized/manual bandwidth, intent, pending context,
