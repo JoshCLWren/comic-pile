@@ -156,8 +156,8 @@ def _requirement_groups(
 
     One earlier Issue can gate a frontier through a hold, strict order, and a
     prerequisite at once. The Issue is the requirement, so those rules are
-    merged into one entry. A rule whose targets are all described by an
-    overlapping entry still joins it, because dropping the rule would hide the
+    merged into one entry. A rule whose targets are already described joins
+    every entry that describes them, because dropping the rule would hide the
     list or prerequisite the reader needs to edit.
 
     Args:
@@ -179,16 +179,21 @@ def _requirement_groups(
             continue
         remaining = tuple(issue_id for issue_id in targets if issue_id not in seen)
         if not remaining:
-            covering = next(
-                (
-                    index
-                    for index, (described, _rules) in enumerate(groups)
-                    if set(targets) <= set(described)
-                ),
-                None,
-            )
-            if covering is not None:
-                groups[covering][1].append(blocker)
+            covered_by = [
+                index
+                for index, (described, _rules) in enumerate(groups)
+                if set(targets) <= set(described)
+            ]
+            if covered_by:
+                groups[covered_by[0]][1].append(blocker)
+            else:
+                # The rule spans requirements described by several entries
+                # (for example a list ordered after two earlier Issues owned by
+                # different lists). Attach it to every entry so no governing
+                # list or prerequisite editor disappears.
+                for index, (described, _rules) in enumerate(groups):
+                    if set(targets) & set(described):
+                        groups[index][1].append(blocker)
             continue
         group_by_targets[remaining] = len(groups)
         groups.append((remaining, [blocker]))

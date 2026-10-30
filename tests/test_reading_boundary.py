@@ -821,3 +821,78 @@ def test_lists_sharing_one_requirement_keep_both_edit_links() -> None:
         other_list_id,
     ]
     assert boundary.summary == "Mister Miracle #1 is waiting on 1 live requirement."
+
+
+def test_rule_spanning_several_requirements_keeps_its_editor() -> None:
+    """A rule that spans distinct requirements stays visible on each one."""
+    first_list_id = LIST_ID
+    second_list_id = LIST_ID + 1
+    third_list_id = LIST_ID + 2
+    state = ReadingSnapshot(
+        user_id=USER_ID,
+        threads=(
+            ReadingThread(FOURTH_WORLD_ID, name="Fourth World"),
+            ReadingThread(MISTER_MIRACLE_ID, name="Mister Miracle"),
+        ),
+        issues=(
+            ReadingIssue(F1, FOURTH_WORLD_ID, 1),
+            ReadingIssue(F2, FOURTH_WORLD_ID, 2),
+            ReadingIssue(M1, MISTER_MIRACLE_ID, 1),
+        ),
+        lists=(
+            ReadingList(
+                first_list_id,
+                "strict",
+                (ReadingListEntry(F1), ReadingListEntry(M1)),
+                "First List",
+            ),
+            ReadingList(
+                second_list_id,
+                "strict",
+                (ReadingListEntry(F2), ReadingListEntry(M1)),
+                "Second List",
+            ),
+            ReadingList(
+                third_list_id,
+                "strict",
+                (ReadingListEntry(F1), ReadingListEntry(F2), ReadingListEntry(M1)),
+                "Third List",
+            ),
+        ),
+        prerequisites=(),
+    )
+    snapshot = build_eligibility_snapshot(
+        state,
+        queued_thread_ids=frozenset({FOURTH_WORLD_ID, MISTER_MIRACLE_ID}),
+    )
+    gates = snapshot.threads[MISTER_MIRACLE_ID].blockers
+    assert [gate.waiting_on_issue_ids for gate in gates] == [(F1,), (F2,), (F1, F2)]
+    labels = replace(
+        _fixture()[2],
+        lists={
+            first_list_id: BoundaryListLabels(first_list_id, "First List", "strict"),
+            second_list_id: BoundaryListLabels(second_list_id, "Second List", "strict"),
+            third_list_id: BoundaryListLabels(third_list_id, "Third List", "strict"),
+        },
+    )
+
+    boundary = project_boundary_explanation(snapshot, labels, MISTER_MIRACLE_ID)
+
+    # Reading either Issue satisfies part of the third list, but the third
+    # list's rule still governs both requirements and must stay editable.
+    assert len(boundary.blockers) == 2
+    assert [
+        [issue.issue_id for issue in blocker.waiting_on]
+        for blocker in boundary.blockers
+    ] == [[F1], [F2]]
+    assert boundary.summary == "Mister Miracle #1 is waiting on 2 live requirements."
+    assert [blocker.reason for blocker in boundary.blockers] == [
+        "Strict order in First List and Strict order in Third List: "
+        "read Fourth World #1 first",
+        "Strict order in Second List and Strict order in Third List: "
+        "read Fourth World #2 first",
+    ]
+    assert [
+        [editor.list_id for editor in blocker.editors]
+        for blocker in boundary.blockers
+    ] == [[first_list_id, third_list_id], [second_list_id, third_list_id]]
