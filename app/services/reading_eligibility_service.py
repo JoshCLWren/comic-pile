@@ -244,10 +244,14 @@ def project_blocking_explanation(
     state = snapshot.threads.get(thread_id)
     dependencies: list[BlockingDependency] = []
     reasons: list[str] = []
+    seen_issue_ids: set[int] = set()
     if state is not None:
         for blocker in state.blockers:
             origin = describe_blocker_origin(snapshot, blocker)
             for issue_id in blocker.waiting_on_issue_ids:
+                if issue_id in seen_issue_ids:
+                    continue
+                seen_issue_ids.add(issue_id)
                 source_thread_id = snapshot.issue_thread_ids[issue_id]
                 label = f"{origin}: waiting on {snapshot.issue_labels.get(issue_id, 'required issue')}"
                 reasons.append(label)

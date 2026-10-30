@@ -402,18 +402,27 @@ def _issue_references(
         blockers: list[ReadingGraphBlocker] = []
         state = eligibility.get(meta.thread_id)
         if state is not None and state.next_issue_id == issue_id:
-            blockers = [
-                ReadingGraphBlocker(
-                    kind=blocker.kind,
-                    list_id=blocker.list_id,
-                    waiting_on_issue_ids=list(blocker.waiting_on_issue_ids),
-                    gate_issue_id=blocker.gate_issue_id,
-                    explanation=_blocker_explanation(
-                        blocker, list_names=context.list_names, issue_labels=labels
-                    ),
+            seen_issue_ids: set[int] = set()
+            deduped_blockers: list[ReadingGraphBlocker] = []
+            for blocker in state.blockers:
+                # Skip blockers whose waiting issues were already reported
+                if all(iid in seen_issue_ids for iid in blocker.waiting_on_issue_ids):
+                    continue
+                # Update seen set with new issues
+                for iid in blocker.waiting_on_issue_ids:
+                    seen_issue_ids.add(iid)
+                deduped_blockers.append(
+                    ReadingGraphBlocker(
+                        kind=blocker.kind,
+                        list_id=blocker.list_id,
+                        waiting_on_issue_ids=list(blocker.waiting_on_issue_ids),
+                        gate_issue_id=blocker.gate_issue_id,
+                        explanation=_blocker_explanation(
+                            blocker, list_names=context.list_names, issue_labels=labels
+                        ),
+                    )
                 )
-                for blocker in state.blockers
-            ]
+            blockers = deduped_blockers
         references.append(
             ReadingGraphIssueReference(
                 issue_id=issue_id,
