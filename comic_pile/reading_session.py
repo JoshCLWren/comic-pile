@@ -45,7 +45,7 @@ async def _resolve_current_session_with_candidate_count(
     This is a single bounded read, including the count of valid candidates.
     """
     now = datetime.now(UTC)
-    cutoff = now - timedelta(hours=6)
+    cutoff = now - timedelta(hours=_session_gap_hours())
     result = await db.execute(
         select(ReadingSession, func.count().over().label("candidate_count"))
         .where(ReadingSession.user_id == user_id)
