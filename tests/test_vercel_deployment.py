@@ -135,7 +135,11 @@ def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
     builds = config["builds"]
 
     assert builds == [
-        {"src": "api/index.py", "use": "@vercel/python"},
+        {
+            "src": "api/index.py",
+            "use": "@vercel/python",
+            "config": {"excludeFiles": "{target/**,native/**/target/**}"},
+        },
         {"src": "api/native_roll.rs", "use": "@vercel/rust"},
         {"src": "api/auth/me.ts", "use": "@vercel/node"},
         {

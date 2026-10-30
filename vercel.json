@@ -13,7 +13,10 @@
   "builds": [
     {
       "src": "api/index.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "excludeFiles": "{target/**,native/**/target/**}"
+      }
     },
     {
       "src": "api/native_roll.rs",
