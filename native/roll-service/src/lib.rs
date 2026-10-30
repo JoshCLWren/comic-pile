@@ -228,9 +228,11 @@ mod rate_tests {
     #[test]
     fn test_get_rating_limits() {
         let config = Config::from_lookup(|name| match name {
-            "RUST_ROLL_RATING_MIN" => Some("0.5".into()),
-            "RUST_ROLL_RATING_MAX" => Some("5.0".into()),
-            "RUST_ROLL_RATING_THRESHOLD" => Some("3.5".into()),
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            "RATING_MIN" => Some("0.5".into()),
+            "RATING_MAX" => Some("5.0".into()),
+            "RATING_THRESHOLD" => Some("3.5".into()),
             _ => None,
         })
         .unwrap();

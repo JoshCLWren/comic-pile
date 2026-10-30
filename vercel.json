@@ -51,6 +51,26 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "/api/v1/rate",
+      "methods": ["POST"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v1/rate/",
+      "methods": ["POST"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/rate",
+      "methods": ["POST"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/rate/",
+      "methods": ["POST"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "/api(?:/.*)?",
       "dest": "/api/index.py"
     },

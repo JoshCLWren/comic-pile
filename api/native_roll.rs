@@ -72,6 +72,10 @@ fn app() -> Router {
         .route("/api/_native_roll/health", get(native_health))
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
+        .route("/api/v1/rate", axum::routing::post(native_bootstrap))
+        .route("/api/v1/rate/", axum::routing::post(native_bootstrap))
+        .route("/api/rate", axum::routing::post(native_bootstrap))
+        .route("/api/rate/", axum::routing::post(native_bootstrap))
 }
 
 #[tokio::main]

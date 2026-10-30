@@ -221,11 +221,11 @@ pub async fn rate(
     let title: String = thread_row.try_get(1).map_err(db::query_error)?;
     let format: String = thread_row.try_get(2).map_err(db::query_error)?;
     let issues_remaining: i32 = thread_row.try_get(3).map_err(db::query_error)?;
-    let last_rating: Option<f64> = thread_row.try_get(4).map_err(db::query_error)?;
+    let _last_rating: Option<f64> = thread_row.try_get(4).map_err(db::query_error)?;
     let last_activity_at: Option<String> = thread_row.try_get(5).map_err(db::query_error)?;
     let total_issues: Option<i32> = thread_row.try_get(6).map_err(db::query_error)?;
-    let reading_progress: Option<String> = thread_row.try_get(7).map_err(db::query_error)?;
-    let next_unread_issue_id: Option<i32> = thread_row.try_get(8).map_err(db::query_error)?;
+    let _reading_progress: Option<String> = thread_row.try_get(7).map_err(db::query_error)?;
+    let _next_unread_issue_id: Option<i32> = thread_row.try_get(8).map_err(db::query_error)?;
     let status: String = thread_row.try_get(9).map_err(db::query_error)?;
     let notes: Option<String> = thread_row.try_get(10).map_err(db::query_error)?;
     let is_test: bool = thread_row.try_get(11).map_err(db::query_error)?;
@@ -432,7 +432,7 @@ pub async fn rate(
     // Build response
     let response = RateResponse {
         id: thread_id_val,
-        title,
+        title: title.clone(),
         format: normalize_format_value(&format),
         issues_remaining: new_issues_remaining,
         queue_position: queue_position,
