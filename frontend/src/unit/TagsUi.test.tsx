@@ -1286,6 +1286,22 @@ describe('TagSection (issue #3032)', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
   })
 
+  it('opens from a controlled deep-link request (issue #4332)', async () => {
+    renderSection({ editorOpen: true, onEditorOpenChange: vi.fn() })
+
+    expect(await screen.findByRole('dialog')).toHaveAccessibleName('Tags · #11')
+  })
+
+  it('reports a controlled open request back to the page', async () => {
+    const user = userEvent.setup()
+    const onEditorOpenChange = vi.fn()
+    renderSection({ editorOpen: false, onEditorOpenChange })
+
+    await user.click(screen.getByRole('button', { name: 'Edit tags' }))
+
+    expect(onEditorOpenChange).toHaveBeenCalledWith(true)
+  })
+
   it('removes a direct tag from the inline view', async () => {
     const user = userEvent.setup()
     mockedTagsApi.effectiveForIssue.mockResolvedValue(makeEffective())
@@ -1772,5 +1788,42 @@ describe('TagEditor inherited tags (issue #3426)', () => {
       'already tags this issue via The Ultimates',
     )
     expect(mockedTagsApi.assign).not.toHaveBeenCalled()
+  })
+
+  it('opens the real source link from the inherited picker annotation (issue #4332)', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    mockedTagsApi.effectiveForIssue.mockResolvedValue(inheritedEffective())
+    mockedTagsApi.list.mockResolvedValue({ tags: [mustReadTag()] })
+
+    renderEditor({ onClose })
+
+    // The picker used to render an inert "Inherited" label. It is now a
+    // disclosure that exposes the same navigable sources as the chip.
+    const marker = await screen.findByTitle('Inherited from The Ultimates')
+    expect(marker).toHaveTextContent('Inherited')
+    await user.click(marker)
+
+    const sources = screen.getByRole('list', { name: /sources for must read/i })
+    const link = within(sources).getByRole('link', {
+      name: /open thread: the ultimates/i,
+    })
+    expect(link).toHaveAttribute('href', '/thread/5?tagEditor=thread')
+
+    // Following the source leaves the issue editor so the source editor can
+    // take focus.
+    await user.click(link)
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('does not advertise inheritance sources when none contribute here (issue #4332)', async () => {
+    mockedTagsApi.effectiveForIssue.mockResolvedValue(emptyEffective())
+
+    renderEditor()
+
+    await screen.findByText('On this issue')
+    expect(
+      screen.queryByText(/Inherited tags are read-only here/i),
+    ).toBeNull()
   })
 })
