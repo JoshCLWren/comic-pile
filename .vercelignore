@@ -5,6 +5,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+# Rust build artifacts belong in the build cache, never the uploaded source.
+target/
+native/**/target/
 .coverage
 htmlcov/
 
