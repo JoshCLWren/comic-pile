@@ -72,6 +72,27 @@ fn identity_state(confirmed: i64, candidate: i64) -> &'static str {
     }
 }
 
+/// Mirror Python extract_cover_source: trim strings and skip absent, null,
+/// non-string and empty values before falling back through stored image sizes.
+/// URL validation remains separate, so an invalid nonempty source does not
+/// silently select different artwork from a lower-priority field.
+fn extract_cover_source(metadata: &Value) -> Option<&str> {
+    fn nonempty(value: &Value) -> Option<&str> {
+        value.as_str().map(str::trim).filter(|s| !s.is_empty())
+    }
+    ["image_url", "primary_image"]
+        .iter()
+        .filter_map(|key| metadata.get(key))
+        .find_map(nonempty)
+        .or_else(|| {
+            let image = metadata.get("image")?;
+            ["original_url", "super_url", "medium_url", "small_url"]
+                .iter()
+                .filter_map(|key| image.get(key))
+                .find_map(nonempty)
+        })
+}
+
 fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
     let thread_id: i32 = row.try_get(0).map_err(db::query_error)?;
     let issue_id: i32 = row.try_get(4).map_err(db::query_error)?;
@@ -106,11 +127,7 @@ fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
         .and_then(|v| v.get("name"))
         .or_else(|| meta.get("volume_name"))
         .and_then(Value::as_str);
-    let cover = meta
-        .get("image_url")
-        .or_else(|| meta.get("primary_image"))
-        .or_else(|| meta.get("image").and_then(|i| i.get("original_url")))
-        .and_then(Value::as_str)
+    let cover = extract_cover_source(&meta)
         .filter(|s| s.starts_with("https://") || s.starts_with("http://"))
         .filter(|s| !s.split('/').nth(2).unwrap_or("").contains('@'));
     let source = if canonical_id.is_some() && mapping_status.as_deref() == Some("confirmed") {
@@ -982,5 +999,71 @@ mod recovery_diagnostic_tests {
         assert_eq!(diagnostics[0]["code"], "cycle_detected");
         assert_eq!(diagnostics[0]["node_id"], 1);
         assert_eq!(diagnostics[0]["limit"], serde_json::Value::Null);
+    }
+}
+
+#[cfg(test)]
+mod cover_source_tests {
+    use super::extract_cover_source;
+    use serde_json::json;
+
+    #[test]
+    fn stored_image_sizes_follow_python_fallback_order() {
+        for key in ["original_url", "super_url", "medium_url", "small_url"] {
+            let mut metadata = json!({"image": {}});
+            metadata["image"][key] = json!(" https://example.com/cover.jpg ");
+            assert_eq!(
+                extract_cover_source(&metadata),
+                Some("https://example.com/cover.jpg")
+            );
+        }
+        let metadata = json!({"image": {
+            "original_url": null, "super_url": " ",
+            "medium_url": "https://example.com/medium.jpg",
+            "small_url": "https://example.com/small.jpg"
+        }});
+        assert_eq!(
+            extract_cover_source(&metadata),
+            Some("https://example.com/medium.jpg")
+        );
+    }
+
+    #[test]
+    fn empty_and_non_string_direct_fields_do_not_hide_stored_covers() {
+        for value in [json!(null), json!(""), json!("  "), json!(23), json!({})] {
+            let metadata = json!({"image_url": value, "primary_image": " https://example.com/primary.jpg ",
+                                  "image": {"original_url": "https://example.com/nested.jpg"}});
+            assert_eq!(
+                extract_cover_source(&metadata),
+                Some("https://example.com/primary.jpg")
+            );
+        }
+        assert_eq!(
+            extract_cover_source(&json!({"image_url": null, "primary_image": " ",
+            "image": {"super_url": "https://example.com/super.jpg"}})),
+            Some("https://example.com/super.jpg")
+        );
+        for metadata in [
+            json!(null),
+            json!({}),
+            json!({"image": "bad"}),
+            json!({"image": {"original_url": false}}),
+        ] {
+            assert_eq!(extract_cover_source(&metadata), None);
+        }
+    }
+
+    #[test]
+    fn first_nonempty_source_wins_even_before_url_validation() {
+        let metadata = json!({"image_url": " invalid-source ",
+            "primary_image": "https://example.com/primary.jpg",
+            "image": {"original_url": "https://example.com/original.jpg"}});
+        assert_eq!(extract_cover_source(&metadata), Some("invalid-source"));
+        let metadata = json!({"image_url": " https://example.com/direct.jpg ",
+            "primary_image": "https://example.com/primary.jpg"});
+        assert_eq!(
+            extract_cover_source(&metadata),
+            Some("https://example.com/direct.jpg")
+        );
     }
 }
