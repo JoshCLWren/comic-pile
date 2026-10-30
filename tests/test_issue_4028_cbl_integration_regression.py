@@ -27,7 +27,6 @@ from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from app.main import app
 from app.models import Dependency, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
-from app.services.reading_eligibility_service import get_execution_eligibility
 from app.services.reading_list_evaluator import (
     ReadingIssue,
     ReadingList,
@@ -38,7 +37,6 @@ from app.services.reading_list_evaluator import (
     SeriesOverlapDecision,
     evaluate,
 )
-from tests.conftest import get_or_create_user_async
 
 FOURTH_WORLD = "comicvine:volume:fourth-world"
 JLI = "comicvine:volume:jli"
