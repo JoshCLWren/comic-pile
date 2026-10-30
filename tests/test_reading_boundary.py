@@ -212,9 +212,122 @@ def test_explanations_parity_with_canonical_evaluator() -> None:
         assert explanation.next is not None
         assert explanation.next.issue.issue_id == state.next_issue_id
         assert (explanation.state == "blocked") is (not state.eligible)
-        assert len(explanation.blockers) <= len(state.blockers)
-        # Deduplication by canonical target issue: one blocking target may
-        # arrive through multiple gates (hold + strict order) but counts once.
+        # One canonical requirement per waiting Issue, in evaluator order, with
+        # no target described twice even when several gates point at it.
+        canonical_targets = [
+            issue_id
+            for blocker in state.blockers
+            for issue_id in blocker.waiting_on_issue_ids
+        ]
+        projected_targets = [
+            issue.issue_id
+            for blocker in explanation.blockers
+            for issue in blocker.waiting_on
+        ]
+        assert projected_targets == list(dict.fromkeys(canonical_targets))
+
+
+def test_stacked_hold_and_strict_gates_describe_one_requirement() -> None:
+    """MQA-ROLL-013: a real hold + strict stack describes its target once."""
+    from app.services.reading_eligibility_service import project_blocking_explanation
+
+    # A cross-series strict list where Mister Miracle #1 carries a hold gate.
+    # The evaluator itself emits both a ``hold`` and a ``strict_order`` blocker
+    # for that frontier, and both wait on the same unread Fourth World issue.
+    state = ReadingSnapshot(
+        user_id=USER_ID,
+        threads=(
+            ReadingThread(FOURTH_WORLD_ID, name="Fourth World"),
+            ReadingThread(MISTER_MIRACLE_ID, name="Mister Miracle"),
+        ),
+        issues=(
+            ReadingIssue(F1, FOURTH_WORLD_ID, 1),
+            ReadingIssue(M1, MISTER_MIRACLE_ID, 1),
+        ),
+        lists=(
+            ReadingList(
+                LIST_ID,
+                "strict",
+                (
+                    ReadingListEntry(F1),
+                    ReadingListEntry(M1, gate="hold"),
+                ),
+                "JLI",
+            ),
+        ),
+        prerequisites=(),
+    )
+    snapshot = build_eligibility_snapshot(
+        state,
+        queued_thread_ids=frozenset({FOURTH_WORLD_ID, MISTER_MIRACLE_ID}),
+    )
+    gates = snapshot.threads[MISTER_MIRACLE_ID].blockers
+    assert [gate.kind for gate in gates] == ["hold", "strict_order"]
+    assert [gate.waiting_on_issue_ids for gate in gates] == [(F1,), (F1,)]
+    labels = _fixture()[2]
+
+    boundary = project_boundary_explanation(snapshot, labels, MISTER_MIRACLE_ID)
+
+    assert [issue.issue_id for b in boundary.blockers for issue in b.waiting_on] == [F1]
+    assert boundary.summary == "Mister Miracle #1 is waiting on 1 live requirement."
+    assert boundary.blockers[0].reason == "Hold in JLI: read Fourth World #1 first"
+    assert boundary.blockers[0].editor is not None
+    assert boundary.blockers[0].editor.list_id == LIST_ID
+
+    blocking = project_blocking_explanation(snapshot, MISTER_MIRACLE_ID)
+    assert [item.issue_id for item in blocking.blocking_dependencies] == [F1]
+    assert blocking.is_blocked
+
+
+def test_distinct_blocking_targets_stay_separately_visible() -> None:
+    """Genuinely distinct requirements keep their own description and editor."""
+    other_list_id = LIST_ID + 1
+    state = ReadingSnapshot(
+        user_id=USER_ID,
+        threads=(
+            ReadingThread(FOURTH_WORLD_ID, name="Fourth World"),
+            ReadingThread(MISTER_MIRACLE_ID, name="Mister Miracle"),
+        ),
+        issues=(
+            ReadingIssue(F1, FOURTH_WORLD_ID, 1),
+            ReadingIssue(F2, FOURTH_WORLD_ID, 2),
+            ReadingIssue(M1, MISTER_MIRACLE_ID, 1),
+        ),
+        lists=(
+            ReadingList(
+                LIST_ID,
+                "strict",
+                (ReadingListEntry(F1), ReadingListEntry(M1)),
+                "JLI",
+            ),
+            ReadingList(
+                other_list_id,
+                "strict",
+                (ReadingListEntry(F2), ReadingListEntry(M1)),
+                "Other List",
+            ),
+        ),
+        prerequisites=(),
+    )
+    snapshot = build_eligibility_snapshot(
+        state,
+        queued_thread_ids=frozenset({FOURTH_WORLD_ID, MISTER_MIRACLE_ID}),
+    )
+    gates = snapshot.threads[MISTER_MIRACLE_ID].blockers
+    assert [gate.waiting_on_issue_ids for gate in gates] == [(F1,), (F2,)]
+    labels = _fixture()[2]
+
+    boundary = project_boundary_explanation(snapshot, labels, MISTER_MIRACLE_ID)
+
+    assert [
+        [issue.issue_id for issue in blocker.waiting_on]
+        for blocker in boundary.blockers
+    ] == [[F1], [F2]]
+    assert boundary.summary == "Mister Miracle #1 is waiting on 2 live requirements."
+    assert [
+        blocker.editor.list_id if blocker.editor is not None else None
+        for blocker in boundary.blockers
+    ] == [LIST_ID, other_list_id]
 
 
 @pytest.mark.asyncio
@@ -616,160 +729,30 @@ async def test_api_includes_owned_list_names_and_modes_on_issues(
     assert body["blockers"][0]["waiting_on"][0]["reading_lists"][0]["mode"] == "strict"
 
 
-def test_deduplicates_single_blocking_issue_across_stacked_gates() -> None:
-    """MQA-ROLL-013: one target issue via hold + strict order counts as 1."""
-    # Build a minimal evaluator state where the same strict list produces
-    # both a hold blocker and a strict_order blocker for the same frontier
-    # issue, both waiting on the same target issue. This simulates the
-    # "Hold until reached" milestone + strict order stacked gates scenario.
-    from app.services.reading_list_evaluator import (
-        Blocker,
-        ReadingIssue,
-        ReadingList,
-        ReadingListEntry,
-        ReadingSnapshot,
-        ReadingThread,
+@pytest.mark.parametrize("requirements", [(F2,), (F2, F1)])
+def test_duplicate_requirements_keep_each_distinct_issue_once(
+    requirements: tuple[int, ...],
+) -> None:
+    """Hold and reader origins cannot duplicate or hide canonical requirements."""
+    from app.services.reading_eligibility_service import project_blocking_explanation
+    from app.services.reading_list_evaluator import Blocker, ThreadEligibility
+
+    _state, snapshot, labels = _fixture()
+    original = (
+        Blocker("hold", LIST_ID, (F2,)),
+        Blocker("prerequisite", None, requirements, prerequisite_id=1, origin="reader"),
     )
-    from app.services.reading_eligibility_service import (
-        build_eligibility_snapshot,
+    snapshot = replace(
+        snapshot,
+        threads={MISTER_MIRACLE_ID: ThreadEligibility(MISTER_MIRACLE_ID, M1, original)},
     )
-    from dataclasses import replace
-
-    test_user_id = 1
-    list_id = 10
-    thread_id = 1
-    a_id, b_id = 100, 101
-
-    state = ReadingSnapshot(
-        user_id=test_user_id,
-        threads=(ReadingThread(thread_id, name="Test Series"),),
-        issues=(
-            ReadingIssue(a_id, thread_id, 1),
-            ReadingIssue(b_id, thread_id, 2),
-        ),
-        lists=(
-            ReadingList(
-                list_id,
-                "strict",
-                (
-                    ReadingListEntry(a_id),
-                    ReadingListEntry(b_id),
-                ),
-                "Test List",
-            ),
-        ),
-        prerequisites=(),
-    )
-    snapshot = build_eligibility_snapshot(state, queued_thread_ids=frozenset({thread_id}))
-
-    # Manually inject two blockers for B (the frontier) from the same list,
-    # both waiting on A. This simulates hold + strict_order stacked gates.
-    thread_state = snapshot.threads[thread_id]
-    duplicated = replace(
-        thread_state,
-        next_issue_id=b_id,
-        blockers=(
-            Blocker("strict_order", list_id, (a_id,)),
-            Blocker("hold", list_id, (a_id,), gate_issue_id=b_id),
-        ),
-    )
-    dup_snapshot = replace(snapshot, threads={**snapshot.threads, thread_id: duplicated})
-
-    # Now project through the boundary explanation service.
-    from app.repositories.reading_boundary_repository import BoundaryShadowLabels, BoundaryThreadLabels, BoundaryIssueLabels, BoundaryListLabels
-    labels = BoundaryShadowLabels(
-        threads={thread_id: BoundaryThreadLabels(thread_id, "Test Series", "active")},
-        issues={
-            a_id: BoundaryIssueLabels(a_id, thread_id, "Test Series", "1"),
-            b_id: BoundaryIssueLabels(b_id, thread_id, "Test Series", "2"),
-        },
-        lists={list_id: BoundaryListLabels(list_id, "Test List", "strict")},
-        prerequisites={},
-    )
-
-    explanation = project_boundary_explanation(dup_snapshot, labels, thread_id)
-    # One canonical blocking target, not two.
-    assert len(explanation.blockers) == 1
-    assert "1 live requirement" in explanation.summary
-    assert explanation.blockers[0].waiting_on[0].issue_id == a_id
-    # The surviving blocker should preserve the list editor link.
-    assert explanation.blockers[0].editor is not None
-    assert explanation.blockers[0].editor.kind == "reading_list"
-    assert explanation.blockers[0].editor.list_id == list_id
-
-
-def test_preserves_separate_blockers_for_different_lists_same_target() -> None:
-    """G2: Two strict lists requiring the same issue stay separately visible.
-
-    Each list has its own editor link; dropping one loses the ability to edit
-    that list's restriction while the other list still blocks reading.
-    """
-    from app.services.reading_list_evaluator import (
-        Blocker,
-        ReadingIssue,
-        ReadingList,
-        ReadingListEntry,
-        ReadingSnapshot,
-        ReadingThread,
-    )
-    from app.services.reading_eligibility_service import (
-        build_eligibility_snapshot,
-    )
-    from dataclasses import replace
-
-    test_user_id = 1
-    list_id_1, list_id_2 = 10, 11
-    thread_id = 1
-    a_id, b_id = 100, 101
-
-    state = ReadingSnapshot(
-        user_id=test_user_id,
-        threads=(ReadingThread(thread_id, name="Test Series"),),
-        issues=(
-            ReadingIssue(a_id, thread_id, 1),
-            ReadingIssue(b_id, thread_id, 2),
-        ),
-        lists=(
-            ReadingList(list_id_1, "strict", (ReadingListEntry(a_id), ReadingListEntry(b_id)), "List One"),
-            ReadingList(list_id_2, "strict", (ReadingListEntry(a_id), ReadingListEntry(b_id)), "List Two"),
-        ),
-        prerequisites=(),
-    )
-    snapshot = build_eligibility_snapshot(state, queued_thread_ids=frozenset({thread_id}))
-
-    # Inject blockers for B from both lists, both waiting on A.
-    thread_state = snapshot.threads[thread_id]
-    duplicated = replace(
-        thread_state,
-        next_issue_id=b_id,
-        blockers=(
-            Blocker("strict_order", list_id_1, (a_id,)),
-            Blocker("strict_order", list_id_2, (a_id,)),
-        ),
-    )
-    dup_snapshot = replace(snapshot, threads={**snapshot.threads, thread_id: duplicated})
-
-    from app.repositories.reading_boundary_repository import BoundaryShadowLabels, BoundaryThreadLabels, BoundaryIssueLabels, BoundaryListLabels
-    labels = BoundaryShadowLabels(
-        threads={thread_id: BoundaryThreadLabels(thread_id, "Test Series", "active")},
-        issues={
-            a_id: BoundaryIssueLabels(a_id, thread_id, "Test Series", "1"),
-            b_id: BoundaryIssueLabels(b_id, thread_id, "Test Series", "2"),
-        },
-        lists={
-            list_id_1: BoundaryListLabels(list_id_1, "List One", "strict"),
-            list_id_2: BoundaryListLabels(list_id_2, "List Two", "strict"),
-        },
-        prerequisites={},
-    )
-
-    explanation = project_boundary_explanation(dup_snapshot, labels, thread_id)
-    # Two distinct blockers (different lists) should both be visible.
-    assert len(explanation.blockers) == 2
-    assert "2 live requirements" in explanation.summary
-    # Both should have their own editor links.
-    editor_list_ids = {b.editor.list_id for b in explanation.blockers if b.editor}
-    assert editor_list_ids == {list_id_1, list_id_2}
-    # Both should wait on the same target issue.
-    for b in explanation.blockers:
-        assert b.waiting_on[0].issue_id == a_id
+    boundary = project_boundary_explanation(snapshot, labels, MISTER_MIRACLE_ID)
+    waiting = [issue.issue_id for blocker in boundary.blockers for issue in blocker.waiting_on]
+    assert waiting == ([F2] if requirements == (F2,) else [F2, F1])
+    assert boundary.blockers[0].reason.startswith("Hold in JLI")
+    assert boundary.blockers[0].editor is not None
+    assert boundary.blockers[0].editor.list_id == LIST_ID
+    explanation = project_blocking_explanation(snapshot, MISTER_MIRACLE_ID)
+    assert [item.issue_id for item in explanation.blocking_dependencies] == waiting
+    assert explanation.is_blocked
+    assert snapshot.threads[MISTER_MIRACLE_ID].blockers == original

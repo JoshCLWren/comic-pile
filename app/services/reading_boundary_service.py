@@ -26,6 +26,7 @@ from app.schemas.reading_boundary import (
     ReadingBoundaryNext,
 )
 from app.services.errors import NotFoundError
+from app.services.reading_blocker_projection import unique_blocker_requirements
 from app.services.reading_eligibility_service import (
     ReadingEligibilitySnapshot,
     get_execution_eligibility,
@@ -134,9 +135,7 @@ def _blocker_editor(
         label=_prerequisite_origin_label(blocker.origin),
         prerequisite_id=blocker.prerequisite_id,
         issue_id=source_id,
-        thread_id=(
-            snapshot.issue_thread_ids.get(source_id) if source_id is not None else None
-        ),
+        thread_id=(snapshot.issue_thread_ids.get(source_id) if source_id is not None else None),
     )
 
 
@@ -272,42 +271,13 @@ def project_boundary_explanation(
         else None
     )
     blockers = (
-        [_project_blocker(snapshot, labels, blocker) for blocker in state.blockers]
+        [
+            _project_blocker(snapshot, labels, blocker)
+            for blocker in unique_blocker_requirements(state.blockers)
+        ]
         if state is not None
         else []
     )
-    # Deduplicate by canonical target issue: one blocking issue should count
-    # as one live requirement even when hold + strict gates both point at it.
-    # For list-based blockers, include the list_id so different lists requiring
-    # the same issue stay separately visible (each has its own editor link).
-    # For prerequisite blockers, deduplicate by target issue only.
-    seen_target_ids: set[tuple] = set()
-    deduped_blockers: list[ReadingBoundaryBlocker] = []
-    for b in blockers:
-        waiting_key = tuple(issue.issue_id for issue in b.waiting_on)
-        if b.origin == "reading_list" and b.editor is not None and b.editor.list_id is not None:
-            key = ("list", b.editor.list_id, waiting_key)
-        else:
-            key = ("prereq", waiting_key)
-        if key in seen_target_ids:
-            # Preserve every gate's reason and edit link by merging the
-            # duplicate into the already-kept blocker instead of dropping it.
-            for existing in deduped_blockers:
-                existing_waiting = tuple(issue.issue_id for issue in existing.waiting_on)
-                existing_key = (
-                    ("list", existing.editor.list_id, existing_waiting)
-                    if existing.origin == "reading_list"
-                    and existing.editor is not None
-                    and existing.editor.list_id is not None
-                    else ("prereq", existing_waiting)
-                )
-                if existing_key == key:
-                    existing.reason = f"{existing.reason}; {b.reason}"
-                    break
-            continue
-        seen_target_ids.add(key)
-        deduped_blockers.append(b)
-    blockers = deduped_blockers
     historical = _historical_rows(snapshot, labels, thread_id) if include_historical else []
     if state is None:
         boundary_state = "unavailable"
