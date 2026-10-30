@@ -22,6 +22,7 @@ import {
 } from '../services/api-cbl-sources'
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
+import ReadingListSeriesSkipControls from './ReadingListSeriesSkipControls'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
 import ConfirmDialog from './ConfirmDialog'
@@ -639,6 +640,20 @@ export default function CustomCBLBuilder({
     )
     setMessage(null)
   }
+  /**
+   * Apply one include/exclude decision to every entry in a series.
+   *
+   * @param threadId - Durable series identity the reader toggled.
+   * @param skipped - True skips the whole series in this list; false restores it.
+   */
+  const setSeriesSkipped = (threadId: number, skipped: boolean) => {
+    setEntries((current) =>
+      current.map((entry) =>
+        entry.thread_id === threadId ? { ...entry, skipped } : entry,
+      ),
+    )
+    setMessage(null)
+  }
   const toggleCheckpoint = (issueId: number) => {
     setEntries((current) =>
       current.map((entry) =>
@@ -877,6 +892,12 @@ export default function CustomCBLBuilder({
                   </div>
                 </div>
               )}
+
+              <ReadingListSeriesSkipControls
+                entries={entries}
+                disabled={disabled || isPending}
+                onSeriesSkipChange={setSeriesSkipped}
+              />
 
               <ol className="space-y-2" aria-label="Custom CBL ordered issues">
                 {visibleEntries.map(({ entry, index }) => (
