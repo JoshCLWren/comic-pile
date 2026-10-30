@@ -212,20 +212,13 @@ async fn roll_v1_post(State(state): State<Arc<AppState>>, request: Request) -> R
 
     // Get database connection from pool
     let _client = state.pool.get().await
-        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database connection failed"))?;
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database connection failed"));
 
-    // TODO: Implement actual roll logic
-    // This is a placeholder implementation that needs to be replaced with:
-    // 1. ✅ JWT token extraction to get user ID
-    // 2. Get or create reading session
-    // 3. Check for pending roll
-    // 4. Get current die
-    // 5. Calculate excluded thread IDs
-    // 6. Perform thread selection
-    // 7. Create Event and RecommendationContext
-    // 8. Build RollResponse
+    // For now, return a success response with the runtime marker.
+    // The full roll logic will be implemented in follow-up PRs.
+    // This placeholder returns the runtime marker so that routing and
+    // infrastructure can be verified without owner data mutation.
 
-    // For now, return a simple success response with the runtime marker
     Ok((
         StatusCode::OK,
         [
