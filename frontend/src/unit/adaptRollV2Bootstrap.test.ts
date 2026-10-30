@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { adaptRollV2Bootstrap } from '../services/adaptRollV2Bootstrap'
 import type { RollV2BootstrapResponse } from '../types/rollV2'
 
+// SAFETY: The adapter accesses only the populated fields in this partial
+// fixture; omitted fields are not involved in the assertions below.
 const sample = {
   session_id: 17,
   user_id: 1,
