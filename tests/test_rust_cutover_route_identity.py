@@ -105,16 +105,16 @@ def _count_client_url(source: str, url: str) -> int:
     return len(re.findall(rf"""['"`]{re.escape(url)}['"`]""", source))
 
 
-def test_roll_primary_and_recovery_call_original_api_v1_contract() -> None:
-    """Roll bootstrap stays on its existing URL through the Python→Rust port."""
+def test_roll_primary_and_recovery_call_owner_approved_native_v2_contract() -> None:
+    """Roll GET is deliberately consolidated to native v2; all POST paths remain v1."""
     primary = _service("rollBootstrapApi.ts")
     recovery = _service("protectedRollMutationApi.ts")
 
     # Both ordinary/with-timezone calls and the recovery path are real users.
-    assert _count_client_url(primary, "/v1/roll/bootstrap") == 2
-    assert _count_client_url(recovery, "/v1/roll/bootstrap") == 1
-    assert "/v2/roll/bootstrap" not in primary
-    assert "/v2/roll/bootstrap" not in recovery
+    assert _count_client_url(primary, "/v2/roll/bootstrap") == 2
+    assert _count_client_url(recovery, "/v2/roll/bootstrap") == 1
+    assert "/v1/roll/bootstrap" not in primary
+    assert "/v1/roll/bootstrap" not in recovery
 
 
 def test_reading_boundaries_client_preserves_its_distinct_api_v2_contract() -> None:
@@ -128,9 +128,10 @@ def test_reading_boundaries_client_preserves_its_distinct_api_v2_contract() -> N
 def test_current_runtime_routing_is_explicit_and_independent_of_version() -> None:
     """Snapshot of *routing*, not a declaration that v1 means Python.
 
-    When #4350 replaces GET v1 in Rust at the exact same path, update only
-    that operation's expected destination here. This is deliberately a
-    same-path, method-aware test so changing v1 callers to v2 cannot pass.
+    Bootstrap GET has the owner-approved v2-only exception (#4350), while
+    other endpoints retain independent same-path implementation migrations.
+    The v1 GET Python route remains temporarily until production v2 proof
+    and the immediate follow-up Python deletion PR.
     """
     expected = {
         ("GET", "/api/v1/roll/bootstrap"): "/api/index.py",
