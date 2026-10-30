@@ -26,6 +26,7 @@ from app.schemas.reading_boundary import (
     ReadingBoundaryNext,
 )
 from app.services.errors import NotFoundError
+from app.services.reading_blocker_projection import unique_blocker_requirements
 from app.services.reading_eligibility_service import (
     ReadingEligibilitySnapshot,
     get_execution_eligibility,
@@ -134,9 +135,7 @@ def _blocker_editor(
         label=_prerequisite_origin_label(blocker.origin),
         prerequisite_id=blocker.prerequisite_id,
         issue_id=source_id,
-        thread_id=(
-            snapshot.issue_thread_ids.get(source_id) if source_id is not None else None
-        ),
+        thread_id=(snapshot.issue_thread_ids.get(source_id) if source_id is not None else None),
     )
 
 
@@ -271,21 +270,14 @@ def project_boundary_explanation(
         if state is not None and state.next_issue_id is not None
         else None
     )
-    blockers = []
-    seen_issue_ids: set[int] = set()
-    if state is not None:
-        for blocker in state.blockers:
-            # Skip blockers whose waiting issues were already reported by an earlier blocker
-            if any(issue_id in seen_issue_ids for issue_id in blocker.waiting_on_issue_ids):
-                # Keep the blocker only if it introduces new issues
-                new_issues = [iid for iid in blocker.waiting_on_issue_ids if iid not in seen_issue_ids]
-                if not new_issues:
-                    continue
-                # Partial blocker with only new issues would be inaccurate; skip the whole blocker to preserve semantics
-                continue
-            for issue_id in blocker.waiting_on_issue_ids:
-                seen_issue_ids.add(issue_id)
-            blockers.append(_project_blocker(snapshot, labels, blocker))
+    blockers = (
+        [
+            _project_blocker(snapshot, labels, blocker)
+            for blocker in unique_blocker_requirements(state.blockers)
+        ]
+        if state is not None
+        else []
+    )
     historical = _historical_rows(snapshot, labels, thread_id) if include_historical else []
     if state is None:
         boundary_state = "unavailable"

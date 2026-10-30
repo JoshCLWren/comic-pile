@@ -612,3 +612,32 @@ async def test_api_includes_owned_list_names_and_modes_on_issues(
     assert body["next"]["issue"]["reading_lists"][0]["mode"] == "strict"
     assert body["blockers"][0]["waiting_on"][0]["reading_lists"][0]["name"] == "JLI"
     assert body["blockers"][0]["waiting_on"][0]["reading_lists"][0]["mode"] == "strict"
+
+
+@pytest.mark.parametrize("requirements", [(F2,), (F2, F1)])
+def test_duplicate_requirements_keep_each_distinct_issue_once(
+    requirements: tuple[int, ...],
+) -> None:
+    """Hold and reader origins cannot duplicate or hide canonical requirements."""
+    from app.services.reading_eligibility_service import project_blocking_explanation
+    from app.services.reading_list_evaluator import Blocker, ThreadEligibility
+
+    _state, snapshot, labels = _fixture()
+    original = (
+        Blocker("hold", LIST_ID, (F2,)),
+        Blocker("prerequisite", None, requirements, prerequisite_id=1, origin="reader"),
+    )
+    snapshot = replace(
+        snapshot,
+        threads={MISTER_MIRACLE_ID: ThreadEligibility(MISTER_MIRACLE_ID, M1, original)},
+    )
+    boundary = project_boundary_explanation(snapshot, labels, MISTER_MIRACLE_ID)
+    waiting = [issue.issue_id for blocker in boundary.blockers for issue in blocker.waiting_on]
+    assert waiting == ([F2] if requirements == (F2,) else [F2, F1])
+    assert boundary.blockers[0].reason.startswith("Hold in JLI")
+    assert boundary.blockers[0].editor is not None
+    assert boundary.blockers[0].editor.list_id == LIST_ID
+    explanation = project_blocking_explanation(snapshot, MISTER_MIRACLE_ID)
+    assert [item.issue_id for item in explanation.blocking_dependencies] == waiting
+    assert explanation.is_blocked
+    assert snapshot.threads[MISTER_MIRACLE_ID].blockers == original

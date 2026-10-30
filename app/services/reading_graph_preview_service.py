@@ -38,6 +38,7 @@ from app.schemas.reading_graph_preview import (
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
 from app.services.cbl_source_service import get_cbl_source_list_preview
+from app.services.reading_blocker_projection import unique_blocker_requirements
 from app.services.reading_list_cycle_validator import (
     ReadingCycleError,
     validate_reading_constraints,
@@ -402,27 +403,18 @@ def _issue_references(
         blockers: list[ReadingGraphBlocker] = []
         state = eligibility.get(meta.thread_id)
         if state is not None and state.next_issue_id == issue_id:
-            seen_issue_ids: set[int] = set()
-            deduped_blockers: list[ReadingGraphBlocker] = []
-            for blocker in state.blockers:
-                # Skip blockers whose waiting issues were already reported
-                if all(iid in seen_issue_ids for iid in blocker.waiting_on_issue_ids):
-                    continue
-                # Update seen set with new issues
-                for iid in blocker.waiting_on_issue_ids:
-                    seen_issue_ids.add(iid)
-                deduped_blockers.append(
-                    ReadingGraphBlocker(
-                        kind=blocker.kind,
-                        list_id=blocker.list_id,
-                        waiting_on_issue_ids=list(blocker.waiting_on_issue_ids),
-                        gate_issue_id=blocker.gate_issue_id,
-                        explanation=_blocker_explanation(
-                            blocker, list_names=context.list_names, issue_labels=labels
-                        ),
-                    )
+            blockers = [
+                ReadingGraphBlocker(
+                    kind=blocker.kind,
+                    list_id=blocker.list_id,
+                    waiting_on_issue_ids=list(blocker.waiting_on_issue_ids),
+                    gate_issue_id=blocker.gate_issue_id,
+                    explanation=_blocker_explanation(
+                        blocker, list_names=context.list_names, issue_labels=labels
+                    ),
                 )
-            blockers = deduped_blockers
+                for blocker in unique_blocker_requirements(state.blockers)
+            ]
         references.append(
             ReadingGraphIssueReference(
                 issue_id=issue_id,
