@@ -14828,6 +14828,8 @@ export interface components {
          */
         RollV2BootstrapResponse: {
             active_thread: components["schemas"]["ActiveThreadInfo"] | null;
+            /** Available Threads */
+            available_threads: number;
             bandwidth: components["schemas"]["SessionBandwidthState"];
             /** Blocked Count */
             blocked_count: number;
@@ -14838,6 +14840,14 @@ export interface components {
             blocked_threads: components["schemas"]["RollableThread"][];
             /** Current Die */
             current_die: number;
+            /** Excluded Count */
+            excluded_count: number;
+            /** Excluded Threads */
+            excluded_threads?: components["schemas"]["ThreadExclusionReason"][];
+            /** Inactive Count */
+            inactive_count: number;
+            /** Inactive Threads */
+            inactive_threads?: components["schemas"]["ThreadExclusionReason"][];
             last_read: components["schemas"]["RollLastRead"] | null;
             /** Last Rolled Result */
             last_rolled_result: number | null;
@@ -14870,6 +14880,8 @@ export interface components {
             stale_thread_count: number;
             /** Timezone */
             timezone?: string | null;
+            /** Total Threads */
+            total_threads: number;
             /** User Id */
             user_id: number;
         };
@@ -14948,7 +14960,7 @@ export interface components {
         };
         /**
          * RollableThread
-         * @description Thread information for rollable items.
+         * @description Thread information for rollable items and Roll summaries.
          */
         RollableThread: {
             /** Format */
@@ -14957,6 +14969,8 @@ export interface components {
             id: number;
             /** Last Activity At */
             last_activity_at?: string | null;
+            /** Tags */
+            tags?: components["schemas"]["TagResponse"][];
             /** Title */
             title: string;
         };
