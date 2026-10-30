@@ -1,0 +1,13 @@
+# Native Rust process used only by the isolated Playwright UI audit stack.
+# All bootstrap GET requests are handled by the same Rust/Axum service as production.
+FROM rust:1.85-bookworm AS builder
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace/native/roll-service
+COPY native/roll-service/Cargo.toml native/roll-service/Cargo.lock ./
+COPY native/roll-service/src/ ./src/
+RUN cargo build --locked --bin comicpile-roll-service
+
+FROM debian:bookworm-slim
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /workspace/native/roll-service/target/debug/comicpile-roll-service /usr/local/bin/comicpile-roll-service
+ENTRYPOINT ["/usr/local/bin/comicpile-roll-service"]
