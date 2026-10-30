@@ -41,7 +41,7 @@ services:
       SECRET_KEY: test-secret-key-for-testing-only
       TEST_ENVIRONMENT: "true"
     ports:
-      - "127.0.0.1:${E2E_API_PORT:-8002}:8000"
+      - "127.0.0.1:${E2E_API_PORT:-8002}:8080"
     volumes:
       - ./app:/workspace/app:ro
       - ./comic_pile:/workspace/comic_pile:ro
@@ -61,6 +61,31 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # The visual audit must exercise the native v2 contract, not FastAPI 404s.
+  # Sharing the Python API network namespace lets Rust keep its secure
+  # development-only loopback binding and lets nginx route at the same origin.
+  native-roll-test:
+    build:
+      context: .
+      dockerfile: native/roll-service/Dockerfile.audit
+    environment:
+      RUST_ROLL_DATABASE_URL: postgresql://postgres:postgres@postgres-test:5432/comic_pile_test
+      RUST_ROLL_JWT_SECRET: test-secret-key-for-testing-only
+      RUST_ROLL_ENV: development
+      RUST_ROLL_BIND: 127.0.0.1:8010
+    network_mode: "service:api-test"
+    depends_on:
+      api-test:
+        condition: service_healthy
+
+  ui-audit-ingress:
+    image: nginx:1.29-alpine
+    network_mode: "service:api-test"
+    volumes:
+      - ./scripts/ui-audit-ingress.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - native-roll-test
 
 networks:
   test-network:
