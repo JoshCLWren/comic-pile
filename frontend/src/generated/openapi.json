@@ -17419,6 +17419,10 @@
               }
             ]
           },
+          "available_threads": {
+            "title": "Available Threads",
+            "type": "integer"
+          },
           "bandwidth": {
             "$ref": "#/components/schemas/SessionBandwidthState"
           },
@@ -17437,6 +17441,28 @@
           "current_die": {
             "title": "Current Die",
             "type": "integer"
+          },
+          "excluded_count": {
+            "title": "Excluded Count",
+            "type": "integer"
+          },
+          "excluded_threads": {
+            "items": {
+              "$ref": "#/components/schemas/ThreadExclusionReason"
+            },
+            "title": "Excluded Threads",
+            "type": "array"
+          },
+          "inactive_count": {
+            "title": "Inactive Count",
+            "type": "integer"
+          },
+          "inactive_threads": {
+            "items": {
+              "$ref": "#/components/schemas/ThreadExclusionReason"
+            },
+            "title": "Inactive Threads",
+            "type": "array"
           },
           "last_read": {
             "anyOf": [
@@ -17557,6 +17583,10 @@
             ],
             "title": "Timezone"
           },
+          "total_threads": {
+            "title": "Total Threads",
+            "type": "integer"
+          },
           "user_id": {
             "title": "User Id",
             "type": "integer"
@@ -17577,7 +17607,11 @@
           "snoozed_count",
           "blocked_count",
           "stale_thread_count",
-          "stale_thread"
+          "stale_thread",
+          "total_threads",
+          "available_threads",
+          "excluded_count",
+          "inactive_count"
         ],
         "title": "RollV2BootstrapResponse",
         "type": "object"
@@ -17786,7 +17820,7 @@
         "type": "object"
       },
       "RollableThread": {
-        "description": "Thread information for rollable items.",
+        "description": "Thread information for rollable items and Roll summaries.",
         "properties": {
           "format": {
             "title": "Format",
@@ -17806,6 +17840,13 @@
               }
             ],
             "title": "Last Activity At"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagResponse"
+            },
+            "title": "Tags",
+            "type": "array"
           },
           "title": {
             "title": "Title",

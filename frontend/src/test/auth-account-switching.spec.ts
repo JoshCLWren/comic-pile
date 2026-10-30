@@ -50,9 +50,22 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
     if (path.endsWith('/roll/bootstrap')) return respond({
       session_id: account === 'first' ? 1 : 2, user_id: account === 'first' ? 1 : 2,
       current_die: 6, manual_die: null, pending_thread_id: null, last_rolled_result: null,
-      session_mode: { bandwidth: 'balanced', intent: 'random' }, active_thread: null,
-      roll_pool: [], snoozed_threads: [], snoozed_count: 0, skipped_thread_ids: [],
-      skipped_threads: [], blocked_count: 0, blocked_threads: [], stale_thread_count: 0, stale_thread: null,
+      session_mode: {
+        active_bandwidth: 'balanced', predicted_bandwidth: 'balanced',
+        bandwidth_confidence: null, bandwidth_source: 'manual', bandwidth_version: null,
+        active_intent: 'random', predicted_intent: 'random',
+        intent_confidence: null, intent_source: 'manual', intent_version: null,
+        session_mode_correction_guidance: null,
+      },
+      active_thread: null, roll_recovery: null,
+      bandwidth: { predicted_bandwidth: 'balanced', active_bandwidth: 'balanced',
+        confidence: null, source: 'manual', mode_version: null },
+      rollable: [], last_read: null,
+      snoozed_threads: [], snoozed_count: 0, skipped_thread_ids: [],
+      skipped_threads: [], blocked_count: 0, blocked_threads: [],
+      stale_thread_count: 0, stale_thread: null,
+      total_threads: 0, available_threads: 0, excluded_count: 0,
+      excluded_threads: [], inactive_count: 0, inactive_threads: [],
     })
     if (path.endsWith('/threads/')) return respond({ threads: [], next_page_token: null })
     return respond({})

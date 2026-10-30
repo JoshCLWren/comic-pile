@@ -363,6 +363,43 @@ async def _run_case(case: str, client: AsyncClient, db: AsyncSession, user: User
     assert repeat.status_code == 200
     assert repeat.json() == payload
     assert await _state(db, user.id) == after
+
+    # Check additive Roll UI visibility separately while preserving the frozen
+    # full-JSON oracle for every pre-existing v2 response property.
+    assert payload["total_threads"] == payload["available_threads"] + payload["excluded_count"]
+    assert payload["inactive_count"] <= payload["excluded_count"]
+    assert len(payload["inactive_threads"]) <= min(payload["inactive_count"], 20)
+    assert len(payload["excluded_threads"]) <= min(payload["excluded_count"], 20)
+    for item in payload["rollable"]:
+        assert isinstance(item["thread"]["tags"], list)
+    for section in ("snoozed_threads", "skipped_threads", "blocked_threads"):
+        assert all(isinstance(item["tags"], list) for item in payload[section])
+
+    # The golden fixtures remain immutable evidence of the original v2 operation.
+    # Drop *only* the explicitly additive fields for this historical comparison.
+    original_response = {
+        key: value for key, value in payload.items()
+        if key not in {
+            "total_threads", "available_threads", "excluded_count",
+            "excluded_threads", "inactive_count", "inactive_threads"
+        }
+    }
+    original_response["rollable"] = [
+        {**item, "thread": {
+            key: value for key, value in item["thread"].items() if key != "tags"
+        }}
+        for item in payload["rollable"]
+    ]
+    for section in ("snoozed_threads", "skipped_threads", "blocked_threads"):
+        original_response[section] = [
+            {key: value for key, value in item.items() if key != "tags"}
+            for item in payload[section]
+        ]
+    if payload["stale_thread"] is not None:
+        original_response["stale_thread"] = {
+            key: value for key, value in payload["stale_thread"].items()
+            if key != "tags"
+        }
     actual = {
         "contract_version": 1,
         "request": {
@@ -371,7 +408,7 @@ async def _run_case(case: str, client: AsyncClient, db: AsyncSession, user: User
             "query": {"timezone": timezone} if timezone else {},
         },
         "status": response.status_code,
-        "response": _canonical(payload, ids),
+        "response": _canonical(original_response, ids),
         "before": _canonical(before, ids),
         "after": _canonical(after, ids),
     }
