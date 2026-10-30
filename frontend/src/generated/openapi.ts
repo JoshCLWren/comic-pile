@@ -4303,39 +4303,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roll/bootstrap": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Roll Bootstrap
-         * @description Return bounded bootstrap data for the Roll initial render.
-         *
-         *     Replaces the need for separate session, full-thread-library, and stale-thread requests
-         *     by returning only the retained data required for the first interactive screen.
-         *
-         *     Args:
-         *         current_user: The authenticated user.
-         *         db: Async database session.
-         *         timezone: Optional browser-resolved IANA timezone identifier captured once
-         *             per active reading session. Invalid or unusable values leave the field
-         *             unset and never break the roll.
-         *
-         *     Returns:
-         *         RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.
-         */
-        get: operations["roll_bootstrap_api_v1_roll_bootstrap_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/roll/clear-manual-die": {
         parameters: {
             query?: never;
@@ -6502,40 +6469,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/roll/bootstrap": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Roll V2 Bootstrap
-         * @description Return v2 bootstrap data for the Roll initial render.
-         *
-         *     This is a breaking sibling of the existing bootstrap with no unversioned alias.
-         *     It provides a superset response replacing roll_pool with rollable[] and adding
-         *     nullable session-scoped last_read while preserving all v1 semantics.
-         *
-         *     Args:
-         *         current_user: The authenticated user.
-         *         db: Async database session.
-         *         timezone: Optional browser-resolved IANA timezone identifier captured once
-         *             per active reading session. Invalid or unusable values leave the field
-         *             unset and never break the roll.
-         *
-         *     Returns:
-         *         RollV2BootstrapResponse with v2 contract including rollable and last_read.
-         */
-        get: operations["roll_v2_bootstrap_api_v2_roll_bootstrap_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/health": {
         parameters: {
             query?: never;
@@ -8521,51 +8454,6 @@ export interface components {
             comicvine_issue_id: string;
             /** Keep Issue Id */
             keep_issue_id?: number | null;
-        };
-        /**
-         * ContinuityBlocker
-         * @description One unsatisfied continuity constraint with factual blocker evidence.
-         */
-        ContinuityBlocker: {
-            /**
-             * Blocker Type
-             * @enum {string}
-             */
-            blocker_type: "item_unread" | "members_unread" | "selected_members_unread" | "crossover_order" | "crossover_order_series";
-            /** Causing Issue Ids */
-            causing_issue_ids?: number[];
-            /** Causing Member Issue Ids */
-            causing_member_issue_ids?: number[];
-            /** Crossover Id */
-            crossover_id?: number | null;
-            /** Note */
-            note?: string | null;
-            /** Rule Id */
-            rule_id?: number | null;
-            /**
-             * Satisfaction Type
-             * @enum {string}
-             */
-            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read" | "converged";
-            /**
-             * Satisfied
-             * @default false
-             * @constant
-             */
-            satisfied: false;
-            /** Sequence Position */
-            sequence_position?: number | null;
-            /** Source Id */
-            source_id: number;
-            /** Source Label */
-            source_label: string;
-            /**
-             * Source Type
-             * @enum {string}
-             */
-            source_type: "issue" | "crossover";
-            /** Unread Issue Details */
-            unread_issue_details?: components["schemas"]["UnreadIssueDetail"][];
         };
         /**
          * ContinuityPlanLane
@@ -11897,12 +11785,6 @@ export interface components {
             total_duplicate_groups: number;
         };
         /**
-         * IdentityState
-         * @description Derived identity states for rollable items.
-         * @enum {string}
-         */
-        IdentityState: "confirmed" | "candidate" | "unresolved" | "ambiguous" | "conflicting";
-        /**
          * ImportIssueRequest
          * @description Request to import a ComicVine issue as a new identity-preserving thread.
          *
@@ -12899,12 +12781,6 @@ export interface components {
             /** Target Issue Id */
             target_issue_id: number;
         };
-        /**
-         * ProgressScope
-         * @description Progress scope for reader context.
-         * @enum {string}
-         */
-        ProgressScope: "canonical_series_run" | "thread";
         /**
          * PublicReleaseResponse
          * @description One release ledger record returned by public-facing endpoints.
@@ -14514,95 +14390,6 @@ export interface components {
             token: string;
         };
         /**
-         * RollBootstrapResponse
-         * @description Bounded bootstrap payload for the Roll initial render.
-         *
-         *     Returns only the retained data required for the first interactive screen.
-         *     Does not include the full queue, collection data, or secondary detail panels.
-         */
-        RollBootstrapResponse: {
-            active_thread: components["schemas"]["ActiveThreadInfo"] | null;
-            /** Available Threads */
-            available_threads: number;
-            bandwidth: components["schemas"]["SessionBandwidthState"];
-            /** Blocked Count */
-            blocked_count: number;
-            /** Blocked Threads */
-            blocked_threads: components["schemas"]["RollBootstrapThread"][];
-            /** Current Die */
-            current_die: number;
-            /** Excluded Count */
-            excluded_count: number;
-            /** Excluded Threads */
-            excluded_threads?: components["schemas"]["ThreadExclusionReason"][];
-            /**
-             * Inactive Count
-             * @default 0
-             */
-            inactive_count: number;
-            /** Inactive Threads */
-            inactive_threads?: components["schemas"]["ThreadExclusionReason"][];
-            /** Last Rolled Result */
-            last_rolled_result: number | null;
-            /** Manual Die */
-            manual_die: number | null;
-            /** Pending Thread Id */
-            pending_thread_id: number | null;
-            /** Roll Pool */
-            roll_pool: components["schemas"]["RollBootstrapThread"][];
-            roll_recovery?: components["schemas"]["RollRecoveryInfo"] | null;
-            /** Session Id */
-            session_id: number;
-            session_mode: components["schemas"]["SessionMode"];
-            /**
-             * Skipped Thread Ids
-             * @default []
-             */
-            skipped_thread_ids: number[];
-            /**
-             * Skipped Threads
-             * @default []
-             */
-            skipped_threads: components["schemas"]["RollBootstrapThread"][];
-            /** Snoozed Count */
-            snoozed_count: number;
-            /** Snoozed Threads */
-            snoozed_threads: components["schemas"]["RollBootstrapThread"][];
-            stale_thread: components["schemas"]["RollBootstrapThread"] | null;
-            /** Stale Thread Count */
-            stale_thread_count: number;
-            /** Timezone */
-            timezone?: string | null;
-            /** Total Threads */
-            total_threads: number;
-            /** User Id */
-            user_id: number;
-        };
-        /**
-         * RollBootstrapThread
-         * @description Lightweight thread summary for the roll bootstrap pool.
-         */
-        RollBootstrapThread: {
-            /** Blocking Reasons */
-            blocking_reasons?: string[];
-            /** Format */
-            format: string;
-            /** Id */
-            id: number;
-            /** Issue Id */
-            issue_id?: number | null;
-            /** Issue Number */
-            issue_number?: string | null;
-            /** Last Activity At */
-            last_activity_at?: string | null;
-            /** Route Labels */
-            route_labels?: string[];
-            /** Tags */
-            tags?: components["schemas"]["TagResponse"][];
-            /** Title */
-            title: string;
-        };
-        /**
          * RollExclusionPageResponse
          * @description One deterministic page of the Roll exclusion drill-down (issue #3330).
          *
@@ -14695,81 +14482,6 @@ export interface components {
             last_read: components["schemas"]["RollLastRead"];
         };
         /**
-         * RollRecoveryChainNode
-         * @description One labeled issue or crossover step in a prerequisite chain.
-         */
-        RollRecoveryChainNode: {
-            /** Is Readable */
-            is_readable: boolean;
-            /** Label */
-            label: string;
-            /** Node Id */
-            node_id: number;
-            /**
-             * Node Type
-             * @enum {string}
-             */
-            node_type: "issue" | "crossover";
-        };
-        /**
-         * RollRecoveryDiagnostic
-         * @description One bounded-traversal diagnostic suitable for reader-facing explanation.
-         */
-        RollRecoveryDiagnostic: {
-            /**
-             * Code
-             * @enum {string}
-             */
-            code: "cycle_detected" | "depth_limit_exceeded" | "node_limit_exceeded";
-            /** Limit */
-            limit?: number | null;
-            /** Node Id */
-            node_id: number;
-            /**
-             * Node Type
-             * @enum {string}
-             */
-            node_type: "issue" | "crossover";
-        };
-        /**
-         * RollRecoveryInfo
-         * @description Structured recovery context for a pending roll that became blocked.
-         */
-        RollRecoveryInfo: {
-            /** Chains */
-            chains?: components["schemas"]["RollRecoveryChainNode"][][];
-            /** Diagnostics */
-            diagnostics?: components["schemas"]["RollRecoveryDiagnostic"][];
-            /** Direct Blockers */
-            direct_blockers?: components["schemas"]["ContinuityBlocker"][];
-            /** Original Thread Id */
-            original_thread_id: number;
-            /** Original Thread Title */
-            original_thread_title: string;
-            /** Readable Prerequisites */
-            readable_prerequisites?: components["schemas"]["RollRecoveryPrerequisite"][];
-        };
-        /**
-         * RollRecoveryPrerequisite
-         * @description One currently readable prerequisite recommended for a blocked active roll.
-         */
-        RollRecoveryPrerequisite: {
-            /**
-             * Is Readable
-             * @default true
-             */
-            is_readable: boolean;
-            /** Label */
-            label: string;
-            /** Node Id */
-            node_id: number;
-            /**
-             * Node Type
-             * @enum {string}
-             */
-            node_type: "issue" | "crossover";
-        };
-        /**
          * RollRequest
          * @description Schema for roll request.
          *
@@ -14819,167 +14531,6 @@ export interface components {
             /** Total Issues */
             total_issues?: number | null;
         };
-        /**
-         * RollV2BootstrapResponse
-         * @description V2 bootstrap response superset with rollable and last_read fields.
-         *
-         *     Replaces the v1 roll_pool with rollable[] and adds nullable last_read.
-         *     Maintains all v1 session/recovery/partition fields with unchanged semantics.
-         */
-        RollV2BootstrapResponse: {
-            active_thread: components["schemas"]["ActiveThreadInfo"] | null;
-            /** Available Threads */
-            available_threads: number;
-            bandwidth: components["schemas"]["SessionBandwidthState"];
-            /** Blocked Count */
-            blocked_count: number;
-            /**
-             * Blocked Threads
-             * @default []
-             */
-            blocked_threads: components["schemas"]["RollableThread"][];
-            /** Current Die */
-            current_die: number;
-            /** Excluded Count */
-            excluded_count: number;
-            /** Excluded Threads */
-            excluded_threads?: components["schemas"]["ThreadExclusionReason"][];
-            /** Inactive Count */
-            inactive_count: number;
-            /** Inactive Threads */
-            inactive_threads?: components["schemas"]["ThreadExclusionReason"][];
-            last_read: components["schemas"]["RollLastRead"] | null;
-            /** Last Rolled Result */
-            last_rolled_result: number | null;
-            /** Manual Die */
-            manual_die: number | null;
-            /** Pending Thread Id */
-            pending_thread_id: number | null;
-            roll_recovery?: components["schemas"]["RollRecoveryInfo"] | null;
-            /** Rollable */
-            rollable: components["schemas"]["RollableItem"][];
-            /** Session Id */
-            session_id: number;
-            session_mode: components["schemas"]["SessionMode"];
-            /**
-             * Skipped Thread Ids
-             * @default []
-             */
-            skipped_thread_ids: number[];
-            /**
-             * Skipped Threads
-             * @default []
-             */
-            skipped_threads: components["schemas"]["RollableThread"][];
-            /** Snoozed Count */
-            snoozed_count: number;
-            /** Snoozed Threads */
-            snoozed_threads?: components["schemas"]["RollableThread"][];
-            stale_thread: components["schemas"]["RollableThread"] | null;
-            /** Stale Thread Count */
-            stale_thread_count: number;
-            /** Timezone */
-            timezone?: string | null;
-            /** Total Threads */
-            total_threads: number;
-            /** User Id */
-            user_id: number;
-        };
-        /**
-         * RollableIdentity
-         * @description Identity information for rollable items.
-         */
-        RollableIdentity: {
-            /** Canonical Series Id */
-            canonical_series_id?: string | null;
-            series_mapping_state: components["schemas"]["IdentityState"];
-            /**
-             * Source
-             * @enum {string}
-             */
-            source: "comicvine" | "unavailable";
-            state: components["schemas"]["IdentityState"];
-        };
-        /**
-         * RollableIssue
-         * @description Issue information for rollable items.
-         */
-        RollableIssue: {
-            /** Canonical Series Title */
-            canonical_series_title?: string | null;
-            /** Cover Url */
-            cover_url?: string | null;
-            /** Id */
-            id: number;
-            /** Number */
-            number: string;
-        };
-        /**
-         * RollableItem
-         * @description A single rollable candidate thread with issue and context.
-         */
-        RollableItem: {
-            identity: components["schemas"]["RollableIdentity"];
-            issue: components["schemas"]["RollableIssue"];
-            /**
-             * Overflow Routes Count
-             * @default 0
-             */
-            overflow_routes_count: number;
-            reader: components["schemas"]["RollableReader"];
-            /** Routes */
-            routes?: components["schemas"]["RollableRoute"][];
-            thread: components["schemas"]["RollableThread"];
-        };
-        /**
-         * RollableReader
-         * @description Reader context for rollable items.
-         */
-        RollableReader: {
-            /** Average Rating */
-            average_rating?: number | null;
-            /** Issue Count */
-            issue_count?: number | null;
-            /** Latest Rating */
-            latest_rating?: number | null;
-            progress_scope: components["schemas"]["ProgressScope"];
-            /** Rating Count */
-            rating_count?: number | null;
-            /** Read Count */
-            read_count?: number | null;
-        };
-        /**
-         * RollableRoute
-         * @description Route information for rollable items.
-         */
-        RollableRoute: {
-            /** @default group */
-            kind: components["schemas"]["RouteKind"];
-            /** Name */
-            name: string;
-        };
-        /**
-         * RollableThread
-         * @description Thread information for rollable items and Roll summaries.
-         */
-        RollableThread: {
-            /** Format */
-            format: string;
-            /** Id */
-            id: number;
-            /** Last Activity At */
-            last_activity_at?: string | null;
-            /** Tags */
-            tags?: components["schemas"]["TagResponse"][];
-            /** Title */
-            title: string;
-        };
-        /**
-         * RouteKind
-         * @description Route kind for rollable items.
-         * @enum {string}
-         */
-        RouteKind: "group";
         /**
          * RouteTrafficCounter
          * @description One aggregated (method, route template, status class) tally.
@@ -15499,74 +15050,6 @@ export interface components {
             started_at: string | null;
             /** User Id */
             user_id: number;
-        };
-        /**
-         * SessionMode
-         * @description Canonical session mode state for Roll bootstrap and frontend rendering.
-         *
-         *     Describes the active and predicted reading bandwidth and intent, together
-         *     with the confidence, source, and version metadata needed for the reading-
-         *     mode UI. When all fields are ``None`` the session is in the legacy null
-         *     state and the frontend should treat it as the default balanced mode.
-         */
-        SessionMode: {
-            /**
-             * Active Bandwidth
-             * @description Current active bandwidth: light, balanced, deep, or null for legacy
-             */
-            active_bandwidth?: string | null;
-            /**
-             * Active Intent
-             * @description Current active intent: balanced, momentum, familiar, explore, random, or null
-             */
-            active_intent?: string | null;
-            /**
-             * Bandwidth Confidence
-             * @description Confidence in the bandwidth prediction
-             */
-            bandwidth_confidence?: number | null;
-            /**
-             * Bandwidth Source
-             * @description Origin of the bandwidth value: inference, manual override, snooze, or quiz
-             */
-            bandwidth_source?: ("inferred" | "manual" | "snooze" | "quiz") | null;
-            /**
-             * Bandwidth Version
-             * @description Version tag for the bandwidth inference algorithm
-             */
-            bandwidth_version?: string | null;
-            /**
-             * Intent Confidence
-             * @description Confidence in the intent prediction
-             */
-            intent_confidence?: number | null;
-            /**
-             * Intent Source
-             * @description Origin of the intent value: inferred, manual, snooze, or quiz
-             */
-            intent_source?: ("inferred" | "manual" | "snooze" | "quiz") | null;
-            /**
-             * Intent Version
-             * @description Version tag for the intent inference algorithm
-             */
-            intent_version?: string | null;
-            /**
-             * Predicted Bandwidth
-             * @description Algorithm-predicted bandwidth for this session
-             */
-            predicted_bandwidth?: string | null;
-            /**
-             * Predicted Intent
-             * @description Algorithm-predicted intent for this session
-             */
-            predicted_intent?: string | null;
-            /**
-             * Session Mode Correction Guidance
-             * @description Compact guidance when mode differs from prediction (null when no correction)
-             */
-            session_mode_correction_guidance?: {
-                [key: string]: unknown;
-            } | null;
         };
         /**
          * SessionModeResponse
@@ -16713,16 +16196,6 @@ export interface components {
              * @description Stable identifier for this process instance.
              */
             instance_id: string;
-        };
-        /**
-         * UnreadIssueDetail
-         * @description Structured label for one unread issue causing a continuity block.
-         */
-        UnreadIssueDetail: {
-            /** Issue Id */
-            issue_id: number;
-            /** Label */
-            label: string;
         };
         /**
          * UserLoginRequest
@@ -22470,38 +21943,6 @@ export interface operations {
             };
         };
     };
-    roll_bootstrap_api_v1_roll_bootstrap_get: {
-        parameters: {
-            query?: {
-                /** @description Browser IANA timezone identifier */
-                timezone?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollBootstrapResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     clear_manual_die_api_v1_roll_clear_manual_die_post: {
         parameters: {
             query?: never;
@@ -24903,38 +24344,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadingBoundaryExplanationV2"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    roll_v2_bootstrap_api_v2_roll_bootstrap_get: {
-        parameters: {
-            query?: {
-                /** @description Browser IANA timezone identifier */
-                timezone?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollV2BootstrapResponse"];
                 };
             };
             /** @description Validation Error */

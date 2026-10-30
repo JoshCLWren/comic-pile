@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="$ROOT_DIR/docker-compose.test.yml"
+COMPOSE_FILE="$ROOT_DIR/docker-compose.ui-audit.yml"
 AUDIT_API_PORT="${AUDIT_API_PORT:-8002}"
 AUDIT_PROJECT_NAME="${AUDIT_PROJECT_NAME:-comic-pile-ui-audit-$$}"
 AUDIT_BASE_URL="http://127.0.0.1:${AUDIT_API_PORT}"
@@ -65,6 +65,17 @@ until curl --fail --silent --show-error "$AUDIT_BASE_URL/health" >/dev/null 2>&1
 done
 
 echo "UI audit backend is ready."
+echo "Waiting for the native Rust Roll v2 ingress (expecting unauthenticated 401)..."
+until [ "$(curl --silent --output /dev/null --write-out '%{http_code}' "$AUDIT_BASE_URL/api/v2/roll/bootstrap" || true)" = "401" ]; do
+  if (( SECONDS >= deadline )); then
+    echo "Native Rust Roll v2 ingress did not become ready."
+    compose ps || true
+    compose logs native-roll-test ui-audit-ingress || true
+    exit 1
+  fi
+  sleep 2
+done
+echo "Native Rust Roll v2 ingress is ready."
 echo "Building frontend..."
 pnpm --filter frontend run build
 

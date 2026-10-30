@@ -205,26 +205,3 @@ async def test_snapshot_endpoint_reports_counters(
     for counter in payload.counters:
         assert counter.alias in {"legacy", "v1", "v2"}
         assert counter.count >= 0
-
-
-async def test_middleware_counts_each_bootstrap_alias_and_web_origin(
-    auth_client: AsyncClient,
-) -> None:
-    """Real requests distinguish all three aliases and browser-origin callers."""
-    for path in (LEGACY_PATH, V1_PATH, V2_PATH):
-        response = await auth_client.get(path)
-        assert response.status_code == 200, path
-    browser = await auth_client.get(V2_PATH, headers={"Sec-Fetch-Site": "same-origin"})
-    assert browser.status_code == 200
-
-    observed = _counts()
-    for alias in ("legacy", "v1", "v2"):
-        assert observed.get((alias, False, "2xx"), 0) >= 1, alias
-    assert observed.get(("v2", True, "2xx"), 0) >= 1
-
-    response = await auth_client.get(SNAPSHOT_PATH)
-    assert response.status_code == 200
-    body = response.json()
-    assert "counters" in body
-    for counter in body["counters"]:
-        assert set(counter) == {"alias", "web_origin", "status_class", "count"}
