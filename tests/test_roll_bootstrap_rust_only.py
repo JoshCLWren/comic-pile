@@ -49,3 +49,18 @@ def test_public_v2_bootstrap_routes_to_native_rust() -> None:
             "dest": "/api/native_roll.rs",
         }
     ]
+
+
+def test_frontend_bootstrap_and_recovery_call_only_v2_rust_route() -> None:
+    """The Roll screen and the protected mutation refresh cannot resurrect v1."""
+    root = Path(__file__).resolve().parents[1]
+    for path in (
+        "frontend/src/services/rollBootstrapApi.ts",
+        "frontend/src/services/protectedRollMutationApi.ts",
+    ):
+        source = (root / path).read_text()
+        assert "'/v2/roll/bootstrap'" in source, path
+        assert "'/v1/roll/bootstrap'" not in source, path
+        assert "'/roll/bootstrap'" not in source, path
+    native = (root / "native/roll-service/src/lib.rs").read_text()
+    assert '.route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))' in native
