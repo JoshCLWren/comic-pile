@@ -9,6 +9,8 @@ import TriStateCheckbox from './TriStateCheckbox'
  *
  * `comicId` is always the canonical Issue ID (the exact ID the Reading List
  * stores), never a display title or a CBL position.
+ * `position` is the one-based reading order position in the original list or
+ * source, used to show the expected order outcome in the preview.
  */
 export interface ReplaceEntry {
   /** Canonical Issue ID; this is the identity the list write uses. */
@@ -33,6 +35,8 @@ export interface ReplaceEntry {
   gate?: ReadingListGate
   /** List-local skip state to keep when the entry survives the replacement. */
   skipped?: boolean
+  /** One-based reading order position in the original list or source. */
+  position?: number
 }
 
 interface SeriesGroup {

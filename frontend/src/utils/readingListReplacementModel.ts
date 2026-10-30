@@ -38,6 +38,7 @@ export function buildReplacementModel(
     saved: true,
     gate: entry.gate,
     skipped: entry.skipped,
+    position: entry.position,
   }))
 
   const after: ReplaceEntry[] = []
@@ -69,6 +70,7 @@ export function buildReplacementModel(
       saved: saved !== undefined,
       gate: saved?.gate ?? 'none',
       skipped: saved?.skipped ?? false,
+      position: entry.cbl_position,
     })
   }
 
