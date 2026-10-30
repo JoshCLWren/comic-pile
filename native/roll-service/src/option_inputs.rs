@@ -281,7 +281,10 @@ async fn load_transaction(
         tracing::error!(%error, "Invalid Option E snapshot response");
         ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid reading snapshot")
     })?;
+    assemble_snapshot(snapshot)
+}
 
+fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
     let core = CoreReadingInputs {
         threads: snapshot.threads.iter().map(|t| ReadingThread {
             id: t.id, status: t.status.clone(), title: t.title.clone(),
@@ -529,4 +532,85 @@ mod tests {
             ("strasse".into(), "0012".into())
         );
     }
+    #[test]
+    fn cte_snapshot_preserves_option_e_order_exclusions_and_provenance() {
+        let snapshot: SnapshotRows = serde_json::from_value(serde_json::json!({
+            "threads": [
+                {"id": 1, "status": "active", "title": "Alpha",
+                 "next_unread_issue_id": 10, "is_blocked": true, "queue_position": 1},
+                {"id": 2, "status": "active", "title": "Beta",
+                 "next_unread_issue_id": 20, "is_blocked": false, "queue_position": 2}
+            ],
+            "issues": [
+                {"id": 10, "thread_id": 1, "position": 1, "status": "unread",
+                 "issue_number": "1"},
+                {"id": 20, "thread_id": 2, "position": 1, "status": "unread",
+                 "issue_number": "1"}
+            ],
+            "lists": [{"id": 50, "mode": "strict"}, {"id": 51, "mode": "loose"}],
+            "entries": [
+                {"id": 100, "list_id": 50, "issue_id": 10,
+                 "gate": "after_previous", "skipped": false},
+                {"id": 101, "list_id": 50, "issue_id": 20,
+                 "gate": "hold", "skipped": false},
+                {"id": 102, "list_id": 51, "issue_id": 20,
+                 "gate": "after_previous", "skipped": true}
+            ],
+            "prerequisites": [
+                {"id": 90, "source_issue_id": 10, "target_issue_id": 20,
+                 "classification": "manual", "provenance": "reader"}
+            ],
+            "evidence": [
+                {"thread_id": 1, "provider": "ComicVine",
+                 "external_id": "4050-0007", "entity_type": "series"},
+                {"thread_id": 2, "provider": "comicvine",
+                 "external_id": "0008", "entity_type": "series"}
+            ],
+            "overlaps": [
+                {"list_id": 50, "continuing_provider": "comicvine",
+                 "continuing_external_id": "7", "waiting_provider": "comicvine",
+                 "waiting_external_id": "8"}
+            ],
+            "exclusions": [
+                {"issue_id": null, "thread_id": null,
+                 "provider": "comicvine", "external_volume_id": "0007"}
+            ],
+            "issue_volumes": [
+                {"issue_id": 10, "provider": "comicvine", "external_id": "7"},
+                {"issue_id": 20, "provider": "comicvine", "external_id": "8"}
+            ]
+        })).unwrap();
+        let mut inputs = assemble_snapshot(snapshot).unwrap();
+        assert!(inputs.require_resolved().is_ok());
+        assert_eq!(inputs.lists.len(), 2);
+        assert_eq!(inputs.lists[0].entries[0].issue_id, 10);
+        assert_eq!(inputs.lists[0].entries[1].gate, "hold");
+        assert!(inputs.lists[1].entries[0].skipped);
+        assert_eq!(inputs.prerequisites.len(), 1);
+        assert_eq!(inputs.prerequisites[0].origin, "reader");
+        assert_eq!(inputs.thread_volumes.get(&1).unwrap(), "comicvine:7");
+        assert_eq!(inputs.thread_volumes.get(&2).unwrap(), "comicvine:8");
+        assert!(inputs.excluded_issue_ids.contains(&10));
+        assert!(!inputs.excluded_issue_ids.contains(&20));
+        assert_eq!(inputs.lists[0].overlap_decisions.len(), 1);
+        inputs.prerequisites[0].target_issue_id = 999;
+        // An unresolved foreign reference cannot be made live by a snapshot.
+        inputs.unresolved.push(UnresolvedReference {
+            kind: "prerequisite", object_id: 90,
+        });
+        assert!(inputs.require_resolved().is_err());
+    }
+
+    #[test]
+    fn cte_snapshot_decodes_all_empty_aggregates() {
+        let snapshot: SnapshotRows = serde_json::from_value(serde_json::json!({
+            "threads": [], "issues": [], "lists": [], "entries": [],
+            "prerequisites": [], "evidence": [], "overlaps": [],
+            "exclusions": [], "issue_volumes": []
+        })).unwrap();
+        let inputs = assemble_snapshot(snapshot).unwrap();
+        assert!(inputs.require_resolved().is_ok());
+        assert!(inputs.core.issues.is_empty());
+    }
+
 }
