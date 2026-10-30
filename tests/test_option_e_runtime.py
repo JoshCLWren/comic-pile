@@ -13,6 +13,7 @@ from app.models import Dependency, Event, Issue, ReadingSession, Snapshot, Threa
 from app.models.collection_exclusion import CollectionExclusion
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
+from app.roll_recovery import build_roll_recovery
 from app.services.reading_eligibility_service import get_execution_eligibility
 from comic_pile.queue import get_bounded_roll_pool_rows
 from tests.conftest import get_or_create_user_async
@@ -65,7 +66,7 @@ async def _series(
     return thread, issues
 
 
-async def test_strict_offer_agrees_across_bootstraps_roll_override_and_queue(
+async def test_strict_offer_agrees_across_eligibility_roll_override_and_queue(
     option_e: None,
     auth_client: AsyncClient,
     async_db: AsyncSession,
@@ -101,15 +102,10 @@ async def test_strict_offer_agrees_across_bootstraps_roll_override_and_queue(
     assert [row[0].id for row in rows] == [first_id]
     assert rows[0][1:] == (1, "2")
 
-    v1 = await auth_client.get("/api/v1/roll/bootstrap")
-    v2 = await auth_client.get("/api/v2/roll/bootstrap")
-    assert v1.status_code == v2.status_code == 200
-    assert [(row["id"], row["issue_id"]) for row in v1.json()["roll_pool"]] == [(first_id, next_id)]
-    assert [(row["thread"]["id"], row["issue"]["id"]) for row in v2.json()["rollable"]] == [
-        (first_id, next_id)
-    ]
-    assert first_id not in [row["id"] for row in v1.json()["blocked_threads"]]
-    assert second_id in [row["id"] for row in v2.json()["blocked_threads"]]
+    eligibility = await get_execution_eligibility(async_db, owner_id)
+    assert eligibility is not None
+    assert eligibility.threads[first_id].eligible is True
+    assert eligibility.threads[second_id].eligible is False
 
     page = await auth_client.get("/api/v1/threads/", params={"page_size": 1, "sort": "position"})
     assert page.status_code == 200
@@ -156,10 +152,11 @@ async def test_strict_offer_agrees_across_bootstraps_roll_override_and_queue(
     assert (
         await async_db.scalar(select(Issue.status).where(Issue.id == excluded_issue_id)) == "unread"
     )
-    advanced = await auth_client.get("/api/v1/roll/bootstrap")
-    assert advanced.status_code == 200
-    assert [row["id"] for row in advanced.json()["roll_pool"]] == [second_id]
-    reading_session_id = advanced.json()["session_id"]
+    advanced = await get_bounded_roll_pool_rows(owner_id, async_db, 10)
+    assert [row[0].id for row in advanced] == [second_id]
+    current_session = await auth_client.get("/api/v1/sessions/current/")
+    assert current_session.status_code == 200
+    reading_session_id = current_session.json()["id"]
     snapshot_id = await async_db.scalar(
         select(Snapshot.id)
         .where(
@@ -327,8 +324,10 @@ async def test_session_filters_leave_no_roll_offer(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Both bootstrap versions and selection respect snoozes and session skips."""
+    """Live eligibility and selection respect snoozes and session skips."""
     from datetime import UTC, datetime, timedelta
+
+    from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
 
     user = await get_or_create_user_async(async_db)
     one, _ = await _series(async_db, user.id, "Snoozed", 1)
@@ -339,13 +338,16 @@ async def test_session_filters_leave_no_roll_offer(
         ReadingSession(user_id=user.id, snoozed_thread_ids=[one_id], skipped_thread_ids=[two_id])
     )
     await async_db.commit()
-    for path, field in [
-        ("/api/v1/roll/bootstrap", "roll_pool"),
-        ("/api/v2/roll/bootstrap", "rollable"),
-    ]:
-        response = await auth_client.get(path)
-        assert response.status_code == 200 and response.json()[field] == []
-        assert response.json()["stale_thread_count"] == 0
+    excluded_ids = await derive_effective_roll_excluded_thread_ids(
+        async_db,
+        user.id,
+        session_snoozed_ids=[one_id],
+        session_skipped_ids=[two_id],
+    )
+    assert set(excluded_ids) == {one_id, two_id}
+    assert (
+        await get_bounded_roll_pool_rows(user.id, async_db, 10, snoozed_ids=excluded_ids) == []
+    )
     stale = await auth_client.get("/api/v1/threads/stale", params={"days": 0})
     assert stale.status_code == 200 and stale.json() == []
     response = await auth_client.post("/api/v1/roll/")
@@ -415,46 +417,6 @@ async def test_old_dependencies_do_not_override_canonical_reading_intent(
     assert isinstance(summary, dict)
     inert_count = summary["inert_dependencies"]
     assert isinstance(inert_count, int) and inert_count >= 2
-
-
-async def test_v2_identity_fanout_does_not_shrink_thread_die_pool(
-    option_e: None,
-    async_db: AsyncSession,
-) -> None:
-    """Multiple stored mappings must not consume another eligible Thread's slot."""
-    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
-    from app.services.roll_v2_projection import get_v2_rollable_projection
-
-    user = await get_or_create_user_async(async_db)
-    one, issues = await _series(async_db, user.id, "Multiple identities", 1)
-    two, _ = await _series(async_db, user.id, "Other series", 2)
-    session = ReadingSession(user_id=user.id)
-    async_db.add(session)
-    for external_id in ["4000-111", "4000-222"]:
-        identity = ExternalIdentity(
-            provider="comicvine",
-            entity_type="issue",
-            external_id=external_id,
-            metadata_json={"issue_number": "1", "volume_id": 123, "volume_name": "Identity"},
-        )
-        async_db.add(identity)
-        await async_db.flush()
-        async_db.add(
-            IssueExternalIdentityMapping(
-                issue_id=issues[0].id,
-                external_identity_id=identity.id,
-                status="candidate",
-            )
-        )
-    await async_db.flush()
-    items, _, _ = await get_v2_rollable_projection(
-        async_db,
-        user_id=user.id,
-        die_size=2,
-        excluded_thread_ids=[],
-        session_id=session.id,
-    )
-    assert [item.thread.id for item in items] == [one.id, two.id]
 
 
 @pytest.mark.parametrize("stored_id,excluded_id", [("4050-123", "123"), ("123", "4050-123")])
@@ -575,6 +537,7 @@ async def test_exclusion_write_cannot_strand_a_live_prerequisite(
         )
     )
     source_thread_id, target_thread_id = one.id, two.id
+    user_id = user.id
     payload: dict[str, object]
     if target == "issue":
         payload = {"issue_id": issues_one[0].id}
@@ -588,9 +551,8 @@ async def test_exclusion_write_cannot_strand_a_live_prerequisite(
     assert response.status_code == 422
     assert "strands" in response.json()["detail"]
     assert list((await async_db.scalars(select(CollectionExclusion))).all()) == []
-    still_valid = await auth_client.get("/api/v1/roll/bootstrap")
-    assert still_valid.status_code == 200
-    assert [row["id"] for row in still_valid.json()["roll_pool"]] == [source_thread_id]
+    still_valid = await get_bounded_roll_pool_rows(user_id, async_db, 10)
+    assert [row[0].id for row in still_valid] == [source_thread_id]
 
     permitted = await auth_client.post(
         "/api/v1/collection-exclusions",
@@ -647,28 +609,33 @@ async def test_pending_recovery_uses_live_frontiers_and_session_filters(
     source_id, pending_id = source.id, target.id
     first_id, second_id, session_id = source_issues[0].id, source_issues[1].id, session.id
     await async_db.commit()
-    for path in ["/api/v1/roll/bootstrap", "/api/v2/roll/bootstrap"]:
-        response = await auth_client.get(path)
-        assert response.status_code == 200
-        recovery = response.json()["roll_recovery"]
-        assert recovery["original_thread_id"] == pending_id
-        assert recovery["original_thread_title"] == "Waiting series"
-        assert recovery["direct_blockers"][0]["causing_issue_ids"] == [second_id]
-        assert recovery["direct_blockers"][0]["source_label"] == "Source series #2"
-        assert "Waiting list" in recovery["direct_blockers"][0]["note"]
-        readable = {
-            row["node_id"] for row in recovery["readable_prerequisites"] if row["is_readable"]
-        }
-        assert readable == {first_id}
+    recovery = await build_roll_recovery(
+        async_db,
+        user_id=user.id,
+        pending_thread_id=pending_id,
+        pending_thread_title="Waiting series",
+    )
+    assert recovery is not None
+    assert recovery.original_thread_id == pending_id
+    assert recovery.original_thread_title == "Waiting series"
+    assert recovery.direct_blockers[0].causing_issue_ids == [second_id]
+    assert recovery.direct_blockers[0].source_label == "Source series #2"
+    blocker_note = recovery.direct_blockers[0].note
+    assert blocker_note is not None and "Waiting list" in blocker_note
+    readable = {row.node_id for row in recovery.readable_prerequisites if row.is_readable}
+    assert readable == {first_id}
     session = await async_db.get(ReadingSession, session_id)
     assert session is not None
     session.snoozed_thread_ids = [source_id]
     await async_db.commit()
-    for path in ["/api/v1/roll/bootstrap", "/api/v2/roll/bootstrap"]:
-        response = await auth_client.get(path)
-        assert response.status_code == 200
-        recovery = response.json()["roll_recovery"]
-        assert all(not row["is_readable"] for row in recovery["readable_prerequisites"])
+    recovery = await build_roll_recovery(
+        async_db,
+        user_id=user.id,
+        pending_thread_id=pending_id,
+        pending_thread_title="Waiting series",
+    )
+    assert recovery is not None
+    assert all(not row.is_readable for row in recovery.readable_prerequisites)
 
 
 async def test_durable_snooze_does_not_depend_on_cached_blocked_flag(
@@ -696,13 +663,12 @@ async def test_durable_snooze_does_not_depend_on_cached_blocked_flag(
     )
     thread_id, user_id = thread.id, user.id
     await async_db.commit()
-    assert await derive_cross_session_excluded_thread_ids(async_db, user_id) == {thread_id}
-    for path, field in [
-        ("/api/v1/roll/bootstrap", "roll_pool"),
-        ("/api/v2/roll/bootstrap", "rollable"),
-    ]:
-        response = await auth_client.get(path)
-        assert response.status_code == 200 and response.json()[field] == []
+    excluded_ids = await derive_cross_session_excluded_thread_ids(async_db, user_id)
+    assert excluded_ids == {thread_id}
+    assert (
+        await get_bounded_roll_pool_rows(user_id, async_db, 10, snoozed_ids=list(excluded_ids))
+        == []
+    )
     selected = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
     assert selected.status_code == 400
     manual = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
@@ -1223,10 +1189,11 @@ async def test_builder_dependency_blocks_across_live_surfaces(
     assert rows[dependent_id]["is_blocked"] is True
     assert rows[prerequisite_id]["is_blocked"] is False
     assert rows[dependent_id]["blocking_reasons"] == explanation["blocking_reasons"]
-    bootstrap = await auth_client.get("/api/v1/roll/bootstrap")
-    assert bootstrap.status_code == 200, bootstrap.text
-    assert [row["id"] for row in bootstrap.json()["roll_pool"]] == [prerequisite_id]
-    assert [row["id"] for row in bootstrap.json()["blocked_threads"]] == [dependent_id]
+    pool = await get_bounded_roll_pool_rows(user_id, async_db, 10)
+    assert [row[0].id for row in pool] == [prerequisite_id]
+    eligibility = await get_execution_eligibility(async_db, user_id)
+    assert eligibility is not None
+    assert eligibility.threads[dependent_id].eligible is False
     selected = await auth_client.post(f"/api/v1/threads/{dependent_id}/set-pending")
     assert selected.status_code == 400, selected.text
 
@@ -1235,10 +1202,8 @@ async def test_builder_dependency_blocks_across_live_surfaces(
     unblocked = await auth_client.post(f"/api/v1/threads/{dependent_id}:getBlockingInfo")
     assert unblocked.status_code == 200
     assert unblocked.json()["is_blocked"] is False
-    bootstrap = await auth_client.get("/api/v1/roll/bootstrap")
-    assert {row["id"] for row in bootstrap.json()["roll_pool"]} == {
-        prerequisite_id, dependent_id,
-    }
+    pool = await get_bounded_roll_pool_rows(user_id, async_db, 10)
+    assert {row[0].id for row in pool} == {prerequisite_id, dependent_id}
 
 
 async def test_unclassified_legacy_dependency_is_not_reader_approval(
@@ -1260,11 +1225,8 @@ async def test_unclassified_legacy_dependency_is_not_reader_approval(
     connected = await auth_client.get(f"/api/v1/threads/{dependent_id}/connected")
     assert connected.status_code == 200
     assert connected.json()["connected_threads"] == []
-    bootstrap = await auth_client.get("/api/v1/roll/bootstrap")
-    assert bootstrap.status_code == 200
-    assert {row["id"] for row in bootstrap.json()["roll_pool"]} == {
-        prerequisite_id, dependent_id,
-    }
+    pool = await get_bounded_roll_pool_rows(user.id, async_db, 10)
+    assert {row[0].id for row in pool} == {prerequisite_id, dependent_id}
 
 
 async def test_option_e_roll_pool_never_reaggregates_unread_issues(

@@ -1,9 +1,0 @@
-{
-  "contract_version": 1,
-  "response": {
-    "detail": "Invalid authentication credentials"
-  },
-  "sets_refresh_cookie": false,
-  "status": 401,
-  "www_authenticate": "Bearer"
-}

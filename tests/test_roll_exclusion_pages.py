@@ -1,14 +1,14 @@
 """Paginated Roll exclusion drill-down for issue #3330.
 
-The Roll bootstrap carries bounded previews of the blocked and out-of-pool
-categories. The production report was that the collapsed headings displayed
-the preview size (20) as if it were the category total, and there was no way
-to reach the rest of the category.
+The Roll UI shows bounded blocked and out-of-pool previews. The production
+report was that the collapsed headings displayed the preview size (20) as if
+it were the category total, and there was no way to reach the rest of the
+category.
 
 These tests drive the real endpoint against async PostgreSQL so the category
 predicates are exercised against real rows. They pin the invariant the UI now
-relies on: the bootstrap count and the drill-down total are the same number
-for the same category scope, and every counted row is reachable by paging.
+relies on: the drill-down total is the true category total for the same scope,
+and every counted row is reachable by paging.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -21,7 +21,7 @@ from app.models import ReadingSession
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
-from app.schemas import RollBootstrapResponse, RollExclusionPageResponse
+from app.schemas import RollExclusionPageResponse
 from tests.conftest import get_or_create_user_async
 
 
@@ -48,13 +48,6 @@ async def _thread(
     db.add(thread)
     await db.flush()
     return thread
-
-
-async def _bootstrap(client: AsyncClient) -> RollBootstrapResponse:
-    """Fetch the Roll bootstrap payload for the authenticated user."""
-    response = await client.get("/api/v1/roll/bootstrap")
-    assert response.status_code == 200
-    return RollBootstrapResponse.model_validate(response.json())
 
 
 async def _exclusion_page(
@@ -122,15 +115,9 @@ async def test_blocked_category_total_and_pages_reach_every_series(
     ]
     await async_db.commit()
 
-    bootstrap = await _bootstrap(auth_client)
-    assert bootstrap.blocked_count == 25
-    # The initial bootstrap stays bounded; only the drill-down is complete.
-    assert len(bootstrap.blocked_threads) == bootstrap.summary_limit
-    assert len(bootstrap.blocked_threads) < bootstrap.blocked_count
-
     first = await _exclusion_page(auth_client, category="blocked")
     assert first.category == "blocked"
-    assert first.total == bootstrap.blocked_count
+    assert first.total == 25
     assert first.limit == 20
     assert first.offset == 0
     assert len(first.items) == 20
@@ -171,13 +158,9 @@ async def test_inactive_category_total_and_pages_reach_every_series(
     ]
     await async_db.commit()
 
-    bootstrap = await _bootstrap(auth_client)
-    assert bootstrap.inactive_count == 26
-    assert len(bootstrap.inactive_threads) == bootstrap.summary_limit
-
     first = await _exclusion_page(auth_client, category="inactive")
     assert first.category == "inactive"
-    assert first.total == bootstrap.inactive_count
+    assert first.total == 26
     assert len(first.items) == 20
     assert first.next_cursor == "20"
 
@@ -212,10 +195,6 @@ async def test_categories_below_the_preview_limit_are_complete_on_one_page(
         async_db, user.id, title="Completed", position=2, status="completed"
     )
     await async_db.commit()
-
-    bootstrap = await _bootstrap(auth_client)
-    assert bootstrap.blocked_count == 1
-    assert bootstrap.inactive_count == 1
 
     blocked_page = await _exclusion_page(auth_client, category="blocked")
     assert blocked_page.total == 1
@@ -255,26 +234,20 @@ async def test_exclusion_categories_partition_without_overlap(
     )
     await async_db.commit()
 
-    bootstrap = await _bootstrap(auth_client)
     blocked_page = await _exclusion_page(auth_client, category="blocked")
     inactive_page = await _exclusion_page(auth_client, category="inactive")
 
     blocked_ids = {item.thread_id for item in blocked_page.items}
     inactive_ids = {item.thread_id for item in inactive_page.items}
 
-    assert blocked_page.total == bootstrap.blocked_count == 1
-    assert inactive_page.total == bootstrap.inactive_count == 2
+    assert blocked_page.total == 1
+    assert inactive_page.total == 2
     assert blocked_ids == {blocked.id}
     assert inactive_ids == {deprioritized.id, completed.id}
     assert blocked_ids.isdisjoint(inactive_ids)
     assert blocked_ids.isdisjoint({snoozed.id, skipped.id})
     assert inactive_ids.isdisjoint({snoozed.id, skipped.id})
     assert available.id not in blocked_ids | inactive_ids
-    # Every owned series is either available or explained exactly once.
-    explained = {item.thread_id for item in bootstrap.excluded_threads}
-    assert explained == {blocked.id, snoozed.id, skipped.id, deprioritized.id, completed.id}
-    assert len(explained) == bootstrap.excluded_count
-    assert bootstrap.available_threads + bootstrap.excluded_count == bootstrap.total_threads
 
 
 @pytest.mark.asyncio
@@ -316,17 +289,16 @@ async def test_blocked_page_explains_dependency_details(
 
 
 @pytest.mark.asyncio
-async def test_inactive_page_uses_the_same_reading_session_as_the_bootstrap(
+async def test_inactive_page_uses_the_session_that_carries_pending_work(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """The drill-down classifies rows with the session the bootstrap resolved.
+    """The drill-down resolves the same session that owns pending reading work.
 
-    Two unended sessions can exist at once. The bootstrap resolves the one
-    that still carries pending reading work, while the newest unended session
-    may carry none. Reading the newest one here would classify a snoozed
-    series as out-of-pool, so the drill-down total would disagree with the
-    bootstrap count printed beside the same heading (#3330).
+    Two unended sessions can exist at once. The authoritative one still carries
+    pending reading work, while the newest unended session may carry none.
+    Reading the newest one here would classify a snoozed series as out-of-pool
+    and disagree with the heading the UI renders beside it (#3330).
     """
     user = await get_or_create_user_async(async_db)
     # Both series sit outside the active queue, so the only thing that keeps
@@ -359,15 +331,11 @@ async def test_inactive_page_uses_the_same_reading_session_as_the_bootstrap(
     )
     await async_db.commit()
 
-    bootstrap = await _bootstrap(auth_client)
     inactive_page = await _exclusion_page(auth_client, category="inactive")
 
-    # The bootstrap resolved the session that carries the pending work.
-    assert bootstrap.session_id != 0
-    assert bootstrap.inactive_count == 1
-    # The drill-down agrees with that heading instead of reporting the snoozed
-    # series as out-of-pool because it read the other session.
-    assert inactive_page.total == bootstrap.inactive_count
+    # The snoozed series stays excluded instead of being reclassified as
+    # out-of-pool because the endpoint read the other session.
+    assert inactive_page.total == 1
     assert [item.thread_id for item in inactive_page.items] == [deprioritized.id]
     assert snoozed.id not in {item.thread_id for item in inactive_page.items}
 

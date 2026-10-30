@@ -104,7 +104,12 @@ def select_mounts_for_path(path: str, mounts: Sequence[RouterMount]) -> tuple[Ro
 
 
 def _register_roll(app: FastAPI) -> None:
-    """Register roll, roll v1, and roll v2 routers."""
+    """Register the Python Roll routers that remain after the v2 GET cutover.
+
+    ``GET /api/v2/roll/bootstrap`` is served by native Rust ingress. The
+    Python Roll router keeps the POST mutations and the v1 exclusion drill-down;
+    no Python bootstrap handler or alias remains registered here.
+    """
     from app.api import roll
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
@@ -112,8 +117,6 @@ def _register_roll(app: FastAPI) -> None:
     # New client resources (e.g. the Roll exclusion drill-down for #3330) are
     # versioned-only: no bare /api/* twin.
     app.include_router(roll.v1_router, prefix="/api/v1/roll", tags=["roll"])
-    # Roll v2: versioned-only, no unversioned alias per #2716
-    app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
 
 
 def _register_admin(app: FastAPI) -> None:
@@ -312,13 +315,6 @@ def _register_traffic_metrics(app: FastAPI) -> None:
     app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
 
 
-def _register_bootstrap_telemetry(app: FastAPI) -> None:
-    """Register bootstrap-alias telemetry routers."""
-    from app.api import bootstrap_telemetry
-
-    app.include_router(bootstrap_telemetry.router, prefix="/api", tags=["bootstrap-telemetry"])
-
-
 def _register_dependencies(app: FastAPI) -> None:
     """Register dependency and continuity routers, composing sub-routers first."""
     from app.api import dependency
@@ -440,11 +436,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("preferences", frozenset({"users"}), _register_preferences),
     RouterMount("taste-signals", frozenset({"users"}), _register_taste_signals),
     RouterMount("traffic-metrics", frozenset({"traffic-metrics"}), _register_traffic_metrics),
-    RouterMount(
-        "bootstrap-telemetry",
-        frozenset({"bootstrap-alias-metrics"}),
-        _register_bootstrap_telemetry,
-    ),
     RouterMount(
         "dependencies",
         frozenset(

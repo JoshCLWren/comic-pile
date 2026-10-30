@@ -1,9 +1,0 @@
-{
-  "contract_version": 1,
-  "response": {
-    "detail": "Invalid or expired token"
-  },
-  "sets_refresh_cookie": false,
-  "status": 401,
-  "www_authenticate": "Bearer"
-}

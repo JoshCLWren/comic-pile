@@ -5,7 +5,7 @@ so there was no at-a-glance signal for tag-based decisions such as "which
 series are physical?" before rolling. These tests lock the list-surface
 contract:
 
-- Queue rows and Roll bootstrap rows carry the thread's visible direct tags
+- Queue rows carry the thread's visible direct tags
 - an untagged thread reports an empty list rather than dropping the field
 - the viewer's own private tags are included and another user's private tag is
   never leaked into a row they cannot edit
@@ -110,29 +110,6 @@ async def test_queue_rows_never_leak_another_users_private_tag(
     rows = {row["title"]: row for row in response.json()["threads"]}
 
     assert rows["Namor"]["tags"] == []
-
-
-@pytest.mark.asyncio
-async def test_roll_bootstrap_die_faces_expose_visible_thread_tags(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    default_user: User,
-) -> None:
-    """Roll bootstrap rows carry the same tags the Queue rows expose."""
-    tagged = await _active_thread(async_db, default_user.id, "X-Men", 1)
-    await _active_thread(async_db, default_user.id, "Untouched", 2)
-
-    physical = await _private_tag(async_db, default_user, "Physical")
-    await TagService(async_db).assign_tag(
-        default_user, physical.id, "Thread", tagged.id
-    )
-
-    response = await auth_client.get("/api/v1/roll/bootstrap")
-    assert response.status_code == 200, response.text
-    pool = {face["title"]: face for face in response.json()["roll_pool"]}
-
-    assert [tag["name"] for tag in pool["X-Men"]["tags"]] == ["Physical"]
-    assert pool["Untouched"]["tags"] == []
 
 
 @pytest.mark.asyncio

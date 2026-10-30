@@ -436,8 +436,8 @@ async def test_4028_saved_overlap_reloads_per_reader_and_shows_on_roll(
     assert owner_miracle.id not in owner_live.candidate_ids()
     assert other_jli.id not in other_live.candidate_ids()
 
-    rolled = await auth_client.get("/api/v1/roll/bootstrap")
-    assert rolled.status_code == 200, rolled.text
-    roll_pool = [(row["id"], row["issue_id"]) for row in rolled.json()["roll_pool"]]
-    assert (owner_jli.id, owner_j2_id) in roll_pool
-    assert owner_miracle.id not in {thread_id for thread_id, _issue_id in roll_pool}
+    # The live eligibility snapshot is the Roll candidate authority after the
+    # Python bootstrap removal: JLI is readable at J2 while Miracle stays blocked.
+    assert owner_live.threads[owner_jli.id].eligible is True
+    assert owner_live.threads[owner_jli.id].next_issue_id == owner_j2_id
+    assert owner_live.threads[owner_miracle.id].eligible is False

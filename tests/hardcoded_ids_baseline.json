@@ -70,12 +70,6 @@
     "tests/test_reading_shadow.py": [
       "user_id=1"
     ],
-    "tests/test_roll_bootstrap_exclusions.py": [
-      "user_id=1"
-    ],
-    "tests/test_roll_bootstrap_ownership.py": [
-      "user_id=1"
-    ],
     "tests/test_roll_recovery.py": [
       "user_id=1"
     ],

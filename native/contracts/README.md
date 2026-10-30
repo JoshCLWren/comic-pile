@@ -1,23 +1,21 @@
 # Python endpoint references for native ports
 
-`roll-bootstrap-v1.openapi.json` is the transitive operation snapshot from
-`frontend/src/generated/openapi.json` at production commit `cdaa74f`, for
-GET `/api/v1/roll/bootstrap` (#4350). It includes nested models, security
-schemes and query defaults. Arrays retain their original ordering. The
-PostgreSQL-backed test also compares it with the live FastAPI `app.openapi()`
-operation, so a stale generated client file cannot silently become the oracle.
+## Supported operation: GET /api/v2/roll/bootstrap
 
-The real normal consumer is `frontend/src/services/rollBootstrapApi.ts`.
-Recovery uses `frontend/src/services/protectedRollMutationApi.ts`. Both keep
-their existing v1 URL. The legacy `/api/roll/bootstrap` alias shares the Python
-handler and must also move before Python deletion. V2 is a separate contract.
+`roll-bootstrap-v2.openapi.json` is the frozen operation snapshot and full
+referenced component closure captured from `frontend/src/generated/openapi.json`
+immediately before the Python v2 handler was deleted. The operation is served
+by native Rust ingress only. `app/schemas/roll_v2.py` and
+`tests/test_roll_v2_frozen_contract.py` keep the frozen Python DTO aligned with
+this contract.
 
 To compare an independently generated Rust OpenAPI operation:
 
 ```sh
 python scripts/rust_endpoint_oracle.py check \
   --schema /tmp/rust-generated-openapi.json \
-  --contract native/contracts/roll-bootstrap-v1.openapi.json
+  --contract native/contracts/roll-bootstrap-v2.openapi.json \
+  --path /api/v2/roll/bootstrap
 ```
 
 The comparison includes the full referenced component closure, not only the
@@ -25,26 +23,16 @@ top-level response. It must receive actual native-generated output. The frozen
 Python file alone does not establish native parity, runtime behavior, or a
 production cutover.
 
-`tests/test_roll_bootstrap_port_oracle.py` executes the original Python v1
-handler against fixture-owned synthetic PostgreSQL data, including pool,
-snoozed, skipped, blocked, stale, completed and deprioritized sections. It
-validates the response against the frozen schema and records every emitted
-statement, driver bind type/container shape, bind order when available, and
-connection transaction events. Scalars are never recorded. The transcript is
-available as `roll-bootstrap-v1.sql.json` in the CI `rust-sql-oracle-*` artifact
-for the shard running that test. A failed test does not export a success artifact.
+## Retired operation: GET /api/v1/roll/bootstrap
 
-This is one representative existing-session path, not a complete SQL inventory:
-new-session creation, pending recovery, and timezone updates still need targeted
-captures as the native handler is implemented. Do not substitute these queries
-for those unrecorded branches or treat the file as proof they are equivalent.
+`roll-bootstrap-v1.openapi.json` is the historical v1 operation snapshot from
+production commit `cdaa74f` (#4350/#4371). It includes nested models, security
+schemes and query defaults. Arrays retain their original ordering.
 
-Run the focused reference checks:
+The v1 and legacy bootstrap paths are retired, not ported. This snapshot is
+retained only as behavioral evidence for fields the live Roll UI used to see.
+The real normal consumer is `frontend/src/services/rollBootstrapApi.ts`, and
+recovery uses `frontend/src/services/protectedRollMutationApi.ts`; both now call
+the v2 operation.
 
-```sh
-pytest tests/test_rust_endpoint_oracle.py tests/test_roll_bootstrap_port_oracle.py --no-cov
-```
-
-This infrastructure does not change ingress, implement Rust v1, or delete
-Python. #4350 stays open until the actual contract-preserving native deployment
-and the subsequent Python-deletion deployment both succeed.
+This directory does not change ingress or resurrect a Python handler.

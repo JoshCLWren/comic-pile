@@ -1,6 +1,5 @@
 """Tests for roll API endpoints."""
 
-import logging
 
 import pytest
 from httpx import AsyncClient
@@ -329,146 +328,6 @@ async def test_override_roll_completed_thread(
 
 
 @pytest.mark.asyncio
-async def test_roll_bootstrap_does_not_flag_fresh_threads_as_stale(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Bootstrap counts a thread as stale only when its effective activity predates the cutoff.
-
-    A freshly created thread with NULL last_activity_at falls back to created_at and must
-    not be flagged stale, matching the previous frontend stale-thread contract.
-    """
-    from datetime import UTC, datetime, timedelta
-
-    from app.models import Thread
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    now = datetime.now(UTC)
-    stale_date = now - timedelta(days=30)
-
-    fresh_thread = Thread(
-        title="Fresh Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        last_activity_at=None,
-        created_at=now,
-    )
-    stale_thread = Thread(
-        title="Old Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=2,
-        status="active",
-        user_id=user.id,
-        last_activity_at=stale_date,
-        created_at=now,
-    )
-    async_db.add_all([fresh_thread, stale_thread])
-    await async_db.commit()
-
-    response = await auth_client.get("/api/v1/roll/bootstrap")
-    assert response.status_code == 200
-    data = response.json()
-
-    assert data["stale_thread_count"] == 1
-    assert data["stale_thread"]["title"] == "Old Thread"
-
-
-@pytest.mark.asyncio
-async def test_roll_bootstrap_counts_null_activity_old_threads_as_stale(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Bootstrap flags a thread with NULL last_activity_at and an old created_at as stale."""
-    from datetime import UTC, datetime, timedelta
-
-    from app.models import Thread
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    now = datetime.now(UTC)
-    old_date = now - timedelta(days=30)
-
-    old_no_activity_thread = Thread(
-        title="Old No Activity",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        last_activity_at=None,
-        created_at=old_date,
-    )
-    async_db.add(old_no_activity_thread)
-    await async_db.commit()
-
-    response = await auth_client.get("/api/v1/roll/bootstrap")
-    assert response.status_code == 200
-    data = response.json()
-
-    assert data["stale_thread_count"] == 1
-    assert data["stale_thread"]["title"] == "Old No Activity"
-
-
-@pytest.mark.asyncio
-async def test_roll_bootstrap_excludes_snoozed_threads_from_stale(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Bootstrap stale count excludes threads that are currently snoozed."""
-    from datetime import UTC, datetime, timedelta
-
-    from app.models import ReadingSession, Thread
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    now = datetime.now(UTC)
-    stale_date = now - timedelta(days=10)
-
-    stale_thread = Thread(
-        title="Stale Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        last_activity_at=stale_date,
-        created_at=now,
-    )
-    snoozed_stale_thread = Thread(
-        title="Snoozed Stale Thread",
-        format="Comic",
-        issues_remaining=3,
-        queue_position=2,
-        status="active",
-        user_id=user.id,
-        last_activity_at=stale_date,
-        created_at=now,
-    )
-    async_db.add_all([stale_thread, snoozed_stale_thread])
-    await async_db.flush()
-
-    session = ReadingSession(
-        user_id=user.id,
-        started_at=now,
-        snoozed_thread_ids=[snoozed_stale_thread.id],
-    )
-    async_db.add(session)
-    await async_db.commit()
-
-    response = await auth_client.get("/api/v1/roll/bootstrap")
-    assert response.status_code == 200
-    data = response.json()
-
-    assert data["stale_thread_count"] == 1
-    assert data["stale_thread"]["title"] == "Stale Thread"
-
-
-@pytest.mark.asyncio
 async def test_roll_die_boundary_caps_result(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
@@ -634,15 +493,3 @@ async def test_roll_snoozed_thread_excluded_from_pool(
     assert data["die_size"] == 4
     assert 1 <= data["result"] <= 4
     assert data["thread_id"] != snoozed_thread.id
-
-
-@pytest.mark.asyncio
-async def test_roll_timezone_logging(
-    auth_client: AsyncClient,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Verify that invalid timezones are logged and don't crash bootstrap."""
-    with caplog.at_level(logging.ERROR):
-        response = await auth_client.get("/api/v1/roll/bootstrap?timezone=INVALID_TZ")
-        assert response.status_code == 200
-        assert "Failed to update session timezone from browser value INVALID_TZ" in caplog.text
