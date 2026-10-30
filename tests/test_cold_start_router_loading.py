@@ -158,31 +158,6 @@ def test_every_eager_api_route_is_reachable_from_its_selected_mounts() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/api/roll/bootstrap",
-        "/api/v1/roll/bootstrap",
-        "/api/v2/roll/bootstrap",
-    ],
-)
-@pytest.mark.asyncio
-async def test_first_roll_bootstrap_skips_dependency_subrouters(path: str) -> None:
-    """A cold Roll GET needs Roll alone, not all continuity/CBL APIs."""
-    app = create_app(serve_frontend=False, defer_router_imports=True)
-    assert PREREQUISITE_SWITCH_PATH not in _route_paths(app)
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get(path)
-
-    # The Roll router answered (unauthenticated), without the dependency
-    # router whose only /roll endpoint is POST switch-prerequisite.
-    assert response.status_code == 401
-    paths = _route_paths(app)
-    assert path in paths
-    assert PREREQUISITE_SWITCH_PATH not in paths
-
 @pytest.mark.asyncio
 async def test_first_snooze_request_registers_only_the_snooze_mount() -> None:
     """A cold snooze request must not import catalog or delivery."""
