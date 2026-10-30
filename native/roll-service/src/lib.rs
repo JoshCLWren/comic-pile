@@ -20,13 +20,41 @@ use axum::{
 use config::{Config, ConfigError, JwtSecret};
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime, Timeouts};
 use postgres_native_tls::MakeTlsConnector;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     future::{Future, IntoFuture},
     sync::Arc,
     time::{Duration, Instant},
 };
+
+/// Schema for roll request.
+#[derive(Deserialize)]
+pub struct RollRequest {
+    pub bandwidth: Option<String>,
+    pub intent: Option<String>,
+}
+
+/// Schema for roll response.
+#[derive(Serialize)]
+pub struct RollResponse {
+    pub thread_id: i32,
+    pub title: String,
+    pub format: String,
+    pub issues_remaining: i32,
+    pub queue_position: i32,
+    pub die_size: i32,
+    pub result: i32,
+    pub offset: i32,
+    pub snoozed_count: i32,
+    pub issue_id: Option<i32>,
+    pub issue_number: Option<String>,
+    pub next_issue_id: Option<i32>,
+    pub next_issue_number: Option<String>,
+    pub total_issues: Option<i32>,
+    pub reading_progress: Option<String>,
+    pub explanation: Option<String>,
+}
 
 /// Runtime dependencies. Never log this state or its credentials.
 pub struct AppState {
@@ -147,25 +175,95 @@ async fn bound_request(
     response
 }
 
+/// Extract JWT token from Authorization header
+fn extract_jwt_token(headers: &http::HeaderMap) -> Result<String, ApiError> {
+    let auth_header = headers
+        .get("authorization")
+        .ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "Missing authorization header"))?;
+    
+    let auth_str = auth_header
+        .to_str()
+        .map_err(|_| ApiError(StatusCode::UNAUTHORIZED, "Invalid authorization header"))?;
+    
+    if !auth_str.starts_with("Bearer ") {
+        return Err(ApiError(StatusCode::UNAUTHORIZED, "Invalid authorization header format"));
+    }
+    
+    Ok(auth_str[7..].to_string())
+}
+
+/// Parse JWT token to extract user ID
+fn parse_jwt_token(token: &str, jwt_secret: &JwtSecret) -> Result<i32, ApiError> {
+    let validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
+    let token_data = jsonwebtoken::decode::<serde_json::Value>(token, &jwt_secret.0, &validation)
+        .map_err(|_| ApiError(StatusCode::UNAUTHORIZED, "Invalid token"))?;
+    
+    let user_id = token_data
+        .claims
+        .get("sub")
+        .and_then(|sub| sub.as_i64())
+        .ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "Invalid token payload"))?;
+    
+    Ok(user_id as i32)
+}
+
 /// Authenticated POST roll endpoint at v1 exact contract.
-async fn roll_v1_post(State(_state): State<Arc<AppState>>, _request: Request) -> Response {
-    // Preserve auth through middleware layer already applied; perform owner-scoped roll.
-    // Focused proof: authenticate, return valid roll-shaped JSON with rust runtime marker.
-    (
+async fn roll_v1_post(State(state): State<Arc<AppState>>, request: Request) -> Result<Response, ApiError> {
+    // Extract JWT token from Authorization header
+    let token = extract_jwt_token(request.headers())?;
+    
+    // Parse JWT token to get user ID
+    let user_id = parse_jwt_token(&token, &state.jwt_secret)?;
+    
+    // Extract the request body
+    let bytes = axum::body::to_bytes(request.into_body(), 1024 * 1024)
+        .await
+        .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "Failed to read request body"))?;
+    
+    let roll_request: RollRequest = serde_json::from_slice(&bytes)
+        .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "Invalid request body"))?;
+    
+    // Get database connection from pool
+    let mut client = state.pool.get().await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database connection failed"))?;
+    
+    // TODO: Implement actual roll logic
+    // This is a placeholder implementation that needs to be replaced with:
+    // 1. ✅ JWT token extraction to get user ID
+    // 2. Get or create reading session
+    // 3. Check for pending roll
+    // 4. Get current die
+    // 5. Calculate excluded thread IDs
+    // 6. Perform thread selection
+    // 7. Create Event and RecommendationContext
+    // 8. Build RollResponse
+    
+    // For now, return a simple success response with the runtime marker
+    Ok((
         StatusCode::OK,
         [
             ("content-type", "application/json"),
             ("x-comicpile-api-runtime", "rust"),
         ],
         Json(json!({
-            "chosen_thread": {"id": 1, "title": "Synthetic roll proof", "format": "test"},
-            "die_result": 6,
-            "session_id": 1,
-            "roll_event_id": 101,
-            "status": "success"
+            "thread_id": 1,
+            "title": "Thread Implementation Needed",
+            "format": "Comic",
+            "issues_remaining": 10,
+            "queue_position": 1,
+            "die_size": 6,
+            "result": 4,
+            "offset": 0,
+            "snoozed_count": 0,
+            "issue_id": null,
+            "issue_number": null,
+            "next_issue_id": null,
+            "next_issue_number": null,
+            "total_issues": null,
+            "reading_progress": null,
+            "explanation": null
         })),
-    )
-        .into_response()
+    ).into_response())
 }
 
 /// Mount health, bootstrap, and v1 roll routes; no partial-success fallback.
