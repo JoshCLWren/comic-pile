@@ -63,8 +63,10 @@ def _destination(
         if not isinstance(source, str) or re.fullmatch(source, path) is None:
             continue
         methods = route.get("methods")
-        if methods is not None and method not in methods:
-            continue
+        if methods is not None:
+            assert isinstance(methods, list)
+            if method not in methods:
+                continue
         destination = route.get("dest")
         if isinstance(destination, str):
             return destination
