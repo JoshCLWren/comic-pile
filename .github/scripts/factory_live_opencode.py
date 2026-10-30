@@ -7,74 +7,19 @@ import argparse
 import json
 import re
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
+from factory_candidate_health import UPDATED_RE, flatten_comments, latest_attempt_evidence
+from factory_completion_controller import parse_time
 from factory_model_catalog import parse_opencode_models_text
 from factory_roster import load_roster_rows, opencode_model_is_free
 
-
+COOLDOWN_SECONDS = 6 * 60 * 60
 MODEL_UNAVAILABLE_RE = re.compile(
     r"Error:\s*Model unavailable:\s*(?P<model>\S+)",
     re.IGNORECASE,
 )
-
-
-@dataclass(frozen=True)
-class ModelCooldown:
-    """One model temporarily excluded due to smoke failure."""
-
-    model: str
-    reason: str
-    expires_at: int  # Unix timestamp
-
-
-@dataclass
-class CooldownRegistry:
-    """Manage model cooldowns across multiple runs."""
-
-    cooldowns: dict[str, ModelCooldown] = field(default_factory=dict)
-    cooldown_duration: int = 21600  # 6 hours in seconds
-
-    def is_cooldown(self, model: str) -> bool:
-        """Return True if the model is currently in cooldown."""
-        if model not in self.cooldowns:
-            return False
-        cooldown = self.cooldowns[model]
-        return time.time() < cooldown.expires_at
-
-    def add_cooldown(self, model: str, reason: str) -> None:
-        """Add or extend a cooldown for a model."""
-        expires_at = int(time.time()) + self.cooldown_duration
-        self.cooldowns[model] = ModelCooldown(model, reason, expires_at)
-
-    def remove_cooldown(self, model: str) -> None:
-        """Remove a model from cooldown."""
-        self.cooldowns.pop(model, None)
-
-    def load_from_file(self, path: Path) -> None:
-        """Load cooldowns from a JSON file."""
-        try:
-            if path.exists():
-                data = json.loads(path.read_text(encoding="utf-8"))
-                for item in data.get("cooldowns", []):
-                    model = item.get("model")
-                    expires_at = item.get("expires_at")
-                    if model and expires_at and isinstance(expires_at, int):
-                        self.cooldowns[model] = ModelCooldown(model, "smoke_failure", expires_at)
-        except (OSError, json.JSONDecodeError):
-            pass
-
-    def save_to_file(self, path: Path) -> None:
-        """Save cooldowns to a JSON file."""
-        cooldown_list = [
-            {"model": cd.model, "reason": cd.reason, "expires_at": cd.expires_at}
-            for cd in self.cooldowns.values()
-        ]
-        data = {"cooldowns": cooldown_list}
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+RUN_RE = re.compile(r"(?m)^Run: ([0-9]+)$")
 
 
 def free_models(raw_catalog: str) -> list[str]:
@@ -83,92 +28,55 @@ def free_models(raw_catalog: str) -> list[str]:
     return sorted(
         entry.model_id
         for entry in catalog.entries
-        if not entry.cost_is_paid
-        and (entry.cost_is_zero or opencode_model_is_free(entry.model_id))
+        if not entry.cost_is_paid and (entry.cost_is_zero or opencode_model_is_free(entry.model_id))
     )
 
 
-def parse_trusted_attempt_evidence(comments: list[dict[str, Any]]) -> dict[tuple[str, str], str]:
-    """Parse trusted attempt evidence from registry comments.
-
-    Returns a mapping of (provider, model) to outcome.
-    Only trusted comments are considered; untrusted, malformed, or stale records are ignored.
-    """
-    from factory_work_policy import comment_is_trusted
-
-    outcome_pattern = re.compile(r"^\s*outcome:\s*(?P<outcome>[a-z][a-z0-9_]+)\s*$")
-    updated_pattern = re.compile(r"^\s*updated:\s*(?P<updated>\S+)\s*$")
-    provider_pattern = re.compile(r"^\s*Source:\s*(?P<provider>\S+)\s*$")
-    model_pattern = re.compile(r"^\s*Model:\s*(?P<model>\S+)\s*$")
-
-    evidence: dict[tuple[str, str], str] = {}
-
-    for comment in comments:
-        if not comment_is_trusted(comment):
-            continue
-
+def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
+    """Return model-specific exclusions from trusted, timestamped registry records."""
+    comments = []
+    for comment in flatten_comments(payload):
         body = str(comment.get("body") or "")
-
-        # Skip comments without the expected markers
-        if "outcome:" not in body or "updated:" not in body:
+        if RUN_RE.search(body) is None:
             continue
-
-        provider_match = provider_pattern.search(body)
-        model_match = model_pattern.search(body)
-        outcome_match = outcome_pattern.search(body)
-        updated_match = updated_pattern.search(body)
-
-        if not all([provider_match, model_match, outcome_match, updated_match]):
+        if not any(
+            marker in body
+            for marker in (
+                "<!-- factory-attempt-outcome:v1 ",
+                "<!-- factory-model-unavailable:v1 ",
+                "<!-- factory-model-retired-410:v1 -->",
+            )
+        ):
             continue
-
-        outcome = outcome_match.group("outcome")
-        if outcome in {"control_plane_failure", "environment_failure"}:
+        timestamp = UPDATED_RE.search(body)
+        updated = parse_time(timestamp.group("updated")) if timestamp else None
+        if updated is None or updated > now_epoch:
             continue
-
-        evidence[(provider_match.group("provider"), model_match.group("model"))] = outcome
-
-    return evidence
-
-
-def filter_unavailable_models(
-    models: list[str],
-    trusted_evidence: dict[tuple[str, str], str],
-    cooldown_registry: CooldownRegistry,
-) -> list[str]:
-    """Filter out models that are unavailable based on trusted evidence and cooldown.
-
-    Returns only models that are:
-    1. Not in cooldown
-    2. Have no permanent unavailable evidence (model_unavailable, model_retired_410)
-    """
-    available = []
-    for model in models:
-        key = ("opencode-free", model)
-
-        # Skip if in cooldown
-        if cooldown_registry.is_cooldown(model):
+        comments.append(comment)
+    excluded = set()
+    for evidence in latest_attempt_evidence(comments).values():
+        if evidence.provider != "opencode-free" or evidence.updated > now_epoch:
             continue
-
-        # Skip if has permanent unavailable evidence
-        if trusted_evidence.get(key) in {"model_unavailable", "model_retired_410"}:
-            continue
-
-        available.append(model)
-
-    return available
+        if evidence.outcome == "model_retired_410" or (
+            evidence.outcome == "model_unavailable"
+            and now_epoch < evidence.updated + COOLDOWN_SECONDS
+        ):
+            excluded.add(evidence.model.removeprefix("opencode/"))
+    return excluded
 
 
-def classify_smoke_failure(log_content: str, runtime_model: str) -> tuple[bool, str]:
-    """Classify the exact smoke failure.
-
-    Returns a tuple of (is_unavailable, reason).
-    """
-    match = MODEL_UNAVAILABLE_RE.search(log_content)
-    if match:
-        model = match.group("model")
-        return (True, f"Model unavailable: {model}")
-
-    return (False, "Smoke test failed for other reasons")
+def record_smoke_failure(log_content: str, runtime_model: str, outcome_file: Path) -> bool:
+    """Persist exact-model unavailability for the terminal registry reporter."""
+    if not any(
+        match.group("model") == runtime_model
+        for match in MODEL_UNAVAILABLE_RE.finditer(log_content)
+    ):
+        return False
+    outcome_file.write_text(
+        f"model_unavailable\tModel unavailable: {runtime_model}\n",
+        encoding="utf-8",
+    )
+    return True
 
 
 def select_model(
@@ -177,7 +85,8 @@ def select_model(
     rotation: int,
     roster_path: Path,
     comments_path: Path | None = None,
-    cooldown_file: Path | None = None,
+    *,
+    now_epoch: int | None = None,
 ) -> dict[str, str | int]:
     """Rotate all free models without assigning duplicate permanent pins.
 
@@ -187,33 +96,20 @@ def select_model(
     if not models:
         raise ValueError("OpenCode catalog has no provably free models")
 
-    # Load trusted evidence from registry comments
-    trusted_evidence: dict[tuple[str, str], str] = {}
-    if comments_path and comments_path.exists():
-        try:
-            comments_payload = json.loads(comments_path.read_text(encoding="utf-8"))
-            trusted_evidence = parse_trusted_attempt_evidence(comments_payload)
-        except (OSError, json.JSONDecodeError):
-            pass
-
-    # Load cooldowns from file
-    cooldown_registry = CooldownRegistry()
-    if cooldown_file:
-        cooldown_registry.load_from_file(cooldown_file)
-
-    # Filter out unavailable models
-    available_models = filter_unavailable_models(models, trusted_evidence, cooldown_registry)
-
-    if not available_models:
-        raise ValueError(
-            f"All {len(models)} candidates are unavailable or in cooldown. "
-            f"Available: {available_models}, Unavailable: {[m for m in models if m not in available_models]}"
+    excluded = set()
+    if comments_path is not None:
+        # Evidence read/JSON errors must fail closed rather than silently forget cooldowns.
+        payload = json.loads(comments_path.read_text(encoding="utf-8"))
+        excluded = unavailable_models(
+            payload,
+            now_epoch=int(time.time()) if now_epoch is None else now_epoch,
         )
+    available_models = [model for model in models if model not in excluded]
+    if not available_models:
+        raise ValueError(f"All {len(models)} candidates are unavailable or in cooldown")
 
     rows = load_roster_rows(roster_path)
-    workers = sorted(
-        int(row["worker"]) for row in rows if row["source"] == "opencode-free"
-    )
+    workers = sorted(int(row["worker"]) for row in rows if row["source"] == "opencode-free")
     if worker not in workers:
         raise ValueError(f"worker {worker} has no OpenCode free slot")
 
@@ -228,16 +124,32 @@ def select_model(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--catalog", type=Path, required=True)
-    parser.add_argument("--worker", type=int, required=True)
-    parser.add_argument("--rotation", type=int, required=True)
+    parser.add_argument("--catalog", type=Path)
+    parser.add_argument("--comments", type=Path)
+    parser.add_argument("--smoke-log", type=Path)
+    parser.add_argument("--runtime-model")
+    parser.add_argument("--outcome-file", type=Path)
+    parser.add_argument("--worker", type=int)
+    parser.add_argument("--rotation", type=int, default=0)
     parser.add_argument("--roster", type=Path, default=Path(".github/free-model-factories.tsv"))
     args = parser.parse_args()
+    if args.smoke_log is not None:
+        if not args.runtime_model or args.outcome_file is None:
+            parser.error("--smoke-log requires --runtime-model and --outcome-file")
+        record_smoke_failure(
+            args.smoke_log.read_text(encoding="utf-8"),
+            args.runtime_model,
+            args.outcome_file,
+        )
+        return
+    if args.catalog is None or args.worker is None:
+        parser.error("selection requires --catalog and --worker")
     selected = select_model(
         args.catalog.read_text(encoding="utf-8"),
         args.worker,
         args.rotation,
         args.roster,
+        args.comments,
     )
     print(json.dumps(selected, sort_keys=True))
 
