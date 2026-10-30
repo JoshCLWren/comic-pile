@@ -3,10 +3,10 @@
  *
  * Acceptance contract (from the issue): after rolling and navigating to Queue
  * via the "Back to Queue" button, no HTTP request should be made to
- * `/api/v1/roll/bootstrap` during navigation.
+ * `/api/v2/roll/bootstrap` during navigation.
  *
  * This test specifically verifies:
- * 1. When leaving Roll via the back to queue button, zero HTTP requests are made to `/api/v1/roll/bootstrap`
+ * 1. When leaving Roll via the back to queue button, zero HTTP requests are made to `/api/v2/roll/bootstrap`
  */
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
@@ -25,10 +25,10 @@ test.describe('Issue #4140: HTTP request count verification', () => {
       total_issues: 3,
     })
 
-    // Track HTTP requests to /api/v1/roll/bootstrap
+    // Track HTTP requests to /api/v2/roll/bootstrap
     let bootstrapRequests = 0
     page.on('request', (request) => {
-      if (request.url().includes('/api/v1/roll/bootstrap') && request.method() === 'GET') {
+      if (request.url().includes('/api/v2/roll/bootstrap') && request.method() === 'GET') {
         bootstrapRequests++
       }
     })
@@ -63,10 +63,10 @@ test.describe('Issue #4140: HTTP request count verification', () => {
       total_issues: 2,
     })
 
-    // Track HTTP requests to /api/v1/roll/bootstrap
+    // Track HTTP requests to /api/v2/roll/bootstrap
     let bootstrapRequests = 0
     page.on('request', (request) => {
-      if (request.url().includes('/api/v1/roll/bootstrap') && request.method() === 'GET') {
+      if (request.url().includes('/api/v2/roll/bootstrap') && request.method() === 'GET') {
         bootstrapRequests++
       }
     })
