@@ -83,7 +83,9 @@ fn corrupt() -> ApiError {
         "Invalid reading session state",
     )
 }
-pub(crate) fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {    serde_json::from_str(row.try_get::<_, &str>(0).map_err(session_error)?).map_err(|_| corrupt())
+pub(crate) fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {
+    serde_json::from_str(row.try_get::<_, &str>(0).map_err(session_error)?)
+        .map_err(|_| corrupt())
 }
 const RESOLVE: &str = "SELECT row_to_json(s)::text FROM sessions s LEFT JOIN LATERAL
  (SELECT max(timestamp) AS last_event FROM events WHERE session_id = s.id) e ON true

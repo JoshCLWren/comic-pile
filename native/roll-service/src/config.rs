@@ -173,6 +173,15 @@ impl Config {
         if !(4..=20).contains(&start_die) {
             return Err(ConfigError("START_DIE outside allowed range"));
         }
+        let rating_min = rating(&get, "RATING_MIN", 0.5, 0.0)?;
+        let rating_max = rating(&get, "RATING_MAX", 5.0, 0.5)?;
+        let rating_threshold = rating(&get, "RATING_THRESHOLD", 4.0, 0.5)?;
+        if rating_min >= rating_max {
+            return Err(ConfigError("rating_min must be less than rating_max"));
+        }
+        if !(rating_min..=rating_max).contains(&rating_threshold) {
+            return Err(ConfigError("rating_threshold must be within [rating_min, rating_max]"));
+        }
         Ok(Self {
             environment,
             bind,
@@ -192,9 +201,9 @@ impl Config {
                 10000,
                 60000,
             )?),
-            rating_min: rating(&get, "RATING_MIN", 0.5, 0.0)?,
-            rating_max: rating(&get, "RATING_MAX", 5.0, 0.5)?,
-            rating_threshold: rating(&get, "RATING_THRESHOLD", 4.0, 0.5)?,
+            rating_min,
+            rating_max,
+            rating_threshold,
             start_die,
         })
     }
