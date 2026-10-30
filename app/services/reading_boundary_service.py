@@ -26,6 +26,7 @@ from app.schemas.reading_boundary import (
     ReadingBoundaryNext,
 )
 from app.services.errors import NotFoundError
+from app.services.reading_blocker_projection import unique_blocker_requirements
 from app.services.reading_eligibility_service import (
     ReadingEligibilitySnapshot,
     get_execution_eligibility,
@@ -138,6 +139,36 @@ def _blocker_editor(
     )
 
 
+def _blocker_reason(
+    snapshot: ReadingEligibilitySnapshot,
+    labels: BoundaryShadowLabels,
+    blocker: Blocker,
+) -> str:
+    """Explain one concrete live blocker with reader-facing names only."""
+    waiting = _issue_names(labels, blocker.waiting_on_issue_ids)
+    if blocker.kind == "prerequisite":
+        origin = _prerequisite_origin_label(blocker.origin)
+        return f"{origin}: read {waiting} first"
+    list_name = _list_name(snapshot, labels, blocker.list_id)
+    kind = _KIND_TEXT[blocker.kind]
+    return f"{kind} in {list_name}: read {waiting} first"
+
+
+def _project_blocker(
+    snapshot: ReadingEligibilitySnapshot,
+    labels: BoundaryShadowLabels,
+    blocker: Blocker,
+) -> ReadingBoundaryBlocker:
+    """Project one evaluator blocker into the reader response contract."""
+    return ReadingBoundaryBlocker(
+        kind=blocker.kind,
+        origin="reading_list" if blocker.list_id is not None else "reader_prerequisite",
+        reason=_blocker_reason(snapshot, labels, blocker),
+        waiting_on=[_issue_label(labels, issue_id) for issue_id in blocker.waiting_on_issue_ids],
+        editor=_blocker_editor(snapshot, labels, blocker),
+    )
+
+
 def _blocker_authority(
     snapshot: ReadingEligibilitySnapshot,
     labels: BoundaryShadowLabels,
@@ -149,88 +180,68 @@ def _blocker_authority(
     return f"{_KIND_TEXT[blocker.kind]} in {_list_name(snapshot, labels, blocker.list_id)}"
 
 
-def _requirement_groups(
-    blockers: Sequence[Blocker],
-) -> list[tuple[tuple[int, ...], tuple[Blocker, ...]]]:
-    """Group evaluator blockers that require the same canonical Issue set.
+def _governing_rules(blockers: Sequence[Blocker], waiting_ids: Sequence[int]) -> list[Blocker]:
+    """Return every evaluator rule that enforces one projected requirement.
 
-    One earlier Issue can gate a frontier through a hold, strict order, and a
-    prerequisite at once. The Issue is the requirement, so those rules are
-    merged into one entry. A rule whose targets are already described joins
-    every entry that describes them, because dropping the rule would hide the
-    list or prerequisite the reader needs to edit.
-
-    Args:
-        blockers: Evaluator blockers for one frontier in presentation order.
-
-    Returns:
-        ``(waiting Issue IDs, governing blockers)`` pairs in projection order.
+    A projected requirement covers one set of waiting Issues. A rule governs it
+    when it waits on any of those Issues, so a rule that spans several
+    requirements stays visible on each one instead of disappearing with the
+    first description of its targets.
     """
-    groups: list[tuple[tuple[int, ...], list[Blocker]]] = []
-    group_by_targets: dict[tuple[int, ...], int] = {}
-    seen: set[int] = set()
-    for blocker in blockers:
-        targets = tuple(blocker.waiting_on_issue_ids)
-        if not targets:
-            groups.append(((), [blocker]))
-            continue
-        if targets in group_by_targets:
-            groups[group_by_targets[targets]][1].append(blocker)
-            continue
-        remaining = tuple(issue_id for issue_id in targets if issue_id not in seen)
-        if not remaining:
-            covered_by = [
-                index
-                for index, (described, _rules) in enumerate(groups)
-                if set(targets) <= set(described)
-            ]
-            if covered_by:
-                groups[covered_by[0]][1].append(blocker)
-            else:
-                # The rule spans requirements described by several entries
-                # (for example a list ordered after two earlier Issues owned by
-                # different lists). Attach it to every entry so no governing
-                # list or prerequisite editor disappears.
-                for index, (described, _rules) in enumerate(groups):
-                    if set(targets) & set(described):
-                        groups[index][1].append(blocker)
-            continue
-        group_by_targets[remaining] = len(groups)
-        groups.append((remaining, [blocker]))
-        seen.update(remaining)
-    return [(targets, tuple(rules)) for targets, rules in groups]
+    target_set = set(waiting_ids)
+    if not target_set:
+        return [blocker for blocker in blockers if not blocker.waiting_on_issue_ids]
+    return [blocker for blocker in blockers if target_set & set(blocker.waiting_on_issue_ids)]
 
 
-def _project_requirement(
+def _with_governing_rules(
     snapshot: ReadingEligibilitySnapshot,
     labels: BoundaryShadowLabels,
-    targets: tuple[int, ...],
-    blockers: Sequence[Blocker],
+    blocker: ReadingBoundaryBlocker,
+    raw_blockers: Sequence[Blocker],
 ) -> ReadingBoundaryBlocker:
-    """Project one canonical requirement and every rule that enforces it."""
+    """Return one projected requirement carrying every rule that enforces it.
+
+    Canonical projection describes each required Issue once. The projected entry
+    still needs every governing rule, because a reader removes the restriction
+    by editing each one and a dropped rule would leave reading blocked for a
+    reason the page hid.
+    """
+    waiting_ids = [issue.issue_id for issue in blocker.waiting_on]
+    rules = _governing_rules(raw_blockers, waiting_ids)
+    if not rules:
+        return blocker
     authorities = list(
-        dict.fromkeys(_blocker_authority(snapshot, labels, blocker) for blocker in blockers)
+        dict.fromkeys(_blocker_authority(snapshot, labels, rule) for rule in rules)
     )
     editors: list[BoundaryEditorTarget] = []
-    editor_keys: set[tuple[object, ...]] = set()
-    for blocker in blockers:
-        editor = _blocker_editor(snapshot, labels, blocker)
+    seen: set[tuple[object, ...]] = set()
+    for rule in rules:
+        editor = _blocker_editor(snapshot, labels, rule)
         if editor is None:
             continue
-        key = (editor.kind, editor.list_id, editor.prerequisite_id, editor.thread_id, editor.issue_id)
-        if key not in editor_keys:
-            editor_keys.add(key)
-            editors.append(editor)
+        key = (
+            editor.kind,
+            editor.list_id,
+            editor.prerequisite_id,
+            editor.thread_id,
+            editor.issue_id,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        editors.append(editor)
+    waiting = _issue_names(labels, waiting_ids)
     reason = (
-        f"{' and '.join(authorities)}: read {_issue_names(labels, targets)} first"
-        if targets
+        f"{' and '.join(authorities)}: read {waiting} first"
+        if waiting
         else " and ".join(authorities)
     )
     return ReadingBoundaryBlocker(
-        kind=blockers[0].kind,
-        origin="reading_list" if blockers[0].list_id is not None else "reader_prerequisite",
+        kind=blocker.kind,
+        origin=blocker.origin,
         reason=reason,
-        waiting_on=[_issue_label(labels, issue_id) for issue_id in targets],
+        waiting_on=blocker.waiting_on,
         editor=editors[0] if editors else None,
         editors=editors,
     )
@@ -341,8 +352,8 @@ def project_boundary_explanation(
     )
     blockers = (
         [
-            _project_requirement(snapshot, labels, targets, rules)
-            for targets, rules in _requirement_groups(state.blockers)
+            _project_blocker(snapshot, labels, blocker)
+            for blocker in unique_blocker_requirements(state.blockers)
         ]
         if state is not None
         else []
@@ -356,6 +367,11 @@ def project_boundary_explanation(
         boundary_state = "blocked"
     else:
         boundary_state = "available"
+    if state is not None:
+        blockers = [
+            _with_governing_rules(snapshot, labels, blocker, state.blockers)
+            for blocker in blockers
+        ]
     return ReadingBoundaryExplanation(
         thread_id=thread_id,
         state=boundary_state,
