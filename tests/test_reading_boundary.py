@@ -270,9 +270,12 @@ def test_stacked_hold_and_strict_gates_describe_one_requirement() -> None:
 
     assert [issue.issue_id for b in boundary.blockers for issue in b.waiting_on] == [F1]
     assert boundary.summary == "Mister Miracle #1 is waiting on 1 live requirement."
-    assert boundary.blockers[0].reason == "Hold in JLI: read Fourth World #1 first"
+    assert boundary.blockers[0].reason == (
+        "Hold in JLI and Strict order in JLI: read Fourth World #1 first"
+    )
     assert boundary.blockers[0].editor is not None
     assert boundary.blockers[0].editor.list_id == LIST_ID
+    assert [editor.list_id for editor in boundary.blockers[0].editors] == [LIST_ID]
 
     blocking = project_blocking_explanation(snapshot, MISTER_MIRACLE_ID)
     assert [item.issue_id for item in blocking.blocking_dependencies] == [F1]
@@ -756,3 +759,65 @@ def test_duplicate_requirements_keep_each_distinct_issue_once(
     assert [item.issue_id for item in explanation.blocking_dependencies] == waiting
     assert explanation.is_blocked
     assert snapshot.threads[MISTER_MIRACLE_ID].blockers == original
+
+
+def test_lists_sharing_one_requirement_keep_both_edit_links() -> None:
+    """A shared earlier Issue stays editable through every governing list."""
+    other_list_id = LIST_ID + 1
+    state = ReadingSnapshot(
+        user_id=USER_ID,
+        threads=(
+            ReadingThread(FOURTH_WORLD_ID, name="Fourth World"),
+            ReadingThread(MISTER_MIRACLE_ID, name="Mister Miracle"),
+        ),
+        issues=(
+            ReadingIssue(F1, FOURTH_WORLD_ID, 1),
+            ReadingIssue(M1, MISTER_MIRACLE_ID, 1),
+        ),
+        lists=(
+            ReadingList(
+                LIST_ID,
+                "strict",
+                (ReadingListEntry(F1), ReadingListEntry(M1)),
+                "JLI",
+            ),
+            ReadingList(
+                other_list_id,
+                "strict",
+                (ReadingListEntry(F1), ReadingListEntry(M1)),
+                "Other List",
+            ),
+        ),
+        prerequisites=(),
+    )
+    snapshot = build_eligibility_snapshot(
+        state,
+        queued_thread_ids=frozenset({FOURTH_WORLD_ID, MISTER_MIRACLE_ID}),
+    )
+    gates = snapshot.threads[MISTER_MIRACLE_ID].blockers
+    assert [gate.waiting_on_issue_ids for gate in gates] == [(F1,), (F1,)]
+    labels = replace(
+        _fixture()[2],
+        lists={
+            LIST_ID: BoundaryListLabels(LIST_ID, "JLI", "strict"),
+            other_list_id: BoundaryListLabels(other_list_id, "Other List", "strict"),
+        },
+    )
+
+    boundary = project_boundary_explanation(snapshot, labels, MISTER_MIRACLE_ID)
+
+    # Both strict lists require Fourth World #1: it is one requirement, and the
+    # grouped entry still links every governing list so neither rule is hidden.
+    assert len(boundary.blockers) == 1
+    assert [issue.issue_id for issue in boundary.blockers[0].waiting_on] == [F1]
+    assert boundary.blockers[0].reason == (
+        "Strict order in JLI and Strict order in Other List: "
+        "read Fourth World #1 first"
+    )
+    assert boundary.blockers[0].editor is not None
+    assert boundary.blockers[0].editor.list_id == LIST_ID
+    assert [editor.list_id for editor in boundary.blockers[0].editors] == [
+        LIST_ID,
+        other_list_id,
+    ]
+    assert boundary.summary == "Mister Miracle #1 is waiting on 1 live requirement."

@@ -110,6 +110,36 @@ describe('ReadingBoundaryExplanation', () => {
     expect(screen.queryByText('Historical associations — not active blockers')).not.toBeInTheDocument()
   })
 
+  it('links every governing list when one requirement has several editors', () => {
+    renderExplanation({
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'Mister Miracle #1 is waiting on 1 live requirement.',
+        blockers: [{
+          kind: 'strict_order',
+          origin: 'reading_list',
+          reason: 'Strict order in JLI and Strict order in Other List: read Fourth World #1 first',
+          waiting_on: [issue()],
+          editor: { kind: 'reading_list', list_id: 4, label: 'JLI' },
+          editors: [
+            { kind: 'reading_list', list_id: 4, label: 'JLI' },
+            { kind: 'reading_list', list_id: 7, label: 'Other List' },
+          ],
+        }],
+      }),
+    })
+
+    const blockerList = screen.getByRole('list', { name: 'Active reading blockers' })
+    expect(within(blockerList).getByRole('link', { name: 'Edit JLI' })).toHaveAttribute(
+      'href',
+      '/reading-lists/4',
+    )
+    expect(within(blockerList).getByRole('link', { name: 'Edit Other List' })).toHaveAttribute(
+      'href',
+      '/reading-lists/7',
+    )
+  })
+
   it('shows only the first actionable strict-order issue by default in compact mode', async () => {
     renderExplanation({
       compact: true,

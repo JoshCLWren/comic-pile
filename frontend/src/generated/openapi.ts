@@ -13358,9 +13358,16 @@ export interface components {
         /**
          * ReadingBoundaryBlocker
          * @description One live Option E requirement that currently blocks the next Issue.
+         *
+         *     Several rules can enforce the same requirement — for example a hold and
+         *     strict order in one list, or two lists that both require the same earlier
+         *     Issue. ``editors`` names every rule the reader can open, while ``editor``
+         *     keeps the first target for clients written before the list existed.
          */
         ReadingBoundaryBlocker: {
             editor?: components["schemas"]["BoundaryEditorTarget"] | null;
+            /** Editors */
+            editors?: components["schemas"]["BoundaryEditorTarget"][];
             /**
              * Kind
              * @enum {string}

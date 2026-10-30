@@ -16,6 +16,22 @@ function EditorLink({ editor }: { editor?: BoundaryEditorTarget | null }) {
   return href && editor ? <Link to={href} className="text-[var(--theme-continuity-accent)] underline">Edit {editor.label}</Link> : null
 }
 
+/** One requirement can be enforced by several rules; expose every editor. */
+function EditorLinks({ editors, editor }: { editors?: BoundaryEditorTarget[]; editor?: BoundaryEditorTarget | null }) {
+  const targets = editors && editors.length > 0 ? editors : editor ? [editor] : []
+  if (targets.length <= 1) return <EditorLink editor={targets[0]} />
+  return (
+    <span className="inline-flex flex-wrap gap-2">
+      {targets.map((target) => (
+        <EditorLink
+          key={`${target.kind}-${target.list_id ?? target.prerequisite_id ?? target.issue_id ?? target.thread_id}`}
+          editor={target}
+        />
+      ))}
+    </span>
+  )
+}
+
 function IssueLabel({ issue }: { issue: BoundaryIssue }) {
   return <Link to={threadIssueRoutePath(issue.thread_id, issue.issue_id)} aria-label={`Open ${issue.thread_title} issue #${issue.issue_number}`} className="text-[var(--theme-continuity-accent)] underline">{issue.label}{issue.volume_label && !issue.label.includes(issue.volume_label) ? ` · ${issue.volume_label}` : ''}</Link>
 }
@@ -41,17 +57,19 @@ const UNAVAILABLE = <p className="text-sm text-[var(--theme-text-muted)]">Readin
 function CompactReadingRequirements({
   primaryIssue,
   editor,
+  editors,
   allRequirements,
 }: {
   primaryIssue: BoundaryIssue
   editor?: BoundaryEditorTarget | null
+  editors?: BoundaryEditorTarget[]
   allRequirements: ReactNode
 }) {
   const [expanded, setExpanded] = useState(false)
   return (
     <>
       <p>Read <IssueLabel issue={primaryIssue} /> first.</p>
-      <EditorLink editor={editor} />
+      <EditorLinks editor={editor} editors={editors} />
       <button
         type="button"
         aria-expanded={expanded}
@@ -85,7 +103,7 @@ export function ReadingBoundaryExplanation({ explanation, isPending, isError, on
           <ul className="space-y-1" aria-label="Waiting on comics">
             {blocker.waiting_on?.map((issue) => <li key={issue.issue_id}><IssueLabel issue={issue} /></li>)}
           </ul>
-          <EditorLink editor={blocker.editor} />
+          <EditorLinks editor={blocker.editor} editors={blocker.editors} />
         </li>
       ))}
     </ul>
@@ -95,7 +113,7 @@ export function ReadingBoundaryExplanation({ explanation, isPending, isError, on
       <p className={`font-semibold ${explanation.state === 'blocked' ? 'text-[var(--theme-warning)]' : 'text-[var(--theme-text-primary)]'}`}>{explanation.summary}</p>
       {explanation.next && <div><p>Next: <IssueLabel issue={explanation.next.issue} /></p><EditorLink editor={explanation.next.editor} /></div>}
       {compact && explanation.state === 'blocked' && primaryIssue ? (
-        <CompactReadingRequirements primaryIssue={primaryIssue} editor={primaryBlocker?.editor} allRequirements={allRequirements} />
+        <CompactReadingRequirements primaryIssue={primaryIssue} editor={primaryBlocker?.editor} editors={primaryBlocker?.editors} allRequirements={allRequirements} />
       ) : allRequirements}
     </div>
   )

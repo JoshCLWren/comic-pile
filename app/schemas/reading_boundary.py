@@ -50,13 +50,20 @@ class BoundaryIssue(BaseModel):
 
 
 class ReadingBoundaryBlocker(BaseModel):
-    """One live Option E requirement that currently blocks the next Issue."""
+    """One live Option E requirement that currently blocks the next Issue.
+
+    Several rules can enforce the same requirement — for example a hold and
+    strict order in one list, or two lists that both require the same earlier
+    Issue. ``editors`` names every rule the reader can open, while ``editor``
+    keeps the first target for clients written before the list existed.
+    """
 
     kind: Literal["strict_order", "hold", "after_previous", "prerequisite"]
     origin: Literal["reading_list", "reader_prerequisite"]
     reason: str
     waiting_on: list[BoundaryIssue] = Field(default_factory=list)
     editor: BoundaryEditorTarget | None = None
+    editors: list[BoundaryEditorTarget] = Field(default_factory=list)
 
 
 class ReadingBoundaryNext(BaseModel):

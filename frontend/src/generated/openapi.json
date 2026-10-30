@@ -13841,7 +13841,7 @@
         "type": "object"
       },
       "ReadingBoundaryBlocker": {
-        "description": "One live Option E requirement that currently blocks the next Issue.",
+        "description": "One live Option E requirement that currently blocks the next Issue.\n\nSeveral rules can enforce the same requirement — for example a hold and\nstrict order in one list, or two lists that both require the same earlier\nIssue. ``editors`` names every rule the reader can open, while ``editor``\nkeeps the first target for clients written before the list existed.",
         "properties": {
           "editor": {
             "anyOf": [
@@ -13852,6 +13852,13 @@
                 "type": "null"
               }
             ]
+          },
+          "editors": {
+            "items": {
+              "$ref": "#/components/schemas/BoundaryEditorTarget"
+            },
+            "title": "Editors",
+            "type": "array"
           },
           "kind": {
             "enum": [
