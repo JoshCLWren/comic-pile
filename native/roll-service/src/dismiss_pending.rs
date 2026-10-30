@@ -47,14 +47,17 @@ async fn mutate(
         .map_err(query_error)?;
 
     // persist a dismiss event so the session timeline records the cancellation
-    // (issue #3763). Without this event the dismissal was silently absent.
-    tx.execute(
-        "INSERT INTO events (type, timestamp, session_id, selected_thread_id)
-         VALUES ('dismiss', to_timestamp($1), $2, $3)",
-        &[&now, &session.id, &session.pending_thread_id],
-    )
-    .await
-        .map_err(query_error)?;
+    // (issue #3763). Only insert when there is a pending thread, matching
+    // the Python handler's behavior of skipping the event when nothing is pending.
+    if session.pending_thread_id.is_some() {
+        tx.execute(
+            "INSERT INTO events (type, timestamp, session_id, selected_thread_id)
+             VALUES ('dismiss', to_timestamp($1), $2, $3)",
+            &[&now, &session.id, &session.pending_thread_id],
+        )
+        .await
+            .map_err(query_error)?;
+    }
 
     // Clear the pending thread on the session.
     tx.execute(
