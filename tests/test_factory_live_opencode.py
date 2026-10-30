@@ -224,3 +224,33 @@ def test_cli_consults_registry_evidence(tmp_path: Path) -> None:
         check=True,
     )
     assert json.loads(result.stdout)["model"] == "big-pickle"
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        "unknown_failure",
+        "provider_failure",
+        "provider_quota",
+        "provider_throttle",
+        "control_plane_failure",
+        "environment_failure",
+        "unconfigured",
+    ],
+)
+def test_non_recovery_outcomes_do_not_clear_active_cooldown(outcome: str) -> None:
+    """A later fallback-lane or infra report cannot erase unavailable-model evidence."""
+    from datetime import UTC, datetime
+
+    now = int(datetime(2026, 10, 17, 7, 0, 6, tzinfo=UTC).timestamp())
+    failure = attempt("ll-alpha-free", "2026-10-17T07:00:05Z")
+    later = attempt("ll-alpha-free", "2026-10-17T07:00:06Z", outcome)
+    for records in ([failure, later], [later, failure]):
+        assert selector.unavailable_models(records, now_epoch=now) == {"ll-alpha-free"}
+        assert (
+            selector.unavailable_models(
+                records,
+                now_epoch=now + selector.COOLDOWN_SECONDS,
+            )
+            == set()
+        )

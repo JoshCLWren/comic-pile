@@ -9,7 +9,14 @@ import re
 import time
 from pathlib import Path
 
-from factory_candidate_health import UPDATED_RE, flatten_comments, latest_attempt_evidence
+from factory_candidate_health import (
+    HEALTHY_OUTCOMES,
+    OUTCOME_RE,
+    RETIREMENT_MARKER,
+    UPDATED_RE,
+    flatten_comments,
+    latest_attempt_evidence,
+)
 from factory_completion_controller import parse_time
 from factory_model_catalog import parse_opencode_models_text
 from factory_roster import load_roster_rows, opencode_model_is_free
@@ -51,6 +58,15 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
         timestamp = UPDATED_RE.search(body)
         updated = parse_time(timestamp.group("updated")) if timestamp else None
         if updated is None or updated > now_epoch:
+            continue
+        # Generic/provider/control-plane failures do not prove model recovery.
+        # Do not let their newer worker summary hide durable unavailability.
+        outcome = OUTCOME_RE.search(body)
+        if RETIREMENT_MARKER not in body and (
+            outcome is None
+            or outcome.group("outcome")
+            not in HEALTHY_OUTCOMES | {"model_unavailable", "model_retired_410"}
+        ):
             continue
         comments.append(comment)
     excluded = set()
