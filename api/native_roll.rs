@@ -7,9 +7,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use comicpile_roll_service::{
-    config::Config, dismiss_pending, router as roll_router, skip, AppState,
-};
+use comicpile_roll_service::{config::Config, router as roll_router, AppState};
 use std::sync::{Arc, OnceLock};
 use tower::{Service, ServiceBuilder};
 use vercel_runtime::{axum::VercelLayer, Error};
@@ -36,13 +34,12 @@ fn normalize_bootstrap_request(request: &mut Request) {
     }
 }
 
-async fn native_bootstrap(mut request: Request) -> Response {
+async fn native_dispatch(request: Request) -> Response {
     // Log only the fixed ingress path, status and elapsed time. Never log query,
     // authorization headers, response JSON or other user data.
     let ingress_path = request.uri().path().to_owned();
     let started = std::time::Instant::now();
-    normalize_bootstrap_request(&mut request);
-    // Cold-start the native Roll pool only for authenticated bootstrap traffic.
+    // Cold-start the native Roll pool only for authenticated traffic.
     // Keep health independent of DB secrets and failures.
     let mut result = match ROLL_STATE.get_or_init(|| {
         Config::from_vercel_env()
@@ -71,7 +68,7 @@ async fn native_bootstrap(mut request: Request) -> Response {
         .headers_mut()
         .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
     eprintln!(
-        "native_roll bootstrap route={} runtime=rust status={} elapsed_ms={}",
+        "native_roll route={} runtime=rust status={} elapsed_ms={}",
         ingress_path,
         result.status().as_u16(),
         started.elapsed().as_millis()
@@ -79,21 +76,18 @@ async fn native_bootstrap(mut request: Request) -> Response {
     result
 }
 
+async fn native_bootstrap(mut request: Request) -> Response {
+    normalize_bootstrap_request(&mut request);
+    native_dispatch(request).await
+}
+
 fn app() -> Router {
     Router::new()
         .route("/api/_native_roll/health", get(native_health))
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
-        .route(
-            "/api/v1/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
-        )
-        .route(
-            "/api/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
-        )
-        .route("/api/v1/roll/skip", post(skip::skip_roll))
-        .route("/api/roll/skip", post(skip::skip_roll))
+        .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/roll/dismiss-pending", post(native_dispatch))
 }
 
 #[tokio::main]

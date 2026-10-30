@@ -158,8 +158,14 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
-        .route("/api/v1/roll/dismiss-pending", post(dismiss_pending::dismiss_pending))
-        .route("/api/roll/dismiss-pending", post(dismiss_pending::dismiss_pending))
+        .route(
+            "/api/v1/roll/dismiss-pending",
+            post(dismiss_pending::dismiss_pending),
+        )
+        .route(
+            "/api/roll/dismiss-pending",
+            post(dismiss_pending::dismiss_pending),
+        )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
         .method_not_allowed_fallback(|| async {
             ApiError(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")

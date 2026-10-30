@@ -9,10 +9,7 @@
 //! so the record survives a later deletion of the series.
 //! #![forbid(unsafe_code)]
 use crate::{auth::AuthenticatedUser, db, reading_session, ApiError, AppState};
-use axum::{
-    extract::State,
-    http::StatusCode,
-};
+use axum::{extract::State, http::StatusCode};
 use deadpool_postgres::Object;
 
 use std::sync::Arc;
@@ -55,7 +52,7 @@ async fn mutate(
             &[&now, &session.id, &session.pending_thread_id],
         )
         .await
-            .map_err(db::query_error)?;
+        .map_err(db::query_error)?;
     }
 
     // Clear the pending thread on the session.
@@ -65,7 +62,7 @@ async fn mutate(
         &[&session.id, &now, &user.id()],
     )
     .await
-        .map_err(db::query_error)?;
+    .map_err(db::query_error)?;
 
     tx.commit().await.map_err(db::query_error)?;
 
@@ -78,18 +75,19 @@ pub async fn dismiss_pending(
     user: AuthenticatedUser,
 ) -> Result<StatusCode, ApiError> {
     let now = now_seconds();
-    let active = reading_session::bootstrap(&state, user.clone(), None, reading_session::SessionPolicy::default()).await?;
+    let active = reading_session::bootstrap(
+        &state,
+        user.clone(),
+        None,
+        reading_session::SessionPolicy::default(),
+    )
+    .await?;
     let session = active.session;
 
     let mut pending = PendingConn(Some(db::checkout(&state).await?));
     let result = tokio::time::timeout(
         state.request_timeout,
-        mutate(
-            user,
-            &session,
-            now,
-            pending.0.as_mut().unwrap(),
-        ),
+        mutate(user, &session, now, pending.0.as_mut().unwrap()),
     )
     .await;
     match result {
@@ -156,7 +154,10 @@ mod tests {
         // Python uses: selected_thread_id for dismiss events (#3763)
         let sql = "INSERT INTO events (type, timestamp, session_id, selected_thread_id)
              VALUES ('dismiss', to_timestamp($1), $2, $3)";
-        assert!(sql.contains("selected_thread_id"), "must use selected_thread_id column");
+        assert!(
+            sql.contains("selected_thread_id"),
+            "must use selected_thread_id column"
+        );
         assert!(sql.contains("'dismiss'"), "must use 'dismiss' event type");
     }
 
@@ -171,10 +172,10 @@ mod tests {
                 }
             }
         }
-        
+
         let conn = TestPendingConn(Some(()));
         drop(conn); // Should not panic
-        
+
         let conn = TestPendingConn(None);
         drop(conn); // Should not panic
     }
