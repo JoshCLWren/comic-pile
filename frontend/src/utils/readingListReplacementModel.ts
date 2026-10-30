@@ -61,6 +61,9 @@ export function buildReplacementModel(
     after.push({
       comicId: issueId,
       title: `${entry.series_name} #${entry.issue_number}`,
+      series_group_id: entry.series_group_id,
+      series_name: entry.series_name,
+      volume_year: entry.volume_year ?? entry.publication_year ?? null,
       included: sourceIncluded || saved !== undefined,
       defaultIncluded: sourceIncluded,
       saved: saved !== undefined,
