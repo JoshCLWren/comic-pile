@@ -6,6 +6,7 @@ pub mod db;
 pub mod option_inputs;
 pub mod reading_constraints;
 pub mod reading_inputs;
+pub mod rate;
 pub mod reading_session;
 mod session_bandwidth;
 
@@ -14,7 +15,7 @@ use axum::{
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use config::{Config, ConfigError, JwtSecret};
@@ -162,6 +163,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
+        .route("/api/v1/rate", post(rate::rate))
+        .route("/api/rate", post(rate::rate))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
         .method_not_allowed_fallback(|| async {
             ApiError(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")
@@ -204,5 +207,38 @@ mod tests {
             to_bytes(response.into_body(), 4096).await.unwrap(),
             r#"{"detail":"Request timed out"}"#
         );
+    }
+}
+
+#[cfg(test)]
+mod rate_tests {
+    use super::*;
+    use crate::rate;
+
+    #[test]
+    fn test_normalize_format_value() {
+        assert_eq!(rate::normalize_format_value("Comic Book"), "comic_book");
+        assert_eq!(rate::normalize_format_value("Trade Paperback"), "trade_paperback");
+        assert_eq!(rate::normalize_format_value("Graphic Novel"), "graphic_novel");
+        assert_eq!(rate::normalize_format_value("ONE-SHOT"), "one-shot");
+        assert_eq!(rate::normalize_format_value("MAGAZINE"), "magazine");
+    }
+
+    #[test]
+    fn test_get_rating_limits() {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_RATING_MIN" => Some("0.5".into()),
+            "RUST_ROLL_RATING_MAX" => Some("5.0".into()),
+            "RUST_ROLL_RATING_THRESHOLD" => Some("3.5".into()),
+            _ => None,
+        })
+        .unwrap();
+        
+        let state = Arc::new(AppState::new(config).unwrap());
+        let (min, max, threshold) = rate::get_rating_limits(&state);
+        
+        assert_eq!(min, 0.5);
+        assert_eq!(max, 5.0);
+        assert_eq!(threshold, 3.5);
     }
 }
