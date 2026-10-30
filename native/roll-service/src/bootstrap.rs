@@ -802,7 +802,7 @@ pub async fn bootstrap_v2(
         .query(
             "SELECT t.id,t.title,t.format,t.last_activity_at::text,
           (coalesce(t.last_activity_at,t.created_at) < now() - interval '7 days') AS stale,
-          t.status,t.queue_position,coalesce(t.is_blocked,false)
+          t.status,t.queue_position
          FROM threads t WHERE t.user_id=$1 ORDER BY t.queue_position,t.id",
             &[&user.id()],
         )
@@ -826,11 +826,12 @@ pub async fn bootstrap_v2(
         }
         let status: String = row.try_get(5).map_err(db::query_error)?;
         let queue_position: i32 = row.try_get(6).map_err(db::query_error)?;
-        let stored_blocked: bool = row.try_get(7).map_err(db::query_error)?;
         if status == "active" || status == "completed" {
             total_threads += 1;
-            let blocked_now = stored_blocked
-                || (status == "active" && queue_position >= 1 && !eligible_threads.contains(&id));
+            // Option E's live graph, not the stale persisted is_blocked flag,
+            // is authoritative for queued thread eligibility.
+            let blocked_now =
+                status == "active" && queue_position >= 1 && !eligible_threads.contains(&id);
             let (reason, detail): (&str, Option<&str>) = if status == "completed" {
                 ("completed", Some("Read the full series"))
             } else if blocked_now {
@@ -891,11 +892,16 @@ pub async fn bootstrap_v2(
     let mode_source = normalized_source(&session.bandwidth_source);
     let intent_source = normalized_source(&session.intent_source);
     let mut stale_thread = choose_stale_thread(&stale, &mut rand::rng()).cloned();
-    let mut tag_ids: Vec<i32> = rollable.iter()
+    let mut tag_ids: Vec<i32> = rollable
+        .iter()
         .filter_map(|item| item.pointer("/thread/id").and_then(Value::as_i64))
         .map(|id| id as i32)
         .collect();
-    for row in snoozed_threads.iter().chain(skipped_threads.iter()).chain(blocked_threads.iter()) {
+    for row in snoozed_threads
+        .iter()
+        .chain(skipped_threads.iter())
+        .chain(blocked_threads.iter())
+    {
         if let Some(id) = row["id"].as_i64() {
             tag_ids.push(id as i32);
         }
@@ -910,7 +916,10 @@ pub async fn bootstrap_v2(
     let tags_by_thread = visible_thread_tags(&conn, user, &tag_ids).await?;
     let attach_tags = |thread: &mut Value| {
         if let Some(id) = thread["id"].as_i64() {
-            thread["tags"] = json!(tags_by_thread.get(&(id as i32)).cloned().unwrap_or_default());
+            thread["tags"] = json!(tags_by_thread
+                .get(&(id as i32))
+                .cloned()
+                .unwrap_or_default());
         }
     };
     for item in &mut rollable {
