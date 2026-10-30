@@ -354,7 +354,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await api.get<AuthUser>('/v1/auth/me', { skipAuthRedirect: true })
       if (generation !== sessionGeneration.current) return
-      resetBootstrapRetry()
       setAuthState(prev => ({
         ...prev,
         status: 'authenticated',
