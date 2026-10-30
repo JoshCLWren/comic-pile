@@ -131,3 +131,29 @@ def test_missing_review_comment_commit_id_fails_closed_to_graphql(monkeypatch):
 
     assert result["decision"] == "pass"
     assert any("graphql" in call for call in calls)
+
+
+def test_quota_only_greptile_review_does_not_block_current_head(monkeypatch):
+    """Credits are optional; a current-head quota notice is not a code finding."""
+    controller = load_controller()
+
+    def fake_gh_json(args, **_kwargs):
+        if "reviews?per_page=100" in args[-1]:
+            return [[{
+                "user": {"login": "greptile-apps[bot]"},
+                "state": "COMMENTED",
+                "commit_id": HEAD,
+                "body": "JoshCLWren has reached the 50-credit limit for trial accounts.",
+            }]]
+        if "comments?per_page=100" in args[-1]:
+            return [[]]
+        raise AssertionError(f"unexpected API call: {args}")
+
+    monkeypatch.setattr(controller, "gh_json", fake_gh_json)
+    assert controller.current_head_review_gate(1507, HEAD)["decision"] == "pass"
+    assert controller.interpret_required_checks(
+        [{"name": "CI Summary", "state": "SUCCESS"}], command_status=0, stderr=""
+    )["decision"] == "pass"
+    assert controller.interpret_required_checks(
+        [{"name": "CI Summary", "state": "FAILURE"}], command_status=1, stderr=""
+    )["decision"] == "deny"
