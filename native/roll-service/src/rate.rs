@@ -2,7 +2,6 @@
 use crate::{
     auth::AuthenticatedUser,
     db,
-    reading_session::{self, SessionPolicy},
     ApiError, AppState,
 };
 use axum::{
@@ -150,7 +149,7 @@ pub async fn rate(
             .await
             .map_err(db::query_error)?;
         
-        let session_id = match session {
+        let session_id: i32 = match session {
             Some(row) => row.try_get(0).map_err(db::query_error)?,
             None => return Err(ApiError(
                 StatusCode::BAD_REQUEST,
@@ -166,7 +165,7 @@ pub async fn rate(
             )
             .await
             .map_err(db::query_error)?
-            .and_then(|row| row.try_get::<_, Option<i32>>(0).ok());
+            .and_then(|row| row.try_get::<_, i32>(0).ok());
         
         if let Some(pending_thread_id) = pending_thread_id {
             pending_thread_id
@@ -396,13 +395,14 @@ pub async fn rate(
         ).await.map_err(db::query_error)?;
     } else if !queue_position_is_manual {
         // Low rating - move to safe position
-        let count: i64 = conn
+        let count: i32 = conn
             .query_one(
                 "SELECT COUNT(*)::int FROM threads WHERE user_id=$1 AND queue_position > 0",
                 &[&user.id()],
             )
             .await
-            .map_err(db::query_error)?;
+            .map_err(db::query_error)?
+            .try_get(0).map_err(db::query_error)?;
         
         let new_position = count + 1;
         conn.execute(
@@ -442,7 +442,7 @@ pub async fn rate(
         is_blocked,
         created_at,
         total_issues,
-        reading_progress: Some(new_reading_progress),
+        reading_progress: Some(new_reading_progress.to_string()),
         next_unread_issue_id,
         next_unread_issue_number,
         manual_creator_credits: None,

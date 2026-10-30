@@ -23,6 +23,7 @@ use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime, 
 use postgres_native_tls::MakeTlsConnector;
 use serde::Serialize;
 use std::{
+    borrow::Cow,
     future::{Future, IntoFuture},
     sync::Arc,
     time::{Duration, Instant},
@@ -107,10 +108,10 @@ pub async fn serve(
 }
 
 /// Python-compatible JSON detail boundary; never serialize a dependency error.
-pub struct ApiError(pub StatusCode, pub &'static str);
+pub struct ApiError(pub StatusCode, pub Cow<'static, str>);
 #[derive(Serialize)]
 struct ErrorBody {
-    detail: &'static str,
+    detail: Cow<'static, str>,
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
