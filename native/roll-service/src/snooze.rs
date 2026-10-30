@@ -390,7 +390,7 @@ async fn mutate(
     let snoozed_json = serde_json::to_string(&updated_snoozed).map_err(|_| internal())?;
     tx.execute(
         "UPDATE sessions SET snoozed_thread_ids = $2::json, pending_thread_id = NULL, pending_thread_updated_at = NULL, active_bandwidth = $4, bandwidth_confidence = $5, bandwidth_source = 'snooze', predicted_bandwidth = COALESCE(predicted_bandwidth, $6) WHERE id = $1 AND user_id = $3",
-        &[&session.id, &snoozed_json, &user.id(), &corrected_active_bw, &corrected_confidence, &original_active_bw],
+        &[&session.id, &snoozed_json, &user.id(), &corrected_active_bw, &corrected_confidence, &original_predicted_bw],
     )
     .await
     .map_err(db::query_error)?;
