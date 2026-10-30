@@ -23,6 +23,8 @@ const sample = {
   excluded_threads: [{ thread_id: 7, title: 'Completed', format: 'Comic', reason: 'completed' }],
   inactive_count: 1,
   inactive_threads: [{ thread_id: 7, title: 'Completed', format: 'Comic', reason: 'completed' }],
+// SAFETY: This intentionally partial v2 fixture covers only the adapter's
+// relevant runtime invariants; unused session fields are never inspected.
 } as RollV2BootstrapResponse
 
 describe('native v2 Roll bootstrap compatibility', () => {
@@ -40,6 +42,7 @@ describe('native v2 Roll bootstrap compatibility', () => {
 
   it('fails closed when the native response omits exclusion counts', () => {
     const { inactive_count: _ignored, ...incomplete } = sample
+    // SAFETY: This intentionally malformed payload is being tested for runtime rejection.
     expect(() => adaptRollV2Bootstrap(incomplete as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 bootstrap response')
   })
@@ -49,6 +52,7 @@ describe('native v2 Roll bootstrap compatibility', () => {
       ...sample,
       rollable: [{ ...sample.rollable[0], thread: { id: 101, title: 'No tags', format: 'Comic' } }],
     }
+    // SAFETY: This deliberately malformed candidate must fail at the adapter boundary.
     expect(() => adaptRollV2Bootstrap(withoutTags as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 candidate')
   })
