@@ -11,6 +11,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use rand::seq::IndexedRandom;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
@@ -28,6 +29,12 @@ fn unavailable() -> ApiError {
         StatusCode::INTERNAL_SERVER_ERROR,
         "Invalid native Roll response",
     )
+}
+
+/// Match Python's random.choice over the complete eligible stale set. The
+/// queue order must not make the first stale thread a permanent recommendation.
+fn choose_stale_thread<'a>(stale: &'a [Value], rng: &mut impl rand::Rng) -> Option<&'a Value> {
+    stale.choose(rng)
 }
 
 fn thread_value(row: &tokio_postgres::Row) -> Result<Value, ApiError> {
@@ -794,6 +801,7 @@ pub async fn bootstrap_v2(
         .and_then(Value::as_i64);
     let mode_source = normalized_source(&session.bandwidth_source);
     let intent_source = normalized_source(&session.intent_source);
+    let stale_thread = choose_stale_thread(&stale, &mut rand::rng());
     let response = json!({
         "session_id": session.id,
         "user_id": user.id(),
@@ -832,10 +840,42 @@ pub async fn bootstrap_v2(
         "blocked_count": blocked.len(),
         "blocked_threads": blocked_threads,
         "stale_thread_count": stale.len(),
-        "stale_thread": stale.first(),
+        "stale_thread": stale_thread,
         "timezone": session.timezone
     });
     Ok(Json(response))
+}
+
+#[cfg(test)]
+mod stale_selection_tests {
+    use super::choose_stale_thread;
+    use rand::{rngs::StdRng, SeedableRng};
+    use serde_json::json;
+    use std::collections::HashSet;
+
+    #[test]
+    fn empty_and_single_candidate_match_python_choice_boundary() {
+        let mut rng = StdRng::seed_from_u64(4299);
+        assert!(choose_stale_thread(&[], &mut rng).is_none());
+        let stale = [json!({"id": 7, "title": "Only stale candidate"})];
+        assert_eq!(choose_stale_thread(&stale, &mut rng), Some(&stale[0]));
+    }
+
+    #[test]
+    fn stale_choice_reaches_the_entire_candidate_set() {
+        let mut rng = StdRng::seed_from_u64(4299);
+        let stale = [json!({"id": 7}), json!({"id": 11}), json!({"id": 19})];
+        let selected: HashSet<_> = (0..128)
+            .map(|_| {
+                choose_stale_thread(&stale, &mut rng).unwrap()["id"]
+                    .as_i64()
+                    .unwrap()
+            })
+            .collect();
+        // A fixed seed keeps this regression deterministic. stale.first()
+        // would only ever return 7, regardless of the available candidates.
+        assert_eq!(selected, HashSet::from([7, 11, 19]));
+    }
 }
 
 #[cfg(test)]
