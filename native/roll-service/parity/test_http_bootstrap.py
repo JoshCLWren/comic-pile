@@ -52,17 +52,26 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
             stale_skipped = Thread(user_id=owner.id, title="Skipped stale series", format="Comic",
                                    queue_position=4, issues_remaining=1,
                                    last_activity_at=now-timedelta(days=10))
+            completed = Thread(user_id=owner.id, title="Read completely", format="Comic",
+                               status="completed", queue_position=0, issues_remaining=0)
+            unqueued = Thread(user_id=owner.id, title="Not in queue", format="Comic",
+                              status="active", queue_position=0, issues_remaining=1)
             foreign = Thread(user_id=stranger.id, title="Private",
                              format="Comic", queue_position=1, issues_remaining=1,
                              last_activity_at=now-timedelta(days=10))
-            db.add_all([t, foreign, stale_other, stale_snoozed, stale_skipped])
+            db.add_all([t, foreign, stale_other, stale_snoozed, stale_skipped,
+                        completed, unqueued])
             await db.flush()
             read = Issue(thread_id=t.id, issue_number="1", position=1,
                          status="read", read_at=now-timedelta(minutes=10))
             next_issue = Issue(thread_id=t.id, issue_number="2", position=2, status="unread")
             foreign_issue = Issue(thread_id=foreign.id, issue_number="1",
                                   position=1, status="unread")
-            db.add_all([read, next_issue, foreign_issue])
+            completed_issue = Issue(thread_id=completed.id, issue_number="1",
+                                    position=1, status="read", read_at=now)
+            unqueued_issue = Issue(thread_id=unqueued.id, issue_number="1",
+                                   position=1, status="unread")
+            db.add_all([read, next_issue, foreign_issue, completed_issue, unqueued_issue])
             for stale in (stale_other, stale_snoozed, stale_skipped):
                 db.add(Issue(thread_id=stale.id, issue_number="1", position=1, status="unread"))
             await db.flush()
@@ -110,6 +119,8 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
             owner_id = owner.id
             next_id = next_issue.id
             foreign_id = foreign.id
+            completed_id = completed.id
+            unqueued_id = unqueued.id
             await db.commit()
 
         token = jwt.encode({"sub":username,"jti":"native-http-fixture",
@@ -144,11 +155,24 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         candidate = body["rollable"][0]
         assert candidate["thread"]["id"] == t.id
         assert candidate["thread"]["tags"][0]["name"] == "Favorites"
-        assert body["total_threads"] == 4
-        assert body["available_threads"] >= 1
-        assert body["excluded_count"] >= 2
-        assert isinstance(body["inactive_count"], int)
-        assert isinstance(body["inactive_threads"], list)
+        # Four excluded series: snoozed, skipped, completed, and unqueued.
+        # The completed/unqueued rows prevent hidden-inactive regressions.
+        assert body["total_threads"] == 6
+        assert body["available_threads"] == 2
+        assert body["excluded_count"] == 4
+        assert body["inactive_count"] == 2
+        assert {
+            row["thread_id"]: row["reason"] for row in body["inactive_threads"]
+        } == {completed_id: "completed", unqueued_id: "not_in_queue"}
+        assert {
+            row["thread_id"]: row["reason"] for row in body["excluded_threads"]
+        } == {
+            completed_id: "completed",
+            unqueued_id: "not_in_queue",
+            stale_snoozed.id: "snoozed",
+            stale_skipped.id: "skipped",
+        }
+        assert {row["id"] for row in body["rollable"] if "id" in row} == set()
         assert candidate["thread"]["id"] != foreign_id
         assert candidate["issue"]["id"] == next_id
         assert candidate["issue"]["cover_url"] == "https://example.com/cover.jpg"
