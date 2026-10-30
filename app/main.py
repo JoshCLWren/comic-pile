@@ -213,18 +213,75 @@ def _resolve_log_level(environment: str) -> int:
     return _default_log_level(environment)
 
 
-def _configure_logging(environment: str) -> None:
-    """Configure root logging unless a handler is already installed.
+class _DiagnosticFieldsFilter(logging.Filter):
+    """Append structured diagnostic ``extra`` fields to the rendered message.
 
-    Uvicorn leaves the root logger without handlers, so this path runs in
-    production. ``basicConfig`` is a no-op when handlers already exist.
+    ``logging.basicConfig`` without a formatter prints only ``%(message)s``,
+    so the ``cpu_time_ms``, ``request_id``, ``database_queries`` and other
+    fields carried through ``extra`` never reach the log text. A handler-level
+    filter sees every record that reaches the handler, including records that
+    propagate from application loggers, and rewrites the message before any
+    formatter runs. That keeps the measurements visible without replacing a
+    formatter supplied by the hosting platform.
+    """
+
+    _DIAGNOSTIC_FIELDS: tuple[str, ...] = (
+        "request_id",
+        "method",
+        "path",
+        "status_code",
+        "process_time_ms",
+        "cpu_time_ms",
+        "database_queries",
+        "database_time_ms",
+        "cold_request",
+        "deployment_id",
+        "event",
+        "startup_duration_ms",
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if getattr(record, "_comic_pile_diagnostics_appended", False):
+            return True
+        extras = [
+            f"{field}={getattr(record, field)!r}"
+            for field in self._DIAGNOSTIC_FIELDS
+            if getattr(record, field, None) is not None
+        ]
+        if extras:
+            record.msg = f"{record.getMessage()} [{' '.join(extras)}]"
+            record.args = ()
+            record._comic_pile_diagnostics_appended = True
+        return True
+
+
+def _configure_logging(environment: str) -> None:
+    """Configure root logging and make diagnostic fields visible.
+
+    Uvicorn leaves the root logger without handlers, so the default path
+    installs a stream handler. When another process (for example a hosting
+    platform) already configured root handlers, those handlers are kept and a
+    diagnostic filter is attached to each so ``extra`` fields still appear in
+    the log text instead of being dropped by the handler's formatter.
 
     Args:
         environment: Current application environment.
     """
-    if logging.getLogger().hasHandlers():
+    root = logging.getLogger()
+    if root.hasHandlers():
+        for handler in root.handlers:
+            has_filter = any(
+                isinstance(existing, _DiagnosticFieldsFilter) for existing in handler.filters
+            )
+            if not has_filter:
+                handler.addFilter(_DiagnosticFieldsFilter())
         return
-    logging.basicConfig(level=_resolve_log_level(environment))
+    handler = logging.StreamHandler()
+    handler.addFilter(_DiagnosticFieldsFilter())
+    logging.basicConfig(
+        level=_resolve_log_level(environment),
+        handlers=[handler],
+    )
 
 
 _db_settings = get_database_settings()
