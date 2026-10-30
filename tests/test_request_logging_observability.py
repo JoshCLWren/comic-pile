@@ -14,7 +14,12 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.main import _configure_logging, _default_log_level, _resolve_log_level
+from app.main import (
+    _DiagnosticFieldsFilter,
+    _configure_logging,
+    _default_log_level,
+    _resolve_log_level,
+)
 from app.middleware.request_logging import add_request_logging_middleware
 
 
@@ -64,7 +69,40 @@ def test_configure_logging_sets_production_level_when_no_handlers(monkeypatch: p
         root.setLevel(original_level)
 
 
-def test_configure_logging_formatter_prints_diagnostic_fields(
+def _diagnostic_filter(handler: logging.Handler) -> _DiagnosticFieldsFilter:
+    """Return the diagnostic filter installed on ``handler``."""
+    for handler_filter in handler.filters:
+        if isinstance(handler_filter, _DiagnosticFieldsFilter):
+            return handler_filter
+    raise AssertionError("diagnostic filter was not installed on the log handler")
+
+
+def _build_diagnostic_record() -> logging.LogRecord:
+    """Build a request log record carrying the production diagnostic extras."""
+    record = logging.LogRecord(
+        name="app.middleware.request_logging",
+        level=logging.WARNING,
+        pathname="",
+        lineno=0,
+        msg="API Error: GET /slow - 500",
+        args=(),
+        exc_info=None,
+    )
+    record.request_id = "abcdef0123456789abcdef0123456789"
+    record.method = "GET"
+    record.path = "/slow"
+    record.status_code = 500
+    record.process_time_ms = 123.45
+    record.cpu_time_ms = 67.89
+    record.database_queries = 3
+    record.database_time_ms = 45.6
+    record.cold_request = False
+    record.deployment_id = "dep_abc123"
+    record.event = "performance_budget_warning"
+    return record
+
+
+def test_configure_logging_prints_diagnostic_fields(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Configured root handler emits structured diagnostic fields in log text.
@@ -81,26 +119,8 @@ def test_configure_logging_formatter_prints_diagnostic_fields(
         root.handlers.clear()
         _configure_logging("production")
         handler = root.handlers[0]
-        record = logging.LogRecord(
-            name="app.middleware.request_logging",
-            level=logging.WARNING,
-            pathname="",
-            lineno=0,
-            msg="API Error: GET /slow - 500",
-            args=(),
-            exc_info=None,
-        )
-        record.request_id = "abcdef0123456789abcdef0123456789"
-        record.method = "GET"
-        record.path = "/slow"
-        record.status_code = 500
-        record.process_time_ms = 123.45
-        record.cpu_time_ms = 67.89
-        record.database_queries = 3
-        record.database_time_ms = 45.6
-        record.cold_request = False
-        record.deployment_id = "dep_abc123"
-        record.event = "performance_budget_warning"
+        record = _build_diagnostic_record()
+        _diagnostic_filter(handler).filter(record)
         formatted = handler.format(record)
         assert "API Error: GET /slow - 500" in formatted
         assert "cpu_time_ms=67.89" in formatted
@@ -109,6 +129,43 @@ def test_configure_logging_formatter_prints_diagnostic_fields(
         assert "process_time_ms=123.45" in formatted
         assert "cold_request=False" in formatted
         assert "deployment_id='dep_abc123'" in formatted
+    finally:
+        root.handlers[:] = original_handlers
+        root.setLevel(original_level)
+
+
+def test_configure_logging_keeps_platform_handler_and_emits_diagnostic_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pre-installed root handler keeps its formatter yet still prints extras.
+
+    A hosting platform may configure root logging before the application
+    imports. The diagnostic filter must attach to that handler instead of
+    returning early and silently dropping ``cpu_time_ms`` and friends.
+    """
+    root = logging.getLogger()
+    original_handlers = root.handlers[:]
+    original_level = root.level
+    platform_handler = logging.StreamHandler()
+    platform_format = logging.Formatter("%(levelname)s %(message)s")
+    platform_handler.setFormatter(platform_format)
+    monkeypatch.setattr(root, "hasHandlers", lambda: True)
+    try:
+        root.handlers[:] = [platform_handler]
+        _configure_logging("production")
+        assert platform_handler.formatter is platform_format
+        assert len(platform_handler.filters) == 1
+        record = _build_diagnostic_record()
+        _diagnostic_filter(platform_handler).filter(record)
+        formatted = platform_handler.format(record)
+        assert formatted.startswith("WARNING API Error: GET /slow - 500")
+        assert "cpu_time_ms=67.89" in formatted
+        assert "database_queries=3" in formatted
+
+        # A record passed through more than one filtered handler is not doubled.
+        _diagnostic_filter(platform_handler).filter(record)
+        reformatted = platform_handler.format(record)
+        assert reformatted.count("cpu_time_ms=67.89") == 1
     finally:
         root.handlers[:] = original_handlers
         root.setLevel(original_level)
