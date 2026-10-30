@@ -1,6 +1,5 @@
 """Tests for roll API endpoints."""
 
-import logging
 
 import pytest
 from httpx import AsyncClient
