@@ -238,7 +238,7 @@ class SessionSettings(BaseSettings):
 
     session_gap_hours: int = Field(
         default=6,
-        description="Hours of inactivity before starting a new session (1-168)",
+        description="Fixed session duration in hours from start (default 6, range 1-168)",
         json_schema_extra={"env": "SESSION_GAP_HOURS"},
     )
     start_die: int = Field(
@@ -250,7 +250,7 @@ class SessionSettings(BaseSettings):
     @field_validator("session_gap_hours")
     @classmethod
     def validate_session_gap_hours(cls, v: int) -> int:
-        """Ensure session gap hours is within valid range."""
+        """Ensure the fixed session duration is within the supported range."""
         if not 1 <= v <= 168:
             raise ValueError(f"SESSION_GAP_HOURS must be between 1 and 168 hours (1 week), got {v}")
         return v
