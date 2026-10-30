@@ -5,20 +5,22 @@ Guidelines for AI agents working in this codebase.
 
 ## Owner-approved exception: consolidate Roll bootstrap on Rust v2 (2026-10-29)
 
-**Concrete version/runtime counterexample (production routing verified 2026-10-29):**
+**Historical pre-cutover snapshot (production routing observed 2026-10-29, before #4383):**
 
-| Public operation | Runtime at that snapshot | Caller |
+| Public operation | Runtime at that snapshot | Caller at that snapshot |
 | --- | --- | --- |
-| `GET /api/v2/roll/bootstrap` | Native Rust | Dedicated QA probe; not the normal Roll UI yet |
+| `GET /api/v2/roll/bootstrap` | Native Rust | Dedicated QA probe; normal Roll UI still used v1 |
 | `POST /api/v2/reading-boundaries` | Python / FastAPI | Queue/Thread/optional Roll reading-boundary UI |
 | `GET /api/v2/reading-boundaries/{thread_id}` | Python / FastAPI | No direct frontend service caller established |
 | `GET /api/v1/roll/bootstrap` | Python / FastAPI | Normal Roll + protected recovery |
 
 **These are per-operation observations, not promises about an entire API version.** Never refer to "v2 is Rust," "all v2 migrated," "v1 is Python," or "migrate the v2 API" as if one version has a single language. For every migration decision, report **HTTP method + exact path + current destination + observed runtime + client consumers**. Read the current deployment rather than treating this historical snapshot as authoritative after additional deploys. The only approved API-version consolidation here concerns **Roll bootstrap GET**; it does not remove or rewrite either reading-boundaries v2 operation.
 
+**Current checked-in state (after #4383, `main`):** both live clients request `GET /api/v2/roll/bootstrap` — `frontend/src/services/rollBootstrapApi.ts` and `frontend/src/services/protectedRollMutationApi.ts` — and `vercel.json` routes that method/path to `api/native_roll.rs`. That is route configuration and client wiring, not production runtime proof. The Python v1/legacy and Python v2 bootstrap handlers remain until the cleanup PR (#4350) removes them after live native-v2 verification.
+
 For **Roll bootstrap GET only**, the owner explicitly chose to retire the old public operations `GET /api/v1/roll/bootstrap` and `GET /api/roll/bootstrap` and standardize on a **single `GET /api/v2/roll/bootstrap` implemented in native Rust**. This is a deliberate, approved API consolidation, not evidence that v1 implies Python or v2 implies Rust. It is the sole exception to the same-path language-port restriction below, and takes precedence over its prohibitions **for bootstrap only**. See #4335, #4299 and #4350. Other v1 operations (including `POST /api/v1/roll/`) remain unchanged until their own separate migration.
 
-**Do not port bootstrap v1 to Rust.** First complete Rust v2's canonical generated OpenAPI response, preserving all actual v1 Roll frontend functionality, including candidate tag chips and excluded/inactive counters and visible explanations, plus session/pending/recovery, die, rollable issue selection and routes. Extend the canonical v2 schema deliberately where required by those existing UI behaviors, with focused regressions for the known losses from closed PR #4369. Update **both** `frontend/src/services/rollBootstrapApi.ts` and `protectedRollMutationApi.ts` (and any other live client), then prove successful authenticated native v2 execution **from actual production Roll and recovery requests**, not just health/401/deployed code. Require green exact-head CI and Greptile 5/5. Only in the immediately following cleanup PR delete Python v1/legacy and Python v2 bootstrap implementations, exclusive dependencies, dead aliases and obsolete tests, preserving code still shared by other operations. Reverify prod and close issues only when no v1 bootstrap path remains.
+**Do not port bootstrap v1 to Rust.** Complete and maintain Rust v2's canonical generated OpenAPI response, preserving all actual Roll frontend functionality that previously came from v1, including candidate tag chips and excluded/inactive counters and visible explanations, plus session/pending/recovery, die, rollable issue selection and routes. Extend the canonical v2 schema deliberately where required by those existing UI behaviors, with focused regressions for the known losses from closed PR #4369. Both live clients are already switched (#4383); do not re-add a v1/legacy caller or a Python enrichment hop. Prove successful authenticated native v2 execution **from actual production Roll and recovery requests**, not just health/401/deployed code. Require green exact-head required CI and independent exact-head semantic/acceptance review; Greptile is optional per current factory policy, and any Greptile finding must be fixed or rebutted with concrete evidence. Then remove the Python v1/legacy and Python v2 bootstrap implementations, exclusive dependencies, dead aliases and obsolete tests in the cleanup PR (#4350), preserving code still shared by other operations. Reverify prod and close issues only when no v1 bootstrap path remains.
 
 ## MANDATORY: API version is not an implementation language (Rust cutover #4335)
 
