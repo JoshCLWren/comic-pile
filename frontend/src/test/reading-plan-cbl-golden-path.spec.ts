@@ -55,14 +55,14 @@ async function assertRollEligibility(
   const payload = await response.json() as { is_blocked: boolean }
   expect(payload.is_blocked).toBe(!expectation.eligible)
 
-  const bootstrap = await page.request.get('/api/v1/roll/bootstrap', { headers })
+  const bootstrap = await page.request.get('/api/v2/roll/bootstrap', { headers })
   expect(bootstrap.ok(), await bootstrap.text()).toBeTruthy()
   // SAFETY: the test reads only the response fields listed in this type
   const roll = await bootstrap.json() as {
-    roll_pool: Array<{ id: number }>
+    rollable: Array<{ thread: { id: number } }>
     blocked_threads: Array<{ id: number }>
   }
-  const inPool = roll.roll_pool.some((thread) => thread.id === threadId)
+  const inPool = roll.rollable.some((item) => item.thread.id === threadId)
   const inBlocked = roll.blocked_threads.some((thread) => thread.id === threadId)
   expect(inPool).toBe(expectation.eligible)
   if (!expectation.eligible) {
