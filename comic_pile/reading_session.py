@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 import logging
 
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,83 +30,40 @@ def _start_die() -> int:
     return get_session_settings().start_die
 
 
-def _current_session_filter(user_id: int, cutoff_time: datetime):
-    """Build the predicate for a session that should remain authoritative.
-
-    A pending roll is active reading work. Its timestamp, rather than the original session start,
-    keeps the session current while the reader is away from the app reading the selected comic.
-    """
-    return (
-        (ReadingSession.user_id == user_id)
-        & ReadingSession.ended_at.is_(None)
-        & or_(
-            ReadingSession.started_at >= cutoff_time,
-            and_(
-                ReadingSession.pending_thread_id.is_not(None),
-                ReadingSession.pending_thread_updated_at >= cutoff_time,
-            ),
-        )
-    )
-
-
 def _as_utc(value: datetime) -> datetime:
     """Normalize persisted timestamps for deterministic comparisons."""
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-
-
-def _last_activity_at(session: ReadingSession, last_event_at: datetime | None) -> datetime:
-    """Return the latest durable reading activity for a session."""
-    candidates = [_as_utc(session.started_at)]
-    if (
-        session.pending_thread_updated_at is not None
-        and (session.pending_thread_id is not None or session.pending_issue_id is not None)
-    ):
-        candidates.append(_as_utc(session.pending_thread_updated_at))
-    if last_event_at is not None:
-        candidates.append(_as_utc(last_event_at))
-    return max(candidates)
 
 
 async def _resolve_current_session_with_candidate_count(
     db: AsyncSession,
     user_id: int,
 ) -> tuple[ReadingSession | None, int]:
-    """Resolve current session and report how many unended rows were considered."""
-    cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
+    """Find the newest unended six-hour session, without extending its lifetime.
+
+    Event, pending-roll and last-activity timestamps never move the expiry.
+    This is a single bounded read, including the count of valid candidates.
+    """
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(hours=6)
     result = await db.execute(
-        select(ReadingSession, func.max(Event.timestamp).label("last_event_at"))
-        .outerjoin(Event, Event.session_id == ReadingSession.id)
+        select(ReadingSession, func.count().over().label("candidate_count"))
         .where(ReadingSession.user_id == user_id)
         .where(ReadingSession.ended_at.is_(None))
-        .group_by(ReadingSession.id)
+        .where(ReadingSession.started_at > cutoff)
+        .where(ReadingSession.started_at <= now)
+        .order_by(ReadingSession.started_at.desc(), ReadingSession.id.desc())
+        .limit(1)
     )
-    rows = result.all()
-
-    candidates: list[tuple[bool, datetime, datetime, int, ReadingSession]] = []
-    for session, last_event_at in rows:
-        activity_at = _last_activity_at(session, last_event_at)
-        if activity_at < cutoff_time:
-            continue
-        has_pending_context = (
-            session.pending_thread_id is not None or session.pending_issue_id is not None
-        )
-        candidates.append(
-            (
-                has_pending_context,
-                activity_at,
-                _as_utc(session.started_at),
-                session.id or 0,
-                session,
-            )
-        )
-
-    if not candidates:
-        return None, len(rows)
-    return max(candidates, key=lambda candidate: candidate[:4])[4], len(rows)
+    row = result.one_or_none()
+    if row is None:
+        return None, 0
+    session, count = row
+    return session, count
 
 
 async def resolve_current_session(db: AsyncSession, user_id: int) -> ReadingSession | None:
-    """Resolve the authoritative unended session from durable recent activity.
+    """Resolve the newest unended session within six hours of its start.
 
     Args:
         db: Async database session used to inspect current-session candidates.
@@ -196,7 +153,7 @@ async def is_active(
     sessions = session_result.scalars().all()
     if not sessions:
         cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
-        return _as_utc(started_at) >= cutoff_time
+        return cutoff_time < _as_utc(started_at) <= datetime.now(UTC)
     if len(sessions) != 1:
         return False
 
@@ -407,7 +364,7 @@ async def get_or_create(
                     user_id=user_id,
                     session=new_session,
                     resolution="created",
-                    creation_reason="no_recent_unended_session",
+                    creation_reason="no_unexpired_unended_session",
                     candidate_unended_sessions=candidate_count,
                 )
                 return new_session
