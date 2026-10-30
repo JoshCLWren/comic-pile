@@ -3,6 +3,12 @@
 Guidelines for AI agents working in this codebase.
 
 
+## Owner-approved exception: consolidate Roll bootstrap on Rust v2 (2026-10-29)
+
+For **Roll bootstrap GET only**, the owner explicitly chose to retire the old public operations `GET /api/v1/roll/bootstrap` and `GET /api/roll/bootstrap` and standardize on a **single `GET /api/v2/roll/bootstrap` implemented in native Rust**. This is a deliberate, approved API consolidation, not evidence that v1 implies Python or v2 implies Rust. It is the sole exception to the same-path language-port restriction below, and takes precedence over its prohibitions **for bootstrap only**. See #4335, #4299 and #4350. Other v1 operations (including `POST /api/v1/roll/`) remain unchanged until their own separate migration.
+
+**Do not port bootstrap v1 to Rust.** First complete Rust v2's canonical generated OpenAPI response, preserving all actual v1 Roll frontend functionality, including candidate tag chips and excluded/inactive counters and visible explanations, plus session/pending/recovery, die, rollable issue selection and routes. Extend the canonical v2 schema deliberately where required by those existing UI behaviors, with focused regressions for the known losses from closed PR #4369. Update **both** `frontend/src/services/rollBootstrapApi.ts` and `protectedRollMutationApi.ts` (and any other live client), then prove successful authenticated native v2 execution **from actual production Roll and recovery requests**, not just health/401/deployed code. Require green exact-head CI and Greptile 5/5. Only in the immediately following cleanup PR delete Python v1/legacy and Python v2 bootstrap implementations, exclusive dependencies, dead aliases and obsolete tests, preserving code still shared by other operations. Reverify prod and close issues only when no v1 bootstrap path remains.
+
 ## MANDATORY: API version is not an implementation language (Rust cutover #4335)
 
 The `v1`, `v2`, etc. segments in public HTTP paths refer **only to API contract versions**, not Python, Rust, a new server, or a migration phase. Both Python and Rust can implement any API version. Never describe an operation as "Python v1" or "Rust v2" without explicitly distinguishing the exact path from its **observed/current** runtime.
