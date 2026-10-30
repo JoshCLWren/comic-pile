@@ -20,6 +20,7 @@ const after: ReplaceEntry[] = [
     series_group_id: 'starman',
     series_name: 'Starman',
     volume_year: 1988,
+    position: 0,
   },
   {
     comicId: 30002,
@@ -32,6 +33,7 @@ const after: ReplaceEntry[] = [
     series_group_id: 'jsa',
     series_name: 'JSA',
     volume_year: 1999,
+    position: 1,
   },
   {
     comicId: 30001,
@@ -42,6 +44,7 @@ const after: ReplaceEntry[] = [
     saved: true,
     gate: 'none',
     skipped: false,
+    position: 2,
   },
 ]
 
@@ -305,6 +308,26 @@ describe('CblReplaceReviewPanel', () => {
 
     await user.click(screen.getByTestId('confirm-replace'))
     expect(onConfirm).toHaveBeenCalledWith([12])
+  })
+
+  it('shows each issue submitted reading-order position in the preview', () => {
+    render(
+      <CblReplaceReviewPanel
+        listName="Position preview"
+        listId={9}
+        mode="loose"
+        before={before}
+        after={after}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    // The grouped preview must show the original submitted order alongside
+    // the series controls, so a reader can verify the order before replacing.
+    expect(screen.getByTestId('position-26360')).toHaveTextContent('pos 1')
+    expect(screen.getByTestId('position-30002')).toHaveTextContent('pos 2')
+    expect(screen.getByTestId('position-30001')).toHaveTextContent('pos 3')
   })
 
   it('confirms the reviewed order and reflects unchecked entries', async () => {

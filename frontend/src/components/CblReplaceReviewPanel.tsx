@@ -312,6 +312,14 @@ export function CblReplaceReviewPanel({
                         <span>
                           <span className="font-mono text-[var(--theme-text-dim)]">{entry.comicId}</span>{' '}
                           {entry.title}
+                          {entry.position != null ? (
+                            <span
+                              data-testid={`position-${entry.comicId}`}
+                              className="ml-2 font-mono text-[10px] text-[var(--theme-text-muted)]"
+                            >
+                              pos {entry.position + 1}
+                            </span>
+                          ) : null}
                           {entry.defaultIncluded ? (
                             <span
                               data-testid={`default-${entry.comicId}`}
@@ -362,6 +370,14 @@ export function CblReplaceReviewPanel({
                         <span>
                           <span className="font-mono text-[var(--theme-text-dim)]">{entry.comicId}</span>{' '}
                           {entry.title}
+                          {entry.position != null ? (
+                            <span
+                              data-testid={`position-${entry.comicId}`}
+                              className="ml-2 font-mono text-[10px] text-[var(--theme-text-muted)]"
+                            >
+                              pos {entry.position + 1}
+                            </span>
+                          ) : null}
                           {entry.saved ? (
                             <span
                               data-testid={`saved-${entry.comicId}`}
