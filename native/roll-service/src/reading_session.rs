@@ -119,7 +119,10 @@ pub fn automatic_die_after(die_after: i32, context: &Value) -> i32 {
         .map(|v| v as i32)
         .unwrap_or(die_after)
 }
-async fn dice(tx: &Transaction<'_>, session: &ReadingSession) -> Result<(i32, i32), ApiError> {
+pub(crate) async fn dice(
+    tx: &Transaction<'_>,
+    session: &ReadingSession,
+) -> Result<(i32, i32), ApiError> {
     let row = tx.query_opt("SELECT die_after, context::text FROM events WHERE session_id = $1
       AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1",
       &[&session.id]).await.map_err(session_error)?;

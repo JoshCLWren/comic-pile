@@ -64,7 +64,7 @@ fn infer(observations: &[Observation], hour: Option<u32>) -> (&'static str, f64)
         (confidence * 10000.0).round_ties_even() / 10000.0,
     )
 }
-fn median(values: Option<&Vec<f64>>) -> Option<f64> {
+pub(crate) fn median(values: Option<&Vec<f64>>) -> Option<f64> {
     let mut v = values.filter(|v| v.len() >= 2)?.clone();
     v.sort_by(f64::total_cmp);
     let mid = v.len() / 2;
@@ -74,7 +74,7 @@ fn median(values: Option<&Vec<f64>>) -> Option<f64> {
         v[mid]
     })
 }
-fn year(metadata: &Value) -> Option<i32> {
+pub(crate) fn year(metadata: &Value) -> Option<i32> {
     for key in ["cover_date", "store_date"] {
         if let Some(s) = metadata[key].as_str() {
             for b in s.as_bytes().windows(4) {
