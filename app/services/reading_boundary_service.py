@@ -276,6 +276,17 @@ def project_boundary_explanation(
         if state is not None
         else []
     )
+    # Deduplicate by canonical target issue: one blocking issue should count
+    # as one live requirement even when hold + strict gates both point at it.
+    seen_target_ids: set[tuple[int, ...]] = set()
+    deduped_blockers: list[ReadingBoundaryBlocker] = []
+    for b in blockers:
+        key = tuple(issue.issue_id for issue in b.waiting_on)
+        if key in seen_target_ids:
+            continue
+        seen_target_ids.add(key)
+        deduped_blockers.append(b)
+    blockers = deduped_blockers
     historical = _historical_rows(snapshot, labels, thread_id) if include_historical else []
     if state is None:
         boundary_state = "unavailable"

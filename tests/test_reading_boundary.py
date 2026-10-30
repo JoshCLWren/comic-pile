@@ -212,7 +212,9 @@ def test_explanations_parity_with_canonical_evaluator() -> None:
         assert explanation.next is not None
         assert explanation.next.issue.issue_id == state.next_issue_id
         assert (explanation.state == "blocked") is (not state.eligible)
-        assert len(explanation.blockers) == len(state.blockers)
+        assert len(explanation.blockers) <= len(state.blockers)
+        # Deduplication by canonical target issue: one blocking target may
+        # arrive through multiple gates (hold + strict order) but counts once.
 
 
 @pytest.mark.asyncio
@@ -612,3 +614,30 @@ async def test_api_includes_owned_list_names_and_modes_on_issues(
     assert body["next"]["issue"]["reading_lists"][0]["mode"] == "strict"
     assert body["blockers"][0]["waiting_on"][0]["reading_lists"][0]["name"] == "JLI"
     assert body["blockers"][0]["waiting_on"][0]["reading_lists"][0]["mode"] == "strict"
+
+
+def test_deduplicates_single_blocking_issue_across_stacked_gates() -> None:
+    """MQA-ROLL-013: one target issue via hold + strict order counts as 1."""
+    _state, snapshot, labels = _fixture()
+    # Manually inject a second blocker with the same target issue (simulates
+    # both a hold milestone and a strict-order gate pointing at Redcoat #7).
+    miracle_state = snapshot.threads[MISTER_MIRACLE_ID]
+    from dataclasses import replace
+    from app.services.reading_list_evaluator import Blocker
+    duplicated = replace(
+        miracle_state,
+        blockers=miracle_state.blockers + (
+            Blocker(
+                kind="hold",
+                list_id=LIST_ID,
+                waiting_on_issue_ids=(M1,),
+                gate_issue_id=M1,
+            ),
+        ),
+    )
+    dup_snapshot = replace(snapshot, threads={**snapshot.threads, MISTER_MIRACLE_ID: duplicated})
+    explanation = project_boundary_explanation(dup_snapshot, labels, MISTER_MIRACLE_ID)
+    # One canonical blocking target, not two.
+    assert len(explanation.blockers) == 1
+    assert "1 live requirement" in explanation.summary
+    assert explanation.blockers[0].waiting_on[0].issue_id == M1
