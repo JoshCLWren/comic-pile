@@ -682,7 +682,6 @@ fn pending_roll_recovery(
     })))
 }
 
-
 /** One owner-scoped bulk tag read for every visible Roll row. */
 async fn visible_thread_tags(
     conn: &deadpool_postgres::Object,
