@@ -21,6 +21,7 @@ from app.schemas.roll_v2 import (
     RouteKind,
 )
 from app.schemas.thread import ThreadResponse
+from app.schemas.roll import RollBootstrapResponse
 
 
 class TestRollV2BootstrapResponse:
@@ -28,15 +29,9 @@ class TestRollV2BootstrapResponse:
 
     def test_v2_response_is_superset_of_v1_fields(self):
         """Test that all v1 bootstrap fields are preserved in v2."""
-        # These fields should be present in both v1 and v2
-        v1_fields = {
-            'session_id', 'user_id', 'current_die', 'manual_die',
-            'pending_thread_id', 'last_rolled_result', 'session_mode',
-            'active_thread', 'roll_recovery', 'bandwidth', 'snoozed_threads',
-            'snoozed_count', 'skipped_thread_ids', 'skipped_threads',
-            'blocked_count', 'blocked_threads', 'stale_thread_count',
-            'stale_thread', 'timezone'
-        }
+        # Compare the real complete v1 schema, not a hand-maintained subset.
+        # This catches regressions in tags and inactive/excluded details.
+        v1_fields = set(RollBootstrapResponse.model_fields) - {'roll_pool'}
 
         # v2 adds these fields
         v2_additional_fields = {'rollable', 'last_read'}
