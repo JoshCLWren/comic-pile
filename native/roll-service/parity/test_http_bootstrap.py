@@ -42,7 +42,8 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
             await db.flush()
             t = Thread(user_id=owner.id, title="Known Series", format="Comic",
                        queue_position=1, issues_remaining=1, total_issues=2,
-                       last_activity_at=now-timedelta(days=8))
+                       # Deliberately stale persisted flag: live Option E says readable.
+                       is_blocked=True, last_activity_at=now-timedelta(days=8))
             stale_other = Thread(user_id=owner.id, title="Other stale series", format="Comic",
                                  queue_position=2, issues_remaining=1,
                                  last_activity_at=now-timedelta(days=9))
@@ -175,6 +176,8 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         assert {row["thread"]["id"] for row in body["rollable"]}.isdisjoint(
             {completed_id, unqueued_id, foreign_id}
         )
+        assert t.id not in {row["id"] for row in body["blocked_threads"]}
+        assert t.id not in {row["thread_id"] for row in body["excluded_threads"]}
         assert candidate["thread"]["id"] != foreign_id
         assert candidate["issue"]["id"] == next_id
         assert candidate["issue"]["cover_url"] == "https://example.com/cover.jpg"
