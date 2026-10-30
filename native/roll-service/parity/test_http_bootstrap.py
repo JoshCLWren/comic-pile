@@ -172,7 +172,9 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
             stale_snoozed.id: "snoozed",
             stale_skipped.id: "skipped",
         }
-        assert {row["id"] for row in body["rollable"] if "id" in row} == set()
+        assert {row["thread"]["id"] for row in body["rollable"]}.isdisjoint(
+            {completed_id, unqueued_id, foreign_id}
+        )
         assert candidate["thread"]["id"] != foreign_id
         assert candidate["issue"]["id"] == next_id
         assert candidate["issue"]["cover_url"] == "https://example.com/cover.jpg"
