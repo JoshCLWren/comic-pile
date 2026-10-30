@@ -143,6 +143,12 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         assert body["stale_thread"]["id"] not in {foreign_id, stale_snoozed.id, stale_skipped.id}
         candidate = body["rollable"][0]
         assert candidate["thread"]["id"] == t.id
+        assert candidate["thread"]["tags"][0]["name"] == "Favorites"
+        assert body["total_threads"] == 4
+        assert body["available_threads"] >= 1
+        assert body["excluded_count"] >= 2
+        assert isinstance(body["inactive_count"], int)
+        assert isinstance(body["inactive_threads"], list)
         assert candidate["thread"]["id"] != foreign_id
         assert candidate["issue"]["id"] == next_id
         assert candidate["issue"]["cover_url"] == "https://example.com/cover.jpg"
