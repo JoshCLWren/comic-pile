@@ -1,4 +1,4 @@
-Factory gate ready for PR #4398 (head 82de4441dbd806d3dba2e9400e67406acc992809, issue #4269).
+Factory gate ready for PR #4398 (head 0c2c33b8406aadeb3bec9e2ccb1067acdd024093, issue #4269).
 
 Summary of changes:
 - Removed duplicate `resetBootstrapRetry()` call in `login()` at frontend/src/App.tsx:357
