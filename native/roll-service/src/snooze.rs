@@ -140,8 +140,7 @@ pub async fn snooze_thread(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
 ) -> Result<Json<SessionResponse>, ApiError> {
-    let active =
-        reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
+    let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
     let session = active.session;
     let current_die = active.current_die;
     let Some(pending_thread_id) = session.pending_thread_id else {
@@ -309,25 +308,31 @@ async fn mutate(
     let last_snooze_direction: Option<String> = if recent_rows.is_empty() {
         None
     } else {
-        let prev_die: i32 = recent_rows[0].try_get::<_, Option<i32>>(0).ok().flatten().unwrap_or(6);
-        let prev_after: i32 = recent_rows[0].try_get::<_, Option<i32>>(1).ok().flatten().unwrap_or(8);
-        if prev_after > prev_die {
-            Some("heavier".to_string())
-        } else if prev_after < prev_die {
-            Some("lighter".to_string())
-        } else {
-            None
+        let prev_die: i32 = recent_rows[0]
+            .try_get::<_, Option<i32>>(0)
+            .ok()
+            .flatten()
+            .unwrap_or(6);
+        let prev_after: i32 = recent_rows[0]
+            .try_get::<_, Option<i32>>(1)
+            .ok()
+            .flatten()
+            .unwrap_or(8);
+        match prev_after.cmp(&prev_die) {
+            std::cmp::Ordering::Greater => Some("heavier".to_string()),
+            std::cmp::Ordering::Less => Some("lighter".to_string()),
+            std::cmp::Ordering::Equal => None,
         }
     };
 
-    // Candidate effort defaults to balanced (no effort model yet).
-    let candidate_effort = "balanced";
+    // Classify candidate effort (no effort model yet, defaults to balanced)
+    let candidate_effort = classify_candidate_effort(None, None);
 
     let correction_result = compute_snooze_correction(
         &original_active_bw,
         original_confidence,
         &original_predicted_bw,
-        candidate_effort,
+        &candidate_effort,
         consecutive_snoozes,
         last_snooze_direction.as_deref(),
     );
@@ -631,6 +636,23 @@ fn bandwidth_index(level: &str) -> i32 {
     }
 }
 
+fn classify_candidate_effort(effort_source: Option<&str>, effort_minutes: Option<f64>) -> String {
+    // Maps effort estimates to a coarse bandwidth level for correction comparison.
+    // This is intentionally simple; richer effort modeling lives in the reading-effort model.
+    if effort_minutes.is_none() || effort_source.is_none() || effort_source == Some("none") {
+        return "balanced".to_string();
+    }
+
+    let minutes = effort_minutes.unwrap();
+    if minutes < 12.0 {
+        "light".to_string()
+    } else if minutes < 20.0 {
+        "balanced".to_string()
+    } else {
+        "deep".to_string()
+    }
+}
+
 fn compute_snooze_correction(
     current_bandwidth: &str,
     current_confidence: f64,
@@ -674,7 +696,10 @@ fn compute_snooze_correction(
         } else if current_bandwidth == "deep" {
             ("balanced".to_string(), (current_confidence + 0.05).min(1.0))
         } else {
-            (current_bandwidth.to_string(), (current_confidence - 0.1).max(0.0))
+            (
+                current_bandwidth.to_string(),
+                (current_confidence - 0.1).max(0.0),
+            )
         };
         if new_bandwidth != current_bandwidth {
             return CorrectionResult {
@@ -703,7 +728,10 @@ fn compute_snooze_correction(
         } else if current_bandwidth == "light" {
             ("balanced".to_string(), (current_confidence + 0.05).min(1.0))
         } else {
-            (current_bandwidth.to_string(), (current_confidence - 0.1).max(0.0))
+            (
+                current_bandwidth.to_string(),
+                (current_confidence - 0.1).max(0.0),
+            )
         };
         if new_bandwidth != current_bandwidth {
             return CorrectionResult {
@@ -736,7 +764,6 @@ fn compute_snooze_correction(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -755,5 +782,28 @@ mod tests {
         let r = compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 1, None);
         assert!(!r.bandwidth_changed);
         assert_eq!(r.reason_code, "confidence_degrade");
+    }
+
+    #[test]
+    fn classify_candidate_effort_defaults_to_balanced() {
+        assert_eq!(classify_candidate_effort(None, None), "balanced");
+        assert_eq!(classify_candidate_effort(Some("none"), None), "balanced");
+        assert_eq!(classify_candidate_effort(None, Some(15.0)), "balanced");
+    }
+
+    #[test]
+    fn classify_candidate_effort_maps_by_minutes() {
+        assert_eq!(
+            classify_candidate_effort(Some("observed"), Some(10.0)),
+            "light"
+        );
+        assert_eq!(
+            classify_candidate_effort(Some("observed"), Some(15.0)),
+            "balanced"
+        );
+        assert_eq!(
+            classify_candidate_effort(Some("observed"), Some(25.0)),
+            "deep"
+        );
     }
 }
