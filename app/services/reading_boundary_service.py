@@ -278,10 +278,17 @@ def project_boundary_explanation(
     )
     # Deduplicate by canonical target issue: one blocking issue should count
     # as one live requirement even when hold + strict gates both point at it.
-    seen_target_ids: set[tuple[int, ...]] = set()
+    # For list-based blockers, include the list_id so different lists requiring
+    # the same issue stay separately visible (each has its own editor link).
+    # For prerequisite blockers, deduplicate by target issue only.
+    seen_target_ids: set[tuple] = set()
     deduped_blockers: list[ReadingBoundaryBlocker] = []
     for b in blockers:
-        key = tuple(issue.issue_id for issue in b.waiting_on)
+        waiting_key = tuple(issue.issue_id for issue in b.waiting_on)
+        if b.origin == "reading_list" and b.editor is not None and b.editor.list_id is not None:
+            key = ("list", b.editor.list_id, waiting_key)
+        else:
+            key = ("prereq", waiting_key)
         if key in seen_target_ids:
             continue
         seen_target_ids.add(key)

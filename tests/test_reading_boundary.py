@@ -618,26 +618,158 @@ async def test_api_includes_owned_list_names_and_modes_on_issues(
 
 def test_deduplicates_single_blocking_issue_across_stacked_gates() -> None:
     """MQA-ROLL-013: one target issue via hold + strict order counts as 1."""
-    _state, snapshot, labels = _fixture()
-    # Manually inject a second blocker with the same target issue (simulates
-    # both a hold milestone and a strict-order gate pointing at Redcoat #7).
-    miracle_state = snapshot.threads[MISTER_MIRACLE_ID]
+    # Build a minimal evaluator state where the same strict list produces
+    # both a hold blocker and a strict_order blocker for the same frontier
+    # issue, both waiting on the same target issue. This simulates the
+    # "Hold until reached" milestone + strict order stacked gates scenario.
+    from app.services.reading_list_evaluator import (
+        Blocker,
+        ReadingIssue,
+        ReadingList,
+        ReadingListEntry,
+        ReadingSnapshot,
+        ReadingThread,
+    )
+    from app.services.reading_eligibility_service import (
+        build_eligibility_snapshot,
+    )
     from dataclasses import replace
-    from app.services.reading_list_evaluator import Blocker
-    duplicated = replace(
-        miracle_state,
-        blockers=miracle_state.blockers + (
-            Blocker(
-                kind="hold",
-                list_id=LIST_ID,
-                waiting_on_issue_ids=(M1,),
-                gate_issue_id=M1,
+
+    test_user_id = 1
+    list_id = 10
+    thread_id = 1
+    a_id, b_id = 100, 101
+
+    state = ReadingSnapshot(
+        user_id=test_user_id,
+        threads=(ReadingThread(thread_id, name="Test Series"),),
+        issues=(
+            ReadingIssue(a_id, thread_id, 1),
+            ReadingIssue(b_id, thread_id, 2),
+        ),
+        lists=(
+            ReadingList(
+                list_id,
+                "strict",
+                (
+                    ReadingListEntry(a_id),
+                    ReadingListEntry(b_id),
+                ),
+                "Test List",
             ),
         ),
+        prerequisites=(),
     )
-    dup_snapshot = replace(snapshot, threads={**snapshot.threads, MISTER_MIRACLE_ID: duplicated})
-    explanation = project_boundary_explanation(dup_snapshot, labels, MISTER_MIRACLE_ID)
+    snapshot = build_eligibility_snapshot(state, queued_thread_ids=frozenset({thread_id}))
+
+    # Manually inject two blockers for B (the frontier) from the same list,
+    # both waiting on A. This simulates hold + strict_order stacked gates.
+    thread_state = snapshot.threads[thread_id]
+    duplicated = replace(
+        thread_state,
+        next_issue_id=b_id,
+        blockers=(
+            Blocker("strict_order", list_id, (a_id,)),
+            Blocker("hold", list_id, (a_id,), gate_issue_id=b_id),
+        ),
+    )
+    dup_snapshot = replace(snapshot, threads={**snapshot.threads, thread_id: duplicated})
+
+    # Now project through the boundary explanation service.
+    from app.repositories.reading_boundary_repository import BoundaryShadowLabels, BoundaryThreadLabels, BoundaryIssueLabels, BoundaryListLabels
+    labels = BoundaryShadowLabels(
+        threads={thread_id: BoundaryThreadLabels(thread_id, "Test Series", "active")},
+        issues={
+            a_id: BoundaryIssueLabels(a_id, thread_id, "Test Series", "1"),
+            b_id: BoundaryIssueLabels(b_id, thread_id, "Test Series", "2"),
+        },
+        lists={list_id: BoundaryListLabels(list_id, "Test List", "strict")},
+        prerequisites={},
+    )
+
+    explanation = project_boundary_explanation(dup_snapshot, labels, thread_id)
     # One canonical blocking target, not two.
     assert len(explanation.blockers) == 1
     assert "1 live requirement" in explanation.summary
-    assert explanation.blockers[0].waiting_on[0].issue_id == M1
+    assert explanation.blockers[0].waiting_on[0].issue_id == a_id
+    # The surviving blocker should preserve the list editor link.
+    assert explanation.blockers[0].editor is not None
+    assert explanation.blockers[0].editor.kind == "reading_list"
+    assert explanation.blockers[0].editor.list_id == list_id
+
+
+def test_preserves_separate_blockers_for_different_lists_same_target() -> None:
+    """G2: Two strict lists requiring the same issue stay separately visible.
+
+    Each list has its own editor link; dropping one loses the ability to edit
+    that list's restriction while the other list still blocks reading.
+    """
+    from app.services.reading_list_evaluator import (
+        Blocker,
+        ReadingIssue,
+        ReadingList,
+        ReadingListEntry,
+        ReadingSnapshot,
+        ReadingThread,
+    )
+    from app.services.reading_eligibility_service import (
+        build_eligibility_snapshot,
+    )
+    from dataclasses import replace
+
+    test_user_id = 1
+    list_id_1, list_id_2 = 10, 11
+    thread_id = 1
+    a_id, b_id = 100, 101
+
+    state = ReadingSnapshot(
+        user_id=test_user_id,
+        threads=(ReadingThread(thread_id, name="Test Series"),),
+        issues=(
+            ReadingIssue(a_id, thread_id, 1),
+            ReadingIssue(b_id, thread_id, 2),
+        ),
+        lists=(
+            ReadingList(list_id_1, "strict", (ReadingListEntry(a_id), ReadingListEntry(b_id)), "List One"),
+            ReadingList(list_id_2, "strict", (ReadingListEntry(a_id), ReadingListEntry(b_id)), "List Two"),
+        ),
+        prerequisites=(),
+    )
+    snapshot = build_eligibility_snapshot(state, queued_thread_ids=frozenset({thread_id}))
+
+    # Inject blockers for B from both lists, both waiting on A.
+    thread_state = snapshot.threads[thread_id]
+    duplicated = replace(
+        thread_state,
+        next_issue_id=b_id,
+        blockers=(
+            Blocker("strict_order", list_id_1, (a_id,)),
+            Blocker("strict_order", list_id_2, (a_id,)),
+        ),
+    )
+    dup_snapshot = replace(snapshot, threads={**snapshot.threads, thread_id: duplicated})
+
+    from app.repositories.reading_boundary_repository import BoundaryShadowLabels, BoundaryThreadLabels, BoundaryIssueLabels, BoundaryListLabels
+    labels = BoundaryShadowLabels(
+        threads={thread_id: BoundaryThreadLabels(thread_id, "Test Series", "active")},
+        issues={
+            a_id: BoundaryIssueLabels(a_id, thread_id, "Test Series", "1"),
+            b_id: BoundaryIssueLabels(b_id, thread_id, "Test Series", "2"),
+        },
+        lists={
+            list_id_1: BoundaryListLabels(list_id_1, "List One", "strict"),
+            list_id_2: BoundaryListLabels(list_id_2, "List Two", "strict"),
+        },
+        prerequisites={},
+    )
+
+    explanation = project_boundary_explanation(dup_snapshot, labels, thread_id)
+    # Two distinct blockers (different lists) should both be visible.
+    assert len(explanation.blockers) == 2
+    assert "2 live requirements" in explanation.summary
+    # Both should have their own editor links.
+    editor_list_ids = {b.editor.list_id for b in explanation.blockers if b.editor}
+    assert editor_list_ids == {list_id_1, list_id_2}
+    # Both should wait on the same target issue.
+    for b in explanation.blockers:
+        assert b.waiting_on[0].issue_id == a_id
