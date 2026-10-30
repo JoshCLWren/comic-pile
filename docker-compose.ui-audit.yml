@@ -38,6 +38,9 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres-test:5432/comic_pile_test
       REDIS_URL: redis://redis-test:6379/0
+      # app/config.py randomizes SECRET_KEY in development even when provided.
+      # Use test mode so Python-issued JWTs and the native Rust verifier agree.
+      ENVIRONMENT: test
       SECRET_KEY: test-secret-key-for-testing-only
       TEST_ENVIRONMENT: "true"
     ports:
