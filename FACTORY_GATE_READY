@@ -1,7 +1,1 @@
-Factory gate ready for PR #4398 (head 0c2c33b8406aadeb3bec9e2ccb1067acdd024093, issue #4269).
-
-Summary of changes:
-- Removed duplicate `resetBootstrapRetry()` call in `login()` at frontend/src/App.tsx:357
-- The `return` in `validateSession()` for public auth pages was already present (line 284)
-
-All A1-A11 criteria verified as pass. No open Greptile findings. PR-Agent advisory findings addressed.
+FACTORY_GATE_READY

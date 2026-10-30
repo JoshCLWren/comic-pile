@@ -16,6 +16,28 @@ import type { AuthContextValue } from '../contexts/AuthContext'
  *   probe, with no late duplicate from the cancelled timer
  * - logout/account switch: 0 requests after the session generation changes
  * - StrictMode: 1 initial request, not one per simulated effect mount
+ *
+ * Measured transport calls per single page load (`/v1/auth/me` transport
+ * invocations counted by this harness, `Math.random` pinned to 0, 91 simulated
+ * seconds after load):
+ *
+ * | scenario                                   | before (main) | after |
+ * | ------------------------------------------ | ------------- | ----- |
+ * | healthy load                               | 1             | 1     |
+ * | persistent 503 until the budget is spent   | 6             | 6     |
+ * | "Try again" succeeds mid-outage            | 3             | 2     |
+ * | "Try again" fails mid-outage               | 7             | 2     |
+ * | logout during outage                       | 1             | 1     |
+ * | account switch during outage               | 2             | 2     |
+ * | StrictMode healthy load                    | 1             | 1     |
+ * | StrictMode persistent 503                  | 6             | 6     |
+ *
+ * The reduction is a request-count reduction, not a wall-clock claim: each
+ * cancelled late timer removes one `/v1/auth/me` Vercel Function invocation
+ * (and its token/user DB read) that previously fired after recovery or after a
+ * manual attempt had already taken ownership. Fewer invocations mean less
+ * Active CPU and fewer cold-start opportunities per page load; this harness
+ * does not measure Vercel-attributed CPU directly.
  */
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
