@@ -1,4 +1,10 @@
-import type { RatePayload, RollResponse, OverrideRollPayload, SnoozeSessionResponse, Thread } from '../types'
+import type {
+  RatePayload,
+  RateResponsePayload,
+  RollResponse,
+  OverrideRollPayload,
+  SnoozeSessionResponse,
+} from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 export interface RollApi {
@@ -12,7 +18,7 @@ export interface RollApi {
 }
 
 export interface ProtectedRollMutationApi {
-  rate: (data: RatePayload) => Promise<Thread>
+  rate: (data: RatePayload) => Promise<RateResponsePayload>
   snooze: () => Promise<SnoozeSessionResponse>
   skip: () => Promise<RollResponse>
   bootstrap: () => Promise<RollBootstrapResponse>
@@ -26,7 +32,7 @@ export interface RollBootstrapApi {
 export type SessionApi = ReturnType<typeof import('./api-sessions').createSessionApi>
 
 export interface CacheEffectsApi {
-  applyRatedThreadCache: (client: import('@tanstack/react-query').QueryClient, thread: Thread) => Promise<void>
+  applyRatedThreadCache: (client: import('@tanstack/react-query').QueryClient, thread: RateResponsePayload) => Promise<void>
   invalidateCurrentSessionAfterSnooze: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
   invalidateAfterSessionModeUpdate: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
 }

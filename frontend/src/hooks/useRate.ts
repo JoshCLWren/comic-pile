@@ -4,7 +4,7 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
-import type { RatePayload, Thread } from '../types'
+import type { RatePayload, RateResponsePayload } from '../types'
 import {
   fetchAndPublishRollBootstrap,
   isAmbiguousNetworkFailure,
@@ -23,7 +23,7 @@ import {
  * traffic and depend on the zero-delay reconciliation window still being open.
  */
 export interface RateMutationOutcome {
-  rate: Thread | undefined
+  rate: RateResponsePayload | undefined
   bootstrap: RollBootstrapResponse | null
 }
 
