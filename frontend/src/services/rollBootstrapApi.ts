@@ -1,4 +1,6 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
+import type { RollV2BootstrapResponse } from '../types/rollV2'
+import { adaptRollV2Bootstrap } from './adaptRollV2Bootstrap'
 import type {
   RollBootstrapResponse,
   RollPrerequisiteSwitchRequest,
@@ -13,11 +15,13 @@ import type {
  */
 export function createRollBootstrapApi(client: HttpClient) {
   return {
-    get: (timezone?: string) => {
-      if (!timezone) return client.get<RollBootstrapResponse>('/v1/roll/bootstrap')
-      return client.get<RollBootstrapResponse>('/v1/roll/bootstrap', {
-        params: { timezone },
-      })
+    get: async (timezone?: string): Promise<RollBootstrapResponse> => {
+      const response = timezone
+        ? await client.get<RollV2BootstrapResponse>('/v2/roll/bootstrap', {
+            params: { timezone },
+          })
+        : await client.get<RollV2BootstrapResponse>('/v2/roll/bootstrap')
+      return adaptRollV2Bootstrap(response)
     },
     switchPrerequisite: (request: RollPrerequisiteSwitchRequest) =>
       client.post<RollPrerequisiteSwitchResponse>('/v1/roll/switch-prerequisite', request),
