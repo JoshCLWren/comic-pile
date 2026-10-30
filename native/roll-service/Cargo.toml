@@ -7,6 +7,8 @@ publish = false
 
 [dependencies]
 axum = "0.8"
+chrono = "0.4"
+chrono-tz = "0.10"
 deadpool-postgres = "0.14"
 jsonwebtoken = { version = "9", default-features = false }
 native-tls = "0.2"
@@ -19,6 +21,7 @@ tokio-postgres = "0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 unicode-casefold = "0.2"
+utoipa = "5"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

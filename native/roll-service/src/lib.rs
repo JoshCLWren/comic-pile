@@ -8,13 +8,14 @@ pub mod reading_constraints;
 pub mod reading_inputs;
 pub mod reading_session;
 mod session_bandwidth;
+pub mod skip;
 
 use axum::{
     extract::{Request, State},
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use config::{Config, ConfigError, JwtSecret};
@@ -154,6 +155,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
+        .route("/api/v1/roll/skip", post(skip::skip_roll))
+        .route("/api/roll/skip", post(skip::skip_roll))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
         .method_not_allowed_fallback(|| async {
             ApiError(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")
