@@ -4,10 +4,16 @@ use axum::{
     extract::Request,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
-use comicpile_roll_service::{config::Config, router as roll_router, AppState};
+use comicpile_roll_service::{
+    config::Config,
+    dismiss_pending,
+    router as roll_router,
+    skip,
+    AppState,
+};
 use std::sync::{Arc, OnceLock};
 use tower::{Service, ServiceBuilder};
 use vercel_runtime::{axum::VercelLayer, Error};
@@ -72,6 +78,16 @@ fn app() -> Router {
         .route("/api/_native_roll/health", get(native_health))
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
+        .route(
+            "/api/v1/roll/dismiss-pending",
+            post(dismiss_pending::dismiss_pending),
+        )
+        .route(
+            "/api/roll/dismiss-pending",
+            post(dismiss_pending::dismiss_pending),
+        )
+        .route("/api/v1/roll/skip", post(skip::skip_roll))
+        .route("/api/roll/skip", post(skip::skip_roll))
 }
 
 #[tokio::main]
