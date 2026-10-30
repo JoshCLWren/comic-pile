@@ -2,7 +2,9 @@
 use crate::{
     auth::AuthenticatedUser,
     db,
-    reading_inputs::{self, CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
+    reading_inputs::{
+        self, CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility,
+    },
     ApiError, AppState,
 };
 use axum::http::StatusCode;
@@ -274,54 +276,92 @@ async fn load_transaction(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
 ) -> Result<OptionInputs, ApiError> {
-    let row = tx.query_one(SNAPSHOT_SQL, &[&user.id()])
-        .await.map_err(db::query_error)?;
+    let row = tx
+        .query_one(SNAPSHOT_SQL, &[&user.id()])
+        .await
+        .map_err(db::query_error)?;
     let encoded: String = row.try_get(0).map_err(db::query_error)?;
     let snapshot: SnapshotRows = serde_json::from_str(&encoded).map_err(|error| {
         tracing::error!(%error, "Invalid Option E snapshot response");
-        ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid reading snapshot")
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid reading snapshot",
+        )
     })?;
     assemble_snapshot(snapshot)
 }
 
 fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
     let core = CoreReadingInputs {
-        threads: snapshot.threads.iter().map(|t| ReadingThread {
-            id: t.id, status: t.status.clone(), title: t.title.clone(),
-        }).collect(),
-        issues: snapshot.issues.iter().map(|i| ReadingIssue {
-            id: i.id, thread_id: i.thread_id, position: i.position,
-            status: i.status.clone(), issue_number: i.issue_number.clone(),
-        }).collect(),
-        stored: snapshot.threads.iter().map(|t| StoredThreadEligibility {
-            thread_id: t.id, next_issue_id: t.next_unread_issue_id,
-            is_blocked: t.is_blocked, queue_position: t.queue_position,
-        }).collect(),
+        threads: snapshot
+            .threads
+            .iter()
+            .map(|t| ReadingThread {
+                id: t.id,
+                status: t.status.clone(),
+                title: t.title.clone(),
+            })
+            .collect(),
+        issues: snapshot
+            .issues
+            .iter()
+            .map(|i| ReadingIssue {
+                id: i.id,
+                thread_id: i.thread_id,
+                position: i.position,
+                status: i.status.clone(),
+                issue_number: i.issue_number.clone(),
+            })
+            .collect(),
+        stored: snapshot
+            .threads
+            .iter()
+            .map(|t| StoredThreadEligibility {
+                thread_id: t.id,
+                next_issue_id: t.next_unread_issue_id,
+                is_blocked: t.is_blocked,
+                queue_position: t.queue_position,
+            })
+            .collect(),
     };
     let owned: HashSet<_> = core.issues.iter().map(|i| i.id).collect();
     let mut unresolved = Vec::new();
     let mut lists = BTreeMap::new();
     for row in snapshot.lists {
-        lists.insert(row.id, ReadingList {
-            list_id: row.id, mode: row.mode, entries: vec![],
-            overlap_decisions: vec![],
-        });
+        lists.insert(
+            row.id,
+            ReadingList {
+                list_id: row.id,
+                mode: row.mode,
+                entries: vec![],
+                overlap_decisions: vec![],
+            },
+        );
     }
     for row in snapshot.entries {
         if !owned.contains(&row.issue_id) {
-            unresolved.push(UnresolvedReference { kind: "list_entry", object_id: row.id });
+            unresolved.push(UnresolvedReference {
+                kind: "list_entry",
+                object_id: row.id,
+            });
         }
         let list = lists.get_mut(&row.list_id).ok_or(ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR, "Invalid reading snapshot",
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid reading snapshot",
         ))?;
         list.entries.push(ReadingEntry {
-            issue_id: row.issue_id, gate: row.gate, skipped: row.skipped,
+            issue_id: row.issue_id,
+            gate: row.gate,
+            skipped: row.skipped,
         });
     }
     let mut prerequisites = vec![];
     for row in snapshot.prerequisites {
         if !owned.contains(&row.source_issue_id) || !owned.contains(&row.target_issue_id) {
-            unresolved.push(UnresolvedReference { kind: "prerequisite", object_id: row.id });
+            unresolved.push(UnresolvedReference {
+                kind: "prerequisite",
+                object_id: row.id,
+            });
         }
         prerequisites.push(Prerequisite {
             prerequisite_id: row.id,
@@ -329,7 +369,10 @@ fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
             target_issue_id: row.target_issue_id,
             origin: "reader".into(),
             provenance: vec![
-                format!("classification:{}", row.classification.as_deref().unwrap_or("None")),
+                format!(
+                    "classification:{}",
+                    row.classification.as_deref().unwrap_or("None")
+                ),
                 row.provenance.unwrap_or_default(),
             ],
         });
@@ -343,7 +386,8 @@ fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
             }
         }
         evidence.push((
-            row.thread_id, normalize_volume(&row.provider, &row.external_id),
+            row.thread_id,
+            normalize_volume(&row.provider, &row.external_id),
         ));
     }
     let thread_volumes = candidates
@@ -356,10 +400,12 @@ fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
             volume_key(&row.waiting_provider, &row.waiting_external_id),
         ) {
             let list = lists.get_mut(&row.list_id).ok_or(ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR, "Invalid reading snapshot",
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid reading snapshot",
             ))?;
             list.overlap_decisions.push(OverlapDecision {
-                continuing_volume_id: c, waiting_volume_id: w,
+                continuing_volume_id: c,
+                waiting_volume_id: w,
             });
         }
     }
@@ -367,14 +413,20 @@ fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
     let mut excluded_threads = HashSet::new();
     let mut excluded_volumes = HashSet::new();
     for row in snapshot.exclusions {
-        if let Some(id) = row.issue_id { excluded_issues.insert(id); }
-        if let Some(id) = row.thread_id { excluded_threads.insert(id); }
+        if let Some(id) = row.issue_id {
+            excluded_issues.insert(id);
+        }
+        if let Some(id) = row.thread_id {
+            excluded_threads.insert(id);
+        }
         if let (Some(p), Some(v)) = (row.provider, row.external_volume_id) {
             excluded_volumes.insert(normalize_volume(&p, &v));
         }
     }
     for (id, key) in evidence {
-        if excluded_volumes.contains(&key) { excluded_threads.insert(id); }
+        if excluded_volumes.contains(&key) {
+            excluded_threads.insert(id);
+        }
     }
     for row in snapshot.issue_volumes {
         if excluded_volumes.contains(&normalize_volume(&row.provider, &row.external_id)) {
@@ -382,14 +434,19 @@ fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
         }
     }
     let excluded_issue_ids = core
-        .issues.iter()
+        .issues
+        .iter()
         .filter(|i| excluded_issues.contains(&i.id) || excluded_threads.contains(&i.thread_id))
         .map(|i| i.id)
         .collect();
     unresolved.sort();
     Ok(OptionInputs {
-        core, thread_volumes, lists: lists.into_values().collect(),
-        prerequisites, excluded_issue_ids, unresolved,
+        core,
+        thread_volumes,
+        lists: lists.into_values().collect(),
+        prerequisites,
+        excluded_issue_ids,
+        unresolved,
     })
 }
 struct Pending(Option<Object>);
@@ -418,7 +475,8 @@ pub async fn load_option_diagnostics(
             .isolation_level(IsolationLevel::RepeatableRead)
             .read_only(true)
             .start()
-            .await.map_err(db::query_error)?;
+            .await
+            .map_err(db::query_error)?;
         let inputs = load_transaction(&tx, user).await?;
         tx.rollback().await.map_err(db::query_error)?;
         Ok::<_, ApiError>(inputs)
@@ -579,7 +637,8 @@ mod tests {
                 {"issue_id": 10, "provider": "comicvine", "external_id": "7"},
                 {"issue_id": 20, "provider": "comicvine", "external_id": "8"}
             ]
-        })).unwrap();
+        }))
+        .unwrap();
         let mut inputs = assemble_snapshot(snapshot).unwrap();
         assert!(inputs.require_resolved().is_ok());
         assert_eq!(inputs.lists.len(), 2);
@@ -596,7 +655,8 @@ mod tests {
         inputs.prerequisites[0].target_issue_id = 999;
         // An unresolved foreign reference cannot be made live by a snapshot.
         inputs.unresolved.push(UnresolvedReference {
-            kind: "prerequisite", object_id: 90,
+            kind: "prerequisite",
+            object_id: 90,
         });
         assert!(inputs.require_resolved().is_err());
     }
@@ -607,10 +667,10 @@ mod tests {
             "threads": [], "issues": [], "lists": [], "entries": [],
             "prerequisites": [], "evidence": [], "overlaps": [],
             "exclusions": [], "issue_volumes": []
-        })).unwrap();
+        }))
+        .unwrap();
         let inputs = assemble_snapshot(snapshot).unwrap();
         assert!(inputs.require_resolved().is_ok());
         assert!(inputs.core.issues.is_empty());
     }
-
 }
