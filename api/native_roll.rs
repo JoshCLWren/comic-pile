@@ -35,6 +35,10 @@ fn normalize_bootstrap_request(request: &mut Request) {
 }
 
 async fn native_bootstrap(mut request: Request) -> Response {
+    // Log only the fixed ingress path, status and elapsed time. Never log query,
+    // authorization headers, response JSON or other user data.
+    let ingress_path = request.uri().path().to_owned();
+    let started = std::time::Instant::now();
     normalize_bootstrap_request(&mut request);
     // Cold-start the native Roll pool only for authenticated bootstrap traffic.
     // Keep health independent of DB secrets and failures.
@@ -64,6 +68,12 @@ async fn native_bootstrap(mut request: Request) -> Response {
     result
         .headers_mut()
         .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    eprintln!(
+        "native_roll bootstrap route={} runtime=rust status={} elapsed_ms={}",
+        ingress_path,
+        result.status().as_u16(),
+        started.elapsed().as_millis()
+    );
     result
 }
 
