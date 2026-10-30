@@ -108,16 +108,24 @@ fn volume_key(provider: &str, external_id: &str) -> Option<String> {
 // Collect independent, owner-scoped datasets without multiplying list entries by
 // issues or prerequisites. This is one PostgreSQL statement, not nine sequential
 // network round trips. Eligibility remains exclusively in the Rust Option E evaluator.
+//
+// MEMORY CONSIDERATION: This query aggregates all owner-scoped data into a single JSONB response.
+// For users with thousands of threads/issues/lists/entries, this could produce large responses
+// (tens of MB). The risk of memory pressure on both PostgreSQL (JSONB aggregation) and the
+// Rust client (deserialization) is acknowledged. This optimization targets the observed 17-call
+// bootstrap total; remaining session and presentation reads are still separate.
+//
+// TODO: Consider defensive pagination or payload limiting if memory usage becomes problematic
+// in production. Monitor payload sizes and consider adding a LIMIT clause for large datasets.
 const SNAPSHOT_SQL: &str = r#"
 WITH
 owned_threads AS MATERIALIZED (
     SELECT id, status, title, next_unread_issue_id, is_blocked,
-           queue_position, catalog_series_id
+           queue_position
     FROM threads WHERE user_id = $1
 ),
 owned_issues AS MATERIALIZED (
-    SELECT i.id, i.thread_id, i.position, i.status, i.issue_number,
-           i.catalog_issue_id
+    SELECT i.id, i.thread_id, i.position, i.status, i.issue_number
     FROM issues i JOIN owned_threads t ON t.id = i.thread_id
 ),
 owned_lists AS (
