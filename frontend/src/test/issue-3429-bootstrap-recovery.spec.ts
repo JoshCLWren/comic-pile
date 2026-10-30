@@ -23,7 +23,7 @@
 import { expect, type Page } from '@playwright/test'
 import { test } from './auth-fixtures'
 
-const ROLL_BOOTSTRAP_PATH = '/api/v1/roll/bootstrap'
+const ROLL_BOOTSTRAP_PATH = '/api/v2/roll/bootstrap'
 const SESSION_LIST_PATH = '/api/v1/sessions/'
 
 const UNAVAILABLE_BODY = JSON.stringify({ detail: 'service_unavailable' })
