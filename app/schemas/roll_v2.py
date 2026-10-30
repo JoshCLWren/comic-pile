@@ -13,7 +13,8 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.schemas.roll import RollRecoveryInfo
+from app.schemas.roll import RollRecoveryInfo, ThreadExclusionReason
+from app.schemas.tags import TagResponse
 from app.schemas.session import ActiveThreadInfo, SessionBandwidthState, SessionMode
 from app.schemas.thread import ThreadResponse
 
@@ -42,12 +43,13 @@ class ProgressScope(StrEnum):
 
 
 class RollableThread(BaseModel):
-    """Thread information for rollable items."""
+    """Thread information for rollable items and Roll summaries."""
 
     id: int
     title: str
     format: str
     last_activity_at: str | None = None
+    tags: list[TagResponse] = Field(default_factory=list)
 
 
 class RollableIssue(BaseModel):
@@ -150,6 +152,14 @@ class RollV2BootstrapResponse(BaseModel):
     stale_thread: RollableThread | None
     timezone: str | None = None
 
+    # v1 Roll visibility intentionally survives the v2 candidate projection.
+    total_threads: int
+    available_threads: int
+    excluded_count: int
+    excluded_threads: list[ThreadExclusionReason] = Field(default_factory=list)
+    inactive_count: int
+    inactive_threads: list[ThreadExclusionReason] = Field(default_factory=list)
+
     @model_validator(mode="before")
     @classmethod
     def bound_summary_lists(cls, data: object) -> object:
@@ -157,7 +167,7 @@ class RollV2BootstrapResponse(BaseModel):
         if not isinstance(data, dict):
             return data
 
-        for field_name in ("snoozed_threads", "skipped_threads", "blocked_threads"):
+        for field_name in ("snoozed_threads", "skipped_threads", "blocked_threads", "excluded_threads", "inactive_threads"):
             values = data.get(field_name)
             if isinstance(values, list):
                 data[field_name] = values[: cls.summary_limit]
