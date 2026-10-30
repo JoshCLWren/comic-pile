@@ -290,6 +290,20 @@ def project_boundary_explanation(
         else:
             key = ("prereq", waiting_key)
         if key in seen_target_ids:
+            # Preserve every gate's reason and edit link by merging the
+            # duplicate into the already-kept blocker instead of dropping it.
+            for existing in deduped_blockers:
+                existing_waiting = tuple(issue.issue_id for issue in existing.waiting_on)
+                existing_key = (
+                    ("list", existing.editor.list_id, existing_waiting)
+                    if existing.origin == "reading_list"
+                    and existing.editor is not None
+                    and existing.editor.list_id is not None
+                    else ("prereq", existing_waiting)
+                )
+                if existing_key == key:
+                    existing.reason = f"{existing.reason}; {b.reason}"
+                    break
             continue
         seen_target_ids.add(key)
         deduped_blockers.append(b)
