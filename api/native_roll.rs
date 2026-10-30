@@ -4,7 +4,7 @@ use axum::{
     extract::Request,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use comicpile_roll_service::{config::Config, router as roll_router, AppState};
@@ -67,11 +67,42 @@ async fn native_bootstrap(mut request: Request) -> Response {
     result
 }
 
+async fn native_roll_post(mut request: Request) -> Response {
+    // Normalize both exact v1 path and legacy alias to roll_service internal path.
+    let target_path = "/api/v1/roll/".to_owned();
+    *request.uri_mut() = target_path.parse().expect("valid roll URI");
+    let mut result = match ROLL_STATE.get_or_init(|| {
+        Config::from_vercel_env()
+            .and_then(AppState::new)
+            .map(Arc::new)
+            .map_err(|err| err.0)
+    }) {
+        Ok(state) => {
+            let mut router = roll_router(state.clone());
+            match router.call(request).await {
+                Ok(response) => response,
+                Err(never) => match never {},
+            }
+        }
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"detail": "Native Roll unavailable"})),
+        )
+            .into_response(),
+    };
+    result
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    result
+}
+
 fn app() -> Router {
     Router::new()
         .route("/api/_native_roll/health", get(native_health))
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
+        .route("/api/v1/roll/", post(native_roll_post))
+        .route("/api/roll/", post(native_roll_post))
 }
 
 #[tokio::main]
@@ -128,6 +159,48 @@ mod tests {
             response.status() == StatusCode::SERVICE_UNAVAILABLE
                 || response.status() == StatusCode::UNAUTHORIZED,
             "isolated path must reach native startup or bearer authentication"
+        );
+    }
+
+    #[tokio::test]
+    async fn v1_roll_post_reaches_rust_and_returns_runtime_marker() {
+        let mut router = app();
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/v1/roll/")
+            .header("authorization", "Bearer synthetic-test-token")
+            .body(Body::empty())
+            .expect("valid roll POST");
+        let response = router.call(request).await.expect("roll POST response");
+        assert!(
+            response.status() == StatusCode::OK || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "POST /api/v1/roll/ must reach Rust (ok if DB up, unavailable if cold)"
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime"),
+            Some(&axum::http::HeaderValue::from_static("rust")),
+            "Rust runtime marker required"
+        );
+    }
+
+    #[tokio::test]
+    async fn roll_alias_post_reaches_rust_at_same_contract() {
+        let mut router = app();
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/roll/")
+            .header("authorization", "Bearer synthetic-test-token")
+            .body(Body::empty())
+            .expect("valid alias POST");
+        let response = router.call(request).await.expect("alias POST response");
+        assert!(
+            response.status() == StatusCode::OK || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "POST /api/roll/ alias must reach Rust"
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime"),
+            Some(&axum::http::HeaderValue::from_static("rust")),
+            "Alias must carry rust runtime marker"
         );
     }
 

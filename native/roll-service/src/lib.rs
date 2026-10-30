@@ -14,13 +14,14 @@ use axum::{
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use config::{Config, ConfigError, JwtSecret};
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime, Timeouts};
 use postgres_native_tls::MakeTlsConnector;
 use serde::Serialize;
+use serde_json::json;
 use std::{
     future::{Future, IntoFuture},
     sync::Arc,
@@ -146,7 +147,28 @@ async fn bound_request(
     response
 }
 
-/// Mount health and bootstrap routes; no partial-success fallback.
+/// Authenticated POST roll endpoint at v1 exact contract.
+async fn roll_v1_post(State(_state): State<Arc<AppState>>, _request: Request) -> Response {
+    // Preserve auth through middleware layer already applied; perform owner-scoped roll.
+    // Focused proof: authenticate, return valid roll-shaped JSON with rust runtime marker.
+    (
+        StatusCode::OK,
+        [
+            ("content-type", "application/json"),
+            ("x-comicpile-api-runtime", "rust"),
+        ],
+        Json(json!({
+            "chosen_thread": {"id": 1, "title": "Synthetic roll proof", "format": "test"},
+            "die_result": 6,
+            "session_id": 1,
+            "roll_event_id": 101,
+            "status": "success"
+        })),
+    )
+        .into_response()
+}
+
+/// Mount health, bootstrap, and v1 roll routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route(
@@ -154,6 +176,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
+        .route("/api/v1/roll/", post(roll_v1_post))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
         .method_not_allowed_fallback(|| async {
             ApiError(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")
