@@ -73,11 +73,9 @@ export default function Modal({
 
     const modal = modalRef.current
 
-    const focusableElements = modal.querySelectorAll<HTMLElement>(
+    const getFocusableElements = () => Array.from(modal.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    )
-    const firstElement = focusableElements[0]
-    const lastElement = focusableElements[focusableElements.length - 1]
+    )).filter(element => element.tabIndex >= 0 && !element.matches(':disabled, [hidden], [aria-hidden="true"]'))
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isTopmostModal(modalId)) return
@@ -87,7 +85,17 @@ export default function Modal({
         return
       }
 
-      if (e.key === 'Tab' && focusableElements.length > 0) {
+      if (e.key === 'Tab') {
+        // Async content can replace or enable controls after the dialog opens.
+        // Recompute the boundaries so keyboard focus stays in the live dialog.
+        const focusableElements = getFocusableElements()
+        const firstElement = focusableElements[0]
+        const lastElement = focusableElements[focusableElements.length - 1]
+        if (!firstElement) {
+          e.preventDefault()
+          modal.focus()
+          return
+        }
         if (e.shiftKey) {
           if (document.activeElement === firstElement) {
             e.preventDefault()
@@ -103,7 +111,8 @@ export default function Modal({
     document.addEventListener('keydown', handleKeyDown)
 
     // Focus the first input/textarea/select element, or fall back to the first focusable element
-    const focusableArray = Array.from(focusableElements)
+    const focusableArray = getFocusableElements()
+    const firstElement = focusableArray[0]
     const firstInput = focusableArray.find(
       el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
     )
