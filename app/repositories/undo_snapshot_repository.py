@@ -570,6 +570,9 @@ class UndoSnapshotRepository:
             selected_thread_id=target_event.selected_thread_id if target_event else None,
             die=target_event.die_after if target_event else None,
             die_after=restored_die,
+            rating=target_event.rating if target_event else None,
+            issue_id=target_event.issue_id if target_event else None,
+            issue_number=target_event.issue_number if target_event else None,
             context={"automatic_die_after": snapshot.session_state["automatic_die"]}
             if snapshot.session_state and "automatic_die" in snapshot.session_state else None,
         )
