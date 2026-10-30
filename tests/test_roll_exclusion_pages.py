@@ -11,13 +11,12 @@ relies on: the bootstrap count and the drill-down total are the same number
 for the same category scope, and every counted row is reachable by paging.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ReadingSession
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
