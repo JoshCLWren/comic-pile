@@ -1222,6 +1222,23 @@ async def roll_v2_bootstrap(
         else None
     )
 
+    # Keep the existing Roll screen's direct visible tags and out-of-pool
+    # transparency in the canonical v2 contract, not a frontend fallback.
+    visible_rows = [
+        *(item.thread for item in rollable),
+        *snoozed_threads,
+        *skipped_threads,
+        *blocked_threads,
+    ]
+    if stale_thread is not None:
+        visible_rows.append(stale_thread)
+    tags_by_thread = await TagInheritanceService(db).get_threads_direct_tags(
+        user_id, [row.id for row in visible_rows]
+    )
+    for row in visible_rows:
+        row.tags = tags_by_thread.get(row.id, [])
+
+    library = summary.library
     response = RollV2BootstrapResponse(
         current_die=die_size,
         manual_die=manual_die,
@@ -1233,6 +1250,12 @@ async def roll_v2_bootstrap(
         bandwidth=bandwidth_state,
         rollable=rollable,  # New v2 field replacing roll_pool
         last_read=last_read,  # New nullable session-scoped field
+        total_threads=library.total_threads,
+        available_threads=len(library.available_ids),
+        excluded_count=len(library.excluded),
+        excluded_threads=list(library.excluded.values()),
+        inactive_count=len(library.inactive),
+        inactive_threads=library.inactive,
         snoozed_threads=snoozed_threads,
         snoozed_count=len(snoozed_threads),
         skipped_thread_ids=skipped_ids,
