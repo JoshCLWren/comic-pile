@@ -175,11 +175,12 @@ async fn bound_request(
     response
 }
 
-/// Extract Bearer token from the Authorization header.
+// Extract Bearer token from the Authorization header.
+
 fn extract_jwt_token(headers: &axum::http::HeaderMap) -> Result<String, ApiError> {
     let auth_header = headers
         .get("authorization")
-        .ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "Missing authorization header"))?;
+        .ok_or(ApiError(StatusCode::UNAUTHORIZED, "Missing authorization header"))?;
 
     let auth_str = auth_header
         .to_str()
@@ -210,15 +211,14 @@ async fn roll_v1_post(State(state): State<Arc<AppState>>, request: Request) -> R
     let _roll_request: RollRequest = serde_json::from_slice(&bytes)
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "Invalid request body"))?;
 
-    // Get database connection from pool
+    // Get database connection from pool (placeholder - connection acquired for auth verification)
     let _client = state.pool.get().await
-        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database connection failed"));
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database connection failed"))?;
 
     // For now, return a success response with the runtime marker.
     // The full roll logic will be implemented in follow-up PRs.
     // This placeholder returns the runtime marker so that routing and
     // infrastructure can be verified without owner data mutation.
-
     Ok((
         StatusCode::OK,
         [
