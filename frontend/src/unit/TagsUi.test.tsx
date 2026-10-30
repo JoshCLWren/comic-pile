@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
@@ -1825,5 +1825,98 @@ describe('TagEditor inherited tags (issue #3426)', () => {
     expect(
       screen.queryByText(/Inherited tags are read-only here/i),
     ).toBeNull()
+  })
+})
+
+
+describe('editor handoff click-through (issue #4332)', () => {
+  it('opens the thread tag editor from the issue editor via a real router and keeps focus inside', async () => {
+    const user = userEvent.setup()
+    mockedTagsApi.effectiveForIssue.mockResolvedValue(inheritedEffective())
+    mockedTagsApi.list.mockResolvedValue({ tags: [mustReadTag()] })
+    mockedTagsApi.effectiveForThread.mockResolvedValue(emptyEffective())
+    mockedTagsApi.effectiveForIssue.mockResolvedValue(inheritedEffective())
+
+    render(
+      <MemoryRouter initialEntries={['/issue/11']}>
+        <Routes>
+          <Route
+            path="/issue/11"
+            element={
+              <TagEditor
+                targetType="Issue"
+                targetId={11}
+                targetLabel="#11"
+                isOpen
+                onClose={vi.fn()}
+              />
+            }
+          />
+          <Route path="/thread/5" element={<div aria-label="Thread page"><button>Thread action</button></div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const marker = await screen.findByTitle('Inherited from The Ultimates')
+    await user.click(marker)
+    const sources = screen.getByRole('list', { name: /sources for must read/i })
+    const link = within(sources).getByRole('link', {
+      name: /open thread: the ultimates/i,
+    })
+    await user.click(link)
+
+    await waitFor(() => expect(screen.getByLabelText('Thread page')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Thread action' })).toBeInTheDocument()
+  })
+
+  it('opens the reading plan tag editor from the issue editor via a real router and keeps focus inside', async () => {
+    const user = userEvent.setup()
+    const planEffective = {
+      target_type: 'Issue' as const,
+      target_id: 11,
+      direct_tags: [],
+      effective_tags: [
+        {
+          tag: mustReadTag(),
+          direct: false,
+          sources: [
+            { target_type: 'ContinuityPlan' as const, target_id: 9, display_name: 'Mignolaverse' },
+          ],
+        },
+      ],
+    }
+    mockedTagsApi.effectiveForIssue.mockResolvedValue(planEffective)
+    mockedTagsApi.list.mockResolvedValue({ tags: [mustReadTag()] })
+
+    render(
+      <MemoryRouter initialEntries={['/issue/11']}>
+        <Routes>
+          <Route
+            path="/issue/11"
+            element={
+              <TagEditor
+                targetType="Issue"
+                targetId={11}
+                targetLabel="#11"
+                isOpen
+                onClose={vi.fn()}
+              />
+            }
+          />
+          <Route path="/continuity-plans/9" element={<div aria-label="Reading plan page"><button>Plan action</button></div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const marker = await screen.findByTitle('Inherited from Mignolaverse')
+    await user.click(marker)
+    const sources = screen.getByRole('list', { name: /sources for must read/i })
+    const link = within(sources).getByRole('link', {
+      name: /open reading plan: mignolaverse/i,
+    })
+    await user.click(link)
+
+    await waitFor(() => expect(screen.getByLabelText('Reading plan page')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Plan action' })).toBeInTheDocument()
   })
 })
