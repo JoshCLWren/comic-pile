@@ -8,11 +8,7 @@ use axum::{
     Json, Router,
 };
 use comicpile_roll_service::{
-    config::Config,
-    dismiss_pending,
-    router as roll_router,
-    skip,
-    AppState,
+    config::Config, dismiss_pending, router as roll_router, skip, AppState,
 };
 use std::sync::{Arc, OnceLock};
 use tower::{Service, ServiceBuilder};
