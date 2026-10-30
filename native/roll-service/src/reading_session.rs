@@ -86,16 +86,15 @@ fn corrupt() -> ApiError {
 fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {
     serde_json::from_str(row.try_get::<_, &str>(0).map_err(session_error)?).map_err(|_| corrupt())
 }
-const RESOLVE: &str = "SELECT row_to_json(s)::text FROM sessions s LEFT JOIN LATERAL
- (SELECT max(timestamp) AS last_event FROM events WHERE session_id = s.id) e ON true
+// A session is a fixed window from started_at, not an inactivity timeout.
+// Pending selections and recent events must never keep an expired session alive.
+const RESOLVE: &str = "SELECT row_to_json(s)::text FROM sessions s
  WHERE s.user_id = $1 AND s.ended_at IS NULL
- AND greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL
- THEN s.pending_thread_updated_at END, e.last_event) >= to_timestamp($2) - make_interval(hours => $3)
- ORDER BY (s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL) DESC,
- greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL
- THEN s.pending_thread_updated_at END, e.last_event) DESC, s.started_at DESC, s.id DESC LIMIT 1";
+   AND s.started_at > to_timestamp($2) - make_interval(hours => $3)
+   AND s.started_at <= to_timestamp($2)
+ ORDER BY s.started_at DESC, s.id DESC LIMIT 1";
 
-/// Read-only authority lookup; takes a caller-owned transaction and injected UTC clock.
+/// Read-only fixed-expiry lookup; takes a caller-owned transaction and injected UTC clock.
 pub async fn resolve_current_session(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
