@@ -32,6 +32,10 @@ pub struct AppState {
     pub pool: Pool,
     pub jwt_secret: JwtSecret,
     pub request_timeout: Duration,
+    pub rating_min: f64,
+    pub rating_max: f64,
+    pub rating_threshold: f64,
+    pub start_die: i32,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -59,6 +63,10 @@ impl AppState {
             pool,
             jwt_secret: config.jwt_secret,
             request_timeout: config.request_timeout,
+            rating_min: config.rating_min,
+            rating_max: config.rating_max,
+            rating_threshold: config.rating_threshold,
+            start_die: config.start_die,
         })
     }
 }

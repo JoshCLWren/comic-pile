@@ -83,8 +83,7 @@ fn corrupt() -> ApiError {
         "Invalid reading session state",
     )
 }
-fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {
-    serde_json::from_str(row.try_get::<_, &str>(0).map_err(session_error)?).map_err(|_| corrupt())
+pub(crate) fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {    serde_json::from_str(row.try_get::<_, &str>(0).map_err(session_error)?).map_err(|_| corrupt())
 }
 const RESOLVE: &str = "SELECT row_to_json(s)::text FROM sessions s LEFT JOIN LATERAL
  (SELECT max(timestamp) AS last_event FROM events WHERE session_id = s.id) e ON true
@@ -119,7 +118,7 @@ pub fn automatic_die_after(die_after: i32, context: &Value) -> i32 {
         .map(|v| v as i32)
         .unwrap_or(die_after)
 }
-async fn dice(tx: &Transaction<'_>, session: &ReadingSession) -> Result<(i32, i32), ApiError> {
+pub(crate) async fn dice(tx: &Transaction<'_>, session: &ReadingSession) -> Result<(i32, i32), ApiError> {
     let row = tx.query_opt("SELECT die_after, context::text FROM events WHERE session_id = $1
       AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1",
       &[&session.id]).await.map_err(session_error)?;
@@ -389,7 +388,7 @@ async fn validate_pending(
 }
 
 // PostgreSQL JSON timestamps omit trailing zeroes; checkpoints use Python isoformat.
-fn python_timestamp(value: &mut Value) {
+pub(crate) fn python_timestamp(value: &mut Value) {
     if let Some(s) = value.as_str() {
         if let Some((head, offset)) = s.rsplit_once('+') {
             let normalized = if let Some((seconds, fraction)) = head.split_once('.') {

@@ -38,6 +38,12 @@ pub struct Config {
     pub pool_size: usize,
     pub pool_timeout: Duration,
     pub request_timeout: Duration,
+    /// Python `RatingSettings.rating_min` / `rating_max` / `rating_threshold`.
+    pub rating_min: f64,
+    pub rating_max: f64,
+    pub rating_threshold: f64,
+    /// Python `SessionSettings.start_die`, used only when no die is available.
+    pub start_die: i32,
 }
 /// Adapt SQLAlchemy/Neon URLs for tokio-postgres. The production DATABASE_URL
 /// can contain libpq/driver options that tokio-postgres does not recognize.
@@ -141,6 +147,32 @@ impl Config {
             }
             Ok(value)
         }
+        // Mirror Python RatingSettings/SessionSettings value validation so a
+        // misconfigured deployment fails closed instead of rating differently.
+        fn rating(
+            get: &impl Fn(&str) -> Option<String>,
+            name: &'static str,
+            default: f64,
+            min: f64,
+        ) -> Result<f64, ConfigError> {
+            let value = get(name)
+                .map(|value| value.trim().parse::<f64>())
+                .transpose()
+                .map_err(|_| ConfigError("invalid rating setting"))?
+                .unwrap_or(default);
+            if !value.is_finite() || !(min..=5.0).contains(&value) {
+                return Err(ConfigError("rating setting outside allowed range"));
+            }
+            Ok(value)
+        }
+        let start_die = get("START_DIE")
+            .map(|value| value.trim().parse::<i32>())
+            .transpose()
+            .map_err(|_| ConfigError("invalid START_DIE"))?
+            .unwrap_or(6);
+        if !(4..=20).contains(&start_die) {
+            return Err(ConfigError("START_DIE outside allowed range"));
+        }
         Ok(Self {
             environment,
             bind,
@@ -160,6 +192,10 @@ impl Config {
                 10000,
                 60000,
             )?),
+            rating_min: rating(&get, "RATING_MIN", 0.5, 0.0)?,
+            rating_max: rating(&get, "RATING_MAX", 5.0, 0.5)?,
+            rating_threshold: rating(&get, "RATING_THRESHOLD", 4.0, 0.5)?,
+            start_die,
         })
     }
 }
@@ -240,5 +276,44 @@ mod vercel_tests {
             _ => None,
         });
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn python_rating_and_start_die_settings_are_validated() {
+        let config = Config::from_vercel_lookup(|key| match key {
+            "DATABASE_URL" => Some("postgresql://reader:password@localhost/app?sslmode=require".into()),
+            "SECRET_KEY" => Some("synthetic".into()),
+            "RATING_MIN" => Some("1.0".into()),
+            "RATING_MAX" => Some("4.5".into()),
+            "RATING_THRESHOLD" => Some("3.5".into()),
+            "START_DIE" => Some("10".into()),
+            _ => None,
+        })
+        .expect("valid Python rating settings");
+        assert_eq!(config.rating_min, 1.0);
+        assert_eq!(config.rating_max, 4.5);
+        assert_eq!(config.rating_threshold, 3.5);
+        assert_eq!(config.start_die, 10);
+
+        for (name, value) in [
+            ("RATING_MIN", "-0.1"),
+            ("RATING_MIN", "5.1"),
+            ("RATING_MAX", "0.4"),
+            ("RATING_THRESHOLD", "0.4"),
+            ("RATING_THRESHOLD", "5.1"),
+            ("START_DIE", "3"),
+            ("START_DIE", "21"),
+            ("RATING_MIN", "nan"),
+        ] {
+            let result = Config::from_vercel_lookup(|key| match key {
+                "DATABASE_URL" => {
+                    Some("postgresql://reader:password@localhost/app?sslmode=require".into())
+                }
+                "SECRET_KEY" => Some("synthetic".into()),
+                key if key == name => Some(value.into()),
+                _ => None,
+            });
+            assert!(result.is_err(), "{name}={value} must be rejected");
+        }
     }
 }
