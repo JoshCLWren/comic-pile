@@ -26,7 +26,7 @@ def test_python_exposes_no_roll_bootstrap_get_handlers() -> None:
         for route in app.routes
         if isinstance(route, APIRoute)
         and route.path in BOOTSTRAP_PATHS
-        and "GET" in route.methods
+        and "GET" in (route.methods or set())
     ]
     assert matches == []
     paths = app.openapi()["paths"]
