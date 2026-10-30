@@ -23,7 +23,10 @@ fn internal() -> ApiError {
     ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
 }
 fn unavailable() -> ApiError {
-    ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database temporarily unavailable")
+    ApiError(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Database temporarily unavailable",
+    )
 }
 fn bad_request(msg: &'static str) -> ApiError {
     ApiError(StatusCode::BAD_REQUEST, msg)
@@ -137,11 +140,14 @@ pub async fn snooze_thread(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
 ) -> Result<Json<SessionResponse>, ApiError> {
-    let active = reading_session::bootstrap(&state, user.clone(), None, SessionPolicy::default()).await?;
+    let active =
+        reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
     let session = active.session;
     let current_die = active.current_die;
     let Some(pending_thread_id) = session.pending_thread_id else {
-        return Err(bad_request("No pending thread to snooze. Please roll the dice first."));
+        return Err(bad_request(
+            "No pending thread to snooze. Please roll the dice first.",
+        ));
     };
 
     let mut pending = Pending(Some(db::checkout(&state).await?));
@@ -185,9 +191,12 @@ async fn mutate(
         .map_err(db::query_error)?;
 
     // Lock user row
-    tx.query_one("SELECT id FROM users WHERE id = $1 FOR KEY SHARE", &[&user.id()])
-        .await
-        .map_err(db::query_error)?;
+    tx.query_one(
+        "SELECT id FROM users WHERE id = $1 FOR KEY SHARE",
+        &[&user.id()],
+    )
+    .await
+    .map_err(db::query_error)?;
 
     // Load fresh session JSON
     let session_row: String = tx
@@ -201,7 +210,10 @@ async fn mutate(
     let session_json: Value = serde_json::from_str(&session_row).map_err(|_| internal())?;
 
     // Determine new die
-    let manual_die: Option<i32> = session_json.get("manual_die").and_then(|v| v.as_i64()).map(|v| v as i32);
+    let manual_die: Option<i32> = session_json
+        .get("manual_die")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
     let new_die = if let Some(d) = manual_die.filter(|d| *d != 0) {
         d
     } else {
@@ -226,7 +238,10 @@ async fn mutate(
     } else {
         // Thread missing
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(ApiError(StatusCode::BAD_REQUEST, "Pending thread not found"));
+        return Err(ApiError(
+            StatusCode::BAD_REQUEST,
+            "Pending thread not found",
+        ));
     };
 
     // Find last roll result
@@ -243,7 +258,11 @@ async fn mutate(
     let snoozed_ids: Vec<i32> = session_json
         .get("snoozed_thread_ids")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_i64().map(|n| n as i32)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_i64().map(|n| n as i32))
+                .collect()
+        })
         .unwrap_or_default();
     let mut updated_snoozed = snoozed_ids;
     if !updated_snoozed.contains(&pending_thread_id) {
@@ -251,9 +270,17 @@ async fn mutate(
     }
 
     // Determine bandwidth correction (stub: no change)
-    let active_bandwidth_str = session_json.get("active_bandwidth").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let bandwidth_confidence = session_json.get("bandwidth_confidence").and_then(|v| v.as_f64());
-    let predicted_bandwidth_str = session_json.get("predicted_bandwidth").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let active_bandwidth_str = session_json
+        .get("active_bandwidth")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let bandwidth_confidence = session_json
+        .get("bandwidth_confidence")
+        .and_then(|v| v.as_f64());
+    let predicted_bandwidth_str = session_json
+        .get("predicted_bandwidth")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
 
     let correction = SnoozeCorrectionInfo {
         bandwidth_changed: false,
@@ -293,7 +320,10 @@ async fn mutate(
 
     // Snapshot count
     let snapshot_count: i32 = tx
-        .query_one("SELECT count(*) FROM snapshots WHERE session_id = $1", &[&session.id])
+        .query_one(
+            "SELECT count(*) FROM snapshots WHERE session_id = $1",
+            &[&session.id],
+        )
         .await
         .map_err(db::query_error)?
         .get(0);
@@ -311,7 +341,10 @@ async fn mutate(
             .await
             .map_err(db::query_error)?;
         rows.iter()
-            .map(|r| SnoozedThreadInfo { id: r.get(0), title: r.get(1) })
+            .map(|r| SnoozedThreadInfo {
+                id: r.get(0),
+                title: r.get(1),
+            })
             .collect()
     };
 
@@ -319,7 +352,11 @@ async fn mutate(
     let skipped_ids: Vec<i32> = session_json
         .get("skipped_thread_ids")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_i64().map(|n| n as i32)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_i64().map(|n| n as i32))
+                .collect()
+        })
         .unwrap_or_default();
     let skipped_threads = if skipped_ids.is_empty() {
         vec![]
@@ -331,7 +368,12 @@ async fn mutate(
             )
             .await
             .map_err(db::query_error)?;
-        rows.iter().map(|r| SnoozedThreadInfo { id: r.get(0), title: r.get(1) }).collect()
+        rows.iter()
+            .map(|r| SnoozedThreadInfo {
+                id: r.get(0),
+                title: r.get(1),
+            })
+            .collect()
     };
 
     // Refresh session row
@@ -347,15 +389,43 @@ async fn mutate(
 
     tx.commit().await.map_err(db::query_error)?;
 
-    let started_at = refreshed.get("started_at").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let ended_at = refreshed.get("ended_at").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let start_die = refreshed.get("start_die").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-    let manual_die_opt = refreshed.get("manual_die").and_then(|v| v.as_i64()).map(|v| v as i32);
-    let timezone = refreshed.get("timezone").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let reading_bandwidth = refreshed.get("reading_bandwidth").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let reading_intent = refreshed.get("reading_intent").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let reading_mode_source = refreshed.get("reading_mode_source").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let reading_mode_suggested = refreshed.get("reading_mode_suggested").and_then(|v| v.as_bool()).unwrap_or(false);
+    let started_at = refreshed
+        .get("started_at")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let ended_at = refreshed
+        .get("ended_at")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let start_die = refreshed
+        .get("start_die")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let manual_die_opt = refreshed
+        .get("manual_die")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+    let timezone = refreshed
+        .get("timezone")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let reading_bandwidth = refreshed
+        .get("reading_bandwidth")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let reading_intent = refreshed
+        .get("reading_intent")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let reading_mode_source = refreshed
+        .get("reading_mode_source")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let reading_mode_suggested = refreshed
+        .get("reading_mode_suggested")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     let active_thread = Some(ActiveThreadInfo {
         id: Some(pending_thread_id),
@@ -370,15 +440,33 @@ async fn mutate(
         predicted_bandwidth: predicted_bandwidth_str,
         active_bandwidth: active_bandwidth_str,
         confidence: bandwidth_confidence,
-        source: refreshed.get("bandwidth_source").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        mode_version: refreshed.get("bandwidth_version").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        source: refreshed
+            .get("bandwidth_source")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        mode_version: refreshed
+            .get("bandwidth_version")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
     };
     let intent_state = SessionIntentState {
-        predicted_intent: refreshed.get("predicted_intent").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        active_intent: refreshed.get("active_intent").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        predicted_intent: refreshed
+            .get("predicted_intent")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        active_intent: refreshed
+            .get("active_intent")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
         confidence: refreshed.get("intent_confidence").and_then(|v| v.as_f64()),
-        source: refreshed.get("intent_source").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        mode_version: refreshed.get("intent_version").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        source: refreshed
+            .get("intent_source")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        mode_version: refreshed
+            .get("intent_version")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
     };
 
     Ok(SessionResponse {
@@ -420,7 +508,10 @@ async fn build_ladder_path(tx: &Transaction<'_>, session_id: i32) -> Result<Stri
         .map_err(db::query_error)?;
     // Need start_die
     let start_die_row = tx
-        .query_one("SELECT start_die FROM sessions WHERE id = $1", &[&session_id])
+        .query_one(
+            "SELECT start_die FROM sessions WHERE id = $1",
+            &[&session_id],
+        )
         .await
         .map_err(db::query_error)?;
     let start_die: i32 = start_die_row.get(0);
@@ -431,7 +522,11 @@ async fn build_ladder_path(tx: &Transaction<'_>, session_id: i32) -> Result<Stri
             path.push(d);
         }
     }
-    Ok(path.iter().map(|d| d.to_string()).collect::<Vec<_>>().join(" → "))
+    Ok(path
+        .iter()
+        .map(|d| d.to_string())
+        .collect::<Vec<_>>()
+        .join(" → "))
 }
 
 fn normalize_format(value: &str) -> String {
