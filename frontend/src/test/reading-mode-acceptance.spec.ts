@@ -45,7 +45,8 @@ async function getSessionMode(page: Page): Promise<{
   active_intent: string | null
 }> {
   const token = await getAuthToken(page)
-  const response = await page.request.get('/api/roll/bootstrap', {
+  // The unversioned bootstrap was retired by #4397. Read the Rust v2 contract.
+  const response = await page.request.get('/api/v2/roll/bootstrap', {
     headers: { Authorization: `Bearer ${token}` },
   })
   expect(response.ok()).toBeTruthy()

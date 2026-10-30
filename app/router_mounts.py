@@ -104,7 +104,7 @@ def select_mounts_for_path(path: str, mounts: Sequence[RouterMount]) -> tuple[Ro
 
 
 def _register_roll(app: FastAPI) -> None:
-    """Register roll, roll v1, and roll v2 routers."""
+    """Register the Python Roll mutation routers, never the native v2 bootstrap."""
     from app.api import roll
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
@@ -112,8 +112,6 @@ def _register_roll(app: FastAPI) -> None:
     # New client resources (e.g. the Roll exclusion drill-down for #3330) are
     # versioned-only: no bare /api/* twin.
     app.include_router(roll.v1_router, prefix="/api/v1/roll", tags=["roll"])
-    # Roll v2: versioned-only, no unversioned alias per #2716
-    app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
 
 
 def _register_admin(app: FastAPI) -> None:

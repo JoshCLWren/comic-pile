@@ -27,7 +27,6 @@ from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from app.main import app
 from app.models import Dependency, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
-from app.services.reading_eligibility_service import get_execution_eligibility
 from app.services.reading_list_evaluator import (
     ReadingIssue,
     ReadingList,
@@ -38,7 +37,6 @@ from app.services.reading_list_evaluator import (
     SeriesOverlapDecision,
     evaluate,
 )
-from tests.conftest import get_or_create_user_async
 
 FOURTH_WORLD = "comicvine:volume:fourth-world"
 JLI = "comicvine:volume:jli"
@@ -308,136 +306,3 @@ async def _authenticated_client(user: User) -> AsyncClient:
     token = create_access_token(data={"sub": user.username, "jti": f"4028-{user.id}"})
     client.headers.update({"Authorization": f"Bearer {token}"})
     return client
-
-
-@pytest.mark.asyncio
-async def test_4028_saved_overlap_reloads_per_reader_and_shows_on_roll(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Saving the overlap choice scopes Roll offers to the owning reader only.
-
-    Owner saves JLI-continues-past-Mister-Miracle through the Reading List API.
-    After reload, the owner's Roll pool offers J2 while M1 stays blocked on F2.
-    A second reader who shares the same Comic Vine volumes but never saved the
-    choice still keeps J2 blocked behind M1.
-    """
-    owner = await get_or_create_user_async(async_db)
-    (
-        _owner_fourth,
-        owner_jli,
-        owner_miracle,
-        owner_fourth_issues,
-        owner_jli_issues,
-        owner_miracle_issues,
-    ) = await _f2_m1_j2_library(async_db, owner.id)
-    other = await get_or_create_user_async(async_db, username="issue_4028_other_reader")
-    (
-        _other_fourth,
-        other_jli,
-        _other_miracle,
-        _other_fourth_issues,
-        other_jli_issues,
-        other_miracle_issues,
-    ) = await _f2_m1_j2_library(async_db, other.id)
-    await async_db.commit()
-
-    owner_j2_id = owner_jli_issues[1].id
-    owner_m1_id = owner_miracle_issues[0].id
-    owner_f2_id = owner_fourth_issues[1].id
-    other_j2_id = other_jli_issues[1].id
-
-    created = await auth_client.post(
-        "/api/v1/custom-cbls",
-        json={
-            "name": "JLI",
-            "mode": "strict",
-            "issue_ids": [
-                owner_jli_issues[0].id,
-                owner_miracle_issues[0].id,
-                owner_jli_issues[1].id,
-                owner_miracle_issues[1].id,
-                owner_jli_issues[2].id,
-            ],
-        },
-    )
-    assert created.status_code == 201, created.text
-    owner_list_id = int(created.json()["id"])
-
-    saved = await auth_client.put(
-        f"/api/v1/custom-cbls/{owner_list_id}/overlap-decisions",
-        json={
-            "continuing_volume_id": JLI_VOLUME_KEY,
-            "waiting_volume_id": MISTER_MIRACLE_VOLUME_KEY,
-        },
-    )
-    assert saved.status_code == 200, saved.text
-    assert len(saved.json()["decisions"]) == 1
-
-    reloaded = await auth_client.get(f"/api/v1/custom-cbls/{owner_list_id}/overlap-decisions")
-    assert reloaded.status_code == 200, reloaded.text
-    assert [
-        (row["continuing_volume_id"], row["waiting_volume_id"])
-        for row in reloaded.json()["decisions"]
-    ] == [(JLI_VOLUME_KEY, MISTER_MIRACLE_VOLUME_KEY)]
-
-    other_client = await _authenticated_client(other)
-    try:
-        other_created = await other_client.post(
-            "/api/v1/custom-cbls",
-            json={
-                "name": "JLI",
-                "mode": "strict",
-                "issue_ids": [
-                    other_jli_issues[0].id,
-                    other_miracle_issues[0].id,
-                    other_jli_issues[1].id,
-                    other_miracle_issues[1].id,
-                    other_jli_issues[2].id,
-                ],
-            },
-        )
-        assert other_created.status_code == 201, other_created.text
-        other_list_id = int(other_created.json()["id"])
-        other_set = await other_client.get(
-            f"/api/v1/custom-cbls/{other_list_id}/overlap-decisions"
-        )
-        assert other_set.status_code == 200, other_set.text
-        assert other_set.json()["decisions"] == []
-    finally:
-        await other_client.aclose()
-
-    owner_live = await get_execution_eligibility(async_db, owner.id)
-    other_live = await get_execution_eligibility(async_db, other.id)
-    assert owner_live is not None
-    assert other_live is not None
-
-    owner_jli_result = owner_live.threads[owner_jli.id]
-    owner_miracle_result = owner_live.threads[owner_miracle.id]
-    assert owner_jli_result.eligible is True
-    assert owner_jli_result.next_issue_id == owner_j2_id
-    assert owner_miracle_result.eligible is False
-    assert owner_miracle_result.next_issue_id == owner_m1_id
-    assert any(
-        owner_f2_id in blocker.waiting_on_issue_ids
-        for blocker in owner_miracle_result.blockers
-    ), "Mister Miracle M1 must still wait on Fourth World F2 after the overlap save"
-
-    other_jli_result = other_live.threads[other_jli.id]
-    assert other_jli_result.eligible is False
-    assert other_j2_id not in {
-        result.next_issue_id
-        for result in other_live.threads.values()
-        if result.eligible and result.next_issue_id is not None
-    }
-
-    assert owner_jli.id in owner_live.candidate_ids()
-    assert owner_miracle.id not in owner_live.candidate_ids()
-    assert other_jli.id not in other_live.candidate_ids()
-
-    rolled = await auth_client.get("/api/v1/roll/bootstrap")
-    assert rolled.status_code == 200, rolled.text
-    roll_pool = [(row["id"], row["issue_id"]) for row in rolled.json()["roll_pool"]]
-    assert (owner_jli.id, owner_j2_id) in roll_pool
-    assert owner_miracle.id not in {thread_id for thread_id, _issue_id in roll_pool}

@@ -675,3 +675,21 @@ class TestReadingGraphPreviewSnapshotImmutability:
         assert state.lists[0].overlap_decisions == (MISTER_MIRACLE_WAITS,)
         # New has different decisions
         assert new_state.lists[-1].overlap_decisions == (SeriesOverlapDecision(JLI, "other"),)
+
+@pytest.mark.parametrize("requirements", [(F2,), (F2, F1)])
+def test_graph_duplicate_origins_preserve_distinct_requirements(
+    requirements: tuple[int, ...],
+) -> None:
+    """Preview copy describes each canonical Issue once, including partial overlaps."""
+    from app.services.reading_list_evaluator import ThreadEligibility
+
+    context = _make_graph_context(fixture_state())
+    blockers = (
+        Blocker("hold", LIST_ID, (F2,)),
+        Blocker("prerequisite", None, requirements, prerequisite_id=1, origin="reader"),
+    )
+    references = _issue_references(context, {3: ThreadEligibility(3, M1, blockers)})
+    target = next(reference for reference in references if reference.issue_id == M1)
+    assert [i for blocker in target.blockers for i in blocker.waiting_on_issue_ids] == (
+        [F2] if requirements == (F2,) else [F2, F1]
+    )

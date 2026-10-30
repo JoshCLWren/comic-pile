@@ -39,6 +39,8 @@ import { useRollViewport } from './useRollViewport'
 import { useRatingView } from './useRatingView'
 import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
+import { LastReadStrip } from './components/LastReadStrip'
+import { useRollLastRead } from '../../hooks/useRollLastRead'
 import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterUndo, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
@@ -75,6 +77,15 @@ export default function RollPage() {
     error: bootstrapError,
     isRetrying: isBootstrapRetrying,
   } = useRollBootstrap()
+
+  // The committed rate response seeds this cache, so the idle strip renders
+  // the saved rating and updated stats without a second GET (#2720).
+  const lastRead = useRollLastRead(bootstrap?.last_read ?? null)
+  const lastReadKey = lastRead
+    ? `${lastRead.lastRead.issue_id ?? 'none'}:${lastRead.lastRead.read_at ?? ''}`
+    : null
+  const [dismissedLastReadKey, setDismissedLastReadKey] = useState<string | null>(null)
+  const showLastRead = lastRead != null && lastReadKey !== dismissedLastReadKey
 
   const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false)
   const [isQuizOpen, setIsQuizOpen] = useState(false)
@@ -538,15 +549,27 @@ export default function RollPage() {
               <RatingView data={ratingViewData} />
             )}
 
-            {!state.isRatingView && (
-              <PostRateCopyPrompt
-                reference={rating.lastRated}
-                onDismiss={rating.clearLastRated}
-                onUndo={handleUndoRating}
-                undoPending={undo.isPending}
-                canUndo={canUndoLastRating}
-              />
-            )}
+            {!state.isRatingView &&
+              (lastRead ? (
+                showLastRead ? (
+                  <LastReadStrip
+                    view={lastRead}
+                    onDismiss={() => setDismissedLastReadKey(lastReadKey)}
+                    onRollAgain={actions.handleRoll}
+                    onUndo={handleUndoRating}
+                    undoPending={undo.isPending}
+                    canUndo={canUndoLastRating}
+                  />
+                ) : null
+              ) : (
+                <PostRateCopyPrompt
+                  reference={rating.lastRated}
+                  onDismiss={rating.clearLastRated}
+                  onUndo={handleUndoRating}
+                  undoPending={undo.isPending}
+                  canUndo={canUndoLastRating}
+                />
+              ))}
 
             {!state.isRatingView && (
               <TasteDiscoveryCard

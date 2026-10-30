@@ -1,5 +1,5 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
-import type { RatePayload, Thread } from '../types'
+import type { RatePayload, RateResponsePayload } from '../types'
 
 /**
  * Build the rating service bound to an HTTP client.
@@ -10,7 +10,7 @@ import type { RatePayload, Thread } from '../types'
 export function createRateApi(client: HttpClient) {
   return {
     rate: (data: RatePayload) =>
-      client.post<Thread, RatePayload>('/v1/rate/', data),
+      client.post<RateResponsePayload, RatePayload>('/v1/rate/', data),
   }
 }
 

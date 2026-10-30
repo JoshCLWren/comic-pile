@@ -16,7 +16,8 @@ import {
   invalidateSessionRecoveryCache,
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
-import type { Thread } from '../types'
+import type { RateResponsePayload, Thread } from '../types'
+import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { CustomCBL } from '../services/api-custom-cbl'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 
@@ -229,6 +230,56 @@ describe('targeted cache effects', () => {
     // recompute instead of retaining the pre-rating blocker.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
     expect(resetQueries).not.toHaveBeenCalled()
+  })
+
+  it('seeds the session last-read cache and the bootstrap projection from a committed rate', async () => {
+    const { client } = createSpiedClient()
+    const rated: RateResponsePayload = {
+      ...thread,
+      last_rating: 4,
+      roll_reconciliation: {
+        last_read: {
+          issue_id: 31,
+          issue_number: '5',
+          read_at: '2026-08-03T18:30:00Z',
+          thread_id: thread.id,
+          thread_title: thread.title,
+        },
+      },
+    }
+    client.setQueryData<Partial<RollBootstrapResponse>>(queryKeys.roll.bootstrap(), {
+      session_id: 12,
+      last_read: null,
+    })
+
+    await applyRatedThreadCache(client, rated)
+
+    expect(client.getQueryData(queryKeys.roll.lastRead())).toEqual(rated)
+    expect(
+      client.getQueryData<Partial<RollBootstrapResponse>>(queryKeys.roll.bootstrap())?.last_read,
+    ).toEqual(rated.roll_reconciliation?.last_read)
+  })
+
+  it('does not clobber a newer last-read record when a rate lacks reconciliation data', async () => {
+    const { client } = createSpiedClient()
+    const existing: RateResponsePayload = {
+      ...thread,
+      last_rating: 3,
+      roll_reconciliation: {
+        last_read: {
+          issue_id: 41,
+          issue_number: '9',
+          read_at: '2026-08-04T10:00:00Z',
+          thread_id: thread.id,
+          thread_title: thread.title,
+        },
+      },
+    }
+    client.setQueryData(queryKeys.roll.lastRead(), existing)
+
+    await applyRatedThreadCache(client, thread)
+
+    expect(client.getQueryData(queryKeys.roll.lastRead())).toEqual(existing)
   })
 
   it('updates a thread and narrowly refreshes queue, current session, and roll state', async () => {

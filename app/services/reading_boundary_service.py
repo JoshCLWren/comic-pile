@@ -26,6 +26,7 @@ from app.schemas.reading_boundary import (
     ReadingBoundaryNext,
 )
 from app.services.errors import NotFoundError
+from app.services.reading_blocker_projection import unique_blocker_requirements
 from app.services.reading_eligibility_service import (
     ReadingEligibilitySnapshot,
     get_execution_eligibility,
@@ -134,9 +135,7 @@ def _blocker_editor(
         label=_prerequisite_origin_label(blocker.origin),
         prerequisite_id=blocker.prerequisite_id,
         issue_id=source_id,
-        thread_id=(
-            snapshot.issue_thread_ids.get(source_id) if source_id is not None else None
-        ),
+        thread_id=(snapshot.issue_thread_ids.get(source_id) if source_id is not None else None),
     )
 
 
@@ -272,7 +271,10 @@ def project_boundary_explanation(
         else None
     )
     blockers = (
-        [_project_blocker(snapshot, labels, blocker) for blocker in state.blockers]
+        [
+            _project_blocker(snapshot, labels, blocker)
+            for blocker in unique_blocker_requirements(state.blockers)
+        ]
         if state is not None
         else []
     )
