@@ -42,7 +42,12 @@ async def fetch_snooze_backoff_rows(
         select(Thread.id, Thread.last_activity_at, Event.type, Event.timestamp, Event.id)
         .outerjoin(
             Event,
-            (Event.thread_id == Thread.id) & Event.type.in_(("snooze", "unsnooze")),
+            (Event.thread_id == Thread.id)
+            & Event.type.in_(("snooze", "unsnooze"))
+            # Native Roll rerolls record a snooze for history/die projection,
+            # but their temporary exclusion is browser-cookie state. They must
+            # not create durable cross-session backoff or block Read now.
+            & Event.context.op("->>")("dice_command_key").is_(None),
         )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
