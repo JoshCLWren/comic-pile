@@ -23,10 +23,14 @@ use tokio_postgres::{Client, IsolationLevel, Transaction};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DiceCommand {
-    ManualSelect { die: i32 },
+    ManualSelect {
+        die: i32,
+    }
     Reset,
     /// The caller must prove this is the pending, Option E-readable offer.
-    Reroll { thread_id: i32 },
+    Reroll {
+        thread_id: i32,
+    }
     /// The caller must complete issue progress in the same transaction.
     RollRating {
         thread_id: i32,
@@ -50,7 +54,9 @@ fn invalid(detail: &'static str) -> ApiError {
 
 fn validate(key: &str, command: &DiceCommand) -> Result<(), ApiError> {
     if !(8..=128).contains(&key.len())
-        || !key.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        || !key
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
     {
         return Err(invalid("Invalid dice idempotency key"));
     }
@@ -230,7 +236,7 @@ pub async fn persist_in_transaction(
         .query_one(
             "INSERT INTO events
                (user_id, type, timestamp, die, die_after, thread_id, issue_id, rating, context)
-             VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, $8::json)
+             VALUES ($1, $2, clock_timestamp(), $3, $4, $5, $6, $7, $8::json)
              RETURNING id",
             &[
                 &user.id(),
@@ -261,7 +267,10 @@ pub async fn execute_standalone(
     idempotency_key: &str,
     command: &DiceCommand,
 ) -> Result<DiceMutation, ApiError> {
-    if !matches!(command, DiceCommand::ManualSelect { .. } | DiceCommand::Reset) {
+    if !matches!(
+        command,
+        DiceCommand::ManualSelect { .. } | DiceCommand::Reset
+    ) {
         return Err(invalid("Composite dice action requires a Roll transaction"));
     }
     let tx = client
@@ -293,7 +302,8 @@ mod tests {
                 issue_id: 100,
                 rating: f64::NAN,
             },
-        ).is_err());
+        )
+        .is_err());
         assert_eq!(
             dice_state::apply_action(12, DiceAction::DirectMarkRead),
             Ok(12)
