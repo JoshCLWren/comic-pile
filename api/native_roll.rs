@@ -88,6 +88,8 @@ fn app() -> Router {
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/v1/rate", post(native_dispatch))
+        .route("/api/rate", post(native_dispatch))
 }
 
 #[tokio::main]

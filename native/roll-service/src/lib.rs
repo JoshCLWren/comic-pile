@@ -164,6 +164,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(rate::post_rate),
         )
         .route(
+            "/api/rate",
+            post(rate::post_rate),
+        )
+        .route(
             "/api/v1/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
