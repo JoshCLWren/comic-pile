@@ -536,8 +536,8 @@ describe('RollPage parent handlers', () => {
   })
 
   it('shows the maximum-die snooze guidance', () => {
-    sessionData.current_die = 100
-    bootstrapData.current_die = 100
+    sessionData.current_die = 20
+    bootstrapData.current_die = 20
     sessionData.snoozed_threads = [{ id: 9, title: 'Snoozed', format: 'Comic' }]
     bootstrapData.snoozed_threads = [{ id: 9, title: 'Snoozed', format: 'Comic' }]
     bootstrapData.snoozed_count = 1
@@ -606,13 +606,13 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'update low rating' }))
     await user.click(screen.getByRole('button', { name: 'update rating' }))
     cleanup()
-    sessionData.current_die = 100
-    bootstrapData.current_die = 100
+    sessionData.current_die = 20
+    bootstrapData.current_die = 20
     sessionData.snoozed_threads = []
     bootstrapData.snoozed_threads = []
     bootstrapData.snoozed_count = 0
     render(<RollPage />)
-    await user.click(screen.getAllByRole('button', { name: 'd100' })[0]!)
+    await user.click(screen.getAllByRole('button', { name: 'd20' })[0]!)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'update low rating' })).toBeInTheDocument())
