@@ -110,10 +110,10 @@ struct OfferMetadata {
     queue_position: i32,
     total_issues: Option<i32>,
     reading_progress: Option<String>,
-    issue_id: Option<i32>,
-    issue_number: Option<String>,
 }
 
+/// Load the retained thread projection only. Issue identity always comes from
+/// the live Option E frontier, never from the denormalized stored pointer.
 async fn offer_metadata(
     conn: &tokio_postgres::Client,
     user: AuthenticatedUser,
@@ -122,9 +122,8 @@ async fn offer_metadata(
     let row = conn
         .query_opt(
             "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
-               t.total_issues,t.reading_progress,t.next_unread_issue_id,i.issue_number
-             FROM threads t LEFT JOIN issues i
-               ON i.id=t.next_unread_issue_id AND i.thread_id=t.id
+               t.total_issues,t.reading_progress
+             FROM threads t
              WHERE t.id=$1 AND t.user_id=$2",
             &[&thread_id, &user.id()],
         )
@@ -139,16 +138,15 @@ async fn offer_metadata(
         queue_position: row.try_get(4).map_err(db::query_error)?,
         total_issues: row.try_get(5).map_err(db::query_error)?,
         reading_progress: row.try_get(6).map_err(db::query_error)?,
-        issue_id: row.try_get(7).map_err(db::query_error)?,
-        issue_number: row.try_get(8).map_err(db::query_error)?,
     })
 }
 
 fn response(
     metadata: OfferMetadata,
+    issue_id: Option<i32>,
+    issue_number: Option<String>,
     die: i32,
     result: i32,
-    snoozed_count: i32,
     snoozed_thread_id: Option<i32>,
 ) -> RollOfferResponse {
     RollOfferResponse {
@@ -160,11 +158,11 @@ fn response(
         die_size: die,
         result,
         offset: 0,
-        snoozed_count,
-        next_issue_id: metadata.issue_id,
-        next_issue_number: metadata.issue_number.clone(),
-        issue_id: metadata.issue_id,
-        issue_number: metadata.issue_number,
+        snoozed_count: i32::from(snoozed_thread_id.is_some()),
+        next_issue_id: issue_id,
+        next_issue_number: issue_number.clone(),
+        issue_id,
+        issue_number,
         total_issues: metadata.total_issues,
         reading_progress: metadata.reading_progress,
         explanation: None,
@@ -173,16 +171,30 @@ fn response(
     }
 }
 
-/// Return a stored offer for an exact key retry, if one committed already.
+struct StoredOffer {
+    thread_id: i32,
+    die: i32,
+    result: i32,
+    issue_id: Option<i32>,
+    issue_number: Option<String>,
+    snoozed_thread_id: Option<i32>,
+}
+
+/// Return a stored offer for an exact key retry, including the thread this
+/// offer snoozed so the browser cookie can reconcile an ambiguous response.
 async fn existing_offer(
     conn: &tokio_postgres::Client,
     user: AuthenticatedUser,
     key: &str,
-) -> Result<Option<(i32, i32, i32)>, ApiError> {
+) -> Result<Option<StoredOffer>, ApiError> {
     let row = conn
         .query_opt(
-            "SELECT selected_thread_id,die,result FROM events
+            "SELECT selected_thread_id,die,result,issue_id,issue_number,
+                    NULLIF(context->>'snoozed_thread_id','')::int
+             FROM events
              WHERE user_id=$1 AND type='roll'
+               AND selected_thread_id IS NOT NULL
+               AND die IS NOT NULL AND result IS NOT NULL
                AND context->>'roll_offer_key'=$2
              ORDER BY timestamp DESC,id DESC LIMIT 1",
             &[&user.id(), &key],
@@ -190,11 +202,14 @@ async fn existing_offer(
         .await
         .map_err(db::query_error)?;
     match row {
-        Some(row) => Ok(Some((
-            row.try_get(0).map_err(db::query_error)?,
-            row.try_get(1).map_err(db::query_error)?,
-            row.try_get(2).map_err(db::query_error)?,
-        ))),
+        Some(row) => Ok(Some(StoredOffer {
+            thread_id: row.try_get(0).map_err(db::query_error)?,
+            die: row.try_get(1).map_err(db::query_error)?,
+            result: row.try_get(2).map_err(db::query_error)?,
+            issue_id: row.try_get(3).map_err(db::query_error)?,
+            issue_number: row.try_get(4).map_err(db::query_error)?,
+            snoozed_thread_id: row.try_get(5).map_err(db::query_error)?,
+        })),
         None => Ok(None),
     }
 }
@@ -205,6 +220,12 @@ pub async fn offer(
     Json(request): Json<RollOfferRequest>,
 ) -> Result<Json<RollOfferResponse>, ApiError> {
     validate_key(&request.idempotency_key)?;
+    if request.snoozed_thread_ids.len() > MAX_COOKIE_SNOOZES {
+        return Err(ApiError(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Too many temporary snoozes",
+        ));
+    }
     let active = reading_session::bootstrap(
         &state,
         user,
@@ -230,7 +251,8 @@ pub async fn offer(
         .start()
         .await
         .map_err(db::query_error)?;
-    // First database statement, identical key to every other same-reader write.
+    // The write transaction's first statement is the per-reader advisory lock;
+    // bootstrap and the read-only snapshot above use their own connections.
     tx.query_one(
         "SELECT pg_advisory_xact_lock($1::bigint)",
         &[&(user.id() as i64)],
@@ -238,13 +260,35 @@ pub async fn offer(
     .await
     .map_err(db::query_error)?;
 
-    if let Some((thread_id, die, result)) =
-        existing_offer(tx.client(), user, &request.idempotency_key).await?
-    {
+    if let Some(stored) = existing_offer(tx.client(), user, &request.idempotency_key).await? {
         tx.rollback().await.map_err(db::query_error)?;
-        let metadata = offer_metadata(&*pending.connection(), user, thread_id).await?;
-        return Ok(Json(response(metadata, die, result, 0, None)));
+        let metadata = offer_metadata(&*pending.connection(), user, stored.thread_id).await?;
+        return Ok(Json(response(
+            metadata,
+            stored.issue_id,
+            stored.issue_number,
+            stored.die,
+            stored.result,
+            stored.snoozed_thread_id,
+        )));
     }
+
+    // Re-read the pending offer under the lock. The bootstrap snapshot above
+    // predates it, so relying on it would let two different-key presses both
+    // roll and overwrite the first offer without snoozing it.
+    let locked = tx
+        .query_opt(
+            "SELECT pending_thread_id FROM sessions
+             WHERE id=$1 AND user_id=$2 FOR UPDATE",
+            &[&active.session.id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or(ApiError(
+            StatusCode::CONFLICT,
+            "Reading session changed; try again",
+        ))?;
+    let previous_offer: Option<i32> = locked.try_get(0).map_err(db::query_error)?;
 
     let mut excluded: HashSet<i32> = active
         .session
@@ -268,7 +312,7 @@ pub async fn offer(
 
     let mut die = dice_state::current_die(&tx, user).await?;
     let mut snoozed_thread_id = None;
-    if let Some(previous) = active.session.pending_thread_id {
+    if let Some(previous) = previous_offer {
         let snooze_key = format!("{}-snooze", request.idempotency_key);
         let mutation = dice_mutation::persist_in_transaction(
             &tx,
@@ -291,8 +335,7 @@ pub async fn offer(
         request
             .snoozed_thread_ids
             .into_iter()
-            .filter(|thread_id| eligible_threads.contains(thread_id))
-            .take(MAX_COOKIE_SNOOZES),
+            .filter(|thread_id| eligible_threads.contains(thread_id)),
     );
 
     let pool = bounded_pool(
@@ -315,7 +358,10 @@ pub async fn offer(
         .iter()
         .find(|issue| issue.id == selected.issue_id)
         .map(|issue| issue.issue_number.clone());
-    let context = json!({"roll_offer_key": request.idempotency_key});
+    let context = json!({
+        "roll_offer_key": request.idempotency_key,
+        "snoozed_thread_id": snoozed_thread_id,
+    });
     tx.query_one(
         "INSERT INTO events
            (type,user_id,session_id,selected_thread_id,die,result,issue_id,
@@ -335,21 +381,39 @@ pub async fn offer(
     )
     .await
     .map_err(db::query_error)?;
-    tx.execute(
-        "UPDATE sessions SET pending_thread_id=$1,pending_thread_updated_at=NOW()
-         WHERE id=$2 AND user_id=$3",
-        &[&selected.thread_id, &active.session.id, &user.id()],
-    )
-    .await
-    .map_err(db::query_error)?;
+    // The legacy rating bridge reads both pending columns; leaving the issue
+    // unset would make the next bootstrap fail its pending validation.
+    let updated = tx
+        .execute(
+            "UPDATE sessions
+             SET pending_thread_id=$1,pending_issue_id=$2,
+                 pending_thread_updated_at=NOW()
+             WHERE id=$3 AND user_id=$4",
+            &[
+                &selected.thread_id,
+                &selected.issue_id,
+                &active.session.id,
+                &user.id(),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if updated != 1 {
+        tx.rollback().await.map_err(db::query_error)?;
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Reading session changed; try again",
+        ));
+    }
     tx.commit().await.map_err(db::query_error)?;
     let metadata = offer_metadata(&*pending.connection(), user, selected.thread_id).await?;
     pending.release();
     Ok(Json(response(
         metadata,
+        Some(selected.issue_id),
+        issue_number,
         die,
         result,
-        excluded.len() as i32,
         snoozed_thread_id,
     )))
 }
@@ -481,8 +545,9 @@ mod tests {
                      (10, 1, 'Saga', 'Comic', 3, 1, 12, '25%', 100);
                  INSERT INTO {schema}.issues VALUES (100, 10, '1');
                  INSERT INTO {schema}.events
-                     (user_id, type, selected_thread_id, die, result, issue_id, context)
-                 VALUES (1, 'roll', 10, 6, 2, 100,
+                     (user_id, type, selected_thread_id, die, result, issue_id,
+                      issue_number, context)
+                 VALUES (1, 'roll', 10, 6, 2, 100, '1',
                          '{{\"roll_offer_key\":\"roll-offer-abc\"}}');"
             ))
             .await
@@ -491,12 +556,16 @@ mod tests {
         let owner = AuthenticatedUser::for_test(1);
         let other = AuthenticatedUser::for_test(2);
 
-        assert_eq!(
-            existing_offer(&client, owner, "roll-offer-abc")
-                .await
-                .unwrap(),
-            Some((10, 6, 2))
-        );
+        let stored = existing_offer(&client, owner, "roll-offer-abc")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.thread_id, 10);
+        assert_eq!(stored.die, 6);
+        assert_eq!(stored.result, 2);
+        assert_eq!(stored.issue_id, Some(100));
+        assert_eq!(stored.issue_number.as_deref(), Some("1"));
+        assert_eq!(stored.snoozed_thread_id, None);
         assert!(existing_offer(&client, other, "roll-offer-abc")
             .await
             .unwrap()
@@ -505,8 +574,6 @@ mod tests {
         let metadata = offer_metadata(&client, owner, 10).await.unwrap();
         assert_eq!(metadata.thread_id, 10);
         assert_eq!(metadata.title, "Saga");
-        assert_eq!(metadata.issue_id, Some(100));
-        assert_eq!(metadata.issue_number.as_deref(), Some("1"));
         assert!(offer_metadata(&client, other, 10).await.is_err());
 
         admin

@@ -751,8 +751,8 @@ pub async fn bootstrap_v2(
     excluded.extend(&durable);
     let eligible: Vec<_> = candidates
         .iter()
-        .filter(|candidate| !excluded.contains(&candidate.thread_id))
         .take(current_die.max(0) as usize)
+        .filter(|candidate| !excluded.contains(&candidate.thread_id))
         .collect();
     let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
 
