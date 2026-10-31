@@ -144,7 +144,8 @@ def upgrade() -> None:
     """)
     op.execute("""
         CREATE TRIGGER trg_assign_event_owner
-        BEFORE INSERT OR UPDATE OF user_id, session_id ON events
+        BEFORE INSERT OR UPDATE OF user_id, session_id, thread_id, issue_id,
+            selected_thread_id, source_roll_event_id ON events
         FOR EACH ROW EXECUTE FUNCTION assign_event_owner()
     """)
 
