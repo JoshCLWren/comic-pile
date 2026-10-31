@@ -60,7 +60,7 @@ async def test_cron_returns_schema_and_delegates_transaction(
     assert isinstance(result, MetadataRepairDrainResponse)
     assert result.claimed == result.completed == 2
     assert response.headers["Cache-Control"] == "no-store"
-    drain.assert_awaited_once_with(db=db)
+    drain.assert_awaited_once_with(db=db, limit=10)
     db.commit.assert_not_awaited()
 
 
