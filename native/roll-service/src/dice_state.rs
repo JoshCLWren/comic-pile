@@ -49,9 +49,10 @@ pub fn apply_action(current: i32, action: DiceAction) -> Result<i32, &'static st
         .ok_or("invalid current die")?;
     match action {
         DiceAction::Reset => Ok(DEFAULT_DIE),
-        DiceAction::ManualSelect(die) => {
-            DICE_LADDER.contains(&die).then_some(die).ok_or("invalid manual die")
-        }
+        DiceAction::ManualSelect(die) => DICE_LADDER
+            .contains(&die)
+            .then_some(die)
+            .ok_or("invalid manual die"),
         DiceAction::DirectMarkRead => Ok(current),
         DiceAction::Reroll => Ok(DICE_LADDER[(position + 1).min(DICE_LADDER.len() - 1)]),
         DiceAction::RollRating(rating) if rating.is_finite() && (0.0..=5.0).contains(&rating) => {
@@ -67,10 +68,7 @@ pub fn apply_action(current: i32, action: DiceAction) -> Result<i32, &'static st
 
 /// Query just the newest effective event belonging to the authenticated user.
 /// No session id, session expiration, snapshot, write, or unbounded replay.
-pub async fn current_die(
-    tx: &Transaction<'_>,
-    user: AuthenticatedUser,
-) -> Result<i32, ApiError> {
+pub async fn current_die(tx: &Transaction<'_>, user: AuthenticatedUser) -> Result<i32, ApiError> {
     let row = tx
         .query_opt(LATEST_DIE_SQL, &[&user.id()])
         .await
@@ -114,7 +112,10 @@ mod tests {
         assert_eq!(apply_action(chosen, DiceAction::RollRating(4.5)), Ok(10));
         assert_eq!(apply_action(chosen, DiceAction::Reroll), Ok(20));
         assert_eq!(apply_action(chosen, DiceAction::DirectMarkRead), Ok(12));
-        assert_eq!(apply_action(6, DiceAction::ManualSelect(30)), Err("invalid manual die"));
+        assert_eq!(
+            apply_action(6, DiceAction::ManualSelect(30)),
+            Err("invalid manual die")
+        );
     }
 
     #[tokio::test]
@@ -127,9 +128,12 @@ mod tests {
         let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
             .await
             .expect("disposable PostgreSQL");
-        tokio::spawn(async move { let _ = connection.await; });
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
         let tx = client.transaction().await.unwrap();
-        tx.batch_execute("
+        tx.batch_execute(
+            "
             CREATE TEMP TABLE events (
                 id integer NOT NULL, user_id integer NOT NULL,
                 type text NOT NULL, die_after integer,
@@ -141,10 +145,12 @@ mod tests {
                 (3, 20, 'reset_dice', 2, '2026-10-30 12:00+00'),
                 (4, 10, 'direct_mark_read', NULL, '2026-10-30 12:00+00'),
                 (5, 10, 'snooze', 12, '2026-10-29 11:00+00');
-        ").await.unwrap();
-        let read = |row: Option<tokio_postgres::Row>| projected_die(
-            row.map(|row| row.get::<_, i32>(0))
-        );
+        ",
+        )
+        .await
+        .unwrap();
+        let read =
+            |row: Option<tokio_postgres::Row>| projected_die(row.map(|row| row.get::<_, i32>(0)));
         assert_eq!(
             read(tx.query_opt(LATEST_DIE_SQL, &[&10_i32]).await.unwrap()),
             12
