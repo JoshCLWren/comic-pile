@@ -225,6 +225,15 @@ async fn existing_offer(
     }
 }
 
+/// Text-first cast: the driver binds `context` as text, so `$8::json` makes
+/// PostgreSQL infer a JSON parameter and reject the String. `::text::json`
+/// keeps the wire type text and performs the cast server-side.
+const OFFER_EVENT_INSERT: &str = "INSERT INTO events
+   (type,user_id,session_id,selected_thread_id,die,result,issue_id,
+    issue_number,selection_method,context,timestamp)
+ VALUES ('roll',$1,$2,$3,$4,$5,$6,$7,'rust_uniform',$8::text::json,NOW())
+ RETURNING id";
+
 pub async fn offer(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -359,11 +368,7 @@ pub async fn offer(
         "snoozed_thread_id": snoozed_thread_id,
     });
     tx.query_one(
-        "INSERT INTO events
-           (type,user_id,session_id,selected_thread_id,die,result,issue_id,
-            issue_number,selection_method,context,timestamp)
-         VALUES ('roll',$1,$2,$3,$4,$5,$6,$7,'rust_uniform',$8::json,NOW())
-         RETURNING id",
+        OFFER_EVENT_INSERT,
         &[
             &user.id(),
             &active.session.id,
@@ -592,6 +597,83 @@ mod tests {
         assert_eq!(metadata.thread_id, 10);
         assert_eq!(metadata.title, "Saga");
         assert!(offer_metadata(&client, other, 10).await.is_err());
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn offer_event_insert_binds_text_json_context() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("offer_insert_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     type text NOT NULL, user_id integer, session_id integer,
+                     selected_thread_id integer, die integer, result integer,
+                     issue_id integer, issue_number text, selection_method text,
+                     context json, timestamp timestamptz DEFAULT NOW()
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.sessions VALUES (1, 1);
+                 INSERT INTO {schema}.threads VALUES (10, 1);
+                 INSERT INTO {schema}.issues VALUES (100, 10);"
+            ))
+            .await
+            .unwrap();
+        let client = test_client(&url, &schema).await;
+        let context = json!({
+            "roll_offer_key": "roll-offer-0123456789",
+            "snoozed_thread_id": null,
+        })
+        .to_string();
+
+        // This is the production binding: a Rust String for a text parameter
+        // cast server-side to JSON. `$8::json` makes the driver infer JSON and
+        // rejects the String, which is the 500 this regression pins.
+        let row = client
+            .query_one(
+                OFFER_EVENT_INSERT,
+                &[
+                    &1i32,
+                    &1i32,
+                    &10i32,
+                    &6i32,
+                    &1i32,
+                    &100i32,
+                    &Some("1".to_string()),
+                    &context,
+                ],
+            )
+            .await
+            .unwrap();
+        assert!(row.get::<_, i32>(0) > 0);
 
         admin
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
