@@ -1131,6 +1131,7 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
     delete_event = Event(
         type="delete",
         timestamp=datetime.now(UTC),
+        user_id=user_id,
         thread_id=None,
     )
     db.add(delete_event)
