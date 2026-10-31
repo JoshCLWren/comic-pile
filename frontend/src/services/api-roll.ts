@@ -21,20 +21,12 @@ const PENDING_MANUAL_DIE_KEY = 'comicpile:roll:pending-manual-die'
 function readPendingManualDie(): PendingManualDie | null {
   try {
     const raw = globalThis.sessionStorage?.getItem(PENDING_MANUAL_DIE_KEY)
-    if (!raw) return null
-    const value: unknown = JSON.parse(raw)
-    if (
-      typeof value === 'object' &&
-      value !== null &&
-      'die' in value &&
-      'key' in value &&
-      typeof value.die === 'number' &&
-      [2, 4, 6, 8, 10, 12, 20].includes(value.die) &&
-      typeof value.key === 'string' &&
-      /^roll-[0-9a-f]{32}$/.test(value.key)
-    ) {
-      return { die: value.die, key: value.key }
-    }
+    // Parse the complete storage record, not individual untrusted fields.
+    const match = raw?.match(/^(2|4|6|8|10|12|20):(roll-[0-9a-f]{32})$/)
+    if (!match) return null
+    const die = Number(match[1])
+    const key = match[2]
+    if (key) return { die, key }
   } catch {
     // Private browsing and storage restrictions should not disable Roll.
   }
@@ -43,7 +35,7 @@ function readPendingManualDie(): PendingManualDie | null {
 
 function writePendingManualDie(attempt: PendingManualDie): void {
   try {
-    globalThis.sessionStorage?.setItem(PENDING_MANUAL_DIE_KEY, JSON.stringify(attempt))
+    globalThis.sessionStorage?.setItem(PENDING_MANUAL_DIE_KEY, `${attempt.die}:${attempt.key}`)
   } catch {
     // Retain in-memory retry safety when browser storage is unavailable.
   }
