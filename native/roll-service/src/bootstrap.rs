@@ -732,9 +732,6 @@ pub async fn bootstrap_v2(
     .await?;
     let validated = option_inputs::load_option_inputs(&state, user).await?;
     let session = &active.session;
-    let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
-    let snoozed = session.snoozed_thread_ids.clone().unwrap_or_default();
-    let mut excluded: HashSet<i32> = skipped.iter().chain(snoozed.iter()).copied().collect();
     let candidates = validated.eligible_frontiers().map_err(|_| {
         ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -749,15 +746,19 @@ pub async fn bootstrap_v2(
     } else {
         json!(session.manual_die)
     };
+    // Identical ordering and top-die-before-exclusions semantics as the offer.
+    // Bootstrap has no temporary (cookie) exclusions, so these are the exact
+    // Option E faces the next offer draws from. Legacy session state is
+    // deliberately not consulted here; it is display-only below.
+    let eligible = crate::roll_pool::in_play_frontiers(&candidates, current_die);
+    let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
+
+    let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
+    let snoozed = session.snoozed_thread_ids.clone().unwrap_or_default();
+    let mut legacy_excluded: HashSet<i32> = skipped.iter().chain(snoozed.iter()).copied().collect();
     let candidate_thread_ids: Vec<i32> = candidates.iter().map(|c| c.thread_id).collect();
     let durable = durable_snoozed(&conn, user, &candidate_thread_ids).await?;
-    excluded.extend(&durable);
-    let eligible: Vec<_> = candidates
-        .iter()
-        .take(current_die.max(0) as usize)
-        .filter(|candidate| !excluded.contains(&candidate.thread_id))
-        .collect();
-    let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
+    legacy_excluded.extend(&durable);
 
     let rows = conn
         .query(CANDIDATES, &[&user.id(), &ids])
@@ -830,7 +831,7 @@ pub async fn bootstrap_v2(
         let stale_flag: Option<bool> = row.try_get(4).map_err(db::query_error)?;
         let info = thread_value(row)?;
         let eligible_for_stale = candidates.iter().any(|candidate| candidate.thread_id == id);
-        if stale_flag.unwrap_or(false) && eligible_for_stale && !excluded.contains(&id) {
+        if stale_flag.unwrap_or(false) && eligible_for_stale && !legacy_excluded.contains(&id) {
             stale.push(info.clone());
         }
         let status: String = row.try_get(5).map_err(db::query_error)?;
@@ -889,7 +890,7 @@ pub async fn bootstrap_v2(
     let roll_recovery = pending_roll_recovery(
         &validated,
         session.pending_thread_id,
-        &excluded,
+        &legacy_excluded,
         &candidates,
     )?;
     let active_thread =
@@ -1271,6 +1272,132 @@ mod cover_source_tests {
         .unwrap();
         assert!(excluded.contains(&10));
         assert!(!excluded.contains(&20));
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod pool_parity_tests {
+    use super::durable_snoozed;
+    use crate::{auth::AuthenticatedUser, reading_constraints::EligibleFrontier};
+    use std::collections::HashSet;
+
+    fn frontier(thread_id: i32) -> EligibleFrontier {
+        EligibleFrontier {
+            thread_id,
+            issue_id: thread_id * 100,
+            queue_position: thread_id,
+        }
+    }
+
+    /// A legacy session can carry skip/snooze arrays and durable snooze
+    /// history while the Option E frontier still contains those threads.
+    /// Bootstrap must display the same top-die faces the offer draws from;
+    /// only temporary cookie/previous-pending exclusions may shrink the offer.
+    #[tokio::test]
+    async fn in_play_pool_ignores_legacy_snoozes_and_matches_the_offer() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("roll_pool_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     last_activity_at timestamptz
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at timestamptz NOT NULL
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     thread_id integer, type text NOT NULL,
+                     timestamp timestamptz NOT NULL
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.threads
+                     SELECT id, 1, NULL FROM generate_series(1, 12) AS id;
+                 INSERT INTO {schema}.sessions
+                     VALUES (1, 1, now() - interval '1 day');
+                 INSERT INTO {schema}.events (thread_id, type, timestamp)
+                     VALUES (2, 'snooze', now());"
+            ))
+            .await
+            .unwrap();
+        let client = {
+            let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+                .await
+                .expect("disposable Postgres");
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            client
+                .batch_execute(&format!("SET search_path TO {schema}, public"))
+                .await
+                .unwrap();
+            client
+        };
+        let owner = AuthenticatedUser::for_test(1);
+        let candidates: Vec<_> = (1..=12).map(frontier).collect();
+        let candidate_ids: Vec<i32> = candidates.iter().map(|item| item.thread_id).collect();
+
+        let durable = durable_snoozed(&client, owner, &candidate_ids)
+            .await
+            .unwrap();
+        assert_eq!(
+            durable,
+            HashSet::from([2]),
+            "the seeded durable snooze must be recognized"
+        );
+
+        // The pre-fix display path: session snoozes {3,4}, skipped {5}, and the
+        // durable snooze {2} removed from the top d10 pool.
+        let mut legacy_excluded = HashSet::from([3, 4, 5]);
+        legacy_excluded.extend(&durable);
+        let legacy_visible: Vec<i32> = candidates
+            .iter()
+            .take(10)
+            .filter(|item| !legacy_excluded.contains(&item.thread_id))
+            .map(|item| item.thread_id)
+            .collect();
+        assert_eq!(legacy_visible.len(), 6, "reproduces the reported 6 of d10");
+
+        let bootstrap_pool = crate::roll_pool::in_play_frontiers(&candidates, 10);
+        let offer_pool = crate::roll_pool::offer_frontiers(&candidates, &HashSet::new(), 10);
+        let bootstrap_ids: Vec<i32> = bootstrap_pool.iter().map(|item| item.thread_id).collect();
+        let offer_ids: Vec<i32> = offer_pool.iter().map(|item| item.thread_id).collect();
+        assert_eq!(
+            bootstrap_ids,
+            (1..=10).collect::<Vec<_>>(),
+            "bootstrap must show the full Option E d10 pool"
+        );
+        assert_eq!(
+            bootstrap_ids, offer_ids,
+            "bootstrap rollable IDs must equal the offer's eligible top-die set"
+        );
+        for thread_id in legacy_excluded {
+            assert!(
+                bootstrap_ids.contains(&thread_id),
+                "legacy exclusion {thread_id} must remain selectable"
+            );
+        }
 
         admin
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))

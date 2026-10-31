@@ -11,6 +11,7 @@ use crate::{
     dice_mutation::{self, DiceCommand},
     dice_state, option_inputs,
     reading_session::{self, SessionPolicy},
+    roll_pool::offer_frontiers,
     ApiError, AppState,
 };
 use axum::{extract::State, http::StatusCode, Json};
@@ -86,20 +87,6 @@ fn empty_pool() -> ApiError {
 
 fn unavailable() -> ApiError {
     ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Roll offer unavailable")
-}
-
-/// Take the highest-ranked `die` eligible candidates, then apply temporary
-/// exclusions without backfilling from below that bound.
-fn bounded_pool<T>(
-    candidates: impl IntoIterator<Item = T>,
-    is_excluded: impl Fn(&T) -> bool,
-    die: i32,
-) -> Vec<T> {
-    candidates
-        .into_iter()
-        .take(die.max(0) as usize)
-        .filter(|candidate| !is_excluded(candidate))
-        .collect()
 }
 
 /// Cookie IDs are exclusion hints only. Intersecting with the live Option E
@@ -407,11 +394,7 @@ pub async fn offer(
         &eligible_threads,
     ));
 
-    let pool = bounded_pool(
-        candidates.iter().copied(),
-        |candidate| excluded.contains(&candidate.thread_id),
-        die,
-    );
+    let pool = offer_frontiers(&candidates, &excluded, die);
     if pool.is_empty() {
         tx.rollback().await.map_err(db::query_error)?;
         return Err(empty_pool());
@@ -474,22 +457,32 @@ mod tests {
         assert!(validate_key("roll/offer").is_err());
     }
 
+    fn frontier(thread_id: i32) -> crate::reading_constraints::EligibleFrontier {
+        crate::reading_constraints::EligibleFrontier {
+            thread_id,
+            issue_id: thread_id * 100,
+            queue_position: thread_id,
+        }
+    }
+
+    fn ids(pool: &[crate::reading_constraints::EligibleFrontier]) -> Vec<i32> {
+        pool.iter().map(|candidate| candidate.thread_id).collect()
+    }
+
     #[test]
     fn bounded_pool_never_backfills_a_snoozed_candidate() {
-        let candidates = vec![(1, "first"), (2, "second"), (3, "third"), (4, "fourth")];
+        let candidates: Vec<_> = (1..=4).map(frontier).collect();
         let excluded = HashSet::from([2, 3]);
-        let pool = bounded_pool(candidates, |candidate| excluded.contains(&candidate.0), 2);
+        let pool = offer_frontiers(&candidates, &excluded, 2);
         // #2 is inside the d2 scope; removing it shrinks the pool to one choice
         // instead of pulling #3 up from outside the scope.
-        assert_eq!(pool, vec![(1, "first")]);
+        assert_eq!(ids(&pool), vec![1]);
 
-        let candidates = vec![(1, "first"), (2, "second"), (3, "third"), (4, "fourth")];
         let excluded = HashSet::from([3]);
-        let pool = bounded_pool(candidates, |candidate| excluded.contains(&candidate.0), 4);
-        assert_eq!(pool, vec![(1, "first"), (2, "second"), (4, "fourth")]);
+        let pool = offer_frontiers(&candidates, &excluded, 4);
+        assert_eq!(ids(&pool), vec![1, 2, 4]);
 
-        let empty: Vec<(i32, &str)> = Vec::new();
-        assert!(bounded_pool(empty, |_| false, 6).is_empty());
+        assert!(offer_frontiers(&[], &HashSet::new(), 6).is_empty());
     }
 
     #[test]
@@ -499,16 +492,15 @@ mod tests {
         assert_eq!(snoozed, HashSet::from([2]));
         assert!(cookie_exclusions(&[], &eligible).is_empty());
 
-        let candidates = vec![(1, "first"), (2, "second"), (3, "third")];
-        let pool = bounded_pool(candidates, |candidate| snoozed.contains(&candidate.0), 3);
-        assert_eq!(pool, vec![(1, "first"), (3, "third")]);
+        let candidates: Vec<_> = (1..=3).map(frontier).collect();
+        let pool = offer_frontiers(&candidates, &snoozed, 3);
+        assert_eq!(ids(&pool), vec![1, 3]);
 
-        let candidates = vec![(1, "first"), (2, "second"), (3, "third")];
         let cleared = cookie_exclusions(&[], &eligible);
-        let pool = bounded_pool(candidates, |candidate| cleared.contains(&candidate.0), 3);
+        let pool = offer_frontiers(&candidates, &cleared, 3);
         assert_eq!(
-            pool,
-            vec![(1, "first"), (2, "second"), (3, "third")],
+            ids(&pool),
+            vec![1, 2, 3],
             "clearing the midnight cookie restores the candidate"
         );
     }
