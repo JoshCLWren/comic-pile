@@ -295,6 +295,9 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
 
             response.headers["X-Request-ID"] = request_id
             response.headers["X-App-DB-Queries"] = str(diagnostics.database_queries)
+            response.headers["X-App-Auth-DB-Queries"] = str(
+                diagnostics.identity_database_queries
+            )
             response.headers["X-App-Cold-Request"] = "1" if startup.cold else "0"
             response.headers["X-Heavy-Init"] = "1" if startup.heavy_initialized else "0"
             response.headers["Server-Timing"] = _server_timing_header(process_time_ms)
@@ -314,6 +317,10 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "cpu_time_ms": round((time.process_time() - started_process) * 1000, 2),
                 "database_queries": diagnostics.database_queries,
                 "database_time_ms": round(diagnostics.database_time_ms, 2),
+                "identity_database_queries": diagnostics.identity_database_queries,
+                "identity_database_time_ms": round(
+                    diagnostics.identity_database_time_ms, 2
+                ),
                 "cold_request": startup.cold,
                 "process_request_number": startup.invocation,
                 "process_age_ms": round(startup.process_age_ms, 2),
@@ -348,6 +355,10 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "cold_request": startup.cold,
                 "database_queries": diagnostics.database_queries,
                 "database_time_ms": round(diagnostics.database_time_ms, 2),
+                "identity_database_queries": diagnostics.identity_database_queries,
+                "identity_database_time_ms": round(
+                    diagnostics.identity_database_time_ms, 2
+                ),
                 "deployment_id": startup.deployment_id,
                 "warning_budget_ms": slow_request_threshold,
                 "violation_budget_ms": REQUEST_TIMEOUT_MS,

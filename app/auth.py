@@ -13,6 +13,7 @@ from app.config import get_auth_settings
 from app.constants import MAX_BCRYPT_PASSWORD_BYTES, MIN_PASSWORD_LENGTH
 from app.database import get_db
 from app.models.user import User
+from app.performance_diagnostics import identity_database_query_scope
 from app.repositories.revoked_token_repository import (
     add_revoked_token,
     get_user_by_username_with_revocation_check,
@@ -228,9 +229,10 @@ async def get_current_user(
         )
 
     try:
-        user, is_revoked = await get_user_by_username_with_revocation_check(
-            db, username, jti
-        )
+        with identity_database_query_scope():
+            user, is_revoked = await get_user_by_username_with_revocation_check(
+                db, username, jti
+            )
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

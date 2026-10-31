@@ -234,6 +234,8 @@ class _DiagnosticFieldsFilter(logging.Filter):
         "cpu_time_ms",
         "database_queries",
         "database_time_ms",
+        "identity_database_queries",
+        "identity_database_time_ms",
         "cold_request",
         "deployment_id",
         "event",

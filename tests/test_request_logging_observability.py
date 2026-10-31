@@ -96,6 +96,8 @@ def _build_diagnostic_record() -> logging.LogRecord:
     record.cpu_time_ms = 67.89
     record.database_queries = 3
     record.database_time_ms = 45.6
+    record.identity_database_queries = 1
+    record.identity_database_time_ms = 12.3
     record.cold_request = False
     record.deployment_id = "dep_abc123"
     record.event = "performance_budget_warning"
@@ -126,6 +128,8 @@ def test_configure_logging_prints_diagnostic_fields(
         assert "cpu_time_ms=67.89" in formatted
         assert "request_id='abcdef0123456789abcdef0123456789'" in formatted
         assert "database_queries=3" in formatted
+        assert "identity_database_queries=1" in formatted
+        assert "identity_database_time_ms=12.3" in formatted
         assert "process_time_ms=123.45" in formatted
         assert "cold_request=False" in formatted
         assert "deployment_id='dep_abc123'" in formatted
@@ -161,6 +165,7 @@ def test_configure_logging_keeps_platform_handler_and_emits_diagnostic_fields(
         assert formatted.startswith("WARNING API Error: GET /slow - 500")
         assert "cpu_time_ms=67.89" in formatted
         assert "database_queries=3" in formatted
+        assert "identity_database_queries=1" in formatted
 
         # A record passed through more than one filtered handler is not doubled.
         _diagnostic_filter(platform_handler).filter(record)

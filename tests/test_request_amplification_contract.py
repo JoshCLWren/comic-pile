@@ -33,6 +33,13 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.middleware.request_logging import add_request_logging_middleware
+from app.performance_diagnostics import (
+    begin_request_diagnostics,
+    end_request_diagnostics,
+    get_request_diagnostics,
+    identity_database_query_scope,
+    record_database_query,
+)
 from app.traffic_metrics import reset_traffic_counters_for_tests, traffic_snapshot
 
 _WAIT_SECONDS = 0.5
@@ -84,12 +91,15 @@ async def test_five_hundred_millisecond_wait_is_wall_time_not_cpu(
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/delayed")
     assert response.status_code == 200
+    assert response.headers["X-App-Auth-DB-Queries"] == "0"
 
     records = _performance_warnings(caplog)
     assert len(records) == 1
     extras = records[0].__dict__
     wall_ms = extras["process_time_ms"]
     cpu_ms = extras["cpu_time_ms"]
+    assert extras["identity_database_queries"] == 0
+    assert extras["identity_database_time_ms"] == 0.0
 
     # The wall clock saw the full wait; the process CPU did not do that work.
     assert wall_ms >= _WAIT_SECONDS * 1000 * 0.9
@@ -140,6 +150,14 @@ async def test_repeated_protected_requests_do_not_multiply_identity_lookups(
         with _captured_selects(db_engine) as statements:
             response = await auth_client.get("/api/v1/auth/me")
         assert response.status_code == 200
+        # Header counters come from the app engine's SQLAlchemy events, while
+        # the test overrides ``get_db`` with a session on the test engine. Only
+        # the subset invariant holds on both sides; the exact identity count is
+        # covered by the explicit-scope test below.
+        auth_queries = int(response.headers["X-App-Auth-DB-Queries"])
+        total_queries = int(response.headers["X-App-DB-Queries"])
+        assert 0 <= auth_queries <= total_queries
+        assert auth_queries <= len(statements)
         per_request_selects.append(statements)
 
     for statements in per_request_selects:
@@ -149,6 +167,31 @@ async def test_repeated_protected_requests_do_not_multiply_identity_lookups(
 
     total_identity_selects = sum(len(statements) for statements in per_request_selects)
     assert total_identity_selects <= protected_requests
+
+
+def test_identity_query_scope_separates_identity_from_business_sql() -> None:
+    """Identity SQL is a counted subset of the request's total SQL.
+
+    The middleware cannot infer which statements authenticate the caller, so
+    ``get_current_user()`` opens an explicit scope around its repository call.
+    Business statements outside that scope must contribute to the total only.
+    """
+    token = begin_request_diagnostics()
+    try:
+        record_database_query(3.0)
+        with identity_database_query_scope():
+            record_database_query(5.0)
+            with identity_database_query_scope():
+                record_database_query(2.0)
+        record_database_query(4.0)
+        diagnostics = get_request_diagnostics()
+    finally:
+        end_request_diagnostics(token)
+
+    assert diagnostics.database_queries == 4
+    assert diagnostics.database_time_ms == 14.0
+    assert diagnostics.identity_database_queries == 2
+    assert diagnostics.identity_database_time_ms == 7.0
 
 
 @pytest.mark.asyncio

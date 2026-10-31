@@ -34,6 +34,7 @@ Slow, error, and cold request records carry two independent timings:
 
 - `process_time_ms` — elapsed wall-clock time for the request. The name is historical; it is not CPU. It is preserved for existing log consumers and still drives the latency budgets and `Server-Timing`.
 - `cpu_time_ms` — process CPU consumed between the start and end of the request, sampled with `time.process_time()`.
+- `identity_database_queries` / `identity_database_time_ms` — the subset of the request's SQL executed inside `get_current_user()`, separated from business SQL. Responses expose the query count as `X-App-Auth-DB-Queries`; the total remains `X-App-DB-Queries`.
 
 `cpu_time_ms` is a process-wide delta. Under async concurrency it includes work performed for other in-flight requests, so it must not be treated as exclusive per-request attribution, divided by request count, or ranked as if each request owned the whole delta. Use it only to tell a CPU-bound request apart from a request that was mostly waiting on I/O, and use isolated one-at-a-time measurements when per-route CPU attribution is required.
 
@@ -69,6 +70,6 @@ Vercel retains runtime logs for **one hour** on the Hobby plan ([runtime log lim
 vercel logs --environment production --query '<event or route>' --since 1h
 ```
 
-Each log record carries these values as structured `extra` attributes (`request_id`, `method`, `path`, `status_code`, `process_time_ms`, `cpu_time_ms`, `database_queries`, `database_time_ms`, `cold_request`, `deployment_id`); a diagnostic filter on the root log handler appends them to the message text, so they appear in deployment logs even when the hosting platform installs its own handler or formatter. Copy them from the log record for every matching row before the window closes. One `cpu_time_ms` value is a single-process sample covering that request window only; repeat the same request and re-capture to see the spread instead of treating one number as a per-request CPU budget.
+Each log record carries these values as structured `extra` attributes (`request_id`, `method`, `path`, `status_code`, `process_time_ms`, `cpu_time_ms`, `database_queries`, `database_time_ms`, `identity_database_queries`, `identity_database_time_ms`, `cold_request`, `deployment_id`); a diagnostic filter on the root log handler appends them to the message text, so they appear in deployment logs even when the hosting platform installs its own handler or formatter. Copy them from the log record for every matching row before the window closes. One `cpu_time_ms` value is a single-process sample covering that request window only; repeat the same request and re-capture to see the spread instead of treating one number as a per-request CPU budget.
 
 Thresholds are diagnostic defaults, not availability guarantees. Adjust `SLOW_REQUEST_THRESHOLD_MS` only after collecting a representative baseline, and never use a higher threshold to hide a regression.

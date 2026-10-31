@@ -28,6 +28,7 @@ The module asserts:
 | --- | --- |
 | Wall time is not CPU | A 500 ms wait logs `process_time_ms >= 450` while `cpu_time_ms < 300` and below three quarters of the wall time. This is the local control for the replay lab's 500 ms DB-delay experiment. |
 | Identity lookups stay bounded | Five protected requests from one already authenticated session never run more than one SELECT each, and the only SELECT is the joined user/revocation lookup. |
+| Identity SQL is separable | `get_current_user()` records its repository SQL in an explicit identity scope; responses expose `X-App-Auth-DB-Queries`, and logs carry `identity_database_queries` / `identity_database_time_ms` as a subset of the request total. |
 | Counters count invocations | Three completed requests to one route record exactly three invocations, independent of log lines. |
 | Counters aggregate by template | Two different thread ids record under `/api/v1/threads/{thread_id}`, not raw numeric paths. |
 
@@ -36,6 +37,8 @@ Existing coverage supplies the rest of the instrumentation contract:
 - `tests/test_request_logging_observability.py` proves `cpu_time_ms` is sampled
   with `time.process_time()` and that structured fields survive both an
   application-configured and a platform-configured root logger.
+- `tests/test_performance_diagnostics.py` proves the middleware exposes the
+  identity SQL subset without changing the total query count.
 - `tests/test_auth_query_count.py` proves one protected request runs exactly one
   joined identity SELECT before the #4275 cutover.
 - `tests/test_traffic_metrics.py` proves counters are process-local, bounded by
@@ -94,6 +97,14 @@ and may start N Python invocations. Report these separately for every scenario:
 - SQL statements run solely by `get_current_user()`, distinct from business SQL;
 - total database connections;
 - process CPU for the scenario.
+
+The request middleware now carries the identity subset directly:
+`X-App-Auth-DB-Queries` counts SQL executed inside
+`identity_database_query_scope()`, while `X-App-DB-Queries` remains the total.
+The same values appear in slow/cold/error log records as
+`identity_database_queries` and `identity_database_time_ms`. A collector must
+still sum these per request across a view; the headers do not by themselves
+produce a view-level total or a fleet total.
 
 The five required scenarios are (1) cold authenticated app load, (2) Roll
 bootstrap plus cancel, (3) Queue navigation, (4) rating then the next Roll, and
