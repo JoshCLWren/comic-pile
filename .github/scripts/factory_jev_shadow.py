@@ -326,13 +326,43 @@ def action_age_days(created_at: str) -> float:
     return max(0.0, (time.time() - created) / 86400)
 
 
+FAILED_CHECK_STATES = {
+    "FAILURE",
+    "ERROR",
+    "CANCELLED",
+    "TIMED_OUT",
+    "ACTION_REQUIRED",
+    "STARTUP_FAILURE",
+    "STALE",
+}
+
+
+def has_failed_check(pr: dict[str, Any]) -> bool:
+    """Return whether trusted check metadata proves a failure needs repair.
+
+    ``factory:ci`` can mean CI is still pending. Offering a repair action without
+    failing-check evidence would spend a model decision on work the deterministic
+    controller refuses to execute.
+    """
+    rollup = pr.get("statusCheckRollup")
+    if not isinstance(rollup, list):
+        return False
+    for check in rollup:
+        if not isinstance(check, dict):
+            continue
+        conclusion = str(check.get("conclusion") or "").upper()
+        state = str(check.get("state") or "").upper()
+        if conclusion in FAILED_CHECK_STATES or state in {"FAILURE", "ERROR"}:
+            return True
+    return False
+
+
 def _completion_type(candidate: Candidate, pr: dict[str, Any]) -> str | None:
     """Derive the legitimate next operation from existing factory state."""
-    del pr
     if candidate.conflicted:
         return "merge-conflict"
     if candidate.stage == "factory:ci":
-        return "ci-repair"
+        return "ci-repair" if has_failed_check(pr) else None
     if candidate.stage == "factory:changes-requested":
         return "review-findings"
     if candidate.stage == "factory:review":
@@ -360,6 +390,10 @@ def completion_actions(
         action = _completion_type(candidate, pr)
         if action is None:
             continue
+        head = str(pr.get("headRefOid") or "")
+        if not head:
+            # Exact-head provenance is required to lease a completion action.
+            continue
         actions.append(
             CompletionAction(
                 action_id=f"pr-{candidate.number}",
@@ -368,7 +402,7 @@ def completion_actions(
                 stage=candidate.stage,
                 priority=candidate.priority,
                 created_at=candidate.created_at,
-                head=str(pr.get("headRefOid") or ""),
+                head=head,
                 merge_state=str(pr.get("mergeStateStatus") or "UNKNOWN").upper(),
                 linked_issue=candidate.linked_issue,
             )
@@ -562,16 +596,23 @@ def completion_report(
     return report
 
 
+def _is_ordinary_completion(candidate: Candidate) -> bool:
+    """Return whether a candidate is an ordinary, promotable lane-3 PR action."""
+    return candidate.kind == "pr" and candidate.lane == 3 and candidate.stage is not None
+
+
 def apply_completion_ranking(
     ordered: list[Candidate],
     report: dict[str, Any],
     current_heads: dict[int, str],
 ) -> tuple[list[Candidate], bool, str]:
-    """Promote the chosen completion action without crossing protected classes.
+    """Promote the chosen completion action without crossing protected work.
 
-    Only ordinary lane-3 PR completion candidates move. Issues, main-breakage,
-    user-reported work, and every non-completion position keep their relative
-    order. A stale exact-head recommendation is refused.
+    The chosen action may move forward only inside the contiguous run of
+    ordinary lane-3 completion candidates that contains it. Any intervening
+    issue, main-breakage, user-reported, or otherwise non-completion position is
+    a hard boundary, so a model decision can never jump protected work. A stale
+    or missing exact-head reference refuses the decision.
     """
     if report.get("surface") != "pr-completion" or report.get("status") != "chosen":
         return ordered, False, "no-chosen-action"
@@ -586,35 +627,32 @@ def apply_completion_ranking(
     head = entry.get("head")
     if not isinstance(pr, int) or isinstance(pr, bool):
         return ordered, False, "invalid-report"
-    if isinstance(head, str) and head and current_heads.get(pr) not in (None, head):
+    if not isinstance(head, str) or not head:
+        return ordered, False, "missing-head"
+    if current_heads.get(pr) != head:
         return ordered, False, "stale-head"
-    subset = [
-        index
-        for index, candidate in enumerate(ordered)
-        if candidate.kind == "pr" and candidate.lane == 3 and candidate.stage is not None
-    ]
-    if not subset:
-        return ordered, False, "no-completion-candidates"
-    if not any(ordered[index].number == pr for index in subset):
+    chosen_index = next(
+        (
+            index
+            for index, candidate in enumerate(ordered)
+            if _is_ordinary_completion(candidate) and candidate.number == pr
+        ),
+        None,
+    )
+    if chosen_index is None:
         return ordered, False, "chosen-not-eligible"
-    if ordered[subset[0]].number == pr:
-        return ordered, False, "already-first"
-    result = ordered[:]
-    item = next(
-        candidate
-        for candidate in result
-        if candidate.kind == "pr"
-        and candidate.lane == 3
-        and candidate.stage is not None
-        and candidate.number == pr
-    )
-    result.remove(item)
-    first = next(
-        index
-        for index, candidate in enumerate(result)
-        if candidate.kind == "pr" and candidate.lane == 3 and candidate.stage is not None
-    )
-    result.insert(first, item)
+    start = chosen_index
+    while start > 0 and _is_ordinary_completion(ordered[start - 1]):
+        start -= 1
+    if start == chosen_index:
+        earlier = any(
+            _is_ordinary_completion(candidate)
+            for candidate in ordered[:chosen_index]
+        )
+        return ordered, False, "protected-boundary" if earlier else "already-first"
+    item = ordered[chosen_index]
+    block = [item, *ordered[start:chosen_index]]
+    result = [*ordered[:start], *block, *ordered[chosen_index + 1 :]]
     return result, True, "promoted"
 
 

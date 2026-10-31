@@ -205,6 +205,9 @@ run_agent() {
     mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Greptile (greptile-apps[bot]) review findings are HIGH PRIORITY, must-address feedback: fix each open one in code or rebut it with concrete evidence, and record every outcome in the outcome file described below; the wrapper posts those outcomes as the thread replies and blocks FACTORY_GATE_READY while any open Greptile finding lacks one. Never resolve a Greptile thread yourself. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
     findings="$(factory_review_findings_mission "$number" "${EXPECTED_HEAD:-$(git rev-parse HEAD)}")"
     mission+=" ${findings}"
+    if completion_line="$(trusted_completion_action_line)"; then
+      mission+=" ${completion_line}"
+    fi
   else
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
@@ -296,6 +299,28 @@ append_wrapper_gate_reason() {
   printf '\n# comic-pile-factory-wrapper-gate\nThe trusted wrapper downgraded this approval to repair: %s\n' "$1" >> "$sanitized_review_log"
 }
 
+read_trusted_completion_decision() {
+  local pr="$1" worker="$2" payload parsed action='' head=''
+  JEV_ACTION=''
+  JEV_ACTION_HEAD=''
+  if ! payload="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${pr}/comments?per_page=100" 2>/dev/null)"; then
+    log "unable to read lease provenance for PR #${pr}; using generic PR mission"
+    return 0
+  fi
+  parsed="$(jq -sr --arg worker "$worker" '
+    [ .[][]?
+      | select(.performed_via_github_app.slug == "github-actions")
+      | .body
+      | capture("comic-pile-factory-controller-claim-v1:pr-(?<pr>[0-9]+):(?<worker>[0-9]+):(?<epoch>[0-9]+)(?::source=(?<source>[a-z-]+))?(?::action=(?<action>[a-z-]+))?(?::head=(?<head>[0-9a-f]{7,40}))?")
+      | select(.worker == $worker)
+    ] | last // empty | [.action // "", .head // ""] | @tsv
+  ' <<< "$payload" 2>/dev/null)" || true
+  IFS=$'\t' read -r action head <<< "$parsed" || true
+  JEV_ACTION="${action:-}"
+  JEV_ACTION_HEAD="${head:-}"
+  log "lease decision provenance for PR #${pr}: action=${JEV_ACTION:-none} head=${JEV_ACTION_HEAD:-none}"
+}
+
 select_controller_assignment() {
   local -a prs=() issues=()
   local pr_json issue_json pr_numbers issue_numbers canonical_pr_json canonical_pr
@@ -358,6 +383,7 @@ select_controller_assignment() {
     NUMBER="$pr"
     BRANCH="$branch"
     ASSIGNED_PR_STAGE="$pr_stage"
+    read_trusted_completion_decision "$pr" "$WORKER"
     return 0
   fi
 
@@ -401,6 +427,8 @@ MODE=''
 NUMBER=''
 BRANCH=''
 ASSIGNED_PR_STAGE=''
+JEV_ACTION=''
+JEV_ACTION_HEAD=''
 
 set +e
 select_controller_assignment

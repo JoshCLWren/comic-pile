@@ -1500,7 +1500,9 @@ def test_real_assign_promotes_jev_completion_action_and_hands_it_off(
     _completion_assign_env(controller, monkeypatch, prs, report, tmp_path)
     claimed: list[tuple[int, str | None]] = []
 
-    def fake_assign(candidate: object, _worker: str, action: str | None = None) -> bool:
+    def fake_assign(
+        candidate: object, _worker: str, action: str | None = None, expected_head: str | None = None
+    ) -> bool:
         claimed.append((int(vars(candidate)["number"]), action))
         return True
 
@@ -1536,7 +1538,9 @@ def test_real_assign_rejects_a_stale_completion_decision(
     _completion_assign_env(controller, monkeypatch, prs, report, tmp_path)
     claimed: list[int] = []
 
-    def fake_assign(candidate: object, _worker: str, action: str | None = None) -> bool:
+    def fake_assign(
+        candidate: object, _worker: str, action: str | None = None, expected_head: str | None = None
+    ) -> bool:
         claimed.append(int(vars(candidate)["number"]))
         return True
 
@@ -1553,10 +1557,93 @@ def test_lease_marker_records_decision_provenance(
     monkeypatch.setattr(
         controller, "run_gh", lambda args, **_kwargs: captured.append(args)
     )
+    head = "a" * 40
     controller.record_controller_lease_activity(
-        35001, "6", "pr", action="ci-repair", source="jev"
+        35001, "6", "pr", action="ci-repair", source="jev", head=head
     )
     body = captured[0][-1]
     assert body.startswith("<!-- comic-pile-factory-controller-claim-v1:pr-35001:6:")
-    assert ":source=jev:action=ci-repair" in body
+    assert f":source=jev:action=ci-repair:head={head}" in body
     assert body.endswith(" -->")
+
+
+def test_assign_candidate_rejects_a_stale_head_before_writing_labels(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    candidate = controller.Candidate("pr", 35201, 3, 0, "2026-10-30T12:00:00Z", stage="factory:ci")
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
+    monkeypatch.setattr(controller, "target_still_unowned", lambda _n: True)
+    monkeypatch.setattr(controller, "target_owned_by", lambda _n, _o: True)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _w: False)
+    monkeypatch.setattr(
+        controller,
+        "live_pr_state",
+        lambda _n: {
+            "head": {"sha": "b" * 40},
+            "mergeable": True,
+            "mergeable_state": "CLEAN",
+            "labels": [{"name": "factory"}, {"name": "factory:ci"}],
+        },
+    )
+    written: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: written.append((number, owner, stage)),
+    )
+
+    assert controller.assign_candidate(
+        candidate, "6", action="ci-repair", expected_head="a" * 40
+    ) is False
+    assert written == []
+
+
+def test_assign_falls_back_when_selected_head_changes_before_the_lease(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A stale decision must be discarded and canonical order reselected."""
+    head_a, head_b = "a" * 40, "b" * 40
+    prs = [
+        _completion_pr(35301, "factory:review", head=head_a),
+        _completion_pr(35302, "factory:ci", head=head_b),
+    ]
+    report = {
+        "surface": "pr-completion",
+        "status": "chosen",
+        "chosen": "pr-35302",
+        "baseline": ["pr-35301", "pr-35302"],
+        "action_map": {
+            "pr-35302": {"pr": 35302, "action": "ci-repair", "head": head_b},
+        },
+    }
+    _completion_assign_env(controller, monkeypatch, prs, report, tmp_path)
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
+    monkeypatch.setattr(controller, "target_still_unowned", lambda _n: True)
+    monkeypatch.setattr(controller, "target_owned_by", lambda _n, _o: True)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _w: False)
+    monkeypatch.setattr(
+        controller,
+        "live_pr_state",
+        lambda _n: {
+            "head": {"sha": "c" * 40},
+            "mergeable": True,
+            "mergeable_state": "CLEAN",
+            "labels": [{"name": "factory"}, {"name": "factory:ci"}],
+        },
+    )
+    written: list[int] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, _owner, stage=None: written.append(number),
+    )
+    monkeypatch.setattr(controller, "record_controller_lease_activity", lambda *a, **k: None)
+
+    selected = controller.assign("6")
+    assert selected is not None
+    assert selected.number == 35301
+    assert written == [35301]
+    assert "Jev FALLBACK worker=6" in capsys.readouterr().err

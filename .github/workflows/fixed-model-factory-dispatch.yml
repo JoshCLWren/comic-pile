@@ -431,7 +431,7 @@ jobs:
           gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 \
             --json number,title,body,labels,createdAt,updatedAt > "$issues"
           gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 500 \
-            --json number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository > "$prs"
+            --json number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository,statusCheckRollup > "$prs"
           python3 .github/scripts/factory_jev_shadow.py \
             --issues "$issues" --prs "$prs" \
             --output "$RUNNER_TEMP/jev-shadow.json" >> "$GITHUB_STEP_SUMMARY"

@@ -169,6 +169,22 @@ def target_json(number: int) -> dict[str, Any]:
     return cast(dict[str, Any], gh_json(['api', f'repos/{REPO}/issues/{number}']))
 
 
+def live_pr_state(number: int) -> dict[str, Any]:
+    """Read the authoritative PR head, merge state, and labels at lease time."""
+    return cast(dict[str, Any], gh_json(['api', f'repos/{REPO}/pulls/{number}']))
+
+
+def completion_action_for(stage: str | None, conflicted: bool) -> str | None:
+    """Derive the same completion action the dispatcher offered for this stage."""
+    if conflicted:
+        return 'merge-conflict'
+    return {
+        'factory:ci': 'ci-repair',
+        'factory:changes-requested': 'review-findings',
+        'factory:review': 'review',
+    }.get(stage or '')
+
+
 def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> None:
     """Atomically reconcile one target to exactly one owner and workflow stage.
 
@@ -320,6 +336,7 @@ def record_controller_lease_activity(
     *,
     action: str | None = None,
     source: str | None = None,
+    head: str | None = None,
 ) -> None:
     """Persist a trusted lease timestamp and optional decision provenance."""
     epoch = int(time.time())
@@ -330,16 +347,26 @@ def record_controller_lease_activity(
         if not re.fullmatch(r'[a-z][a-z-]{0,31}', value):
             raise ValueError(f'unsafe lease provenance field: {field}')
         marker += f':{field}={value}'
+    if head is not None:
+        if not re.fullmatch(r'[0-9a-f]{7,40}', head):
+            raise ValueError('unsafe lease head reference')
+        marker += f':head={head}'
     marker += ' -->'
     run_gh(['issue', 'comment', str(number), '--repo', REPO, '--body', marker])
 
 
-def assign_candidate(candidate: Candidate, worker: str, action: str | None = None) -> bool:
+def assign_candidate(
+    candidate: Candidate,
+    worker: str,
+    action: str | None = None,
+    expected_head: str | None = None,
+) -> bool:
     """Claim a candidate and any linked issue for one fixed-model worker.
 
     Enforces the invariant: an executable issue must never simultaneously satisfy
-    both 'factory:unowned' and active factory ownership. ``action`` is recorded
-    on the PR lease so the selected completion action is auditable at handoff.
+    both 'factory:unowned' and active factory ownership. ``action`` and
+    ``expected_head`` are validated against an authoritative PR read immediately
+    before the lease is written, so a stale Jev decision is never executed.
     """
     if os.environ.get('GITHUB_ACTIONS', '').strip().lower() == 'true' and not dispatcher_identity_verified():
         return False
@@ -375,6 +402,42 @@ def assign_candidate(candidate: Candidate, worker: str, action: str | None = Non
             if not target_still_unowned(number):
                 release_verified_claims(claimed)
                 return False
+            if expected_head is not None and number == candidate.number:
+                try:
+                    live = live_pr_state(number)
+                    live_head = str((live.get('head') or {}).get('sha') or '')
+                    live_labels = {
+                        label['name']
+                        for label in live.get('labels', [])
+                        if isinstance(label, dict) and label.get('name')
+                    }
+                    live_conflicted = (
+                        live.get('mergeable') is False
+                        or str(live.get('mergeable_state') or '').upper() == 'DIRTY'
+                    )
+                    live_action = completion_action_for(
+                        stage_of(live_labels), live_conflicted
+                    )
+                except (RuntimeError, KeyError, TypeError):
+                    release_verified_claims(claimed)
+                    return False
+                if live_head != expected_head:
+                    print(
+                        f'[factory-controller] Jev stale exact head for PR #{number} '
+                        f'(expected {expected_head[:12]}, live {live_head[:12] or "unknown"}); '
+                        'discarding recommendation',
+                        file=sys.stderr,
+                    )
+                    release_verified_claims(claimed)
+                    return False
+                if action is not None and live_action != action:
+                    print(
+                        f'[factory-controller] Jev action {action} no longer matches '
+                        f'PR #{number} live state ({live_action}); discarding recommendation',
+                        file=sys.stderr,
+                    )
+                    release_verified_claims(claimed)
+                    return False
             if candidate.kind == 'issue':
                 stage = 'factory:building'
                 kind = 'issue'
@@ -393,6 +456,8 @@ def assign_candidate(candidate: Candidate, worker: str, action: str | None = Non
                 lease_kwargs: dict[str, str] = {}
                 if selected_pr and action:
                     lease_kwargs = {'action': action, 'source': 'jev'}
+                    if expected_head:
+                        lease_kwargs['head'] = expected_head
                 record_controller_lease_activity(number, worker, kind, **lease_kwargs)
             except Exception:
                 release_verified_claims([*claimed, number])
@@ -961,6 +1026,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
     jev_used = False
     jev_pr: int | None = None
     jev_action: str | None = None
+    jev_head: str | None = None
     if jev_path:
         try:
             with open(jev_path, encoding="utf-8") as jev_file:
@@ -982,6 +1048,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
                 if jev_used and isinstance(entry, dict):
                     jev_pr = entry.get("pr")
                     jev_action = entry.get("action")
+                    jev_head = entry.get("head")
                 if jev_used:
                     print(
                         f"[factory-controller] Jev ACTIVE surface=pr-completion "
@@ -1013,7 +1080,11 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
                 "using canonical order",
                 file=sys.stderr,
             )
-    for candidate in candidates:
+    index = 0
+    fallback_used = False
+    while index < len(candidates):
+        candidate = candidates[index]
+        index += 1
         if not candidate_is_live_executable(candidate):
             continue
         if (
@@ -1023,16 +1094,52 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
             continue
         action = jev_action if jev_used and jev_pr == candidate.number else None
         assigned = (
-            assign_candidate(candidate, worker)
-            if action is None
-            else assign_candidate(candidate, worker, action=action)
+            assign_candidate(
+                candidate,
+                worker,
+                action=action,
+                expected_head=jev_head,
+            )
+            if action is not None
+            else assign_candidate(candidate, worker)
         )
         if assigned:
             reason = ' conflict-repair' if candidate.conflicted else ''
             print(f'[factory-controller] assigned {candidate.kind} #{candidate.number} lane={candidate.lane} priority={candidate.priority}{reason} to Factory {worker}', file=sys.stderr)
-            if jev_used and action is not None:
+            if action is not None:
                 log_completion_result(candidate, canonical_candidates, worker, action)
             return candidate
+        if action is not None and not fallback_used:
+            fallback_used = True
+            print(
+                f"[factory-controller] Jev FALLBACK worker={worker}: chosen "
+                f"PR #{candidate.number} was rejected at lease time; "
+                "reselecting from canonical order",
+                file=sys.stderr,
+            )
+            jev_used = False
+            candidates = canonical_candidates
+            index = 0
+    return None
+
+
+def first_live_candidate(
+    candidates: list[Candidate], worker: str
+) -> Candidate | None:
+    """Return the candidate the deterministic controller would lease next.
+
+    The scan is bounded to the decision window so influence accounting cannot
+    turn one assignment into an unbounded API walk.
+    """
+    for candidate in candidates[:8]:
+        if not candidate_is_live_executable(candidate):
+            continue
+        if (
+            candidate.kind == "issue"
+            and issue_excludes_worker_on_strike_retry(candidate.number, worker)
+        ):
+            continue
+        return candidate
     return None
 
 
@@ -1042,23 +1149,13 @@ def log_completion_result(
     worker: str,
     action: str,
 ) -> None:
-    """Record whether the promoted completion action changed the actual lease."""
-    canonical_first = next(
-        (
-            candidate
-            for candidate in canonical
-            if candidate.kind == 'pr'
-            and candidate.lane == 3
-            and candidate.stage is not None
-        ),
-        None,
-    )
-    baseline = canonical_first.number if canonical_first is not None else None
-    influenced = baseline != assigned.number
+    """Record whether the promoted action changed the deterministic lease."""
+    baseline = first_live_candidate(canonical, worker)
+    influenced = baseline is None or baseline.number != assigned.number
     print(
         f"[factory-controller] Jev RESULT worker={worker} assigned=pr "
         f"#{assigned.number} action={action} "
-        f"canonical-pr=#{baseline if baseline is not None else 'none'} "
+        f"canonical=#{baseline.number if baseline is not None else 'none'} "
         f"influenced={'yes' if influenced else 'no'}",
         file=sys.stderr,
     )

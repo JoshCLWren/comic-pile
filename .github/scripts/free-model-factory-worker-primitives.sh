@@ -445,6 +445,34 @@ is_model_cooldown_failure() {
   grep -Eiq 'cooling down|model_cooldown' "/tmp/opencode-factory-${WORKER}.log"
 }
 
+completion_action_for_stage() {
+  case "${1:-}" in
+    factory:conflict) printf '%s' 'merge-conflict' ;;
+    factory:ci) printf '%s' 'ci-repair' ;;
+    factory:changes-requested) printf '%s' 'review-findings' ;;
+    factory:review) printf '%s' 'review' ;;
+    *) printf '' ;;
+  esac
+}
+
+completion_action_matches_stage() {
+  case "${1:-}:${2:-}" in
+    merge-conflict:factory:conflict|merge-conflict:factory:changes-requested) return 0 ;;
+    ci-repair:factory:ci) return 0 ;;
+    review-findings:factory:changes-requested) return 0 ;;
+    review:factory:review) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+trusted_completion_action_line() {
+  [[ -n "${JEV_ACTION:-}" ]] || return 1
+  [[ -n "${JEV_ACTION_HEAD:-}" ]] || return 1
+  [[ -n "${EXPECTED_HEAD:-}" && "${JEV_ACTION_HEAD}" == "${EXPECTED_HEAD}" ]] || return 1
+  completion_action_matches_stage "${JEV_ACTION}" "${ASSIGNED_PR_STAGE:-}" || return 1
+  printf 'The trusted factory decision for this lease selected the %s action at exact head %s. Focus this session on that action and do not re-plan unrelated PR work.' "$JEV_ACTION" "$JEV_ACTION_HEAD"
+}
+
 run_agent() {
   local mode="$1" number="$2" timeout_seconds="$3"
   local target mission prompt findings status=0
@@ -453,6 +481,11 @@ run_agent() {
     mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Greptile (greptile-apps[bot]) review findings are HIGH PRIORITY, must-address feedback: fix each open one in code or rebut it with concrete evidence, and record every outcome in the outcome file described below; the wrapper posts those outcomes as the thread replies and blocks FACTORY_GATE_READY while any open Greptile finding lacks one. Never resolve a Greptile thread yourself. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only when no semantic blocker remains; otherwise end with FACTORY_GATE_NOT_READY."
     findings="$(factory_review_findings_mission "$number" "${EXPECTED_HEAD:-$(git rev-parse HEAD)}")"
     mission+=" ${findings}"
+    if completion_line="$(trusted_completion_action_line)"; then
+      mission+=" ${completion_line}"
+    else
+      log "no trusted Jev completion action for PR #${number} (action=${JEV_ACTION:-none}, head=${JEV_ACTION_HEAD:-none}, stage=${ASSIGNED_PR_STAGE:-none}); using generic PR mission"
+    fi
   else
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
