@@ -234,6 +234,70 @@ const OFFER_EVENT_INSERT: &str = "INSERT INTO events
  VALUES ('roll',$1,$2,$3,$4,$5,$6,$7,'rust_uniform',$8::text::json,NOW())
  RETURNING id";
 
+pub(crate) struct OfferWrite<'a> {
+    pub session_id: i32,
+    pub thread_id: i32,
+    pub issue_id: i32,
+    pub issue_number: Option<String>,
+    pub die: i32,
+    pub result: i32,
+    pub idempotency_key: &'a str,
+    pub snoozed_thread_id: Option<i32>,
+}
+
+/// Write the roll event and advance the retained pending bridge atomically.
+/// Extracted so the real write path can be exercised against disposable Postgres.
+pub(crate) async fn persist_offer(
+    tx: &tokio_postgres::Transaction<'_>,
+    user: AuthenticatedUser,
+    write: OfferWrite<'_>,
+) -> Result<i32, ApiError> {
+    let context = json!({
+        "roll_offer_key": write.idempotency_key,
+        "snoozed_thread_id": write.snoozed_thread_id,
+    });
+    let row = tx
+        .query_one(
+            OFFER_EVENT_INSERT,
+            &[
+                &user.id(),
+                &write.session_id,
+                &write.thread_id,
+                &write.die,
+                &write.result,
+                &write.issue_id,
+                &write.issue_number,
+                &context.to_string(),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    // The legacy rating bridge reads both pending columns; leaving the issue
+    // unset would make the next bootstrap fail its pending validation.
+    let updated = tx
+        .execute(
+            "UPDATE sessions
+             SET pending_thread_id=$1,pending_issue_id=$2,
+                 pending_thread_updated_at=NOW()
+             WHERE id=$3 AND user_id=$4",
+            &[
+                &write.thread_id,
+                &write.issue_id,
+                &write.session_id,
+                &user.id(),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if updated != 1 {
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Reading session changed; try again",
+        ));
+    }
+    Ok(row.get(0))
+}
+
 pub async fn offer(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -363,49 +427,21 @@ pub async fn offer(
         .iter()
         .find(|issue| issue.id == selected.issue_id)
         .map(|issue| issue.issue_number.clone());
-    let context = json!({
-        "roll_offer_key": request.idempotency_key,
-        "snoozed_thread_id": snoozed_thread_id,
-    });
-    tx.query_one(
-        OFFER_EVENT_INSERT,
-        &[
-            &user.id(),
-            &active.session.id,
-            &selected.thread_id,
-            &die,
-            &result,
-            &selected.issue_id,
-            &issue_number,
-            &context.to_string(),
-        ],
+    persist_offer(
+        &tx,
+        user,
+        OfferWrite {
+            session_id: active.session.id,
+            thread_id: selected.thread_id,
+            issue_id: selected.issue_id,
+            issue_number: issue_number.clone(),
+            die,
+            result,
+            idempotency_key: &request.idempotency_key,
+            snoozed_thread_id,
+        },
     )
-    .await
-    .map_err(db::query_error)?;
-    // The legacy rating bridge reads both pending columns; leaving the issue
-    // unset would make the next bootstrap fail its pending validation.
-    let updated = tx
-        .execute(
-            "UPDATE sessions
-             SET pending_thread_id=$1,pending_issue_id=$2,
-                 pending_thread_updated_at=NOW()
-             WHERE id=$3 AND user_id=$4",
-            &[
-                &selected.thread_id,
-                &selected.issue_id,
-                &active.session.id,
-                &user.id(),
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
-    if updated != 1 {
-        tx.rollback().await.map_err(db::query_error)?;
-        return Err(ApiError(
-            StatusCode::CONFLICT,
-            "Reading session changed; try again",
-        ));
-    }
+    .await?;
     tx.commit().await.map_err(db::query_error)?;
     let metadata = offer_metadata(&*pending.connection(), user, selected.thread_id).await?;
     pending.release();
@@ -674,6 +710,119 @@ mod tests {
             .await
             .unwrap();
         assert!(row.get::<_, i32>(0) > 0);
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn persist_offer_writes_the_event_and_pending_bridge() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("offer_write_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz
+                 );
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     type text NOT NULL, user_id integer, session_id integer,
+                     selected_thread_id integer, die integer, result integer,
+                     issue_id integer, issue_number text, selection_method text,
+                     context json, timestamp timestamptz DEFAULT NOW()
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.sessions VALUES (1, 1, NULL, NULL, NULL);
+                 INSERT INTO {schema}.threads VALUES (10, 1);
+                 INSERT INTO {schema}.issues VALUES (100, 10);"
+            ))
+            .await
+            .unwrap();
+        let mut client = test_client(&url, &schema).await;
+        let user = AuthenticatedUser::for_test(1);
+
+        let tx = client.transaction().await.unwrap();
+        let event_id = persist_offer(
+            &tx,
+            user,
+            OfferWrite {
+                session_id: 1,
+                thread_id: 10,
+                issue_id: 100,
+                issue_number: Some("1".to_string()),
+                die: 8,
+                result: 2,
+                idempotency_key: "test-offer-write-001",
+                snoozed_thread_id: Some(9),
+            },
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        let event = client
+            .query_one(
+                "SELECT type,user_id,session_id,selected_thread_id,die,result,
+                        issue_id,issue_number,context->>'roll_offer_key',
+                        context->>'snoozed_thread_id'
+                 FROM events WHERE id=$1",
+                &[&event_id],
+            )
+            .await
+            .unwrap();
+        assert_eq!(event.get::<_, String>(0), "roll");
+        assert_eq!(event.get::<_, i32>(1), 1);
+        assert_eq!(event.get::<_, i32>(2), 1);
+        assert_eq!(event.get::<_, i32>(3), 10);
+        assert_eq!(event.get::<_, i32>(4), 8);
+        assert_eq!(event.get::<_, i32>(5), 2);
+        assert_eq!(event.get::<_, i32>(6), 100);
+        assert_eq!(event.get::<_, String>(7), "1");
+        assert_eq!(event.get::<_, String>(8), "test-offer-write-001");
+        assert_eq!(event.get::<_, String>(9), "9");
+
+        let pending = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id FROM sessions WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(pending.get::<_, i32>(0), 10);
+        assert_eq!(pending.get::<_, i32>(1), 100);
+
+        let stored = existing_offer(&client, user, "test-offer-write-001")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.thread_id, 10);
+        assert_eq!(stored.die, 8);
+        assert_eq!(stored.result, 2);
+        assert_eq!(stored.snoozed_thread_id, Some(9));
 
         admin
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))

@@ -1,0 +1,9 @@
+{
+  "description": "Frozen, shrink-only exemptions for native Roll POST handlers that predate the write-path test rule. Add a test that calls the handler or its persist_<handler> writer before changing an entry.",
+  "allowed_modules": ["dice_api", "dismiss_pending", "skip"],
+  "modules": {
+    "dice_api": "Delegates the write to dice_mutation::execute_standalone, whose disposable-Postgres tests cover the event insert and idempotency.",
+    "dismiss_pending": "Legacy pending bridge handler. Add an endpoint-level DB test before its next behavioral change.",
+    "skip": "Mounted in the service router but still routed to Python by vercel.json/api/native_roll.rs. Add an endpoint-level DB test before enabling the Rust route."
+  }
+}
