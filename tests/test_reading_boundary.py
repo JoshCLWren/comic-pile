@@ -268,6 +268,7 @@ def test_stacked_hold_and_strict_gates_describe_one_requirement() -> None:
 
     boundary = project_boundary_explanation(snapshot, labels, MISTER_MIRACLE_ID)
 
+    assert len(boundary.blockers) == 1
     assert [issue.issue_id for b in boundary.blockers for issue in b.waiting_on] == [F1]
     assert boundary.summary == "Mister Miracle #1 is waiting on 1 live requirement."
     assert boundary.blockers[0].reason == (
