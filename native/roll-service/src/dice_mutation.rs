@@ -198,7 +198,7 @@ pub async fn persist_in_transaction(
     if let Some(thread_id) = command.thread_id() {
         if tx
             .query_opt(
-                "SELECT id FROM threads WHERE id = $1 AND user_id = $2",
+                "SELECT id FROM threads WHERE id = $1 AND user_id = $2 FOR SHARE",
                 &[&thread_id, &user.id()],
             )
             .await
@@ -213,7 +213,8 @@ pub async fn persist_in_transaction(
             .query_opt(
                 "SELECT i.id FROM issues i
                  JOIN threads t ON t.id = i.thread_id
-                 WHERE i.id = $1 AND i.thread_id = $2 AND t.user_id = $3",
+                 WHERE i.id = $1 AND i.thread_id = $2 AND t.user_id = $3
+                 FOR SHARE OF i, t",
                 &[&issue_id, &command.thread_id(), &user.id()],
             )
             .await
@@ -440,6 +441,74 @@ mod tests {
             .unwrap()
             .get(0);
         assert_eq!(count, 3);
+    }
+
+    #[tokio::test]
+    async fn owner_checks_lock_references_through_commit() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let schema = test_schema(&url).await;
+        let mut writer = scoped_client(&url, &schema).await;
+        let mut transfer = scoped_client(&url, &schema).await;
+        let tx = writer.transaction().await.unwrap();
+
+        let result = persist_in_transaction(
+            &tx,
+            AuthenticatedUser::for_test(1),
+            "owner-transfer-001",
+            &DiceCommand::RollRating {
+                thread_id: 10,
+                issue_id: 100,
+                rating: 4.5,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.die_after, 4);
+
+        // An owner check without a held row lock would let this transfer
+        // race between validation and the event commit.
+        transfer
+            .batch_execute("SET lock_timeout = '250ms'")
+            .await
+            .unwrap();
+        let err = transfer
+            .execute("UPDATE threads SET user_id = 2 WHERE id = 10", &[])
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.code(),
+            Some(&tokio_postgres::error::SqlState::LOCK_NOT_AVAILABLE)
+        );
+        let err = transfer
+            .execute("UPDATE issues SET thread_id = 20 WHERE id = 100", &[])
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.code(),
+            Some(&tokio_postgres::error::SqlState::LOCK_NOT_AVAILABLE)
+        );
+
+        tx.commit().await.unwrap();
+        transfer.batch_execute("SET lock_timeout = 0").await.unwrap();
+        transfer
+            .execute("UPDATE threads SET user_id = 2 WHERE id = 10", &[])
+            .await
+            .unwrap();
+
+        let mut retry = scoped_client(&url, &schema).await;
+        let tx = retry.transaction().await.unwrap();
+        let err = persist_in_transaction(
+            &tx,
+            AuthenticatedUser::for_test(1),
+            "owner-transfer-002",
+            &DiceCommand::Reroll { thread_id: 10 },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.0, StatusCode::NOT_FOUND);
+        tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
