@@ -624,8 +624,20 @@ def build_candidates(
     *,
     no_diff_attempts_by_issue: Mapping[int, int] | None = None,
     no_diff_attempt_records: Iterable[NoDiffAttempt] | None = None,
+    include_backpressured_issues: bool = False,
 ) -> list[Candidate]:
-    """Build and rank executable issue and pull-request candidates."""
+    """Build and rank executable issue and pull-request candidates.
+
+    Args:
+        issues: Open issue payloads from GitHub.
+        prs: Open pull-request payloads from GitHub.
+        no_diff_attempts_by_issue: Retry counts keyed by issue number.
+        no_diff_attempt_records: Structured no-diff retry records.
+        include_backpressured_issues: Keep otherwise-eligible issues that are
+            only held back by the PR WIP or review-backlog gate. This is for
+            queue visibility and ranking, never for bypassing backpressure:
+            lease assignment still uses the default filtered form.
+    """
     issue_map = {int(issue['number']): issue for issue in issues}
     retry_counts = no_diff_attempts_by_issue or {}
     attempt_records = None if no_diff_attempt_records is None else list(no_diff_attempt_records)
@@ -654,17 +666,18 @@ def build_candidates(
         body = str(issue.get('body') or '')
         if body_depends_on_unresolved(body, open_numbers - {number}):
             continue
-        if pr_wip_full and not issue_bypasses_wip_limit(issue):
-            continue
-        if review_backlog_full and not issue_bypasses_wip_limit(
-            issue,
-            review_backlog_saturated=True,
-        ):
-            # End-to-end backpressure: while the completion stages are
-            # saturated, the fleet drains existing PRs instead of
-            # manufacturing new ones. Only main-breakage bypasses this gate
-            # when the review backlog is saturated (>= FACTORY_REVIEW_BACKLOG_LIMIT).
-            continue
+        if not include_backpressured_issues:
+            if pr_wip_full and not issue_bypasses_wip_limit(issue):
+                continue
+            if review_backlog_full and not issue_bypasses_wip_limit(
+                issue,
+                review_backlog_saturated=True,
+            ):
+                # End-to-end backpressure: while the completion stages are
+                # saturated, the fleet drains existing PRs instead of
+                # manufacturing new ones. Only main-breakage bypasses this gate
+                # when the review backlog is saturated (>= FACTORY_REVIEW_BACKLOG_LIMIT).
+                continue
         labels = labels_of(issue)
         candidates.append(
             Candidate(
