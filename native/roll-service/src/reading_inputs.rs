@@ -85,7 +85,7 @@ struct Pending(Option<Object>);
 impl Drop for Pending {
     fn drop(&mut self) {
         if let Some(c) = self.0.take() {
-            drop(c);
+            drop(Object::take(c));
         }
     }
 }
