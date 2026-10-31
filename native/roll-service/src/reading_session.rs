@@ -285,7 +285,38 @@ async fn bootstrap_once(
                 .map_err(session_error)?,
             )?,
         };
-        validate_pending(&tx, user, &session).await?;
+        // Pending selection is disposable UI state. A legacy writer can leave
+        // a stale issue pointer (or a dangling thread) behind; dropping that
+        // pointer must not wedge every native Roll request with a 500.
+        let (thread_valid, issue_valid) = pending_validity(
+            &tx,
+            user,
+            session.pending_thread_id,
+            session.pending_issue_id,
+        )
+        .await?;
+        if !thread_valid {
+            tx.execute(
+                "UPDATE sessions
+                 SET pending_thread_id=NULL,pending_issue_id=NULL,
+                     pending_thread_updated_at=NULL
+                 WHERE id=$1 AND user_id=$2",
+                &[&session.id, &user.id()],
+            )
+            .await
+            .map_err(session_error)?;
+            session.pending_thread_id = None;
+            session.pending_issue_id = None;
+            session.pending_thread_updated_at = None;
+        } else if !issue_valid {
+            tx.execute(
+                "UPDATE sessions SET pending_issue_id=NULL WHERE id=$1 AND user_id=$2",
+                &[&session.id, &user.id()],
+            )
+            .await
+            .map_err(session_error)?;
+            session.pending_issue_id = None;
+        }
         if session.bandwidth_source.is_none() {
             tx.batch_execute("SAVEPOINT bandwidth_inference")
                 .await
@@ -364,31 +395,23 @@ async fn bootstrap_once(
     }
 }
 
-async fn validate_pending(
+async fn pending_validity(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
-    session: &ReadingSession,
-) -> Result<(), ApiError> {
-    let valid: bool = tx
+    pending_thread_id: Option<i32>,
+    pending_issue_id: Option<i32>,
+) -> Result<(bool, bool), ApiError> {
+    let row = tx
         .query_one(
             "SELECT
-      ($2::int IS NULL OR EXISTS (SELECT 1 FROM threads WHERE id=$2 AND user_id=$1))
-      AND ($3::int IS NULL OR EXISTS (SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id
+      ($2::int IS NULL OR EXISTS (SELECT 1 FROM threads WHERE id=$2 AND user_id=$1)),
+      ($3::int IS NULL OR EXISTS (SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id
         WHERE i.id=$3 AND t.user_id=$1 AND ($2::int IS NULL OR i.thread_id=$2)))",
-            &[
-                &user.id(),
-                &session.pending_thread_id,
-                &session.pending_issue_id,
-            ],
+            &[&user.id(), &pending_thread_id, &pending_issue_id],
         )
         .await
-        .map_err(session_error)?
-        .get(0);
-    if valid {
-        Ok(())
-    } else {
-        Err(corrupt())
-    }
+        .map_err(session_error)?;
+    Ok((row.get(0), row.get(1)))
 }
 
 // PostgreSQL JSON timestamps omit trailing zeroes; checkpoints use Python isoformat.
@@ -537,5 +560,80 @@ mod tests {
         }
         assert!(SessionPolicy::new(0, 6).is_err());
         assert!(SessionPolicy::new(6, 21).is_err());
+    }
+
+    #[tokio::test]
+    async fn stale_pending_pointers_are_detected_for_repair() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("pending_validity_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 INSERT INTO {schema}.users VALUES (1), (2);
+                 INSERT INTO {schema}.threads VALUES (10, 1), (20, 2);
+                 INSERT INTO {schema}.issues VALUES (100, 10), (200, 20);"
+            ))
+            .await
+            .unwrap();
+        let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .await
+            .unwrap();
+        let tx = client.transaction().await.unwrap();
+        let user = AuthenticatedUser::for_test(1);
+
+        assert_eq!(
+            pending_validity(&tx, user, Some(10), Some(100))
+                .await
+                .unwrap(),
+            (true, true)
+        );
+        // Legacy Python Roll can leave an issue from another thread in place.
+        assert_eq!(
+            pending_validity(&tx, user, Some(10), Some(200))
+                .await
+                .unwrap(),
+            (true, false)
+        );
+        // A dangling or foreign thread invalidates the whole pending pointer.
+        assert_eq!(
+            pending_validity(&tx, user, Some(20), None).await.unwrap(),
+            (false, true)
+        );
+        assert_eq!(
+            pending_validity(&tx, user, None, None).await.unwrap(),
+            (true, true)
+        );
+
+        tx.rollback().await.unwrap();
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
     }
 }
