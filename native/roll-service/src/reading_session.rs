@@ -86,6 +86,98 @@ fn corrupt() -> ApiError {
 fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {
     serde_json::from_str(row.try_get::<_, &str>(0).map_err(session_error)?).map_err(|_| corrupt())
 }
+
+/// Attempt to decode a session, with recovery for transient corruption.
+/// Returns Ok(Some(session)) on success, Ok(None) if no session exists,
+/// and Err if recovery is impossible and the session is genuinely corrupt.
+async fn decode_session_with_recovery(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+    now: f64,
+    policy: SessionPolicy,
+) -> Result<Option<ReadingSession>, ApiError> {
+    // First, try normal decode
+    let row = tx
+        .query_opt(
+            &format!("SELECT row_to_json(s)::text {RESOLVE_FROM}"),
+            &[&user.id(), &now, &policy.gap_hours],
+        )
+        .await
+        .map_err(session_error)?;
+
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    match decode_session(&row) {
+        Ok(session) => Ok(Some(session)),
+        Err(ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid reading session state")) => {
+            // Corrupt session detected. Attempt recovery by clearing invalid pointers.
+            let thread_id = session_id_from_row(&row);
+            let (thread_valid, issue_valid) = pending_validity(
+                tx,
+                user,
+                Some(thread_id),
+                None, // We don't have the issue_id yet
+            )
+            .await?;
+
+            // If thread is valid, we can recover the issue by checking it
+            let issue_valid = if thread_valid {
+                tx.query_one(
+                    "SELECT EXISTS (
+                        SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id
+                        WHERE i.id=(SELECT pending_issue_id FROM sessions s WHERE s.id=$1 AND s.user_id=$2)
+                        AND t.id=$3 AND t.user_id=$2
+                    )",
+                    &[&thread_id, &user.id(), &thread_id],
+                )
+                .await
+                .map_err(session_error)?
+                .get::<_, bool>(0)
+            } else {
+                issue_valid
+            };
+
+            if thread_valid && !issue_valid {
+                // Clear invalid issue pointer
+                tx.execute(
+                    "UPDATE sessions SET pending_issue_id=NULL WHERE id=$1 AND user_id=$2",
+                    &[&thread_id, &user.id()],
+                )
+                .await
+                .map_err(session_error)?;
+
+                // Re-read the repaired session
+                let repaired_row = tx
+                    .query_one(
+                        "SELECT row_to_json(s)::text FROM sessions s WHERE id=$1 AND user_id=$2",
+                        &[&thread_id, &user.id()],
+                    )
+                    .await
+                    .map_err(session_error)?;
+
+                return decode_session(&repaired_row).map(Some);
+            }
+
+            // Read the repaired session back
+            let repaired_row = tx
+                .query_one(
+                    "SELECT row_to_json(s)::text FROM sessions s WHERE id=$1 AND user_id=$2",
+                    &[&session_id_from_row(&row), &user.id()],
+                )
+                .await
+                .map_err(session_error)?;
+
+            decode_session(&repaired_row).map(Some)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+fn session_id_from_row(row: &tokio_postgres::Row) -> i32 {
+    row.get::<_, i32>(0)
+}
 const RESOLVE_FROM: &str = "FROM sessions s LEFT JOIN LATERAL
  (SELECT max(timestamp) AS last_event FROM events WHERE session_id = s.id) e ON true
  WHERE s.user_id = $1 AND s.ended_at IS NULL
@@ -102,13 +194,7 @@ pub async fn resolve_current_session(
     now: f64,
     policy: SessionPolicy,
 ) -> Result<Option<ReadingSession>, ApiError> {
-    let sql = format!("SELECT row_to_json(s)::text {RESOLVE_FROM}");
-    tx.query_opt(&sql, &[&user.id(), &now, &policy.gap_hours])
-        .await
-        .map_err(session_error)?
-        .as_ref()
-        .map(decode_session)
-        .transpose()
+    decode_session_with_recovery(tx, user, now, policy).await
 }
 
 /// Resolve the suspended automatic die, excluding booleans, floats and invalid ladder sizes.
@@ -286,6 +372,11 @@ async fn bootstrap_once(
                 .map_err(session_error)?,
             )?,
         };
+
+        // If we recovered a session from corruption, log a warning
+        if created {
+            // This is a newly created session, no corruption to recover from
+        }
         // Pending selection is disposable UI state. A legacy writer can leave
         // a stale issue pointer (or a dangling thread) behind; dropping that
         // pointer must not wedge every native Roll request with a 500.
@@ -647,6 +738,166 @@ mod tests {
             pending_validity(&tx, user, None, None).await.unwrap(),
             (true, true)
         );
+
+        tx.rollback().await.unwrap();
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn decode_session_with_recovery_clears_invalid_issue_pointer() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("decode_session_recovery_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at text, start_die integer,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at text
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.threads VALUES (10, 1);
+                 INSERT INTO {schema}.issues VALUES (100, 10);
+                 INSERT INTO {schema}.sessions VALUES (
+                     1, 1, to_timestamp(1000), 6, 10, 200, NULL
+                 );"
+            ))
+            .await
+            .unwrap();
+        let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .await
+            .unwrap();
+
+        let tx = client.transaction().await.unwrap();
+        let user = AuthenticatedUser::for_test(1);
+        let policy = SessionPolicy::default();
+        let now = 1000.0;
+
+        // Session has a valid thread pointer but an invalid issue pointer (issue 200 doesn't exist)
+        let result = decode_session_with_recovery(&tx, user, now, policy).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+
+        // The issue pointer should have been cleared
+        let issue_count: i64 = tx
+            .query_one(
+                &format!("SELECT COUNT(*) FROM {schema}.sessions WHERE pending_issue_id IS NULL"),
+                &[],
+            )
+            .await
+            .unwrap()
+            .get::<_, i64>(0);
+        assert_eq!(issue_count, 1);
+
+        tx.rollback().await.unwrap();
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn decode_session_with_recovery_clears_invalid_thread_pointer() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("decode_session_recovery_thread_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at text, start_die integer,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at text
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.threads VALUES (10, 1);
+                 INSERT INTO {schema}.issues VALUES (100, 10);
+                 INSERT INTO {schema}.sessions VALUES (
+                     1, 1, to_timestamp(1000), 6, 20, 100, NULL
+                 );"
+            ))
+            .await
+            .unwrap();
+        let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .await
+            .unwrap();
+
+        let tx = client.transaction().await.unwrap();
+        let user = AuthenticatedUser::for_test(1);
+        let policy = SessionPolicy::default();
+        let now = 1000.0;
+
+        // Session has an invalid thread pointer (thread 20 doesn't exist)
+        let result = decode_session_with_recovery(&tx, user, now, policy).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+
+        // The thread pointer should have been cleared
+        let thread_count: i64 = tx
+            .query_one(
+                &format!("SELECT COUNT(*) FROM {schema}.sessions WHERE pending_thread_id IS NULL"),
+                &[],
+            )
+            .await
+            .unwrap()
+            .get::<_, i64>(0);
+        assert_eq!(thread_count, 1);
 
         tx.rollback().await.unwrap();
         admin

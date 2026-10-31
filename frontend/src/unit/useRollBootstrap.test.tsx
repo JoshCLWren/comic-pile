@@ -410,4 +410,30 @@ describe('useRollBootstrap retry progress (issue #3429)', () => {
     expect(result.current.isError).toBe(false)
     expect(result.current.isRetrying).toBe(false)
   })
+
+  it('recovers from transient corruption on retry', async () => {
+    // First call returns a corrupted session (Invalid reading session state)
+    // Second call returns a valid session after recovery
+    mockedBootstrap
+      .mockRejectedValueOnce(new Error('Invalid reading session state'))
+      .mockResolvedValueOnce(bootstrapResponse)
+
+    const { result } = renderBootstrap()
+
+    // First call fails
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.error).toEqual(new Error('Invalid reading session state'))
+    expect(result.current.data).toBeNull()
+
+    // Retry should succeed and recover
+    await act(async () => {
+      await result.current.refetch()
+    })
+
+    // React Query transitions from errored to success
+    await waitFor(() => expect(result.current.data).toBe(bootstrapResponse))
+    expect(result.current.isError).toBe(false)
+    expect(result.current.error).toBeNull()
+    expect(result.current.isPending).toBe(false)
+  })
 })
