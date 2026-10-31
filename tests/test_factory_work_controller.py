@@ -1376,8 +1376,8 @@ def test_real_assign_uses_jev_when_confident_and_canonical_when_absent(
     )
     claimed: list[int] = []
 
-    def assign_candidate(candidate: Any, _worker: str) -> bool:
-        claimed.append(candidate.number)
+    def assign_candidate(candidate: object, _worker: str) -> bool:
+        claimed.append(int(getattr(candidate, "number")))
         return True
 
     monkeypatch.setattr(controller, "assign_candidate", assign_candidate)
