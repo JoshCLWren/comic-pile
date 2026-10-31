@@ -1,6 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["cle1"],
+  "regions": [
+    "cle1"
+  ],
   "crons": [
     {
       "path": "/api/v1/cron/release-sync",
@@ -41,27 +43,44 @@
   "routes": [
     {
       "src": "/api/v1/auth/me",
-      "methods": ["GET"],
+      "methods": [
+        "GET"
+      ],
       "dest": "/api/auth/me.ts"
     },
     {
       "src": "/api/_native_roll/health",
-      "methods": ["GET"],
+      "methods": [
+        "GET"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api/v2/roll/bootstrap",
-      "methods": ["GET"],
+      "methods": [
+        "GET"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api/v1/roll/dismiss-pending",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api/roll/dismiss-pending",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v1/rate",
+      "methods": [
+        "POST"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
