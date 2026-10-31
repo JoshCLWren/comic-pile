@@ -360,7 +360,7 @@ jobs:
           set -euo pipefail
           deploy_sha="$(git rev-parse HEAD)"
           response="$(curl --fail --silent --show-error \
-            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&target=production&limit=20" \
+            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&limit=20" \
             -H "Authorization: Bearer ${VERCEL_TOKEN}")"
           newest_sha="$(jq -r '
             [.deployments[] | select(.readyState == "READY")]
