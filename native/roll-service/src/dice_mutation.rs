@@ -25,12 +25,12 @@ use tokio_postgres::{Client, IsolationLevel, Transaction};
 pub enum DiceCommand {
     ManualSelect {
         die: i32,
-    }
+    },
     Reset,
     /// The caller must prove this is the pending, Option E-readable offer.
     Reroll {
         thread_id: i32,
-    }
+    },
     /// The caller must complete issue progress in the same transaction.
     RollRating {
         thread_id: i32,
