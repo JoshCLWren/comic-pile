@@ -175,8 +175,12 @@ def shadow_report(
             },
             "latency_ms": round((time.monotonic() - started) * 1000),
         }
-    except (HTTPError, URLError, OSError, ValueError, TypeError, KeyError):
-        return {**report, "reason": "provider unavailable, uncertain or invalid response"}
+    except HTTPError as error:
+        return {**report, "reason": f"OpenRouter HTTP {error.code}"}
+    except ValueError as error:
+        return {**report, "reason": f"invalid or uncertain response: {error}"}
+    except (URLError, OSError, TypeError, KeyError) as error:
+        return {**report, "reason": f"provider error type: {type(error).__name__}"}
 
 
 def markdown(report: dict[str, Any]) -> str:
