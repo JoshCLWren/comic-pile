@@ -260,8 +260,8 @@ export function DecisionCard({
             it can come up again in a future roll.
           </p>
           <p className="text-xs text-[var(--theme-text-dim)]">
-            Snooze postpones the comic temporarily, and Cancel roll exits without rating. Skip is
-            different from both — it moves past this comic now.
+            Roll again snoozes this comic temporarily and selects the next offer. Cancel roll exits
+            without rating. Skip is different from both — it moves past this comic now.
           </p>
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <button

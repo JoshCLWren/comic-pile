@@ -48,14 +48,14 @@ export interface RatingViewData {
   predictedDie: number
   errorMessage: string
   rateIsPending: boolean
-  snoozeIsPending: boolean
+  snoozeIsPending?: boolean
   rerollIsPending?: boolean
   dismissIsPending: boolean
   skipIsPending: boolean
   manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
-  onSnooze: () => void
+  onSnooze?: () => void
   onReroll?: () => Promise<void>
   onSkip?: () => void
   onCancel: () => void
