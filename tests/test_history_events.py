@@ -124,7 +124,6 @@ async def test_delete_thread_creates_event(
     assert create_response.status_code == 201
     thread_id = create_response.json()["id"]
 
-    from app.models import Thread
     owner_id = (await async_db.get(Thread, thread_id)).user_id
 
     delete_response = await auth_client.delete(f"/api/v1/threads/{thread_id}")
