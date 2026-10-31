@@ -133,10 +133,11 @@ impl DiceCommand {
 /// without the coordinated Option E and current-offer validation.
 ///
 /// Lock ordering: this function takes the per-reader advisory lock as its first
-/// statement. A composite caller must invoke it before acquiring any other row
-/// locks for the same reader (for example `UPDATE issues` for progress); taking
-/// a row lock first and then calling this function can deadlock against a
-/// concurrent same-reader command and surface as a generic 500 (`40P01`).
+/// database statement, before any row lock. A composite caller must invoke it
+/// before acquiring any other row locks for the same reader (for example
+/// `UPDATE issues` for progress); taking a row lock first and then calling this
+/// function can deadlock against a concurrent same-reader command and surface
+/// as a generic 500 (`40P01`).
 pub async fn persist_in_transaction(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
@@ -605,18 +606,18 @@ mod tests {
         )
         .await
         .unwrap();
-        // The same key text from a different reader is a different action and
-        // must not replay the first reader's receipt.
+        // The same key text and command from a different reader is a distinct
+        // action and must not replay the first reader's receipt.
         let bob_receipt = execute_standalone(
             &mut client,
             bob,
             "shared-client-key-001",
-            &DiceCommand::ManualSelect { die: 12 },
+            &DiceCommand::ManualSelect { die: 4 },
         )
         .await
         .unwrap();
         assert_ne!(alice_receipt.event_id, bob_receipt.event_id);
         assert!(!bob_receipt.replayed);
-        assert_eq!(bob_receipt.die_after, 12);
+        assert_eq!(bob_receipt.die_after, 4);
     }
 }
