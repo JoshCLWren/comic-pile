@@ -41,3 +41,14 @@ def test_oracle_changes_trigger_native_parity(event: str, changed_path: str) -> 
         "pytest native/roll-service/parity/" in step.get("run", "")
         for step in steps
     )
+
+
+def test_parity_job_provides_the_disposable_database_url() -> None:
+    """A CI run without the test Postgres would silently skip every parity test."""
+    workflow = Path(__file__).resolve().parents[1] / ".github/workflows/rust-roll.yml"
+    config = yaml.load(workflow.read_text(), Loader=yaml.BaseLoader)
+    job = config["jobs"]["rust-roll"]
+    assert "RUST_ROLL_TEST_DATABASE_URL" in job["env"], (
+        "rust-roll must provide RUST_ROLL_TEST_DATABASE_URL so the native parity "
+        "suite cannot skip its database-backed coverage in CI"
+    )
