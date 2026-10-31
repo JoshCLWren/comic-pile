@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { rateApi } from '../../services/api-rate'
 import type { Issue } from '../../types'
@@ -36,11 +36,15 @@ export function IssueRateButton({
 }: IssueRateButtonProps) {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [savedRating, setSavedRating] = useState<number | null>(null)
+  const [savedRating, setSavedRating] = useState<number | null>(issue.rating ?? null)
   // A rating always marks its issue read. Keep the newest snapshot so two rows
   // rated in quick succession both land in the visible issue list.
   const latestSnapshot = useRef(snapshot)
   latestSnapshot.current = snapshot
+
+  useEffect(() => {
+    setSavedRating(issue.rating ?? null)
+  }, [issue.id, issue.rating])
 
   const mutation = useMutation({
     mutationFn: (rating: number) =>

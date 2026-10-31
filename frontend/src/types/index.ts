@@ -413,6 +413,8 @@ export interface Issue {
   read_at: string | null;
   /** ISO 8601 timestamp when the issue was created */
   created_at: string;
+  /** Latest rating for this issue, if any */
+  rating?: number | null;
 }
 
 /**
