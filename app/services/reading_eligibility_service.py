@@ -17,7 +17,7 @@ from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverla
 from app.repositories.reading_shadow_repository import load_shadow_inputs
 from app.schemas.thread import ThreadResponse
 from app.schemas.dependency import BlockingDependency, BlockingExplanation
-from app.services.reading_blocker_projection import unique_blocker_requirements
+from app.services.reading_blocker_projection import describe_blocker_gates
 from app.services.reading_list_cycle_validator import validate_reading_constraints
 from app.services.reading_list_evaluator import (
     Blocker,
@@ -240,15 +240,17 @@ def project_blocking_explanation(
         thread_id: Owned Thread to explain.
 
     Returns:
-        All restrictions without consulting cached flags or legacy edges.
+        All restrictions without consulting cached flags or legacy edges. Each
+        canonical blocking Issue appears once, with every gate named by its own
+        reader-facing origin.
     """
     state = snapshot.threads.get(thread_id)
     dependencies: list[BlockingDependency] = []
     reasons: list[str] = []
     if state is not None:
-        for blocker in unique_blocker_requirements(state.blockers):
-            origin = describe_blocker_origin(snapshot, blocker)
-            for issue_id in blocker.waiting_on_issue_ids:
+        for gate in describe_blocker_gates(state.blockers):
+            origin = describe_blocker_origin(snapshot, gate.blocker)
+            for issue_id in gate.described_issue_ids:
                 source_thread_id = snapshot.issue_thread_ids[issue_id]
                 label = f"{origin}: waiting on {snapshot.issue_labels.get(issue_id, 'required issue')}"
                 reasons.append(label)

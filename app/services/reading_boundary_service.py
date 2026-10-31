@@ -26,7 +26,11 @@ from app.schemas.reading_boundary import (
     ReadingBoundaryNext,
 )
 from app.services.errors import NotFoundError
-from app.services.reading_blocker_projection import unique_blocker_requirements
+from app.services.reading_blocker_projection import (
+    DescribedBlockerGate,
+    describe_blocker_gates,
+    requirement_count,
+)
 from app.services.reading_eligibility_service import (
     ReadingEligibilitySnapshot,
     get_execution_eligibility,
@@ -142,29 +146,47 @@ def _blocker_editor(
 def _blocker_reason(
     snapshot: ReadingEligibilitySnapshot,
     labels: BoundaryShadowLabels,
+    gate: DescribedBlockerGate,
+) -> str:
+    """Explain one live gate with reader-facing names only.
+
+    A gate that only repeats an already-described Issue names its rule without
+    restating the Issue, so one canonical requirement reads once while every
+    governing gate and its editor stays reachable.
+    """
+    label = _gate_label(snapshot, labels, gate.blocker)
+    if not gate.described_issue_ids:
+        return f"Also gated by {label}."
+    waiting = _issue_names(labels, gate.described_issue_ids)
+    return f"{label}: read {waiting} first"
+
+
+def _gate_label(
+    snapshot: ReadingEligibilitySnapshot,
+    labels: BoundaryShadowLabels,
     blocker: Blocker,
 ) -> str:
-    """Explain one concrete live blocker with reader-facing names only."""
-    waiting = _issue_names(labels, blocker.waiting_on_issue_ids)
+    """Name the rule behind one gate without exposing a storage ID."""
     if blocker.kind == "prerequisite":
-        origin = _prerequisite_origin_label(blocker.origin)
-        return f"{origin}: read {waiting} first"
+        return _prerequisite_origin_label(blocker.origin)
     list_name = _list_name(snapshot, labels, blocker.list_id)
-    kind = _KIND_TEXT[blocker.kind]
-    return f"{kind} in {list_name}: read {waiting} first"
+    return f"{_KIND_TEXT[blocker.kind]} in {list_name}"
 
 
 def _project_blocker(
     snapshot: ReadingEligibilitySnapshot,
     labels: BoundaryShadowLabels,
-    blocker: Blocker,
+    gate: DescribedBlockerGate,
 ) -> ReadingBoundaryBlocker:
-    """Project one evaluator blocker into the reader response contract."""
+    """Project one evaluator gate into the reader response contract."""
+    blocker = gate.blocker
     return ReadingBoundaryBlocker(
         kind=blocker.kind,
         origin="reading_list" if blocker.list_id is not None else "reader_prerequisite",
-        reason=_blocker_reason(snapshot, labels, blocker),
-        waiting_on=[_issue_label(labels, issue_id) for issue_id in blocker.waiting_on_issue_ids],
+        reason=_blocker_reason(snapshot, labels, gate),
+        waiting_on=[
+            _issue_label(labels, issue_id) for issue_id in gate.described_issue_ids
+        ],
         editor=_blocker_editor(snapshot, labels, blocker),
     )
 
@@ -231,17 +253,20 @@ def _summary(
     state: ThreadEligibility | None,
     next_issue: BoundaryIssue | None,
     blockers: Sequence[ReadingBoundaryBlocker],
+    requirements: int,
 ) -> str:
     """Return a concise explanation consistent with the projected state."""
     if state is None:
         return f"{title} is not currently active."
     if next_issue is None:
         return f"{title} has no unread issues."
-    if blockers:
+    if requirements:
         return (
-            f"{next_issue.label} is waiting on {len(blockers)} live "
-            f"requirement{'s' if len(blockers) != 1 else ''}."
+            f"{next_issue.label} is waiting on {requirements} live "
+            f"requirement{'s' if requirements != 1 else ''}."
         )
+    if blockers:
+        return f"{next_issue.label} is blocked by an active reading rule."
     return f"{next_issue.label} is available next."
 
 
@@ -261,7 +286,8 @@ def project_boundary_explanation(
         include_historical: Include retired associations only for the v1 API.
 
     Returns:
-        One explanation whose blockers exactly match the evaluator's blockers.
+        One explanation whose gates exactly match the evaluator's blockers while
+        each canonical blocking Issue is described and counted once.
     """
     thread = labels.threads[thread_id]
     state = snapshot.threads.get(thread_id)
@@ -270,27 +296,22 @@ def project_boundary_explanation(
         if state is not None and state.next_issue_id is not None
         else None
     )
-    blockers = (
-        [
-            _project_blocker(snapshot, labels, blocker)
-            for blocker in unique_blocker_requirements(state.blockers)
-        ]
-        if state is not None
-        else []
-    )
+    gates = describe_blocker_gates(state.blockers) if state is not None else ()
+    blockers = [_project_blocker(snapshot, labels, gate) for gate in gates]
+    requirements = requirement_count(gates)
     historical = _historical_rows(snapshot, labels, thread_id) if include_historical else []
     if state is None:
         boundary_state = "unavailable"
     elif next_issue is None:
         boundary_state = "complete"
-    elif blockers:
+    elif state.blockers:
         boundary_state = "blocked"
     else:
         boundary_state = "available"
     return ReadingBoundaryExplanation(
         thread_id=thread_id,
         state=boundary_state,
-        summary=_summary(thread.title, state, next_issue, blockers),
+        summary=_summary(thread.title, state, next_issue, blockers, requirements),
         next=(
             ReadingBoundaryNext(
                 issue=next_issue,

@@ -38,13 +38,15 @@ from app.schemas.reading_graph_preview import (
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
 from app.services.cbl_source_service import get_cbl_source_list_preview
-from app.services.reading_blocker_projection import unique_blocker_requirements
+from app.services.reading_blocker_projection import (
+    DescribedBlockerGate,
+    describe_blocker_gates,
+)
 from app.services.reading_list_cycle_validator import (
     ReadingCycleError,
     validate_reading_constraints,
 )
 from app.services.reading_list_evaluator import (
-    Blocker,
     ReadingIssue,
     ReadingList,
     ReadingListEntry,
@@ -345,25 +347,35 @@ def _series_nodes(
 
 
 def _blocker_explanation(
-    blocker: Blocker,
+    gate: DescribedBlockerGate,
     *,
     list_names: Mapping[int, str],
     issue_labels: Mapping[int, str],
 ) -> str:
-    """Name one restriction with its actual list/prerequisite authority."""
-    waiting = ", ".join(
-        issue_labels.get(issue_id, f"Issue {issue_id}") for issue_id in blocker.waiting_on_issue_ids
-    )
+    """Name one restriction with its actual list/prerequisite authority.
+
+    A gate whose Issues were already described by an earlier gate names only its
+    own rule, so the preview keeps every authority without repeating an Issue.
+    """
+    blocker = gate.blocker
     if blocker.kind == "prerequisite":
-        origin = "Reader prerequisite" if blocker.origin == "reader" else "Converted prerequisite"
-        return f"{origin}: waiting on {waiting}"
-    kind = {
-        "strict_order": "Strict order",
-        "hold": "Hold",
-        "after_previous": "Wait for previous",
-    }[blocker.kind]
-    list_name = list_names.get(blocker.list_id, "Reading List")
-    return f"{kind} in {list_name}: waiting on {waiting}"
+        label = (
+            "Reader prerequisite" if blocker.origin == "reader" else "Converted prerequisite"
+        )
+    else:
+        kind = {
+            "strict_order": "Strict order",
+            "hold": "Hold",
+            "after_previous": "Wait for previous",
+        }[blocker.kind]
+        label = f"{kind} in {list_names.get(blocker.list_id, 'Reading List')}"
+    if not gate.described_issue_ids:
+        return f"Also gated by {label}."
+    waiting = ", ".join(
+        issue_labels.get(issue_id, f"Issue {issue_id}")
+        for issue_id in gate.described_issue_ids
+    )
+    return f"{label}: waiting on {waiting}"
 
 
 def _issue_label(context: _GraphContext, issue_id: int) -> str:
@@ -405,15 +417,15 @@ def _issue_references(
         if state is not None and state.next_issue_id == issue_id:
             blockers = [
                 ReadingGraphBlocker(
-                    kind=blocker.kind,
-                    list_id=blocker.list_id,
-                    waiting_on_issue_ids=list(blocker.waiting_on_issue_ids),
-                    gate_issue_id=blocker.gate_issue_id,
+                    kind=gate.blocker.kind,
+                    list_id=gate.blocker.list_id,
+                    waiting_on_issue_ids=list(gate.described_issue_ids),
+                    gate_issue_id=gate.blocker.gate_issue_id,
                     explanation=_blocker_explanation(
-                        blocker, list_names=context.list_names, issue_labels=labels
+                        gate, list_names=context.list_names, issue_labels=labels
                     ),
                 )
-                for blocker in unique_blocker_requirements(state.blockers)
+                for gate in describe_blocker_gates(state.blockers)
             ]
         references.append(
             ReadingGraphIssueReference(

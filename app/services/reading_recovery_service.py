@@ -89,53 +89,61 @@ def build_reading_recovery(
     direct: list[ContinuityBlocker] = []
     chains: list[list[RollRecoveryChainNode]] = []
     recommended: dict[int, RollRecoveryPrerequisite] = {}
+    # One pending Issue is one recovery blocker even when several gates (for
+    # example a hold milestone and strict order) require it. Merge every gate's
+    # origin into that single note so no rule is hidden from the reader.
+    origins_by_issue: dict[int, list[str]] = {}
     for blocker in pending.blockers:
         origin = describe_blocker_origin(snapshot, blocker)
         if blocker.provenance:
             origin += "; " + "; ".join(blocker.provenance)
         for issue_id in blocker.waiting_on_issue_ids:
-            if len(direct) >= MAX_NODES:
-                diagnostics.append(
-                    RollRecoveryDiagnostic(
-                        code="node_limit_exceeded",
-                        node_type="issue",
-                        node_id=issue_id,
-                        limit=MAX_NODES,
-                    )
-                )
-                break
-            label = snapshot.issue_labels.get(issue_id, "Required issue")
-            direct.append(
-                ContinuityBlocker(
-                    source_type="issue",
-                    source_id=issue_id,
-                    source_label=label,
-                    satisfaction_type="item_read",
-                    blocker_type="item_unread",
-                    causing_issue_ids=[issue_id],
-                    unread_issue_details=[UnreadIssueDetail(issue_id=issue_id, label=label)],
-                    note=origin,
-                )
-            )
-            recommended.setdefault(
-                issue_id,
-                RollRecoveryPrerequisite(
+            notes = origins_by_issue.setdefault(issue_id, [])
+            if origin not in notes:
+                notes.append(origin)
+    for issue_id, notes in origins_by_issue.items():
+        if len(direct) >= MAX_NODES:
+            diagnostics.append(
+                RollRecoveryDiagnostic(
+                    code="node_limit_exceeded",
                     node_type="issue",
                     node_id=issue_id,
-                    label=label,
-                    is_readable=False,
-                ),
+                    limit=MAX_NODES,
+                )
             )
-            for chain in walk(issue_id, frozenset()):
-                chains.append(chain)
-                for node in chain:
-                    if node.is_readable:
-                        recommended[node.node_id] = RollRecoveryPrerequisite(
-                            node_type="issue",
-                            node_id=node.node_id,
-                            label=node.label,
-                            is_readable=True,
-                        )
+            break
+        label = snapshot.issue_labels.get(issue_id, "Required issue")
+        direct.append(
+            ContinuityBlocker(
+                source_type="issue",
+                source_id=issue_id,
+                source_label=label,
+                satisfaction_type="item_read",
+                blocker_type="item_unread",
+                causing_issue_ids=[issue_id],
+                unread_issue_details=[UnreadIssueDetail(issue_id=issue_id, label=label)],
+                note="; ".join(notes),
+            )
+        )
+        recommended.setdefault(
+            issue_id,
+            RollRecoveryPrerequisite(
+                node_type="issue",
+                node_id=issue_id,
+                label=label,
+                is_readable=False,
+            ),
+        )
+        for chain in walk(issue_id, frozenset()):
+            chains.append(chain)
+            for node in chain:
+                if node.is_readable:
+                    recommended[node.node_id] = RollRecoveryPrerequisite(
+                        node_type="issue",
+                        node_id=node.node_id,
+                        label=node.label,
+                        is_readable=True,
+                    )
     return RollRecoveryInfo(
         original_thread_id=pending_thread_id,
         original_thread_title=(
