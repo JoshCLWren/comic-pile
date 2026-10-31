@@ -88,7 +88,8 @@ fn unavailable() -> ApiError {
     ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Roll offer unavailable")
 }
 
-/// Keep only the highest-ranked `die` eligible candidates, in queue order.
+/// Take the highest-ranked `die` eligible candidates, then apply temporary
+/// exclusions without backfilling from below that bound.
 fn bounded_pool<T>(
     candidates: impl IntoIterator<Item = T>,
     is_excluded: impl Fn(&T) -> bool,
@@ -96,8 +97,8 @@ fn bounded_pool<T>(
 ) -> Vec<T> {
     candidates
         .into_iter()
-        .filter(|candidate| !is_excluded(candidate))
         .take(die.max(0) as usize)
+        .filter(|candidate| !is_excluded(candidate))
         .collect()
 }
 
@@ -373,13 +374,19 @@ mod tests {
     }
 
     #[test]
-    fn bounded_pool_keeps_only_the_top_die_ranked_candidates() {
+    fn bounded_pool_never_backfills_a_snoozed_candidate() {
+        let candidates = vec![(1, "first"), (2, "second"), (3, "third"), (4, "fourth")];
+        let excluded = HashSet::from([2, 3]);
+        let pool = bounded_pool(candidates, |candidate| excluded.contains(&candidate.0), 2);
+        // #2 is inside the d2 scope; removing it shrinks the pool to one choice
+        // instead of pulling #3 up from outside the scope.
+        assert_eq!(pool, vec![(1, "first")]);
+
         let candidates = vec![(1, "first"), (2, "second"), (3, "third"), (4, "fourth")];
         let excluded = HashSet::from([3]);
         let pool = bounded_pool(candidates, |candidate| excluded.contains(&candidate.0), 4);
         assert_eq!(pool, vec![(1, "first"), (2, "second"), (4, "fourth")]);
-        let pool = bounded_pool(pool, |_| false, 2);
-        assert_eq!(pool, vec![(1, "first"), (2, "second")]);
+
         let empty: Vec<(i32, &str)> = Vec::new();
         assert!(bounded_pool(empty, |_| false, 6).is_empty());
     }
