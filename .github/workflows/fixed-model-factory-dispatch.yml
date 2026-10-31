@@ -414,7 +414,7 @@ jobs:
       # Rank once before worker leases. The actual controller uses the decision
       # only within existing interchangeable classes and otherwise falls back.
       - name: Rank factory issue candidates with Jev (active selection)
-        if: steps.api_budget.outputs.allow == 'true' && github.event_name != 'push'
+        if: steps.api_budget.outputs.allow == 'true'
         continue-on-error: true
         shell: bash
         env:
@@ -441,7 +441,7 @@ jobs:
           echo "FACTORY_JEV_RANKING_FILE=$RUNNER_TEMP/jev-shadow.json" >> "$GITHUB_ENV"
 
       - name: Preserve Jev selection decision for later evaluation
-        if: always() && hashFiles('.github/scripts/factory_jev_shadow.py') != '' && github.event_name != 'push'
+        if: always() && hashFiles('.github/scripts/factory_jev_shadow.py') != ''
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
