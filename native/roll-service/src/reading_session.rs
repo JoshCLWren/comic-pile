@@ -308,48 +308,6 @@ async fn bootstrap_once(
             // Repair will happen on write paths (offer/reset/dismiss).
             session.pending_issue_id = None;
         }
-        if session.bandwidth_source.is_none() {
-            tx.batch_execute("SAVEPOINT bandwidth_inference")
-                .await
-                .map_err(session_error)?;
-            // Python's first history SELECT autoflushes a new ORM session, so
-            // started_at is available before infer_bandwidth applies its daypart.
-            let prediction =
-                super::session_bandwidth::predict(&tx, user, Some(&session.started_at)).await;
-            let (level, confidence) = match prediction {
-                Ok(prediction) => prediction,
-                Err(_) => {
-                    tx.batch_execute("ROLLBACK TO SAVEPOINT bandwidth_inference")
-                        .await
-                        .map_err(session_error)?;
-                    tracing::warn!("bandwidth inference failed; using balanced default");
-                    ("balanced", 0.1)
-                }
-            };
-            tx.batch_execute("RELEASE SAVEPOINT bandwidth_inference")
-                .await
-                .map_err(session_error)?;
-            tx.execute(
-                "UPDATE sessions SET predicted_bandwidth=$2, active_bandwidth=$2,
-              bandwidth_confidence=$3, bandwidth_source='inferred', bandwidth_version='v1',
-              bandwidth_updated_at=to_timestamp($4) WHERE id=$1 AND user_id=$5",
-                &[&session.id, &level, &confidence, &now, &user.id()],
-            )
-            .await
-            .map_err(session_error)?;
-        }
-        session = decode_session(
-            &tx.query_one(
-                "SELECT row_to_json(s)::text FROM sessions s WHERE id=$1 AND user_id=$2",
-                &[&session.id, &user.id()],
-            )
-            .await
-            .map_err(session_error)?,
-        )?;
-        if created {
-            // Skip checkpoint creation for GET endpoint - must be read-only.
-            // Checkpoint will be created on the first write operation.
-        }
         // Python captures the browser timezone after the session-start checkpoint.
         // Since this is a GET endpoint, skip timezone update to maintain read-only behavior.
         // Timezone will be updated on the first write operation.
