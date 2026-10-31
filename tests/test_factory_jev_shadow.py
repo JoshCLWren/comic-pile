@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,13 @@ SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import factory_jev_shadow as shadow
+SPEC = importlib.util.spec_from_file_location(
+    "factory_jev_shadow", SCRIPTS / "factory_jev_shadow.py"
+)
+assert SPEC is not None and SPEC.loader is not None
+shadow = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = shadow
+SPEC.loader.exec_module(shadow)
 
 
 def issue(number: int, labels: list[str] | None = None, *, body: str = "Fix a product bug") -> dict[str, Any]:
