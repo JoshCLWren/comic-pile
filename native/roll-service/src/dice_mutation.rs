@@ -491,7 +491,10 @@ mod tests {
         );
 
         tx.commit().await.unwrap();
-        transfer.batch_execute("SET lock_timeout = 0").await.unwrap();
+        transfer
+            .batch_execute("SET lock_timeout = 0")
+            .await
+            .unwrap();
         transfer
             .execute("UPDATE threads SET user_id = 2 WHERE id = 10", &[])
             .await
