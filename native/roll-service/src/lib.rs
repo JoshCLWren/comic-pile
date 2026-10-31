@@ -102,6 +102,7 @@ pub async fn serve(
 }
 
 /// Python-compatible JSON detail boundary; never serialize a dependency error.
+#[derive(Debug)]
 pub struct ApiError(pub StatusCode, pub &'static str);
 #[derive(Serialize)]
 struct ErrorBody {
