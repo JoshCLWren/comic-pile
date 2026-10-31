@@ -622,7 +622,7 @@ mod tests {
                  );
                  CREATE TABLE {schema}.sessions (
                      id integer PRIMARY KEY, user_id integer NOT NULL,
-                     started_at timestamptz NOT NULL, start_die integer NOT NULL,
+                      started_at timestamptz NOT NULL, ended_at timestamptz, start_die integer NOT NULL,
                      pending_thread_id integer, pending_issue_id integer,
                      pending_thread_updated_at timestamptz, timezone text,
                      predicted_bandwidth text, active_bandwidth text,
@@ -652,8 +652,8 @@ mod tests {
                  -- Create a session with stale pending pointers to test read-only behavior
                  INSERT INTO {schema}.sessions 
                  (id, user_id, started_at, start_die, pending_thread_id, pending_issue_id,
-                  pending_thread_updated_at) 
-                 VALUES (1, 1, NOW() - interval '1 hour', 6, 999, 999, NOW());"
+                  pending_thread_updated_at, reading_mode_suggested) 
+                 VALUES (1, 1, NOW() - interval '1 hour', 6, 999, 999, NOW(), false);"
             ))
             .await
             .unwrap();
@@ -669,8 +669,17 @@ mod tests {
             .await
             .unwrap();
         
-        let config = crate::config::Config::from_test_url(&url);
-        let state = AppState::new(config).await.unwrap();
+        let base = url.split('?').next().unwrap();
+        let config = crate::config::Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(format!("{base}?sslmode=disable&options=-csearch_path%3D{schema}")),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic".into()),
+            "RUST_ROLL_POOL_SIZE" => Some("1".into()),
+            "RUST_ROLL_POOL_TIMEOUT_MS" => Some("10000".into()),
+            "RUST_ROLL_REQUEST_TIMEOUT_MS" => Some("10000".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = AppState::new(config).unwrap();
         let user = AuthenticatedUser::for_test(1);
         
         // Count initial state
@@ -681,6 +690,11 @@ mod tests {
             .get(0);
         let initial_snapshot_count: i64 = client
             .query_one(&format!("SELECT COUNT(*) FROM {schema}.snapshots"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        let initial_event_count: i64 = client
+            .query_one(&format!("SELECT COUNT(*) FROM {schema}.events"), &[])
             .await
             .unwrap()
             .get(0);
@@ -698,6 +712,9 @@ mod tests {
         )
         .await;
         assert!(result.is_ok(), "Bootstrap should succeed: {:?}", result);
+        let bootstrap = result.unwrap();
+        assert!(bootstrap.session.pending_thread_id.is_none(), "Response should null pending_thread_id");
+        assert!(bootstrap.session.pending_issue_id.is_none(), "Response should null pending_issue_id");
         
         // Count state after bootstrap - should be unchanged
         let final_session_count: i64 = client
@@ -710,10 +727,16 @@ mod tests {
             .await
             .unwrap()
             .get(0);
+        let final_event_count: i64 = client
+            .query_one(&format!("SELECT COUNT(*) FROM {schema}.events"), &[])
+            .await
+            .unwrap()
+            .get(0);
         
         // Verify no writes occurred
         assert_eq!(initial_session_count, final_session_count, "No new sessions should be created");
         assert_eq!(initial_snapshot_count, final_snapshot_count, "No snapshots should be created");
+        assert_eq!(initial_event_count, final_event_count, "No events should be created");
         
         // Verify the stale pending pointers are not persisted but are nulled in the response
         let session: Option<String> = client
@@ -742,6 +765,128 @@ mod tests {
         assert_eq!(db_pending_thread, Some(999), "Database should preserve stale pending_thread_id");
         assert_eq!(db_pending_issue, Some(999), "Database should preserve stale pending_issue_id");
         
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+
+    #[tokio::test]
+    async fn bootstrap_get_is_read_only_issue_stale() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("bootstrap_issue_stale_{}_{}", std::process::id(), nanos);
+        let base = url.split('?').next().unwrap();
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at timestamptz NOT NULL, ended_at timestamptz,
+                     start_die integer NOT NULL,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz, timezone text,
+                     predicted_bandwidth text, active_bandwidth text,
+                     bandwidth_confidence float8, bandwidth_source text,
+                     bandwidth_version timestamptz, reading_bandwidth text,
+                     reading_intent text, reading_mode_source text,
+                     reading_mode_suggested boolean, active_intent text,
+                     predicted_intent text, intent_confidence float8,
+                     intent_source text, intent_version timestamptz,
+                     session_mode_correction_guidance json
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     session_id integer, thread_id integer, issue_id integer,
+                     type text, timestamp timestamptz, rating float8,
+                     context json, selected_thread_id integer, result integer,
+                     die_after integer, metadata_json json
+                 );
+                 CREATE TABLE {schema}.snapshots (
+                     id integer PRIMARY KEY, session_id integer, event_id integer,
+                     thread_states json, session_state json, created_at timestamptz,
+                     description text, snapshot_kind text, schema_version integer
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.threads VALUES (10, 1);
+                 INSERT INTO {schema}.issues VALUES (100, 10);
+                 INSERT INTO {schema}.sessions
+                 (id, user_id, started_at, start_die, pending_thread_id, pending_issue_id,
+                  pending_thread_updated_at, reading_mode_suggested)
+                 VALUES (1, 1, NOW() - interval '1 hour', 6, 10, 999, NOW(), false);"
+            ))
+            .await
+            .unwrap();
+
+        let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .await
+            .unwrap();
+
+        let config = crate::config::Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(format!("{base}?sslmode=disable&options=-csearch_path%3D{schema}")),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic".into()),
+            "RUST_ROLL_POOL_SIZE" => Some("1".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = AppState::new(config).unwrap();
+        let user = AuthenticatedUser::for_test(1);
+
+        let result = crate::reading_session::bootstrap_at(
+            &state,
+            user,
+            None,
+            SessionPolicy::default(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64(),
+        )
+        .await;
+        assert!(result.is_ok(), "Bootstrap should succeed: {:?}", result);
+        let bootstrap = result.unwrap();
+        assert_eq!(bootstrap.session.pending_thread_id, Some(10), "Thread should remain valid");
+        assert!(bootstrap.session.pending_issue_id.is_none(), "Stale issue should be nulled in response");
+
+        let db_pending_thread: Option<i32> = client
+            .query_one(&format!("SELECT pending_thread_id FROM {schema}.sessions WHERE id=1"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        let db_pending_issue: Option<i32> = client
+            .query_one(&format!("SELECT pending_issue_id FROM {schema}.sessions WHERE id=1"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(db_pending_thread, Some(10), "Database should preserve pending_thread_id");
+        assert_eq!(db_pending_issue, Some(999), "Database should preserve stale pending_issue_id");
+
         admin
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
             .await
