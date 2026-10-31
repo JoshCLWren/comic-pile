@@ -137,8 +137,16 @@ async fn execute_rate_pipeline(
             .await
             .map_err(db::query_error)?;
 
-            // Update thread state: decrement issues_remaining, update last_rating/last_activity_at
-            let new_issues_remaining = /* computed below */ 0; // placeholder
+            // Update thread state: decrement issues_remaining by 1 (one issue just read), update last_rating/last_activity_at
+            let current_issues: i32 = tx.query_one_optional(
+                "SELECT issues_remaining FROM threads WHERE id = $1",
+                &[&thread_id],
+            )
+            .await
+            .map_err(db::query_error)?
+            .map(|r| r.get::<_, i32>(0))
+            .unwrap_or(0);
+            let new_issues_remaining = current_issues.saturating_sub(1);
             tx.execute(
                 "UPDATE threads SET issues_remaining = $1, last_rating = $2, last_activity_at = to_timestamp(extract(epoch from current_timestamp)) WHERE id = $3",
                 &[&new_issues_remaining, &rate_data.rating, &thread_id],
@@ -341,27 +349,25 @@ async fn find_any_owned_thread_with_issues_raw(
     }
 
     let r = &rows[0];
-    Ok(Some((
-        r.get::<_, i32>(0),
-        db::ThreadQuery {
-            id: r.get(0),
-            title: r.get(1),
-            format: r.get(2),
-            issues_remaining: r.get(3),
-            queue_position: r.get(4),
-            status: r.get(5),
-            last_rating: r.get(6),
-            last_activity_at: format_activity(r.get::<_, i64>(7)),
-            notes: r.get(8),
-            is_test: r.get(9),
-            created_at: format_date(r.get::<_, i64>(10)),
-            total_issues: r.get(11),
-            next_unread_issue_id: r.get(12),
-            reading_progress: r.get(13).or_else(|| Some("in_progress".to_string())),
-            is_blocked: r.get(14),
-            manual_creator_credits: r.get(15),
-        },
-    ))
+    let thread = db::ThreadQuery {
+        id: r.get(0),
+        title: r.get(1),
+        format: r.get(2),
+        issues_remaining: r.get(3),
+        queue_position: r.get(4),
+        status: r.get(5),
+        last_rating: r.get(6),
+        last_activity_at: format_activity(r.get::<_, i64>(7)),
+        notes: r.get(8),
+        is_test: r.get(9),
+        created_at: format_date(r.get::<_, i64>(10)),
+        total_issues: r.get(11),
+        next_unread_issue_id: r.get(12),
+        reading_progress: r.get(13).or_else(|| Some("in_progress".to_string())),
+        is_blocked: r.get(14),
+        manual_creator_credits: r.get(15),
+    };
+    Ok(Some((r.get::<_, i32>(0), thread)))
 }
 
 /// Determine which issue to rate and compute the die_after value.
