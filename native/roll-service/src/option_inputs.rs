@@ -2,12 +2,14 @@
 use crate::{
     auth::AuthenticatedUser,
     db,
-    reading_inputs::{self, CoreReadingInputs},
+    reading_inputs::{
+        self, CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility,
+    },
     ApiError, AppState,
 };
 use axum::http::StatusCode;
 use deadpool_postgres::Object;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     time::Instant,
@@ -103,87 +105,342 @@ fn volume_key(provider: &str, external_id: &str) -> Option<String> {
     (provider == "comicvine").then(|| format!("comicvine:{value}"))
 }
 
+// Collect independent, owner-scoped datasets without multiplying list entries by
+// issues or prerequisites. This is one PostgreSQL statement, not nine sequential
+// network round trips. Eligibility remains exclusively in the Rust Option E evaluator.
+//
+// MEMORY CONSIDERATION: This query aggregates all owner-scoped data into a single JSONB response.
+// For users with thousands of threads/issues/lists/entries, this could produce large responses
+// (tens of MB). The risk of memory pressure on both PostgreSQL (JSONB aggregation) and the
+// Rust client (deserialization) is acknowledged. This optimization targets the observed 17-call
+// bootstrap total; remaining session and presentation reads are still separate.
+//
+// TODO: Consider defensive pagination or payload limiting if memory usage becomes problematic
+// in production. Monitor payload sizes and consider adding a LIMIT clause for large datasets.
+const SNAPSHOT_SQL: &str = r#"
+WITH
+owned_threads AS MATERIALIZED (
+    SELECT id, status, title, next_unread_issue_id, is_blocked,
+           queue_position, catalog_series_id
+    FROM threads WHERE user_id = $1
+),
+owned_issues AS MATERIALIZED (
+    SELECT i.id, i.thread_id, i.position, i.status, i.issue_number,
+           i.catalog_issue_id
+    FROM issues i JOIN owned_threads t ON t.id = i.thread_id
+),
+owned_lists AS (
+    SELECT id, mode FROM custom_cbl_lists WHERE user_id = $1
+),
+owned_entries AS (
+    SELECT e.id, e.list_id, e.issue_id, e.gate, e.skipped, e.position
+    FROM custom_cbl_entries e
+    JOIN owned_lists l ON l.id = e.list_id
+),
+reader_prerequisites AS (
+    SELECT d.id, d.source_issue_id, d.target_issue_id,
+           d.classification, d.provenance
+    FROM dependencies d
+    WHERE d.origin = 'reader'
+      AND (EXISTS (SELECT 1 FROM owned_issues i WHERE i.id = d.source_issue_id)
+        OR EXISTS (SELECT 1 FROM owned_issues i WHERE i.id = d.target_issue_id))
+),
+volume_evidence AS (
+    SELECT t.id AS thread_id, e.provider, e.external_id, e.entity_type
+    FROM owned_threads t
+    JOIN thread_external_series_mappings m ON m.thread_id = t.id
+    JOIN external_identities e ON e.id = m.external_identity_id
+    WHERE m.status = 'confirmed'
+    UNION ALL
+    SELECT t.id AS thread_id, e.provider, e.external_id, e.entity_type
+    FROM owned_threads t
+    JOIN catalog_series s ON s.id = t.catalog_series_id
+    JOIN external_identities e ON e.id = s.canonical_external_identity_id
+),
+overlap_rows AS (
+    SELECT d.id, d.list_id, c.provider AS continuing_provider,
+           c.external_id AS continuing_external_id,
+           w.provider AS waiting_provider, w.external_id AS waiting_external_id
+    FROM custom_cbl_overlap_decisions d
+    JOIN external_identities c ON c.id = d.continuing_external_identity_id
+    JOIN external_identities w ON w.id = d.waiting_external_identity_id
+    JOIN owned_lists l ON l.id = d.list_id
+    WHERE d.user_id = $1
+),
+exclusion_rows AS (
+    SELECT issue_id, thread_id, provider, external_volume_id
+    FROM collection_exclusions WHERE user_id = $1
+),
+issue_volume_rows AS (
+    SELECT i.id AS issue_id, e.provider, e.external_id
+    FROM owned_issues i
+    JOIN catalog_issues ci ON ci.id = i.catalog_issue_id
+    JOIN catalog_series s ON s.id = ci.catalog_series_id
+    JOIN external_identities e ON e.id = s.canonical_external_identity_id
+)
+SELECT jsonb_build_object(
+    'threads', COALESCE((SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id)
+                         FROM owned_threads t), '[]'::jsonb),
+    'issues', COALESCE((SELECT jsonb_agg(to_jsonb(i)
+                         ORDER BY i.thread_id, i.position, i.id)
+                        FROM owned_issues i), '[]'::jsonb),
+    'lists', COALESCE((SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id)
+                       FROM owned_lists l), '[]'::jsonb),
+    'entries', COALESCE((SELECT jsonb_agg(to_jsonb(e)
+                         ORDER BY e.list_id, e.position, e.id)
+                         FROM owned_entries e), '[]'::jsonb),
+    'prerequisites', COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id)
+                              FROM reader_prerequisites p), '[]'::jsonb),
+    'evidence', COALESCE((SELECT jsonb_agg(to_jsonb(v))
+                         FROM volume_evidence v), '[]'::jsonb),
+    'overlaps', COALESCE((SELECT jsonb_agg(to_jsonb(o) ORDER BY o.id)
+                         FROM overlap_rows o), '[]'::jsonb),
+    'exclusions', COALESCE((SELECT jsonb_agg(to_jsonb(x))
+                           FROM exclusion_rows x), '[]'::jsonb),
+    'issue_volumes', COALESCE((SELECT jsonb_agg(to_jsonb(v))
+                              FROM issue_volume_rows v), '[]'::jsonb)
+)::text
+"#;
+
+#[derive(Deserialize)]
+struct SnapshotRows {
+    threads: Vec<ThreadRow>,
+    issues: Vec<IssueRow>,
+    lists: Vec<ListRow>,
+    entries: Vec<EntryRow>,
+    prerequisites: Vec<PrerequisiteRow>,
+    evidence: Vec<VolumeEvidenceRow>,
+    overlaps: Vec<OverlapRow>,
+    exclusions: Vec<ExclusionRow>,
+    issue_volumes: Vec<IssueVolumeRow>,
+}
+#[derive(Deserialize)]
+struct ThreadRow {
+    id: i32,
+    status: String,
+    title: String,
+    next_unread_issue_id: Option<i32>,
+    is_blocked: bool,
+    queue_position: i32,
+}
+#[derive(Deserialize)]
+struct IssueRow {
+    id: i32,
+    thread_id: i32,
+    position: i32,
+    status: String,
+    issue_number: String,
+}
+#[derive(Deserialize)]
+struct ListRow {
+    id: i32,
+    mode: String,
+}
+#[derive(Deserialize)]
+struct EntryRow {
+    id: i32,
+    list_id: i32,
+    issue_id: i32,
+    gate: String,
+    skipped: bool,
+}
+#[derive(Deserialize)]
+struct PrerequisiteRow {
+    id: i32,
+    source_issue_id: i32,
+    target_issue_id: i32,
+    classification: Option<String>,
+    provenance: Option<String>,
+}
+#[derive(Deserialize)]
+struct VolumeEvidenceRow {
+    thread_id: i32,
+    provider: String,
+    external_id: String,
+    entity_type: String,
+}
+#[derive(Deserialize)]
+struct OverlapRow {
+    list_id: i32,
+    continuing_provider: String,
+    continuing_external_id: String,
+    waiting_provider: String,
+    waiting_external_id: String,
+}
+#[derive(Deserialize)]
+struct ExclusionRow {
+    issue_id: Option<i32>,
+    thread_id: Option<i32>,
+    provider: Option<String>,
+    external_volume_id: Option<String>,
+}
+#[derive(Deserialize)]
+struct IssueVolumeRow {
+    issue_id: i32,
+    provider: String,
+    external_id: String,
+}
+
 async fn load_transaction(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
-) -> Result<OptionInputs, tokio_postgres::Error> {
-    let core = reading_inputs::load_core_transaction(tx, user).await?;
-    let user_id = user.id();
+) -> Result<OptionInputs, ApiError> {
+    let row = tx
+        .query_one(SNAPSHOT_SQL, &[&user.id()])
+        .await
+        .map_err(db::query_error)?;
+    let encoded: String = row.try_get(0).map_err(db::query_error)?;
+    let snapshot: SnapshotRows = serde_json::from_str(&encoded).map_err(|error| {
+        tracing::error!(%error, "Invalid Option E snapshot response");
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid reading snapshot",
+        )
+    })?;
+    assemble_snapshot(snapshot)
+}
+
+fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
+    let core = CoreReadingInputs {
+        threads: snapshot
+            .threads
+            .iter()
+            .map(|t| ReadingThread {
+                id: t.id,
+                status: t.status.clone(),
+                title: t.title.clone(),
+            })
+            .collect(),
+        issues: snapshot
+            .issues
+            .iter()
+            .map(|i| ReadingIssue {
+                id: i.id,
+                thread_id: i.thread_id,
+                position: i.position,
+                status: i.status.clone(),
+                issue_number: i.issue_number.clone(),
+            })
+            .collect(),
+        stored: snapshot
+            .threads
+            .iter()
+            .map(|t| StoredThreadEligibility {
+                thread_id: t.id,
+                next_issue_id: t.next_unread_issue_id,
+                is_blocked: t.is_blocked,
+                queue_position: t.queue_position,
+            })
+            .collect(),
+    };
     let owned: HashSet<_> = core.issues.iter().map(|i| i.id).collect();
     let mut unresolved = Vec::new();
     let mut lists = BTreeMap::new();
-    for row in tx
-        .query(
-            "SELECT id, mode FROM custom_cbl_lists WHERE user_id=$1 ORDER BY id",
-            &[&user_id],
-        )
-        .await?
-    {
-        let id = row.try_get(0)?;
+    for row in snapshot.lists {
         lists.insert(
-            id,
+            row.id,
             ReadingList {
-                list_id: id,
-                mode: row.try_get(1)?,
+                list_id: row.id,
+                mode: row.mode,
                 entries: vec![],
                 overlap_decisions: vec![],
             },
         );
     }
-    for row in tx.query("SELECT e.id,e.list_id,e.issue_id,e.gate,e.skipped FROM custom_cbl_entries e JOIN custom_cbl_lists l ON l.id=e.list_id WHERE l.user_id=$1 ORDER BY e.list_id,e.position", &[&user_id]).await? {
-        let issue_id = row.try_get(2)?;
-        if !owned.contains(&issue_id) { unresolved.push(UnresolvedReference {kind:"list_entry",object_id:row.try_get(0)?}); }
-        lists.get_mut(&row.try_get::<_, i32>(1)?).unwrap().entries.push(ReadingEntry {issue_id,gate:row.try_get(3)?,skipped:row.try_get(4)?});
+    for row in snapshot.entries {
+        if !owned.contains(&row.issue_id) {
+            unresolved.push(UnresolvedReference {
+                kind: "list_entry",
+                object_id: row.id,
+            });
+        }
+        let list = lists.get_mut(&row.list_id).ok_or(ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid reading snapshot",
+        ))?;
+        list.entries.push(ReadingEntry {
+            issue_id: row.issue_id,
+            gate: row.gate,
+            skipped: row.skipped,
+        });
     }
     let mut prerequisites = vec![];
-    for row in tx.query("SELECT d.id,d.source_issue_id,d.target_issue_id,d.classification,d.provenance FROM dependencies d WHERE d.origin='reader' AND (d.source_issue_id IN (SELECT i.id FROM issues i JOIN threads t ON t.id=i.thread_id WHERE t.user_id=$1) OR d.target_issue_id IN (SELECT i.id FROM issues i JOIN threads t ON t.id=i.thread_id WHERE t.user_id=$1)) ORDER BY d.id", &[&user_id]).await? {
-        let id = row.try_get(0)?;
-        let source = row.try_get(1)?;
-        let target = row.try_get(2)?;
-        if !owned.contains(&source) || !owned.contains(&target) { unresolved.push(UnresolvedReference {kind:"prerequisite",object_id:id}); }
-        let classification: Option<String> = row.try_get(3)?;
-        prerequisites.push(Prerequisite {prerequisite_id:id,source_issue_id:source,target_issue_id:target,origin:"reader".into(),provenance:vec![format!("classification:{}",classification.as_deref().unwrap_or("None")),row.try_get::<_,Option<String>>(4)?.unwrap_or_default()]});
+    for row in snapshot.prerequisites {
+        if !owned.contains(&row.source_issue_id) || !owned.contains(&row.target_issue_id) {
+            unresolved.push(UnresolvedReference {
+                kind: "prerequisite",
+                object_id: row.id,
+            });
+        }
+        prerequisites.push(Prerequisite {
+            prerequisite_id: row.id,
+            source_issue_id: row.source_issue_id,
+            target_issue_id: row.target_issue_id,
+            origin: "reader".into(),
+            provenance: vec![
+                format!(
+                    "classification:{}",
+                    row.classification.as_deref().unwrap_or("None")
+                ),
+                row.provenance.unwrap_or_default(),
+            ],
+        });
     }
-    // One evidence query serves both volume exclusions and overlap resolution.
-    // Exclusions intentionally don't filter entity_type, matching the Python oracle.
-    let rows = tx.query("SELECT t.id,e.provider,e.external_id,e.entity_type FROM threads t JOIN thread_external_series_mappings m ON m.thread_id=t.id JOIN external_identities e ON e.id=m.external_identity_id WHERE t.user_id=$1 AND m.status='confirmed' UNION ALL SELECT t.id,e.provider,e.external_id,e.entity_type FROM threads t JOIN catalog_series s ON s.id=t.catalog_series_id JOIN external_identities e ON e.id=s.canonical_external_identity_id WHERE t.user_id=$1", &[&user_id]).await?;
     let mut evidence = vec![];
     let mut candidates: BTreeMap<i32, BTreeSet<String>> = BTreeMap::new();
-    for row in rows {
-        let thread_id = row.try_get(0)?;
-        let provider: String = row.try_get(1)?;
-        let external_id: String = row.try_get(2)?;
-        if row.try_get::<_, String>(3)? == "series" {
-            if let Some(key) = volume_key(&provider, &external_id) {
-                candidates.entry(thread_id).or_default().insert(key);
+    for row in snapshot.evidence {
+        if row.entity_type == "series" {
+            if let Some(key) = volume_key(&row.provider, &row.external_id) {
+                candidates.entry(row.thread_id).or_default().insert(key);
             }
         }
-        evidence.push((thread_id, normalize_volume(&provider, &external_id)));
+        evidence.push((
+            row.thread_id,
+            normalize_volume(&row.provider, &row.external_id),
+        ));
     }
     let thread_volumes = candidates
         .into_iter()
         .filter_map(|(id, mut keys)| (keys.len() == 1).then(|| (id, keys.pop_first().unwrap())))
         .collect();
-    for row in tx.query("SELECT d.list_id,c.provider,c.external_id,w.provider,w.external_id FROM custom_cbl_overlap_decisions d JOIN external_identities c ON c.id=d.continuing_external_identity_id JOIN external_identities w ON w.id=d.waiting_external_identity_id JOIN custom_cbl_lists l ON l.id=d.list_id AND l.user_id=d.user_id WHERE d.user_id=$1 ORDER BY d.id", &[&user_id]).await? {
-        if let (Some(c),Some(w)) = (volume_key(row.try_get(1)?,row.try_get(2)?),volume_key(row.try_get(3)?,row.try_get(4)?)) {
-            lists.get_mut(&row.try_get::<_,i32>(0)?).unwrap().overlap_decisions.push(OverlapDecision {continuing_volume_id:c,waiting_volume_id:w});
+    for row in snapshot.overlaps {
+        if let (Some(c), Some(w)) = (
+            volume_key(&row.continuing_provider, &row.continuing_external_id),
+            volume_key(&row.waiting_provider, &row.waiting_external_id),
+        ) {
+            let list = lists.get_mut(&row.list_id).ok_or(ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid reading snapshot",
+            ))?;
+            list.overlap_decisions.push(OverlapDecision {
+                continuing_volume_id: c,
+                waiting_volume_id: w,
+            });
         }
     }
     let mut excluded_issues = HashSet::new();
     let mut excluded_threads = HashSet::new();
     let mut excluded_volumes = HashSet::new();
-    for row in tx.query("SELECT issue_id,thread_id,provider,external_volume_id FROM collection_exclusions WHERE user_id=$1", &[&user_id]).await? {
-        if let Some(id) = row.try_get::<_,Option<i32>>(0)? { excluded_issues.insert(id); }
-        if let Some(id) = row.try_get::<_,Option<i32>>(1)? { excluded_threads.insert(id); }
-        if let (Some(p),Some(v)) = (row.try_get::<_,Option<String>>(2)?,row.try_get::<_,Option<String>>(3)?) { excluded_volumes.insert(normalize_volume(&p,&v)); }
+    for row in snapshot.exclusions {
+        if let Some(id) = row.issue_id {
+            excluded_issues.insert(id);
+        }
+        if let Some(id) = row.thread_id {
+            excluded_threads.insert(id);
+        }
+        if let (Some(p), Some(v)) = (row.provider, row.external_volume_id) {
+            excluded_volumes.insert(normalize_volume(&p, &v));
+        }
     }
     for (id, key) in evidence {
         if excluded_volumes.contains(&key) {
             excluded_threads.insert(id);
         }
     }
-    for row in tx.query("SELECT i.id,e.provider,e.external_id FROM issues i JOIN threads t ON t.id=i.thread_id JOIN catalog_issues ci ON ci.id=i.catalog_issue_id JOIN catalog_series s ON s.id=ci.catalog_series_id JOIN external_identities e ON e.id=s.canonical_external_identity_id WHERE t.user_id=$1", &[&user_id]).await? {
-        if excluded_volumes.contains(&normalize_volume(row.try_get(1)?,row.try_get(2)?)) { excluded_issues.insert(row.try_get::<_,i32>(0)?); }
+    for row in snapshot.issue_volumes {
+        if excluded_volumes.contains(&normalize_volume(&row.provider, &row.external_id)) {
+            excluded_issues.insert(row.issue_id);
+        }
     }
     let excluded_issue_ids = core
         .issues
@@ -209,7 +466,7 @@ impl Drop for Pending {
         }
     }
 }
-/// Read all Option E constraints in one bounded, repeatable-read, read-only transaction.
+/// Read all Option E constraints in one SQL statement inside a bounded, repeatable-read, read-only transaction.
 /// Diagnostics contain owned entry/dependency IDs only, never foreign titles or metadata.
 /// Diagnostic-only: preserves unresolved IDs for comparison, never for execution.
 pub async fn load_option_diagnostics(
@@ -227,10 +484,11 @@ pub async fn load_option_diagnostics(
             .isolation_level(IsolationLevel::RepeatableRead)
             .read_only(true)
             .start()
-            .await?;
+            .await
+            .map_err(db::query_error)?;
         let inputs = load_transaction(&tx, user).await?;
-        tx.rollback().await?;
-        Ok::<_, tokio_postgres::Error>(inputs)
+        tx.rollback().await.map_err(db::query_error)?;
+        Ok::<_, ApiError>(inputs)
     })
     .await;
     match result {
@@ -238,11 +496,11 @@ pub async fn load_option_diagnostics(
             StatusCode::SERVICE_UNAVAILABLE,
             "Database temporarily unavailable",
         )),
-        Ok(Err(error)) => Err(db::query_error(error)),
+        Ok(Err(error)) => Err(error),
         Ok(Ok(inputs)) => {
             drop(pending.0.take());
             tracing::info!(
-                query_count = 9,
+                query_count = 1,
                 elapsed_us = started.elapsed().as_micros() as u64,
                 unresolved_count = inputs.unresolved.len(),
                 "Option E inputs loaded"
@@ -340,5 +598,88 @@ mod tests {
             normalize_volume(" STRAẞE ", "0012"),
             ("strasse".into(), "0012".into())
         );
+    }
+    #[test]
+    fn cte_snapshot_preserves_option_e_order_exclusions_and_provenance() {
+        let snapshot: SnapshotRows = serde_json::from_value(serde_json::json!({
+            "threads": [
+                {"id": 1, "status": "active", "title": "Alpha",
+                 "next_unread_issue_id": 10, "is_blocked": true, "queue_position": 1},
+                {"id": 2, "status": "active", "title": "Beta",
+                 "next_unread_issue_id": 20, "is_blocked": false, "queue_position": 2}
+            ],
+            "issues": [
+                {"id": 10, "thread_id": 1, "position": 1, "status": "unread",
+                 "issue_number": "1"},
+                {"id": 20, "thread_id": 2, "position": 1, "status": "unread",
+                 "issue_number": "1"}
+            ],
+            "lists": [{"id": 50, "mode": "strict"}, {"id": 51, "mode": "loose"}],
+            "entries": [
+                {"id": 100, "list_id": 50, "issue_id": 10,
+                 "gate": "after_previous", "skipped": false},
+                {"id": 101, "list_id": 50, "issue_id": 20,
+                 "gate": "hold", "skipped": false},
+                {"id": 102, "list_id": 51, "issue_id": 20,
+                 "gate": "after_previous", "skipped": true}
+            ],
+            "prerequisites": [
+                {"id": 90, "source_issue_id": 10, "target_issue_id": 20,
+                 "classification": "manual", "provenance": "reader"}
+            ],
+            "evidence": [
+                {"thread_id": 1, "provider": "ComicVine",
+                 "external_id": "4050-0007", "entity_type": "series"},
+                {"thread_id": 2, "provider": "comicvine",
+                 "external_id": "0008", "entity_type": "series"}
+            ],
+            "overlaps": [
+                {"list_id": 50, "continuing_provider": "comicvine",
+                 "continuing_external_id": "7", "waiting_provider": "comicvine",
+                 "waiting_external_id": "8"}
+            ],
+            "exclusions": [
+                {"issue_id": null, "thread_id": null,
+                 "provider": "comicvine", "external_volume_id": "0007"}
+            ],
+            "issue_volumes": [
+                {"issue_id": 10, "provider": "comicvine", "external_id": "7"},
+                {"issue_id": 20, "provider": "comicvine", "external_id": "8"}
+            ]
+        }))
+        .unwrap();
+        let mut inputs = assemble_snapshot(snapshot).ok().unwrap();
+        assert!(inputs.require_resolved().is_ok());
+        assert_eq!(inputs.lists.len(), 2);
+        assert_eq!(inputs.lists[0].entries[0].issue_id, 10);
+        assert_eq!(inputs.lists[0].entries[1].gate, "hold");
+        assert!(inputs.lists[1].entries[0].skipped);
+        assert_eq!(inputs.prerequisites.len(), 1);
+        assert_eq!(inputs.prerequisites[0].origin, "reader");
+        assert_eq!(inputs.thread_volumes.get(&1).unwrap(), "comicvine:7");
+        assert_eq!(inputs.thread_volumes.get(&2).unwrap(), "comicvine:8");
+        assert!(inputs.excluded_issue_ids.contains(&10));
+        assert!(!inputs.excluded_issue_ids.contains(&20));
+        assert_eq!(inputs.lists[0].overlap_decisions.len(), 1);
+        inputs.prerequisites[0].target_issue_id = 999;
+        // An unresolved foreign reference cannot be made live by a snapshot.
+        inputs.unresolved.push(UnresolvedReference {
+            kind: "prerequisite",
+            object_id: 90,
+        });
+        assert!(inputs.require_resolved().is_err());
+    }
+
+    #[test]
+    fn cte_snapshot_decodes_all_empty_aggregates() {
+        let snapshot: SnapshotRows = serde_json::from_value(serde_json::json!({
+            "threads": [], "issues": [], "lists": [], "entries": [],
+            "prerequisites": [], "evidence": [], "overlaps": [],
+            "exclusions": [], "issue_volumes": []
+        }))
+        .unwrap();
+        let inputs = assemble_snapshot(snapshot).ok().unwrap();
+        assert!(inputs.require_resolved().is_ok());
+        assert!(inputs.core.issues.is_empty());
     }
 }
