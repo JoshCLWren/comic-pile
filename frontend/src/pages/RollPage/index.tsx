@@ -208,7 +208,10 @@ export default function RollPage() {
     navigate,
   })
 
+  const [resetDiceError, setResetDiceError] = useState('')
+
   const handleResetDice = useCallback(async () => {
+    setResetDiceError('')
     try {
       await resetDiceMutation.mutate()
       state.setIsRolling(false)
@@ -217,8 +220,10 @@ export default function RollPage() {
       state.setSelectedThreadId(null)
       state.setActiveRatingThread(null)
       state.setErrorMessage('')
+      return true
     } catch (error: unknown) {
-      state.setErrorMessage(getApiErrorDetail(error))
+      setResetDiceError(getApiErrorDetail(error))
+      return false
     }
   }, [resetDiceMutation, state])
 
@@ -690,6 +695,7 @@ export default function RollPage() {
           onClearManualDie={actions.handleClearManualDie}
           onResetDice={handleResetDice}
           resetDicePending={resetDiceMutation.isPending}
+          resetDiceError={resetDiceError}
           setDiePending={setDieMutation.isPending}
           clearManualDiePending={clearManualDieMutation.isPending}
           isActionSheetOpen={state.isActionSheetOpen}

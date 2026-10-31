@@ -8,8 +8,7 @@ use crate::{
     db,
     dice_api::Pending,
     dice_mutation::{self, DiceCommand},
-    reading_session::{self, SessionPolicy},
-    ApiError, AppState,
+    reading_session, ApiError, AppState,
 };
 use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
@@ -34,26 +33,28 @@ pub(crate) async fn persist_reset(
     tx: &tokio_postgres::Transaction<'_>,
     user: AuthenticatedUser,
     idempotency_key: &str,
-    session_id: i32,
+    session_id: Option<i32>,
 ) -> Result<dice_mutation::DiceMutation, ApiError> {
     let mutation =
         dice_mutation::persist_in_transaction(tx, user, idempotency_key, &DiceCommand::Reset)
             .await?;
-    let updated = tx
-        .execute(
-            "UPDATE sessions
-             SET pending_thread_id=NULL,pending_issue_id=NULL,
-                 pending_thread_updated_at=NULL
-             WHERE id=$1 AND user_id=$2",
-            &[&session_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?;
-    if updated != 1 {
-        return Err(ApiError(
-            StatusCode::CONFLICT,
-            "Reading session changed; try again",
-        ));
+    if let Some(session_id) = session_id {
+        let updated = tx
+            .execute(
+                "UPDATE sessions
+                 SET pending_thread_id=NULL,pending_issue_id=NULL,
+                     pending_thread_updated_at=NULL,manual_die=NULL
+                 WHERE id=$1 AND user_id=$2",
+                &[&session_id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?;
+        if updated != 1 {
+            return Err(ApiError(
+                StatusCode::CONFLICT,
+                "Reading session changed; try again",
+            ));
+        }
     }
     Ok(mutation)
 }
@@ -64,7 +65,6 @@ pub async fn reset(
     Json(request): Json<ResetDiceRequest>,
 ) -> Result<Json<ResetDiceResponse>, ApiError> {
     dice_mutation::validate(&request.idempotency_key, &DiceCommand::Reset)?;
-    let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
     let mut pending = Pending::new(db::checkout(&state).await?);
     let tx = pending
         .connection()
@@ -81,7 +81,8 @@ pub async fn reset(
     .await
     .map_err(db::query_error)?;
 
-    let mutation = persist_reset(&tx, user, &request.idempotency_key, active.session.id).await?;
+    let session_id = reading_session::active_session_id(&tx, user).await?;
+    let mutation = persist_reset(&tx, user, &request.idempotency_key, session_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     pending.release();
     Ok(Json(ResetDiceResponse {
@@ -175,7 +176,7 @@ mod tests {
                  CREATE TABLE {schema}.sessions (
                      id integer PRIMARY KEY, user_id integer NOT NULL,
                      pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at timestamptz
+                     pending_thread_updated_at timestamptz, manual_die integer
                  );
                  CREATE TABLE {schema}.events (
                      id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -185,7 +186,10 @@ mod tests {
                      issue_id integer, rating double precision, context json
                  );
                  INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.sessions VALUES (1, 1, 10, 100, NOW());"
+                 INSERT INTO {schema}.sessions VALUES (1, 1, 10, 100, NOW(), 12);
+                 INSERT INTO {schema}.events
+                     (user_id, type, die, die_after, context)
+                 VALUES (1, 'manual_die', 6, 20, '{{}}'::json);"
             ))
             .await
             .unwrap();
@@ -193,7 +197,7 @@ mod tests {
         let user = AuthenticatedUser::for_test(1);
 
         let tx = client.transaction().await.unwrap();
-        let mutation = persist_reset(&tx, user, "reset-dice-test-001", 1)
+        let mutation = persist_reset(&tx, user, "reset-dice-test-001", Some(1))
             .await
             .unwrap();
         tx.commit().await.unwrap();
@@ -210,7 +214,7 @@ mod tests {
             .unwrap();
         assert_eq!(event.get::<_, String>(0), "reset_dice");
         assert_eq!(event.get::<_, i32>(1), 1);
-        assert_eq!(event.get::<_, i32>(2), 6);
+        assert_eq!(event.get::<_, i32>(2), 20);
         assert_eq!(event.get::<_, i32>(3), 6);
         assert_eq!(event.get::<_, String>(4), "reset-dice-test-001");
 
@@ -224,16 +228,24 @@ mod tests {
             .unwrap();
         assert!(pending.get::<_, Option<i32>>(0).is_none());
         assert!(pending.get::<_, Option<i32>>(1).is_none());
+        let manual = client
+            .query_one("SELECT manual_die FROM sessions WHERE id=1", &[])
+            .await
+            .unwrap();
+        assert!(manual.get::<_, Option<i32>>(0).is_none());
 
         let tx = client.transaction().await.unwrap();
-        let replay = persist_reset(&tx, user, "reset-dice-test-001", 1)
+        let replay = persist_reset(&tx, user, "reset-dice-test-001", Some(1))
             .await
             .unwrap();
         tx.commit().await.unwrap();
         assert!(replay.replayed);
         assert_eq!(replay.event_id, mutation.event_id);
         let count = client
-            .query_one("SELECT count(*)::int FROM events", &[])
+            .query_one(
+                "SELECT count(*)::int FROM events WHERE type='reset_dice'",
+                &[],
+            )
             .await
             .unwrap();
         assert_eq!(count.get::<_, i32>(0), 1);

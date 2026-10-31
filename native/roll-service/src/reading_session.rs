@@ -395,6 +395,26 @@ async fn bootstrap_once(
     }
 }
 
+/// Find the reader's current open session without creating one or writing a
+/// checkpoint. Reset only needs the pending bridge, not a new session.
+pub(crate) async fn active_session_id(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+) -> Result<Option<i32>, ApiError> {
+    let row = tx
+        .query_opt(
+            "SELECT id FROM sessions
+             WHERE user_id=$1 AND ended_at IS NULL
+             ORDER BY (pending_thread_id IS NOT NULL) DESC,
+                      started_at DESC, id DESC
+             LIMIT 1",
+            &[&user.id()],
+        )
+        .await
+        .map_err(session_error)?;
+    Ok(row.map(|row| row.get(0)))
+}
+
 async fn pending_validity(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,

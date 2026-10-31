@@ -235,6 +235,16 @@ export function createRollApi(client: HttpClient) {
       clearPendingResetKey(key)
       // Reset Dice clears this browser's temporary snoozes by definition.
       writeRollSnoozes([])
+      // A reset discards the pre-reset intent: never replay an unanswered
+      // offer or manual-die key against the fresh state.
+      unresolvedOfferKey = null
+      unresolvedManual = null
+      try {
+        globalThis.sessionStorage?.removeItem(PENDING_OFFER_KEY)
+        globalThis.sessionStorage?.removeItem(PENDING_MANUAL_DIE_KEY)
+      } catch {
+        // The in-memory keys above are still cleared.
+      }
       return response
     },
     // Legacy auto toggle remains until the sessionless Roll UI is cut over.
