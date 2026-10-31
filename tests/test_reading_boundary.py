@@ -641,3 +641,260 @@ def test_duplicate_requirements_keep_each_distinct_issue_once(
     assert [item.issue_id for item in explanation.blocking_dependencies] == waiting
     assert explanation.is_blocked
     assert snapshot.threads[MISTER_MIRACLE_ID].blockers == original
+
+
+REDCOAT_ID = 11
+GEIGER_ID = 12
+REDCOAT_ISSUE = 301
+GEIGER_ISSUE = 309
+SECOND_LIST_ID = 21
+QA_LIST_NAME = "QA LIST 20261029"
+
+
+def _stacked_gate_labels() -> BoundaryShadowLabels:
+    """Name the Redcoat/Geiger series and the strict list that gates Geiger."""
+    return BoundaryShadowLabels(
+        threads={
+            REDCOAT_ID: BoundaryThreadLabels(REDCOAT_ID, "Redcoat", "active"),
+            GEIGER_ID: BoundaryThreadLabels(GEIGER_ID, "Geiger", "active"),
+        },
+        issues={
+            REDCOAT_ISSUE: BoundaryIssueLabels(REDCOAT_ISSUE, REDCOAT_ID, "Redcoat", "7"),
+            GEIGER_ISSUE: BoundaryIssueLabels(GEIGER_ISSUE, GEIGER_ID, "Geiger", "9"),
+        },
+        lists={LIST_ID: BoundaryListLabels(LIST_ID, QA_LIST_NAME, "strict")},
+        prerequisites={},
+    )
+
+
+def _stacked_hold_strict_snapshot() -> ReadingEligibilitySnapshot:
+    """Reproduce MQA-ROLL-013: a hold milestone also precedes the next issue."""
+    state = ReadingSnapshot(
+        user_id=USER_ID,
+        threads=(
+            ReadingThread(REDCOAT_ID, name="Redcoat", comicvine_volume_id="redcoat"),
+            ReadingThread(GEIGER_ID, name="Geiger", comicvine_volume_id="geiger"),
+        ),
+        issues=(
+            ReadingIssue(REDCOAT_ISSUE, REDCOAT_ID, 1),
+            ReadingIssue(GEIGER_ISSUE, GEIGER_ID, 9),
+        ),
+        lists=(
+            ReadingList(
+                LIST_ID,
+                "strict",
+                (ReadingListEntry(REDCOAT_ISSUE, gate="hold"), ReadingListEntry(GEIGER_ISSUE)),
+                QA_LIST_NAME,
+                (),
+            ),
+        ),
+    )
+    return build_eligibility_snapshot(state, queued_thread_ids=frozenset({REDCOAT_ID, GEIGER_ID}))
+
+
+def test_stacked_hold_and_strict_order_count_one_canonical_requirement() -> None:
+    """One blocking Issue reached through hold and strict order is one requirement."""
+    snapshot = _stacked_hold_strict_snapshot()
+    labels = _stacked_gate_labels()
+    # The evaluator keeps both gates so eligibility stays exactly as evaluated.
+    assert [blocker.kind for blocker in snapshot.threads[GEIGER_ID].blockers] == [
+        "hold",
+        "strict_order",
+    ]
+
+    explanation = project_boundary_explanation(snapshot, labels, GEIGER_ID)
+
+    assert explanation.state == "blocked"
+    assert explanation.summary == "Geiger #9 is waiting on 1 live requirement."
+    assert [
+        issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on
+    ] == [REDCOAT_ISSUE]
+    assert explanation.blockers[0].reason == (
+        f"Hold in {QA_LIST_NAME}: read Redcoat #7 first"
+    )
+    # The strict-order rule stays visible and editable without restating Redcoat #7.
+    assert explanation.blockers[1].reason == f"Also gated by Strict order in {QA_LIST_NAME}."
+    assert explanation.blockers[1].waiting_on == []
+    assert all(
+        blocker.editor is not None and blocker.editor.list_id == LIST_ID
+        for blocker in explanation.blockers
+    )
+
+
+def test_distinct_blocking_issues_remain_separately_visible_and_counted() -> None:
+    """Two canonical blockers read as two requirements even when gates stack."""
+    state = ReadingSnapshot(
+        user_id=USER_ID,
+        threads=(
+            ReadingThread(REDCOAT_ID, name="Redcoat", comicvine_volume_id="redcoat"),
+            ReadingThread(GEIGER_ID, name="Geiger", comicvine_volume_id="geiger"),
+            ReadingThread(13, name="Mister Miracle Special", comicvine_volume_id="special"),
+        ),
+        issues=(
+            ReadingIssue(REDCOAT_ISSUE, REDCOAT_ID, 1),
+            ReadingIssue(302, 13, 1),
+            ReadingIssue(GEIGER_ISSUE, GEIGER_ID, 9),
+        ),
+        lists=(
+            ReadingList(
+                LIST_ID,
+                "strict",
+                (
+                    ReadingListEntry(REDCOAT_ISSUE, gate="hold"),
+                    ReadingListEntry(302),
+                    ReadingListEntry(GEIGER_ISSUE),
+                ),
+                QA_LIST_NAME,
+                (),
+            ),
+        ),
+    )
+    snapshot = build_eligibility_snapshot(
+        state, queued_thread_ids=frozenset({REDCOAT_ID, GEIGER_ID, 13})
+    )
+    base_labels = _stacked_gate_labels()
+    labels = replace(
+        base_labels,
+        threads={
+            **base_labels.threads,
+            13: BoundaryThreadLabels(13, "Mister Miracle Special", "active"),
+        },
+        issues={
+            **base_labels.issues,
+            302: BoundaryIssueLabels(302, 13, "Mister Miracle Special", "1"),
+        },
+    )
+
+    explanation = project_boundary_explanation(snapshot, labels, GEIGER_ID)
+
+    assert explanation.summary == "Geiger #9 is waiting on 2 live requirements."
+    assert [
+        issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on
+    ] == [REDCOAT_ISSUE, 302]
+    assert "Redcoat #7" in explanation.blockers[0].reason
+    assert "Mister Miracle Special #1" in explanation.blockers[1].reason
+
+
+def test_two_lists_requiring_one_issue_keep_both_editors() -> None:
+    """Every list that requires the same Issue stays editable without a second count."""
+    state = ReadingSnapshot(
+        user_id=USER_ID,
+        threads=(
+            ReadingThread(REDCOAT_ID, name="Redcoat", comicvine_volume_id="redcoat"),
+            ReadingThread(GEIGER_ID, name="Geiger", comicvine_volume_id="geiger"),
+        ),
+        issues=(
+            ReadingIssue(REDCOAT_ISSUE, REDCOAT_ID, 1),
+            ReadingIssue(GEIGER_ISSUE, GEIGER_ID, 9),
+        ),
+        lists=(
+            ReadingList(
+                LIST_ID,
+                "strict",
+                (ReadingListEntry(REDCOAT_ISSUE), ReadingListEntry(GEIGER_ISSUE)),
+                QA_LIST_NAME,
+                (),
+            ),
+            ReadingList(
+                SECOND_LIST_ID,
+                "strict",
+                (ReadingListEntry(REDCOAT_ISSUE), ReadingListEntry(GEIGER_ISSUE)),
+                "Crossover order",
+                (),
+            ),
+        ),
+    )
+    snapshot = build_eligibility_snapshot(
+        state, queued_thread_ids=frozenset({REDCOAT_ID, GEIGER_ID})
+    )
+    labels = replace(
+        _stacked_gate_labels(),
+        lists={
+            LIST_ID: BoundaryListLabels(LIST_ID, QA_LIST_NAME, "strict"),
+            SECOND_LIST_ID: BoundaryListLabels(SECOND_LIST_ID, "Crossover order", "strict"),
+        },
+    )
+
+    explanation = project_boundary_explanation(snapshot, labels, GEIGER_ID)
+
+    assert explanation.summary == "Geiger #9 is waiting on 1 live requirement."
+    assert [
+        issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on
+    ] == [REDCOAT_ISSUE]
+    assert {blocker.editor.list_id for blocker in explanation.blockers if blocker.editor} == {
+        LIST_ID,
+        SECOND_LIST_ID,
+    }
+    assert explanation.blockers[1].reason == "Also gated by Strict order in Crossover order."
+
+
+def test_recovery_describes_stacked_gates_once_with_every_origin() -> None:
+    """Roll recovery lists one blocker per Issue and keeps both gate origins."""
+    from app.services.reading_recovery_service import build_reading_recovery
+
+    snapshot = replace(
+        _stacked_hold_strict_snapshot(),
+        list_labels={LIST_ID: QA_LIST_NAME},
+        issue_labels={REDCOAT_ISSUE: "Redcoat #7", GEIGER_ISSUE: "Geiger #9"},
+    )
+
+    recovery = build_reading_recovery(
+        snapshot,
+        pending_thread_id=GEIGER_ID,
+        pending_thread_title="Geiger",
+        excluded_thread_ids=frozenset(),
+    )
+
+    assert recovery is not None
+    assert [blocker.source_id for blocker in recovery.direct_blockers] == [REDCOAT_ISSUE]
+    note = recovery.direct_blockers[0].note
+    assert note is not None
+    assert f"Hold in {QA_LIST_NAME}" in note
+    assert f"Strict order in {QA_LIST_NAME}" in note
+
+
+@pytest.mark.asyncio
+async def test_api_counts_stacked_hold_and_strict_gates_as_one_requirement(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """MQA-ROLL-013: the boundary API reports one requirement for one Issue."""
+    user = await get_or_create_user_async(async_db)
+    _redcoat, redcoat_issues = await _owned_series(async_db, user.id, "Redcoat", 1, count=1)
+    geiger, geiger_issues = await _owned_series(async_db, user.id, "Geiger", 2, count=1)
+    cbl = CustomCBLList(user_id=user.id, name=QA_LIST_NAME, mode="strict")
+    async_db.add(cbl)
+    await async_db.flush()
+    async_db.add_all(
+        [
+            CustomCBLEntry(
+                list_id=cbl.id, issue_id=redcoat_issues[0].id, position=1, gate="hold"
+            ),
+            CustomCBLEntry(
+                list_id=cbl.id, issue_id=geiger_issues[0].id, position=2, gate="none"
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/reading-boundaries/{geiger.id}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["state"] == "blocked"
+    assert body["summary"] == "Geiger #1 is waiting on 1 live requirement."
+    waiting = [
+        issue["issue_id"] for blocker in body["blockers"] for issue in blocker["waiting_on"]
+    ]
+    assert waiting == [redcoat_issues[0].id]
+    assert any(
+        blocker["reason"] == f"Also gated by Strict order in {QA_LIST_NAME}"
+        for blocker in body["blockers"]
+    )
+
+    canonical = await auth_client.post(
+        "/api/v2/reading-boundaries", json={"thread_ids": [geiger.id]}
+    )
+    assert canonical.status_code == 200, canonical.text
+    assert canonical.json()["threads"][str(geiger.id)]["summary"] == body["summary"]

@@ -110,6 +110,44 @@ describe('ReadingBoundaryExplanation', () => {
     expect(screen.queryByText('Historical associations — not active blockers')).not.toBeInTheDocument()
   })
 
+  it('renders one requirement line plus an additional gate without repeating the Issue', () => {
+    renderExplanation({
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'Geiger #9 is waiting on 1 live requirement.',
+        blockers: [
+          {
+            kind: 'hold',
+            origin: 'reading_list',
+            reason: 'Hold in QA LIST 20261029: read Redcoat #7 first',
+            waiting_on: [issue({ issue_id: 31, thread_id: 11, thread_title: 'Redcoat', issue_number: '7', label: 'Redcoat #7' })],
+            editor: { kind: 'reading_list', list_id: 20, label: 'QA LIST 20261029' },
+          },
+          {
+            kind: 'strict_order',
+            origin: 'reading_list',
+            reason: 'Also gated by Strict order in Crossover order.',
+            waiting_on: [],
+            editor: { kind: 'reading_list', list_id: 21, label: 'Crossover order' },
+          },
+        ],
+      }),
+    })
+
+    const blockerList = screen.getByRole('list', { name: 'Active reading blockers' })
+    expect(blockerList).toHaveTextContent('Hold in QA LIST 20261029: read Redcoat #7 first')
+    expect(blockerList).toHaveTextContent('Also gated by Strict order in Crossover order.')
+    expect(within(blockerList).getAllByRole('link', { name: 'Open Redcoat issue #7' })).toHaveLength(1)
+    expect(within(blockerList).getByRole('link', { name: 'Edit QA LIST 20261029' })).toHaveAttribute(
+      'href',
+      '/reading-lists/20',
+    )
+    expect(within(blockerList).getByRole('link', { name: 'Edit Crossover order' })).toHaveAttribute(
+      'href',
+      '/reading-lists/21',
+    )
+  })
+
   it('shows only the first actionable strict-order issue by default in compact mode', async () => {
     renderExplanation({
       compact: true,
