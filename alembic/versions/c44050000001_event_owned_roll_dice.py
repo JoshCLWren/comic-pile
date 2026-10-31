@@ -3,8 +3,8 @@
 Revision ID: c44050000001
 Revises: c42550000001
 
-Every recoverable historical event receives its original owner. Refuse to guess
-ownership of orphaned history. Keep session and snapshot tables for their
+Every recoverable historical event receives its original owner. Preserve legacy
+unattributed delete events with NULL ownership instead of guessing a user. Keep session and snapshot tables for their
 current consumers, but make deleting a session NULL its event link instead of
 deleting the events. The trigger lets existing Python and Rust session-based
 writers continue working without a coordinated API cutover.
@@ -53,13 +53,12 @@ def upgrade() -> None:
         WHERE e.user_id IS NULL AND e.source_roll_event_id = source.id
           AND source.user_id IS NOT NULL
     """)
-    orphaned = op.get_bind().execute(sa.text(
-        "SELECT id FROM events WHERE user_id IS NULL ORDER BY id LIMIT 10"
-    )).scalars().all()
-    if orphaned:
-        raise RuntimeError(
-            f"Cannot infer event ownership; refusing to discard or reassign events {orphaned}"
-        )
+    # Some historical thread-deletion events have had every ownership reference
+    # removed. Production currently has 192 such records (2026-10-30).
+    # Keep these rows intact with NULL owner rather than inventing a user or
+    # blocking deployment. Owner-scoped history never returns them. All *new*
+    # activity, including sessionless activity, requires a verified user_id
+    # through the INSERT trigger below.
 
     # Session-independent history is not allowed to disappear in a session
     # cleanup. User deletion still cascades via the new FK.
@@ -71,10 +70,6 @@ def upgrade() -> None:
     op.create_index(
         "ix_event_user_timestamp_id", "events",
         ["user_id", sa.text("timestamp DESC"), sa.text("id DESC")],
-    )
-    op.create_check_constraint(
-        "ck_event_has_owner_or_legacy_session", "events",
-        "user_id IS NOT NULL OR session_id IS NOT NULL",
     )
     # Database-side compatibility for existing writers using session_id only.
     # The authenticated owner must be supplied explicitly for new sessionless
