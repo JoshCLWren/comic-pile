@@ -54,9 +54,7 @@ async fn main() {
         // Run a query through the SAME pool before releasing the SQL blocker.
         // Returning a still-busy connection would hang here instead of passing.
         let checkout = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-            let connection = db::checkout(&state)
-                .await
-                .expect("post-cancel checkout");
+            let connection = db::checkout(&state).await.expect("post-cancel checkout");
             let row = connection
                 .query_one("SELECT 1::int4", &[])
                 .await
