@@ -116,7 +116,7 @@ def test_absent_key_or_single_candidate_makes_no_request() -> None:
 
 
 @pytest.mark.parametrize(
-    "defect", ["wrong-model", "missing-answer", "low-confidence", "nan", "wrong-type"]
+    "defect", ["wrong-model", "missing-answer", "nan", "wrong-type"]
 )
 def test_bad_jev_answer_falls_back_to_deterministic_order(defect: str) -> None:
     rows = [issue(10400), issue(10401)]
@@ -126,8 +126,6 @@ def test_bad_jev_answer_falls_back_to_deterministic_order(defect: str) -> None:
         reply["model"] = "typesafe/jev-1.13"
     elif defect == "missing-answer":
         reply["answers"].pop(f"feasibility_{baseline[-1]}")
-    elif defect == "low-confidence":
-        reply["answers"][f"impact_{baseline[0]}"]["confidence"] = 0.25
     elif defect == "nan":
         reply["answers"][f"impact_{baseline[0]}"]["score"] = float("nan")
     else:
@@ -135,6 +133,19 @@ def test_bad_jev_answer_falls_back_to_deterministic_order(defect: str) -> None:
     report = shadow.shadow_report(rows, [], "key", client=lambda _p, _k: reply)
     assert report["status"] == "unchanged"
     assert report["shadow"] == baseline
+
+
+def test_low_confidence_is_an_auditable_abstention() -> None:
+    """Uncertain judgments preserve their scores without promoting work."""
+    rows = [issue(10420), issue(10421)]
+    baseline = [candidate.number for candidate in shadow.comparable_issues(rows, [])]
+    reply = response(baseline)
+    reply["answers"][f"impact_{baseline[0]}"]["confidence"] = 0.25
+    report = shadow.shadow_report(rows, [], "key", client=lambda _p, _k: reply)
+    assert report["status"] == "abstained"
+    assert report["shadow"] == baseline
+    assert report["scores"][baseline[0]]["impact_confidence"] == 0.25
+    assert report["usage"]["input_tokens"] == 200
 
 
 def test_issue_body_is_never_transformed_into_instruction_or_extra_candidate() -> None:
