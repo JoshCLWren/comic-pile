@@ -4,6 +4,7 @@ pub mod bootstrap;
 pub mod config;
 pub mod db;
 pub mod dice_state;
+pub mod dice_mutation;
 pub mod dismiss_pending;
 pub mod option_inputs;
 pub mod reading_constraints;

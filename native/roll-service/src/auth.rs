@@ -17,6 +17,11 @@ impl AuthenticatedUser {
     pub fn id(&self) -> i32 {
         self.id
     }
+
+    #[cfg(test)]
+    pub(crate) fn for_test(id: i32) -> Self {
+        Self { id }
+    }
 }
 
 fn unauthorized(detail: &'static str) -> ApiError {
