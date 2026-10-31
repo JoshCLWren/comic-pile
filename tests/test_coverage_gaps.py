@@ -1,6 +1,6 @@
 """Coverage gap tests for queue.py, dependencies.py, and session.py."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import pytest
 from unittest.mock import patch
 from sqlalchemy.exc import OperationalError
@@ -348,6 +348,58 @@ async def test_get_current_die_for_session_latest_die_event_wins(
 
     die = await get_current_die_for_session(session, async_db)
     assert die == 30
+
+
+@pytest.mark.asyncio
+async def test_get_current_die_for_session_uses_sessionless_owner_event(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Rust manual-die events without a session_id still drive the next die."""
+    session = ReadingSession(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+    )
+    thread = Thread(
+        title="Sessionless Dice Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add_all([session, thread])
+    await async_db.commit()
+    await async_db.refresh(session)
+    await async_db.refresh(thread)
+
+    now = datetime.now(UTC)
+    async_db.add_all(
+        [
+            Event(
+                type="rate",
+                session_id=session.id,
+                thread_id=thread.id,
+                user_id=default_user.id,
+                rating=3.0,
+                die_after=8,
+                timestamp=now,
+            ),
+            Event(
+                type="manual_die",
+                user_id=default_user.id,
+                die_after=12,
+                timestamp=now + timedelta(seconds=1),
+                context={"dice_command_key": "client-command-123"},
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    assert await get_current_die_for_session(session, async_db) == 12
+    # Auto mode ignores the unpinned manual choice and resolves the prior step.
+    assert await get_current_die_for_session(session, async_db, automatic=True) == 8
 
 
 @pytest.mark.asyncio

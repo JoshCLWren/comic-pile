@@ -102,6 +102,17 @@ fn bounded_pool<T>(
         .collect()
 }
 
+/// Cookie IDs are exclusion hints only. Intersecting with the live Option E
+/// frontier keeps them from granting or removing anything else, and clearing
+/// the cookie restores the thread without touching die history.
+fn cookie_exclusions(snoozed: &[i32], eligible: &HashSet<i32>) -> HashSet<i32> {
+    snoozed
+        .iter()
+        .copied()
+        .filter(|thread_id| eligible.contains(thread_id))
+        .collect()
+}
+
 struct OfferMetadata {
     thread_id: i32,
     title: String,
@@ -290,25 +301,14 @@ pub async fn offer(
         ))?;
     let previous_offer: Option<i32> = locked.try_get(0).map_err(db::query_error)?;
 
-    let mut excluded: HashSet<i32> = active
-        .session
-        .skipped_thread_ids
-        .clone()
-        .unwrap_or_default()
-        .into_iter()
-        .chain(
-            active
-                .session
-                .snoozed_thread_ids
-                .clone()
-                .unwrap_or_default(),
-        )
-        .collect();
+    // Temporary snoozes are cookie-owned. Legacy session skip/snooze arrays and
+    // the durable Fibonacci backoff must not remove candidates from the new
+    // offer, or clearing the midnight cookie could not restore them.
+    let mut excluded: HashSet<i32> = HashSet::new();
     let candidate_ids: Vec<i32> = candidates
         .iter()
         .map(|candidate| candidate.thread_id)
         .collect();
-    excluded.extend(crate::bootstrap::durable_snoozed(tx.client(), user, &candidate_ids).await?);
 
     let mut die = dice_state::current_die(&tx, user).await?;
     let mut snoozed_thread_id = None;
@@ -328,15 +328,11 @@ pub async fn offer(
         snoozed_thread_id = Some(previous);
     }
 
-    // Cookie IDs are exclusion hints only. Intersecting with the live Option E
-    // frontier keeps them from granting or removing anything else.
     let eligible_threads: HashSet<i32> = candidate_ids.iter().copied().collect();
-    excluded.extend(
-        request
-            .snoozed_thread_ids
-            .into_iter()
-            .filter(|thread_id| eligible_threads.contains(thread_id)),
-    );
+    excluded.extend(cookie_exclusions(
+        &request.snoozed_thread_ids,
+        &eligible_threads,
+    ));
 
     let pool = bounded_pool(
         candidates.iter().copied(),
@@ -456,6 +452,27 @@ mod tests {
     }
 
     #[test]
+    fn cookie_exclusions_are_bounded_and_restore_when_cleared() {
+        let eligible = HashSet::from([1, 2, 3]);
+        let snoozed = cookie_exclusions(&[2, 9], &eligible);
+        assert_eq!(snoozed, HashSet::from([2]));
+        assert!(cookie_exclusions(&[], &eligible).is_empty());
+
+        let candidates = vec![(1, "first"), (2, "second"), (3, "third")];
+        let pool = bounded_pool(candidates, |candidate| snoozed.contains(&candidate.0), 3);
+        assert_eq!(pool, vec![(1, "first"), (3, "third")]);
+
+        let candidates = vec![(1, "first"), (2, "second"), (3, "third")];
+        let cleared = cookie_exclusions(&[], &eligible);
+        let pool = bounded_pool(candidates, |candidate| cleared.contains(&candidate.0), 3);
+        assert_eq!(
+            pool,
+            vec![(1, "first"), (2, "second"), (3, "third")],
+            "clearing the midnight cookie restores the candidate"
+        );
+    }
+
+    #[test]
     fn request_shape_requires_an_explicit_key_and_rejects_unknown_fields() {
         assert!(serde_json::from_str::<RollOfferRequest>(
             r#"{"idempotency_key":"roll-offer-0123456789","snoozed_thread_ids":[4,8]}"#
@@ -548,7 +565,7 @@ mod tests {
                      (user_id, type, selected_thread_id, die, result, issue_id,
                       issue_number, context)
                  VALUES (1, 'roll', 10, 6, 2, 100, '1',
-                         '{{\"roll_offer_key\":\"roll-offer-abc\"}}');"
+                         '{{\"roll_offer_key\":\"roll-offer-abc\",\"snoozed_thread_id\":7}}');"
             ))
             .await
             .unwrap();
@@ -565,7 +582,7 @@ mod tests {
         assert_eq!(stored.result, 2);
         assert_eq!(stored.issue_id, Some(100));
         assert_eq!(stored.issue_number.as_deref(), Some("1"));
-        assert_eq!(stored.snoozed_thread_id, None);
+        assert_eq!(stored.snoozed_thread_id, Some(7));
         assert!(existing_offer(&client, other, "roll-offer-abc")
             .await
             .unwrap()

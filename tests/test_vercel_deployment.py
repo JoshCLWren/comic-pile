@@ -339,6 +339,8 @@ def test_node_auth_route_is_isolated_from_python_and_static_routes() -> None:
         ("GET", "/api/_native_roll/bootstrap", "/api/index.py"),
         ("GET", "/api/v2/roll/bootstrap", "/api/native_roll.rs"),
         ("POST", "/api/v2/roll/bootstrap", "/api/index.py"),
+        ("POST", "/api/v2/roll/dice-command", "/api/native_roll.rs"),
+        ("POST", "/api/v2/roll/offer", "/api/native_roll.rs"),
         ("GET", "/api/_native_roll/health", "/api/native_roll.rs"),
         ("POST", "/api/_native_roll/health", "/api/index.py"),
         ("GET", "/api/v2/reading-boundaries", "/api/index.py"),

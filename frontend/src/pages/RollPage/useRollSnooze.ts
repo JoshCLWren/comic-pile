@@ -1,6 +1,6 @@
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
-import type { SnoozeCorrectionInfo } from '../../types'
+import type { RollResponse, SnoozeCorrectionInfo } from '../../types'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 
@@ -12,6 +12,7 @@ interface UseRollSnoozeParams {
     refreshError?: unknown
     retryRefresh?: () => Promise<boolean>
   }
+  rerollMutation?: { mutate: () => Promise<RollResponse> }
   unsnoozeMutation: { mutate: (threadId: number) => Promise<void> }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
   onClarificationSuggested?: (correction: SnoozeCorrectionInfo) => void
@@ -36,6 +37,7 @@ interface UseRollSnoozeParams {
 export function useRollSnooze({
   state,
   snoozeMutation,
+  rerollMutation,
   unsnoozeMutation,
   refetchBootstrap,
   onClarificationSuggested,
@@ -56,6 +58,27 @@ export function useRollSnooze({
       await refetchBootstrap()
     } catch (error) {
       console.error('Unsnooze failed:', error)
+    }
+  }
+
+  /**
+   * One Roll/Reroll action from the rating view: the Rust offer records the
+   * pending snooze and selects the next offer in a single command. The
+   * refreshed bootstrap rehydrates the next rating view.
+   */
+  async function handleReroll() {
+    if (!rerollMutation) return
+    try {
+      await rerollMutation.mutate()
+      await refetchBootstrap()
+      setIsRolling(false)
+      setIsRatingView(false)
+      setRolledResult(null)
+      setSelectedThreadId(null)
+      setActiveRatingThread(null)
+      setErrorMessage('')
+    } catch (error: unknown) {
+      setErrorMessage(getApiErrorDetail(error))
     }
   }
 
@@ -103,6 +126,7 @@ export function useRollSnooze({
   return {
     handleUnsnooze,
     handleSnooze,
+    handleReroll,
     retryRefresh: snoozeMutation.retryRefresh,
     hasRefreshError: snoozeMutation.hasRefreshError ?? false,
     refreshError: snoozeMutation.refreshError,

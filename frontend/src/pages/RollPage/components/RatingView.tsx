@@ -26,6 +26,8 @@ export function RatingView({ data }: RatingViewProps) {
     onUpdateRating,
     onSubmitRating,
     onSnooze,
+    onReroll,
+    rerollIsPending,
     onSkip,
     onCancel,
     onRefreshThread,
@@ -71,6 +73,8 @@ export function RatingView({ data }: RatingViewProps) {
             onUpdateRating={onUpdateRating}
             onSubmitRating={onSubmitRating}
             onSnooze={onSnooze}
+            onReroll={onReroll}
+            rerollIsPending={rerollIsPending}
             onSkip={onSkip}
             onCancel={onCancel}
           />

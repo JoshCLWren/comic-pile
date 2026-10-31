@@ -52,6 +52,8 @@ interface DecisionCardProps {
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
+  onReroll?: () => Promise<void>
+  rerollIsPending?: boolean
   onSkip?: () => void
   onCancel: () => void
 }
@@ -69,6 +71,15 @@ function ratingReadout(): HTMLElement {
 }
 
 describe('DecisionCard', () => {
+  it('invokes the Rust reroll action from the rating view', async () => {
+    const onReroll = vi.fn().mockResolvedValue(undefined)
+    renderDecisionCard(makeDecisionCardProps({ onReroll }))
+
+    await userEvent.setup().click(screen.getByTestId('reroll-offer'))
+
+    expect(onReroll).toHaveBeenCalledTimes(1)
+  })
+
   it('renders rating states and invokes controls in automatic mode', async () => {
     const callbacks = makeDecisionCardProps()
     const user = userEvent.setup()

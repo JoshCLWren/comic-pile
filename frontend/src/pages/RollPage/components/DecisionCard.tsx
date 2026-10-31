@@ -20,12 +20,14 @@ interface DecisionCardProps {
   errorMessage: string
   rateIsPending: boolean
   snoozeIsPending: boolean
+  rerollIsPending?: boolean
   dismissIsPending: boolean
   skipIsPending?: boolean
   manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
+  onReroll?: () => Promise<void>
   onSkip?: () => void
   onCancel: () => void
 }
@@ -59,6 +61,8 @@ export function DecisionCard({
   onUpdateRating,
   onSubmitRating,
   onSnooze,
+  onReroll,
+  rerollIsPending = false,
   onSkip,
   onCancel,
 }: DecisionCardProps) {
@@ -221,6 +225,17 @@ export function DecisionCard({
           >
             {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
           </button>
+          {onReroll && (
+            <button
+              type="button"
+              onClick={() => { void onReroll() }}
+              disabled={rerollIsPending}
+              data-testid="reroll-offer"
+              className={rollSecondaryActionClass}
+            >
+              {rerollIsPending ? 'Rolling…' : 'Roll again'}
+            </button>
+          )}
           {onSkip && (
             <button
               type="button"
