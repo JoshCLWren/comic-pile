@@ -65,6 +65,7 @@ async def test_native_reroll_snoozes_do_not_create_durable_backoff(
                 thread_id=legacy.id,
                 user_id=default_user.id,
                 timestamp=now,
+                context={"bandwidth_source": "snooze", "bandwidth_level": "balanced"},
             ),
             Event(
                 type="snooze",

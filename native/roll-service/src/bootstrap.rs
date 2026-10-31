@@ -332,6 +332,9 @@ pub(crate) async fn durable_snoozed(
              FROM threads t JOIN events e ON e.thread_id=t.id
              WHERE t.user_id=$1 AND t.id=ANY($2::int[])
                AND e.type IN ('snooze','unsnooze')
+               -- Native rerolls are browser-cookie temporary exclusions, not
+               -- durable backoff. Only legacy snoozes count here.
+               AND (e.context->>'dice_command_key') IS NULL
                AND (t.last_activity_at IS NULL OR e.timestamp > t.last_activity_at)
              ORDER BY t.id,e.timestamp,e.id",
             &[&user.id(), &candidate_thread_ids],
@@ -1199,5 +1202,79 @@ mod cover_source_tests {
             extract_cover_source(&metadata),
             Some("https://example.com/direct.jpg")
         );
+    }
+
+    async fn test_client(url: &str, schema: &str) -> tokio_postgres::Client {
+        let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .await
+            .unwrap();
+        client
+    }
+
+    #[tokio::test]
+    async fn durable_snoozed_ignores_native_reroll_events() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("durable_snoozed_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     last_activity_at timestamptz
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     thread_id integer, type text, timestamp timestamptz,
+                     context json
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at timestamptz NOT NULL
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.threads VALUES (10, 1, NULL), (20, 1, NULL);
+                 INSERT INTO {schema}.sessions VALUES (1, 1, NOW() - interval '1 hour');
+                 INSERT INTO {schema}.events (thread_id, type, timestamp, context)
+                 VALUES
+                   (10, 'snooze', NOW(), '{{}}'::json),
+                   (20, 'snooze', NOW(), '{{\"dice_command_key\":\"roll-abc-snooze\"}}'::json);"
+            ))
+            .await
+            .unwrap();
+        let client = test_client(&url, &schema).await;
+        let excluded = crate::bootstrap::durable_snoozed(
+            &client,
+            crate::auth::AuthenticatedUser::for_test(1),
+            &[10, 20],
+        )
+        .await
+        .unwrap();
+        assert!(excluded.contains(&10));
+        assert!(!excluded.contains(&20));
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
     }
 }

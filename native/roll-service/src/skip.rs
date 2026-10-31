@@ -498,7 +498,9 @@ async fn durable_snoozed(tx: &Transaction<'_>, user_id: i32) -> Result<HashSet<i
             "SELECT t.id, extract(epoch FROM t.last_activity_at)::float8, e.type,
                     extract(epoch FROM e.timestamp)::float8, e.id
              FROM threads t
-             LEFT JOIN events e ON e.thread_id = t.id AND e.type IN ('snooze','unsnooze')
+             LEFT JOIN events e ON e.thread_id = t.id
+               AND e.type IN ('snooze','unsnooze')
+               AND (e.context->>'dice_command_key') IS NULL
              WHERE t.user_id = $1 AND t.status = 'active' AND t.is_blocked = false
              ORDER BY t.id, e.timestamp, e.id",
             &[&user_id],
