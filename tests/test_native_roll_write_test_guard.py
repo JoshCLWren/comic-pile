@@ -2,9 +2,9 @@
 
 The #4423 production 500 shipped because the suite covered auth, request shape,
 lookups, and read projections but never executed the offer INSERT. This guard
-requires each mounted POST module to contain a database-backed test, with a
-shrink-only baseline for handlers that predate the rule or delegate their write
-to an already-tested module.
+requires each mounted POST handler to have a database-backed test that reaches
+that handler's write path, with a frozen, shrink-only baseline for handlers that
+predate the rule or delegate their write to an already-tested module.
 """
 
 from __future__ import annotations
@@ -19,38 +19,88 @@ LIB_SOURCE = SERVICE_SOURCE / "lib.rs"
 BASELINE = REPOSITORY_ROOT / "tests" / "native_roll_write_test_baseline.json"
 
 POST_ROUTE_RE = re.compile(
-    r'\.route\(\s*"[^"]+"\s*,\s*post\(\s*(?P<module>[a-z_]+)::[a-z_]+\s*\)\s*,?\s*\)',
+    r'\.route\(\s*"[^"]+"\s*,\s*post\(\s*(?P<module>[a-z_0-9]+)::'
+    r'(?P<handler>[a-z_0-9]+)\s*\)\s*,?\s*\)',
     re.DOTALL,
 )
-DB_TEST_MARKERS = ("RUST_ROLL_TEST_DATABASE_URL", "#[tokio::test]")
+DB_TEST_MARKER = "RUST_ROLL_TEST_DATABASE_URL"
 
 
-def _mounted_post_modules() -> set[str]:
-    """Return every Rust module mounted on a POST route.
+def _lib_source() -> str:
+    """Return the service router source.
 
     Returns:
-        Module names referenced by ``post(module::handler)`` in the router.
+        Contents of ``src/lib.rs``.
     """
-    source = LIB_SOURCE.read_text(encoding="utf-8")
-    return {match.group("module") for match in POST_ROUTE_RE.finditer(source)}
+    return LIB_SOURCE.read_text(encoding="utf-8")
 
 
-def _has_database_test(module: str) -> bool:
-    """Return whether a module contains a disposable-Postgres test.
+def _route_matches() -> list[tuple[str, str]]:
+    """Return every parsed ``post(module::handler)`` occurrence.
+
+    Returns:
+        Module/handler pairs in router order, including aliases.
+    """
+    return [
+        (match.group("module"), match.group("handler"))
+        for match in POST_ROUTE_RE.finditer(_lib_source())
+    ]
+
+
+def _mounted_post_routes() -> set[tuple[str, str]]:
+    """Return the distinct module/handler pairs mounted on POST routes.
+
+    Returns:
+        Unique pairs referenced by ``post(module::handler)`` in the router.
+    """
+    return set(_route_matches())
+
+
+def _test_module(module: str) -> str:
+    """Return only the ``#[cfg(test)]`` section of a service module.
 
     Args:
         module: Rust module name mounted on a POST route.
 
     Returns:
-        True when the module source references the test database and defines a
-        Tokio test, which is the minimum shape of a real write-path test.
+        Test-module source, or an empty string when the module has no tests.
     """
     source = (SERVICE_SOURCE / f"{module}.rs").read_text(encoding="utf-8")
-    return all(marker in source for marker in DB_TEST_MARKERS)
+    marker = "#[cfg(test)]"
+    if marker not in source:
+        return ""
+    return source[source.index(marker):]
+
+
+def _tests_write_path(module: str, handler: str) -> bool:
+    """Return whether the test module reaches this handler's write path.
+
+    A DB marker alone is insufficient: ``roll_offer`` had one for a read-only
+    lookup test and still shipped the broken INSERT. Require a Tokio test plus a
+    direct reference to the handler or its extracted ``persist_<handler>``
+    writer inside the test module.
+
+    Args:
+        module: Rust module name mounted on a POST route.
+        handler: Handler function name from the route.
+
+    Returns:
+        True when the module's tests reference the handler write path.
+    """
+    tests = _test_module(module)
+    if not tests or DB_TEST_MARKER not in tests or "#[tokio::test]" not in tests:
+        return False
+    # Word-boundary match so a read helper like `existing_offer(` does not
+    # masquerade as a call to `offer(`.
+    references = (
+        rf"(?<![A-Za-z0-9_]){re.escape(handler)}\(",
+        rf"(?<![A-Za-z0-9_])persist_{re.escape(handler)}\(",
+    )
+    return any(re.search(pattern, tests) for pattern in references)
 
 
 def _baseline_modules() -> dict[str, str]:
-    """Return the shrink-only allowlist of modules without write tests.
+    """Return the frozen allowlist of modules without handler write tests.
 
     Returns:
         Mapping of module name to the documented reason it is exempt.
@@ -61,38 +111,71 @@ def _baseline_modules() -> dict[str, str]:
     return {str(name): str(reason) for name, reason in modules.items()}
 
 
-def test_every_mounted_post_handler_has_a_database_test() -> None:
-    """Fail when a new write handler has no DB-backed test, or a baseline is stale."""
-    mounted = _mounted_post_modules()
+def _baseline_allowed() -> set[str]:
+    """Return the frozen declaration of allowed baseline modules.
+
+    Returns:
+        Module names explicitly permitted in the baseline.
+    """
+    payload = json.loads(BASELINE.read_text(encoding="utf-8"))
+    allowed = payload["allowed_modules"]
+    assert isinstance(allowed, list)
+    return {str(name) for name in allowed}
+
+
+def test_router_parser_sees_every_post_call() -> None:
+    """A new route syntax must fail loudly instead of silently losing coverage."""
+    parsed = _route_matches()
+    post_calls = _lib_source().count("post(")
+    assert len(parsed) == post_calls, (
+        f"Parsed {len(parsed)} POST routes but lib.rs contains {post_calls} "
+        "`post(` calls. Update the guard parser instead of dropping a handler."
+    )
+
+
+def test_every_mounted_post_handler_has_a_write_test() -> None:
+    """Fail when a mounted handler has no DB-backed write-path test."""
+    mounted = _mounted_post_routes()
     baseline = _baseline_modules()
 
     assert mounted, "router parse found no POST routes; update the guard parser"
 
-    missing = {
-        module
-        for module in mounted
-        if not _has_database_test(module) and module not in baseline
-    }
-    assert missing == set(), (
-        "Native Roll POST handlers without a disposable-Postgres test: "
-        f"{sorted(missing)}. Add a test that calls the real write path, not just "
-        "auth/request-shape/read helpers."
+    missing = sorted(
+        (module, handler)
+        for module, handler in mounted
+        if not _tests_write_path(module, handler) and module not in baseline
+    )
+    assert missing == [], (
+        "Native Roll POST handlers without a disposable-Postgres write-path "
+        f"test: {missing}. Add a test that calls the handler or its "
+        "persist_<handler> writer, not just auth/request-shape/read helpers."
     )
 
-    stale = sorted(set(baseline) - mounted)
+    stale = sorted(set(baseline) - {module for module, _handler in mounted})
     assert stale == [], (
         "Baseline entries no longer mounted on POST routes; remove them: "
         f"{stale}"
     )
 
-    now_tested = sorted(module for module in mounted if _has_database_test(module) and module in baseline)
+    now_tested = sorted(
+        module
+        for module, handler in mounted
+        if _tests_write_path(module, handler) and module in baseline
+    )
     assert now_tested == [], (
-        "These modules now have a disposable-Postgres test; remove them from "
+        "These modules now have a write-path test; remove them from "
         f"{BASELINE.name}: {now_tested}"
     )
 
 
-def test_baseline_entries_document_a_reason() -> None:
-    """Exemptions must be deliberate and reviewable, not empty placeholders."""
-    for module, reason in _baseline_modules().items():
+def test_baseline_is_frozen_and_documented() -> None:
+    """Exemptions must be enumerated explicitly and carry a reason."""
+    modules = _baseline_modules()
+    allowed = _baseline_allowed()
+
+    assert set(modules) == allowed, (
+        "Baseline modules and allowed_modules must match exactly; adding a new "
+        "exemption has to be an explicit, reviewable change."
+    )
+    for module, reason in modules.items():
         assert reason.strip(), f"{module} needs a baseline reason"
