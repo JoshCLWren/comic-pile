@@ -22,7 +22,9 @@ sys.modules[SPEC.name] = shadow
 SPEC.loader.exec_module(shadow)
 
 
-def issue(number: int, labels: list[str] | None = None, *, body: str = "Fix a product bug") -> dict[str, Any]:
+def issue(
+    number: int, labels: list[str] | None = None, *, body: str = "Fix a product bug"
+) -> dict[str, Any]:
     """Return a deterministic, unowned product issue fixture."""
     return {
         "number": number,
@@ -30,7 +32,10 @@ def issue(number: int, labels: list[str] | None = None, *, body: str = "Fix a pr
         "body": body,
         "state": "OPEN",
         "createdAt": f"2026-10-{1 + number % 28:02d}T12:00:00Z",
-        "labels": [{"name": label} for label in (labels or ["factory:unowned", "ralph-priority:medium"])],
+        "labels": [
+            {"name": label}
+            for label in (labels or ["factory:unowned", "ralph-priority:medium"])
+        ],
     }
 
 
@@ -90,7 +95,9 @@ def test_rank_only_shadows_and_never_changes_actual_order() -> None:
     """An advisory disagreement has no side effects or factory-authoritative rank change."""
     rows = [issue(10200 + index) for index in range(4)]
     canonical = [candidate.number for candidate in shadow.comparable_issues(rows, [])]
-    report = shadow.shadow_report(rows, [], "dedicated-key", client=lambda _p, _k: response(canonical))
+    report = shadow.shadow_report(
+        rows, [], "dedicated-key", client=lambda _p, _k: response(canonical)
+    )
     assert report["status"] == "scored"
     assert report["baseline"] == canonical
     assert report["shadow"][0] == canonical[-1]
@@ -108,7 +115,9 @@ def test_absent_key_or_single_candidate_makes_no_request() -> None:
     assert shadow.shadow_report(rows[:1], [], "key", client=forbidden)["status"] == "unchanged"
 
 
-@pytest.mark.parametrize("defect", ["wrong-model", "missing-answer", "low-confidence", "nan", "wrong-type"])
+@pytest.mark.parametrize(
+    "defect", ["wrong-model", "missing-answer", "low-confidence", "nan", "wrong-type"]
+)
 def test_bad_jev_answer_falls_back_to_deterministic_order(defect: str) -> None:
     rows = [issue(10400), issue(10401)]
     baseline = [candidate.number for candidate in shadow.comparable_issues(rows, [])]
@@ -135,7 +144,10 @@ def test_issue_body_is_never_transformed_into_instruction_or_extra_candidate() -
     assert payload["model"] == shadow.MODEL
     assert payload["state"]["issues"]["i_10500"]["description"] == (malicious * 100)[:900]
     assert len(payload["questions"]) == 4
-    assert all("IGNORE INSTRUCTIONS" not in q["instructions"] for q in payload["questions"].values())
+    assert all(
+        "IGNORE INSTRUCTIONS" not in q["instructions"]
+        for q in payload["questions"].values()
+    )
 
 
 def test_provider_failure_keeps_baseline_and_redacts_key() -> None:
