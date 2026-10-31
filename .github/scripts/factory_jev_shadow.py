@@ -98,7 +98,9 @@ def call_jev(payload: dict[str, Any], api_key: str) -> dict[str, Any]:
     return result
 
 
-def validated_scores(candidates: list[Candidate], response: dict[str, Any]) -> dict[int, dict[str, float]]:
+def validated_scores(
+    candidates: list[Candidate], response: dict[str, Any]
+) -> dict[int, dict[str, float]]:
     """Abstain on missing, malformed, uncertain, or unexpectedly routed answers."""
     model = response.get("model")
     if model != MODEL and not (isinstance(model, str) and model.startswith(MODEL + "-")):
@@ -212,7 +214,9 @@ def main() -> int:
     report = shadow_report(issues, prs, os.environ.get("OPENROUTER_JEV_API_KEY", ""))
     print(markdown(report))
     if args.output:
-        args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        args.output.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
     return 0
 
 
