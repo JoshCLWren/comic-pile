@@ -12,10 +12,11 @@ Repository engineering rules still apply. Factory workers may not skip tests, we
 
 ## Source of truth
 
-- The GitHub issue is the source of truth for scope and acceptance criteria.
+- The GitHub issue records the independently executable scope and acceptance criteria. The owner's latest explicit objective and product decisions take precedence over narrower assistant-authored issue text; preserve and reconcile any divergence under `docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md`.
 - GitHub issues, labels, links, bodies, and durable comments are the source of truth for priority, status, dependencies, claims, and blockers.
-- A linked local plan file is authoritative for implementation details.
+- A linked local plan file guides implementation details but cannot invent owner requirements, narrow the requested final behavior, or waive repository engineering gates.
 - `AGENTS.md` is mandatory for repository engineering constraints.
+- `docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md` governs the definition of objective completion, PR size, real activation, and handoffs.
 - `docs/AUTONOMOUS_FACTORY_POLICY.md` is mandatory and takes precedence for autonomous factory lifecycle behavior.
 
 ## Before changing code
@@ -42,8 +43,8 @@ Do not create planning-only pull requests unless the issue itself requests docum
 
 ## While implementing
 
-- Implement the full issue in one coherent PR whenever reasonably reviewable.
-- Split only under the exceptions in the autonomous policy.
+- Choose the PR boundary that best balances reviewability, merge conflicts, rollback and end-to-end delivery speed. Coherent small PRs and coherent large PRs are both valid.
+- A split PR must identify the owner's original requested outcome and the behavior still missing. An intermediate scope never changes the completion standard of the original objective.
 - Do not delete, weaken, skip, quarantine, or conditionally disable meaningful tests.
 - Do not use `--no-verify`, `# noqa`, `# type: ignore`, or equivalent suppressions to force green.
 - Preserve unrelated working-tree changes.
@@ -100,7 +101,7 @@ An unresolved actionable correctness, security, ownership, data-integrity, migra
 - Open pull requests ready for review by default.
 - Never create a draft pull request unless Josh explicitly requests a draft.
 - Use a closure keyword only when merge will truthfully satisfy the complete issue.
-- Do not use `Stage scope` or `Remaining work` to justify avoidable splitting.
+- State remaining owner-objective work truthfully whenever a PR is an intermediate deliverable. Neither metadata nor a follow-up issue is evidence that the original objective is complete.
 - PR metadata, comments, labels, and review prose are not substitutes for implementation.
 
 ## Merge rules
@@ -118,7 +119,7 @@ Non-factory agents require Josh's explicit authorization before merging unless h
 1. **In progress**: implementation is actively advancing.
 2. **Validation**: focused checks and exact-head CI are running or complete.
 3. **Integration ready**: exact-head review, required checks, feedback accounting, mergeability, and metadata are complete.
-4. **Done**: the PR has merged, acceptance criteria are verified, and the issue is truthfully closed.
+4. **Done (issue)**: the PR has merged, the issue's acceptance criteria are verified, and it is truthfully closed. **Done (original user objective)** requires deployed/active functionality proven end-to-end on the intended real path; a completed child issue or merged PR alone never closes a broader objective.
 
 A green or ready PR must not monopolize a worker. When another executable issue exists, preserve state and return to backlog selection.
 

@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 26
+Version: 27
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, fixed-model external factories, and interactive factory repair sessions.
 
@@ -9,6 +9,8 @@ This is the canonical policy for every scheduled ChatGPT worker, the local OpenC
 **Drive the open issue backlog to zero by delivering complete, safe implementations instead of orbiting a few pull requests.**
 
 Success is measured by issues truthfully closed and production defects removed. Pull requests, commits, comments, reviews, labels, and hours spent are intermediate activity, not outcomes.
+
+For original owner-requested engineering objectives, follow [`docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md`](OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md): do not redefine the finish line through a self-authored issue, partial PR, shadow-only phase, or a ready-to-merge milestone. A runnable objective is done only after merged, deployed, and end-to-end verified on the real intended path; issue-level closure may be narrower than the owner's objective.
 
 ## Continuous delivery cycle
 
@@ -150,11 +152,11 @@ Required secrets on the runner: `OPENCODE_ZEN_API_KEY` (exported as `OPENCODE_AP
 
 ## Full-contract implementation
 
-Implement the whole issue in one coherent non-draft PR whenever reasonably reviewable. Large coherent PRs are allowed.
+Choose PR size according to reviewability, conflict exposure, deployment and rollback boundaries, and total time to the requested working behavior. Both small atomic PRs and larger coherent PRs are acceptable; neither is an objective in itself.
 
-Split only when Josh requests it, a real independent deployment boundary exists, destructive authorization must remain separate, unavoidable branch collisions make one PR unsafe, or the combined change is genuinely unreasonable to review.
+A split is valid when it improves reviewability, reduces conflict/rollback risk, or accelerates end-to-end delivery. Keep the original owner objective tracked and name the still-missing behavior in every partial PR and handoff. Do not substitute a prerequisite, scaffold, or observation-only implementation for the requested active capability.
 
-A partial PR does not automatically outrank a fresh higher-priority issue. Continue the parent issue only when it wins under the selection order.
+A partial PR does not automatically outrank a fresh higher-priority issue. Continue the parent issue only when it wins under the selection order. If deferred, leave a durable objective-preserving handoff. Do not introduce shadow modes, disabled-by-default flags, dark launches, or extra approval phases unless Josh explicitly requested them or a pre-existing applicable policy mandates them. Preserve all real security, data-integrity, independent review, CI, claim, and deploy controls.
 
 ## Required work loop
 
