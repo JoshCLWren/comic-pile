@@ -1321,6 +1321,7 @@ def test_real_assign_uses_jev_when_confident_and_canonical_when_absent(
     controller: types.ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
     use_jev: bool,
 ) -> None:
     """Jev must affect assign() itself, not just an advisory report."""
@@ -1376,15 +1377,29 @@ def test_real_assign_uses_jev_when_confident_and_canonical_when_absent(
         controller, "issue_excludes_worker_on_strike_retry", lambda _n, _w: False
     )
     claimed: list[int] = []
+    sources: list[str | None] = []
 
-    def assign_candidate(candidate: object, _worker: str) -> bool:
+    def assign_candidate(
+        candidate: object, _worker: str, source: str | None = None
+    ) -> bool:
         claimed.append(int(vars(candidate)["number"]))
+        sources.append(source)
         return True
 
     monkeypatch.setattr(controller, "assign_candidate", assign_candidate)
     result = controller.assign("6")
     assert result is not None
     assert claimed == [numbers[-1] if use_jev else numbers[0]]
+    assert sources == ["jev" if use_jev else None]
+    stderr = capsys.readouterr().err
+    if use_jev:
+        assert "Jev ACTIVE worker=6" in stderr
+        assert (
+            f"Jev RESULT worker=6 assigned=issue #{numbers[-1]} "
+            f"canonical=#{numbers[0]} influenced=yes"
+        ) in stderr
+    else:
+        assert "Jev RESULT" not in stderr
 
 
 def test_real_assign_falls_back_when_jev_file_is_invalid(
@@ -1566,6 +1581,48 @@ def test_lease_marker_records_decision_provenance(
     assert body.startswith("<!-- comic-pile-factory-controller-claim-v1:pr-35001:6:")
     assert f":source=jev:action=ci-repair:head={head}" in body
     assert body.endswith(" -->")
+
+
+def test_issue_lease_marker_records_jev_selection_provenance(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Jev-ranked issue must leave durable source=jev evidence on its lease."""
+    captured: list[list[str]] = []
+    monkeypatch.setattr(
+        controller, "run_gh", lambda args, **_kwargs: captured.append(args)
+    )
+    controller.record_controller_lease_activity(35002, "6", "issue", source="jev")
+    body = captured[0][-1]
+    assert body.startswith("<!-- comic-pile-factory-controller-claim-v1:issue-35002:6:")
+    assert ":source=jev" in body
+    assert body.endswith(" -->")
+
+
+def test_assign_candidate_forwards_jev_source_to_the_issue_lease(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The controller must pass issue-selection provenance into the lease write."""
+    candidate = controller.Candidate(
+        "issue", 35301, 3, 2, "2026-10-30T12:00:00Z"
+    )
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
+    monkeypatch.setattr(controller, "target_still_unowned", lambda _n: True)
+    monkeypatch.setattr(controller, "target_owned_by", lambda _n, _o: True)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _w: False)
+    monkeypatch.setattr(
+        controller, "replace_factory_labels", lambda *_a, **_k: None
+    )
+    recorded: list[tuple[int, str, dict[str, str]]] = []
+    monkeypatch.setattr(
+        controller,
+        "record_controller_lease_activity",
+        lambda number, _worker, kind, **kwargs: recorded.append(
+            (number, kind, kwargs)
+        ),
+    )
+
+    assert controller.assign_candidate(candidate, "6", source="jev") is True
+    assert recorded == [(35301, "issue", {"source": "jev"})]
 
 
 def test_assign_candidate_rejects_a_stale_head_before_writing_labels(

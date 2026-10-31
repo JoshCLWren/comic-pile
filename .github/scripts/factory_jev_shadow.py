@@ -701,6 +701,7 @@ def _backpressure_lines(report: dict[str, Any]) -> list[str]:
         f"{snapshot.get('pr_wip')}/{snapshot.get('pr_wip_limit')}; "
         f"review backlog: {snapshot.get('review_backlog')}/"
         f"{snapshot.get('review_backlog_limit')}",
+        f"- Leasable issue peers: {snapshot.get('leasable_issue_peers', 0)}",
         f"- Waiting issue peers behind backpressure: {snapshot.get('waiting_issue_peers', 0)}",
     ]
 
@@ -764,18 +765,29 @@ def markdown(report: dict[str, Any]) -> str:
 def backpressure_snapshot(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> dict[str, Any]:
     """Describe the real queue so an empty decision surface is explainable.
 
-    ``waiting_issue_peers`` counts ordinary product issues that are statically
-    eligible but held back only by the PR WIP or review-backlog gate. They are
-    not leasable while backpressure applies; the count exists to distinguish
-    "nothing is ready" from "work is waiting behind the fleet limit".
+    ``leasable_issue_peers`` counts ordinary product issues the deterministic
+    controller may lease right now. ``waiting_issue_peers`` counts the peers that
+    are statically eligible but held back only by the PR WIP or review-backlog
+    gate. Both counts keep the highest canonical priority class, so the report
+    distinguishes "nothing is ready" from "work is waiting behind the fleet
+    limit" instead of relabeling already-leasable peers as blocked.
     """
+    leasable_numbers = {
+        candidate.number for candidate in _eligible_issue_peers(issues, prs)
+    }
+    statically_eligible = _eligible_issue_peers(
+        issues, prs, include_backpressured=True
+    )
     return {
         "pr_wip": factory_pr_wip_count(prs),
         "pr_wip_limit": FACTORY_PR_WIP_LIMIT,
         "review_backlog": factory_review_backlog_count(prs),
         "review_backlog_limit": FACTORY_REVIEW_BACKLOG_LIMIT,
-        "waiting_issue_peers": len(
-            _eligible_issue_peers(issues, prs, include_backpressured=True)
+        "leasable_issue_peers": len(leasable_numbers),
+        "waiting_issue_peers": sum(
+            1
+            for candidate in statically_eligible
+            if candidate.number not in leasable_numbers
         ),
     }
 

@@ -61,9 +61,9 @@ Factory backpressure can legally leave zero leasable issues: while PR WIP or the
 review backlog is saturated, `build_candidates` excludes new issue work so the
 fleet drains existing PRs. In that case the same single pass ranks an existing
 **PR completion action** instead, so a decision is still meaningful. The report
-records `pr_wip`, `review_backlog`, and the number of ordinary issues waiting
-behind backpressure, so an issue surface that is empty for policy reasons is
-explainable rather than silent.
+records `pr_wip`, `review_backlog`, the number of ordinary issues that are
+leasable now, and the number waiting behind backpressure, so an issue surface
+that is empty for policy reasons is explainable rather than silent.
 
 Deterministic policy remains authoritative and owns every hard constraint:
 
@@ -86,8 +86,10 @@ Deterministic policy remains authoritative and owns every hard constraint:
 - Leases, review independence, dependencies, exact-head CI, semantic review, and
   provider/spend limits are unchanged.
 - The model sees only trusted normalized metadata (stage, priority, merge state,
-  age, linked issue, exact-head reference). Issue/PR bodies, comments, diffs, and
-  logs are never sent.
+  age, linked issue, exact-head reference) for completion actions. Issue
+  selection sends a bounded, truncated issue title, description, and labels,
+  framed as untrusted data the model must never follow as instructions; PR
+  bodies, comments, diffs, and logs are never sent on either surface.
 - One bounded request per dispatch pass. Missing key, provider failure,
   low probability margin, invalid response, or a stale/missing exact-head
   reference fall back to deterministic order without blocking dispatch.
@@ -97,9 +99,9 @@ Deterministic policy remains authoritative and owns every hard constraint:
 - The deterministic baseline is recorded alongside the chosen item, and the
   controller logs whether the actual lease differed from the deterministic pick
   after all filters. Jev selection is provenance on the lease
-  (`source=jev`, `action=<type>`, `head=<sha>`); the worker independently
-  validates the action against its live stage and checked-out head before
-  including it in the coding prompt.
+  (`source=jev`, plus `action=<type>` and `head=<sha>` for completion work); the
+  worker independently validates the action against its live stage and
+  checked-out head before including it in the coding prompt.
 
 
 ## Work-session utilization

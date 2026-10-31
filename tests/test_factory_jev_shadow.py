@@ -340,7 +340,8 @@ def test_capacity_prefers_real_issue_selection_over_completion_ranking() -> None
         "pr_wip_limit": shadow.FACTORY_PR_WIP_LIMIT,
         "review_backlog": 1,
         "review_backlog_limit": shadow.FACTORY_REVIEW_BACKLOG_LIMIT,
-        "waiting_issue_peers": 3,
+        "leasable_issue_peers": 3,
+        "waiting_issue_peers": 0,
     }
     ordered, changed = shadow.apply_jev_ranking(
         shadow.comparable_issues(rows, prs), report
@@ -365,6 +366,7 @@ def test_wip_saturation_ranks_completion_and_reports_waiting_issues() -> None:
     assert report["wip_saturated"] is True
     assert report["status"] == "chosen"
     assert report["backpressure"]["waiting_issue_peers"] == 6
+    assert report["backpressure"]["leasable_issue_peers"] == 0
     assert report["backpressure"]["pr_wip"] == 5
     assert "Waiting issue peers behind backpressure: 6" in shadow.markdown(report)
 
@@ -382,7 +384,8 @@ def test_single_issue_peer_falls_back_to_completion_with_one_call() -> None:
     report = shadow.select_report(rows, prs, "key", client=client)
     assert report["surface"] == "pr-completion"
     assert calls == ["choice"]
-    assert report["backpressure"]["waiting_issue_peers"] == 1
+    assert report["backpressure"]["waiting_issue_peers"] == 0
+    assert report["backpressure"]["leasable_issue_peers"] == 1
 
 
 def test_no_work_reports_queue_without_spending_a_decision() -> None:
@@ -392,4 +395,5 @@ def test_no_work_reports_queue_without_spending_a_decision() -> None:
     report = shadow.select_report([], [], "key", client=forbidden)
     assert report["status"] == "unchanged"
     assert report["backpressure"]["waiting_issue_peers"] == 0
+    assert report["backpressure"]["leasable_issue_peers"] == 0
     assert "pr_wip" in report["backpressure"]
