@@ -98,7 +98,7 @@ async fn execute_rate_pipeline(
     if rate_data.rating < rating_min || rate_data.rating > rating_max {
         return Err(ApiError(
             StatusCode::BAD_REQUEST,
-            format!("Rating must be between {} and {}", rating_min, rating_max),
+            "Rating must be between 0.5 and 5.0",
         ));
     }
 
@@ -111,7 +111,7 @@ async fn execute_rate_pipeline(
     if !thread_has_issues_remaining(db, thread_id).await? {
         return Err(ApiError(
             StatusCode::BAD_REQUEST,
-            format!("Thread {} has no issues remaining", thread_id),
+            "Thread has no issues remaining",
         ));
     }
 
@@ -237,7 +237,7 @@ async fn determine_thread_id(
         if owned.is_none() {
             return Err(ApiError(
                 StatusCode::NOT_FOUND,
-                format!("Thread {} not found", tid),
+                "Thread not found",
             ));
         }
         Ok(tid)
@@ -258,7 +258,7 @@ async fn determine_thread_id(
             if owned.is_none() {
                 return Err(ApiError(
                     StatusCode::NOT_FOUND,
-                    format!("Thread {} not found", tid),
+                    "Thread not found",
                 ));
             }
             Ok(tid)
@@ -268,7 +268,7 @@ async fn determine_thread_id(
             if thread.is_none() {
                 return Err(ApiError(
                     StatusCode::BAD_REQUEST,
-                    "No active thread. Please roll the dice first.".into(),
+                    "No active thread. Please roll the dice first.",
                 ));
             }
             let (tid, _) = thread.unwrap();
@@ -474,7 +474,7 @@ async fn determine_issue_and_die(
 
         if let Some(r) = issue {
             let issue_id = r.get(0);
-            let die_after = compute_die_after(rating_threshold, current_die);
+            let die_after = compute_die_after(rate_data.rating, rating_threshold, current_die);
             return Ok((issue_id, 1, die_after));
         }
     }
@@ -489,20 +489,20 @@ async fn determine_issue_and_die(
 
     if let Some(r) = issue {
         let issue_id = r.get(0);
-        let die_after = compute_die_after(rating_threshold, current_die);
+        let die_after = compute_die_after(rate_data.rating, rating_threshold, current_die);
         return Ok((issue_id, 1, die_after));
     }
 
     Err(ApiError(
         StatusCode::BAD_REQUEST,
-        format!("Thread {} has no unread issues", thread_id),
+        "Thread has no unread issues",
     ))
 }
 
 /// Compute die_after based on rating vs threshold using the dice ladder.
-fn compute_die_after(rating_threshold: f64, current_die: i32) -> Option<i32> {
+fn compute_die_after(rating: f64, rating_threshold: f64, current_die: i32) -> Option<i32> {
     let idx = DICE_LADDER.iter().position(|&d| d == current_die)?;
-    if current_die_is_good_rating_threshold(rating_threshold) {
+    if current_die_is_good_rating_threshold(rating, rating_threshold) {
         // Step down: higher rating -> smaller die.
         if idx > 0 {
             Some(DICE_LADDER[idx - 1])
@@ -522,15 +522,14 @@ fn compute_die_after(rating_threshold: f64, current_die: i32) -> Option<i32> {
 /// Whether a rating at the threshold steps the die down. The actual rating
 /// comparison happens at the call site; this helper selects the ladder
 /// direction for the threshold boundary.
-fn current_die_is_good_rating_threshold(_rating_threshold: f64) -> bool {
-    // The rating-vs-threshold comparison is applied by advance_die_based_on_rating.
-    // This placeholder preserves the ladder structure; the caller decides direction.
-    false
+fn current_die_is_good_rating_threshold(rating: f64, rating_threshold: f64) -> bool {
+    // High rating (>= threshold) steps down to smaller die
+    rating >= rating_threshold
 }
 
 /// Advance the die based on the rating against the threshold.
 fn advance_die_based_on_rating(rating: f64, rating_threshold: f64, current_die: i32) -> Option<i32> {
-    compute_die_after(rating_threshold, current_die)
+    compute_die_after(rating, rating_threshold, current_die)
 }
 
 /// Handle queue position changes based on the rating.
@@ -556,9 +555,8 @@ async fn handle_queue_placement(
             UPDATE threads AS t
             SET queue_position = CASE
                 WHEN t.id = $2 THEN 1
-                WHEN target.seq < 1 THEN
-                    CASE WHEN ranked.seq > target.seq AND ranked.seq <= 1
-                         THEN ranked.seq - 1 ELSE ranked.seq END
+                WHEN ranked.seq > target.seq THEN ranked.seq - 1
+                ELSE ranked.seq
                 ELSE
                     CASE WHEN ranked.seq >= 1 AND ranked.seq < target.seq
                          THEN ranked.seq + 1 ELSE ranked.seq END
@@ -696,7 +694,7 @@ async fn re_read_thread(
     db: &mut Object,
 ) -> Result<ThreadQuery, ApiError> {
     find_owned_thread_raw(state, user_id, thread_id, db).await?
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, format!("Thread {thread_id} not found")))
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Thread not found"))
 }
 
 /// Build the roll reconciliation from the committed rate event.
@@ -745,7 +743,7 @@ fn build_rate_response(
         total_issues: thread.total_issues,
         reading_progress: thread.reading_progress.clone(),
         next_unread_issue_id: thread.next_unread_issue_id,
-        next_unread_issue_number: None,
+        next_unread_issue_number: thread.next_unread_issue_number,
         manual_creator_credits: thread.manual_creator_credits.clone(),
         roll_reconciliation,
     }
@@ -785,16 +783,16 @@ mod tests {
     #[test]
     fn dice_ladder_step_down_and_up() {
         // Step down: high rating -> smaller die.
-        assert_eq!(compute_die_after(4.0, 20), Some(10));
-        assert_eq!(compute_die_after(4.0, 10), Some(6));
-        assert_eq!(compute_die_after(4.0, 6), Some(4));
-        assert_eq!(compute_die_after(4.0, 4), None);
+        assert_eq!(compute_die_after(4.0, 4.0, 20), Some(10));
+        assert_eq!(compute_die_after(4.0, 4.0, 10), Some(6));
+        assert_eq!(compute_die_after(4.0, 4.0, 6), Some(4));
+        assert_eq!(compute_die_after(4.0, 4.0, 4), None);
         // Step up: low rating -> larger die.
-        assert_eq!(compute_die_after(3.0, 4), Some(6));
-        assert_eq!(compute_die_after(3.0, 6), Some(8));
-        assert_eq!(compute_die_after(3.0, 100), None);
+        assert_eq!(compute_die_after(3.0, 4.0, 4), Some(6));
+        assert_eq!(compute_die_after(3.0, 4.0, 6), Some(8));
+        assert_eq!(compute_die_after(3.0, 4.0, 100), None);
         // Unknown die size returns None.
-        assert_eq!(compute_die_after(4.0, 7), None);
+        assert_eq!(compute_die_after(4.0, 4.0, 7), None);
     }
 
     #[test]
