@@ -12,6 +12,7 @@ pub mod reading_constraints;
 pub mod reading_inputs;
 pub mod reading_session;
 pub mod roll_offer;
+pub mod roll_pool;
 pub mod roll_reset;
 mod session_bandwidth;
 pub mod skip;

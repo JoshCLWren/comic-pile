@@ -71,6 +71,25 @@ def test_javascript_block_comment_is_not_code() -> None:
     )[0]
 
 
+def test_rust_source_counts_as_production_implementation() -> None:
+    """Rust-only Roll changes must not be treated as docs/test-only delivery."""
+    path = "native/roll-service/src/roll_pool.rs"
+    old = ["// old comment", "pub fn pool() -> i32 {", "    1", "}"]
+    new = ["// new comment", "pub fn pool() -> i32 {", "    2", "}"]
+    ok, reason = delivery.pr_delivers_implementation(
+        "Fix the Roll in-play pool", [path], patch(path, old, new)
+    )
+    assert ok, reason
+
+    comment_only = delivery.pr_delivers_implementation(
+        "Fix the Roll in-play pool",
+        [path],
+        patch(path, ["// old comment", "pub fn pool() -> i32 { 1 }"],
+              ["// new comment", "pub fn pool() -> i32 { 1 }"]),
+    )
+    assert not comment_only[0]
+
+
 def test_docs_cannot_supply_evidence_for_comment_only_python() -> None:
     """A mixed docs/source diff must inspect only behavioral source."""
     docs = "docs/issue-plans/4017.md"
