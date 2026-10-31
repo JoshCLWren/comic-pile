@@ -121,11 +121,12 @@ const SNAPSHOT_SQL: &str = r#"
 WITH
 owned_threads AS MATERIALIZED (
     SELECT id, status, title, next_unread_issue_id, is_blocked,
-           queue_position
+           queue_position, catalog_series_id
     FROM threads WHERE user_id = $1
 ),
 owned_issues AS MATERIALIZED (
-    SELECT i.id, i.thread_id, i.position, i.status, i.issue_number
+    SELECT i.id, i.thread_id, i.position, i.status, i.issue_number,
+           i.catalog_issue_id
     FROM issues i JOIN owned_threads t ON t.id = i.thread_id
 ),
 owned_lists AS (
