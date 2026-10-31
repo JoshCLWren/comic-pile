@@ -53,7 +53,11 @@ def normalize(value):
 ])
 async def test_session_bootstrap_parity(scenario):
     """Compare every persisted field, dice, checkpoints, retry effects and foreign access."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
+    url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
+    if url is None:
+        pytest.skip(
+            "disposable test Postgres (RUST_ROLL_TEST_DATABASE_URL) is not available"
+        )
     schema = f"native_session_{uuid4().hex}"
     admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     async with admin.begin() as c:

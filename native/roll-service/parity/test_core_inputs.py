@@ -25,7 +25,11 @@ SECRET = "synthetic-core-parity-secret"
 @pytest.mark.asyncio
 async def test_core_scalar_parity() -> None:
     """Exercise natural order, inactive sources, stale flags, and foreign frontiers."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
+    url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
+    if url is None:
+        pytest.skip(
+            "disposable test Postgres (RUST_ROLL_TEST_DATABASE_URL) is not available"
+        )
     schema = f"native_core_{uuid4().hex}"
     admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     async with admin.begin() as connection:

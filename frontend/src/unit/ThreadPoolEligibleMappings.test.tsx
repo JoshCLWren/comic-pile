@@ -223,4 +223,53 @@ describe('ThreadPool eligible mappings', () => {
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     expect(row).not.toHaveAccessibleName(/connected to/i)
   })
+
+  it('counts the API pool even when its series also appear in legacy categories (#4447)', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          dieSize={10}
+          snoozedExpanded
+          skippedExpanded
+          blockedExpanded
+          pool={[
+            { id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' },
+            { id: 9, title: 'Secret Six', format: 'ongoing', issue_number: '1' },
+          ]}
+          snoozedThreads={[
+            { id: 7, title: 'Amazing Adventures', format: 'ongoing' },
+            { id: 21, title: 'Outside Scope', format: 'ongoing' },
+          ]}
+          skippedThreads={[{ id: 9, title: 'Secret Six', format: 'ongoing' }]}
+          blockedThreads={[
+            {
+              id: 7,
+              title: 'Amazing Adventures',
+              format: 'ongoing',
+              blocking_reasons: ['ordered_after_dependencies'],
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    )
+
+    // The in-play count is the API pool length. Legacy session snooze/skip
+    // and durable backoff categories stay visible on their own, but they
+    // must never subtract a die face or backfill outside the die scope.
+    expect(screen.getByText('2 in play')).toBeVisible()
+    expect(screen.getByLabelText(/2 in play, 2 mapped results/)).toBeVisible()
+    expect(screen.getByText(/Only 2 of d10 faces are mapped to an in-play series/i)).toBeVisible()
+    const faces = screen.getAllByRole('button', { name: /Die face \d+:/i })
+    expect(faces).toHaveLength(2)
+    expect(screen.getByRole('button', { name: /Die face 2: Secret Six/i })).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Die face 3:/i })).not.toBeInTheDocument()
+
+    // The legacy display categories keep their own rows so the reader can
+    // still see the reason a series is listed without losing its in-play face.
+    expect(screen.getByText('Snoozed (2)')).toBeVisible()
+    expect(screen.getByText('Skipped (1)')).toBeVisible()
+    expect(screen.getByText(/1 series waiting for earlier issues/)).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Amazing Adventures' })).toBeVisible()
+  })
 })

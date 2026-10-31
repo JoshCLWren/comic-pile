@@ -27,7 +27,11 @@ SECRET = "synthetic-option-parity"
 @pytest.mark.asyncio
 async def test_option_input_parity() -> None:
     """Compare all constraints, then corrupt owned endpoints to test closed failure."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
+    url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
+    if url is None:
+        pytest.skip(
+            "disposable test Postgres (RUST_ROLL_TEST_DATABASE_URL) is not available"
+        )
     schema = f"native_options_{uuid4().hex}"
     admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     async with admin.begin() as connection:

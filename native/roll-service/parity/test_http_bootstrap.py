@@ -21,7 +21,11 @@ SECRET = "synthetic-native-http-secret"
 @pytest.mark.asyncio
 async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_candidate():
     """Exercise the mounted GET, its session writes, eligibility SQL and output fields."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
+    url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
+    if url is None:
+        pytest.skip(
+            "disposable test Postgres (RUST_ROLL_TEST_DATABASE_URL) is not available"
+        )
     name = f"rust_http_{uuid4().hex}"
     admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     async with admin.begin() as connection:
