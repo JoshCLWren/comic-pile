@@ -65,6 +65,7 @@ it('reuses an unanswered command key, but not a confirmed command key', async ()
   await isolated.setDie(8)
   await isolated.setDie(12)
 
+  // SAFETY: this isolated test invokes only setDie, which always posts a ManualDieCommand payload.
   const commands = client.post.mock.calls.map((args) => args[1] as { idempotency_key: string; die: number })
   expect(commands.map((command) => command.die)).toEqual([8, 8, 8, 12])
   expect(commands[1].idempotency_key).toBe(commands[0].idempotency_key)
