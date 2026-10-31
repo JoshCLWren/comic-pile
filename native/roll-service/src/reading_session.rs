@@ -83,6 +83,7 @@ fn corrupt() -> ApiError {
         "Invalid reading session state",
     )
 }
+/// Decode a session from a row containing only the JSON text.
 fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {
     serde_json::from_str(row.try_get::<_, &str>(0).map_err(session_error)?).map_err(|_| corrupt())
 }
@@ -96,10 +97,17 @@ async fn decode_session_with_recovery(
     now: f64,
     policy: SessionPolicy,
 ) -> Result<Option<ReadingSession>, ApiError> {
-    // First, try normal decode
+    // First, try normal decode - query for the session ID first
     let row = tx
         .query_opt(
-            &format!("SELECT row_to_json(s)::text {RESOLVE_FROM}"),
+            "SELECT s.id, row_to_json(s)::text FROM sessions s
+             LEFT JOIN LATERAL (SELECT max(timestamp) AS last_event FROM events WHERE session_id = s.id) e ON true
+             WHERE s.user_id = $1 AND s.ended_at IS NULL
+             AND greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL
+             THEN s.pending_thread_updated_at END, e.last_event) >= to_timestamp($2) - make_interval(hours => $3)
+             ORDER BY (s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL) DESC,
+             greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL
+             THEN s.pending_thread_updated_at END, e.last_event) DESC, s.started_at DESC, s.id DESC LIMIT 1",
             &[&user.id(), &now, &policy.gap_hours],
         )
         .await
@@ -109,41 +117,28 @@ async fn decode_session_with_recovery(
         return Ok(None);
     };
 
-    match decode_session(&row) {
+    // Extract session_id and json_text from the row
+    let sid: i32 = row.get::<_, i32>(0);
+    let json_text: String = row.get::<_, &str>(1).to_owned();
+
+    match serde_json::from_str::<ReadingSession>(&json_text) {
         Ok(session) => Ok(Some(session)),
-        Err(ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid reading session state")) => {
-            // Corrupt session detected. Attempt recovery by clearing invalid pointers.
-            let thread_id = session_id_from_row(&row);
-            let (thread_valid, issue_valid) = pending_validity(
+        Err(_) => {
+            // Corrupt session detected (JSON deserialization failed).
+            // Attempt recovery by clearing invalid pointers.
+            let (thread_valid, issue_valid) = pending_validity_for_session(
                 tx,
                 user,
-                Some(thread_id),
-                None, // We don't have the issue_id yet
+                sid,
             )
             .await?;
 
-            // If thread is valid, we can recover the issue by checking it
-            let issue_valid = if thread_valid {
-                tx.query_one(
-                    "SELECT EXISTS (
-                        SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id
-                        WHERE i.id=(SELECT pending_issue_id FROM sessions s WHERE s.id=$1 AND s.user_id=$2)
-                        AND t.id=$3 AND t.user_id=$2
-                    )",
-                    &[&thread_id, &user.id(), &thread_id],
-                )
-                .await
-                .map_err(session_error)?
-                .get::<_, bool>(0)
-            } else {
-                issue_valid
-            };
-
-            if thread_valid && !issue_valid {
-                // Clear invalid issue pointer
+            // Clear invalid pointers as needed
+            if !thread_valid {
+                // Thread is invalid - clear both thread and issue pointers
                 tx.execute(
-                    "UPDATE sessions SET pending_issue_id=NULL WHERE id=$1 AND user_id=$2",
-                    &[&thread_id, &user.id()],
+                    "UPDATE sessions SET pending_thread_id=NULL,pending_issue_id=NULL,pending_thread_updated_at=NULL WHERE id=$1 AND user_id=$2",
+                    &[&sid, &user.id()],
                 )
                 .await
                 .map_err(session_error)?;
@@ -152,7 +147,26 @@ async fn decode_session_with_recovery(
                 let repaired_row = tx
                     .query_one(
                         "SELECT row_to_json(s)::text FROM sessions s WHERE id=$1 AND user_id=$2",
-                        &[&thread_id, &user.id()],
+                        &[&sid, &user.id()],
+                    )
+                    .await
+                    .map_err(session_error)?;
+
+                return decode_session(&repaired_row).map(Some);
+            } else if !issue_valid {
+                // Thread is valid but issue is invalid - clear issue pointer
+                tx.execute(
+                    "UPDATE sessions SET pending_issue_id=NULL WHERE id=$1 AND user_id=$2",
+                    &[&sid, &user.id()],
+                )
+                .await
+                .map_err(session_error)?;
+
+                // Re-read the repaired session
+                let repaired_row = tx
+                    .query_one(
+                        "SELECT row_to_json(s)::text FROM sessions s WHERE id=$1 AND user_id=$2",
+                        &[&sid, &user.id()],
                     )
                     .await
                     .map_err(session_error)?;
@@ -160,23 +174,41 @@ async fn decode_session_with_recovery(
                 return decode_session(&repaired_row).map(Some);
             }
 
-            // Read the repaired session back
+            // If we get here, both pointers are valid but JSON deserialization still failed.
+            // This indicates genuine corruption that cannot be recovered from via pointer clearing.
+            // Re-read the session to attempt a second decode.
             let repaired_row = tx
                 .query_one(
                     "SELECT row_to_json(s)::text FROM sessions s WHERE id=$1 AND user_id=$2",
-                    &[&session_id_from_row(&row), &user.id()],
+                    &[&sid, &user.id()],
                 )
                 .await
                 .map_err(session_error)?;
 
             decode_session(&repaired_row).map(Some)
         }
-        Err(e) => Err(e),
     }
 }
 
-fn session_id_from_row(row: &tokio_postgres::Row) -> i32 {
-    row.get::<_, i32>(0)
+/// Check validity of thread and issue pointers for a session ID.
+async fn pending_validity_for_session(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+    session_id: i32,
+) -> Result<(bool, bool), ApiError> {
+    // Get pending_thread_id and pending_issue_id from the session
+    let row = tx
+        .query_one(
+            "SELECT pending_thread_id, pending_issue_id FROM sessions WHERE id = $1 AND user_id = $2",
+            &[&session_id, &user.id()],
+        )
+        .await
+        .map_err(session_error)?;
+
+    let pending_thread_id: Option<i32> = row.get(0);
+    let pending_issue_id: Option<i32> = row.get(1);
+
+    pending_validity(tx, user, pending_thread_id, pending_issue_id).await
 }
 const RESOLVE_FROM: &str = "FROM sessions s LEFT JOIN LATERAL
  (SELECT max(timestamp) AS last_event FROM events WHERE session_id = s.id) e ON true
@@ -773,17 +805,19 @@ mod tests {
                      id integer PRIMARY KEY, thread_id integer NOT NULL
                  );
                  CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     started_at text, start_die integer,
-                     pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at text
+                     id integer PRIMARY KEY, started_at timestamptz, ended_at timestamptz,
+                     start_die integer, manual_die integer, reading_mode_suggested boolean NOT NULL,
+                     user_id integer NOT NULL, pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer PRIMARY KEY, session_id integer, user_id integer, timestamp timestamptz
                  );
                  INSERT INTO {schema}.users VALUES (1);
                  INSERT INTO {schema}.threads VALUES (10, 1);
                  INSERT INTO {schema}.issues VALUES (100, 10);
-                 INSERT INTO {schema}.sessions VALUES (
-                     1, 1, to_timestamp(1000), 6, 10, 200, NULL
-                 );"
+                 INSERT INTO {schema}.sessions (id, started_at, ended_at, start_die, manual_die, reading_mode_suggested, user_id, pending_thread_id, pending_issue_id, pending_thread_updated_at)
+                 VALUES (1, to_timestamp(1000), NULL, 6, NULL, false, 1, 10, 200, NULL);"
             ))
             .await
             .unwrap();
@@ -853,17 +887,19 @@ mod tests {
                      id integer PRIMARY KEY, thread_id integer NOT NULL
                  );
                  CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     started_at text, start_die integer,
-                     pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at text
+                     id integer PRIMARY KEY, started_at timestamptz, ended_at timestamptz,
+                     start_die integer, manual_die integer, reading_mode_suggested boolean NOT NULL,
+                     user_id integer NOT NULL, pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer PRIMARY KEY, session_id integer, user_id integer, timestamp timestamptz
                  );
                  INSERT INTO {schema}.users VALUES (1);
                  INSERT INTO {schema}.threads VALUES (10, 1);
                  INSERT INTO {schema}.issues VALUES (100, 10);
-                 INSERT INTO {schema}.sessions VALUES (
-                     1, 1, to_timestamp(1000), 6, 20, 100, NULL
-                 );"
+                 INSERT INTO {schema}.sessions (id, started_at, ended_at, start_die, manual_die, reading_mode_suggested, user_id, pending_thread_id, pending_issue_id, pending_thread_updated_at)
+                 VALUES (1, to_timestamp(1000), NULL, 6, NULL, false, 1, 20, 100, NULL);"
             ))
             .await
             .unwrap();
@@ -888,16 +924,92 @@ mod tests {
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
 
-        // The thread pointer should have been cleared
+        // Both thread and issue pointers should have been cleared (since thread is invalid)
         let thread_count: i64 = tx
             .query_one(
-                &format!("SELECT COUNT(*) FROM {schema}.sessions WHERE pending_thread_id IS NULL"),
+                &format!("SELECT COUNT(*) FROM {schema}.sessions WHERE pending_thread_id IS NULL AND pending_issue_id IS NULL"),
                 &[],
             )
             .await
             .unwrap()
             .get::<_, i64>(0);
         assert_eq!(thread_count, 1);
+
+        tx.rollback().await.unwrap();
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn decode_session_with_recovery_handles_valid_session_normally() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("decode_session_recovery_valid_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, started_at timestamptz, ended_at timestamptz,
+                     start_die integer, manual_die integer, reading_mode_suggested boolean NOT NULL,
+                     user_id integer NOT NULL, pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer PRIMARY KEY, session_id integer, user_id integer, timestamp timestamptz
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.threads VALUES (10, 1);
+                 INSERT INTO {schema}.issues VALUES (100, 10);
+                 INSERT INTO {schema}.sessions (id, started_at, ended_at, start_die, manual_die, reading_mode_suggested, user_id, pending_thread_id, pending_issue_id, pending_thread_updated_at)
+                 VALUES (1, to_timestamp(1000), NULL, 6, NULL, false, 1, 10, 100, NULL);"
+            ))
+            .await
+            .unwrap();
+        let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .await
+            .unwrap();
+
+        let tx = client.transaction().await.unwrap();
+        let user = AuthenticatedUser::for_test(1);
+        let policy = SessionPolicy::default();
+        let now = 1000.0;
+
+        // Session has valid thread and issue pointers - should decode normally
+        let result = decode_session_with_recovery(&tx, user, now, policy).await;
+        assert!(result.is_ok());
+        let session = result.unwrap();
+        assert!(session.is_some());
+        let session = session.unwrap();
+        assert_eq!(session.id, 1);
+        assert_eq!(session.pending_thread_id, Some(10));
+        assert_eq!(session.pending_issue_id, Some(100));
 
         tx.rollback().await.unwrap();
         admin
