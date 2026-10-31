@@ -345,6 +345,9 @@ async def get_issue_intelligence(
     repair_request: MetadataRepairState | None = None
     if metadata_needs_hydration(identity):
         repair_request = await request_issue_metadata_repair(db, identity.id)
+        # The GET dependency closes without auto-committing. Make the idempotent
+        # work item visible to a separate worker before scheduling a drain.
+        await db.commit()
         schedule_metadata_repair_drain()
         schedule_issue_metadata_refresh(identity.id)
     else:

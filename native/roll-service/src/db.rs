@@ -32,7 +32,6 @@ pub(crate) async fn query_one_optional(
     impl Drop for Pending {
         fn drop(&mut self) {
             if let Some(connection) = self.0.take() {
-                // A cancelled query may still be running. Evict its physical client.
                 drop(Object::take(connection));
             }
         }

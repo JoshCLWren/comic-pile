@@ -170,8 +170,6 @@ struct Pending(Option<Object>);
 impl Drop for Pending {
     fn drop(&mut self) {
         if let Some(c) = self.0.take() {
-            // An aborted bootstrap may still hold a PostgreSQL transaction.
-            // Evict the physical client rather than returning it to the pool.
             drop(Object::take(c));
         }
     }

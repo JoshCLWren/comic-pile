@@ -167,7 +167,7 @@ mod tests {
         struct TestPendingConn(Option<()>);
         impl Drop for TestPendingConn {
             fn drop(&mut self) {
-                self.0 = None;
+                let _ = self.0.take();
             }
         }
 
