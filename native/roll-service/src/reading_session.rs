@@ -86,7 +86,7 @@ fn corrupt() -> ApiError {
 fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {
     serde_json::from_str(row.try_get::<_, &str>(0).map_err(session_error)?).map_err(|_| corrupt())
 }
-const RESOLVE: &str = "SELECT row_to_json(s)::text FROM sessions s LEFT JOIN LATERAL
+const RESOLVE_FROM: &str = "FROM sessions s LEFT JOIN LATERAL
  (SELECT max(timestamp) AS last_event FROM events WHERE session_id = s.id) e ON true
  WHERE s.user_id = $1 AND s.ended_at IS NULL
  AND greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL
@@ -102,7 +102,8 @@ pub async fn resolve_current_session(
     now: f64,
     policy: SessionPolicy,
 ) -> Result<Option<ReadingSession>, ApiError> {
-    tx.query_opt(RESOLVE, &[&user.id(), &now, &policy.gap_hours])
+    let sql = format!("SELECT row_to_json(s)::text {RESOLVE_FROM}");
+    tx.query_opt(&sql, &[&user.id(), &now, &policy.gap_hours])
         .await
         .map_err(session_error)?
         .as_ref()
@@ -395,21 +396,18 @@ async fn bootstrap_once(
     }
 }
 
-/// Find the reader's current open session without creating one or writing a
-/// checkpoint. Reset only needs the pending bridge, not a new session.
-pub(crate) async fn active_session_id(
+/// Return the authoritative current session id without creating a session or
+/// writing a checkpoint. Uses the same window and ordering as the Roll/Python
+/// resolver so Reset clears the session the rest of the app reads.
+pub(crate) async fn current_session_id(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
+    now: f64,
+    policy: SessionPolicy,
 ) -> Result<Option<i32>, ApiError> {
+    let sql = format!("SELECT s.id {RESOLVE_FROM}");
     let row = tx
-        .query_opt(
-            "SELECT id FROM sessions
-             WHERE user_id=$1 AND ended_at IS NULL
-             ORDER BY (pending_thread_id IS NOT NULL) DESC,
-                      started_at DESC, id DESC
-             LIMIT 1",
-            &[&user.id()],
-        )
+        .query_opt(&sql, &[&user.id(), &now, &policy.gap_hours])
         .await
         .map_err(session_error)?;
     Ok(row.map(|row| row.get(0)))

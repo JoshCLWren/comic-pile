@@ -8,7 +8,8 @@ use crate::{
     db,
     dice_api::Pending,
     dice_mutation::{self, DiceCommand},
-    reading_session, ApiError, AppState,
+    reading_session::{self, SessionPolicy},
+    ApiError, AppState,
 };
 use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
@@ -81,7 +82,12 @@ pub async fn reset(
     .await
     .map_err(db::query_error)?;
 
-    let session_id = reading_session::active_session_id(&tx, user).await?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs_f64())
+        .unwrap_or(0.0);
+    let session_id =
+        reading_session::current_session_id(&tx, user, now, SessionPolicy::default()).await?;
     let mutation = persist_reset(&tx, user, &request.idempotency_key, session_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     pending.release();
@@ -175,21 +181,25 @@ mod tests {
                  CREATE TABLE {schema}.users (id integer PRIMARY KEY);
                  CREATE TABLE {schema}.sessions (
                      id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at timestamptz NOT NULL, ended_at timestamptz,
                      pending_thread_id integer, pending_issue_id integer,
                      pending_thread_updated_at timestamptz, manual_die integer
                  );
                  CREATE TABLE {schema}.events (
                      id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     user_id integer, type text,
+                     user_id integer, type text, session_id integer,
                      timestamp timestamptz DEFAULT NOW(),
                      die integer, die_after integer, thread_id integer,
                      issue_id integer, rating double precision, context json
                  );
                  INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.sessions VALUES (1, 1, 10, 100, NOW(), 12);
+                 INSERT INTO {schema}.sessions VALUES
+                     (1, 1, NOW() - interval '10 hours', NULL, 10, 100,
+                      NOW() - interval '10 hours', 12),
+                     (2, 1, NOW(), NULL, 20, 200, NOW(), 12);
                  INSERT INTO {schema}.events
-                     (user_id, type, die, die_after, context)
-                 VALUES (1, 'manual_die', 6, 20, '{{}}'::json);"
+                     (user_id, type, session_id, die, die_after, context)
+                 VALUES (1, 'manual_die', 2, 6, 20, '{{}}'::json);"
             ))
             .await
             .unwrap();
@@ -197,7 +207,20 @@ mod tests {
         let user = AuthenticatedUser::for_test(1);
 
         let tx = client.transaction().await.unwrap();
-        let mutation = persist_reset(&tx, user, "reset-dice-test-001", Some(1))
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        let session_id =
+            reading_session::current_session_id(&tx, user, now, SessionPolicy::default())
+                .await
+                .unwrap();
+        assert_eq!(
+            session_id,
+            Some(2),
+            "the stale session must not be selected"
+        );
+        let mutation = persist_reset(&tx, user, "reset-dice-test-001", session_id)
             .await
             .unwrap();
         tx.commit().await.unwrap();
@@ -220,22 +243,30 @@ mod tests {
 
         let pending = client
             .query_one(
-                "SELECT pending_thread_id,pending_issue_id
-                 FROM sessions WHERE id=1",
+                "SELECT pending_thread_id,pending_issue_id,manual_die
+                 FROM sessions WHERE id=2",
                 &[],
             )
             .await
             .unwrap();
         assert!(pending.get::<_, Option<i32>>(0).is_none());
         assert!(pending.get::<_, Option<i32>>(1).is_none());
-        let manual = client
-            .query_one("SELECT manual_die FROM sessions WHERE id=1", &[])
+        assert!(pending.get::<_, Option<i32>>(2).is_none());
+
+        let stale = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id,manual_die
+                 FROM sessions WHERE id=1",
+                &[],
+            )
             .await
             .unwrap();
-        assert!(manual.get::<_, Option<i32>>(0).is_none());
+        assert_eq!(stale.get::<_, i32>(0), 10);
+        assert_eq!(stale.get::<_, i32>(1), 100);
+        assert_eq!(stale.get::<_, i32>(2), 12);
 
         let tx = client.transaction().await.unwrap();
-        let replay = persist_reset(&tx, user, "reset-dice-test-001", Some(1))
+        let replay = persist_reset(&tx, user, "reset-dice-test-001", session_id)
             .await
             .unwrap();
         tx.commit().await.unwrap();
