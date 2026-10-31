@@ -2,6 +2,10 @@
 
 Guidelines for AI agents working in this codebase.
 
+## Engineering objective completion
+
+Follow [`docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md`](docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md) for original user intent, reviewable PR boundaries, rollout decisions, deployment proof, and continuation handoffs. The owner's requested behavior, not a self-authored partial issue or PR, defines completion. Keep all existing security, ownership, CI, review, and deployment gates.
+
 
 ## Owner-approved exception: consolidate Roll bootstrap on Rust v2 (2026-10-29)
 
