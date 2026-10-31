@@ -201,19 +201,15 @@ async fn roll_v1_post(State(state): State<Arc<AppState>>, request: Request) -> R
     // Reuse the shared auth path: signature, revocation, and password-epoch
     // checks are identical to every other native Roll endpoint.
     let token = extract_jwt_token(request.headers())?;
-    let _user = crate::auth::authenticate(&state, &token).await?;
+    let user = crate::auth::authenticate(&state, &token).await?;
 
     // Extract the request body
     let bytes = axum::body::to_bytes(request.into_body(), 1024 * 1024)
         .await
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "Failed to read request body"))?;
 
-    let _roll_request: RollRequest = serde_json::from_slice(&bytes)
+    let roll_request: RollRequest = serde_json::from_slice(&bytes)
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "Invalid request body"))?;
-
-    // Get database connection from pool (placeholder - connection acquired for auth verification)
-    let _client = state.pool.get().await
-        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "Database connection failed"))?;
 
     // For now, return a success response with the runtime marker.
     // The full roll logic will be implemented in follow-up PRs.
@@ -226,7 +222,7 @@ async fn roll_v1_post(State(state): State<Arc<AppState>>, request: Request) -> R
             ("x-comicpile-api-runtime", "rust"),
         ],
         Json(json!({
-            "thread_id": 1,
+            "thread_id": user.id(),
             "title": "Thread Implementation Needed",
             "format": "Comic",
             "issues_remaining": 10,
