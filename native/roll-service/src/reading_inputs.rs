@@ -85,7 +85,8 @@ struct Pending(Option<Object>);
 impl Drop for Pending {
     fn drop(&mut self) {
         if let Some(c) = self.0.take() {
-            drop(c);
+            // A cancelled query may still be running. Evict its physical client.
+            drop(Object::take(c));
         }
     }
 }
