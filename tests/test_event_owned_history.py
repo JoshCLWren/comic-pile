@@ -11,6 +11,7 @@ from app.models import Event, ReadingSession, User
 async def test_direct_history_is_owner_scoped_without_a_reading_session(
     async_db: AsyncSession, default_user: User
 ) -> None:
+    """Keep direct activity private to its owner without a session."""
     other = User(username="another_event_history_reader")
     async_db.add(other)
     await async_db.flush()
@@ -44,6 +45,7 @@ async def test_direct_history_is_owner_scoped_without_a_reading_session(
 async def test_deleting_session_preserves_owned_event(
     async_db: AsyncSession, default_user: User
 ) -> None:
+    """Preserve event ownership and history when its session is deleted."""
     legacy_session = ReadingSession(user_id=default_user.id)
     async_db.add(legacy_session)
     await async_db.flush()
