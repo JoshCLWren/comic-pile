@@ -964,7 +964,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
   })
 
 
-  it('shows "Creator credits being fetched" when metadata_status is not_deep_fetched', async () => {
+  it('says credits are not fetched without claiming a running repair', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '100',
       comicvine_url: null,
@@ -985,11 +985,11 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     renderIdentity()
     await waitForLoaded()
 
-    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
-    expect(screen.getByTestId('creator-status-fetching')).toHaveTextContent('Creator credits being fetched…')
+    expect(screen.getByTestId('creator-status-not-fetched')).toBeInTheDocument()
+    expect(screen.getByTestId('creator-status-not-fetched')).toHaveTextContent('Creator credits not yet fetched')
   })
 
-  it('shows "Creator credits being fetched" when metadata_status is refresh_pending', async () => {
+  it('says credits are queued when metadata_status is refresh_pending', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '200',
       comicvine_url: null,
@@ -1012,7 +1012,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     await waitForLoaded()
 
     expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
-    expect(screen.getByTestId('creator-status-fetching')).toHaveTextContent('Creator credits being fetched…')
+    expect(screen.getByTestId('creator-status-fetching')).toHaveTextContent('Creator credits queued for fetch…')
   })
 
   it('shows "Creator credits being fetched" when metadata_status is refresh_running', async () => {
