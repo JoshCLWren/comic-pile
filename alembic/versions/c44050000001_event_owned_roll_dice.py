@@ -71,28 +71,43 @@ def upgrade() -> None:
         "ix_event_user_timestamp_id", "events",
         ["user_id", sa.text("timestamp DESC"), sa.text("id DESC")],
     )
-    # Database-side compatibility for existing writers using session_id only.
+    # Database-side compatibility for existing session-based and thread/issue
+    # based writers; sessionless reference-free deletes now pass explicit owner.
     # The authenticated owner must be supplied explicitly for new sessionless
     # activity; a conflicting supplied owner never overrides the session owner.
     op.execute("""
         CREATE FUNCTION assign_event_owner() RETURNS trigger
         LANGUAGE plpgsql AS $$
-        DECLARE session_owner integer;
+        DECLARE inferred_owner integer;
         BEGIN
+            -- Legacy writers do not yet pass user_id. Most direct Mark Read,
+            -- issue, and queue events already have an owned thread/issue.
+            -- Deletions with no surviving references pass user_id explicitly.
             IF NEW.session_id IS NOT NULL THEN
-                SELECT user_id INTO session_owner
+                SELECT user_id INTO inferred_owner
                 FROM sessions WHERE id = NEW.session_id;
-                IF session_owner IS NULL THEN
-                    RAISE EXCEPTION 'unknown event session' USING ERRCODE = '23503';
-                END IF;
-                IF NEW.user_id IS NOT NULL AND NEW.user_id <> session_owner THEN
-                    RAISE EXCEPTION 'event owner does not match session owner'
-                        USING ERRCODE = '23514';
-                END IF;
-                NEW.user_id := session_owner;
+            ELSIF NEW.thread_id IS NOT NULL THEN
+                SELECT user_id INTO inferred_owner
+                FROM threads WHERE id = NEW.thread_id;
+            ELSIF NEW.issue_id IS NOT NULL THEN
+                SELECT t.user_id INTO inferred_owner
+                FROM issues i JOIN threads t ON t.id = i.thread_id
+                WHERE i.id = NEW.issue_id;
+            ELSIF NEW.selected_thread_id IS NOT NULL THEN
+                SELECT user_id INTO inferred_owner
+                FROM threads WHERE id = NEW.selected_thread_id;
+            ELSIF NEW.source_roll_event_id IS NOT NULL THEN
+                SELECT user_id INTO inferred_owner
+                FROM events WHERE id = NEW.source_roll_event_id;
             END IF;
+            IF inferred_owner IS NOT NULL AND NEW.user_id IS NOT NULL
+               AND NEW.user_id <> inferred_owner THEN
+                RAISE EXCEPTION 'event owner conflicts with owning reference'
+                    USING ERRCODE = '23514';
+            END IF;
+            NEW.user_id := COALESCE(NEW.user_id, inferred_owner);
             IF NEW.user_id IS NULL THEN
-                RAISE EXCEPTION 'sessionless event requires user_id'
+                RAISE EXCEPTION 'event requires an owner or an owned reference'
                     USING ERRCODE = '23502';
             END IF;
             IF TG_OP = 'UPDATE' AND NEW.user_id <> OLD.user_id THEN
