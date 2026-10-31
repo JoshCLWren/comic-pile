@@ -1,7 +1,7 @@
 //! Native session bootstrap. No public route is mounted until full endpoint parity.
 //! All writes share Python's per-user advisory transaction lock and commit atomically
 //! with the full-library undo checkpoint. Pure resolution never changes durable state.
-use crate::{auth::AuthenticatedUser, config, db, ApiError, AppState};
+use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::http::StatusCode;
 use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
@@ -312,7 +312,13 @@ async fn bootstrap_once(
         // Since this is a GET endpoint, skip timezone update to maintain read-only behavior.
         // Timezone will be updated on the first write operation.
         let (current_die, automatic_die) = dice(&tx, &session).await?;
-        tx.commit().await.map_err(session_error)?;
+        // When a session already exists, no writes occurred; rollback instead of commit
+        // to maintain read-only semantics and avoid unnecessary write locks.
+        if created {
+            tx.commit().await.map_err(session_error)?;
+        } else {
+            tx.rollback().await.map_err(session_error)?;
+        }
         Ok(SessionBootstrap {
             session,
             current_die,
@@ -886,6 +892,254 @@ mod tests {
             .get(0);
         assert_eq!(db_pending_thread, Some(10), "Database should preserve pending_thread_id");
         assert_eq!(db_pending_issue, Some(999), "Database should preserve stale pending_issue_id");
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn bootstrap_skips_bandwidth_inference_write() {
+        // Verify that when a session exists without bandwidth,
+        // the bootstrap does not perform bandwidth inference writes.
+        // This tests requirement: "No test verifies bandwidth inference is skipped"
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("bootstrap_bandwidth_skip_{}_{}", std::process::id(), nanos);
+        let base = url.split('?').next().unwrap();
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at timestamptz NOT NULL, ended_at timestamptz, start_die integer NOT NULL,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz, timezone text,
+                     predicted_bandwidth text, active_bandwidth text,
+                     bandwidth_confidence float8, bandwidth_source text,
+                     bandwidth_version timestamptz, reading_bandwidth text,
+                     reading_intent text, reading_mode_source text,
+                     reading_mode_suggested boolean, active_intent text,
+                     predicted_intent text, intent_confidence float8,
+                     intent_source text, intent_version timestamptz,
+                     session_mode_correction_guidance json
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     session_id integer, thread_id integer, issue_id integer,
+                     type text, timestamp timestamptz, rating float8,
+                     context json, selected_thread_id integer, result integer,
+                     die_after integer, metadata_json json
+                 );
+                 CREATE TABLE {schema}.snapshots (
+                     id integer PRIMARY KEY, session_id integer, event_id integer,
+                     thread_states json, session_state json, created_at timestamptz,
+                     description text, snapshot_kind text, schema_version integer
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.threads VALUES (10, 1);
+                 -- Create a session with NULL bandwidth_source to test skip behavior
+                 INSERT INTO {schema}.sessions 
+                 (id, user_id, started_at, start_die, reading_mode_suggested,
+                  predicted_bandwidth, active_bandwidth, bandwidth_confidence, 
+                  bandwidth_source, bandwidth_version) 
+                 VALUES (1, 1, NOW() - interval '1 hour', 6, false,
+                         NULL, NULL, NULL, NULL, NULL);"
+            ))
+            .await
+            .unwrap();
+
+        let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .await
+            .unwrap();
+
+        let config = crate::config::Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(format!("{base}?sslmode=disable&options=-csearch_path%3D{schema}")),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic".into()),
+            "RUST_ROLL_POOL_SIZE" => Some("1".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = AppState::new(config).unwrap();
+        let user = AuthenticatedUser::for_test(1);
+
+        // Record bandwidth values before bootstrap
+        let before_bw: Option<String> = client
+            .query_one("SELECT predicted_bandwidth FROM sessions WHERE id=1", &[])
+            .await
+            .unwrap()
+            .get(0);
+
+        // Call bootstrap - should not update bandwidth
+        let result = crate::reading_session::bootstrap_at(
+            &state,
+            user,
+            None,
+            SessionPolicy::default(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64(),
+        )
+        .await;
+        assert!(result.is_ok(), "Bootstrap should succeed: {:?}", result);
+
+        // Verify bandwidth was NOT written (should remain NULL)
+        let after_bw: Option<String> = client
+            .query_one("SELECT predicted_bandwidth FROM sessions WHERE id=1", &[])
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(before_bw, after_bw, "Bandwidth should not be written");
+        assert!(after_bw.is_none(), "predicted_bandwidth should remain NULL");
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn bootstrap_skips_timezone_write() {
+        // Verify that when a session exists, the bootstrap does not write timezone.
+        // This tests requirement: "No test verifies timezone update is skipped"
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("bootstrap_timezone_skip_{}_{}", std::process::id(), nanos);
+        let base = url.split('?').next().unwrap();
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at timestamptz NOT NULL, ended_at timestamptz, start_die integer NOT NULL,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz, timezone text,
+                     predicted_bandwidth text, active_bandwidth text,
+                     bandwidth_confidence float8, bandwidth_source text,
+                     bandwidth_version timestamptz, reading_bandwidth text,
+                     reading_intent text, reading_mode_source text,
+                     reading_mode_suggested boolean, active_intent text,
+                     predicted_intent text, intent_confidence float8,
+                     intent_source text, intent_version timestamptz,
+                     session_mode_correction_guidance json
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     session_id integer, thread_id integer, issue_id integer,
+                     type text, timestamp timestamptz, rating float8,
+                     context json, selected_thread_id integer, result integer,
+                     die_after integer, metadata_json json
+                 );
+                 CREATE TABLE {schema}.snapshots (
+                     id integer PRIMARY KEY, session_id integer, event_id integer,
+                     thread_states json, session_state json, created_at timestamptz,
+                     description text, snapshot_kind text, schema_version integer
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.threads VALUES (10, 1);
+                 -- Create a session with timezone = NULL
+                 INSERT INTO {schema}.sessions 
+                 (id, user_id, started_at, start_die, reading_mode_suggested, timezone) 
+                 VALUES (1, 1, NOW() - interval '1 hour', 6, false, NULL);"
+            ))
+            .await
+            .unwrap();
+
+        let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .await
+            .unwrap();
+
+        let config = crate::config::Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(format!("{base}?sslmode=disable&options=-csearch_path%3D{schema}")),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic".into()),
+            "RUST_ROLL_POOL_SIZE" => Some("1".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = AppState::new(config).unwrap();
+        let user = AuthenticatedUser::for_test(1);
+
+        // Record timezone before bootstrap (passing a valid timezone parameter)
+        let before_tz: Option<String> = client
+            .query_one("SELECT timezone FROM sessions WHERE id=1", &[])
+            .await
+            .unwrap()
+            .get(0);
+
+        // Call bootstrap with a browser timezone parameter
+        let result = crate::reading_session::bootstrap_at(
+            &state,
+            user,
+            Some("America/New_York"), // browser timezone
+            SessionPolicy::default(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64(),
+        )
+        .await;
+        assert!(result.is_ok(), "Bootstrap should succeed: {:?}", result);
+
+        // Verify timezone was NOT written (should remain NULL)
+        let after_tz: Option<String> = client
+            .query_one("SELECT timezone FROM sessions WHERE id=1", &[])
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(before_tz, after_tz, "Timezone should not be written on GET");
+        assert!(after_tz.is_none(), "timezone should remain NULL");
 
         admin
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
