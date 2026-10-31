@@ -411,9 +411,9 @@ jobs:
           set -Eeuo pipefail
           python3 .github/scripts/factory-work-controller.py stale
 
-      # Advisory only: read the same pre-lease GitHub snapshot as the dispatcher.
-      # A failed/limited/uncertain Jev call must never block or alter worker claims.
-      - name: Compare Jev ranking with factory issue selector (shadow only)
+      # Rank once before worker leases. The actual controller uses the decision
+      # only within existing interchangeable classes and otherwise falls back.
+      - name: Rank factory issue candidates with Jev (active selection)
         if: steps.api_budget.outputs.allow == 'true' && github.event_name != 'push'
         continue-on-error: true
         shell: bash
@@ -423,7 +423,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           if [[ -z "${OPENROUTER_JEV_API_KEY:-}" ]]; then
-            echo 'Jev shadow skipped: dedicated key not configured' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Jev selection skipped: dedicated key not configured' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           issues="$RUNNER_TEMP/jev-shadow-issues.json"
@@ -435,8 +435,12 @@ jobs:
           python3 .github/scripts/factory_jev_shadow.py \
             --issues "$issues" --prs "$prs" \
             --output "$RUNNER_TEMP/jev-shadow.json" >> "$GITHUB_STEP_SUMMARY"
+          # Make the report available only to later steps of this same trusted
+          # dispatcher job. A failed/abstaining report is safe to pass through:
+          # the controller validates status, class and current eligibility.
+          echo "FACTORY_JEV_RANKING_FILE=$RUNNER_TEMP/jev-shadow.json" >> "$GITHUB_ENV"
 
-      - name: Preserve Jev shadow result for later evaluation
+      - name: Preserve Jev selection decision for later evaluation
         if: always() && hashFiles('.github/scripts/factory_jev_shadow.py') != '' && github.event_name != 'push'
         continue-on-error: true
         uses: actions/upload-artifact@v4
