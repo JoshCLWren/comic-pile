@@ -739,13 +739,20 @@ pub async fn bootstrap_v2(
         )
     })?;
     let conn = db::checkout(&state).await?;
+    let native_die = crate::dice_state::bootstrap_die_after_native_command(&conn, user).await?;
+    let current_die = native_die.unwrap_or(active.current_die);
+    let manual_die = if native_die.is_some() {
+        Value::Null
+    } else {
+        json!(session.manual_die)
+    };
     let candidate_thread_ids: Vec<i32> = candidates.iter().map(|c| c.thread_id).collect();
     let durable = durable_snoozed(&conn, user, &candidate_thread_ids).await?;
     excluded.extend(&durable);
     let eligible: Vec<_> = candidates
         .iter()
         .filter(|candidate| !excluded.contains(&candidate.thread_id))
-        .take(active.current_die.max(0) as usize)
+        .take(current_die.max(0) as usize)
         .collect();
     let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
 
@@ -943,8 +950,8 @@ pub async fn bootstrap_v2(
     let response = json!({
         "session_id": session.id,
         "user_id": user.id(),
-        "current_die": active.current_die,
-        "manual_die": session.manual_die,
+        "current_die": current_die,
+        "manual_die": manual_die,
         "pending_thread_id": session.pending_thread_id,
         "last_rolled_result": last_roll_result,
         "session_mode": {

@@ -2,7 +2,7 @@
 //! New mutations will record an explicit die_after; existing session-based
 //! mutations remain on their current contracts until the coordinated cutover.
 use crate::{auth::AuthenticatedUser, db, ApiError};
-use tokio_postgres::Transaction;
+use tokio_postgres::{Client, Transaction};
 
 pub const DEFAULT_DIE: i32 = 6;
 pub const DICE_LADDER: [i32; 7] = [2, 4, 6, 8, 10, 12, 20];
@@ -64,6 +64,34 @@ pub fn apply_action(current: i32, action: DiceAction) -> Result<i32, &'static st
         }
         DiceAction::RollRating(_) => Err("invalid rating"),
     }
+}
+
+/// During the transition, legacy session presentation remains the fallback
+/// until the owner issues their first native dice command. Afterwards the
+/// newest owner-scoped dice outcome (including later legacy rate events) wins.
+/// This is a pure read and never initializes a session or resets the die.
+pub async fn bootstrap_die_after_native_command(
+    client: &Client,
+    user: AuthenticatedUser,
+) -> Result<Option<i32>, ApiError> {
+    let row = client
+        .query_one(
+            "SELECT
+                (SELECT die_after FROM events
+                 WHERE user_id = $1
+                   AND type IN ('rate', 'snooze', 'undo', 'manual_die', 'reset_dice')
+                   AND die_after IN (2, 4, 6, 8, 10, 12, 20, 30, 50, 100)
+                 ORDER BY timestamp DESC, id DESC LIMIT 1),
+                EXISTS (SELECT 1 FROM events
+                        WHERE user_id = $1
+                          AND context->>'dice_command_key' IS NOT NULL)",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let native_writer_used: bool = row.get(1);
+    let latest: Option<i32> = row.get(0);
+    Ok(native_writer_used.then(|| projected_die(latest)))
 }
 
 /// Query just the newest effective event belonging to the authenticated user.
