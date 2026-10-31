@@ -450,7 +450,7 @@ mod tests {
         };
         let schema = test_schema(&url).await;
         let mut writer = scoped_client(&url, &schema).await;
-        let mut transfer = scoped_client(&url, &schema).await;
+        let transfer = scoped_client(&url, &schema).await;
         let tx = writer.transaction().await.unwrap();
 
         let result = persist_in_transaction(
