@@ -58,22 +58,13 @@ FEASIBILITY_LEVELS = [
 ]
 
 
-def comparable_issues(
+def _eligible_issue_peers(
     issues: list[dict[str, Any]],
     prs: list[dict[str, Any]],
     *,
     include_backpressured: bool = False,
 ) -> list[Candidate]:
-    """Only compare already-eligible ordinary product issues in the same priority class.
-
-    Args:
-        issues: Open issue payloads from GitHub.
-        prs: Open pull-request payloads from GitHub.
-        include_backpressured: Count issues that are only waiting behind the
-            PR WIP or review-backlog gate. They are never leased while
-            backpressure applies; the flag exists so the dispatcher can report
-            the real waiting queue instead of an unexplained empty surface.
-    """
+    """Return every eligible ordinary peer in the highest canonical priority class."""
     by_number = {int(issue["number"]): issue for issue in issues}
     candidates = [
         candidate
@@ -90,7 +81,28 @@ def comparable_issues(
     return [
         candidate for candidate in candidates
         if (candidate.lane, candidate.priority) == (first.lane, first.priority)
-    ][:MAX_CANDIDATES]
+    ]
+
+
+def comparable_issues(
+    issues: list[dict[str, Any]],
+    prs: list[dict[str, Any]],
+    *,
+    include_backpressured: bool = False,
+) -> list[Candidate]:
+    """Only compare already-eligible ordinary product issues in the same priority class.
+
+    Args:
+        issues: Open issue payloads from GitHub.
+        prs: Open pull-request payloads from GitHub.
+        include_backpressured: Count issues that are only waiting behind the
+            PR WIP or review-backlog gate. They are never leased while
+            backpressure applies; the flag exists so the dispatcher can report
+            the real waiting queue instead of an unexplained empty surface.
+    """
+    return _eligible_issue_peers(
+        issues, prs, include_backpressured=include_backpressured
+    )[:MAX_CANDIDATES]
 
 
 def make_request(candidates: list[Candidate], issues: list[dict[str, Any]]) -> dict[str, Any]:
@@ -763,7 +775,7 @@ def backpressure_snapshot(issues: list[dict[str, Any]], prs: list[dict[str, Any]
         "review_backlog": factory_review_backlog_count(prs),
         "review_backlog_limit": FACTORY_REVIEW_BACKLOG_LIMIT,
         "waiting_issue_peers": len(
-            comparable_issues(issues, prs, include_backpressured=True)
+            _eligible_issue_peers(issues, prs, include_backpressured=True)
         ),
     }
 

@@ -351,7 +351,7 @@ def test_capacity_prefers_real_issue_selection_over_completion_ranking() -> None
 
 def test_wip_saturation_ranks_completion_and_reports_waiting_issues() -> None:
     """No issue may be leased behind backpressure; the pass still does real work."""
-    rows = [issue(12100 + index) for index in range(3)]
+    rows = [issue(12100 + index) for index in range(6)]
     owned = [completion_pr(12150 + index, owner="factory:41") for index in range(5)]
     actions = [completion_pr(12160), completion_pr(12161)]
     prs = [*owned, *actions]
@@ -364,9 +364,9 @@ def test_wip_saturation_ranks_completion_and_reports_waiting_issues() -> None:
     assert report["surface"] == "pr-completion"
     assert report["wip_saturated"] is True
     assert report["status"] == "chosen"
-    assert report["backpressure"]["waiting_issue_peers"] == 3
+    assert report["backpressure"]["waiting_issue_peers"] == 6
     assert report["backpressure"]["pr_wip"] == 5
-    assert "Waiting issue peers behind backpressure: 3" in shadow.markdown(report)
+    assert "Waiting issue peers behind backpressure: 6" in shadow.markdown(report)
 
 
 def test_single_issue_peer_falls_back_to_completion_with_one_call() -> None:
