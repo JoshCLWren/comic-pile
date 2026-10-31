@@ -152,7 +152,7 @@ the objective in the current session:
 
 ## 8. Mandatory PR and completion review
 
-Every substantial implementation PR should make these facts easy to audit:
+Every substantive implementation PR **must** provide these facts in the PR body or a directly linked issue record, with accurate current statuses:
 
 | Field | Required evidence |
 | --- | --- |
@@ -162,10 +162,12 @@ Every substantial implementation PR should make these facts easy to audit:
 | **Safety/rollout basis** | Existing policy or explicit owner request for staging, if any; otherwise active behavior |
 | **Validation** | Focused tests, exact-head CI/review, deployment and real-path verification, each clearly labeled as complete/pending/unavailable |
 
-An independent reviewer should ask **two separate questions**:
+An independent reviewer **must** check **two separate questions** before semantic/acceptance approval:
 (1) Is the implementation correct and safe under existing engineering rules?
 (2) Does it deliver its stated scope, and is anyone falsely declaring the
-owner's broader objective complete?
+owner's broader objective complete? Missing or contradictory objective evidence
+must be corrected before treating the original objective as done; it does not
+justify bypassing or postponing other existing review and release gates.
 
 A child implementation PR may pass its own gates while the larger objective
 remains unfinished. Only declare the **original objective** done when the
