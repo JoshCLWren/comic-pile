@@ -318,8 +318,8 @@ async fn current_active_thread(
 
 /// Reconstruct the Python Fibonacci snooze backoff from saved events and
 /// sessions, not just current-session snoozes. A later unsnooze wins.
-async fn durable_snoozed(
-    conn: &deadpool_postgres::Object,
+pub(crate) async fn durable_snoozed(
+    conn: &tokio_postgres::Client,
     user: AuthenticatedUser,
     candidate_thread_ids: &[i32],
 ) -> Result<HashSet<i32>, ApiError> {
