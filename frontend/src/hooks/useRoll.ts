@@ -13,6 +13,12 @@ export function useRoll(api?: RollApi) {
   const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
     mutationFn: () => rollApiInstance.roll(),
+    onSuccess: async () => {
+      // The Rust offer moves the event-derived die and pending pointer, so the
+      // retained bootstrap projection must refresh instead of showing the
+      // pre-roll die until the next navigation.
+      await invalidateAfterRollDieModeUpdate(queryClient)
+    },
   })
 
   return {

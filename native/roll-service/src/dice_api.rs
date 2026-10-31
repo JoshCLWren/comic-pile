@@ -29,12 +29,27 @@ pub struct DiceCommandReceipt {
 
 // A cancelled PostgreSQL command must never return a possibly busy
 // connection to the pool. Only completed commits can recycle it.
-struct Pending(Option<Object>);
+pub(crate) struct Pending(Option<Object>);
 impl Drop for Pending {
     fn drop(&mut self) {
         if let Some(connection) = self.0.take() {
             drop(Object::take(connection));
         }
+    }
+}
+
+impl Pending {
+    pub(crate) fn new(connection: Object) -> Self {
+        Self(Some(connection))
+    }
+
+    pub(crate) fn connection(&mut self) -> &mut Object {
+        self.0.as_mut().expect("checked-out PostgreSQL client")
+    }
+
+    /// Return a completed connection to the pool instead of discarding it.
+    pub(crate) fn release(&mut self) {
+        drop(self.0.take());
     }
 }
 
@@ -49,15 +64,15 @@ pub async fn manual_die(
             idempotency_key,
         } => (die, idempotency_key),
     };
-    let mut pending = Pending(Some(db::checkout(&state).await?));
+    let mut pending = Pending::new(db::checkout(&state).await?);
     let receipt = dice_mutation::execute_standalone(
-        pending.0.as_mut().expect("checked-out PostgreSQL client"),
+        pending.connection(),
         user,
         &key,
         &DiceCommand::ManualSelect { die },
     )
     .await?;
-    drop(pending.0.take());
+    pending.release();
     Ok(Json(DiceCommandReceipt {
         event_id: receipt.event_id,
         die_before: receipt.die_before,
