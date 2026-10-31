@@ -74,6 +74,13 @@ fn step_up(die: i32) -> i32 {
 }
 
 #[derive(Debug, Serialize)]
+struct TagResponse {
+    id: i32,
+    name: String,
+    color: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 struct SnoozedThreadInfo {
     id: i32,
     title: String,
@@ -86,6 +93,15 @@ struct ActiveThreadInfo {
     issues_remaining: i32,
     queue_position: i32,
     last_rolled_result: Option<i32>,
+    total_issues: Option<i32>,
+    reading_progress: Option<String>,
+    issues_read: Option<i32>,
+    last_rating: Option<f64>,
+    tags: Vec<TagResponse>,
+    issue_id: Option<i32>,
+    issue_number: Option<String>,
+    next_issue_id: Option<i32>,
+    next_issue_number: Option<String>,
 }
 #[derive(Debug, Serialize)]
 struct SessionBandwidthState {
@@ -545,6 +561,15 @@ async fn mutate(
         issues_remaining: thread_issues,
         queue_position: thread_queue,
         last_rolled_result: roll_result,
+        total_issues: None,
+        reading_progress: None,
+        issues_read: None,
+        last_rating: None,
+        tags: Vec::new(),
+        issue_id: None,
+        issue_number: None,
+        next_issue_id: None,
+        next_issue_number: None,
     });
 
     let bandwidth_state = SessionBandwidthState {
