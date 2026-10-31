@@ -1,14 +1,132 @@
 //! Bounded database reads. All reading-domain lookups require verified ownership.
 use crate::{auth::AuthenticatedUser, ApiError, AppState};
 use axum::http::StatusCode;
+use chrono::DateTime;
 use deadpool_postgres::Object;
-use tokio_postgres::{types::ToSql, Row};
+use serde_json::Value;
+use tokio_postgres::{types::ToSql, Row, Transaction};
 
 fn unavailable() -> ApiError {
     ApiError(
         StatusCode::SERVICE_UNAVAILABLE,
         "Database temporarily unavailable",
     )
+}
+
+/// Thread row shape used by the rate pipeline, matching the Python ThreadResponse fields.
+#[derive(Clone, Debug)]
+pub struct ThreadQuery {
+    pub id: i32,
+    pub title: String,
+    pub format: String,
+    pub issues_remaining: i32,
+    pub queue_position: i32,
+    pub status: String,
+    pub last_rating: Option<f64>,
+    pub last_activity_at: Option<String>,
+    pub notes: Option<String>,
+    pub is_test: bool,
+    pub created_at: Option<String>,
+    pub total_issues: Option<i32>,
+    pub next_unread_issue_id: Option<i32>,
+    pub reading_progress: Option<String>,
+    pub is_blocked: bool,
+    pub manual_creator_credits: Option<Value>,
+}
+
+impl ThreadQuery {
+    pub fn transpose(self) -> Result<Option<Self>, std::convert::Infallible> {
+        Ok(Some(self))
+    }
+}
+
+/// Session row shape used by the rate pipeline.
+#[derive(Clone, Debug)]
+pub struct SessionQuery {
+    pub id: i32,
+    pub user_id: i32,
+    pub start_die: i32,
+    pub manual_die: Option<i32>,
+    pub pending_thread_id: Option<i32>,
+    pub pending_thread_updated_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub started_at: Option<String>,
+    pub snoozed_thread_ids: Vec<i32>,
+    pub skipped_thread_ids: Vec<i32>,
+}
+
+impl SessionQuery {
+    pub fn transpose(self) -> Result<Option<Self>, std::convert::Infallible> {
+        Ok(Some(self))
+    }
+}
+
+/// Format a unix-epoch i64 timestamp as an ISO-8601 activity string.
+pub fn format_activity(ts: i64) -> Option<String> {
+    DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339())
+}
+
+/// Format a unix-epoch i64 timestamp as an ISO-8601 date string.
+pub fn format_date(ts: i64) -> Option<String> {
+    DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339())
+}
+
+/// Format a unix-epoch i64 timestamp as an ISO-8601 string.
+pub fn format_timestamp(ts: i64) -> String {
+    DateTime::from_timestamp(ts, 0)
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_default()
+}
+
+/// Format an optional unix-epoch i64 timestamp as an Option<String>.
+pub fn format_timestamp_opt(ts: Option<i64>) -> Option<String> {
+    ts.map(format_timestamp)
+}
+
+/// Extension trait adding `query_one_optional` to pooled connections.
+pub trait ObjectExt {
+    async fn query_one_optional(
+        &mut self,
+        sql: &str,
+        params: &[&(dyn ToSql + Sync)],
+    ) -> Result<Option<Row>, tokio_postgres::Error>;
+}
+
+impl ObjectExt for Object {
+    async fn query_one_optional(
+        &mut self,
+        sql: &str,
+        params: &[&(dyn ToSql + Sync)],
+    ) -> Result<Option<Row>, tokio_postgres::Error> {
+        self.query_opt(sql, params).await
+    }
+}
+
+/// Run a closure inside a read-committed transaction, committing on success
+/// and rolling back on failure.
+pub async fn execute_in_transaction<F, Fut, T>(
+    db: &mut Object,
+    f: F,
+) -> Result<T, ApiError>
+where
+    F: FnOnce(&mut Transaction<'_>) -> Fut,
+    Fut: std::future::Future<Output = Result<T, ApiError>>,
+{
+    let mut tx = db
+        .transaction()
+        .await
+        .map_err(query_error)?;
+    let result = f(&mut tx).await;
+    match result {
+        Ok(val) => {
+            tx.commit().await.map_err(query_error)?;
+            Ok(val)
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            Err(e)
+        }
+    }
 }
 
 /// Pool wait/create deadlines are configured at startup; no unbounded retry loop.

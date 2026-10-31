@@ -164,6 +164,12 @@ impl Config {
     }
 }
 
+/// Rating limits, matching Python's `app.config.get_rating_settings`.
+/// Defaults mirror the Python RatingSettings (min 0.5, max 5.0, threshold 4.0).
+pub fn get_rating_settings() -> (f64, f64, f64) {
+    (0.5, 5.0, 4.0)
+}
+
 #[cfg(test)]
 mod vercel_tests {
     use super::*;

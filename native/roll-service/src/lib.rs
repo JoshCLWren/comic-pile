@@ -14,6 +14,7 @@ pub mod reading_session;
 pub mod roll_offer;
 pub mod roll_reset;
 mod session_bandwidth;
+pub mod rate;
 pub mod skip;
 
 use axum::{
@@ -167,6 +168,14 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/roll/reset", post(roll_reset::reset))
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
+        .route(
+            "/api/v1/rate",
+            post(rate::post_rate),
+        )
+        .route(
+            "/api/rate",
+            post(rate::post_rate),
+        )
         .route(
             "/api/v1/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
