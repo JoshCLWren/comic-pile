@@ -905,6 +905,16 @@ pub async fn bootstrap_v2(
             tag_ids.push(id as i32);
         }
     }
+    for row in &exclusions {
+        if let Some(id) = row["thread_id"].as_i64() {
+            tag_ids.push(id as i32);
+        }
+    }
+    for row in &inactive {
+        if let Some(id) = row["thread_id"].as_i64() {
+            tag_ids.push(id as i32);
+        }
+    }
     if let Some(ref row) = stale_thread {
         if let Some(id) = row["id"].as_i64() {
             tag_ids.push(id as i32);
@@ -914,9 +924,14 @@ pub async fn bootstrap_v2(
     tag_ids.dedup();
     let tags_by_thread = visible_thread_tags(&conn, user, &tag_ids).await?;
     let attach_tags = |thread: &mut Value| {
-        if let Some(id) = thread["id"].as_i64() {
+        let id = thread
+            ["id"]
+            .as_i64()
+            .or_else(|| thread["thread_id"].as_i64())
+            .map(|v| v as i32);
+        if let Some(id) = id {
             thread["tags"] = json!(tags_by_thread
-                .get(&(id as i32))
+                .get(&id)
                 .cloned()
                 .unwrap_or_default());
         }
@@ -931,6 +946,12 @@ pub async fn bootstrap_v2(
         attach_tags(row);
     }
     for row in &mut blocked_threads {
+        attach_tags(row);
+    }
+    for row in &mut exclusions {
+        attach_tags(row);
+    }
+    for row in &mut inactive {
         attach_tags(row);
     }
     if let Some(ref mut row) = stale_thread {
