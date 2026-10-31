@@ -4,7 +4,6 @@ import { useRollSnooze } from '../pages/RollPage/useRollSnooze'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import type { SnoozeMutationOutcome } from '../hooks/useSnooze'
 import type { RatingThread } from '../pages/RollPage/types'
-import type { RollResponse } from '../types'
 
 function ratingThread(id: number): RatingThread {
   return {
@@ -20,26 +19,6 @@ function ratingThread(id: number): RatingThread {
     next_issue_id: null,
     next_issue_number: null,
     last_rolled_result: null,
-  }
-}
-
-function nextOffer(): RollResponse {
-  return {
-    thread_id: 9,
-    title: 'Next Series',
-    format: 'Comic',
-    issues_remaining: 2,
-    queue_position: 2,
-    die_size: 8,
-    result: 1,
-    offset: 0,
-    snoozed_count: 1,
-    issue_id: null,
-    issue_number: null,
-    next_issue_id: null,
-    next_issue_number: null,
-    total_issues: 6,
-    reading_progress: null,
   }
 }
 
@@ -172,72 +151,5 @@ describe('useRollSnooze', () => {
 
     expect(retryRefresh).toHaveBeenCalledTimes(1)
     expect(mutate).not.toHaveBeenCalled()
-  })
-
-  it('rerolls through the Rust offer and refreshes the next offer', async () => {
-    const reroll = vi.fn().mockResolvedValue(nextOffer())
-    const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
-    const { result } = renderHook(() => {
-      const state = useRollPageState()
-      const snooze = useRollSnooze({
-        state,
-        snoozeMutation: { mutate: vi.fn() },
-        rerollMutation: { mutate: reroll },
-        unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined) },
-        refetchBootstrap,
-      })
-      return { state, snooze }
-    })
-
-    act(() => {
-      result.current.state.setActiveRatingThread(ratingThread(7))
-      result.current.state.setIsRatingView(true)
-      result.current.state.setIsRolling(true)
-    })
-
-    await act(async () => {
-      await result.current.snooze.handleReroll()
-    })
-
-    expect(reroll).toHaveBeenCalledTimes(1)
-    expect(refetchBootstrap).toHaveBeenCalledTimes(1)
-    expect(result.current.state.isRatingView).toBe(false)
-    expect(result.current.state.activeRatingThread).toBeNull()
-  })
-
-  it('enters the next offer from the response instead of refetching', async () => {
-    const response = nextOffer()
-    const reroll = vi.fn().mockResolvedValue(response)
-    const enterRatingView = vi.fn().mockResolvedValue(undefined)
-    const refetchBootstrap = vi.fn()
-    const { result } = renderHook(() => {
-      const state = useRollPageState()
-      const snooze = useRollSnooze({
-        state,
-        snoozeMutation: { mutate: vi.fn() },
-        rerollMutation: { mutate: reroll },
-        enterRatingView,
-        unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined) },
-        refetchBootstrap,
-      })
-      return { state, snooze }
-    })
-
-    act(() => {
-      result.current.state.setActiveRatingThread(ratingThread(7))
-      result.current.state.setIsRatingView(true)
-    })
-
-    await act(async () => {
-      await result.current.snooze.handleReroll()
-    })
-
-    expect(reroll).toHaveBeenCalledTimes(1)
-    expect(enterRatingView).toHaveBeenCalledWith(
-      response.thread_id,
-      response.result,
-      response,
-    )
-    expect(refetchBootstrap).not.toHaveBeenCalled()
   })
 })

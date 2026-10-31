@@ -254,8 +254,6 @@ export default function RollPage() {
   const snooze = useRollSnooze({
     state,
     snoozeMutation,
-    rerollMutation: rollMutation,
-    enterRatingView: rating.enterRatingView,
     unsnoozeMutation,
     refetchBootstrap,
     onClarificationSuggested: handleCorrectionSuggested,
@@ -384,8 +382,6 @@ export default function RollPage() {
     onSkip: skip.handleSkip,
     rateMutation,
     snoozeMutation,
-    rerollMutation: rollMutation,
-    onReroll: snooze.handleReroll,
     dismissPendingMutation,
     skipMutation,
     ratingViewTopRef,

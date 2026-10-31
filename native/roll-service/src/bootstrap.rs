@@ -318,8 +318,8 @@ async fn current_active_thread(
 
 /// Reconstruct the Python Fibonacci snooze backoff from saved events and
 /// sessions, not just current-session snoozes. A later unsnooze wins.
-pub(crate) async fn durable_snoozed(
-    conn: &tokio_postgres::Client,
+async fn durable_snoozed(
+    conn: &deadpool_postgres::Object,
     user: AuthenticatedUser,
     candidate_thread_ids: &[i32],
 ) -> Result<HashSet<i32>, ApiError> {
@@ -751,8 +751,8 @@ pub async fn bootstrap_v2(
     excluded.extend(&durable);
     let eligible: Vec<_> = candidates
         .iter()
-        .take(current_die.max(0) as usize)
         .filter(|candidate| !excluded.contains(&candidate.thread_id))
+        .take(current_die.max(0) as usize)
         .collect();
     let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
 

@@ -19,13 +19,13 @@ interface DecisionCardProps {
   predictedDie: number
   errorMessage: string
   rateIsPending: boolean
-  rerollIsPending?: boolean
+  snoozeIsPending: boolean
   dismissIsPending: boolean
   skipIsPending?: boolean
   manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
-  onReroll?: () => Promise<void>
+  onSnooze: () => void
   onSkip?: () => void
   onCancel: () => void
 }
@@ -36,7 +36,7 @@ interface DecisionCardProps {
  * Key features:
  * - Rating slider with visual feedback based on rating value
  * - Die readout that reports the truthful die outcome for the active mode
- * - Action buttons for saving, rolling again, skipping, and canceling
+ * - Action buttons for saving, snoozing, skipping, and canceling
  *
  * Manual die mode:
  * - When `manualDie` is not null the die is pinned, so the ladder move never
@@ -52,13 +52,13 @@ export function DecisionCard({
   predictedDie,
   errorMessage,
   rateIsPending,
+  snoozeIsPending,
   dismissIsPending,
   skipIsPending = false,
   manualDie,
   onUpdateRating,
   onSubmitRating,
-  onReroll,
-  rerollIsPending = false,
+  onSnooze,
   onSkip,
   onCancel,
 }: DecisionCardProps) {
@@ -213,17 +213,14 @@ export function DecisionCard({
           className={rollSecondaryActionGroupClass}
           data-testid="rating-secondary-actions"
         >
-          {onReroll && (
-            <button
-              type="button"
-              onClick={() => { void onReroll() }}
-              disabled={rerollIsPending}
-              data-testid="reroll-offer"
-              className={rollSecondaryActionClass}
-            >
-              {rerollIsPending ? 'Rolling…' : 'Roll again'}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onSnooze}
+            disabled={snoozeIsPending}
+            className={rollSecondaryActionClass}
+          >
+            {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
+          </button>
           {onSkip && (
             <button
               type="button"
@@ -260,8 +257,8 @@ export function DecisionCard({
             it can come up again in a future roll.
           </p>
           <p className="text-xs text-[var(--theme-text-dim)]">
-            Roll again snoozes this comic temporarily and selects the next offer. Cancel roll exits
-            without rating. Skip is different from both — it moves past this comic now.
+            Snooze postpones the comic temporarily, and Cancel roll exits without rating. Skip is
+            different from both — it moves past this comic now.
           </p>
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <button

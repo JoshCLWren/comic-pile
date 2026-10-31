@@ -30,11 +30,9 @@ interface UseRatingViewParams {
     enterRatingView: (threadId: number | null, result?: number | null, threadMetadata?: ThreadMetadata | null) => Promise<void>
   }
   snooze: { handleSnooze: () => Promise<void> }
-  onReroll?: () => Promise<void>
   onSkip: () => Promise<void>
   rateMutation: { isPending: boolean }
   snoozeMutation: { isPending: boolean }
-  rerollMutation?: { isPending: boolean }
   dismissPendingMutation: { isPending: boolean }
   skipMutation: { isPending: boolean }
   ratingViewTopRef: React.RefObject<HTMLDivElement | null> | null
@@ -48,15 +46,13 @@ export interface RatingViewData {
   predictedDie: number
   errorMessage: string
   rateIsPending: boolean
-  snoozeIsPending?: boolean
-  rerollIsPending?: boolean
+  snoozeIsPending: boolean
   dismissIsPending: boolean
   skipIsPending: boolean
   manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
-  onSnooze?: () => void
-  onReroll?: () => Promise<void>
+  onSnooze: () => void
   onSkip?: () => void
   onCancel: () => void
   onRefreshThread: () => void
@@ -112,11 +108,9 @@ export function useRatingView({
   connectedThreadsError,
   rating,
   snooze,
-  onReroll,
   onSkip,
   rateMutation,
   snoozeMutation,
-  rerollMutation,
   dismissPendingMutation,
   skipMutation,
   ratingViewTopRef,
@@ -151,15 +145,13 @@ export function useRatingView({
     predictedDie,
     errorMessage,
     rateIsPending: rateMutation.isPending,
-    snoozeIsPending: (rerollMutation ?? snoozeMutation).isPending,
+    snoozeIsPending: snoozeMutation.isPending,
     dismissIsPending: dismissPendingMutation.isPending,
     skipIsPending: skipMutation.isPending,
     manualDie: bootstrap?.manual_die ?? null,
     onUpdateRating: rating.updateRatingUI,
     onSubmitRating: rating.handleSubmitRating,
     onSnooze: snooze.handleSnooze,
-    onReroll,
-    rerollIsPending: rerollMutation?.isPending ?? false,
     onSkip,
     onCancel: rating.handleCancelRating,
     onRefreshThread: rating.handleRefreshThread,

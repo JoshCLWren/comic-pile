@@ -30,13 +30,13 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     predictedDie: 8,
     errorMessage: '',
     rateIsPending: false,
-    rerollIsPending: false,
+    snoozeIsPending: false,
     dismissIsPending: false,
     skipIsPending: false,
     manualDie: null,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
-    onReroll: vi.fn().mockResolvedValue(undefined),
+    onSnooze: vi.fn(),
     onSkip: undefined,
     onCancel: vi.fn(),
     onRefreshThread: vi.fn(),
@@ -299,7 +299,7 @@ describe('Roll optional reading cards interaction (#2764)', () => {
     expect(screen.queryByTestId('reading-boundaries-loading')).not.toBeInTheDocument()
     expect(screen.getByRole('slider')).toBeEnabled()
     expect(screen.getByRole('button', { name: /mark read & save/i })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /roll again/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /snooze/i })).toBeEnabled()
     expect(screen.getByRole('button', { name: /cancel roll/i })).toBeEnabled()
   })
 

@@ -188,14 +188,14 @@ describe('RatingView', () => {
   function makeData(overrides: Partial<RatingViewData> = {}): RatingViewData {
     return {
       activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10, issue_number: '3', next_issue_number: '4', reading_progress: 'in_progress', queue_position: 0, issue_id: 100, next_issue_id: 101 },
-      currentDie: 6, rolledResult: 3, rating: 3.0, predictedDie: 8, errorMessage: '', rateIsPending: false, rerollIsPending: false, dismissIsPending: false, skipIsPending: false, manualDie: null, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onReroll: vi.fn().mockResolvedValue(undefined), onCancel: vi.fn(), onRefreshThread: vi.fn(), readerContext: null, isReaderContextLoading: false, readerContextError: null, ratingViewTopRef: null, issuesRemaining: 5, readingContextRequested: false, readingBoundariesRequested: false, readingOrders: [], connectedThreads: [], onShowContext: vi.fn(), onShowBoundaries: vi.fn(), readingOrdersIsLoading: false, readingOrdersError: null, connectedThreadsIsLoading: false, connectedThreadsError: null, ...overrides,
+      currentDie: 6, rolledResult: 3, rating: 3.0, predictedDie: 8, errorMessage: '', rateIsPending: false, snoozeIsPending: false, dismissIsPending: false, skipIsPending: false, manualDie: null, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn(), readerContext: null, isReaderContextLoading: false, readerContextError: null, ratingViewTopRef: null, issuesRemaining: 5, readingContextRequested: false, readingBoundariesRequested: false, readingOrders: [], connectedThreads: [], onShowContext: vi.fn(), onShowBoundaries: vi.fn(), readingOrdersIsLoading: false, readingOrdersError: null, connectedThreadsIsLoading: false, connectedThreadsError: null, ...overrides,
     }
   }
 
   it('renders rating states and invokes controls', async () => {
-    const onUpdateRating = vi.fn(); const onSubmitRating = vi.fn(); const onReroll = vi.fn().mockResolvedValue(undefined); const onCancel = vi.fn(); const onRefreshThread = vi.fn()
+    const onUpdateRating = vi.fn(); const onSubmitRating = vi.fn(); const onSnooze = vi.fn(); const onCancel = vi.fn(); const onRefreshThread = vi.fn()
     const user = userEvent.setup()
-    render(<MemoryRouter><RatingView data={makeData({ rating: 5, onUpdateRating, onSubmitRating, onReroll, onCancel, onRefreshThread })} /></MemoryRouter>)
+    render(<MemoryRouter><RatingView data={makeData({ rating: 5, onUpdateRating, onSubmitRating, onSnooze, onCancel, onRefreshThread })} /></MemoryRouter>)
     expect(screen.getAllByText(/Saga/).length).toBeGreaterThan(0)
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
@@ -209,14 +209,14 @@ describe('RatingView', () => {
     fireEvent.change(rating, { target: { value: '3' } })
     expect(onUpdateRating).toHaveBeenCalledWith('3')
     await user.click(screen.getByRole('button', { name: /mark read & save/i }))
-    await user.click(screen.getByRole('button', { name: /roll again/i }))
+    await user.click(screen.getByRole('button', { name: /snooze/i }))
     expect(onSubmitRating).toHaveBeenCalled()
-    expect(onReroll).toHaveBeenCalled()
+    expect(onSnooze).toHaveBeenCalled()
   })
 
   it('renders empty, low-rating, progress, reading-order, and correction states', async () => {
-    const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onReroll: vi.fn().mockResolvedValue(undefined), onCancel: vi.fn(), onRefreshThread: vi.fn() }
-    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: 'completed', queue_position: 0, issue_id: 100, next_issue_id: null }, rating: 1, errorMessage: 'Oops', rerollIsPending: true, onUpdateRating: callbacks.onUpdateRating, onSubmitRating: callbacks.onSubmitRating, onReroll: callbacks.onReroll, onCancel: callbacks.onCancel, onRefreshThread: callbacks.onRefreshThread })} /></MemoryRouter>)
+    const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
+    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: 'completed', queue_position: 0, issue_id: 100, next_issue_id: null }, rating: 1, errorMessage: 'Oops', snoozeIsPending: true, onUpdateRating: callbacks.onUpdateRating, onSubmitRating: callbacks.onSubmitRating, onSnooze: callbacks.onSnooze, onCancel: callbacks.onCancel, onRefreshThread: callbacks.onRefreshThread })} /></MemoryRouter>)
     expect(screen.getByText(/This is the last issue/)).toBeInTheDocument()
     expect(screen.getByText('Oops')).toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
@@ -228,12 +228,12 @@ describe('RatingView', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Correct successfully' }))
     expect(callbacks.onRefreshThread).toHaveBeenCalled()
     fireEvent.change(screen.getByRole('slider'), { target: { value: '2' } })
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Rolling…' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Snoozing…' }))
     await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel roll' }))
   })
 
   it('renders safe fallbacks for missing thread metadata', async () => {
-    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onReroll: vi.fn().mockResolvedValue(undefined), onCancel: vi.fn(), onRefreshThread: vi.fn() })} /></MemoryRouter>)
+    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() })} /></MemoryRouter>)
     expect(screen.getByText('Saga')).toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
@@ -242,8 +242,8 @@ describe('RatingView', () => {
   })
 
   it('renders alternate rating, progress, and order boundaries', async () => {
-    const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onReroll: vi.fn().mockResolvedValue(undefined), onCancel: vi.fn(), onRefreshThread: vi.fn() }
-    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, total_issues: 0, issue_number: null, next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, rating: 5, predictedDie: 6, rolledResult: 2, onUpdateRating: callbacks.onUpdateRating, onSubmitRating: callbacks.onSubmitRating, onReroll: callbacks.onReroll, onCancel: callbacks.onCancel, onRefreshThread: callbacks.onRefreshThread })} /></MemoryRouter>)
+    const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
+    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, total_issues: 0, issue_number: null, next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, rating: 5, predictedDie: 6, rolledResult: 2, onUpdateRating: callbacks.onUpdateRating, onSubmitRating: callbacks.onSubmitRating, onSnooze: callbacks.onSnooze, onCancel: callbacks.onCancel, onRefreshThread: callbacks.onRefreshThread })} /></MemoryRouter>)
     expect(screen.getByText('Saga')).toBeInTheDocument()
     expect(screen.queryByText('Die stays the same')).not.toBeInTheDocument()
     expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
@@ -253,7 +253,7 @@ describe('RatingView', () => {
   })
 
   it('asserts Why this? stays absent while collapsed Reading Context and Reading Boundaries cards are present', async () => {
-    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onReroll: vi.fn().mockResolvedValue(undefined), onCancel: vi.fn(), onRefreshThread: vi.fn() })} /></MemoryRouter>)
+    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() })} /></MemoryRouter>)
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.getByText('Reading Context (optional)')).toBeInTheDocument()
     expect(screen.getByText('Reading Boundaries (optional)')).toBeInTheDocument()

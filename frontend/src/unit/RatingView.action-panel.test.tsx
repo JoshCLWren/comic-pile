@@ -76,13 +76,13 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     predictedDie: 8,
     errorMessage: '',
     rateIsPending: false,
-    rerollIsPending: false,
+    snoozeIsPending: false,
     dismissIsPending: false,
     skipIsPending: false,
     manualDie: null,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
-    onReroll: vi.fn().mockResolvedValue(undefined),
+    onSnooze: vi.fn(),
     onSkip: undefined,
     onCancel: vi.fn(),
     onRefreshThread: vi.fn(),
@@ -119,11 +119,11 @@ describe('RatingView action panel (issue #1406)', () => {
   it('Cancel uses demoted tertiary styling that does not rival the primary save', () => {
     render(ratingView())
     const cancel = screen.getByRole('button', { name: /cancel roll/i })
-    const reroll = screen.getByRole('button', { name: /roll again/i })
+    const snooze = screen.getByRole('button', { name: /snooze/i })
     // Issue #3009 replaces Cancel's one-off tertiary treatment with the shared
     // secondary peer class, so the peers are now literally identical rather
     // than merely similar. Cancel used to be the only transparent peer.
-    expect(cancel.className).toBe(reroll.className)
+    expect(cancel.className).toBe(snooze.className)
     expect(cancel.className).toContain('border-[var(--theme-border)]')
     expect(cancel.className).toContain('bg-[var(--theme-bg-panel)]')
     // Demotion comes from the flat surface, not from an accent fill and not from
@@ -138,25 +138,25 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(cancel.className).not.toContain('focus:ring-rose-500')
   })
 
-  it('Roll again remains neutral styling', () => {
+  it('Snooze remains neutral styling', () => {
     render(ratingView())
-    const reroll = screen.getByRole('button', { name: /roll again/i })
-    expect(reroll.className).toContain('border-[var(--theme-border)]')
-    expect(reroll.className).toContain('bg-[var(--theme-bg-panel)]')
+    const snooze = screen.getByRole('button', { name: /snooze/i })
+    expect(snooze.className).toContain('border-[var(--theme-border)]')
+    expect(snooze.className).toContain('bg-[var(--theme-bg-panel)]')
     // Issue #3009 replaces the raw `text-stone-300` palette utility with the
     // semantic text token so the neutral label stays readable in every theme.
-    expect(reroll.className).toContain('text-[var(--theme-text-primary)]')
-    expect(reroll.className).not.toMatch(/\bstone-\d/)
-    expect(reroll.className).not.toContain('theme-comic-accent')
-    expect(reroll.className).not.toContain('theme-danger')
-    expect(reroll.className).not.toContain('theme-continuity-accent')
+    expect(snooze.className).toContain('text-[var(--theme-text-primary)]')
+    expect(snooze.className).not.toMatch(/\bstone-\d/)
+    expect(snooze.className).not.toContain('theme-comic-accent')
+    expect(snooze.className).not.toContain('theme-danger')
+    expect(snooze.className).not.toContain('theme-continuity-accent')
   })
 
-  it('Roll again and Cancel are equal width (both flex-1)', () => {
+  it('Snooze and Cancel are equal width (both flex-1)', () => {
     render(ratingView())
-    const reroll = screen.getByRole('button', { name: /roll again/i })
+    const snooze = screen.getByRole('button', { name: /snooze/i })
     const cancel = screen.getByRole('button', { name: /cancel roll/i })
-    expect(reroll.className).toContain('flex-1')
+    expect(snooze.className).toContain('flex-1')
     expect(cancel.className).toContain('flex-1')
   })
 
@@ -248,10 +248,10 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(save).toBeDisabled()
   })
 
-  it('Roll again is disabled while rerollIsPending', () => {
-    render(ratingView({ rerollIsPending: true }))
-    const reroll = screen.getByRole('button', { name: /rolling/i })
-    expect(reroll).toBeDisabled()
+  it('snooze button is disabled while snoozeIsPending', () => {
+    render(ratingView({ snoozeIsPending: true }))
+    const snooze = screen.getByRole('button', { name: /snoozing/i })
+    expect(snooze).toBeDisabled()
   })
 
   it('cancel button is disabled while dismissIsPending', () => {
@@ -260,13 +260,13 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(cancel).toBeDisabled()
   })
 
-  it('invokes callbacks on save, roll again, and cancel', async () => {
+  it('invokes callbacks on save, snooze, and cancel', async () => {
     const onUpdateRating = vi.fn()
     const onSubmitRating = vi.fn()
-    const onReroll = vi.fn().mockResolvedValue(undefined)
+    const onSnooze = vi.fn()
     const onCancel = vi.fn()
     const user = userEvent.setup()
-    render(ratingView({ onUpdateRating, onSubmitRating, onReroll, onCancel }))
+    render(ratingView({ onUpdateRating, onSubmitRating, onSnooze, onCancel }))
 
     fireEvent.change(screen.getByRole('slider'), { target: { value: '4' } })
     expect(onUpdateRating).toHaveBeenCalledWith('4')
@@ -274,8 +274,8 @@ describe('RatingView action panel (issue #1406)', () => {
     await user.click(screen.getByRole('button', { name: /mark read & save/i }))
     expect(onSubmitRating).toHaveBeenCalledWith(false)
 
-    await user.click(screen.getByRole('button', { name: /roll again/i }))
-    expect(onReroll).toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: /snooze/i }))
+    expect(onSnooze).toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: /cancel roll/i }))
     expect(onCancel).toHaveBeenCalled()
@@ -369,16 +369,16 @@ describe('RatingView action panel (issue #1406)', () => {
 
   it('secondary action buttons have equal flex weight', () => {
     render(ratingView())
-    const reroll = screen.getByRole('button', { name: /roll again/i })
+    const snooze = screen.getByRole('button', { name: /snooze/i })
     const cancel = screen.getByRole('button', { name: /cancel roll/i })
-    expect(reroll.className).toContain('flex-1')
+    expect(snooze.className).toContain('flex-1')
     expect(cancel.className).toContain('flex-1')
     // Issue #3009 replaces the old "no min width at all" expectation with one
     // shared standard-scale minimum width. The arbitrary `min-w-[7.5rem]` value
     // is still rejected: the visual grammar prefers the standard spacing scale.
-    expect(reroll.className).toContain('min-w-28')
+    expect(snooze.className).toContain('min-w-28')
     expect(cancel.className).toContain('min-w-28')
-    expect(reroll.className).not.toContain('min-w-\\[7.5rem\\]')
+    expect(snooze.className).not.toContain('min-w-\\[7.5rem\\]')
     expect(cancel.className).not.toContain('min-w-\\[7.5rem\\]')
   })
 })

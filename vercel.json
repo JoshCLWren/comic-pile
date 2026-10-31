@@ -60,11 +60,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "/api/v2/roll/offer",
-      "methods": ["POST"],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "/api/v1/roll/dismiss-pending",
       "methods": ["POST"],
       "dest": "/api/native_roll.rs"

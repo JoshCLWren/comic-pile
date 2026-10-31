@@ -7,106 +7,10 @@ type ManualDieCommand = {
   idempotency_key: string
 }
 
-type RollOfferPayload = {
-  timezone?: string
-  snoozed_thread_ids: number[]
-  idempotency_key: string
-}
-
-type RollOfferResponse = RollResponse & { snoozed_thread_id?: number | null }
-
-const SNOOZE_COOKIE = 'comicpile_roll_snoozes'
-const PENDING_OFFER_KEY = 'comicpile:roll:pending-offer'
-const MAX_ROLL_SNOOZES = 50
-const SNOOZE_COOKIE_PATTERN = /^\[\d{1,10}(,\d{1,10}){0,49}\]$/
-const OFFER_KEY_PATTERN = /^roll-offer-[0-9a-f]{32}$/
-
 function newCommandKey(): string {
   const bytes = new Uint8Array(16)
   globalThis.crypto.getRandomValues(bytes)
   return `roll-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`
-}
-
-function newOfferKey(): string {
-  const bytes = new Uint8Array(16)
-  globalThis.crypto.getRandomValues(bytes)
-  return `roll-offer-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`
-}
-
-function browserTimeZone(): string | undefined {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined
-  } catch {
-    return undefined
-  }
-}
-
-function nextMidnight(): Date {
-  const midnight = new Date()
-  midnight.setHours(24, 0, 0, 0)
-  return midnight
-}
-
-/**
- * Temporary snoozes live only in this browser and expire at midnight.
- * The server treats them as exclusion hints, never as eligibility or auth.
- */
-function readRollSnoozes(): number[] {
-  try {
-    const raw = globalThis.document?.cookie
-      ?.split('; ')
-      .find((entry) => entry.startsWith(`${SNOOZE_COOKIE}=`))
-      ?.slice(SNOOZE_COOKIE.length + 1)
-    if (!raw) return []
-    const decoded = decodeURIComponent(raw)
-    if (!SNOOZE_COOKIE_PATTERN.test(decoded)) return []
-    return decoded
-      .slice(1, -1)
-      .split(',')
-      .map((value) => Number(value))
-  } catch {
-    return []
-  }
-}
-
-function writeRollSnoozes(ids: number[]): void {
-  try {
-    const bounded = Array.from(
-      new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0)),
-    ).slice(-MAX_ROLL_SNOOZES)
-    globalThis.document.cookie = `${SNOOZE_COOKIE}=${encodeURIComponent(
-      JSON.stringify(bounded),
-    )}; expires=${nextMidnight().toUTCString()}; path=/; SameSite=Lax`
-  } catch {
-    // A blocked cookie must not disable Roll; the server still snoozes pending.
-  }
-}
-
-function readPendingOfferKey(): string | null {
-  try {
-    const raw = globalThis.sessionStorage?.getItem(PENDING_OFFER_KEY)
-    return raw && OFFER_KEY_PATTERN.test(raw) ? raw : null
-  } catch {
-    return null
-  }
-}
-
-function writePendingOfferKey(key: string): void {
-  try {
-    globalThis.sessionStorage?.setItem(PENDING_OFFER_KEY, key)
-  } catch {
-    // In-memory retry safety remains for this page instance.
-  }
-}
-
-function clearPendingOfferKey(key: string): void {
-  try {
-    if (readPendingOfferKey() === key) {
-      globalThis.sessionStorage?.removeItem(PENDING_OFFER_KEY)
-    }
-  } catch {
-    // The in-memory key is still cleared after a confirmed response.
-  }
 }
 
 type PendingManualDie = { die: number; key: string }
@@ -154,34 +58,13 @@ function clearPendingManualDie(key: string): void {
  */
 export function createRollApi(client: HttpClient) {
   let unresolvedManual: PendingManualDie | null = readPendingManualDie()
-  let unresolvedOfferKey: string | null = readPendingOfferKey()
-
-  const offer = async (): Promise<RollOfferResponse> => {
-    const key = unresolvedOfferKey ?? newOfferKey()
-    unresolvedOfferKey = key
-    writePendingOfferKey(key)
-    const response = await client.post<RollOfferResponse, RollOfferPayload>(
-      '/v2/roll/offer',
-      {
-        timezone: browserTimeZone(),
-        snoozed_thread_ids: readRollSnoozes(),
-        idempotency_key: key,
-      },
-    )
-    if (unresolvedOfferKey === key) unresolvedOfferKey = null
-    clearPendingOfferKey(key)
-    if (response.snoozed_thread_id) {
-      writeRollSnoozes([...readRollSnoozes(), response.snoozed_thread_id])
-    }
-    return response
-  }
 
   return {
-    roll: offer,
+    roll: () => client.post<RollResponse>('/v1/roll/'),
     override: (data: { thread_id: number }) => client.post<RollResponse, { thread_id: number }>('/v1/roll/override', data),
     dismissPending: () => client.post<void>('/v1/roll/dismiss-pending'),
     skip: () => client.post<RollResponse>('/v1/roll/skip'),
-    reroll: offer,
+    reroll: () => client.post<RollResponse>('/v1/roll/'),
     setDie: async (die: number): Promise<void> => {
       const key = unresolvedManual?.die === die ? unresolvedManual.key : newCommandKey()
       unresolvedManual = { die, key }

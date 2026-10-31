@@ -486,22 +486,10 @@ async def get_current_die_for_session(
     if session.manual_die and not automatic:
         return session.manual_die
 
-    # The logical die is owner-scoped event history, not just the current
-    # session. Rust commands write sessionless manual_die/snooze events and do
-    # not pin session.manual_die, so a session-only lookup would compute the
-    # next rating from a stale die and then feed that wrong die back to Rust.
-    types: tuple[str, ...] = ("rate", "snooze", "undo", "reset_dice")
-    if not automatic:
-        types = (*types, "manual_die")
     result = await db.execute(
         select(Event)
-        .where(
-            or_(
-                Event.user_id == session.user_id,
-                Event.session_id == session.id,
-            )
-        )
-        .where(Event.type.in_(types))
+        .where(Event.session_id == session.id)
+        .where(Event.type.in_(("rate", "snooze", "undo")))
         .where(Event.die_after.is_not(None))
         .order_by(Event.timestamp.desc(), Event.id.desc())
         .limit(1)

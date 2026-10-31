@@ -25,13 +25,13 @@ function makeDecisionCardProps(overrides: Partial<DecisionCardProps> = {}) {
     predictedDie: 8,
     errorMessage: '',
     rateIsPending: false,
-    rerollIsPending: false,
+    snoozeIsPending: false,
     dismissIsPending: false,
     skipIsPending: false,
     manualDie: null,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
-    onReroll: vi.fn().mockResolvedValue(undefined),
+    onSnooze: vi.fn(),
     onSkip: vi.fn(),
     onCancel: vi.fn(),
     ...overrides,
@@ -45,13 +45,13 @@ interface DecisionCardProps {
   predictedDie: number
   errorMessage: string
   rateIsPending: boolean
-  rerollIsPending?: boolean
+  snoozeIsPending: boolean
   dismissIsPending: boolean
   skipIsPending?: boolean
   manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
-  onReroll?: () => Promise<void>
+  onSnooze: () => void
   onSkip?: () => void
   onCancel: () => void
 }
@@ -69,15 +69,6 @@ function ratingReadout(): HTMLElement {
 }
 
 describe('DecisionCard', () => {
-  it('invokes the Rust reroll action from the rating view', async () => {
-    const onReroll = vi.fn().mockResolvedValue(undefined)
-    renderDecisionCard(makeDecisionCardProps({ onReroll }))
-
-    await userEvent.setup().click(screen.getByTestId('reroll-offer'))
-
-    expect(onReroll).toHaveBeenCalledTimes(1)
-  })
-
   it('renders rating states and invokes controls in automatic mode', async () => {
     const callbacks = makeDecisionCardProps()
     const user = userEvent.setup()
@@ -96,8 +87,8 @@ describe('DecisionCard', () => {
     await user.click(screen.getByRole('button', { name: /mark read & save/i }))
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
 
-    await user.click(screen.getByRole('button', { name: /roll again/i }))
-    expect(callbacks.onReroll).toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: /snooze/i }))
+    expect(callbacks.onSnooze).toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: /cancel roll/i }))
     expect(callbacks.onCancel).toHaveBeenCalled()
@@ -155,13 +146,13 @@ describe('DecisionCard', () => {
   it('shows loading states for async operations', () => {
     const callbacks = makeDecisionCardProps({
       rateIsPending: true,
-      rerollIsPending: true,
+      snoozeIsPending: true,
     })
 
     renderDecisionCard(callbacks)
 
     expect(screen.getByRole('button', { name: /saving…/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /rolling…/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /snoozing…/i })).toBeInTheDocument()
   })
 
   it('shows skip button when skipIsPending is false', () => {

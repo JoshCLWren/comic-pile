@@ -1,7 +1,6 @@
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
-import type { RollResponse, SnoozeCorrectionInfo } from '../../types'
-import type { ThreadMetadata } from './types'
+import type { SnoozeCorrectionInfo } from '../../types'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 
@@ -13,12 +12,6 @@ interface UseRollSnoozeParams {
     refreshError?: unknown
     retryRefresh?: () => Promise<boolean>
   }
-  rerollMutation?: { mutate: () => Promise<RollResponse> }
-  enterRatingView?: (
-    threadId: number | null,
-    result?: number | null,
-    threadMetadata?: ThreadMetadata | null,
-  ) => Promise<void>
   unsnoozeMutation: { mutate: (threadId: number) => Promise<void> }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
   onClarificationSuggested?: (correction: SnoozeCorrectionInfo) => void
@@ -43,8 +36,6 @@ interface UseRollSnoozeParams {
 export function useRollSnooze({
   state,
   snoozeMutation,
-  rerollMutation,
-  enterRatingView,
   unsnoozeMutation,
   refetchBootstrap,
   onClarificationSuggested,
@@ -65,33 +56,6 @@ export function useRollSnooze({
       await refetchBootstrap()
     } catch (error) {
       console.error('Unsnooze failed:', error)
-    }
-  }
-
-  /**
-   * One Roll/Reroll action from the rating view: the Rust offer records the
-   * pending snooze and selects the next offer in a single command. The
-   * refreshed bootstrap rehydrates the next rating view.
-   */
-  async function handleReroll() {
-    if (!rerollMutation) return
-    try {
-      const response = await rerollMutation.mutate()
-      if (enterRatingView) {
-        // Use the offer response directly so a failed background refresh cannot
-        // leave the just-snoozed thread open in the rating view.
-        await enterRatingView(response.thread_id, response.result, response)
-      } else {
-        await refetchBootstrap()
-        setIsRolling(false)
-        setIsRatingView(false)
-        setRolledResult(null)
-        setSelectedThreadId(null)
-        setActiveRatingThread(null)
-      }
-      setErrorMessage('')
-    } catch (error: unknown) {
-      setErrorMessage(getApiErrorDetail(error))
     }
   }
 
@@ -139,7 +103,6 @@ export function useRollSnooze({
   return {
     handleUnsnooze,
     handleSnooze,
-    handleReroll,
     retryRefresh: snoozeMutation.retryRefresh,
     hasRefreshError: snoozeMutation.hasRefreshError ?? false,
     refreshError: snoozeMutation.refreshError,
