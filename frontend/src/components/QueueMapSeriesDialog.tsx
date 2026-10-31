@@ -61,6 +61,7 @@ interface QueueMapSeriesDialogProps {
   isOpen: boolean
   threadId: number
   threadTitle: string
+  knownIssueNumber?: string | null
   onClose: () => void
   onMapped: (confirmedIssueIds: number[]) => void
   /**
@@ -164,6 +165,7 @@ export default function QueueMapSeriesDialog({
   isOpen,
   threadId,
   threadTitle,
+  knownIssueNumber,
   onClose,
   onMapped,
   onSkip,
@@ -456,6 +458,11 @@ export default function QueueMapSeriesDialog({
               <span className="font-bold text-stone-100">{threadTitle}</span>. Nothing changes
               until you review and approve the mapping plan.
             </p>
+            {knownIssueNumber != null && knownIssueNumber !== '' && (
+              <p className="text-xs text-stone-400">
+                Known issue: #{knownIssueNumber}
+              </p>
+            )}
             <input
               type="search"
               value={query}

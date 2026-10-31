@@ -19,6 +19,7 @@ from app.models.user import User
 from app.schemas import (
     CheckPotentialDuplicatesRequest,
     CheckPotentialDuplicatesResponse,
+    ComicVineMappingHealth,
     MigrateToIssuesRequest,
     QueueThreadListResponse,
     ReactivateRequest,
@@ -367,6 +368,27 @@ async def get_thread(
     except ServiceError as exc:
         raise _map_service_error(exc) from exc
 
+
+@v1_router.get(
+    "/{thread_id}/comicvine-mapping-health",
+    response_model=ComicVineMappingHealth,
+)
+async def get_thread_comicvine_mapping_health(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ComicVineMappingHealth:
+    """Return stored ComicVine mapping health for one owned thread.
+
+    Raises:
+        HTTPException: 404 when the thread does not exist for this user.
+    """
+    try:
+        return await thread_service.get_thread_comicvine_mapping_health(
+            db, current_user.id, thread_id
+        )
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 @router.put("/{thread_id}", response_model=ThreadResponse)
 async def update_thread(

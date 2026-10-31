@@ -309,6 +309,11 @@ export const queryKeys = {
      */
     queueSeriesOrigin: (threadId: number) => ['comicVine', 'queueSeriesOrigin', threadId] as const,
     /**
+     * Stored ComicVine mapping health for one owned thread (#2723). Read only
+     * while the Roll action sheet is open, never at Roll view load.
+     */
+    mappingHealth: (threadId: number) => ['comicVine', 'mappingHealth', threadId] as const,
+    /**
      * Server truth about whether the caller already owns one ComicVine volume.
      * The add-series dialog reads it while the confirm step is open to choose
      * between "already in your queue" and "creates a new series" copy (#3854),

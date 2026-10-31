@@ -329,6 +329,50 @@ def _extract_series_metadata(
     )
 
 
+def build_comicvine_mapping_health(
+    mapping_health: dict | None,
+    total_issues: int | None = None,
+) -> ComicVineMappingHealth | None:
+    """Derive the ComicVine mapping health projection from a raw health row.
+
+    Shared by the Queue list projection and the per-thread health endpoint so
+    the two surfaces cannot drift on status derivation.
+    """
+    if mapping_health is None:
+        return None
+
+    tracked = mapping_health["tracked_issue_count"]
+    confirmed = mapping_health["confirmed_issue_count"]
+    needs_mapping = mapping_health["needs_mapping_count"]
+    needs_review = mapping_health["needs_review_count"]
+    metadata_missing = mapping_health.get("metadata_missing_count", 0)
+    has_issues = mapping_health["has_issues"]
+
+    if not has_issues and total_issues is None:
+        # Legacy thread without issue tracking - mapping not applicable
+        status = ComicVineMappingStatus.not_applicable
+    elif tracked == 0:
+        # Thread uses issue tracking but has no issues yet
+        status = ComicVineMappingStatus.not_applicable
+    elif needs_review > 0:
+        status = ComicVineMappingStatus.needs_review
+    elif confirmed == tracked and tracked > 0 and metadata_missing == 0:
+        status = ComicVineMappingStatus.fully_mapped
+    elif confirmed > 0:
+        status = ComicVineMappingStatus.partial
+    else:
+        status = ComicVineMappingStatus.unresolved
+
+    return ComicVineMappingHealth(
+        status=status,
+        tracked_issue_count=tracked,
+        confirmed_issue_count=confirmed,
+        needs_mapping_count=needs_mapping,
+        needs_review_count=needs_review,
+        metadata_missing_count=metadata_missing,
+    )
+
+
 def to_queue_list_item(
     tr: ThreadResponse,
     mapping_health: dict | None = None,
@@ -359,38 +403,7 @@ def to_queue_list_item(
     """
     format_value = normalize_format_value(tr.format)
 
-    comicvine_mapping = None
-    if mapping_health is not None:
-        tracked = mapping_health["tracked_issue_count"]
-        confirmed = mapping_health["confirmed_issue_count"]
-        needs_mapping = mapping_health["needs_mapping_count"]
-        needs_review = mapping_health["needs_review_count"]
-        metadata_missing = mapping_health.get("metadata_missing_count", 0)
-        has_issues = mapping_health["has_issues"]
-
-        if not has_issues and tr.total_issues is None:
-            # Legacy thread without issue tracking - mapping not applicable
-            status = ComicVineMappingStatus.not_applicable
-        elif tracked == 0:
-            # Thread uses issue tracking but has no issues yet
-            status = ComicVineMappingStatus.not_applicable
-        elif needs_review > 0:
-            status = ComicVineMappingStatus.needs_review
-        elif confirmed == tracked and tracked > 0 and metadata_missing == 0:
-            status = ComicVineMappingStatus.fully_mapped
-        elif confirmed > 0:
-            status = ComicVineMappingStatus.partial
-        else:
-            status = ComicVineMappingStatus.unresolved
-
-        comicvine_mapping = ComicVineMappingHealth(
-            status=status,
-            tracked_issue_count=tracked,
-            confirmed_issue_count=confirmed,
-            needs_mapping_count=needs_mapping,
-            needs_review_count=needs_review,
-            metadata_missing_count=metadata_missing,
-        )
+    comicvine_mapping = build_comicvine_mapping_health(mapping_health, tr.total_issues)
 
     series_metadata = None
     if series_metadata_docs:
@@ -1840,3 +1853,41 @@ async def set_current_issue(
         total_issues=total_issues,
         reading_progress=reading_progress,
     )
+
+
+async def get_thread_comicvine_mapping_health(
+    db: AsyncSession,
+    user_id: int,
+    thread_id: int,
+) -> ComicVineMappingHealth:
+    """Return the stored ComicVine mapping health for one owned thread.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the thread.
+        thread_id: Thread primary key.
+
+    Returns:
+        Derived mapping health projection.
+    """
+    thread = await _require_owned_thread(db, user_id, thread_id)
+    health_map = await thread_repository.fetch_comicvine_mapping_health(db, {thread_id})
+    mapping_health = health_map.get(thread_id)
+    result = build_comicvine_mapping_health(mapping_health, thread.total_issues)
+    if result is None:
+        # A thread with no health row still gets a not_applicable projection
+        # rather than a 404, matching the Queue list behaviour for legacy
+        # threads.
+        result = build_comicvine_mapping_health(
+            {
+                "tracked_issue_count": 0,
+                "confirmed_issue_count": 0,
+                "needs_mapping_count": 0,
+                "needs_review_count": 0,
+                "metadata_missing_count": 0,
+                "has_issues": False,
+            },
+            thread.total_issues,
+        )
+    assert result is not None
+    return result

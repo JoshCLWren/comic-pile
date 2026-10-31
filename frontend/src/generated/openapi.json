@@ -32776,6 +32776,55 @@
         ]
       }
     },
+    "/api/v1/threads/{thread_id}/comicvine-mapping-health": {
+      "get": {
+        "description": "Return stored ComicVine mapping health for one owned thread.\n\nRaises:\n    HTTPException: 404 when the thread does not exist for this user.",
+        "operationId": "get_thread_comicvine_mapping_health_api_v1_threads__thread_id__comicvine_mapping_health_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComicVineMappingHealth"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Thread Comicvine Mapping Health",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
     "/api/v1/threads/{thread_id}/connected": {
       "get": {
         "description": "Return threads connected to this one via dependencies.\n\nWhen you are reading a thread, this tells you which other threads\nare part of the same dependency web so you know there's a relationship.",

@@ -1,4 +1,5 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
+import type { components } from '../generated/openapi'
 import type {
   CheckPotentialDuplicatesRequest,
   CheckPotentialDuplicatesResponse,
@@ -79,6 +80,10 @@ export function createThreadsApi(client: HttpClient) {
       client.post<CheckPotentialDuplicatesResponse, CheckPotentialDuplicatesRequest>(
         '/v1/threads/check-duplicates',
         data,
+      ),
+    comicvineMappingHealth: (id: number) =>
+      client.get<components['schemas']['ComicVineMappingHealth']>(
+        `/v1/threads/${id}/comicvine-mapping-health`,
       ),
   }
 }

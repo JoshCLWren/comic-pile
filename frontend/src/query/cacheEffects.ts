@@ -831,6 +831,19 @@ export async function invalidateAfterSessionModeUpdate(
  * will refetch on the next active use (returning to Roll) instead of
  * replaying a stale snapshot with `pending_thread_id: null`.
  */
+/**
+ * Invalidate the stored ComicVine mapping health for one owned thread (#2723).
+ *
+ * Used after a successful series mapping so reopening the Roll action sheet
+ * reflects the new state.
+ */
+export async function invalidateComicVineMappingHealth(
+  client: QueryClient,
+  threadId: number,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.comicVine.mappingHealth(threadId) })
+}
+
 export async function invalidateRollBootstrapOnNavigation(
   client: QueryClient,
 ): Promise<void> {

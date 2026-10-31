@@ -15,6 +15,7 @@ import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 import type { RatingThread } from '../types'
 import { buildManualPickerOptions } from '../manualPickerOptions'
 import { ManualPickerSearch } from './ManualPickerSearch'
+import QueueMapSeriesDialog from '../../../components/QueueMapSeriesDialog'
 
 interface SetCurrentIssueModalProps {
   onSubmit: (issueNumber: string) => Promise<void>
@@ -115,6 +116,14 @@ interface RollModalsProps {
   isActionSheetOpen: boolean
   selectedThread: RollBootstrapThread | null
   /**
+   * Whether the selected idle row may offer the Map series action (#2723).
+   * Derived from stored mapping health; false by default.
+   */
+  mapSeriesAvailable?: boolean
+  isMapSeriesOpen?: boolean
+  onCloseMapSeries?: () => void
+  onMapSeriesMapped?: (confirmedIssueIds: number[]) => void
+  /**
    * The reading session's pending thread. `POST /v1/snooze/` acts on this
    * thread, so the action sheet's Snooze entry is only available for it.
    */
@@ -167,6 +176,10 @@ export function RollModals({
   clearManualDiePending,
   isActionSheetOpen,
   selectedThread,
+  mapSeriesAvailable = false,
+  isMapSeriesOpen = false,
+  onCloseMapSeries,
+  onMapSeriesMapped,
   pendingThreadId,
   onCloseActionSheet,
   onAction,
@@ -355,6 +368,17 @@ export function RollModals({
             <span className="text-lg">✏️</span>
             <span>Edit Series</span>
           </button>
+          {mapSeriesAvailable && (
+            <button
+              type="button"
+              data-testid="roll-map-series-action"
+              onClick={() => onAction('map-series')}
+              className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            >
+              <span className="text-lg">🗺️</span>
+              <span>Map series</span>
+            </button>
+          )}
         </div>
       </Modal>
 
@@ -369,6 +393,20 @@ export function RollModals({
             onClose={onCloseSetCurrentIssue}
           />
         </Modal>
+      )}
+
+      {isMapSeriesOpen && selectedThread && onCloseMapSeries && (
+        <QueueMapSeriesDialog
+          isOpen
+          threadId={selectedThread.id}
+          threadTitle={selectedThread.title}
+          knownIssueNumber={selectedThread.issue_number ?? null}
+          onClose={onCloseMapSeries}
+          onMapped={(confirmedIssueIds) => {
+            onMapSeriesMapped?.(confirmedIssueIds)
+            onCloseMapSeries()
+          }}
+        />
       )}
 
       {isShuffleOpen && (

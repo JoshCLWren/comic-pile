@@ -35,6 +35,7 @@ import { useRollSkip } from './useRollSkip'
 import { useRollDependencies } from './useRollDependencies'
 import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
+import { useRollMappingHealth, isRollMapSeriesCandidate } from '../../hooks/useRollSeriesMapping'
 import { useRollViewport } from './useRollViewport'
 import { useRatingView } from './useRatingView'
 import { RatingView } from './components/RatingView'
@@ -43,7 +44,8 @@ import { LastReadStrip } from './components/LastReadStrip'
 import { useRollLastRead } from '../../hooks/useRollLastRead'
 import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
-import { invalidateAfterUndo, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
+import { invalidateAfterUndo, invalidateComicVineMappingHealth, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
+
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
@@ -138,6 +140,14 @@ export default function RollPage() {
     navigate('/queue')
   }, [navigate, queryClient])
 
+  const handleMapSeriesMapped = useCallback(async () => {
+    const threadId = state.selectedThread?.id
+    if (threadId != null) {
+      await invalidateComicVineMappingHealth(queryClient, threadId)
+    }
+    await refetchBootstrap()
+  }, [queryClient, refetchBootstrap, state.selectedThread])
+
   const handleCorrectionSubmit = useCallback(
     async (_choiceId: CorrectionChoiceId, patch: SessionModeUpdateRequest) => {
       await sessionModeMutation.mutate(patch)
@@ -207,6 +217,15 @@ export default function RollPage() {
   })
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
+
+  // Mapping health for the idle row whose action sheet is open (#2723). The
+  // query stays disabled at Roll view load and only runs while the sheet is
+  // open, so bootstrap budgets and fan-out limits are preserved.
+  const mappingHealthQuery = useRollMappingHealth(
+    state.selectedThread?.id ?? null,
+    state.isActionSheetOpen,
+  )
+  const mapSeriesAvailable = isRollMapSeriesCandidate(mappingHealthQuery.data)
 
   // Issue #3330: the bootstrap only carries bounded previews of these two
   // categories. Load the authoritative drill-down lazily, only while the
@@ -672,6 +691,10 @@ export default function RollPage() {
           clearManualDiePending={clearManualDieMutation.isPending}
           isActionSheetOpen={state.isActionSheetOpen}
           selectedThread={state.selectedThread}
+          mapSeriesAvailable={mapSeriesAvailable}
+          isMapSeriesOpen={state.isMapSeriesOpen}
+          onCloseMapSeries={() => state.setIsMapSeriesOpen(false)}
+          onMapSeriesMapped={handleMapSeriesMapped}
           pendingThreadId={bootstrap.pending_thread_id}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
           onAction={actions.handleAction}

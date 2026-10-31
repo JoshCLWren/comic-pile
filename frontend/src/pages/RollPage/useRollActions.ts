@@ -87,6 +87,7 @@ export function useRollActions({
     staleThread,
     setSelectedThread,
     setIsActionSheetOpen,
+    setIsMapSeriesOpen,
     setIsSetCurrentIssueOpen,
     setIsShuffleOpen,
     setShuffleError,
@@ -258,6 +259,9 @@ export function useRollActions({
           }
           break
         }
+        case 'map-series':
+          setIsMapSeriesOpen(true)
+          break
         case 'edit':
           navigate(`/thread/${selectedThread!.id}`, { state: { openEditModal: true } })
           break
