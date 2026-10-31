@@ -185,7 +185,7 @@ async fn execute_rate_pipeline(
             .ok_or_else(|| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Failed to create rate event"))?;
 
             let _ = event_id;
-            Ok::<(i32, Option<i32>), ApiError>((new_issues_remaining, next_unread))
+            Ok((new_issues_remaining, next_unread))
         })
     }).await?;
 
@@ -291,7 +291,7 @@ async fn thread_has_issues_remaining(db: &mut Object, thread_id: i32) -> Result<
 
 /// Find an owned thread by ID using raw query.
 async fn find_owned_thread_raw(
-    state: &Arc<AppState>,
+    _state: &Arc<AppState>,
     user_id: i32,
     thread_id: i32,
     db: &mut Object,
@@ -317,9 +317,7 @@ async fn find_owned_thread_raw(
         created_at: format_ts(r.get::<_, DateTime<Utc>>(10)),
         total_issues: r.get(11),
         next_unread_issue_id: r.get(12),
-        reading_progress: r.get(13).or_else(|| Some("in_progress".to_string())),
-        is_blocked: r.get(14),
-        manual_creator_credits: r.get(15),
+        reading_progress: r.get::<_, Option<String>>(13).or_else(|| Some("in_progress".to_string())),
     }))
 }
 
@@ -380,7 +378,7 @@ async fn find_any_owned_thread_with_issues_raw(
         created_at: format_ts(r.get::<_, DateTime<Utc>>(10)),
         total_issues: r.get(11),
         next_unread_issue_id: r.get(12),
-        reading_progress: r.get(13).or_else(|| Some("in_progress".to_string())),
+        reading_progress: r.get::<_, Option<String>>(13).or_else(|| Some("in_progress".to_string())),
         is_blocked: r.get(14),
         manual_creator_credits: r.get(15),
     };
@@ -599,7 +597,7 @@ async fn handle_queue_placement(
 
 /// Create a rate snapshot (v2 delta mode) keyed by the real session id.
 async fn create_rate_snapshot(
-    state: &Arc<AppState>,
+    _state: &Arc<AppState>,
     db: &mut Object,
     user_id: i32,
     thread_id: i32,
@@ -610,7 +608,7 @@ async fn create_rate_snapshot(
     db.execute(
         "INSERT INTO snapshots (session_id, event_id, thread_states, snapshot_kind, schema_version, description)
          VALUES ($1, NULL, $2::jsonb, 'delta', 2, 'After rating')",
-        &[&session_id, &serde_json::json!({thread_id: {"rated": true}})],
+        &[&session_id, &serde_json::json!({thread_id.to_string(): {"rated": true}})],
     )
     .await
     .map_err(query_error)?;
@@ -688,7 +686,7 @@ async fn end_session_db(user_id: i32, db: &mut Object) -> Result<(), ApiError> {
 
 /// Re-read the thread state from the database.
 async fn re_read_thread(
-    state: &Arc<AppState>,
+    _state: &Arc<AppState>,
     user_id: i32,
     thread_id: i32,
     db: &mut Object,
@@ -743,7 +741,7 @@ fn build_rate_response(
         total_issues: thread.total_issues,
         reading_progress: thread.reading_progress.clone(),
         next_unread_issue_id: thread.next_unread_issue_id,
-        next_unread_issue_number: thread.next_unread_issue_number,
+        next_unread_issue_number: None,
         manual_creator_credits: thread.manual_creator_credits.clone(),
         roll_reconciliation,
     }
