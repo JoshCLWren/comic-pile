@@ -101,7 +101,7 @@ def call_jev(payload: dict[str, Any], api_key: str) -> dict[str, Any]:
 def validated_scores(
     candidates: list[Candidate], response: dict[str, Any]
 ) -> dict[int, dict[str, float]]:
-    """Abstain on missing, malformed, uncertain, or unexpectedly routed answers."""
+    """Validate all numeric answers; preserve low-confidence scores for calibration."""
     model = response.get("model")
     if model != MODEL and not (isinstance(model, str) and model.startswith(MODEL + "-")):
         raise ValueError("unexpected answer model")
@@ -124,9 +124,9 @@ def validated_scores(
                 or not isinstance(confidence, (float, int))
                 or isinstance(confidence, bool)
                 or not math.isfinite(confidence)
-                or not MIN_CONFIDENCE <= confidence <= 1
+                or not 0 <= confidence <= 1
             ):
-                raise ValueError("invalid or uncertain score")
+                raise ValueError("invalid score or confidence")
             measures[dimension] = float(score)
             measures[f"{dimension}_confidence"] = float(confidence)
         result[candidate.number] = measures
@@ -155,6 +155,11 @@ def shadow_report(
     try:
         response = client(make_request(candidates, issues), api_key)
         scores = validated_scores(candidates, response)
+        uncertain = any(
+            scores[candidate.number][f"{dimension}_confidence"] < MIN_CONFIDENCE
+            for candidate in candidates
+            for dimension in ("impact", "feasibility")
+        )
         ranked = sorted(
             candidates,
             key=lambda candidate: (
@@ -166,8 +171,13 @@ def shadow_report(
         usage = response.get("usage")
         usage = usage if isinstance(usage, dict) else {}
         return {
-            **report, "status": "scored", "shadow": [candidate.number for candidate in ranked],
-            "reason": "weighted impact 60%, feasibility 40%; confidence >= 0.55",
+            **report,
+            "status": "abstained" if uncertain else "scored",
+            "shadow": baseline if uncertain else [candidate.number for candidate in ranked],
+            "reason": (
+                "low confidence; kept canonical order while recording scores"
+                if uncertain else "weighted impact 60%, feasibility 40%; confidence >= 0.55"
+            ),
             "scores": scores,
             "usage": {
                 name: usage[name] for name in ("cost", "input_tokens", "output_tokens")
