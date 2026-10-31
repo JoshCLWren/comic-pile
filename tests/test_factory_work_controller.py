@@ -1314,3 +1314,115 @@ def test_reconcile_contradictory_labels_leaves_clean_targets_alone(
 
     assert controller.reconcile_contradictory_labels(issues, []) == []
     assert replaced == []
+
+
+@pytest.mark.parametrize("use_jev", [True, False])
+def test_real_assign_uses_jev_when_confident_and_canonical_when_absent(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    use_jev: bool,
+) -> None:
+    """Jev must affect assign() itself, not just an advisory report."""
+    numbers = [33001, 33002, 33003]
+    issues = [
+        {
+            "number": number,
+            "title": f"Product issue {number}",
+            "body": "Improve reader reliability.",
+            "state": "OPEN",
+            "createdAt": f"2026-10-{index + 1:02d}T12:00:00Z",
+            "labels": [
+                {"name": "factory:unowned"},
+                {"name": "ralph-priority:medium"},
+            ],
+        }
+        for index, number in enumerate(numbers)
+    ]
+    report = {
+        "model": "typesafe/jev-1.14",
+        "mode": "active-selection",
+        "status": "scored",
+        "baseline": numbers,
+        "shadow": [numbers[-1], *numbers[:-1]],
+        "qualified": numbers,
+    }
+    report_path = tmp_path / "jev.json"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    if use_jev:
+        monkeypatch.setenv("FACTORY_JEV_RANKING_FILE", str(report_path))
+    else:
+        monkeypatch.delenv("FACTORY_JEV_RANKING_FILE", raising=False)
+
+    monkeypatch.setattr(controller, "quota_pause_for", lambda _w: None)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _w: False)
+    monkeypatch.setattr(controller, "budget_block_reason", lambda _w: None)
+    monkeypatch.setattr(
+        controller, "omniroute_free_entry_capacity",
+        lambda: {"remaining": 3},
+    )
+    monkeypatch.setattr(controller, "reconcile_stale_leases", lambda: [])
+    monkeypatch.setattr(controller, "reconcile_contradictory_labels", lambda: [])
+    monkeypatch.setattr(controller, "list_issues", lambda: issues)
+    monkeypatch.setattr(controller, "list_prs", lambda: [])
+    monkeypatch.setattr(controller, "load_no_diff_attempt_records", lambda: [])
+    monkeypatch.setattr(controller, "rotisserie_issue_intake", lambda _i, _p: None)
+    monkeypatch.setattr(
+        controller, "resolve_review_head_contributors", lambda candidates, _prs: candidates
+    )
+    monkeypatch.setattr(controller, "candidate_is_live_executable", lambda _c: True)
+    monkeypatch.setattr(
+        controller, "issue_excludes_worker_on_strike_retry", lambda _n, _w: False
+    )
+    claimed: list[int] = []
+
+    def assign_candidate(candidate: object, _worker: str) -> bool:
+        claimed.append(int(vars(candidate)["number"]))
+        return True
+
+    monkeypatch.setattr(controller, "assign_candidate", assign_candidate)
+    result = controller.assign("6")
+    assert result is not None
+    assert claimed == [numbers[-1] if use_jev else numbers[0]]
+
+
+def test_real_assign_falls_back_when_jev_file_is_invalid(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Malformed model output must not stop the normal factory claim."""
+    bad = tmp_path / "bad-jev.json"
+    bad.write_text("{not-json", encoding="utf-8")
+    monkeypatch.setenv("FACTORY_JEV_RANKING_FILE", str(bad))
+    monkeypatch.setattr(controller, "quota_pause_for", lambda _w: None)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _w: False)
+    monkeypatch.setattr(controller, "budget_block_reason", lambda _w: None)
+    monkeypatch.setattr(
+        controller, "omniroute_free_entry_capacity",
+        lambda: {"remaining": 3},
+    )
+    monkeypatch.setattr(controller, "reconcile_stale_leases", lambda: [])
+    monkeypatch.setattr(controller, "reconcile_contradictory_labels", lambda: [])
+    monkeypatch.setattr(
+        controller, "list_issues",
+        lambda: [{
+            "number": 33401, "title": "Product issue", "body": "",
+            "state": "OPEN", "createdAt": "2026-10-01T00:00:00Z",
+            "labels": [{"name": "factory:unowned"}],
+        }],
+    )
+    monkeypatch.setattr(controller, "list_prs", lambda: [])
+    monkeypatch.setattr(controller, "load_no_diff_attempt_records", lambda: [])
+    monkeypatch.setattr(controller, "rotisserie_issue_intake", lambda _i, _p: None)
+    monkeypatch.setattr(
+        controller, "resolve_review_head_contributors", lambda items, _prs: items
+    )
+    monkeypatch.setattr(controller, "candidate_is_live_executable", lambda _c: True)
+    monkeypatch.setattr(
+        controller, "issue_excludes_worker_on_strike_retry", lambda _n, _w: False
+    )
+    monkeypatch.setattr(controller, "assign_candidate", lambda _c, _w: True)
+    selected = controller.assign("6")
+    assert selected is not None
+    assert selected.number == 33401
