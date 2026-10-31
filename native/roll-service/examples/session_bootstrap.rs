@@ -77,7 +77,7 @@ async fn main() {
             .await
             .map(|_| serde_json::json!({"owned":true}))
     } else if std::env::var("RUST_ROLL_TEST_RESOLVE_ONLY").is_ok() {
-        let mut c = db::checkout(&state).await.ok().unwrap();
+        let mut c = db::checkout(&state).await.expect("session checkout");
         let tx = c.build_transaction().read_only(true).start().await.unwrap();
         let s = reading_session::resolve_current_session(&tx, user, now, policy).await;
         tx.rollback().await.unwrap();

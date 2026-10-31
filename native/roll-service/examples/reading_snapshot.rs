@@ -6,7 +6,6 @@ async fn main() {
     let token = std::env::var("RUST_ROLL_TEST_TOKEN").expect("synthetic token required");
     let user = auth::authenticate(&state, &token)
         .await
-        .ok()
         .expect("fixture authentication");
     match reading_inputs::load_core_inputs(&state, user).await {
         Ok(inputs) => println!("{}", serde_json::to_string(&inputs).unwrap()),
