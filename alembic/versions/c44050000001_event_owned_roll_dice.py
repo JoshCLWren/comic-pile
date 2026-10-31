@@ -19,6 +19,38 @@ branch_labels = None
 depends_on = None
 
 
+# Quarantine rows whose surviving references disagree with the recorded
+# owner. New activity is rejected by the trigger; historical rows are kept
+# intact but excluded from every owner-scoped projection.
+OWNER_AGREEMENT_GUARD = """
+        UPDATE events e SET user_id = NULL
+        WHERE e.user_id IS NOT NULL AND (
+            EXISTS (
+                SELECT 1 FROM sessions s
+                WHERE s.id = e.session_id AND s.user_id <> e.user_id
+            )
+            OR EXISTS (
+                SELECT 1 FROM threads t
+                WHERE t.id = e.thread_id AND t.user_id <> e.user_id
+            )
+            OR EXISTS (
+                SELECT 1 FROM issues i JOIN threads t ON t.id = i.thread_id
+                WHERE i.id = e.issue_id AND t.user_id <> e.user_id
+            )
+            OR EXISTS (
+                SELECT 1 FROM threads t
+                WHERE t.id = e.selected_thread_id AND t.user_id <> e.user_id
+            )
+            OR EXISTS (
+                SELECT 1 FROM events source
+                WHERE source.id = e.source_roll_event_id
+                  AND source.user_id IS NOT NULL
+                  AND source.user_id <> e.user_id
+            )
+        )
+"""
+
+
 EVENT_USER_INDEX = "ix_event_user_timestamp_id"
 
 
@@ -105,33 +137,8 @@ def upgrade() -> None:
     # The production read-only audit (2026-10-30) found no such conflicts, so
     # this is a guard against malformed data, not a reclassification of
     # reviewed records.
-    op.execute("""
-        UPDATE events e SET user_id = NULL
-        WHERE e.user_id IS NOT NULL AND (
-            EXISTS (
-                SELECT 1 FROM sessions s
-                WHERE s.id = e.session_id AND s.user_id <> e.user_id
-            )
-            OR EXISTS (
-                SELECT 1 FROM threads t
-                WHERE t.id = e.thread_id AND t.user_id <> e.user_id
-            )
-            OR EXISTS (
-                SELECT 1 FROM issues i JOIN threads t ON t.id = i.thread_id
-                WHERE i.id = e.issue_id AND t.user_id <> e.user_id
-            )
-            OR EXISTS (
-                SELECT 1 FROM threads t
-                WHERE t.id = e.selected_thread_id AND t.user_id <> e.user_id
-            )
-            OR EXISTS (
-                SELECT 1 FROM events source
-                WHERE source.id = e.source_roll_event_id
-                  AND source.user_id IS NOT NULL
-                  AND source.user_id <> e.user_id
-            )
-        )
-    """)
+    # First pass: quarantine historical rows whose own references disagree.
+    op.execute(OWNER_AGREEMENT_GUARD)
     # A dependent event may inherit its source roll's owner, but only after
     # the guard has quarantined sources with conflicting references.
     op.execute("""
@@ -140,6 +147,9 @@ def upgrade() -> None:
         WHERE e.user_id IS NULL AND e.source_roll_event_id = source.id
           AND source.user_id IS NOT NULL
     """)
+    # Second pass: a source-inherited owner must still agree with the
+    # event's own surviving references.
+    op.execute(OWNER_AGREEMENT_GUARD)
     # Some historical thread-deletion events have had every ownership reference
     # removed. Production currently has 192 such records (2026-10-30).
     # Keep these rows intact with NULL owner rather than inventing a user or
@@ -244,9 +254,10 @@ def upgrade() -> None:
     # Build the owner-scoped activity index concurrently only after the
     # ownership trigger exists: the concurrent build commits the preceding
     # transaction, and legacy writers must already be protected during that
-    # window. The index sub-step is restartable after an interrupted build;
-    # an interruption earlier in this revision needs manual recovery because
-    # the committed column and backfill are not re-runnable.
+    # window. That commit is not stamped as a completed revision, so an
+    # interruption here or earlier needs manual recovery: the committed column,
+    # backfill, and trigger make a plain re-run fail before reaching the
+    # restartable invalid-index rebuild inside _create_event_user_index().
     with op.get_context().autocommit_block():
         _create_event_user_index()
 

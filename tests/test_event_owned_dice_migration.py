@@ -34,6 +34,7 @@ MIGRATION_PATH = (
 ALICE = 1
 BOB = 2
 ALICE_SESSION = 10
+BOB_SESSION = 11
 ALICE_THREAD = 100
 BOB_THREAD = 200
 ALICE_SELECTED_THREAD = 300
@@ -150,9 +151,10 @@ async def _create_pre_migration_schema(connection: AsyncConnection, schema: str)
     )
     await connection.execute(
         text(
-            f'INSERT INTO "{schema}".sessions (id, user_id) VALUES (:id, :owner)'
+            f'INSERT INTO "{schema}".sessions (id, user_id) VALUES '
+            "(:alice_session, :alice), (:bob_session, :bob)"
         ),
-        {"id": ALICE_SESSION, "owner": ALICE},
+        {"alice_session": ALICE_SESSION, "bob_session": BOB_SESSION, "alice": ALICE, "bob": BOB},
     )
     await connection.execute(
         text(
@@ -197,7 +199,9 @@ async def _create_pre_migration_schema(connection: AsyncConnection, schema: str)
             "(7, 'rate', :session, :bob_thread, NULL, NULL, NULL), "
             "(8, 'rate', NULL, :bob_thread, NULL, NULL, NULL), "
             "(20, 'roll', :session, :bob_thread, NULL, NULL, NULL), "
-            "(21, 'rate', NULL, NULL, NULL, NULL, 20)"
+            "(21, 'rate', NULL, NULL, NULL, NULL, 20), "
+            "(30, 'roll', :bob_session, NULL, NULL, NULL, NULL), "
+            "(31, 'rate', :session, NULL, NULL, NULL, 30)"
         ),
         {
             "session": ALICE_SESSION,
@@ -205,6 +209,7 @@ async def _create_pre_migration_schema(connection: AsyncConnection, schema: str)
             "alice_issue": ALICE_ISSUE,
             "selected": ALICE_SELECTED_THREAD,
             "bob_thread": BOB_THREAD,
+            "bob_session": BOB_SESSION,
         },
     )
     # Explicit historical ids do not advance the identity sequence; move it to
@@ -335,6 +340,8 @@ async def test_migration_backfills_ownership_and_preserves_unattributable_histor
             8: BOB,  # detached thread owned by another reader
             20: None,  # conflicting roll row is quarantined
             21: None,  # dependent row must not borrow a quarantined source owner
+            30: BOB,  # Bob's source roll is owned normally
+            31: None,  # inherited Bob owner conflicts with Alice's own session
         }
 
         # The session link must null out instead of cascading the owned event.
@@ -382,6 +389,8 @@ async def test_migration_backfills_ownership_and_preserves_unattributable_histor
         assert post_delete[8] == BOB
         assert post_delete[20] is None
         assert post_delete[21] is None
+        assert post_delete[30] == BOB
+        assert post_delete[31] is None
     finally:
         await _drop_fixture_schema(worker, schema)
         await worker.close()
