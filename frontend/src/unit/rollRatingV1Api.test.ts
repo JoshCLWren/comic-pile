@@ -12,6 +12,7 @@ const protectedRollMutationApi = createProtectedRollMutationApi(client)
 const rollBootstrapApi = createRollBootstrapApi(client)
 
 beforeEach(() => {
+  globalThis.sessionStorage?.removeItem('comicpile:roll:pending-manual-die')
   client.get.mockReset().mockResolvedValue({ rollable: [], total_threads: 0, available_threads: 0, excluded_count: 0, excluded_threads: [], inactive_count: 0, inactive_threads: [] })
   client.post.mockReset().mockResolvedValue({})
 })
@@ -71,4 +72,17 @@ it('reuses an unanswered command key, but not a confirmed command key', async ()
   expect(commands[1].idempotency_key).toBe(commands[0].idempotency_key)
   expect(commands[2].idempotency_key).not.toBe(commands[1].idempotency_key)
   expect(commands[3].idempotency_key).not.toBe(commands[2].idempotency_key)
+})
+
+it('survives a browser refresh without duplicating an unacknowledged manual die event', async () => {
+  const firstPage = createRollApi(client)
+  client.post.mockRejectedValueOnce(new Error('connection dropped'))
+  await expect(firstPage.setDie(4)).rejects.toThrow('connection dropped')
+
+  // A new service instance models a page refresh in the same browser tab.
+  const afterRefresh = createRollApi(client)
+  await afterRefresh.setDie(4)
+  const commands = client.post.mock.calls
+  expect(commands[1][1]).toEqual(commands[0][1])
+  expect(globalThis.sessionStorage?.getItem('comicpile:roll:pending-manual-die')).toBeNull()
 })
