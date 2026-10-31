@@ -924,16 +924,12 @@ pub async fn bootstrap_v2(
     tag_ids.dedup();
     let tags_by_thread = visible_thread_tags(&conn, user, &tag_ids).await?;
     let attach_tags = |thread: &mut Value| {
-        let id = thread
-            ["id"]
+        let id = thread["id"]
             .as_i64()
             .or_else(|| thread["thread_id"].as_i64())
             .map(|v| v as i32);
         if let Some(id) = id {
-            thread["tags"] = json!(tags_by_thread
-                .get(&id)
-                .cloned()
-                .unwrap_or_default());
+            thread["tags"] = json!(tags_by_thread.get(&id).cloned().unwrap_or_default());
         }
     };
     for item in &mut rollable {
