@@ -142,7 +142,7 @@ class ReadingSession(Base):
         "Issue", foreign_keys=[pending_issue_id], lazy="raise"
     )
     events: Mapped[list[Event]] = relationship(
-        "Event", back_populates="session", lazy="raise"
+        "Event", back_populates="session", passive_deletes=True, lazy="raise"
     )
     snapshots: Mapped[list[Snapshot]] = relationship(
         "Snapshot", back_populates="session", cascade="all, delete-orphan", lazy="raise"

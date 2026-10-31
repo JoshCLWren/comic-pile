@@ -38,7 +38,7 @@ class User(Base):
     )
 
     events: Mapped[list[Event]] = relationship(
-        "Event", back_populates="user", lazy="raise"
+        "Event", back_populates="user", passive_deletes=True, lazy="raise"
     )
     reading_sessions: Mapped[list[ReadingSession]] = relationship(
         "ReadingSession", back_populates="user", cascade="all, delete-orphan", lazy="raise"
