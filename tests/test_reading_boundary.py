@@ -889,7 +889,7 @@ async def test_api_counts_stacked_hold_and_strict_gates_as_one_requirement(
     ]
     assert waiting == [redcoat_issues[0].id]
     assert any(
-        blocker["reason"] == f"Also gated by Strict order in {QA_LIST_NAME}"
+        blocker["reason"] == f"Also gated by Strict order in {QA_LIST_NAME}."
         for blocker in body["blockers"]
     )
 
