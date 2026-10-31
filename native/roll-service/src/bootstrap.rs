@@ -1326,7 +1326,7 @@ mod pool_parity_tests {
                  CREATE TABLE {schema}.events (
                      id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
                      thread_id integer, type text NOT NULL,
-                     timestamp timestamptz NOT NULL
+                     timestamp timestamptz NOT NULL, context json
                  );
                  INSERT INTO {schema}.users VALUES (1);
                  INSERT INTO {schema}.threads
