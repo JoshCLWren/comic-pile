@@ -29,6 +29,7 @@ const rollApi: RollApi = {
   reroll: vi.fn(),
   setDie,
   clearManualDie,
+  reset: vi.fn().mockResolvedValue({ die: 6, replayed: false }),
 }
 
 const ACTIVE_THREAD: RatingThread = {

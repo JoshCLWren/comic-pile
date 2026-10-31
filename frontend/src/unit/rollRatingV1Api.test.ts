@@ -135,3 +135,20 @@ it('records the snoozed thread in a bounded midnight cookie', async () => {
   const payload = client.post.mock.calls.at(-1)?.[1] as { snoozed_thread_ids: number[] }
   expect(payload.snoozed_thread_ids).toEqual([9])
 })
+
+it('resets dice through Rust and clears temporary snoozes', async () => {
+  globalThis.document.cookie = `comicpile_roll_snoozes=${encodeURIComponent('[9]')}`
+  client.post.mockResolvedValueOnce({ die: 6, replayed: false })
+
+  const result = await rollApi.reset()
+
+  expect(result).toEqual({ die: 6, replayed: false })
+  expect(client.post).toHaveBeenCalledWith('/v2/roll/reset', {
+    idempotency_key: expect.stringMatching(/^roll-[0-9a-f]{32}$/),
+  })
+  const cookie = globalThis.document.cookie
+    .split('; ')
+    .find((entry) => entry.startsWith('comicpile_roll_snoozes='))
+  const encoded = cookie?.slice('comicpile_roll_snoozes='.length) ?? ''
+  expect(JSON.parse(decodeURIComponent(encoded))).toEqual([])
+})

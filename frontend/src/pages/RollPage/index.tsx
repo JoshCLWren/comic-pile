@@ -7,6 +7,7 @@ import { useRollExclusions } from '../../hooks/useRollExclusions'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useClearManualDie,
+  useResetDice,
   useDismissPending,
   useOverrideRoll,
   useRoll,
@@ -147,6 +148,7 @@ export default function RollPage() {
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
+  const resetDiceMutation = useResetDice()
   const rollMutation = useRoll()
   const dismissPendingMutation = useDismissPending()
   const overrideMutation = useOverrideRoll()
@@ -205,6 +207,20 @@ export default function RollPage() {
     bootstrapError,
     navigate,
   })
+
+  const handleResetDice = useCallback(async () => {
+    try {
+      await resetDiceMutation.mutate()
+      state.setIsRolling(false)
+      state.setIsRatingView(false)
+      state.setRolledResult(null)
+      state.setSelectedThreadId(null)
+      state.setActiveRatingThread(null)
+      state.setErrorMessage('')
+    } catch (error: unknown) {
+      state.setErrorMessage(getApiErrorDetail(error))
+    }
+  }, [resetDiceMutation, state])
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
 
@@ -672,6 +688,8 @@ export default function RollPage() {
           currentDie={state.currentDie}
           onSetDie={actions.handleSetDie}
           onClearManualDie={actions.handleClearManualDie}
+          onResetDice={handleResetDice}
+          resetDicePending={resetDiceMutation.isPending}
           setDiePending={setDieMutation.isPending}
           clearManualDiePending={clearManualDieMutation.isPending}
           isActionSheetOpen={state.isActionSheetOpen}

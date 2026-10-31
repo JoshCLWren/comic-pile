@@ -17,6 +17,7 @@ type RollOfferResponse = RollResponse & { snoozed_thread_id?: number | null }
 
 const SNOOZE_COOKIE = 'comicpile_roll_snoozes'
 const PENDING_OFFER_KEY = 'comicpile:roll:pending-offer'
+const PENDING_RESET_KEY = 'comicpile:roll:pending-reset'
 const MAX_ROLL_SNOOZES = 50
 const SNOOZE_COOKIE_PATTERN = /^\[\d{1,10}(,\d{1,10}){0,49}\]$/
 const OFFER_KEY_PATTERN = /^roll-offer-[0-9a-f]{32}$/
@@ -79,6 +80,33 @@ function writeRollSnoozes(ids: number[]): void {
     )}; expires=${nextMidnight().toUTCString()}; path=/; SameSite=Lax`
   } catch {
     // A blocked cookie must not disable Roll; the server still snoozes pending.
+  }
+}
+
+function readPendingResetKey(): string | null {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(PENDING_RESET_KEY)
+    return raw && /^roll-[0-9a-f]{32}$/.test(raw) ? raw : null
+  } catch {
+    return null
+  }
+}
+
+function writePendingResetKey(key: string): void {
+  try {
+    globalThis.sessionStorage?.setItem(PENDING_RESET_KEY, key)
+  } catch {
+    // In-memory retry safety remains for this page instance.
+  }
+}
+
+function clearPendingResetKey(key: string): void {
+  try {
+    if (readPendingResetKey() === key) {
+      globalThis.sessionStorage?.removeItem(PENDING_RESET_KEY)
+    }
+  } catch {
+    // The in-memory key is still cleared after a confirmed response.
   }
 }
 
@@ -155,6 +183,7 @@ function clearPendingManualDie(key: string): void {
 export function createRollApi(client: HttpClient) {
   let unresolvedManual: PendingManualDie | null = readPendingManualDie()
   let unresolvedOfferKey: string | null = readPendingOfferKey()
+  let unresolvedResetKey: string | null = readPendingResetKey()
 
   const offer = async (): Promise<RollOfferResponse> => {
     const key = unresolvedOfferKey ?? newOfferKey()
@@ -193,6 +222,20 @@ export function createRollApi(client: HttpClient) {
       })
       if (unresolvedManual?.key === key) unresolvedManual = null
       clearPendingManualDie(key)
+    },
+    reset: async () => {
+      const key = unresolvedResetKey ?? newCommandKey()
+      unresolvedResetKey = key
+      writePendingResetKey(key)
+      const response = await client.post<
+        { die: number; replayed: boolean },
+        { idempotency_key: string }
+      >('/v2/roll/reset', { idempotency_key: key })
+      if (unresolvedResetKey === key) unresolvedResetKey = null
+      clearPendingResetKey(key)
+      // Reset Dice clears this browser's temporary snoozes by definition.
+      writeRollSnoozes([])
+      return response
     },
     // Legacy auto toggle remains until the sessionless Roll UI is cut over.
     clearManualDie: () => client.post<void>('/v1/roll/clear-manual-die'),
