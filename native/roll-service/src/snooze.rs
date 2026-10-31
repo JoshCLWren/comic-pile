@@ -32,6 +32,37 @@ fn bad_request(msg: &'static str) -> ApiError {
     ApiError(StatusCode::BAD_REQUEST, msg)
 }
 
+/// Python isoformat for a PostgreSQL `timestamp with time zone` text value.
+fn python_timestamp(value: &str) -> String {
+    let Some((date, time)) = value.split_once(' ') else {
+        return value.to_owned();
+    };
+    let offset_start = time
+        .char_indices()
+        .rev()
+        .find(|(index, character)| *index >= 8 && matches!(character, '+' | '-'))
+        .map(|(index, _)| index);
+    let time = match offset_start {
+        Some(index) => {
+            let (clock, offset) = time.split_at(index);
+            let (sign, offset) = offset.split_at(1);
+            let offset = offset.trim();
+            let normalized = if offset.contains(':') {
+                offset.to_owned()
+            } else if offset.len() == 2 {
+                format!("{offset}:00")
+            } else if offset.len() == 4 {
+                format!("{}:{}", &offset[..2], &offset[2..])
+            } else {
+                offset.to_owned()
+            };
+            format!("{clock}{sign}{normalized}")
+        }
+        None => time.to_owned(),
+    };
+    format!("{date}T{time}")
+}
+
 const DICE_LADDER: [i32; 9] = [4, 6, 8, 10, 12, 20, 30, 50, 100];
 fn step_up(die: i32) -> i32 {
     let idx = DICE_LADDER.iter().position(|&d| d == die).unwrap_or(0);
@@ -472,12 +503,12 @@ async fn mutate(
     let started_at = refreshed
         .get("started_at")
         .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+        .map(python_timestamp)
+        .unwrap_or_default();
     let ended_at = refreshed
         .get("ended_at")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .map(python_timestamp);
     let start_die = refreshed
         .get("start_die")
         .and_then(|v| v.as_i64())
@@ -949,5 +980,27 @@ mod tests {
         let r = compute_snooze_correction("balanced", 0.5, "balanced", "deep", 3, Some("lighter"));
         assert!(r.suggest_clarification);
         assert_eq!(r.reason_code, "clarification_needed");
+    }
+
+    #[test]
+    fn timestamp_normalization_matches_python() {
+        // PostgreSQL timestamps should be normalized to Python ISO format
+        assert_eq!(
+            python_timestamp("2026-10-30 12:34:56.123456+00"),
+            "2026-10-30T12:34:56.123456+00:00"
+        );
+        assert_eq!(
+            python_timestamp("2026-10-30 12:34:56+00"),
+            "2026-10-30T12:34:56+00:00"
+        );
+        assert_eq!(
+            python_timestamp("2026-10-30 12:34:56.5-05"),
+            "2026-10-30T12:34:56.5-05:00"
+        );
+        // Already correct format passes through
+        assert_eq!(
+            python_timestamp("already-correct"),
+            "already-correct"
+        );
     }
 }
