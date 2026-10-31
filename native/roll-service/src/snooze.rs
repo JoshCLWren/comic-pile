@@ -785,6 +785,120 @@ mod tests {
     }
 
     #[test]
+    fn deep_mode_boundary_keeps_bandwidth_same() {
+        // Deep-mode boundary with deep candidate keeps bandwidth, degrades confidence
+        let r = compute_snooze_correction("deep", 0.7, "balanced", "deep", 1, None);
+        assert!(!r.bandwidth_changed);
+        assert_eq!(r.active_bandwidth, "deep");
+        assert!(r.active_confidence < 0.7);
+        assert_eq!(r.reason_code, "confidence_degrade");
+    }
+
+    #[test]
+    fn light_snooze_shifts_balanced_to_deep() {
+        // Snoozing a light candidate while balanced shifts to deep
+        let r = compute_snooze_correction("balanced", 0.5, "balanced", "light", 1, None);
+        assert!(r.bandwidth_changed);
+        assert_eq!(r.active_bandwidth, "deep");
+        assert_eq!(r.reason_code, "light_snooze_deflate");
+    }
+
+    #[test]
+    fn light_mode_boundary_keeps_bandwidth_same() {
+        // Light-mode boundary with light candidate keeps bandwidth, degrades confidence
+        let r = compute_snooze_correction("light", 0.7, "balanced", "light", 1, None);
+        assert!(!r.bandwidth_changed);
+        assert_eq!(r.active_bandwidth, "light");
+        assert!(r.active_confidence < 0.7);
+        assert_eq!(r.reason_code, "confidence_degrade");
+    }
+
+    #[test]
+    fn already_light_cannot_go_lighter() {
+        // Snoozing a deep candidate while already light degrades confidence
+        let r = compute_snooze_correction("light", 0.7, "balanced", "deep", 1, None);
+        assert!(!r.bandwidth_changed);
+        assert_eq!(r.active_bandwidth, "light");
+        assert!(r.active_confidence < 0.7);
+        assert_eq!(r.reason_code, "light_snooze_deflate");
+    }
+
+    #[test]
+    fn already_deep_cannot_go_deeper() {
+        // Snoozing a light candidate while already deep degrades confidence
+        let r = compute_snooze_correction("deep", 0.7, "balanced", "light", 1, None);
+        assert!(!r.bandwidth_changed);
+        assert_eq!(r.active_bandwidth, "deep");
+        assert!(r.active_confidence < 0.7);
+        assert_eq!(r.reason_code, "light_snooze_deflate");
+    }
+
+    #[test]
+    fn preserves_predicted_bandwidth() {
+        // Predicted bandwidth is always passed through unchanged
+        let r = compute_snooze_correction("balanced", 0.5, "deep", "balanced", 1, None);
+        assert_eq!(r.predicted_bandwidth, "deep");
+    }
+
+    #[test]
+    fn confidence_never_exceeds_1() {
+        // Confidence is capped at 1.0
+        let r = compute_snooze_correction("balanced", 0.95, "balanced", "deep", 1, None);
+        assert!(r.active_confidence <= 1.0);
+    }
+
+    #[test]
+    fn confidence_never_below_0() {
+        // Confidence is floored at 0.0
+        let r = compute_snooze_correction("light", 0.05, "balanced", "deep", 1, None);
+        assert!(r.active_confidence >= 0.0);
+    }
+
+    #[test]
+    fn contradictory_snoozes_request_clarification() {
+        // Three consecutive contradictory snoozes suggest clarification
+        // Previous snoozes were shifting heavier, now a balanced candidate
+        let r = compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 3, Some("heavier"));
+        assert!(r.suggest_clarification);
+        assert_eq!(r.reason_code, "clarification_needed");
+        assert!(!r.bandwidth_changed);
+    }
+
+    #[test]
+    fn three_snoozes_contradictory_direction_requests_clarification() {
+        // Three consecutive snoozes with contradictory direction request clarification
+        let r = compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 3, Some("heavier"));
+        assert!(r.suggest_clarification);
+    }
+
+    #[test]
+    fn two_snoozes_no_clarification() {
+        // Two consecutive snoozes do not trigger clarification
+        let r = compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 2, Some("heavier"));
+        assert!(!r.suggest_clarification);
+    }
+
+    #[test]
+    fn deterministic_output() {
+        // Same inputs always produce the same output
+        let args = (
+            "balanced",
+            0.5,
+            "balanced",
+            "deep",
+            2,
+            Some("lighter"),
+        );
+        let r1 = compute_snooze_correction(args.0, args.1, args.2, args.3, args.4, args.5);
+        let r2 = compute_snooze_correction(args.0, args.1, args.2, args.3, args.4, args.5);
+        assert_eq!(r1.active_bandwidth, r2.active_bandwidth);
+        assert_eq!(r1.active_confidence, r2.active_confidence);
+        assert_eq!(r1.reason_code, r2.reason_code);
+        assert_eq!(r1.bandwidth_changed, r2.bandwidth_changed);
+        assert_eq!(r1.suggest_clarification, r2.suggest_clarification);
+    }
+
+    #[test]
     fn classify_candidate_effort_defaults_to_balanced() {
         assert_eq!(classify_candidate_effort(None, None), "balanced");
         assert_eq!(classify_candidate_effort(Some("none"), None), "balanced");
@@ -805,5 +919,35 @@ mod tests {
             classify_candidate_effort(Some("observed"), Some(25.0)),
             "deep"
         );
+    }
+
+    #[test]
+    fn classify_candidate_effort_boundaries() {
+        // Exactly 12 minutes is balanced
+        assert_eq!(classify_candidate_effort(Some("observed"), Some(12.0)), "balanced");
+        // Exactly 20 minutes is deep
+        assert_eq!(classify_candidate_effort(Some("observed"), Some(20.0)), "deep");
+        // Zero minutes with source is still light (0 < 12)
+        assert_eq!(classify_candidate_effort(Some("observed"), Some(0.0)), "light");
+        // 'none' source returns balanced
+        assert_eq!(classify_candidate_effort(Some("none"), Some(10.0)), "balanced");
+        // Publication-era source works like any other
+        assert_eq!(classify_candidate_effort(Some("publication_era"), Some(22.0)), "deep");
+    }
+
+    #[test]
+    fn contradictory_snooze_heavier_then_lighter_candidate() {
+        // Last snooze was heavier, now lighter candidate - contradictory
+        let r = compute_snooze_correction("balanced", 0.5, "balanced", "light", 3, Some("heavier"));
+        assert!(r.suggest_clarification);
+        assert_eq!(r.reason_code, "clarification_needed");
+    }
+
+    #[test]
+    fn contradictory_snooze_lighter_then_heavier_candidate() {
+        // Last snooze was lighter, now heavier candidate - contradictory
+        let r = compute_snooze_correction("balanced", 0.5, "balanced", "deep", 3, Some("lighter"));
+        assert!(r.suggest_clarification);
+        assert_eq!(r.reason_code, "clarification_needed");
     }
 }
