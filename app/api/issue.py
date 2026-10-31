@@ -5,12 +5,13 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Issue
+from app.models import Event, Issue
 from app.models.user import User
 from app.schemas import (
     IssueBulkMarkReadRequest,
@@ -116,11 +117,12 @@ async def get_issue_reader_context(
     return await get_reader_context(db, current_user.id, issue_id)
 
 
-def issue_to_response(issue: Issue) -> IssueResponse:
+def issue_to_response(issue: Issue, rating: float | None = None) -> IssueResponse:
     """Convert Issue model to IssueResponse.
 
     Args:
         issue: Issue model instance
+        rating: Optional latest rating for the issue
 
     Returns:
         IssueResponse schema with position field for ordering
@@ -141,6 +143,7 @@ def issue_to_response(issue: Issue) -> IssueResponse:
         status=issue_status,
         read_at=read_at,
         created_at=created_at,
+        rating=rating,
     )
 
 
@@ -183,7 +186,23 @@ async def list_issues(
         db, thread_id, current_user.id, status_filter, page_size, page_token
     )
 
-    issue_responses = [issue_to_response(issue) for issue in issues]
+    # Fetch latest rating per issue in bulk
+    rating_map: dict[int, float] = {}
+    if issues:
+        issue_ids = [issue.id for issue in issues]
+        result = await db.execute(
+            select(Event.issue_id, Event.rating)
+            .where(Event.issue_id.in_(issue_ids), Event.type == "rate", Event.rating.isnot(None))
+            .order_by(Event.timestamp.desc(), Event.id.desc())
+        )
+        seen = set()
+        for issue_id, rating in result.all():
+            if issue_id is None or issue_id in seen:
+                continue
+            seen.add(issue_id)
+            rating_map[int(issue_id)] = float(rating)
+
+    issue_responses = [issue_to_response(issue, rating_map.get(issue.id)) for issue in issues]
 
     return IssueListResponse(
         issues=issue_responses,

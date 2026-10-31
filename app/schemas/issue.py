@@ -19,6 +19,7 @@ class IssueResponse(BaseModel):
     status: str
     read_at: datetime | None
     created_at: datetime
+    rating: float | None = None
 
 
 class IssueCreate(BaseModel):
