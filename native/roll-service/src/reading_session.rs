@@ -1,7 +1,7 @@
 //! Native session bootstrap. No public route is mounted until full endpoint parity.
 //! All writes share Python's per-user advisory transaction lock and commit atomically
 //! with the full-library undo checkpoint. Pure resolution never changes durable state.
-use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use crate::{auth::AuthenticatedUser, config, db, ApiError, AppState};
 use axum::http::StatusCode;
 use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
@@ -289,6 +289,7 @@ async fn bootstrap_once(
         // Pending selection is disposable UI state. A legacy writer can leave
         // a stale issue pointer (or a dangling thread) behind; dropping that
         // pointer must not wedge every native Roll request with a 500.
+        // Since this is a GET endpoint, it must be read-only - no writes allowed.
         let (thread_valid, issue_valid) = pending_validity(
             &tx,
             user,
@@ -297,25 +298,14 @@ async fn bootstrap_once(
         )
         .await?;
         if !thread_valid {
-            tx.execute(
-                "UPDATE sessions
-                 SET pending_thread_id=NULL,pending_issue_id=NULL,
-                     pending_thread_updated_at=NULL
-                 WHERE id=$1 AND user_id=$2",
-                &[&session.id, &user.id()],
-            )
-            .await
-            .map_err(session_error)?;
+            // Return nulled pending projection without persisting changes.
+            // Repair will happen on write paths (offer/reset/dismiss).
             session.pending_thread_id = None;
             session.pending_issue_id = None;
             session.pending_thread_updated_at = None;
         } else if !issue_valid {
-            tx.execute(
-                "UPDATE sessions SET pending_issue_id=NULL WHERE id=$1 AND user_id=$2",
-                &[&session.id, &user.id()],
-            )
-            .await
-            .map_err(session_error)?;
+            // Return nulled pending projection without persisting changes.
+            // Repair will happen on write paths (offer/reset/dismiss).
             session.pending_issue_id = None;
         }
         if session.bandwidth_source.is_none() {
@@ -357,21 +347,12 @@ async fn bootstrap_once(
             .map_err(session_error)?,
         )?;
         if created {
-            checkpoint(&tx, user, &session, now).await?;
+            // Skip checkpoint creation for GET endpoint - must be read-only.
+            // Checkpoint will be created on the first write operation.
         }
         // Python captures the browser timezone after the session-start checkpoint.
-        if let Some(zone) = timezone
-            .filter(|_| session.timezone.is_none())
-            .and_then(browser_timezone)
-        {
-            tx.execute(
-                "UPDATE sessions SET timezone=$2 WHERE id=$1 AND user_id=$3",
-                &[&session.id, &zone, &user.id()],
-            )
-            .await
-            .map_err(session_error)?;
-            session.timezone = Some(zone);
-        }
+        // Since this is a GET endpoint, skip timezone update to maintain read-only behavior.
+        // Timezone will be updated on the first write operation.
         let (current_die, automatic_die) = dice(&tx, &session).await?;
         tx.commit().await.map_err(session_error)?;
         Ok(SessionBootstrap {
@@ -649,6 +630,160 @@ mod tests {
         );
 
         tx.rollback().await.unwrap();
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn bootstrap_get_is_read_only() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("bootstrap_read_only_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at timestamptz NOT NULL, start_die integer NOT NULL,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz, timezone text,
+                     predicted_bandwidth text, active_bandwidth text,
+                     bandwidth_confidence float8, bandwidth_source text,
+                     bandwidth_version timestamptz, reading_bandwidth text,
+                     reading_intent text, reading_mode_source text,
+                     reading_mode_suggested boolean, active_intent text,
+                     predicted_intent text, intent_confidence float8,
+                     intent_source text, intent_version timestamptz,
+                     session_mode_correction_guidance json
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     session_id integer, thread_id integer, issue_id integer,
+                     type text, timestamp timestamptz, rating float8,
+                     context json, selected_thread_id integer, result integer,
+                     die_after integer, metadata_json json
+                 );
+                 CREATE TABLE {schema}.snapshots (
+                     id integer PRIMARY KEY, session_id integer, event_id integer,
+                     thread_states json, session_state json, created_at timestamptz,
+                     description text, snapshot_kind text, schema_version integer
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.threads VALUES (10, 1);
+                 INSERT INTO {schema}.issues VALUES (100, 10);
+                 -- Create a session with stale pending pointers to test read-only behavior
+                 INSERT INTO {schema}.sessions 
+                 (id, user_id, started_at, start_die, pending_thread_id, pending_issue_id,
+                  pending_thread_updated_at) 
+                 VALUES (1, 1, NOW() - interval '1 hour', 6, 999, 999, NOW());"
+            ))
+            .await
+            .unwrap();
+        
+        let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .await
+            .unwrap();
+        
+        let config = crate::config::Config::from_test_url(&url);
+        let state = AppState::new(config).await.unwrap();
+        let user = AuthenticatedUser::for_test(1);
+        
+        // Count initial state
+        let initial_session_count: i64 = client
+            .query_one(&format!("SELECT COUNT(*) FROM {schema}.sessions"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        let initial_snapshot_count: i64 = client
+            .query_one(&format!("SELECT COUNT(*) FROM {schema}.snapshots"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        
+        // Call bootstrap - should not perform any writes
+        let result = crate::reading_session::bootstrap_at(
+            &state,
+            user,
+            None,
+            SessionPolicy::default(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64(),
+        )
+        .await;
+        assert!(result.is_ok(), "Bootstrap should succeed: {:?}", result);
+        
+        // Count state after bootstrap - should be unchanged
+        let final_session_count: i64 = client
+            .query_one(&format!("SELECT COUNT(*) FROM {schema}.sessions"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        let final_snapshot_count: i64 = client
+            .query_one(&format!("SELECT COUNT(*) FROM {schema}.snapshots"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        
+        // Verify no writes occurred
+        assert_eq!(initial_session_count, final_session_count, "No new sessions should be created");
+        assert_eq!(initial_snapshot_count, final_snapshot_count, "No snapshots should be created");
+        
+        // Verify the stale pending pointers are not persisted but are nulled in the response
+        let session: Option<String> = client
+            .query_one(
+                &format!("SELECT row_to_json(s)::text FROM {schema}.sessions s WHERE id=1"),
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let session_json: Value = serde_json::from_str(&session.unwrap()).unwrap();
+        
+        // The pending pointers should still exist in the database (not persisted)
+        let db_pending_thread: Option<i32> = client
+            .query_one(&format!("SELECT pending_thread_id FROM {schema}.sessions WHERE id=1"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        let db_pending_issue: Option<i32> = client
+            .query_one(&format!("SELECT pending_issue_id FROM {schema}.sessions WHERE id=1"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        
+        // The database should still have the stale pointers (not modified)
+        assert_eq!(db_pending_thread, Some(999), "Database should preserve stale pending_thread_id");
+        assert_eq!(db_pending_issue, Some(999), "Database should preserve stale pending_issue_id");
+        
         admin
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
             .await
