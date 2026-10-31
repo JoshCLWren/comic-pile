@@ -37,7 +37,7 @@ Slow, error, and cold request records carry two independent timings:
 
 `cpu_time_ms` is a process-wide delta. Under async concurrency it includes work performed for other in-flight requests, so it must not be treated as exclusive per-request attribution, divided by request count, or ranked as if each request owned the whole delta. Use it only to tell a CPU-bound request apart from a request that was mostly waiting on I/O, and use isolated one-at-a-time measurements when per-route CPU attribution is required.
 
-These fields describe a single process. They are not Vercel billed Active CPU: billing also depends on invocation volume, provisioned memory, and cold starts, and Vercel's `group_by=requestPath` counts log events rather than invocations. Route-level CPU attribution needs isolated one-at-a-time measurement; the replay lab tracked in #4277 is the intended source for that evidence.
+These fields describe a single process. They are not Vercel billed Active CPU: billing also depends on invocation volume, provisioned memory, and cold starts, and Vercel's `group_by=requestPath` counts log events rather than invocations. Route-level CPU attribution needs isolated one-at-a-time measurement; the replay lab tracked in #4277 is the intended source for that evidence. See [`REQUEST_AMPLIFICATION_CONTRACT.md`](REQUEST_AMPLIFICATION_CONTRACT.md) for the deterministic regression contract, the isolated cold/warm measurement method, the route-ranking formula, and the manual daily Active CPU comparison step.
 
 ## Reproduced baseline from 2026-08-06
 
