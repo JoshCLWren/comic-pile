@@ -22,6 +22,7 @@ from factory_capacity_policy import (
     remaining_omniroute_free_entry_slots,
 )
 from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FACTORY_PR_WIP_LIMIT, FACTORY_REVIEW_BACKLOG_LIMIT, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, NON_EXECUTABLE_ISSUES, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, eligibility, env_positive_int, factory_pr_wip_count, factory_review_backlog_count, is_manual_only, item_is_unowned, issue_bypasses_wip_limit, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, pr_suppresses_issue_candidate, stage_of)
+from factory_jev_shadow import apply_jev_ranking
 from stale_pr_decay import StalePRGuard
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
 from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for
@@ -932,6 +933,31 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
     candidates = order_candidates_for_worker(
         resolve_review_head_contributors(candidates, prs), worker
     )
+    # The dispatcher prepares one bounded Jev decision before leasing any
+    # worker. Only already-eligible, same-class issue slots can be reordered;
+    # every live claim and worker-specific exclusion remains authoritative.
+    jev_path = os.environ.get("FACTORY_JEV_RANKING_FILE", "")
+    if jev_path:
+        try:
+            with open(jev_path, encoding="utf-8") as jev_file:
+                jev_report = json.load(jev_file)
+            if not isinstance(jev_report, dict):
+                raise ValueError("invalid Jev decision report")
+            baseline_order = [c.number for c in candidates]
+            candidates, used_jev = apply_jev_ranking(candidates, jev_report)
+            if used_jev:
+                print(
+                    f"[factory-controller] Jev ACTIVE worker={worker}: "
+                    f"canonical={baseline_order[:8]} chosen-order="
+                    f"{[c.number for c in candidates[:8]]}",
+                    file=sys.stderr,
+                )
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            print(
+                f"[factory-controller] Jev unavailable ({type(exc).__name__}); "
+                "using canonical order",
+                file=sys.stderr,
+            )
     for candidate in candidates:
         if not candidate_is_live_executable(candidate):
             continue
