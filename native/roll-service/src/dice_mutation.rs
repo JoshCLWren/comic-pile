@@ -236,7 +236,7 @@ pub async fn persist_in_transaction(
         .query_one(
             "INSERT INTO events
                (user_id, type, timestamp, die, die_after, thread_id, issue_id, rating, context)
-             VALUES ($1, $2, clock_timestamp(), $3, $4, $5, $6, $7, $8::json)
+             VALUES ($1, $2, clock_timestamp(), $3, $4, $5, $6, $7, $8::text::json)
              RETURNING id",
             &[
                 &user.id(),
