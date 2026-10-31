@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare Jev's ranking with canonical factory selection; never change leases."""
+"""Bounded Jev decisions for live factory selection within hard policy boundaries."""
 
 from __future__ import annotations
 
@@ -140,11 +140,11 @@ def shadow_report(
     *,
     client: Callable[[dict[str, Any], str], dict[str, Any]] = call_jev,
 ) -> dict[str, Any]:
-    """Score comparable work but retain canonical order as the sole assignment authority."""
+    """Score interchangeable issues and preserve policy order for uncertain peers."""
     candidates = comparable_issues(issues, prs)
     baseline = [candidate.number for candidate in candidates]
     report: dict[str, Any] = {
-        "mode": "shadow-only", "model": MODEL, "baseline": baseline,
+        "mode": "active-selection", "model": MODEL, "baseline": baseline,
         "shadow": baseline[:], "status": "unchanged", "reason": "insufficient peers",
     }
     if len(candidates) < 2:
@@ -155,28 +155,42 @@ def shadow_report(
     try:
         response = client(make_request(candidates, issues), api_key)
         scores = validated_scores(candidates, response)
-        uncertain = any(
-            scores[candidate.number][f"{dimension}_confidence"] < MIN_CONFIDENCE
-            for candidate in candidates
-            for dimension in ("impact", "feasibility")
-        )
+        # Only confident candidates may be promoted. Uncertain ones retain
+        # their original positions; do not throw away other reliable scores.
+        confident = [
+            candidate for candidate in candidates
+            if all(
+                scores[candidate.number][f"{dimension}_confidence"] >= MIN_CONFIDENCE
+                for dimension in ("impact", "feasibility")
+            )
+        ]
         ranked = sorted(
-            candidates,
+            confident,
             key=lambda candidate: (
                 -(0.6 * scores[candidate.number]["impact"]
                   + 0.4 * scores[candidate.number]["feasibility"]),
                 candidate.sort_key(),
             ),
         )
+        recommended = baseline[:]
+        confident_numbers = {candidate.number for candidate in confident}
+        confident_slots = [
+            index for index, number in enumerate(baseline)
+            if number in confident_numbers
+        ]
+        for slot, candidate in zip(confident_slots, ranked, strict=True):
+            recommended[slot] = candidate.number
+        abstained = len(confident) < 2
         usage = response.get("usage")
         usage = usage if isinstance(usage, dict) else {}
         return {
             **report,
-            "status": "abstained" if uncertain else "scored",
-            "shadow": baseline if uncertain else [candidate.number for candidate in ranked],
+            "status": "abstained" if abstained else "scored",
+            "shadow": baseline if abstained else recommended,
+            "qualified": [candidate.number for candidate in confident],
             "reason": (
-                "low confidence; kept canonical order while recording scores"
-                if uncertain else "weighted impact 60%, feasibility 40%; confidence >= 0.55"
+                "fewer than two confident peers; kept canonical order"
+                if abstained else "ranked confident peers by 60% impact, 40% feasibility"
             ),
             "scores": scores,
             "usage": {
@@ -189,18 +203,69 @@ def shadow_report(
         return {**report, "reason": "provider unavailable, uncertain or invalid response"}
 
 
+def apply_jev_ranking(
+    ordered: list[Candidate], report: dict[str, Any]
+) -> tuple[list[Candidate], bool]:
+    """Reorder only current, equal-priority ordinary issues from a validated decision.
+
+    Never add candidates, change another class, bypass eligibility, or promote
+    uncertain peers. The factory's worker-specific policy ordering runs first.
+    """
+    if report.get("model") != MODEL or report.get("status") != "scored":
+        return ordered, False
+    baseline, recommended, qualified = (
+        report.get("baseline"), report.get("shadow"), report.get("qualified")
+    )
+    if not all(isinstance(value, list) for value in (baseline, recommended, qualified)):
+        return ordered, False
+    if (
+        not 2 <= len(baseline) <= MAX_CANDIDATES
+        or len(recommended) != len(baseline)
+        or len(set(baseline)) != len(baseline)
+        or set(recommended) != set(baseline)
+        or len(set(qualified)) != len(qualified)
+        or not set(qualified) <= set(baseline)
+        or not all(type(value) is int for value in baseline + recommended + qualified)
+    ):
+        return ordered, False
+
+    qualified_set = set(qualified)
+    rank = [number for number in recommended if number in qualified_set]
+    positions = [
+        index for index, candidate in enumerate(ordered)
+        if candidate.number in qualified_set
+        and candidate.kind == "issue"
+        and candidate.lane == 3
+    ]
+    if len(positions) < 2:
+        return ordered, False
+    peers = [ordered[position] for position in positions]
+    if len({(peer.lane, peer.priority, peer.stage) for peer in peers}) != 1:
+        return ordered, False
+    indexed = {peer.number: peer for peer in peers}
+    ranked = [indexed[number] for number in rank if number in indexed]
+    if len(ranked) != len(peers):
+        return ordered, False
+    if [peer.number for peer in peers] == [peer.number for peer in ranked]:
+        return ordered, False
+    result = ordered[:]
+    for index, candidate in zip(positions, ranked, strict=True):
+        result[index] = candidate
+    return result, True
+
+
 def markdown(report: dict[str, Any]) -> str:
-    """Render a safe advisory summary without publishing raw issue bodies or credentials."""
+    """Render a safe decision summary without publishing issue bodies or credentials."""
     def refs(ids: list[int]) -> str:
         return ", ".join(f"#{number}" for number in ids) or "none"
 
     lines = [
-        "### Jev factory shadow ranking (advisory only)",
+        "### Jev factory work ranking (active when confident)",
         "", f"- Status: {report['status']}", f"- Model: `{MODEL}`",
         f"- Existing policy order: {refs(report['baseline'])}",
-        f"- Jev shadow order: {refs(report['shadow'])}",
+        f"- Jev recommended order: {refs(report['shadow'])}",
         f"- Result: {report['reason']}",
-        "- Factory selection, claims, reviews, and CI: unchanged",
+        "- Actual selection logged by controller; protected policy and leases remain authoritative",
     ]
     if "usage" in report:
         lines += [
