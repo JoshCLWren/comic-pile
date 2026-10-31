@@ -98,12 +98,6 @@ def upgrade() -> None:
         FROM threads t
         WHERE e.user_id IS NULL AND e.selected_thread_id = t.id
     """)
-    op.execute("""
-        UPDATE events e SET user_id = source.user_id
-        FROM events source
-        WHERE e.user_id IS NULL AND e.source_roll_event_id = source.id
-          AND source.user_id IS NOT NULL
-    """)
     # Greedy attribution above trusts the strongest surviving reference. If a
     # corrupt historical row carries references owned by different readers,
     # keep it unattributed instead of silently assigning one of them; this
@@ -138,6 +132,14 @@ def upgrade() -> None:
             )
         )
     """)
+    # A dependent event may inherit its source roll's owner, but only after
+    # the guard has quarantined sources with conflicting references.
+    op.execute("""
+        UPDATE events e SET user_id = source.user_id
+        FROM events source
+        WHERE e.user_id IS NULL AND e.source_roll_event_id = source.id
+          AND source.user_id IS NOT NULL
+    """)
     # Some historical thread-deletion events have had every ownership reference
     # removed. Production currently has 192 such records (2026-10-30).
     # Keep these rows intact with NULL owner rather than inventing a user or
@@ -152,11 +154,6 @@ def upgrade() -> None:
         "events_session_id_fkey", "events", "sessions", ["session_id"], ["id"],
         ondelete="SET NULL",
     )
-    # Build the owner-scoped activity index concurrently so the migration does
-    # not take an ACCESS EXCLUSIVE lock on the hot events table while Roll is
-    # writing. The block is restartable after an interrupted build.
-    with op.get_context().autocommit_block():
-        _create_event_user_index()
     # Database-side compatibility for existing session-based and thread/issue
     # based writers; sessionless reference-free deletes now pass explicit owner.
     # The authenticated owner must be supplied explicitly for new sessionless
@@ -244,6 +241,14 @@ def upgrade() -> None:
             selected_thread_id, source_roll_event_id ON events
         FOR EACH ROW EXECUTE FUNCTION assign_event_owner()
     """)
+    # Build the owner-scoped activity index concurrently only after the
+    # ownership trigger exists: the concurrent build commits the preceding
+    # transaction, and legacy writers must already be protected during that
+    # window. The index sub-step is restartable after an interrupted build;
+    # an interruption earlier in this revision needs manual recovery because
+    # the committed column and backfill are not re-runnable.
+    with op.get_context().autocommit_block():
+        _create_event_user_index()
 
 
 def downgrade() -> None:

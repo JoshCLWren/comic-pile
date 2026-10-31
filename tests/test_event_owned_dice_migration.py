@@ -195,7 +195,9 @@ async def _create_pre_migration_schema(connection: AsyncConnection, schema: str)
             "(5, 'rate', NULL, NULL, NULL, NULL, 1), "
             "(6, 'delete', NULL, NULL, NULL, NULL, NULL), "
             "(7, 'rate', :session, :bob_thread, NULL, NULL, NULL), "
-            "(8, 'rate', NULL, :bob_thread, NULL, NULL, NULL)"
+            "(8, 'rate', NULL, :bob_thread, NULL, NULL, NULL), "
+            "(20, 'roll', :session, :bob_thread, NULL, NULL, NULL), "
+            "(21, 'rate', NULL, NULL, NULL, NULL, 20)"
         ),
         {
             "session": ALICE_SESSION,
@@ -331,6 +333,8 @@ async def test_migration_backfills_ownership_and_preserves_unattributable_histor
             6: None,  # unattributable historical delete
             7: None,  # conflicting session/thread owners stay unassigned
             8: BOB,  # detached thread owned by another reader
+            20: None,  # conflicting roll row is quarantined
+            21: None,  # dependent row must not borrow a quarantined source owner
         }
 
         # The session link must null out instead of cascading the owned event.
@@ -371,6 +375,13 @@ async def test_migration_backfills_ownership_and_preserves_unattributable_histor
         ).one()
         assert preserved.user_id == ALICE
         assert preserved.session_id is None
+        # The same SET NULL must not attribute any preserved unowned row.
+        post_delete = await _owners(worker, schema)
+        assert post_delete[6] is None
+        assert post_delete[7] is None
+        assert post_delete[8] == BOB
+        assert post_delete[20] is None
+        assert post_delete[21] is None
     finally:
         await _drop_fixture_schema(worker, schema)
         await worker.close()
