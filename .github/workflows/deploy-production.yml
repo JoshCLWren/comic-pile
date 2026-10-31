@@ -194,19 +194,37 @@ jobs:
             --prod \
             --status READY \
             --meta "githubCommitSha=$deploy_sha" \
-            --limit 1 \
+            --limit 5 \
             --json \
             --yes \
             --scope "$VERCEL_TEAM_SLUG" \
             --token "$VERCEL_TOKEN")"
-          ready_count="$(jq '.deployments | length' <<< "$deployments_json")"
+          # Only a deployment created by this workflow counts as already
+          # deployed. A vercel[bot] Git deployment for the same SHA must not
+          # deduplicate the migration-aware path.
+          ready_count="$(jq --arg sha "$deploy_sha" '
+            [.deployments[]
+             | select(.meta.githubCommitSha == $sha)
+             | select((.meta.githubDeployment // "") | tostring == "1")]
+            | length
+          ' <<< "$deployments_json")"
+          foreign_count="$(jq --arg sha "$deploy_sha" '
+            [.deployments[]
+             | select(.meta.githubCommitSha == $sha)
+             | select((.meta.githubDeployment // "") | tostring != "1")]
+            | length
+          ' <<< "$deployments_json")"
 
           if [[ "$ready_count" -gt 0 ]]; then
             echo "deployment_required=false" >> "$GITHUB_OUTPUT"
-            echo "Production already has a READY deployment for $deploy_sha; skipping duplicate trigger."
+            echo "Production already has a workflow-created READY deployment for $deploy_sha; skipping duplicate trigger."
           else
             echo "deployment_required=true" >> "$GITHUB_OUTPUT"
-            echo "No READY production deployment exists for $deploy_sha."
+            if [[ "$foreign_count" -gt 0 ]]; then
+              echo "A production deployment for $deploy_sha was created outside this workflow; the migration-aware deploy will replace it."
+            else
+              echo "No READY production deployment exists for $deploy_sha."
+            fi
           fi
 
   deploy:
@@ -359,19 +377,33 @@ jobs:
         run: |
           set -euo pipefail
           deploy_sha="$(git rev-parse HEAD)"
-          response="$(curl --fail --silent --show-error \
-            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&limit=20" \
-            -H "Authorization: Bearer ${VERCEL_TOKEN}")"
-          newest_sha="$(jq -r '
-            [.deployments[] | select(.readyState == "READY")]
-            | sort_by(.createdAt) | reverse | .[0].meta.githubCommitSha // empty
-          ' <<< "$response")"
-          if [[ "$newest_sha" != "$deploy_sha" ]]; then
-            echo "ERROR: newest READY production deployment is ${newest_sha:-<none>}, expected $deploy_sha" >&2
-            jq -r '.deployments[] | "  \(.uid) \(.readyState) \(.meta.githubCommitSha // "no-sha")"' <<< "$response" >&2
-            exit 1
-          fi
-          echo "Production deployment confirmed for $deploy_sha"
+          for attempt in $(seq 1 5); do
+            response="$(curl --fail --silent --show-error \
+              "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&limit=20" \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}")"
+            newest="$(jq -r '
+              [.deployments[] | select(.readyState == "READY")]
+              | sort_by(.createdAt // .created) | reverse | .[0]
+              | [
+                  (.meta.githubCommitSha // ""),
+                  ((.meta.githubDeployment // "") | tostring),
+                  ((.aliasError // null) | tostring)
+                ]
+              | @tsv
+            ' <<< "$response")"
+            read -r newest_sha newest_owner newest_alias_error <<< "$newest"
+            if [[ "$newest_sha" == "$deploy_sha" && "$newest_owner" == "1" && "$newest_alias_error" == "null" ]]; then
+              echo "Production deployment confirmed for $deploy_sha"
+              exit 0
+            fi
+            if [[ "$attempt" -lt 5 ]]; then
+              echo "Production deployment not confirmed yet (attempt $attempt/5): sha=${newest_sha:-<none>} workflow=${newest_owner:-<none>} aliasError=${newest_alias_error:-<none>}"
+              sleep 5
+            fi
+          done
+          echo "ERROR: newest READY production deployment is not the workflow deployment for $deploy_sha" >&2
+          jq -r '.deployments[] | "  \(.uid) \(.readyState) \(.meta.githubCommitSha // "no-sha") workflow=\((.meta.githubDeployment // "") | tostring) aliasError=\((.aliasError // null) | tostring)"' <<< "$response" >&2
+          exit 1
 
       - name: Smoke production health
         run: |
