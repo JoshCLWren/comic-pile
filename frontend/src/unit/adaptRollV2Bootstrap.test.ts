@@ -58,4 +58,45 @@ describe('native v2 Roll bootstrap compatibility', () => {
     expect(() => adaptRollV2Bootstrap(withoutTags as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 candidate')
   })
+
+  // Regression guards for #4369: the v1-to-v2 adapter and Rust projection must
+  // never silently drop candidate tag chips or hide inactive/excluded series.
+  describe('regression: #4369 lost-tag and hidden-inactive losses', () => {
+    it('preserves visible tag chips on every rollable candidate', () => {
+      const state = adaptRollV2Bootstrap(sample)
+      // Tags must survive the adapter; a missing tags array means the native
+      // projection dropped them and the Roll screen loses its tag chips.
+      expect(state.roll_pool[0].tags).toEqual([
+        {
+          id: 1,
+          name: 'Favorites',
+          normalized_name: 'favorites',
+          scope: 'global',
+          owner_user_id: null,
+          color: '#336699',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ])
+    })
+
+    it('never hides inactive series from the bootstrap response', () => {
+      const state = adaptRollV2Bootstrap(sample)
+      // Inactive threads must be reported with count and reasons; hiding them
+      // would make the Roll screen claim series are available when they are not.
+      expect(state.inactive_count).toBeGreaterThan(0)
+      expect(state.inactive_threads).toHaveLength(1)
+      expect(state.inactive_threads?.[0].reason).toBe('completed')
+      expect(state.inactive_threads?.[0].thread_id).toBe(7)
+    })
+
+    it('never hides excluded series from the bootstrap response', () => {
+      const state = adaptRollV2Bootstrap(sample)
+      // Excluded threads must be reported with count and reasons; hiding them
+      // would make the Roll screen omit series the user expects to see.
+      expect(state.excluded_count).toBeGreaterThan(0)
+      expect(state.excluded_threads).toHaveLength(1)
+      expect(state.excluded_threads?.[0].reason).toBe('completed')
+    })
+  })
 })

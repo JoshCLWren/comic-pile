@@ -285,7 +285,7 @@ async fn current_active_thread(
          JOIN tags tag ON tag.id=assignment.tag_id
          WHERE assignment.target_type='Thread' AND assignment.target_id=$1
            AND (tag.scope='global' OR (tag.scope='private' AND tag.owner_user_id=$2))
-         ORDER BY tag.scope,tag.normalized_name",
+         ORDER BY tag.scope DESC, tag.normalized_name",
             &[&id, &user.id()],
         )
         .await
@@ -703,7 +703,7 @@ async fn visible_thread_tags(
                AND assignment.target_id = ANY($2::int[])
                AND (tag.scope = 'global'
                     OR (tag.scope = 'private' AND tag.owner_user_id = $1))
-             ORDER BY assignment.target_id, tag.scope, tag.normalized_name",
+             ORDER BY assignment.target_id, tag.scope DESC, tag.normalized_name",
             &[&user.id(), &ids],
         )
         .await
@@ -915,6 +915,16 @@ pub async fn bootstrap_v2(
             tag_ids.push(id as i32);
         }
     }
+    for row in &exclusions {
+        if let Some(id) = row["thread_id"].as_i64() {
+            tag_ids.push(id as i32);
+        }
+    }
+    for row in &inactive {
+        if let Some(id) = row["thread_id"].as_i64() {
+            tag_ids.push(id as i32);
+        }
+    }
     if let Some(ref row) = stale_thread {
         if let Some(id) = row["id"].as_i64() {
             tag_ids.push(id as i32);
@@ -924,11 +934,12 @@ pub async fn bootstrap_v2(
     tag_ids.dedup();
     let tags_by_thread = visible_thread_tags(&conn, user, &tag_ids).await?;
     let attach_tags = |thread: &mut Value| {
-        if let Some(id) = thread["id"].as_i64() {
-            thread["tags"] = json!(tags_by_thread
-                .get(&(id as i32))
-                .cloned()
-                .unwrap_or_default());
+        let id = thread["id"]
+            .as_i64()
+            .or_else(|| thread["thread_id"].as_i64())
+            .map(|v| v as i32);
+        if let Some(id) = id {
+            thread["tags"] = json!(tags_by_thread.get(&id).cloned().unwrap_or_default());
         }
     };
     for item in &mut rollable {
@@ -941,6 +952,12 @@ pub async fn bootstrap_v2(
         attach_tags(row);
     }
     for row in &mut blocked_threads {
+        attach_tags(row);
+    }
+    for row in &mut exclusions {
+        attach_tags(row);
+    }
+    for row in &mut inactive {
         attach_tags(row);
     }
     if let Some(ref mut row) = stale_thread {
