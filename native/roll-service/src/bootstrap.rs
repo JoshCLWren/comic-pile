@@ -842,17 +842,14 @@ pub async fn bootstrap_v2(
             // is authoritative for queued thread eligibility.
             let blocked_now =
                 status == "active" && queue_position >= 1 && !eligible_threads.contains(&id);
+            // Legacy session snoozes/skips are display-only categories below.
+            // They are not Option E eligibility reasons and must not make an
+            // in-play thread look excluded from the pool.
             let (reason, detail): (&str, Option<&str>) = if status == "completed" {
                 ("completed", Some("Read the full series"))
             } else if blocked_now {
                 blocked.push(id);
                 ("blocked", None)
-            } else if snoozed.contains(&id) {
-                ("snoozed", Some("Snoozed in current session"))
-            } else if durable.contains(&id) {
-                ("snoozed", Some("Snoozed by cross-session backoff"))
-            } else if skipped.contains(&id) {
-                ("skipped", Some("Skipped in current session"))
             } else if queue_position < 1 {
                 ("not_in_queue", Some("Not in the active queue"))
             } else {
