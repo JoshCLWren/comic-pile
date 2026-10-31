@@ -124,10 +124,12 @@ async fn execute_rate_pipeline(
     let (issue_id, issues_read, die_after) =
         determine_issue_and_die(db, thread_id, rate_data, current_die, rating_threshold).await?;
 
+    // Pre-fetch issue number for event creation to avoid borrowing tx inside async block.
+    let issue_number = issue_number_opt(db, thread_id, rate_data).await?;
+
     // Steps 4-6: Mark issue read, update thread, create rate event — all in one
     // transaction, matching Python's single commit boundary.
-    let (new_issues_remaining, next_unread_issue_id) = execute_in_transaction(db, |tx| {
-        Box::pin(async move {
+    let (new_issues_remaining, next_unread_issue_id) = execute_in_transaction(db, |tx| async move {
             // Mark the issue as read.
             tx.execute(
                 "UPDATE issues SET status = 'read', read_at = to_timestamp(extract(epoch from current_timestamp)) WHERE id = $1",
@@ -175,7 +177,7 @@ async fn execute_rate_pipeline(
                     &current_die,
                     &die_after,
                     &issue_id,
-                    &issue_number_tx(tx, thread_id, rate_data).await?,
+                    &issue_number,
                     &Value::Null,
                 ],
             )
@@ -318,6 +320,8 @@ async fn find_owned_thread_raw(
         total_issues: r.get(11),
         next_unread_issue_id: r.get(12),
         reading_progress: r.get::<_, Option<String>>(13).or_else(|| Some("in_progress".to_string())),
+        is_blocked: r.get(14),
+        manual_creator_credits: r.get(15),
     }))
 }
 
@@ -686,7 +690,7 @@ async fn end_session_db(user_id: i32, db: &mut Object) -> Result<(), ApiError> {
 
 /// Re-read the thread state from the database.
 async fn re_read_thread(
-    _state: &Arc<AppState>,
+    state: &Arc<AppState>,
     user_id: i32,
     thread_id: i32,
     db: &mut Object,

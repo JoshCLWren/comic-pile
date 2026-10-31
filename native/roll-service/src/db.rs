@@ -104,29 +104,29 @@ impl ObjectExt for Object {
 
 /// Run a closure inside a read-committed transaction, committing on success
 /// and rolling back on failure.
-pub async fn execute_in_transaction<F, Fut>(
+pub async fn execute_in_transaction<F, Fut, T>(
     db: &mut Object,
     f: F,
-) -> Result<(), ApiError>
+) -> Result<T, ApiError>
 where
     F: FnOnce(&mut Transaction<'_>) -> Fut,
-    Fut: std::future::Future<Output = Result<(), ApiError>>,
+    Fut: std::future::Future<Output = Result<T, ApiError>>,
 {
     let mut tx = db
         .transaction()
-        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
-        .start()
         .await
         .map_err(query_error)?;
     let result = f(&mut tx).await;
     match result {
-        Ok(()) => tx.commit().await.map_err(query_error)?,
+        Ok(val) => {
+            tx.commit().await.map_err(query_error)?;
+            Ok(val)
+        }
         Err(e) => {
             let _ = tx.rollback().await;
-            return Err(e);
+            Err(e)
         }
     }
-    Ok(())
 }
 
 /// Pool wait/create deadlines are configured at startup; no unbounded retry loop.
