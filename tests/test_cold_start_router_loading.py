@@ -130,7 +130,7 @@ def test_every_eager_api_route_is_reachable_from_its_selected_mounts() -> None:
 
     Group by the exact selected mounts, not just the resource segment: Roll's
     prerequisite switch intentionally needs a different cold router set from
-    ordinary Roll requests.
+    ordinary Roll bootstrap requests.
     """
     eager_signatures = _api_route_signatures(create_app(serve_frontend=False))
     assert eager_signatures
@@ -157,34 +157,6 @@ def test_every_eager_api_route_is_reachable_from_its_selected_mounts() -> None:
             f"mounts {selected!r} for {sample_path!r} miss {missing}"
         )
 
-
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/api/v1/roll/exclusions",
-    ],
-)
-@pytest.mark.asyncio
-async def test_first_roll_request_skips_dependency_subrouters(path: str) -> None:
-    """A cold Roll GET needs Roll alone, not all continuity/CBL APIs.
-
-    The Roll bootstrap GET is native Rust, so this exercises the remaining
-    Python Roll GET surface to prove cold-start mount selection still isolates
-    the Roll router from the dependency/CBL routers.
-    """
-    app = create_app(serve_frontend=False, defer_router_imports=True)
-    assert PREREQUISITE_SWITCH_PATH not in _route_paths(app)
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get(path)
-
-    # The Roll router answered (unauthenticated), without the dependency
-    # router whose only /roll endpoint is POST switch-prerequisite.
-    assert response.status_code == 401
-    paths = _route_paths(app)
-    assert path in paths
-    assert PREREQUISITE_SWITCH_PATH not in paths
 
 @pytest.mark.asyncio
 async def test_first_snooze_request_registers_only_the_snooze_mount() -> None:

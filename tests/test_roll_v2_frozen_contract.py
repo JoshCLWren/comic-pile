@@ -38,6 +38,14 @@ def test_frozen_operation_is_the_v2_bootstrap_get() -> None:
     assert operation["security"] == [{"HTTPBearer": []}]
 
 
+def test_frozen_contract_contains_only_the_supported_v2_path() -> None:
+    """The retired v1 and legacy bootstrap paths are not part of this contract."""
+    paths = _contract()["paths"]
+
+    assert list(paths) == ["/api/v2/roll/bootstrap"]
+    assert "get" in paths["/api/v2/roll/bootstrap"]
+
+
 def test_frozen_python_schema_matches_the_contract() -> None:
     """The retained Python DTO still describes the frozen v2 response."""
     schema = _contract()["components"]["schemas"]["RollV2BootstrapResponse"]

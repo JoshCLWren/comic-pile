@@ -172,26 +172,6 @@ def test_delivery_target_route_addresses_slash_containing_branches() -> None:
     assert "GET" in methods_by_path[target_path]
 
 
-def test_roll_bootstrap_is_not_served_by_python() -> None:
-    """Only native Rust serves the owner-approved v2 bootstrap operation.
-
-    The v1 and legacy bootstrap handlers were deleted with the v2 cutover, so
-    no Python OpenAPI operation may remain for any bootstrap URL. V2 ingress
-    is asserted separately in ``test_rust_cutover_route_identity.py``.
-    """
-    schema = create_app(serve_frontend=False).openapi()
-
-    for path in (
-        "/api/roll/bootstrap",
-        "/api/v1/roll/bootstrap",
-        "/api/v2/roll/bootstrap",
-    ):
-        assert path not in schema["paths"], (
-            f"{path} is still served by Python; the Rust v2 cutover requires "
-            "removing every Python bootstrap handler and alias"
-        )
-
-
 def test_no_new_bare_api_client_routes() -> None:
     """Regression guard: no client-facing routes under bare /api/* (non-v1)."""
     app = create_app(serve_frontend=False)
@@ -231,6 +211,7 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/queue/threads/{thread_id}/position/",
             "/api/rate/",
             "/api/roll/",
+            "/api/roll/bootstrap",
             "/api/roll/clear-manual-die",
             "/api/roll/dismiss-pending",
             "/api/roll/override",

@@ -128,13 +128,14 @@ def test_reading_boundaries_client_preserves_its_distinct_api_v2_contract() -> N
 def test_current_runtime_routing_is_explicit_and_independent_of_version() -> None:
     """Snapshot of *routing*, not a declaration that v1 means Python.
 
-    Bootstrap GET has the owner-approved v2-only exception (#4299/#4350):
-    only the native v2 operation is supported. The v1/legacy bootstrap paths
-    were retired with their Python handlers, so they intentionally have no
-    explicit route and fall through to the Python catch-all as 404s. Other
-    endpoints retain independent same-path implementation migrations.
+    Bootstrap GET has the owner-approved v2-only exception (#4350), while
+    other endpoints retain independent same-path implementation migrations.
+    The v1 GET Python route remains temporarily until production v2 proof
+    and the immediate follow-up Python deletion PR.
     """
     expected = {
+        ("GET", "/api/v1/roll/bootstrap"): "/api/index.py",
+        ("GET", "/api/roll/bootstrap"): "/api/index.py",
         ("POST", "/api/v1/roll/"): "/api/index.py",
         ("GET", "/api/v2/roll/bootstrap"): "/api/native_roll.rs",
         ("POST", "/api/v2/reading-boundaries"): "/api/index.py",

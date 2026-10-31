@@ -5,7 +5,7 @@ so there was no at-a-glance signal for tag-based decisions such as "which
 series are physical?" before rolling. These tests lock the list-surface
 contract:
 
-- Queue rows carry the thread's visible direct tags
+- Queue rows and Roll bootstrap rows carry the thread's visible direct tags
 - an untagged thread reports an empty list rather than dropping the field
 - the viewer's own private tags are included and another user's private tag is
   never leaked into a row they cannot edit

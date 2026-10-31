@@ -38,6 +38,7 @@ from app.schemas.reading_graph_preview import (
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
 from app.services.cbl_source_service import get_cbl_source_list_preview
+from app.services.reading_blocker_projection import unique_blocker_requirements
 from app.services.reading_list_cycle_validator import (
     ReadingCycleError,
     validate_reading_constraints,
@@ -412,7 +413,7 @@ def _issue_references(
                         blocker, list_names=context.list_names, issue_labels=labels
                     ),
                 )
-                for blocker in state.blockers
+                for blocker in unique_blocker_requirements(state.blockers)
             ]
         references.append(
             ReadingGraphIssueReference(

@@ -4,7 +4,7 @@ use axum::{
     extract::Request,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use comicpile_roll_service::{config::Config, router as roll_router, AppState};
@@ -34,9 +34,12 @@ fn normalize_bootstrap_request(request: &mut Request) {
     }
 }
 
-async fn native_bootstrap(mut request: Request) -> Response {
-    normalize_bootstrap_request(&mut request);
-    // Cold-start the native Roll pool only for authenticated bootstrap traffic.
+async fn native_dispatch(request: Request) -> Response {
+    // Log only the fixed ingress path, status and elapsed time. Never log query,
+    // authorization headers, response JSON or other user data.
+    let ingress_path = request.uri().path().to_owned();
+    let started = std::time::Instant::now();
+    // Cold-start the native Roll pool only for authenticated traffic.
     // Keep health independent of DB secrets and failures.
     let mut result = match ROLL_STATE.get_or_init(|| {
         Config::from_vercel_env()
@@ -64,7 +67,18 @@ async fn native_bootstrap(mut request: Request) -> Response {
     result
         .headers_mut()
         .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    eprintln!(
+        "native_roll route={} runtime=rust status={} elapsed_ms={}",
+        ingress_path,
+        result.status().as_u16(),
+        started.elapsed().as_millis()
+    );
     result
+}
+
+async fn native_bootstrap(mut request: Request) -> Response {
+    normalize_bootstrap_request(&mut request);
+    native_dispatch(request).await
 }
 
 fn app() -> Router {
@@ -72,6 +86,8 @@ fn app() -> Router {
         .route("/api/_native_roll/health", get(native_health))
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
+        .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/roll/dismiss-pending", post(native_dispatch))
 }
 
 #[tokio::main]

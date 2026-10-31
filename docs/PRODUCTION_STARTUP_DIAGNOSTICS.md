@@ -22,11 +22,22 @@ Request diagnostics add total route duration, database query count and time, HTT
 1. Filter deployment logs to `event=application_startup` for the process startup record.
 2. Find the first request with `cold_request=true` and correlate it by deployment ID plus `process_started_at_ns`.
 3. Compare `startup_duration_ms` with the external time-to-first-byte captured by the timing script.
-4. Compare `process_time_ms` and database time inside that first request.
+4. Compare `process_time_ms` and database time inside that first request. `process_time_ms` is elapsed wall time despite its historical name; `cpu_time_ms` is the separate process CPU sample described below.
 5. Review the `httpstat` phase breakdown for DNS, TCP, TLS, and other externally visible transport time before attributing latency to application startup. Only the remainder not explained by those phases, measured startup, or measured request work can be treated as pre-application/platform time.
 6. Repeat the same path immediately and verify the response marker before treating it as warm (`X-App-Cold-Request: 0`).
 
 A cold request is suspicious when measured application startup exceeds 1,000 ms or total request duration exceeds the configured slow-request threshold. A warm request is suspicious when database duration dominates the request, or when unexplained application time remains after subtracting dependency time.
+
+## Timing fields and CPU attribution
+
+Slow, error, and cold request records carry two independent timings:
+
+- `process_time_ms` — elapsed wall-clock time for the request. The name is historical; it is not CPU. It is preserved for existing log consumers and still drives the latency budgets and `Server-Timing`.
+- `cpu_time_ms` — process CPU consumed between the start and end of the request, sampled with `time.process_time()`.
+
+`cpu_time_ms` is a process-wide delta. Under async concurrency it includes work performed for other in-flight requests, so it must not be treated as exclusive per-request attribution, divided by request count, or ranked as if each request owned the whole delta. Use it only to tell a CPU-bound request apart from a request that was mostly waiting on I/O, and use isolated one-at-a-time measurements when per-route CPU attribution is required.
+
+These fields describe a single process. They are not Vercel billed Active CPU: billing also depends on invocation volume, provisioned memory, and cold starts, and Vercel's `group_by=requestPath` counts log events rather than invocations. Route-level CPU attribution needs isolated one-at-a-time measurement; the replay lab tracked in #4277 is the intended source for that evidence.
 
 ## Reproduced baseline from 2026-08-06
 
@@ -49,5 +60,15 @@ scripts/capture-production-startup-timing.sh
 ```
 
 The script writes a bounded artifact containing portable timestamps and `vercel httpstat` output for a potential-cold root request and two potential-warm follow-ups. Use the captured `X-App-Cold-Request` response header to classify each request and `X-Request-ID` to correlate it with application logs. It does not print response bodies, credentials, environment variables, or user data.
+
+### Request record capture window
+
+Vercel retains runtime logs for **one hour** on the Hobby plan ([runtime log limits](https://vercel.com/docs/logs/runtime)), so slow, cold, and error records must be collected while the deployment is still serving; there is no next-day historical read and no paid retention is enabled for this project. Capture the structured records with the dashboard Logs tab or:
+
+```bash
+vercel logs --environment production --query '<event or route>' --since 1h
+```
+
+Each log record carries these values as structured `extra` attributes (`request_id`, `method`, `path`, `status_code`, `process_time_ms`, `cpu_time_ms`, `database_queries`, `database_time_ms`, `cold_request`, `deployment_id`); a diagnostic filter on the root log handler appends them to the message text, so they appear in deployment logs even when the hosting platform installs its own handler or formatter. Copy them from the log record for every matching row before the window closes. One `cpu_time_ms` value is a single-process sample covering that request window only; repeat the same request and re-capture to see the spread instead of treating one number as a per-request CPU budget.
 
 Thresholds are diagnostic defaults, not availability guarantees. Adjust `SLOW_REQUEST_THRESHOLD_MS` only after collecting a representative baseline, and never use a higher threshold to hide a regression.

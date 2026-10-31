@@ -159,6 +159,20 @@ A worker's own review conclusion does not silently override existing human or bo
 
 ### Greptile findings are high priority
 
+Greptile is an optional source of review feedback. Josh disabled it on 2026-10-30;
+OSS review credits may be available intermittently. No worker may require a
+Greptile review, check, confidence score (including 5/5), or acknowledgement to
+advance a PR. Disabled integration, exhausted credits, quota notices, and stale
+scores do not block delivery or justify repeatedly requesting reviews. Do not
+automatically re-enable it or consume newly available credits. Independent
+exact-head factory semantic/acceptance review, contributor-independence rules,
+required CI, and the actionable-feedback gate remain mandatory, including for
+Rust cutover PRs. Fetch GitHub's existing review data even when Greptile is off;
+incomplete GitHub review data still fails closed. Existing actionable findings
+must still be fixed or rebutted; disabling the integration does not dismiss them.
+A trusted evidence-backed outcome permits independent review to proceed without
+waiting for Greptile to return.
+
 Josh directed on 2026-10-18 that Greptile (`greptile-apps[bot]`) findings be held in high regard. They are must-address review feedback, not advisory noise:
 
 - the worker wrapper fetches unresolved review threads, the Greptile review body and PR-body summary, and current-head PR-Agent check output before every PR-mode run, and injects them into the mission with Greptile items first and labeled HIGH PRIORITY;

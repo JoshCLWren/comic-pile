@@ -1,0 +1,9 @@
+{
+  "contract_version": 1,
+  "response": {
+    "detail": "Token has been revoked"
+  },
+  "sets_refresh_cookie": false,
+  "status": 401,
+  "www_authenticate": "Bearer"
+}

@@ -31,6 +31,11 @@ from app.startup_diagnostics import (
     next_request_snapshot,
     startup_event_snapshot,
 )
+from app.bootstrap_route_telemetry import (
+    classify_bootstrap_alias,
+    classify_web_origin,
+    record_bootstrap_alias_hit,
+)
 from app.traffic_metrics import record_route_hit, resolve_route_template
 
 logger = logging.getLogger(__name__)
@@ -247,6 +252,10 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
     async def log_errors_middleware(request: Request, call_next):
         """Add diagnostics headers and log slow or failed requests with performance budgets."""
         started_at = time.perf_counter()
+        # Process CPU is sampled separately from elapsed wall time. Keep
+        # ``process_time_ms`` unchanged for existing log consumers; it is
+        # wall-clock elapsed time despite the historical name. See issue #4273.
+        started_process = time.process_time()
         request_id = uuid.uuid4().hex
         request.state.startup_snapshot = next_request_snapshot()
         startup = request.state.startup_snapshot
@@ -270,6 +279,17 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 resolve_route_template(request.scope),
                 status_code,
             )
+            # Issue #2718: distinguish bootstrap alias traffic and browser
+            # origin signals for the legacy-alias deletion gate. The exact
+            # path check keeps this off the hot path for every other route.
+            bootstrap_alias = classify_bootstrap_alias(request.url.path)
+            if bootstrap_alias is not None:
+                origin_info = classify_web_origin(request.headers, host=request.headers.get("Host"))
+                record_bootstrap_alias_hit(
+                    bootstrap_alias,
+                    origin_info.web_origin,
+                    status_code,
+                )
             diagnostics = get_request_diagnostics()
             log_path = _sanitize_log_path(request.url.path)
 
@@ -288,6 +308,10 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "query_params": str(request.url.query) if request.url.query else None,
                 "status_code": status_code,
                 "process_time_ms": round(process_time_ms, 2),
+                # Process-wide CPU consumed during this request window. This is
+                # not exclusive per-request attribution under async
+                # concurrency, so never divide or rank by it alone.
+                "cpu_time_ms": round((time.process_time() - started_process) * 1000, 2),
                 "database_queries": diagnostics.database_queries,
                 "database_time_ms": round(diagnostics.database_time_ms, 2),
                 "cold_request": startup.cold,

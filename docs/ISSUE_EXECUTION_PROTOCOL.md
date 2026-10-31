@@ -84,6 +84,13 @@ Path-filtered ruff or ty is not a valid CI substitute. `ruff check` alone is not
 
 Every push invalidates prior review and readiness.
 
+Greptile is optional and may be disabled when OSS credits are unavailable.
+Its absence, quota notices, confidence score, or acknowledgement must not block
+delivery or trigger repeated review requests. Use the canonical independent
+exact-head factory semantic/acceptance review and required CI gates. Existing
+actionable Greptile findings still require fixes or evidence-backed rebuttals;
+missing GitHub review data remains a retry, not evidence of no findings.
+
 Before pass, readiness, or merge, inspect the exact current head SHA, submitted reviews, and every current inline review thread. Each actionable finding must be fixed, demonstrably outdated by a specific later change, or rebutted with concrete evidence. Non-actionable status noise such as summaries, rate-limit notices, release notes, and optional finishing-touch suggestions does not block readiness.
 
 An unresolved actionable correctness, security, ownership, data-integrity, migration, concurrency, recovery, or test-validity finding blocks readiness and merge.

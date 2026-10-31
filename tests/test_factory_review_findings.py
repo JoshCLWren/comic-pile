@@ -452,3 +452,31 @@ def test_marker_mentioned_in_prose_is_not_a_summary_boundary(tmp_path: Path) -> 
     summary = out[out.index("### Greptile PR-body summary") : out.index("## Other unresolved")]
     assert "Real Greptile summary" in summary
     assert "Author section" not in summary
+
+
+def test_disabled_greptile_and_quota_notices_require_no_outcomes(tmp_path: Path) -> None:
+    """No integration or credit-only review must not manufacture a repair gate."""
+    quota_review: Review = {
+        "user": {"login": "greptile-apps[bot]"},
+        "body": "JoshCLWren has reached the 50-credit limit for trial accounts.",
+        "commit_id": HEAD,
+        "submitted_at": "2026-10-30T00:00:00Z",
+    }
+    for reviews in ([], [quota_review]):
+        files = write_inputs(
+            tmp_path,
+            threads_page([], {"hasNextPage": False, "endCursor": None}),
+            reviews=reviews,
+            body="Factory implementation; Greptile disabled.",
+        )
+        comments_file = tmp_path / "comments.json"
+        comments_file.write_text("[]")
+        result = run_bash(
+            f"factory_greptile_required_findings {files[0]} {files[2]} {files[3]} "
+            f"{comments_file} {HEAD}"
+        )
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == []
+        prompt = format_findings(tmp_path, reviews=reviews, body="Greptile disabled.")
+        assert "Greptile is optional." in prompt
+        assert "Required CI and independent exact-head semantic/acceptance review remain mandatory" in prompt

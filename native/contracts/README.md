@@ -5,7 +5,8 @@
 `roll-bootstrap-v2.openapi.json` is the frozen operation snapshot and full
 referenced component closure captured from `frontend/src/generated/openapi.json`
 immediately before the Python v2 handler was deleted. The operation is served
-by native Rust ingress only. `app/schemas/roll_v2.py` and
+by native Rust ingress only (`api/native_roll.rs` → `native/roll-service`, routed
+from `vercel.json`). `app/schemas/roll_v2.py` and
 `tests/test_roll_v2_frozen_contract.py` keep the frozen Python DTO aligned with
 this contract.
 

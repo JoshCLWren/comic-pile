@@ -2,23 +2,27 @@
 
 > **API v2 is a URL contract, not a language.** The only supported Roll
 > bootstrap operation is `GET /api/v2/roll/bootstrap`, and it is implemented
-> by native Rust ingress (`api/native_roll.rs` → `native/roll-service`). The
-> Python v1, legacy and v2 handlers were deleted after the live clients moved
-> to v2. `GET /api/v1/roll/bootstrap` and `GET /api/roll/bootstrap` are retired
-> and return no application route.
+> by native Rust ingress (`api/native_roll.rs` → `native/roll-service`).
+> `vercel.json` routes that method/path to the Rust function; FastAPI exposes
+> no bootstrap handler. `GET /api/v1/roll/bootstrap` and
+> `GET /api/roll/bootstrap` are retired and return no application route. The
+> Python v1, legacy and v2 handlers were deleted in #4397 after both live
+> clients moved to v2 (#4383).
 
 ## Frozen contracts
 
 - `native/contracts/roll-bootstrap-v2.openapi.json` is the frozen OpenAPI
   operation and transitive component closure for the supported v2 operation.
-  It was captured from the Python-generated client schema immediately before
-  the Python handler was deleted.
+  It was captured with `scripts/rust_endpoint_oracle.py` from the
+  Python-generated client schema immediately before the Python handler was
+  deleted, so it still describes the wire contract the Rust implementation
+  must satisfy.
 - `native/contracts/roll-bootstrap-v1.openapi.json` is the historical v1
   operation snapshot retained as behavioral evidence (#4371). It is **not** an
   implementation mandate: v1 is retired, not ported.
-- `app/schemas/roll_v2.py` is the frozen Python DTO. `tests/test_roll_v2_frozen_contract.py`
-  keeps its field set aligned with the frozen v2 contract and guards the
-  Roll UI visibility fields.
+- `app/schemas/roll_v2.py` is the frozen Python DTO.
+  `tests/test_roll_v2_frozen_contract.py` keeps its field set aligned with the
+  frozen v2 contract and guards the Roll UI visibility fields.
 
 The v2 contract deliberately extends the original v2 response with the data
 the live Roll screen needs, so no Python v1 enrichment call or fallback is

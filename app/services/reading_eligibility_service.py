@@ -17,6 +17,7 @@ from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverla
 from app.repositories.reading_shadow_repository import load_shadow_inputs
 from app.schemas.thread import ThreadResponse
 from app.schemas.dependency import BlockingDependency, BlockingExplanation
+from app.services.reading_blocker_projection import unique_blocker_requirements
 from app.services.reading_list_cycle_validator import validate_reading_constraints
 from app.services.reading_list_evaluator import (
     Blocker,
@@ -245,7 +246,7 @@ def project_blocking_explanation(
     dependencies: list[BlockingDependency] = []
     reasons: list[str] = []
     if state is not None:
-        for blocker in state.blockers:
+        for blocker in unique_blocker_requirements(state.blockers):
             origin = describe_blocker_origin(snapshot, blocker)
             for issue_id in blocker.waiting_on_issue_ids:
                 source_thread_id = snapshot.issue_thread_ids[issue_id]

@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
+import type { RateResponsePayload } from '../types'
 
 const undoSpies = vi.hoisted(() => ({
   undo: vi.fn(),
@@ -99,6 +102,32 @@ const rateResponse = {
   reading_progress: '30.0%',
   next_unread_issue_id: 12,
   next_unread_issue_number: '6',
+}
+
+const cachedLastRead: RateResponsePayload = {
+  id: 1,
+  title: 'Saga',
+  format: 'Comic',
+  issues_remaining: 3,
+  total_issues: 10,
+  queue_position: 1,
+  status: 'active',
+  is_blocked: false,
+  blocking_reasons: [],
+  last_activity_at: '2024-05-01T10:20:00Z',
+  last_rating: 2,
+  notes: null,
+  is_test: false,
+  created_at: '2024-05-01T00:00:00Z',
+  roll_reconciliation: {
+    last_read: {
+      issue_id: 10,
+      issue_number: '4',
+      read_at: '2024-05-01T10:20:00Z',
+      thread_id: 1,
+      thread_title: 'Saga',
+    },
+  },
 }
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
@@ -241,6 +270,20 @@ describe('RollPage post-rate copy prompt', () => {
 
     expect(writeText).toHaveBeenCalledWith('Saga 5')
     expect(screen.getByText('Copied')).toBeInTheDocument()
+  })
+
+  it('shows the seeded last-read strip instead of the fallback prompt', async () => {
+    const user = userEvent.setup()
+    queryClient.setQueryData(queryKeys.roll.lastRead(), cachedLastRead)
+
+    render(<RollPage />)
+    await waitFor(() => expect(screen.getByTestId('save-and-continue')).toBeInTheDocument())
+
+    await user.click(screen.getByTestId('save-and-continue'))
+
+    await waitFor(() => expect(screen.getByTestId('last-read-strip')).toBeInTheDocument())
+    expect(screen.getByTestId('last-read-strip')).toHaveTextContent('Saga 4')
+    expect(screen.queryByTestId('post-rate-copy-prompt')).not.toBeInTheDocument()
   })
 
   it('keeps die and roll flow reachable while the prompt is visible', async () => {

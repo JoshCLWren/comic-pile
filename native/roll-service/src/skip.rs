@@ -779,7 +779,7 @@ struct Pending(Option<Object>);
 impl Drop for Pending {
     fn drop(&mut self) {
         if let Some(connection) = self.0.take() {
-            drop(Object::take(connection));
+            drop(connection);
         }
     }
 }
