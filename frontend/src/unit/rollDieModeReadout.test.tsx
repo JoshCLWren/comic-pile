@@ -19,7 +19,9 @@ vi.mock('../services/api-reader-context', () => ({
 const getReaderContext = vi.mocked(readerContextApi.get)
 
 const setDie = vi.fn<(die: number) => Promise<void>>().mockResolvedValue(undefined)
-const clearManualDie = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
+const clearManualDie = vi
+  .fn<() => Promise<number | null>>()
+  .mockResolvedValue(null)
 
 const rollApi: RollApi = {
   roll: vi.fn(),
@@ -278,6 +280,74 @@ describe('die-mode mutations refresh the manual_die projection', () => {
       exact: true,
     })
 
+    invalidateQueries.mockRestore()
+  })
+
+  // Issue #4279: clicking AUTO used to leave manual mode on screen until the
+  // bootstrap refetch (or a reload) landed. The clear response already carries
+  // the automatic die, so the mutation must apply it to the same cache the
+  // header and the die readout read.
+  it('applies the automatic die reported by the clear response (#4279)', async () => {
+    const invalidateQueries = vi
+      .spyOn(queryClient, 'invalidateQueries')
+      .mockResolvedValue(undefined)
+    queryClient.setQueryData(queryKeys.roll.bootstrap(), bootstrapWithManualDie(20))
+    clearManualDie.mockResolvedValueOnce(8)
+
+    const { result } = renderHook(() => useClearManualDie(rollApi), {
+      wrapper: wrapper(testClient()),
+    })
+
+    await act(async () => {
+      await result.current.mutate()
+    })
+
+    expect(
+      queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap()),
+    ).toMatchObject({ current_die: 8, manual_die: null })
+
+    queryClient.removeQueries({ queryKey: queryKeys.roll.bootstrap() })
+    invalidateQueries.mockRestore()
+  })
+
+  it('does not copy the pinned die when the clear response is delayed (#4279)', async () => {
+    const invalidateQueries = vi
+      .spyOn(queryClient, 'invalidateQueries')
+      .mockResolvedValue(undefined)
+    queryClient.setQueryData(queryKeys.roll.bootstrap(), bootstrapWithManualDie(20))
+    let resolveClear: (die: number) => void = () => {}
+    clearManualDie.mockImplementationOnce(
+      () =>
+        new Promise<number>((resolve) => {
+          resolveClear = resolve
+        }),
+    )
+
+    const { result } = renderHook(() => useClearManualDie(rollApi), {
+      wrapper: wrapper(testClient()),
+    })
+
+    let clearRequest: Promise<number | null> | undefined
+    await act(async () => {
+      clearRequest = result.current.mutate()
+      await Promise.resolve()
+    })
+
+    // The server has not answered yet, so the manual die is still authoritative.
+    expect(
+      queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap()),
+    ).toMatchObject({ current_die: 20, manual_die: 20 })
+
+    await act(async () => {
+      resolveClear(8)
+      await clearRequest
+    })
+
+    expect(
+      queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap()),
+    ).toMatchObject({ current_die: 8, manual_die: null })
+
+    queryClient.removeQueries({ queryKey: queryKeys.roll.bootstrap() })
     invalidateQueries.mockRestore()
   })
 })

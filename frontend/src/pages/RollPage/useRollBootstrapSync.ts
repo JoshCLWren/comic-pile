@@ -27,6 +27,15 @@ export function useRollBootstrapSync({
 }: UseRollBootstrapSyncParams): void {
   const { setCurrentDie, setRolledResult, setDiceState, setStaleThread, setStaleThreadCount } = state
 
+  // Read the die-mode and last-result projections up front so the sync effect
+  // depends on the values it uses rather than on the whole payload identity.
+  // `current_die` is already the pinned die while manual mode is active; the
+  // explicit `manual_die` preference keeps that contract even if a snapshot
+  // ever reports the suspended automatic ladder as `current_die` (#4279).
+  const manualDie = bootstrap?.manual_die
+  const currentDie = bootstrap?.current_die
+  const lastRolledResult = bootstrap?.last_rolled_result
+
   useEffect(() => {
     if (isBootstrapError && bootstrapError) {
       const status = getApiErrorStatus(bootstrapError)
@@ -35,12 +44,13 @@ export function useRollBootstrapSync({
   }, [isBootstrapError, bootstrapError, navigate])
 
   useEffect(() => {
-    if (bootstrap?.current_die) setCurrentDie(bootstrap.current_die)
-    if (bootstrap?.last_rolled_result !== undefined && bootstrap?.last_rolled_result !== null) {
-      setRolledResult(bootstrap.last_rolled_result)
+    const effectiveDie = manualDie ?? currentDie
+    if (effectiveDie) setCurrentDie(effectiveDie)
+    if (lastRolledResult !== undefined && lastRolledResult !== null) {
+      setRolledResult(lastRolledResult)
       setDiceState('rolled')
     }
-  }, [bootstrap?.current_die, bootstrap?.last_rolled_result, setCurrentDie, setRolledResult, setDiceState])
+  }, [manualDie, currentDie, lastRolledResult, setCurrentDie, setRolledResult, setDiceState])
 
   useEffect(() => {
     const staleFromBootstrap = bootstrap?.stale_thread ?? null

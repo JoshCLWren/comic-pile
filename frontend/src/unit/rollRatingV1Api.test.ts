@@ -30,7 +30,9 @@ it('uses native v2 only for bootstrap while keeping other Roll mutations on v1',
   expect(client.post).toHaveBeenCalledWith('/v1/roll/override', { thread_id: 7 })
   expect(client.post).toHaveBeenCalledWith('/v1/roll/dismiss-pending')
   expect(client.post).toHaveBeenCalledWith('/v1/roll/set-die', null, { params: { die: 12 } })
-  expect(client.post).toHaveBeenCalledWith('/v1/roll/clear-manual-die')
+  expect(client.post).toHaveBeenCalledWith('/v1/roll/clear-manual-die', undefined, {
+    responseType: 'text',
+  })
   expect(client.post).toHaveBeenCalledWith('/v1/rate/', {
     thread_id: 7,
     rating: 4,
@@ -50,4 +52,16 @@ it('reads native v2 during auth recovery while keeping mutations on v1', async (
   )
   expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap', { skipAuthRedirect: true })
   expect(client.post).toHaveBeenCalledWith('/v1/snooze/', undefined, { skipAuthRedirect: true })
+})
+
+it('reads the automatic die that clear-manual-die reports (#4279)', async () => {
+  client.post.mockResolvedValueOnce('d8')
+
+  await expect(rollApi.clearManualDie()).resolves.toBe(8)
+})
+
+it('reports no die when the clear-manual-die body is not a die label', async () => {
+  client.post.mockResolvedValueOnce('ok')
+
+  await expect(rollApi.clearManualDie()).resolves.toBeNull()
 })

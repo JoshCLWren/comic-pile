@@ -811,6 +811,28 @@ export async function invalidateAfterRollDieModeUpdate(
 }
 
 /**
+ * Apply the server's post-clear automatic die to the cached Roll bootstrap.
+ *
+ * `POST /roll/clear-manual-die` answers with the die the automatic ladder
+ * resumes at. Writing that result moves the die readout and the Auto/Manual
+ * mode together in one render, so pressing Auto never waits for the bootstrap
+ * refetch (or a reload) to take effect (#4279). The invalidation that follows
+ * still reconciles against authoritative bootstrap data.
+ *
+ * @param client - Query client owning the Roll bootstrap cache.
+ * @param automaticDie - Automatic die reported by the clear response.
+ */
+export function applyClearedManualDie(client: QueryClient, automaticDie: number): void {
+  const current = client.getQueryData<RollBootstrapResponse | null>(queryKeys.roll.bootstrap())
+  if (!current) return
+  client.setQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap(), {
+    ...current,
+    current_die: automaticDie,
+    manual_die: null,
+  })
+}
+
+/**
  * Invalidate the roll bootstrap and current session after a session-mode
  * update. Replaces the imperative `sessionApi.updateMode` + `refetchBootstrap()`
  * pattern in RollPage (#2649).
