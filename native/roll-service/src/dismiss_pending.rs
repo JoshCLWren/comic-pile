@@ -167,9 +167,7 @@ mod tests {
         struct TestPendingConn(Option<()>);
         impl Drop for TestPendingConn {
             fn drop(&mut self) {
-                if let Some(inner) = self.0.take() {
-                    inner; // drop the unit value without a Clippy warning
-                }
+                self.0 = None;
             }
         }
 
