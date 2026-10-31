@@ -285,7 +285,7 @@ async fn current_active_thread(
          JOIN tags tag ON tag.id=assignment.tag_id
          WHERE assignment.target_type='Thread' AND assignment.target_id=$1
            AND (tag.scope='global' OR (tag.scope='private' AND tag.owner_user_id=$2))
-         ORDER BY tag.scope,tag.normalized_name",
+         ORDER BY tag.scope DESC, tag.normalized_name",
             &[&id, &user.id()],
         )
         .await
@@ -700,7 +700,7 @@ async fn visible_thread_tags(
                AND assignment.target_id = ANY($2::int[])
                AND (tag.scope = 'global'
                     OR (tag.scope = 'private' AND tag.owner_user_id = $1))
-             ORDER BY assignment.target_id, tag.scope, tag.normalized_name",
+             ORDER BY assignment.target_id, tag.scope DESC, tag.normalized_name",
             &[&user.id(), &ids],
         )
         .await
