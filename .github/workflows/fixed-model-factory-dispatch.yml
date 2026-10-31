@@ -29,6 +29,7 @@ on:
       - '.github/scripts/stale_pr_decay.py'
       - '.github/scripts/factory-review-controller.py'
       - '.github/scripts/factory_work_policy.py'
+      - '.github/scripts/factory_jev_shadow.py'
       - '.github/scripts/factory_rotisserie_adopter.py'
       - '.github/factory-rotisserie-control.json'
       - '.github/scripts/factory_review_policy.py'
@@ -409,6 +410,41 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 .github/scripts/factory-work-controller.py stale
+
+      # Advisory only: read the same pre-lease GitHub snapshot as the dispatcher.
+      # A failed/limited/uncertain Jev call must never block or alter worker claims.
+      - name: Compare Jev ranking with factory issue selector (shadow only)
+        if: steps.api_budget.outputs.allow == 'true' && github.event_name != 'push'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENROUTER_JEV_API_KEY: ${{ secrets.OPENROUTER_JEV_API_KEY }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${OPENROUTER_JEV_API_KEY:-}" ]]; then
+            echo 'Jev shadow skipped: dedicated key not configured' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          issues="$RUNNER_TEMP/jev-shadow-issues.json"
+          prs="$RUNNER_TEMP/jev-shadow-prs.json"
+          gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 \
+            --json number,title,body,labels,createdAt,updatedAt > "$issues"
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 500 \
+            --json number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository > "$prs"
+          python3 .github/scripts/factory_jev_shadow.py \
+            --issues "$issues" --prs "$prs" \
+            --output "$RUNNER_TEMP/jev-shadow.json" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve Jev shadow result for later evaluation
+        if: always() && hashFiles('.github/scripts/factory_jev_shadow.py') != '' && github.event_name != 'push'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: jev-shadow-${{ github.run_id }}
+          path: ${{ runner.temp }}/jev-shadow.json
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Resolve and dispatch fixed workers
         if: steps.api_budget.outputs.allow == 'true'
