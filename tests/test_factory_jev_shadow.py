@@ -1,4 +1,4 @@
-"""Regression tests for shadow-only, policy-bounded Jev factory selection."""
+"""Regression tests for policy-bounded live Jev factory issue selection."""
 
 from __future__ import annotations
 
@@ -91,18 +91,24 @@ def test_protected_classes_blocked_dependencies_and_claims_never_enter_jev() -> 
     assert set(ids) == {10111, 10112, 10113}
 
 
-def test_rank_only_shadows_and_never_changes_actual_order() -> None:
-    """An advisory disagreement has no side effects or factory-authoritative rank change."""
+def test_confident_jev_ranking_changes_actual_candidate_selection_order() -> None:
+    """A high-confidence Jev recommendation is actually used for a real issue slot."""
     rows = [issue(10200 + index) for index in range(4)]
     canonical = [candidate.number for candidate in shadow.comparable_issues(rows, [])]
     report = shadow.shadow_report(
         rows, [], "dedicated-key", client=lambda _p, _k: response(canonical)
     )
+    assert report["mode"] == "active-selection"
     assert report["status"] == "scored"
     assert report["baseline"] == canonical
     assert report["shadow"][0] == canonical[-1]
     assert set(report["shadow"]) == set(canonical)
-    assert [candidate.number for candidate in shadow.comparable_issues(rows, [])] == canonical
+    ordered = shadow.comparable_issues(rows, [])
+    active, changed = shadow.apply_jev_ranking(ordered, report)
+    assert changed
+    assert active[0].number == canonical[-1]
+    assert [item.number for item in active] == report["shadow"]
+    assert [item.number for item in ordered] == canonical
     assert report["usage"]["input_tokens"] == 200
 
 
@@ -171,3 +177,90 @@ def test_provider_failure_keeps_baseline_and_redacts_key() -> None:
     assert report["status"] == "unchanged"
     assert report["shadow"] == report["baseline"]
     assert "secret-key" not in shadow.markdown(report)
+
+def test_uncertain_peers_stay_put_while_confident_peers_can_swap() -> None:
+    """A single low-confidence issue cannot be promoted or move another class."""
+    rows = [issue(10700 + index) for index in range(4)]
+    canonical = [candidate.number for candidate in shadow.comparable_issues(rows, [])]
+    reply = response(canonical)
+    # One ordinary issue is uncertain. Its slot is fixed, while at least
+    # two reliable comparisons may still inform live dispatch.
+    reply["answers"][f"impact_{canonical[1]}"]["confidence"] = 0.15
+    report = shadow.shadow_report(rows, [], "key", client=lambda _p, _k: reply)
+    assert report["status"] == "scored"
+    assert canonical[1] == report["shadow"][1]
+    ordered, changed = shadow.apply_jev_ranking(
+        shadow.comparable_issues(rows, []), report
+    )
+    assert changed
+    assert ordered[0].number == canonical[-1]
+    assert ordered[1].number == canonical[1]
+
+
+def test_jev_selection_preserves_priority_and_review_positions() -> None:
+    """A Jev decision may move only equal-class issue positions."""
+    rows = [issue(10800 + index) for index in range(4)]
+    comparable = shadow.comparable_issues(rows, [])
+    ids = [item.number for item in comparable]
+    report = shadow.shadow_report(
+        rows, [], "key", client=lambda _p, _k: response(ids)
+    )
+    urgent = shadow.Candidate(
+        kind="issue", number=11000, lane=1, priority=4,
+        created_at="2026-10-01T00:00:00Z",
+    )
+    review = shadow.Candidate(
+        kind="pr", number=11001, lane=2, priority=2,
+        created_at="2026-10-01T00:00:00Z", stage="factory:review",
+    )
+    higher = shadow.Candidate(
+        kind="issue", number=11002, lane=3, priority=3,
+        created_at="2026-10-01T00:00:00Z",
+    )
+    ordered = [urgent, review, higher, *comparable]
+    selected, changed = shadow.apply_jev_ranking(ordered, report)
+    assert changed
+    assert [item.number for item in selected[:3]] == [11000, 11001, 11002]
+    assert selected[3].number == ids[-1]
+    assert [item.number for item in ordered[:3]] == [11000, 11001, 11002]
+
+
+def test_stale_or_cross_priority_jev_decision_fails_to_canonical() -> None:
+    """Missing current peers or changed lane/priority never grant authority."""
+    rows = [issue(10900 + index) for index in range(4)]
+    peers = shadow.comparable_issues(rows, [])
+    ids = [item.number for item in peers]
+    report = shadow.shadow_report(
+        rows, [], "key", client=lambda _p, _k: response(ids)
+    )
+    altered = [*peers]
+    altered[1] = shadow.Candidate(
+        kind="issue", number=ids[1], lane=3, priority=4,
+        created_at=altered[1].created_at,
+    )
+    assert shadow.apply_jev_ranking(altered, report) == (altered, False)
+    assert shadow.apply_jev_ranking(peers[:1], report) == (peers[:1], False)
+    corrupted = {**report, "shadow": [ids[-1], ids[-1], ids[0], ids[1]]}
+    assert shadow.apply_jev_ranking(peers, corrupted) == (peers, False)
+
+
+def test_confidence_without_second_peer_abstains_before_claiming() -> None:
+    rows = [issue(11100), issue(11101)]
+    ids = [c.number for c in shadow.comparable_issues(rows, [])]
+    reply = response(ids)
+    reply["answers"][f"impact_{ids[0]}"]["confidence"] = 0.1
+    report = shadow.shadow_report(rows, [], "key", client=lambda _p, _k: reply)
+    assert report["status"] == "abstained"
+    assert shadow.apply_jev_ranking(shadow.comparable_issues(rows, []), report)[1] is False
+
+
+def test_jev_report_cannot_reorder_outside_same_priority() -> None:
+    rows = [issue(11200), issue(11201)]
+    ids = [c.number for c in shadow.comparable_issues(rows, [])]
+    report = shadow.shadow_report(rows, [], "key", client=lambda _p, _k: response(ids))
+    canonical = shadow.comparable_issues(rows, [])
+    foreign = shadow.Candidate(
+        kind="issue", number=ids[0], lane=5, priority=2,
+        created_at=canonical[0].created_at,
+    )
+    assert shadow.apply_jev_ranking([foreign, canonical[1]], report)[1] is False
