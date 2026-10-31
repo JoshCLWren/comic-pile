@@ -174,14 +174,15 @@ async def _issue_numbers(db: AsyncSession, *, thread_id: int) -> list[str]:
     return list(rows.scalars().all())
 
 
-def test_vercel_config_declares_one_daily_release_sync_cron() -> None:
-    """The deployment must expose exactly one daily release-sync cron."""
+def test_vercel_config_declares_daily_release_and_metadata_repair_crons() -> None:
+    """Both release sync and durable creator repair have daily recovery jobs."""
     config = json.loads(
         (REPOSITORY_ROOT / "vercel.json").read_text(encoding="utf-8")
     )
 
     assert config["crons"] == [
-        {"path": CRON_URL, "schedule": "0 9 * * *"}
+        {"path": CRON_URL, "schedule": "0 9 * * *"},
+        {"path": "/api/v1/cron/comicvine-metadata-repair", "schedule": "0 10 * * *"},
     ]
 
     from scripts.validate_vercel_config import check_hobby_cron

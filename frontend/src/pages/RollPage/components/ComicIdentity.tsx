@@ -415,7 +415,17 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
               switch (status) {
                 case 'not_deep_fetched':
+                  return (
+                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-not-fetched">
+                      Creator credits not yet fetched
+                    </p>
+                  );
                 case 'refresh_pending':
+                  return (
+                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-fetching">
+                      Creator credits queued for fetch…
+                    </p>
+                  );
                 case 'refresh_running':
                   return (
                     <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-fetching">

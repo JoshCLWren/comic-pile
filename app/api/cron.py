@@ -152,7 +152,8 @@ async def comicvine_metadata_repair_cron(
         Counts for this bounded repair drain.
     """
     response.headers["Cache-Control"] = "no-store"
-    report = await drain_due_metadata_repairs(db=db)
+    # A daily fallback can safely drain up to ten due jobs per invocation.
+    report = await drain_due_metadata_repairs(db=db, limit=10)
     return MetadataRepairDrainResponse(
         claimed=report.claimed,
         completed=report.completed,
