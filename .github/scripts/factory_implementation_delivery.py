@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 DOC_SUFFIXES = (".md", ".rst", ".txt", ".adoc")
 BEHAVIORAL_FILENAMES = frozenset({"dockerfile", "containerfile", "makefile", "gnumakefile"})
 SOURCE_SUFFIXES = (
-    ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
+    ".py", ".rs", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
     ".sh", ".sql", ".html", ".css", ".scss", ".vue", ".svelte",
     ".yml", ".yaml", ".json", ".toml", ".ini", ".cfg",
 )

@@ -149,19 +149,27 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         assert body["active_thread"]["tags"][0]["name"] == "Favorites"
         assert body["last_rolled_result"] == 3
         assert body["timezone"] == "America/Chicago"
-        assert len(body["rollable"]) == 2
+        # The in-play pool is the Option E top-die set. Legacy session snoozes
+        # and skips stay in their own display categories and cannot hide a
+        # face the offer is allowed to select.
+        assert len(body["rollable"]) == 4
+        assert {row["thread"]["id"] for row in body["rollable"]} == {
+            t.id, stale_other.id, stale_snoozed.id, stale_skipped.id
+        }
         assert body["stale_thread_count"] == 2
         assert body["stale_thread"]["id"] in {t.id, stale_other.id}
         assert body["stale_thread"]["id"] not in {foreign_id, stale_snoozed.id, stale_skipped.id}
         candidate = body["rollable"][0]
         assert candidate["thread"]["id"] == t.id
         assert candidate["thread"]["tags"][0]["name"] == "Favorites"
-        # Four excluded series: snoozed, skipped, completed, and unqueued.
-        # The completed/unqueued rows prevent hidden-inactive regressions.
+        # Two genuinely excluded series: completed and unqueued. The legacy
+        # snoozed/skipped rows remain separate display categories.
         assert body["total_threads"] == 6
-        assert body["available_threads"] == 2
-        assert body["excluded_count"] == 4
+        assert body["available_threads"] == 4
+        assert body["excluded_count"] == 2
         assert body["inactive_count"] == 2
+        assert {row["id"] for row in body["snoozed_threads"]} == {stale_snoozed.id}
+        assert {row["id"] for row in body["skipped_threads"]} == {stale_skipped.id}
         assert {
             row["thread_id"]: row["reason"] for row in body["inactive_threads"]
         } == {completed_id: "completed", unqueued_id: "not_in_queue"}
@@ -170,8 +178,6 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         } == {
             completed_id: "completed",
             unqueued_id: "not_in_queue",
-            stale_snoozed.id: "snoozed",
-            stale_skipped.id: "skipped",
         }
         assert {row["thread"]["id"] for row in body["rollable"]}.isdisjoint(
             {completed_id, unqueued_id, foreign_id}
