@@ -1,11 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
 import type { Thread, ThreadListResponse, Issue } from '../types'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { IssueListResponse } from '../services/api-issues'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
+import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
 

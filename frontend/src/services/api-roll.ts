@@ -16,10 +16,15 @@ const DIE_LABEL_PATTERN = /^d(\d+)$/
  * authoritative die immediately instead of guessing or waiting for a bootstrap
  * refetch (#4279).
  *
+ * The transport is typed as returning a string, but a misconfigured client or a
+ * test double can hand back any value, so the boundary is checked rather than
+ * trusted. A non-string body is simply "not a die label".
+ *
  * @param label - Plain-text response body from a die-mode endpoint.
  * @returns The die size, or null when the body is not a die label.
  */
-function parseDieLabel(label: string): number | null {
+function parseDieLabel(label: unknown): number | null {
+  if (typeof label !== 'string') return null
   const match = DIE_LABEL_PATTERN.exec(label.trim())
   return match ? Number(match[1]) : null
 }

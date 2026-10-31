@@ -12,14 +12,11 @@ const protectedRollMutationApi = createProtectedRollMutationApi(client)
 const rollBootstrapApi = createRollBootstrapApi(client)
 
 beforeEach(() => {
-  client.get.mockReset().mockResolvedValue({ rollable: [], total_threads: 0, available_threads: 0, excluded_count: 0, excluded_threads: [], inactive_count: 0, inactive_threads: [] })
+  client.get.mockReset().mockResolvedValue({})
   client.post.mockReset().mockResolvedValue({})
 })
 
-it('uses native v2 only for bootstrap while keeping other Roll mutations on v1', async () => {
-  // The clear-die endpoint answers with a plain-text die label, so the stub
-  // returns that shape for the canonical-path assertions below.
-  client.post.mockResolvedValue('d6')
+it('uses canonical v1 Roll and rating paths for maintained callers', async () => {
   await rollApi.roll()
   await rollApi.reroll()
   await rollApi.override({ thread_id: 7 })
@@ -40,7 +37,21 @@ it('uses native v2 only for bootstrap while keeping other Roll mutations on v1',
     thread_id: 7,
     rating: 4,
   })
-  expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
+  expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap')
+})
+
+it('keeps auth-recovery Roll mutations on canonical v1 paths', async () => {
+  await protectedRollMutationApi.rate({ thread_id: 9, rating: 3 })
+  await protectedRollMutationApi.bootstrap()
+  await protectedRollMutationApi.snooze()
+
+  expect(client.post).toHaveBeenCalledWith(
+    '/v1/rate/',
+    { thread_id: 9, rating: 3 },
+    { skipAuthRedirect: true },
+  )
+  expect(client.get).toHaveBeenCalledWith('/v1/roll/bootstrap', { skipAuthRedirect: true })
+  expect(client.post).toHaveBeenCalledWith('/v1/snooze/', undefined, { skipAuthRedirect: true })
 })
 
 it('reads the automatic die that clear-manual-die reports (#4279)', async () => {
@@ -53,18 +64,4 @@ it('reports no die when the clear-manual-die body is not a die label', async () 
   client.post.mockResolvedValueOnce('ok')
 
   await expect(rollApi.clearManualDie()).resolves.toBeNull()
-})
-
-it('reads native v2 during auth recovery while keeping mutations on v1', async () => {
-  await protectedRollMutationApi.rate({ thread_id: 9, rating: 3 })
-  await protectedRollMutationApi.bootstrap()
-  await protectedRollMutationApi.snooze()
-
-  expect(client.post).toHaveBeenCalledWith(
-    '/v1/rate/',
-    { thread_id: 9, rating: 3 },
-    { skipAuthRedirect: true },
-  )
-  expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap', { skipAuthRedirect: true })
-  expect(client.post).toHaveBeenCalledWith('/v1/snooze/', undefined, { skipAuthRedirect: true })
 })
