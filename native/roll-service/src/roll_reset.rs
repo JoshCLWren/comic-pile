@@ -286,4 +286,82 @@ mod tests {
             .await
             .unwrap();
     }
+
+    #[tokio::test]
+    async fn persist_reset_clears_every_pending_column() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("reset_clear_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at timestamptz NOT NULL, ended_at timestamptz,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz, manual_die integer
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     user_id integer, type text, session_id integer,
+                     timestamp timestamptz DEFAULT NOW(),
+                     die integer, die_after integer, thread_id integer,
+                     issue_id integer, rating double precision, context json
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.sessions VALUES
+                     (1, 1, NOW(), NULL, 10, 100, NOW(), 12);"
+            ))
+            .await
+            .unwrap();
+        let mut client = test_client(&url, &schema).await;
+        let user = AuthenticatedUser::for_test(1);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+
+        let tx = client.transaction().await.unwrap();
+        let session_id =
+            reading_session::current_session_id(&tx, user, now, SessionPolicy::default())
+                .await
+                .unwrap();
+        assert_eq!(session_id, Some(1));
+        let mutation = persist_reset(&tx, user, "reset-dice-clear-001", session_id)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(mutation.die_after, 6);
+
+        let cleared = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id,
+                        (pending_thread_updated_at IS NULL),manual_die
+                 FROM sessions WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert!(cleared.get::<_, Option<i32>>(0).is_none());
+        assert!(cleared.get::<_, Option<i32>>(1).is_none());
+        assert!(cleared.get::<_, bool>(2));
+        assert!(cleared.get::<_, Option<i32>>(3).is_none());
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
 }
