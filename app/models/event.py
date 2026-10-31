@@ -17,10 +17,11 @@ if TYPE_CHECKING:
     from app.models.reading_session import ReadingSession
     from app.models.snapshot import Snapshot
     from app.models.thread import Thread
+    from app.models.user import User
 
 
 class Event(Base):
-    """Tracks discrete actions that occur during reading sessions.
+    """Tracks durable user-owned activity, including legacy reading sessions.
 
     Events record user interactions with the reading queue system. Each event
     captures a specific action along with relevant metadata like dice values,
@@ -82,8 +83,13 @@ class Event(Base):
     issues_read: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queue_move: Mapped[str | None] = mapped_column(String(20), nullable=True)
     die_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Direct ownership survives session deletion. Nullable in the ORM during
+    # legacy-writer compatibility; the production trigger always fills it.
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
     session_id: Mapped[int | None] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True
+        ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True
     )
     # Foreign key to threads table for events that act on a thread
     # Used by: "rate" events (thread that was read) and "rolled_but_skipped" events
@@ -126,6 +132,7 @@ class Event(Base):
     )
 
     __table_args__ = (
+        Index("ix_event_user_timestamp_id", "user_id", timestamp.desc(), id.desc()),
         Index("ix_event_session_id", "session_id"),
         Index("ix_event_timestamp", "timestamp"),
         Index("ix_event_session_type_timestamp", "session_id", "type", "timestamp"),
@@ -140,6 +147,7 @@ class Event(Base):
         Index("ix_event_source_roll_event_id", "source_roll_event_id"),
     )
 
+    user: Mapped[User | None] = relationship("User", back_populates="events", lazy="raise")
     session: Mapped[ReadingSession | None] = relationship(
         "ReadingSession", back_populates="events", lazy="raise"
     )

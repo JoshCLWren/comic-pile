@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.password_reset_token import PasswordResetToken
     from app.models.revoked_token import RevokedToken
     from app.models.reading_session import ReadingSession
+    from app.models.event import Event
     from app.models.thread import Thread
     from app.models.user_preferences import UserPreferences
 
@@ -36,6 +37,9 @@ class User(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
+    events: Mapped[list[Event]] = relationship(
+        "Event", back_populates="user", lazy="raise"
+    )
     reading_sessions: Mapped[list[ReadingSession]] = relationship(
         "ReadingSession", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
