@@ -1875,19 +1875,35 @@ async def get_thread_comicvine_mapping_health(
     mapping_health = health_map.get(thread_id)
     result = build_comicvine_mapping_health(mapping_health, thread.total_issues)
     if result is None:
-        # A thread with no health row still gets a not_applicable projection
-        # rather than a 404, matching the Queue list behaviour for legacy
-        # threads.
-        result = build_comicvine_mapping_health(
-            {
-                "tracked_issue_count": 0,
-                "confirmed_issue_count": 0,
-                "needs_mapping_count": 0,
-                "needs_review_count": 0,
-                "metadata_missing_count": 0,
-                "has_issues": False,
-            },
-            thread.total_issues,
-        )
+        # A thread with no health row still gets a projection rather than a 404,
+        # matching the Queue list behaviour for legacy threads.
+        # Check if the thread has any issues to determine the appropriate status.
+        issues_count = await issue_repository.count_thread_issues(db, thread_id)
+        if issues_count > 0:
+            # Thread has issues but no mapping health - unresolved status
+            result = build_comicvine_mapping_health(
+                {
+                    "tracked_issue_count": 0,
+                    "confirmed_issue_count": 0,
+                    "needs_mapping_count": issues_count,
+                    "needs_review_count": 0,
+                    "metadata_missing_count": 0,
+                    "has_issues": True,
+                },
+                thread.total_issues,
+            )
+        else:
+            # Thread has no issues - not_applicable status
+            result = build_comicvine_mapping_health(
+                {
+                    "tracked_issue_count": 0,
+                    "confirmed_issue_count": 0,
+                    "needs_mapping_count": 0,
+                    "needs_review_count": 0,
+                    "metadata_missing_count": 0,
+                    "has_issues": False,
+                },
+                thread.total_issues,
+            )
     assert result is not None
     return result

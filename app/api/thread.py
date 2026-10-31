@@ -372,6 +372,10 @@ async def get_thread(
 @v1_router.get(
     "/{thread_id}/comicvine-mapping-health",
     response_model=ComicVineMappingHealth,
+    responses={
+        404: {"description": "Thread not found for this user"},
+        422: {"description": "Invalid thread ID"},
+    },
 )
 async def get_thread_comicvine_mapping_health(
     thread_id: int,

@@ -563,6 +563,22 @@ async def confirmed_comicvine_credits_for_thread(
     ]
 
 
+async def count_thread_issues(db: AsyncSession, thread_id: int) -> int:
+    """Count the number of issues for a specific thread.
+
+    Args:
+        db: Database session.
+        thread_id: Primary key of the thread.
+
+    Returns:
+        Number of issues for the thread.
+    """
+    result = await db.scalar(
+        select(func.count(Issue.id)).where(Issue.thread_id == thread_id)
+    )
+    return result or 0
+
+
 def is_thread_number_conflict(exc: IntegrityError) -> bool:
     """Report whether an integrity error came from issue thread/number uniqueness.
 
