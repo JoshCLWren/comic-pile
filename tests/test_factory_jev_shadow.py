@@ -264,3 +264,132 @@ def test_jev_report_cannot_reorder_outside_same_priority() -> None:
         created_at=canonical[0].created_at,
     )
     assert shadow.apply_jev_ranking([foreign, canonical[1]], report)[1] is False
+
+
+def completion_pr(
+    number: int,
+    *,
+    stage: str = "factory:review",
+    owner: str = "factory:unowned",
+    head: str = "b" * 40,
+) -> dict[str, Any]:
+    """Return one factory-managed PR fixture for the completion surface."""
+    return {
+        "number": number,
+        "title": f"Completion work {number}",
+        "body": "",
+        "state": "OPEN",
+        "isDraft": False,
+        "headRefName": f"factory/6-{90000 + number}-{number}-completion",
+        "headRefOid": head,
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "CLEAN",
+        "createdAt": "2026-10-30T12:00:00Z",
+        "statusCheckRollup": [],
+        "labels": [
+            {"name": label}
+            for label in ("factory", owner, stage)
+            if label != "factory:unowned" or owner == "factory:unowned"
+        ],
+    }
+
+
+def choice(
+    ids: list[str], *, selected: str | None = None, confidence: float = 0.9
+) -> dict[str, Any]:
+    """Return a typed choice response that prefers the last eligible action."""
+    winner = selected or ids[-1]
+    probabilities = {
+        action_id: (0.8 if action_id == winner else 0.2 / (len(ids) - 1))
+        for action_id in ids
+    }
+    return {
+        "model": "typesafe/jev-1.14-20261014",
+        "id": "gen-dec-surface",
+        "answers": {
+            "next_action": {
+                "type": "choice",
+                "choice": winner,
+                "confidence": confidence,
+                "probabilities": probabilities,
+            }
+        },
+        "usage": {"input_tokens": 300, "output_tokens": 40, "cost": 0.0002},
+    }
+
+
+def test_capacity_prefers_real_issue_selection_over_completion_ranking() -> None:
+    """The owner objective runs whenever interchangeable issues are leasable."""
+    rows = [issue(12000 + index) for index in range(3)]
+    prs = [completion_pr(12050)]
+    payloads: list[dict[str, Any]] = []
+
+    def client(payload: dict[str, Any], _key: str) -> dict[str, Any]:
+        payloads.append(payload)
+        ids = [candidate.number for candidate in shadow.comparable_issues(rows, prs)]
+        return response(ids)
+
+    report = shadow.select_report(rows, prs, "key", client=client)
+    assert report["surface"] == "issue-selection"
+    assert report["status"] == "scored"
+    assert len(payloads) == 1
+    assert "questions" in payloads[0]
+    assert "impact_12000" in payloads[0]["questions"]
+    assert report["backpressure"] == {
+        "pr_wip": 0,
+        "pr_wip_limit": shadow.FACTORY_PR_WIP_LIMIT,
+        "review_backlog": 1,
+        "review_backlog_limit": shadow.FACTORY_REVIEW_BACKLOG_LIMIT,
+        "waiting_issue_peers": 3,
+    }
+    ordered, changed = shadow.apply_jev_ranking(
+        shadow.comparable_issues(rows, prs), report
+    )
+    assert changed
+    assert ordered[0].number == report["shadow"][0]
+
+
+def test_wip_saturation_ranks_completion_and_reports_waiting_issues() -> None:
+    """No issue may be leased behind backpressure; the pass still does real work."""
+    rows = [issue(12100 + index) for index in range(3)]
+    owned = [completion_pr(12150 + index, owner="factory:41") for index in range(5)]
+    actions = [completion_pr(12160), completion_pr(12161)]
+    prs = [*owned, *actions]
+
+    def client(payload: dict[str, Any], _key: str) -> dict[str, Any]:
+        ids = list(payload["questions"]["next_action"]["criteria"])
+        return choice(ids)
+
+    report = shadow.select_report(rows, prs, "key", client=client)
+    assert report["surface"] == "pr-completion"
+    assert report["wip_saturated"] is True
+    assert report["status"] == "chosen"
+    assert report["backpressure"]["waiting_issue_peers"] == 3
+    assert report["backpressure"]["pr_wip"] == 5
+    assert "Waiting issue peers behind backpressure: 3" in shadow.markdown(report)
+
+
+def test_single_issue_peer_falls_back_to_completion_with_one_call() -> None:
+    """An unrankable issue surface must not suppress meaningful completion work."""
+    rows = [issue(12200)]
+    prs = [completion_pr(12250), completion_pr(12251)]
+    calls: list[str] = []
+
+    def client(payload: dict[str, Any], _key: str) -> dict[str, Any]:
+        calls.append("choice" if "next_action" in payload["questions"] else "score")
+        return choice(list(payload["questions"]["next_action"]["criteria"]))
+
+    report = shadow.select_report(rows, prs, "key", client=client)
+    assert report["surface"] == "pr-completion"
+    assert calls == ["choice"]
+    assert report["backpressure"]["waiting_issue_peers"] == 1
+
+
+def test_no_work_reports_queue_without_spending_a_decision() -> None:
+    def forbidden(_payload: dict[str, Any], _key: str) -> dict[str, Any]:
+        raise AssertionError("called paid provider without any eligible work")
+
+    report = shadow.select_report([], [], "key", client=forbidden)
+    assert report["status"] == "unchanged"
+    assert report["backpressure"]["waiting_issue_peers"] == 0
+    assert "pr_wip" in report["backpressure"]

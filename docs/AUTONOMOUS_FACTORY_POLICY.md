@@ -49,42 +49,58 @@ A green, ready, review-passed, or merge-gated PR is excluded from ordinary work 
 
 Optional tests, cleanup, metadata edits, wording changes, evidence polishing, PR-body edits, architectural debate, or another minor slice do not outrank a coherent implementation for an unclaimed executable product issue.
 
-## Jev completion-action selection
+## Jev work selection
 
-The production dispatcher may use the dedicated Jev decision model to choose
-**which already-eligible PR completion action** a worker executes next. This
-supersedes the narrower ordinary-issue-only surface recorded in #4428: Jev may
-now rank CI repair, review findings, merge conflicts, and review work.
+The production dispatcher may use the dedicated Jev decision model for **one
+bounded selection per dispatch pass**. The owner objective (#4428) is issue
+selection: when at least two interchangeable ordinary product issues are
+actually leasable, Jev ranks them and the controller may start the chosen issue
+instead of the canonical first one.
+
+Factory backpressure can legally leave zero leasable issues: while PR WIP or the
+review backlog is saturated, `build_candidates` excludes new issue work so the
+fleet drains existing PRs. In that case the same single pass ranks an existing
+**PR completion action** instead, so a decision is still meaningful. The report
+records `pr_wip`, `review_backlog`, and the number of ordinary issues waiting
+behind backpressure, so an issue surface that is empty for policy reasons is
+explainable rather than silent.
 
 Deterministic policy remains authoritative and owns every hard constraint:
 
-- Action types are **derived** from the existing stage machine, never inferred
-  by the model: `merge-conflict`, `ci-repair`, `review-findings`, `review`.
-  `ci-repair` is offered only when trusted check metadata shows an actual
-  failure; pending CI is not an executable action.
+- Issue ranking is limited to the same lane and priority class and never crosses
+  protected work: user-reported bugs, main-breakage, manual-only/epic/PRD,
+  blocked, dependency-blocked, infrastructure, and owned issues keep their
+  canonical positions. Worker-specific exclusions and leases still apply after
+  ranking.
+- Completion action types are **derived** from the existing stage machine, never
+  inferred by the model: `merge-conflict`, `ci-repair`, `review-findings`,
+  `review`. `ci-repair` is offered only when trusted check metadata shows an
+  actual failure; pending CI is not an executable action.
 - Only ordinary lane-3 PR actions are promotable. Main-breakage, user-reported,
   `factory:ready`, blocked, draft, and owned work never move. Promotion is
   confined to the contiguous run of ordinary completion candidates containing
   the chosen action, so a decision can never jump protected or issue positions.
-- WIP and review-backlog limits continue to gate *new PR creation*; they do not
-  prevent ranking existing completion work.
+- WIP and review-backlog limits continue to gate *new issue/PR creation*; they do
+  not authorize starting work behind the gate, and they do not prevent ranking
+  existing completion work.
 - Leases, review independence, dependencies, exact-head CI, semantic review, and
   provider/spend limits are unchanged.
 - The model sees only trusted normalized metadata (stage, priority, merge state,
   age, linked issue, exact-head reference). Issue/PR bodies, comments, diffs, and
   logs are never sent.
-- One bounded `choice` request per dispatch pass. Missing key, provider failure,
+- One bounded request per dispatch pass. Missing key, provider failure,
   low probability margin, invalid response, or a stale/missing exact-head
   reference fall back to deterministic order without blocking dispatch.
-- The chosen action and exact head are validated against an authoritative PR
-  read immediately before the lease is written. A changed head or action discards
-  the recommendation and reselects from canonical order.
-- The deterministic baseline is recorded alongside the chosen action, and the
+- For completion actions, the chosen action and exact head are validated against
+  an authoritative PR read immediately before the lease is written. A changed
+  head or action discards the recommendation and reselects from canonical order.
+- The deterministic baseline is recorded alongside the chosen item, and the
   controller logs whether the actual lease differed from the deterministic pick
   after all filters. Jev selection is provenance on the lease
   (`source=jev`, `action=<type>`, `head=<sha>`); the worker independently
   validates the action against its live stage and checked-out head before
   including it in the coding prompt.
+
 
 ## Work-session utilization
 

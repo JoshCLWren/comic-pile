@@ -1342,6 +1342,7 @@ def test_real_assign_uses_jev_when_confident_and_canonical_when_absent(
     report = {
         "model": "typesafe/jev-1.14",
         "mode": "active-selection",
+        "surface": "issue-selection",
         "status": "scored",
         "baseline": numbers,
         "shadow": [numbers[-1], *numbers[:-1]],
