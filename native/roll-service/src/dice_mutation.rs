@@ -52,7 +52,7 @@ fn invalid(detail: &'static str) -> ApiError {
     ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail)
 }
 
-fn validate(key: &str, command: &DiceCommand) -> Result<(), ApiError> {
+pub(crate) fn validate(key: &str, command: &DiceCommand) -> Result<(), ApiError> {
     if !(8..=128).contains(&key.len())
         || !key
             .bytes()

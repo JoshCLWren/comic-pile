@@ -110,6 +110,9 @@ interface RollModalsProps {
   currentDie: number
   onSetDie: (die: number) => Promise<boolean> | boolean
   onClearManualDie: () => void
+  onResetDice: () => Promise<boolean> | boolean
+  resetDicePending: boolean
+  resetDiceError: string
   setDiePending: boolean
   clearManualDiePending: boolean
   isActionSheetOpen: boolean
@@ -163,6 +166,9 @@ export function RollModals({
   currentDie,
   onSetDie,
   onClearManualDie,
+  onResetDice,
+  resetDicePending,
+  resetDiceError,
   setDiePending,
   clearManualDiePending,
   isActionSheetOpen,
@@ -288,7 +294,22 @@ export function RollModals({
           >
             Auto
           </button>
+          <button
+            onClick={async () => {
+              if (await onResetDice()) onCloseDieModal()
+            }}
+            disabled={resetDicePending}
+            data-testid="reset-dice"
+            className="px-3 py-3 text-sm font-black rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] transition-colors hover:bg-white/10"
+          >
+            {resetDicePending ? 'Resetting…' : 'Reset Dice'}
+          </button>
         </div>
+        {resetDiceError ? (
+          <p className="mt-3 text-xs font-bold text-[var(--theme-danger)]" role="alert">
+            {resetDiceError}
+          </p>
+        ) : null}
       </Modal>
 
       <Modal

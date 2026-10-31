@@ -41,6 +41,7 @@ vi.mock('../hooks/useRollBootstrap', () => ({
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: spies.setDie, isPending: state.setDiePending }),
   useClearManualDie: () => ({ mutate: spies.clearDie, isPending: false }),
+  useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: vi.fn(), isPending: false }),
   useDismissPending: () => ({ mutate: vi.fn(), isPending: false }),
   useOverrideRoll: () => ({ mutate: spies.override, isPending: state.overridePending }),

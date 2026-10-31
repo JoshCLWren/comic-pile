@@ -15,6 +15,7 @@ export interface RollApi {
   reroll: () => Promise<RollResponse>
   setDie: (die: number) => Promise<void>
   clearManualDie: () => Promise<void>
+  reset: () => Promise<{ die: number; replayed: boolean }>
 }
 
 export interface ProtectedRollMutationApi {

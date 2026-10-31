@@ -135,3 +135,40 @@ it('records the snoozed thread in a bounded midnight cookie', async () => {
   const payload = client.post.mock.calls.at(-1)?.[1] as { snoozed_thread_ids: number[] }
   expect(payload.snoozed_thread_ids).toEqual([9])
 })
+
+it('resets dice through Rust and clears temporary snoozes', async () => {
+  globalThis.document.cookie = `comicpile_roll_snoozes=${encodeURIComponent('[9]')}`
+  client.post.mockResolvedValueOnce({ die: 6, replayed: false })
+
+  const result = await rollApi.reset()
+
+  expect(result).toEqual({ die: 6, replayed: false })
+  expect(client.post).toHaveBeenCalledWith('/v2/roll/reset', {
+    idempotency_key: expect.stringMatching(/^roll-[0-9a-f]{32}$/),
+  })
+  const cookie = globalThis.document.cookie
+    .split('; ')
+    .find((entry) => entry.startsWith('comicpile_roll_snoozes='))
+  const encoded = cookie?.slice('comicpile_roll_snoozes='.length) ?? ''
+  expect(JSON.parse(decodeURIComponent(encoded))).toEqual([])
+})
+
+it('does not replay an unanswered offer after Reset Dice', async () => {
+  const isolated = createRollApi(client)
+  client.post.mockRejectedValueOnce(new Error('offer response lost'))
+  await expect(isolated.roll()).rejects.toThrow('offer response lost')
+
+  client.post.mockResolvedValueOnce({ die: 6, replayed: false })
+  await isolated.reset()
+
+  client.post.mockResolvedValueOnce({ thread_id: 3, result: 1, die_size: 6 })
+  await isolated.roll()
+
+  const offers = client.post.mock.calls.filter((call) => call[0] === '/v2/roll/offer')
+  expect(offers).toHaveLength(2)
+  // SAFETY: these entries are the offer payloads posted by roll() above.
+  const first = offers[0][1] as { idempotency_key: string }
+  // SAFETY: same payload shape, posted by the post-reset roll().
+  const second = offers[1][1] as { idempotency_key: string }
+  expect(second.idempotency_key).not.toBe(first.idempotency_key)
+})

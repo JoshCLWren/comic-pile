@@ -12,6 +12,7 @@ pub mod reading_constraints;
 pub mod reading_inputs;
 pub mod reading_session;
 pub mod roll_offer;
+pub mod roll_reset;
 mod session_bandwidth;
 pub mod skip;
 
@@ -163,6 +164,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
+        .route("/api/v2/roll/reset", post(roll_reset::reset))
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
         .route(

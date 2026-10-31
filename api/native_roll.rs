@@ -87,6 +87,7 @@ fn app() -> Router {
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route("/api/v2/roll/offer", post(native_dispatch))
+        .route("/api/v2/roll/reset", post(native_dispatch))
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))

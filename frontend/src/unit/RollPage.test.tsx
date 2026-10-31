@@ -38,6 +38,7 @@ vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn()
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: vi.fn(),
   useClearManualDie: vi.fn(),
+  useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: vi.fn(),
   useOverrideRoll: vi.fn(),
   useDismissPending: vi.fn(),

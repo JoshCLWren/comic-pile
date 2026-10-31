@@ -70,6 +70,22 @@ export function useSetDie(api?: RollApi) {
   }
 }
 
+export function useResetDice(api?: RollApi) {
+  const rollApiInstance = getRollApi(api)
+  const mutation = useMutation({
+    mutationFn: () => rollApiInstance.reset(),
+    onSuccess: async () => {
+      await invalidateAfterRollDieModeUpdate(queryClient)
+    },
+  })
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
+}
+
 export function useClearManualDie(api?: RollApi) {
   const rollApiInstance = getRollApi(api)
   const mutation = useMutation({

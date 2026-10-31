@@ -74,6 +74,7 @@ vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: () => bootstrapH
 vi.mock('../hooks/useThread', () => ({ useStaleThreads: () => ({ data: staleData, refetch: spies.refetch }) }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: spies.setDie, isPending: false }), useClearManualDie: () => ({ mutate: spies.clearDie, isPending: false }),
+  useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: spies.roll, isPending: false }), useDismissPending: () => ({ mutate: spies.dismissPending, isPending: false }),
   useOverrideRoll: () => ({ mutate: spies.override, isPending: false }),
 }))
