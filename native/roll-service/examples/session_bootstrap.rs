@@ -16,7 +16,6 @@ async fn main() {
         .unwrap();
     let user = auth::authenticate(&state, &token)
         .await
-        .ok()
         .expect("fixture authentication");
     let timezone = std::env::var("RUST_ROLL_TEST_TIMEZONE").ok();
     let policy = SessionPolicy::new(
@@ -55,10 +54,7 @@ async fn main() {
         // Run a query through the SAME pool before releasing the SQL blocker.
         // Returning a still-busy connection would hang here instead of passing.
         let checkout = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-            let connection = db::checkout(&state)
-                .await
-                .ok()
-                .expect("post-cancel checkout");
+            let connection = db::checkout(&state).await.expect("post-cancel checkout");
             let row = connection
                 .query_one("SELECT 1::int4", &[])
                 .await
@@ -81,7 +77,7 @@ async fn main() {
             .await
             .map(|_| serde_json::json!({"owned":true}))
     } else if std::env::var("RUST_ROLL_TEST_RESOLVE_ONLY").is_ok() {
-        let mut c = db::checkout(&state).await.ok().unwrap();
+        let mut c = db::checkout(&state).await.expect("session checkout");
         let tx = c.build_transaction().read_only(true).start().await.unwrap();
         let s = reading_session::resolve_current_session(&tx, user, now, policy).await;
         tx.rollback().await.unwrap();

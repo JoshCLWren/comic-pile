@@ -3,6 +3,7 @@ pub mod auth;
 pub mod bootstrap;
 pub mod config;
 pub mod db;
+pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
 pub mod option_inputs;
@@ -101,6 +102,7 @@ pub async fn serve(
 }
 
 /// Python-compatible JSON detail boundary; never serialize a dependency error.
+#[derive(Debug)]
 pub struct ApiError(pub StatusCode, pub &'static str);
 #[derive(Serialize)]
 struct ErrorBody {
