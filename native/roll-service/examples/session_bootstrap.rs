@@ -16,7 +16,6 @@ async fn main() {
         .unwrap();
     let user = auth::authenticate(&state, &token)
         .await
-        .ok()
         .expect("fixture authentication");
     let timezone = std::env::var("RUST_ROLL_TEST_TIMEZONE").ok();
     let policy = SessionPolicy::new(
@@ -57,7 +56,6 @@ async fn main() {
         let checkout = tokio::time::timeout(std::time::Duration::from_secs(3), async {
             let connection = db::checkout(&state)
                 .await
-                .ok()
                 .expect("post-cancel checkout");
             let row = connection
                 .query_one("SELECT 1::int4", &[])
