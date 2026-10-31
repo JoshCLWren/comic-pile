@@ -196,7 +196,7 @@ mod tests {
                  INSERT INTO {schema}.sessions VALUES
                      (1, 1, NOW() - interval '10 hours', NULL, 10, 100,
                       NOW() - interval '10 hours', 12),
-                     (2, 1, NOW(), NULL, 20, 200, NOW(), 12);
+                     (2, 1, NOW(), NULL, NULL, 200, NOW(), 12);
                  INSERT INTO {schema}.events
                      (user_id, type, session_id, die, die_after, context)
                  VALUES (1, 'manual_die', 2, 6, 20, '{{}}'::json);"
