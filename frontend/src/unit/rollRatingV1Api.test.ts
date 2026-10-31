@@ -16,7 +16,7 @@ beforeEach(() => {
   client.post.mockReset().mockResolvedValue({})
 })
 
-it('uses native v2 only for bootstrap while keeping other Roll mutations on v1', async () => {
+it('calls Rust v2 manual dice while composite Roll mutations remain on v1', async () => {
   await rollApi.roll()
   await rollApi.reroll()
   await rollApi.override({ thread_id: 7 })
@@ -29,7 +29,11 @@ it('uses native v2 only for bootstrap while keeping other Roll mutations on v1',
   expect(client.post).toHaveBeenCalledWith('/v1/roll/')
   expect(client.post).toHaveBeenCalledWith('/v1/roll/override', { thread_id: 7 })
   expect(client.post).toHaveBeenCalledWith('/v1/roll/dismiss-pending')
-  expect(client.post).toHaveBeenCalledWith('/v1/roll/set-die', null, { params: { die: 12 } })
+  expect(client.post).toHaveBeenCalledWith('/v2/roll/dice-command', {
+    kind: 'manual_select',
+    die: 12,
+    idempotency_key: expect.stringMatching(/^roll-[0-9a-f]{32}$/),
+  })
   expect(client.post).toHaveBeenCalledWith('/v1/roll/clear-manual-die')
   expect(client.post).toHaveBeenCalledWith('/v1/rate/', {
     thread_id: 7,
@@ -50,4 +54,20 @@ it('reads native v2 during auth recovery while keeping mutations on v1', async (
   )
   expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap', { skipAuthRedirect: true })
   expect(client.post).toHaveBeenCalledWith('/v1/snooze/', undefined, { skipAuthRedirect: true })
+})
+
+it('reuses an unanswered command key, but not a confirmed command key', async () => {
+  const isolated = createRollApi(client)
+  client.post.mockRejectedValueOnce(new Error('network response lost'))
+
+  await expect(isolated.setDie(8)).rejects.toThrow('network response lost')
+  await isolated.setDie(8)
+  await isolated.setDie(8)
+  await isolated.setDie(12)
+
+  const commands = client.post.mock.calls.map((args) => args[1] as { idempotency_key: string; die: number })
+  expect(commands.map((command) => command.die)).toEqual([8, 8, 8, 12])
+  expect(commands[1].idempotency_key).toBe(commands[0].idempotency_key)
+  expect(commands[2].idempotency_key).not.toBe(commands[1].idempotency_key)
+  expect(commands[3].idempotency_key).not.toBe(commands[2].idempotency_key)
 })
