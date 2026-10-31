@@ -77,7 +77,7 @@ pub async fn dismiss_pending(
     let now = now_seconds();
     let active = reading_session::bootstrap(
         &state,
-        user.clone(),
+        user,
         None,
         reading_session::SessionPolicy::default(),
     )
@@ -167,8 +167,8 @@ mod tests {
         struct TestPendingConn(Option<()>);
         impl Drop for TestPendingConn {
             fn drop(&mut self) {
-                if let Some(inner) = self.0.take() {
-                    let _ = inner; // consume to suppress warnings
+                if let Some(_inner) = self.0.take() {
+                    // Value consumed by binding to _
                 }
             }
         }
