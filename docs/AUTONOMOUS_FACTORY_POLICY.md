@@ -47,6 +47,34 @@ A green, ready, review-passed, or merge-gated PR is excluded from ordinary work 
 
 Optional tests, cleanup, metadata edits, wording changes, evidence polishing, PR-body edits, architectural debate, or another minor slice do not outrank a coherent implementation for an unclaimed executable product issue.
 
+## Jev completion-action selection
+
+The production dispatcher may use the dedicated Jev decision model to choose
+**which already-eligible PR completion action** a worker executes next. This
+supersedes the narrower ordinary-issue-only surface recorded in #4428: Jev may
+now rank CI repair, review findings, merge conflicts, and review work.
+
+Deterministic policy remains authoritative and owns every hard constraint:
+
+- Action types are **derived** from the existing stage machine, never inferred
+  by the model: `merge-conflict`, `ci-repair`, `review-findings`, `review`.
+- Only ordinary lane-3 PR actions are promotable. Main-breakage, user-reported,
+  `factory:ready`, blocked, draft, and owned work never move.
+- WIP and review-backlog limits continue to gate *new PR creation*; they do not
+  prevent ranking existing completion work.
+- Leases, review independence, dependencies, exact-head CI, semantic review, and
+  provider/spend limits are unchanged.
+- The model sees only trusted normalized metadata (stage, priority, merge state,
+  age, linked issue, exact-head reference). Issue/PR bodies, comments, diffs, and
+  logs are never sent.
+- One bounded `choice` request per dispatch pass. Missing key, provider failure,
+  low probability margin, invalid response, or a stale exact-head recommendation
+  fall back to deterministic order without blocking dispatch.
+- The deterministic baseline is recorded alongside the chosen action, and the
+  controller logs whether the actual lease differed from that baseline. Jev
+  selection is provenance on the lease (`source=jev`, `action=<type>`); the
+  worker still validates its own lease and stage before acting.
+
 ## Work-session utilization
 
 A scheduled heartbeat is a bounded work session, not a one-ticket punch.
