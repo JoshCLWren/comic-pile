@@ -51,6 +51,16 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "/api/v1/snooze/",
+      "methods": ["POST"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/snooze/",
+      "methods": ["POST"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "/api(?:/.*)?",
       "dest": "/api/index.py"
     },

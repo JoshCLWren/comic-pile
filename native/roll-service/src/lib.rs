@@ -3,6 +3,7 @@ pub mod auth;
 pub mod bootstrap;
 pub mod config;
 pub mod db;
+pub mod dismiss_pending;
 pub mod option_inputs;
 pub mod reading_constraints;
 pub mod reading_inputs;
@@ -158,6 +159,14 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
+        .route(
+            "/api/v1/roll/dismiss-pending",
+            post(dismiss_pending::dismiss_pending),
+        )
+        .route(
+            "/api/roll/dismiss-pending",
+            post(dismiss_pending::dismiss_pending),
+        )
         .route("/api/v1/snooze/", post(snooze::snooze_thread))
         .route("/api/snooze/", post(snooze::snooze_thread))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })

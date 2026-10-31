@@ -914,7 +914,8 @@ mod tests {
     fn contradictory_snoozes_request_clarification() {
         // Three consecutive contradictory snoozes suggest clarification
         // Previous snoozes were shifting heavier, now a balanced candidate
-        let r = compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 3, Some("heavier"));
+        let r =
+            compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 3, Some("heavier"));
         assert!(r.suggest_clarification);
         assert_eq!(r.reason_code, "clarification_needed");
         assert!(!r.bandwidth_changed);
@@ -923,28 +924,23 @@ mod tests {
     #[test]
     fn three_snoozes_contradictory_direction_requests_clarification() {
         // Three consecutive snoozes with contradictory direction request clarification
-        let r = compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 3, Some("heavier"));
+        let r =
+            compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 3, Some("heavier"));
         assert!(r.suggest_clarification);
     }
 
     #[test]
     fn two_snoozes_no_clarification() {
         // Two consecutive snoozes do not trigger clarification
-        let r = compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 2, Some("heavier"));
+        let r =
+            compute_snooze_correction("balanced", 0.5, "balanced", "balanced", 2, Some("heavier"));
         assert!(!r.suggest_clarification);
     }
 
     #[test]
     fn deterministic_output() {
         // Same inputs always produce the same output
-        let args = (
-            "balanced",
-            0.5,
-            "balanced",
-            "deep",
-            2,
-            Some("lighter"),
-        );
+        let args = ("balanced", 0.5, "balanced", "deep", 2, Some("lighter"));
         let r1 = compute_snooze_correction(args.0, args.1, args.2, args.3, args.4, args.5);
         let r2 = compute_snooze_correction(args.0, args.1, args.2, args.3, args.4, args.5);
         assert_eq!(r1.active_bandwidth, r2.active_bandwidth);
@@ -980,15 +976,30 @@ mod tests {
     #[test]
     fn classify_candidate_effort_boundaries() {
         // Exactly 12 minutes is balanced
-        assert_eq!(classify_candidate_effort(Some("observed"), Some(12.0)), "balanced");
+        assert_eq!(
+            classify_candidate_effort(Some("observed"), Some(12.0)),
+            "balanced"
+        );
         // Exactly 20 minutes is deep
-        assert_eq!(classify_candidate_effort(Some("observed"), Some(20.0)), "deep");
+        assert_eq!(
+            classify_candidate_effort(Some("observed"), Some(20.0)),
+            "deep"
+        );
         // Zero minutes with source is still light (0 < 12)
-        assert_eq!(classify_candidate_effort(Some("observed"), Some(0.0)), "light");
+        assert_eq!(
+            classify_candidate_effort(Some("observed"), Some(0.0)),
+            "light"
+        );
         // 'none' source returns balanced
-        assert_eq!(classify_candidate_effort(Some("none"), Some(10.0)), "balanced");
+        assert_eq!(
+            classify_candidate_effort(Some("none"), Some(10.0)),
+            "balanced"
+        );
         // Publication-era source works like any other
-        assert_eq!(classify_candidate_effort(Some("publication_era"), Some(22.0)), "deep");
+        assert_eq!(
+            classify_candidate_effort(Some("publication_era"), Some(22.0)),
+            "deep"
+        );
     }
 
     #[test]
@@ -1023,9 +1034,6 @@ mod tests {
             "2026-10-30T12:34:56.5-05:00"
         );
         // Already correct format passes through
-        assert_eq!(
-            python_timestamp("already-correct"),
-            "already-correct"
-        );
+        assert_eq!(python_timestamp("already-correct"), "already-correct");
     }
 }

@@ -4,7 +4,7 @@ use axum::{
     extract::Request,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use comicpile_roll_service::{config::Config, router as roll_router, AppState};
@@ -67,11 +67,45 @@ async fn native_bootstrap(mut request: Request) -> Response {
     result
 }
 
+/// Route snooze requests through the same native Roll router as bootstrap.
+/// Registered ahead of Vercel's Python catch-all so live requests reach Rust.
+async fn native_snooze(request: Request) -> Response {
+    let mut result = match ROLL_STATE.get_or_init(|| {
+        Config::from_vercel_env()
+            .and_then(AppState::new)
+            .map(Arc::new)
+            .map_err(|err| {
+                // ConfigError is a static, credential-free message.
+                eprintln!("native_roll initialisation failed: {err}");
+                err.0
+            })
+    }) {
+        Ok(state) => {
+            let mut router = roll_router(state.clone());
+            match router.call(request).await {
+                Ok(response) => response,
+                Err(never) => match never {},
+            }
+        }
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"detail": "Native Roll unavailable"})),
+        )
+            .into_response(),
+    };
+    result
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    result
+}
+
 fn app() -> Router {
     Router::new()
         .route("/api/_native_roll/health", get(native_health))
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
+        .route("/api/v1/snooze/", post(native_snooze))
+        .route("/api/snooze/", post(native_snooze))
 }
 
 #[tokio::main]
