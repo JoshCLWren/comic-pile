@@ -175,6 +175,64 @@ def test_successful_last_run_is_all_clear() -> None:
     assert decision["run_id"] == 9
 
 
+def test_dispatched_run_path_lifts_the_freeze() -> None:
+    """The owner override run must clear the freeze despite its custom run-name."""
+    module = load_module()
+    override = run(
+        100,
+        name="Deploy Production [source=manual] Deploy #4423 Rust Roll offer cutover",
+        conclusion="success",
+        updated_at="2026-10-31T16:29:29Z",
+        job_list=attempted_jobs(),
+    )
+    override["path"] = ".github/workflows/deploy-production.yml"
+    payload = {
+        "workflow_runs": [
+            run(
+                99,
+                conclusion="failure",
+                updated_at="2026-10-29T17:31:10Z",
+                html_url=RED_RUN_URL,
+                job_list=attempted_jobs(deploy_conclusion="failure"),
+            ),
+            override,
+        ]
+    }
+
+    decision = module.evaluate_freeze(payload)
+
+    assert decision["blocked"] is False
+    assert decision["frozen"] is False
+    assert decision["run_id"] == 100
+
+
+def test_dispatched_run_name_prefix_lifts_the_freeze_without_path() -> None:
+    """A custom run-name still identifies Deploy Production when path is absent."""
+    module = load_module()
+    payload = {
+        "workflow_runs": [
+            run(
+                99,
+                conclusion="failure",
+                updated_at="2026-10-29T17:31:10Z",
+                job_list=attempted_jobs(deploy_conclusion="failure"),
+            ),
+            run(
+                100,
+                name="Deploy Production [source=manual] Deploy #4423",
+                conclusion="success",
+                updated_at="2026-10-31T16:29:29Z",
+                job_list=attempted_jobs(),
+            ),
+        ]
+    }
+
+    decision = module.evaluate_freeze(payload)
+
+    assert decision["blocked"] is False
+    assert decision["run_id"] == 100
+
+
 def test_override_requires_reason_and_unblocks_red_run() -> None:
     """Override without a reason stays blocked; a reason logs and proceeds."""
     module = load_module()

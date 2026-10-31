@@ -46,14 +46,18 @@ def test_production_workflow_deduplicates_automatic_triggers_by_main_sha() -> No
     assert "workflow_dispatch:" in workflow
 
     # Automatic recovery triggers serialize, then skip once the exact main SHA
-    # has a READY production deployment. Manual dispatch remains a force-recovery path.
+    # has a READY deployment created by this workflow. A vercel[bot] deployment
+    # for the same SHA must not deduplicate the migration-aware path. Manual
+    # dispatch remains a force-recovery path.
     assert "group: vercel-production" in workflow
     assert "cancel-in-progress: false" in workflow
     assert "vercel list comic-pile" in workflow
     assert "--prod" in workflow
     assert "--status READY" in workflow
     assert '--meta "githubCommitSha=$deploy_sha"' in workflow
-    assert "jq '.deployments | length'" in workflow
+    assert 'githubDeployment' in workflow
+    assert 'sort_by(.createdAt // .created)' in workflow
+    assert 'aliasError' in workflow
     assert 'GITHUB_EVENT_NAME" == "workflow_dispatch"' in workflow
     assert "deployment_required=false" in workflow
     assert "needs: preflight" in workflow
