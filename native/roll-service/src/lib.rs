@@ -3,6 +3,7 @@ pub mod auth;
 pub mod bootstrap;
 pub mod config;
 pub mod db;
+pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
@@ -159,6 +160,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
+        .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
         .route(
