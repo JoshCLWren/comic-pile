@@ -1,6 +1,7 @@
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { RollResponse, SnoozeCorrectionInfo } from '../../types'
+import type { ThreadMetadata } from './types'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 
@@ -13,6 +14,11 @@ interface UseRollSnoozeParams {
     retryRefresh?: () => Promise<boolean>
   }
   rerollMutation?: { mutate: () => Promise<RollResponse> }
+  enterRatingView?: (
+    threadId: number | null,
+    result?: number | null,
+    threadMetadata?: ThreadMetadata | null,
+  ) => Promise<void>
   unsnoozeMutation: { mutate: (threadId: number) => Promise<void> }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
   onClarificationSuggested?: (correction: SnoozeCorrectionInfo) => void
@@ -38,6 +44,7 @@ export function useRollSnooze({
   state,
   snoozeMutation,
   rerollMutation,
+  enterRatingView,
   unsnoozeMutation,
   refetchBootstrap,
   onClarificationSuggested,
@@ -69,13 +76,19 @@ export function useRollSnooze({
   async function handleReroll() {
     if (!rerollMutation) return
     try {
-      await rerollMutation.mutate()
-      await refetchBootstrap()
-      setIsRolling(false)
-      setIsRatingView(false)
-      setRolledResult(null)
-      setSelectedThreadId(null)
-      setActiveRatingThread(null)
+      const response = await rerollMutation.mutate()
+      if (enterRatingView) {
+        // Use the offer response directly so a failed background refresh cannot
+        // leave the just-snoozed thread open in the rating view.
+        await enterRatingView(response.thread_id, response.result, response)
+      } else {
+        await refetchBootstrap()
+        setIsRolling(false)
+        setIsRatingView(false)
+        setRolledResult(null)
+        setSelectedThreadId(null)
+        setActiveRatingThread(null)
+      }
       setErrorMessage('')
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))

@@ -19,14 +19,12 @@ interface DecisionCardProps {
   predictedDie: number
   errorMessage: string
   rateIsPending: boolean
-  snoozeIsPending: boolean
   rerollIsPending?: boolean
   dismissIsPending: boolean
   skipIsPending?: boolean
   manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
-  onSnooze: () => void
   onReroll?: () => Promise<void>
   onSkip?: () => void
   onCancel: () => void
@@ -38,7 +36,7 @@ interface DecisionCardProps {
  * Key features:
  * - Rating slider with visual feedback based on rating value
  * - Die readout that reports the truthful die outcome for the active mode
- * - Action buttons for saving, snoozing, skipping, and canceling
+ * - Action buttons for saving, rolling again, skipping, and canceling
  *
  * Manual die mode:
  * - When `manualDie` is not null the die is pinned, so the ladder move never
@@ -54,13 +52,11 @@ export function DecisionCard({
   predictedDie,
   errorMessage,
   rateIsPending,
-  snoozeIsPending,
   dismissIsPending,
   skipIsPending = false,
   manualDie,
   onUpdateRating,
   onSubmitRating,
-  onSnooze,
   onReroll,
   rerollIsPending = false,
   onSkip,
@@ -217,14 +213,6 @@ export function DecisionCard({
           className={rollSecondaryActionGroupClass}
           data-testid="rating-secondary-actions"
         >
-          <button
-            type="button"
-            onClick={onSnooze}
-            disabled={snoozeIsPending}
-            className={rollSecondaryActionClass}
-          >
-            {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
-          </button>
           {onReroll && (
             <button
               type="button"

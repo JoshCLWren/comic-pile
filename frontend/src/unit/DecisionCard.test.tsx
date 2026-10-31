@@ -25,13 +25,13 @@ function makeDecisionCardProps(overrides: Partial<DecisionCardProps> = {}) {
     predictedDie: 8,
     errorMessage: '',
     rateIsPending: false,
-    snoozeIsPending: false,
+    rerollIsPending: false,
     dismissIsPending: false,
     skipIsPending: false,
     manualDie: null,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
-    onSnooze: vi.fn(),
+    onReroll: vi.fn().mockResolvedValue(undefined),
     onSkip: vi.fn(),
     onCancel: vi.fn(),
     ...overrides,
@@ -45,15 +45,13 @@ interface DecisionCardProps {
   predictedDie: number
   errorMessage: string
   rateIsPending: boolean
-  snoozeIsPending: boolean
+  rerollIsPending?: boolean
   dismissIsPending: boolean
   skipIsPending?: boolean
   manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
-  onSnooze: () => void
   onReroll?: () => Promise<void>
-  rerollIsPending?: boolean
   onSkip?: () => void
   onCancel: () => void
 }
@@ -98,8 +96,8 @@ describe('DecisionCard', () => {
     await user.click(screen.getByRole('button', { name: /mark read & save/i }))
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
 
-    await user.click(screen.getByRole('button', { name: /snooze/i }))
-    expect(callbacks.onSnooze).toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: /roll again/i }))
+    expect(callbacks.onReroll).toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: /cancel roll/i }))
     expect(callbacks.onCancel).toHaveBeenCalled()
@@ -157,13 +155,13 @@ describe('DecisionCard', () => {
   it('shows loading states for async operations', () => {
     const callbacks = makeDecisionCardProps({
       rateIsPending: true,
-      snoozeIsPending: true,
+      rerollIsPending: true,
     })
 
     renderDecisionCard(callbacks)
 
     expect(screen.getByRole('button', { name: /saving…/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /snoozing…/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /rolling…/i })).toBeInTheDocument()
   })
 
   it('shows skip button when skipIsPending is false', () => {

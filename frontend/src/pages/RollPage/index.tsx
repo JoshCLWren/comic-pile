@@ -255,6 +255,7 @@ export default function RollPage() {
     state,
     snoozeMutation,
     rerollMutation: rollMutation,
+    enterRatingView: rating.enterRatingView,
     unsnoozeMutation,
     refetchBootstrap,
     onClarificationSuggested: handleCorrectionSuggested,
