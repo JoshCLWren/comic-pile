@@ -140,13 +140,16 @@ export default function RollPage() {
     navigate('/queue')
   }, [navigate, queryClient])
 
-  const handleMapSeriesMapped = useCallback(async () => {
-    const threadId = state.selectedThread?.id
-    if (threadId != null) {
-      await invalidateComicVineMappingHealth(queryClient, threadId)
-    }
-    await refetchBootstrap()
-  }, [queryClient, refetchBootstrap, state.selectedThread])
+  const handleMapSeriesMapped = useCallback(
+    async (_confirmedIssueIds?: number[]) => {
+      const threadId = state.selectedThread?.id
+      if (threadId != null) {
+        await invalidateComicVineMappingHealth(queryClient, threadId)
+      }
+      await refetchBootstrap()
+    },
+    [queryClient, refetchBootstrap, state.selectedThread],
+  )
 
   const handleCorrectionSubmit = useCallback(
     async (_choiceId: CorrectionChoiceId, patch: SessionModeUpdateRequest) => {
