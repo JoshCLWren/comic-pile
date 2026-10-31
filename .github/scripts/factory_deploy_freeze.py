@@ -158,6 +158,28 @@ def run_attempted_deploy(
     return False
 
 
+def is_deploy_production_run(run: Mapping[str, object]) -> bool:
+    """Return whether a run belongs to Deploy Production.
+
+    Dispatched runs use the workflow ``run-name`` (for example
+    ``Deploy Production [source=manual] ...``), so an exact name match would
+    silently drop the owner override that is supposed to clear a freeze. Prefer
+    the workflow path when GitHub supplies it and accept the documented
+    dispatch prefix otherwise.
+
+    Args:
+        run: One GitHub workflow-run object.
+
+    Returns:
+        True when the run is a Deploy Production run.
+    """
+    path = str(run.get("path") or "")
+    if path:
+        return path.rsplit("/", 1)[-1] == "deploy-production.yml"
+    name = str(run.get("name") or "")
+    return name == WORKFLOW_NAME or name.startswith(f"{WORKFLOW_NAME} [")
+
+
 def _sort_key(run: Mapping[str, object]) -> tuple[str, int]:
     """Newest-first ordering key for one run."""
     updated = str(run.get("updated_at") or run.get("created_at") or "")
@@ -189,9 +211,8 @@ def latest_attempted_deploy_run(
     """
     eligible: list[Mapping[str, object]] = []
     for run in workflow_runs(payload):
-        name = str(run.get("name") or "")
         status = str(run.get("status") or "").lower()
-        if name and name != WORKFLOW_NAME:
+        if not is_deploy_production_run(run):
             continue
         if status and status != "completed":
             continue

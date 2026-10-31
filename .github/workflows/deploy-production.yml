@@ -134,6 +134,7 @@ jobs:
           if [[ "$frozen" == "true" ]]; then
             echo "proceed=false" >> "$GITHUB_OUTPUT"
             echo "frozen=true" >> "$GITHUB_OUTPUT"
+            echo "::error title=Deploy skipped::The last attempted Deploy Production run is red; production was not deployed." >&2
             echo "Last attempted Deploy Production run is red; skipping this deploy." >&2
             echo "This run is gate-blocked and will not count as a deploy failure." >&2
             exit 0
@@ -268,12 +269,37 @@ jobs:
           fi
           echo "Single head confirmed: $heads"
 
+      - name: Detect pending Alembic revisions
+        id: migrations
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          expected="$(.venv/bin/alembic heads | awk 'NR==1 {print $1}')"
+          current="$(.venv/bin/alembic current | awk 'NR==1 {print $1}')"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "expected=$expected" >> "$GITHUB_OUTPUT"
+          if [[ -n "$expected" && "$current" == "$expected" ]]; then
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+            echo "No pending migrations (production already at $current)."
+          else
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+            echo "Pending migrations: production=${current:-<none>} application=$expected"
+          fi
+
       - name: Migrate production database before deploy
+        if: steps.migrations.outputs.pending == 'true'
         env:
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
         run: |
           set -euo pipefail
           .venv/bin/alembic upgrade head
+
+      - name: Verify production schema at application head
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
           expected="$(.venv/bin/alembic heads | awk 'NR==1 {print $1}')"
           current="$(.venv/bin/alembic current | awk 'NR==1 {print $1}')"
           echo "Production Alembic revision: $current"
@@ -326,6 +352,26 @@ jobs:
             --meta githubOrg="$GITHUB_REPOSITORY_OWNER" \
             --meta githubRepo="${GITHUB_REPOSITORY#*/}" \
             --meta githubCommitAuthorLogin="$GITHUB_ACTOR"
+
+      - name: Verify the newest production deployment matches this SHA
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deploy_sha="$(git rev-parse HEAD)"
+          response="$(curl --fail --silent --show-error \
+            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&target=production&limit=20" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}")"
+          newest_sha="$(jq -r '
+            [.deployments[] | select(.readyState == "READY")]
+            | sort_by(.createdAt) | reverse | .[0].meta.githubCommitSha // empty
+          ' <<< "$response")"
+          if [[ "$newest_sha" != "$deploy_sha" ]]; then
+            echo "ERROR: newest READY production deployment is ${newest_sha:-<none>}, expected $deploy_sha" >&2
+            jq -r '.deployments[] | "  \(.uid) \(.readyState) \(.meta.githubCommitSha // "no-sha")"' <<< "$response" >&2
+            exit 1
+          fi
+          echo "Production deployment confirmed for $deploy_sha"
 
       - name: Smoke production health
         run: |

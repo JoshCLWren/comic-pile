@@ -156,6 +156,14 @@ def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
     assert "defer_router_imports=True" in entrypoint
 
 
+def test_vercel_git_auto_deploy_cannot_promote_main() -> None:
+    """Production promotion must stay on the migration-aware Deploy Production job."""
+    config = _load_vercel_config()
+    git = cast("dict[str, object]", config["git"])
+
+    assert git["deploymentEnabled"] == {"main": False}
+
+
 def test_vercel_routes_backend_before_spa_fallback() -> None:
     """Ensure API and documentation requests cannot be swallowed by the SPA."""
     routes = _routes(_load_vercel_config())
