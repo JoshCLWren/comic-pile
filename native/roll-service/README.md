@@ -265,3 +265,16 @@ Run the Python command from the repository root with
 existing Native Rust Roll workflow discovers this parity file automatically.
 Full response projection, recovery, and routing remain the separately scoped
 #4308–#4314 work; no production routing or preview deployment changes are made.
+
+## Write-handler test rule
+
+Every mounted POST handler must have a disposable-Postgres test that executes
+the real write path (the insert/update and the resulting rows), not only auth,
+request-shape, or read helpers. The #4423 production 500 shipped because the
+offer suite never ran its INSERT.
+
+`tests/test_native_roll_write_test_guard.py` enforces this for every
+`post(module::handler)` mounted in `src/lib.rs`. Handlers that predate the rule
+or delegate to an already-tested writer live in the shrink-only
+`tests/native_roll_write_test_baseline.json`; add the missing test and remove
+the entry rather than expanding the baseline.
