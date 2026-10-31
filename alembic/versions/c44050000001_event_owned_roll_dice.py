@@ -110,7 +110,31 @@ def upgrade() -> None:
                 RAISE EXCEPTION 'event requires an owner or an owned reference'
                     USING ERRCODE = '23502';
             END IF;
-            IF TG_OP = 'UPDATE' AND NEW.user_id <> OLD.user_id THEN
+            -- A compound event may carry several references. The first
+            -- determines a missing owner, but *every* existing reference
+            -- must agree with that owner to prevent cross-reader linkage.
+            IF EXISTS (
+                SELECT 1 FROM sessions s
+                WHERE s.id = NEW.session_id AND s.user_id <> NEW.user_id
+            ) OR EXISTS (
+                SELECT 1 FROM threads t
+                WHERE t.id = NEW.thread_id AND t.user_id <> NEW.user_id
+            ) OR EXISTS (
+                SELECT 1 FROM issues i JOIN threads t ON t.id = i.thread_id
+                WHERE i.id = NEW.issue_id AND t.user_id <> NEW.user_id
+            ) OR EXISTS (
+                SELECT 1 FROM threads t
+                WHERE t.id = NEW.selected_thread_id AND t.user_id <> NEW.user_id
+            ) OR EXISTS (
+                SELECT 1 FROM events source
+                WHERE source.id = NEW.source_roll_event_id
+                  AND source.user_id IS NOT NULL
+                  AND source.user_id <> NEW.user_id
+            ) THEN
+                RAISE EXCEPTION 'event references data owned by another user'
+                    USING ERRCODE = '23514';
+            END IF;
+            IF TG_OP = 'UPDATE' AND NEW.user_id IS DISTINCT FROM OLD.user_id THEN
                 RAISE EXCEPTION 'event ownership is immutable'
                     USING ERRCODE = '23514';
             END IF;
