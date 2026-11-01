@@ -209,11 +209,22 @@ class TestReadingGraphPreviewBaseline:
         """Issue references show active blockers at baseline."""
         state = fixture_state(approved=False)
         context = _make_graph_context(state)
-        issues = _issue_references(context, evaluate(state))
+        eligibility = evaluate(state)
+        issues = _issue_references(context, eligibility)
         j2 = next(i for i in issues if i.issue_id == J2)
-        # Verify J2 has a strict_order blocker pointing to M1
-        blocker = next(b for b in j2.blockers if b.kind == "strict_order")
-        assert blocker.waiting_on_issue_ids == [M1]
+        # Assert actual graph blocker relation for J2: strict_order pointing at M1
+        assert len(j2.blockers) == 1
+        blocker_ref = j2.blockers[0]
+        assert blocker_ref.kind == "strict_order"
+        assert blocker_ref.waiting_on_issue_ids == [M1]
+        # Cross-check through eligibility model that J2's frontier is blocked by M1
+        j2_elig = eligibility[2]  # thread containing J2 (JLI thread id per fixture)
+        assert j2_elig.next_issue_id == J2
+        strict_blockers = [b for b in j2_elig.blockers if b.kind == "strict_order"]
+        assert len(strict_blockers) == 1
+        assert strict_blockers[0].waiting_on_issue_ids == (M1,)
+        # Verify that J2 is blocked by M1 in the eligibility model
+        assert j2_elig.blockers == (Blocker("strict_order", LIST_ID, (M1,)),)
 
 
 class TestReadingGraphPreviewWithChoice:
