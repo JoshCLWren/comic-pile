@@ -223,6 +223,8 @@ class TestReadingGraphPreviewBaseline:
         strict_blockers = [b for b in j2_elig.blockers if b.kind == "strict_order"]
         assert len(strict_blockers) == 1
         assert strict_blockers[0].waiting_on_issue_ids == (M1,)
+        # Verify that J2 is blocked by M1 in the eligibility model
+        assert j2_elig.blockers == (Blocker("strict_order", LIST_ID, (M1,)),)
 
 
 class TestReadingGraphPreviewWithChoice:
