@@ -936,11 +936,9 @@ async def list_continuity_plan_items(
             if existing is not None and existing[0] != list_id:
                 raise HTTPException(status_code=409, detail="Ambiguous Reading List association")
             authorities[plan_id] = (list_id, mode, list_updated_at)
-        if len(authorities) != len(ordered):
-            raise HTTPException(
-                status_code=409,
-                detail="Reading Plan has no linked authoritative Reading List",
-            )
+        # Allow orphaned plans (linked lists deleted) to be listed without authority.
+        # Individual plan detail pages still work, and orphaned plans remain owned.
+        # Only reject when there are ambiguous or foreign list authorities.
         # Source badges and editor links must expose the actual owned List,
         # even when historical Plan nodes lack CBL provenance.
         for plan in ordered:
