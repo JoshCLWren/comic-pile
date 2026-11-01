@@ -257,6 +257,7 @@ describe('QueueBulkMapSeriesDialog', () => {
     fireEvent.click(screen.getByText('finish-batch'))
 
     const results = await screen.findByTestId('queue-bulk-map-series-results')
+    expect(screen.getByTestId('queue-bulk-map-series-done')).toHaveClass('text-[var(--theme-primary-action-text)]')
     expect(results).toHaveTextContent('Reviewed 1 of 3 series.')
     const rows = results.querySelectorAll('[data-testid="queue-bulk-map-series-result-row"]')
     expect(rows).toHaveLength(3)

@@ -27,6 +27,7 @@ The three existing themes are `classic`, `ink-gold`, and `command-center`. New f
 | Personal accent | `--theme-personal-accent` | User history, ratings, and personal context |
 | Primary action | `--theme-primary-action` | Main affirmative action |
 | Primary action hover | `--theme-primary-action-hover` | Interactive state for the main action |
+| Primary action text | `--theme-primary-action-text` | High-contrast foreground on primary action backgrounds, including hover |
 | Danger | `--theme-danger` | Destructive or cancel semantics |
 | Danger hover | `--theme-danger-hover` | Interactive destructive state |
 | Warning | `--theme-warning` | Caution and graded-scale middle semantics |

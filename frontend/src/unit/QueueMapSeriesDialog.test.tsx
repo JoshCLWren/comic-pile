@@ -350,6 +350,7 @@ describe('QueueMapSeriesDialog', () => {
     )
     // The reported bug: the approval button read "Map 0 issues" for a matching miniseries.
     expect(screen.getByTestId('queue-map-series-approve')).toHaveTextContent('Map 5 issues')
+    expect(screen.getByTestId('queue-map-series-approve')).toHaveClass('text-[var(--theme-primary-action-text)]')
     expect(screen.queryByTestId('queue-map-series-provider-inventory')).not.toBeInTheDocument()
   })
 
@@ -409,6 +410,7 @@ describe('QueueMapSeriesDialog', () => {
 
     expect(await screen.findByText('The mapping plan could not be loaded. Nothing was changed.')).toBeInTheDocument()
     expect(screen.getByTestId('queue-map-series-retry')).toHaveTextContent('Try again')
+    expect(screen.getByTestId('queue-map-series-retry')).toHaveClass('text-[var(--theme-primary-action-text)]')
     await user.click(screen.getByTestId('queue-map-series-dismiss'))
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(mockedCommit).not.toHaveBeenCalled()
