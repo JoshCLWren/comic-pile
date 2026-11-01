@@ -5,7 +5,7 @@ use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::http::StatusCode;
 use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
     path::{Component, Path},
     time::{SystemTime, UNIX_EPOCH},
@@ -316,7 +316,7 @@ fn session_error(error: tokio_postgres::Error) -> ApiError {
 async fn bootstrap_once(
     state: &AppState,
     user: AuthenticatedUser,
-    timezone: Option<&str>,
+    _timezone: Option<&str>,
     policy: SessionPolicy,
     now: f64,
 ) -> Result<SessionBootstrap, ApiError> {
@@ -339,10 +339,7 @@ async fn bootstrap_once(
             .await
             .map_err(session_error)?;
         if tx
-            .query_opt(
-                "SELECT id FROM users WHERE id = $1",
-                &[&user.id()],
-            )
+            .query_opt("SELECT id FROM users WHERE id = $1", &[&user.id()])
             .await
             .map_err(session_error)?
             .is_none()
@@ -442,124 +439,11 @@ async fn pending_validity(
 }
 
 // PostgreSQL JSON timestamps omit trailing zeroes; checkpoints use Python isoformat.
-fn python_timestamp(value: &mut Value) {
-    if let Some(s) = value.as_str() {
-        if let Some((head, offset)) = s.rsplit_once('+') {
-            let normalized = if let Some((seconds, fraction)) = head.split_once('.') {
-                format!("{seconds}.{fraction:0<6}+{offset}")
-            } else {
-                format!("{head}+{offset}")
-            };
-            *value = Value::String(normalized);
-        }
-    }
-}
-async fn checkpoint(
-    tx: &Transaction<'_>,
-    user: AuthenticatedUser,
-    session: &ReadingSession,
-    now: f64,
-) -> Result<(), ApiError> {
-    let rows = tx
-        .query(
-            "SELECT row_to_json(t)::text FROM threads t WHERE user_id=$1 ORDER BY id FOR UPDATE",
-            &[&user.id()],
-        )
-        .await
-        .map_err(session_error)?;
-    let issues = tx.query("SELECT row_to_json(i)::text FROM issues i JOIN threads t ON t.id=i.thread_id WHERE t.user_id=$1 ORDER BY i.position, i.id", &[&user.id()])
-        .await.map_err(session_error)?;
-    let mut by_thread = std::collections::HashMap::<i64, Vec<Value>>::new();
-    for row in issues {
-        let mut i: Value = serde_json::from_str(row.get(0)).map_err(|_| corrupt())?;
-        python_timestamp(&mut i["read_at"]);
-        by_thread
-            .entry(i["thread_id"].as_i64().ok_or_else(corrupt)?)
-            .or_default()
-            .push(json!({
-            "id": i["id"], "number": i["issue_number"], "status": i["status"],
-            "read_at": i["read_at"], "position": i["position"] }));
-    }
-    let mut threads = serde_json::Map::new();
-    for row in rows {
-        let mut t: Value = serde_json::from_str(row.get(0)).map_err(|_| corrupt())?;
-        for key in ["last_activity_at", "created_at"] {
-            python_timestamp(&mut t[key]);
-        }
-        let tracking = !t["total_issues"].is_null();
-        let mut capture = serde_json::Map::new();
-        for key in [
-            "title",
-            "format",
-            "issues_remaining",
-            "last_rating",
-            "last_activity_at",
-            "queue_position",
-            "queue_position_is_manual",
-            "status",
-            "notes",
-            "is_test",
-            "is_blocked",
-            "created_at",
-            "user_id",
-        ] {
-            capture.insert(key.into(), t[key].clone());
-        }
-        capture.insert("uses_issue_tracking".into(), json!(tracking));
-        capture.insert(
-            "issue_states".into(),
-            if tracking {
-                json!(by_thread
-                    .remove(&t["id"].as_i64().ok_or_else(corrupt)?)
-                    .unwrap_or_default())
-            } else {
-                Value::Null
-            },
-        );
-        for key in ["total_issues", "next_unread_issue_id", "reading_progress"] {
-            capture.insert(
-                key.into(),
-                if tracking {
-                    t[key].clone()
-                } else {
-                    Value::Null
-                },
-            );
-        }
-        threads.insert(t["id"].to_string(), Value::Object(capture));
-    }
-    let mut session_state = serde_json::to_value(session).map_err(|_| corrupt())?;
-    let keys = [
-        "start_die",
-        "manual_die",
-        "snoozed_thread_ids",
-        "active_bandwidth",
-        "predicted_bandwidth",
-        "bandwidth_confidence",
-        "bandwidth_source",
-        "bandwidth_version",
-        "active_intent",
-        "predicted_intent",
-        "intent_confidence",
-        "intent_source",
-        "intent_version",
-    ];
-    session_state
-        .as_object_mut()
-        .ok_or_else(corrupt)?
-        .retain(|key, _| keys.contains(&key.as_str()));
-    session_state["current_die"] = json!(session.start_die);
-    let threads = Value::Object(threads).to_string();
-    let session_state = session_state.to_string();
-    tx.execute("INSERT INTO snapshots (session_id,event_id,thread_states,session_state,created_at,description,snapshot_kind,schema_version)
-      VALUES ($1,NULL,$2::text::json,$3::text::json,to_timestamp($4),'Session start','session_start',NULL)",
-      &[&session.id,&threads,&session_state,&now]).await.map_err(session_error)?;
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     #[test]
     fn timezone_validation_and_manual_ladder() {
         assert_eq!(
