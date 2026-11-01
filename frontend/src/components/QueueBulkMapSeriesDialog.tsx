@@ -217,7 +217,8 @@ export default function QueueBulkMapSeriesDialog({
     // drops the loaded pages, and re-draining would reopen the preparing dialog
     // beneath the mapping or results dialog after every saved series.
     onBatchCaptured?.()
-  }, [isOpen, isScopeLoading, phase, resumeAtFirstPending, onBatchCaptured])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [isOpen, isScopeLoading, phase, resumeAtFirstPending, onBatchCaptured])
 
   const currentItem = batch[currentIndex]
 
@@ -382,17 +383,29 @@ export default function QueueBulkMapSeriesDialog({
       </Modal>
 
       {currentItem && (
-        <QueueMapSeriesDialog
-          isOpen={mappingOpen}
-          threadId={currentItem.threadId}
-          threadTitle={currentItem.threadTitle}
-          onClose={handleCancel}
-          onMapped={handleCurrentMapped}
-          onSkip={handleCurrentSkipped}
-          onFailed={handleCurrentFailed}
-          batchProgress={batchProgress}
-          onFinishBatch={handleFinish}
-        />
+        <>
+          {batchIncomplete && (
+            <p
+              role="alert"
+              className="rounded-lg border border-[var(--theme-warning)]/40 bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-text-primary)]"
+            >
+              Part of the queue could not be loaded, so this run may not cover every series that
+              needs a ComicVine match. Reopen Map Series once the queue finishes loading to include
+              the rest.
+            </p>
+          )}
+          <QueueMapSeriesDialog
+            isOpen={mappingOpen}
+            threadId={currentItem.threadId}
+            threadTitle={currentItem.threadTitle}
+            onClose={handleCancel}
+            onMapped={handleCurrentMapped}
+            onSkip={handleCurrentSkipped}
+            onFailed={handleCurrentFailed}
+            batchProgress={batchProgress}
+            onFinishBatch={handleFinish}
+          />
+        </>
       )}
 
       <Modal isOpen={resultsOpen} title="Mapping Results" onClose={handleDone} size="large">
