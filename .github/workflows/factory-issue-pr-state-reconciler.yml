@@ -88,7 +88,7 @@ jobs:
 
           trusted_factory_pr() {
             local pr="$1" expected_issue="$2" pr_json head_ref head_repo comments
-            pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}")" || return 1
+            pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}")" || return 2
             head_ref="$(jq -r '.head.ref // ""' <<< "$pr_json")"
             head_repo="$(jq -r '.head.repo.full_name // ""' <<< "$pr_json")"
 
@@ -98,44 +98,59 @@ jobs:
             [[ "$(issue_from_head "$head_ref")" == "$expected_issue" ]] || return 1
 
             comments="$(mktemp)"
+            # A GitHub API/network/permission failure is operational, not missing
+            # provenance. Return 2 so it is retried only by the caller's bounded
+            # loop and then fails the job instead of turning the run green.
             gh api --paginate --slurp \
-              "repos/${GITHUB_REPOSITORY}/issues/${pr}/comments?per_page=100" >"$comments" || return 1
+              "repos/${GITHUB_REPOSITORY}/issues/${pr}/comments?per_page=100" >"$comments" || return 2
 
             python3 - "$head_ref" "$pr" "$expected_issue" "$comments" <<'PY'
           import importlib.util
           import json
           import sys
+          import traceback
           from pathlib import Path
 
-          head_ref, pr_number, expected_issue, comments_path = sys.argv[1:]
-          path = Path('.github/scripts/factory-revocation-fence.py')
-          spec = importlib.util.spec_from_file_location('factory_revocation_fence', path)
-          if spec is None or spec.loader is None:
-              raise SystemExit(1)
-          fence = importlib.util.module_from_spec(spec)
-          sys.modules[spec.name] = fence
-          spec.loader.exec_module(fence)
+          def check_provenance():
+              head_ref, pr_number, expected_issue, comments_path = sys.argv[1:]
+              path = Path('.github/scripts/factory-revocation-fence.py')
+              # importlib does not automatically add this script's directory to sys.path.
+              sys.path.insert(0, str(path.parent.resolve()))
+              spec = importlib.util.spec_from_file_location('factory_revocation_fence', path)
+              if spec is None or spec.loader is None:
+                  # Failing to construct the loader is operational, not a
+                  # missing/untrusted provenance marker.
+                  return 2
+              fence = importlib.util.module_from_spec(spec)
+              sys.modules[spec.name] = fence
+              spec.loader.exec_module(fence)
 
-          branch = fence.BRANCH_RE.match(head_ref)
-          if branch is None or branch.group('issue') != expected_issue:
-              raise SystemExit(1)
+              branch = fence.BRANCH_RE.match(head_ref)
+              if branch is None or branch.group('issue') != expected_issue:
+                  return 1
 
-          comments = json.loads(Path(comments_path).read_text(encoding='utf-8'))
-          for comment in fence.flatten_comments(comments):
-              if not fence.comment_is_trusted(comment):
-                  continue
-              for marker in fence.PROVENANCE_RE.finditer(str(comment.get('body') or '')):
-                  if (
-                      marker.group('pr') == pr_number
-                      and marker.group('issue') == expected_issue
-                      and marker.group('worker') == branch.group('worker')
-                  ):
-                      # The marker itself is the durable identity established by
-                      # the same trusted parser used by the revocation fence.
-                      # Later repair commits may advance the PR head, so issue
-                      # completion follows this persisted PR/issue/producer tuple.
-                      raise SystemExit(0)
-          raise SystemExit(1)
+              comments = json.loads(Path(comments_path).read_text(encoding='utf-8'))
+              for comment in fence.flatten_comments(comments):
+                  if not fence.comment_is_trusted(comment):
+                      continue
+                  for marker in fence.PROVENANCE_RE.finditer(str(comment.get('body') or '')):
+                      if (
+                          marker.group('pr') == pr_number
+                          and marker.group('issue') == expected_issue
+                          and marker.group('worker') == branch.group('worker')
+                      ):
+                          # The marker itself is the durable identity established by
+                          # the same trusted parser used by the revocation fence.
+                          # Later repair commits may advance the PR head, so issue
+                          # completion follows this persisted PR/issue/producer tuple.
+                          return 0
+              return 1
+
+          try:
+              sys.exit(check_provenance())
+          except Exception:
+              traceback.print_exc()
+              sys.exit(2)
           PY
           }
 
@@ -202,6 +217,9 @@ jobs:
                   --arg state "$state" \
                   --argjson merged "$merged" \
                   '. + [{trusted:true,state:$state,merged:$merged}]' <<< "$records")"
+              else
+                status=$?
+                [[ "$status" == 1 ]] || return "$status"
               fi
             done < <(jq -r '.[][] | [.number, .head.ref, .state, .merged_at] | @tsv' <<< "$pulls")
 
@@ -229,6 +247,11 @@ jobs:
               if trusted_factory_pr "$EVENT_PR_NUMBER" "$issue"; then
                 trusted=true
                 break
+              else
+                status=$?
+                # Only missing/untrusted provenance is retryable. A broken
+                # verifier or GitHub API error must fail the job visibly.
+                [[ "$status" == 1 ]] || exit "$status"
               fi
               (( attempt < 12 )) && sleep 5
             done
@@ -244,10 +267,13 @@ jobs:
           # Do not refetch the same full PR list once per open factory issue.
           SWEEP_PULLS="$(gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/pulls?state=all&per_page=100")"
+          # Capture the issue list explicitly: a process-substitution failure is
+          # invisible to `set -e` and would let a failed sweep exit green.
+          factory_issues="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label factory \
+            --limit 1000 --json number --jq '.[].number')"
           while IFS= read -r issue; do
             [[ -n "$issue" ]] || continue
             state="$(gh issue view "$issue" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)"
             [[ "$state" == 'OPEN' ]] || continue
             reconcile_issue "$issue"
-          done < <(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label factory \
-            --limit 1000 --json number --jq '.[].number')
+          done <<< "$factory_issues"
