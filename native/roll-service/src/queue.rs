@@ -92,6 +92,18 @@ pub struct QueueOrderResponse {
 
 /// A cancelled PostgreSQL command must never recycle a possibly busy connection.
 struct Pending(Option<Object>);
+impl Pending {
+    /// Return a client whose command completed to the pool.
+    ///
+    /// Dropping a [`Pending`] without calling this discards the client, so a
+    /// cancelled request never hands a possibly busy connection to the next
+    /// request. Successful requests must reuse the pooled connection instead:
+    /// opening a fresh PostgreSQL connection per queue request was measured at
+    /// ~115 ms of checkout latency on the production-sized measurement fixture.
+    fn release(mut self) {
+        drop(self.0.take());
+    }
+}
 impl Drop for Pending {
     fn drop(&mut self) {
         if let Some(connection) = self.0.take() {
@@ -242,9 +254,12 @@ pub async fn get_queue_entry(
     user: AuthenticatedUser,
     Path(thread_id): Path<i32>,
 ) -> Result<Json<QueueEntryResponse>, ApiError> {
-    let connection = db::checkout(&state).await?;
-    let rows = load_queue_rows(&**connection, user.id()).await?;
-    drop(Object::take(connection));
+    let pending = Pending(Some(db::checkout(&state).await?));
+    let rows = {
+        let client = pending.0.as_ref().expect("checked-out PostgreSQL client");
+        load_queue_rows(&***client, user.id()).await?
+    };
+    pending.release();
     let entries = order_display_rows(&state, user, rows).await?;
     let position = ordinal_of(&entries, thread_id).ok_or_else(|| not_found(thread_id))?;
     Ok(Json(QueueEntryResponse {
@@ -394,7 +409,7 @@ pub async fn update_queue_entry(
             .map_err(db::query_error)?;
     }
     transaction.commit().await.map_err(db::query_error)?;
-    drop(pending.0.take());
+    pending.release();
 
     Ok(Json(QueueEntryResponse {
         thread_id,
@@ -450,7 +465,7 @@ pub async fn create_queue_order(
             .map_err(db::query_error)?;
         if let Some(row) = replayed {
             transaction.commit().await.map_err(db::query_error)?;
-            drop(pending.0.take());
+            pending.release();
             return Ok((
                 StatusCode::OK,
                 Json(QueueOrderResponse {
@@ -514,7 +529,7 @@ pub async fn create_queue_order(
         .map_err(db::query_error)?
         .get(0);
     transaction.commit().await.map_err(db::query_error)?;
-    drop(pending.0.take());
+    pending.release();
 
     Ok((
         StatusCode::CREATED,
@@ -894,6 +909,202 @@ mod tests {
                 .expect("seed option e issue");
         }
         drop(Object::take(connection));
+    }
+
+    fn unix_micros() -> u128 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_micros()
+    }
+
+    /// Production-sized measurement fixture for the three v2 queue operations.
+    ///
+    /// Ignored because it prints environment-specific timings. Each pooled
+    /// connection logs `log_min_duration_statement = 0`, so the printed
+    /// `window_us` ranges let an external `docker logs` capture count the exact
+    /// issued statements and sum DB execution time per request. Run with:
+    ///
+    /// ```text
+    /// RUST_ROLL_TEST_DATABASE_URL=postgresql://... cargo test --lib \
+    ///   measure_queue_db_work -- --ignored --nocapture
+    /// ```
+    #[tokio::test]
+    #[ignore]
+    async fn measure_queue_db_work() {
+        const QUEUE_SIZE: i32 = 300;
+        const BLOCKED: i32 = 50;
+        let _guard = DB_LOCK.lock().await;
+        let base = std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL");
+        let separator = if base.contains('?') { '&' } else { '?' };
+        let url = format!(
+            "{base}{separator}options=-csearch_path%3Dqueue_unit_test%2Cpublic%20-c%20log_min_duration_statement%3D0"
+        );
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
+            "RUST_ROLL_POOL_SIZE" => Some("4".into()),
+            _ => None,
+        })
+        .expect("measurement config");
+        let state = Arc::new(AppState::new(config).expect("measurement state"));
+        reset(&state).await;
+        let connection = db::checkout(&state)
+            .await
+            .expect("measurement seed connection");
+        connection
+            .execute(
+                "INSERT INTO threads (id, user_id, status, queue_position, is_blocked) \
+                 SELECT g, 7, 'active', g, g > $1 FROM generate_series(1, $2) g",
+                &[&(QUEUE_SIZE - BLOCKED), &QUEUE_SIZE],
+            )
+            .await
+            .expect("measurement seed");
+        drop(Object::take(connection));
+
+        let user = AuthenticatedUser::for_test(7);
+        for (mode, enabled) in [("legacy", false), ("option_e", true)] {
+            if enabled {
+                std::env::set_var("OPTION_E_ENABLED", "true");
+            } else {
+                std::env::remove_var("OPTION_E_ENABLED");
+            }
+            // Warm the pool so the timed requests show steady-state reuse.
+            let _ = get_queue_entry(State(state.clone()), user, Path(150))
+                .await
+                .expect("warm get");
+            println!("MEASURE mode={mode} rows={QUEUE_SIZE} blocked={BLOCKED}");
+
+            let t0 = unix_micros();
+            let started = std::time::Instant::now();
+            let entry = get_queue_entry(State(state.clone()), user, Path(150))
+                .await
+                .expect("measure get")
+                .0;
+            let bytes = serde_json::to_vec(&entry).expect("entry json").len();
+            println!(
+                "MEASURE {mode} get_entry wall_us={} payload_bytes={bytes} window_us={t0}-{}",
+                started.elapsed().as_micros(),
+                unix_micros()
+            );
+
+            let t0 = unix_micros();
+            let started = std::time::Instant::now();
+            let moved = update_queue_entry(
+                State(state.clone()),
+                user,
+                Path(300),
+                Json(QueueEntryPatch { position: 2 }),
+            )
+            .await
+            .expect("measure patch")
+            .0;
+            let bytes = serde_json::to_vec(&moved).expect("moved json").len();
+            println!(
+                "MEASURE {mode} patch_move wall_us={} payload_bytes={bytes} window_us={t0}-{}",
+                started.elapsed().as_micros(),
+                unix_micros()
+            );
+
+            let t0 = unix_micros();
+            let started = std::time::Instant::now();
+            let shuffled = create_queue_order(
+                State(state.clone()),
+                user,
+                Json(QueueOrderRequest {
+                    idempotency_key: Some(format!("measure-key-{mode}")),
+                }),
+            )
+            .await
+            .expect("measure shuffle");
+            let bytes = serde_json::to_vec(&shuffled.1 .0)
+                .expect("shuffle json")
+                .len();
+            println!(
+                "MEASURE {mode} post_shuffle wall_us={} payload_bytes={bytes} window_us={t0}-{}",
+                started.elapsed().as_micros(),
+                unix_micros()
+            );
+
+            let t0 = unix_micros();
+            let started = std::time::Instant::now();
+            let replay = create_queue_order(
+                State(state.clone()),
+                user,
+                Json(QueueOrderRequest {
+                    idempotency_key: Some(format!("measure-key-{mode}")),
+                }),
+            )
+            .await
+            .expect("measure replay");
+            let bytes = serde_json::to_vec(&replay.1 .0).expect("replay json").len();
+            println!(
+                "MEASURE {mode} post_shuffle_replay wall_us={} payload_bytes={bytes} window_us={t0}-{}",
+                started.elapsed().as_micros(),
+                unix_micros()
+            );
+        }
+        std::env::remove_var("OPTION_E_ENABLED");
+    }
+
+    #[tokio::test]
+    async fn queue_responses_expose_only_minimal_entry_fields() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state().await;
+        reset(&state).await;
+        let user = AuthenticatedUser::for_test(7);
+        seed(&state, 7, &[(1, 1, false), (2, 2, false)]).await;
+
+        let entry = get_queue_entry(State(state.clone()), user, Path(1))
+            .await
+            .expect("entry read")
+            .0;
+        let entry_json = serde_json::to_value(&entry).expect("entry json");
+        let mut entry_keys: Vec<&str> = entry_json
+            .as_object()
+            .expect("entry object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        entry_keys.sort_unstable();
+        assert_eq!(entry_keys, ["ordering_version", "position", "thread_id"]);
+        assert!(serde_json::to_vec(&entry).expect("entry bytes").len() <= 96);
+
+        let moved = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(2),
+            Json(QueueEntryPatch { position: 1 }),
+        )
+        .await
+        .expect("queue move")
+        .0;
+        assert!(serde_json::to_vec(&moved).expect("moved bytes").len() <= 96);
+
+        let shuffled = create_queue_order(
+            State(state.clone()),
+            user,
+            Json(QueueOrderRequest {
+                idempotency_key: Some("minimal-response".into()),
+            }),
+        )
+        .await
+        .expect("queue shuffle");
+        let order_json = serde_json::to_value(&shuffled.1 .0).expect("order json");
+        let mut order_keys: Vec<&str> = order_json
+            .as_object()
+            .expect("order object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        order_keys.sort_unstable();
+        assert_eq!(order_keys, ["event_id", "replayed", "shuffled"]);
+        assert!(
+            serde_json::to_vec(&shuffled.1 .0)
+                .expect("order bytes")
+                .len()
+                <= 96
+        );
     }
 
     #[test]
@@ -1343,6 +1554,50 @@ mod tests {
                 "option e GET ordinal after move for thread {thread_id}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn successful_queue_requests_return_their_connection_to_the_pool() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state().await;
+        reset(&state).await;
+        let user = AuthenticatedUser::for_test(7);
+        seed(&state, 7, &[(1, 1, false), (2, 2, false), (3, 3, false)]).await;
+
+        let _ = get_queue_entry(State(state.clone()), user, Path(2))
+            .await
+            .expect("entry read");
+        assert!(
+            state.pool.status().available >= 1,
+            "GET must return its pooled connection instead of opening a new one per request"
+        );
+
+        let _ = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(3),
+            Json(QueueEntryPatch { position: 1 }),
+        )
+        .await
+        .expect("queue move");
+        assert!(
+            state.pool.status().available >= 1,
+            "PATCH must return its pooled connection"
+        );
+
+        let _ = create_queue_order(
+            State(state.clone()),
+            user,
+            Json(QueueOrderRequest {
+                idempotency_key: Some("pool-release".into()),
+            }),
+        )
+        .await
+        .expect("queue shuffle");
+        assert!(
+            state.pool.status().available >= 1,
+            "POST must return its pooled connection"
+        );
     }
 
     #[tokio::test]
