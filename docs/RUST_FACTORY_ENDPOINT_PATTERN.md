@@ -64,3 +64,22 @@ parity, migration health, and the remaining gates run in CI.
 The worker's pre-push toolchain is a prerequisite, not evidence that CI passed.
 If compilation cannot run, fail closed and preserve a truthful handoff rather
 than pretending the code was verified or weakening the tests.
+
+## Quality measurement
+
+The read-only first-head scorecard runs daily from
+`.github/workflows/rust-first-head-quality.yml`. Its rolling seven-day JSON
+and Markdown artifacts are retained for 30 days and identify the declared
+model and worker where supplied by the PR body.
+
+To inspect the latest retained GitHub Actions history manually:
+
+```bash
+python scripts/report_rust_first_head_ci.py --since 2026-10-29 --format markdown
+```
+
+The report distinguishes passed, failed, cancelled, incomplete, and missing
+first-head runs. Failed job names are shown, but **code versus infrastructure**
+causality remains unclassified unless someone investigates the actual logs.
+Its bounded GitHub query window and retained-run limitations are explicit.
+It does not change merge gates, schedule factory dispatch, or write to GitHub.
