@@ -29,7 +29,6 @@ use axum::{
     Json,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -143,14 +142,18 @@ fn normalize_search(search: Option<&str>) -> String {
 }
 
 fn option_e_enabled() -> bool {
-    std::env::var("OPTION_E_ENABLED")
+    let enabled = std::env::var("OPTION_E_ENABLED")
         .map(|value| {
             matches!(
                 value.trim().to_ascii_lowercase().as_str(),
                 "1" | "true" | "t" | "yes" | "y" | "on"
             )
         })
-        .unwrap_or(false)
+        .unwrap_or(false);
+    enabled
+        && std::env::var("OPTION_E_APPROVED_PREVIEW")
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false)
 }
 
 fn encode_cursor(cursor: &QueueCursor) -> String {
@@ -945,11 +948,14 @@ async fn query_page(
 
     let connection = db::checkout(state).await?;
     PAGE_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
-    let row = connection
-        .query_one(&sql, &bindings)
-        .await
-        .map_err(db::query_error)?;
-    drop(Object::take(connection));
+    let row = db::query_one_optional(state, connection, &sql, &bindings)
+        .await?
+        .ok_or_else(|| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal Server Error".to_string(),
+            )
+        })?;
     let payload: String = row.try_get(0).map_err(db::query_error)?;
     let payload: PagePayload = serde_json::from_str(&payload).map_err(|_| {
         ApiError(
