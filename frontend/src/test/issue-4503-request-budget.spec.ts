@@ -118,6 +118,11 @@ test.describe('Issue #4503 route request budgets', () => {
       page,
       () => countCalls(calls, 'GET', `/api/v1/continuity-plans/${plan.id}/reader`),
     )
+    await settleCalls(
+      page,
+      () => countCalls(calls, 'GET', `/api/v1/tags/effective/plan/${plan.id}/`),
+      1,
+    )
 
     expect(countCalls(calls, 'GET', `/api/v1/continuity-plans/${plan.id}/reader`)).toBe(1)
     expect(countCalls(calls, 'GET', `/api/v1/tags/effective/plan/${plan.id}/`)).toBe(1)

@@ -26,22 +26,26 @@ export function useIdentityInbox(offset: number) {
 /**
  * Unresolved inbox total used by the navigation badge.
  *
- * On `/identity-inbox` the page's own list response supplies the total the
- * badge would otherwise probe for. Suppressing this limit=1 read on that route
- * turns two concurrent requests to `/v1/identity-inbox` into the single page
- * request; every other route keeps the cheap probe and its 10-second
- * freshness window. A badge already cached before entering the page keeps
- * rendering; a direct cold load fills it on the next route change.
+ * On `/identity-inbox` the badge subscribes to the page's own first-page query
+ * instead of issuing a second totals-only read of the same endpoint. Both
+ * observers share one cache entry, so a cold load makes a single request, the
+ * badge receives the page's `total`, and mutation invalidation refreshes both.
+ * Every other route keeps the cheap limit=1 probe and its 10-second freshness
+ * window.
  */
 export function useIdentityInboxStatus(enabled = true) {
   const { pathname } = useLocation()
   const pageOwnsTotal = pathname === INBOX_ROUTE_PATH
   return useQuery({
-    queryKey: queryKeys.identityInbox.list({ offset: 0, limit: 1 }),
-    queryFn: () => identityInboxApi.list(0, 1),
+    queryKey: pageOwnsTotal
+      ? queryKeys.identityInbox.list({ offset: 0, limit: INBOX_LIMIT })
+      : queryKeys.identityInbox.list({ offset: 0, limit: 1 }),
+    queryFn: pageOwnsTotal
+      ? () => identityInboxApi.list(0, INBOX_LIMIT)
+      : () => identityInboxApi.list(0, 1),
     select: (data) => data.total,
     staleTime: 10_000,
-    enabled: enabled && !pageOwnsTotal,
+    enabled,
   })
 }
 

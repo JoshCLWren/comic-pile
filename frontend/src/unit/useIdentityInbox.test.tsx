@@ -225,12 +225,13 @@ describe('useIdentityInboxStatus', () => {
     expect(mockedInboxApi.list).toHaveBeenCalledWith(0, 1)
   })
 
-  it('suppresses the totals probe while the inbox page owns the total', async () => {
+  it('shares the inbox first-page query instead of probing limit=1 on that route', async () => {
     const wrapper = createWrapper('/identity-inbox')
     const { result } = renderHook(() => useIdentityInboxStatus(), { wrapper })
 
-    await waitFor(() => expect(result.current.fetchStatus).toBe('idle'))
-    expect(mockedInboxApi.list).not.toHaveBeenCalled()
+    await waitFor(() => expect(result.current.data).toBe(1))
+    expect(mockedInboxApi.list).toHaveBeenCalledTimes(1)
+    expect(mockedInboxApi.list).toHaveBeenCalledWith(0, 20)
   })
 })
 

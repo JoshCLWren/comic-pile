@@ -36,6 +36,7 @@ type RecordedRequest = {
 
 const requests: RecordedRequest[] = []
 const originalAdapter = api.defaults.adapter
+let inboxTotal = 25
 
 type QueryValue = string | number | boolean
 type QueryValues = Record<string, QueryValue | QueryValue[]>
@@ -62,13 +63,13 @@ function canonicalUrl(method: string, path: string, query: CanonicalQuery): stri
 }
 
 function inboxPage(offset: number, limit: number) {
-  const items = Array.from({ length: 25 }, (_, index) => {
+  const items = Array.from({ length: inboxTotal }, (_, index) => {
     if (index === 0) return inboxItem(1, 'Mister Miracle', 501)
     if (index === 1) return inboxItem(2, 'The Ultimates', 502)
     if (index === 2) return inboxItem(3, 'New Gods', 503)
     return inboxItem(index + 1, `Series ${index + 1}`, 500 + index)
   }).slice(offset, offset + limit)
-  return { items, total: 25, offset, limit }
+  return { items, total: inboxTotal, offset, limit }
 }
 
 function inboxItem(mappingId: number, threadTitle: string, identityId: number) {
@@ -130,7 +131,11 @@ function planDetail(planId: number) {
   }
 }
 
-function responseFor(method: string, path: string, query: Record<string, string[]>) {
+function responseFor(method: string, path: string, query: CanonicalQuery) {
+  if (method === 'POST' && path === '/api/v1/identity-inbox/1/confirm') {
+    inboxTotal -= 1
+    return undefined
+  }
   if (method !== 'GET') return undefined
   if (path === '/api/v1/continuity-plans/') return []
   if (/^\/api\/v1\/continuity-plans\/\d+\/reader$/.test(path)) {
@@ -199,6 +204,7 @@ const INBOX_STATUS_PROBE = GET('/api/v1/identity-inbox', { offset: 0, limit: 1 }
 
 beforeEach(() => {
   requests.length = 0
+  inboxTotal = 25
   api.defaults.adapter = recorder
 })
 
@@ -231,8 +237,8 @@ function expectExact(expected: string[]) {
 }
 
 function TagBadgeProbe() {
-  useIdentityInboxStatus(true)
-  return null
+  const { data } = useIdentityInboxStatus(true)
+  return <span data-testid="badge-total">{data ?? 'none'}</span>
 }
 
 function renderRoute(entry: string, { withBadge = false, strict = false } = {}) {
@@ -390,6 +396,7 @@ describe('/identity-inbox', () => {
     await settle(1)
     expect(urls()).toEqual([INBOX_FIRST_PAGE])
     expect(count(INBOX_STATUS_PROBE)).toBe(0)
+    expect(screen.getByTestId('badge-total')).toHaveTextContent('25')
   })
 
   it('does not re-probe the total on a warm revisit to the inbox route', async () => {
@@ -425,10 +432,11 @@ describe('/identity-inbox', () => {
     expectExact([])
   })
 
-  it('confirming a candidate refetches the current page without a badge probe', async () => {
+  it('confirming a candidate refreshes the page and the badge from one shared query', async () => {
     renderRoute('/identity-inbox', { withBadge: true })
     await screen.findByText('Mister Miracle')
     await settle(1)
+    expect(screen.getByTestId('badge-total')).toHaveTextContent('25')
     requests.length = 0
 
     await userEvent.click(screen.getByRole('button', { name: /Mister Miracle/ }))
@@ -436,6 +444,7 @@ describe('/identity-inbox', () => {
     await waitFor(() => expect(count(INBOX_FIRST_PAGE)).toBe(1))
     expect(urls()).toContain('POST /api/v1/identity-inbox/1/confirm')
     expect(count(INBOX_STATUS_PROBE)).toBe(0)
+    await waitFor(() => expect(screen.getByTestId('badge-total')).toHaveTextContent('24'))
   })
 
   it('focus and visibility restore do not refetch the inbox', async () => {
