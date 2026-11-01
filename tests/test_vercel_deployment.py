@@ -141,6 +141,7 @@ def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
             "config": {"excludeFiles": "{target/**,native/**/target/**}"},
         },
         {"src": "api/native_roll.rs", "use": "@vercel/rust"},
+        {"src": "api/native_issue.rs", "use": "@vercel/rust"},
         {"src": "api/auth/me.ts", "use": "@vercel/node"},
         {
             "src": "package.json",
@@ -160,7 +161,7 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
     """Ensure API and documentation requests cannot be swallowed by the SPA."""
     routes = _routes(_load_vercel_config())
 
-    native_routes = [
+    native_roll_routes = [
         ("/api/v1/auth/me", "GET"),
         ("/api/v2/auth/register", "POST"),
         ("/api/v2/auth/login", "POST"),
@@ -175,17 +176,33 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         ("/api/v2/roll/offer", "POST"),
         ("/api/v2/roll/reset", "POST"),
         ("/api/v2/reading-boundaries", "POST"),
+        ("/api/v2/queue-entries/:thread_id", "GET"),
+        ("/api/v2/queue-entries/:thread_id", "PATCH"),
+        ("/api/v2/queue-orders", "POST"),
         ("/api/v1/roll/dismiss-pending", "POST"),
         ("/api/roll/dismiss-pending", "POST"),
     ]
-    for index, (src, method) in enumerate(native_routes):
+    for index, (src, method) in enumerate(native_roll_routes):
         assert routes[index] == {
             "src": src,
             "methods": [method],
             "dest": "/api/native_roll.rs",
         }
 
-    python_start = len(native_routes)
+    native_issue_routes = [
+        ("/api/_native_issue/health", "GET"),
+        ("^/api/v2/issues/[0-9]+$", "PATCH"),
+        ("^/api/v2/issues/cards$", "POST"),
+    ]
+    issue_start = len(native_roll_routes)
+    for offset, (src, method) in enumerate(native_issue_routes):
+        assert routes[issue_start + offset] == {
+            "src": src,
+            "methods": [method],
+            "dest": "/api/native_issue.rs",
+        }
+
+    python_start = issue_start + len(native_issue_routes)
     assert routes[python_start] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
     assert routes[python_start + 1] == {
         "src": "/(?:openapi\\.json|docs|redoc|health)",
@@ -293,7 +310,8 @@ def test_vercel_dynamic_route_pages_fall_through_to_the_spa_fallback() -> None:
         matched = re.fullmatch(src_pattern, path)
         assert matched is None, f"{path} must fall through to the SPA, not a static file"
 
-    assert routes[routes.index({"handle": "filesystem"}) - 1]["src"] == _route_html_rule()["src"]
+    filesystem_index = routes.index({"handle": "filesystem"})
+    assert routes[filesystem_index - 1]["src"] == _route_html_rule()["src"]
     fallback = routes[-1]
     assert fallback["src"] == "/(.*)"
     assert fallback["dest"] == "/index.html"
@@ -330,7 +348,7 @@ def test_vercel_node_typescript_relative_imports_use_js_extensions() -> None:
 
 
 def test_native_auth_routes_are_isolated_from_python_and_static_routes() -> None:
-    """Keep migrated auth GET/POST in Rust and password recovery in Python."""
+    """Keep migrated auth in Rust and password recovery in Python."""
     routes = _routes(_load_vercel_config())
     probes = (
         ("GET", "/api/v1/auth/me", "/api/native_roll.rs"),
@@ -354,6 +372,16 @@ def test_native_auth_routes_are_isolated_from_python_and_static_routes() -> None
         ("POST", "/api/v2/roll/reset", "/api/native_roll.rs"),
         ("GET", "/api/_native_roll/health", "/api/native_roll.rs"),
         ("POST", "/api/_native_roll/health", "/api/index.py"),
+        ("GET", "/api/_native_issue/health", "/api/native_issue.rs"),
+        ("POST", "/api/_native_issue/health", "/api/index.py"),
+        ("PATCH", "/api/v2/issues/42", "/api/native_issue.rs"),
+        ("PATCH", "/api/v2/issues/99", "/api/native_issue.rs"),
+        ("POST", "/api/v2/issues/cards", "/api/native_issue.rs"),
+        ("GET", "/api/v2/issues/cards", "/api/index.py"),
+        ("PATCH", "/api/v2/issues/cards", "/api/index.py"),
+        ("GET", "/api/v2/issues/42", "/api/index.py"),
+        ("POST", "/api/v2/issues/42", "/api/index.py"),
+        ("PATCH", "/api/v2/issues/not-an-id", "/api/index.py"),
         ("GET", "/api/v2/reading-boundaries", "/api/index.py"),
         ("GET", "/health", "/api/index.py"),
         ("GET", "/", "/index.html"),

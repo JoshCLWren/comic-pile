@@ -49,12 +49,8 @@ function bootstrapState(pendingThreadId: number | null): RollBootstrapResponse {
     roll_pool: [],
     snoozed_threads: [],
     snoozed_count: 0,
-    blocked_count: 0,
-    blocked_threads: [],
     skipped_thread_ids: [],
     skipped_threads: [],
-    stale_thread_count: 0,
-    stale_thread: null,
   }
 }
 

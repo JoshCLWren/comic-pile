@@ -6,7 +6,7 @@ const client = createHttpClientStub()
 const rollBootstrapApi = createRollBootstrapApi(client)
 
 beforeEach(() => {
-  client.get.mockReset().mockResolvedValue({ rollable: [], total_threads: 0, available_threads: 0, excluded_count: 0, excluded_threads: [], inactive_count: 0, inactive_threads: [] })
+  client.get.mockReset().mockResolvedValue({ rollable: [], pool_reason: 'no_series' })
 })
 
 it('sends a valid browser IANA timezone as the bootstrap query parameter', async () => {

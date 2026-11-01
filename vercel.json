@@ -29,6 +29,10 @@
       "use": "@vercel/rust"
     },
     {
+      "src": "api/native_issue.rs",
+      "use": "@vercel/rust"
+    },
+    {
       "src": "api/auth/me.ts",
       "use": "@vercel/node"
     },
@@ -140,6 +144,21 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "/api/v2/queue-entries/:thread_id",
+      "methods": ["GET"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/queue-entries/:thread_id",
+      "methods": ["PATCH"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/queue-orders",
+      "methods": ["POST"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "/api/v1/roll/dismiss-pending",
       "methods": [
         "POST"
@@ -152,6 +171,21 @@
         "POST"
       ],
       "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/_native_issue/health",
+      "methods": ["GET"],
+      "dest": "/api/native_issue.rs"
+    },
+    {
+      "src": "^/api/v2/issues/[0-9]+$",
+      "methods": ["PATCH"],
+      "dest": "/api/native_issue.rs"
+    },
+    {
+      "src": "^/api/v2/issues/cards$",
+      "methods": ["POST"],
+      "dest": "/api/native_issue.rs"
     },
     {
       "src": "/api(?:/.*)?",

@@ -27,6 +27,7 @@ from stale_pr_decay import StalePRGuard
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
 from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for
 from factory_source_budget import budget_block_reason
+from factory_attempt_history import read_comment_history
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
@@ -564,11 +565,23 @@ def latest_lease_activity_epoch(number: int) -> int | None:
 
 
 def recent_factory_comments(now_epoch: int) -> list[dict[str, Any]]:
-    """Fetch comments that can still contribute to the no-diff budget."""
-    since_epoch = max(0, now_epoch - FACTORY_NO_DIFF_RETRY_RESET_SECONDS)
-    since = datetime.fromtimestamp(since_epoch, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
-    pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/comments?since={since}&per_page=100'])
-    return flatten_pages(pages)
+    """Read retry history, sharing only a refreshed snapshot within a dispatch pass."""
+    def fetch_pages(since_epoch: int) -> tuple[list[dict[str, object]], int]:
+        since = datetime.fromtimestamp(since_epoch, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
+        pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/comments?since={since}&per_page=100'])
+        if (
+            not isinstance(pages, list) or not pages
+            or not all(isinstance(page, list) for page in pages)
+            or not all(isinstance(comment, dict) for page in pages for comment in page)
+        ):
+            raise RuntimeError('retry history pagination returned an invalid response')
+        return flatten_pages(pages), len(pages)
+
+    cache = os.environ.get('FACTORY_ATTEMPT_HISTORY_CACHE', '')
+    return read_comment_history(
+        now_epoch=now_epoch, reset_seconds=FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
+        scope=REPO, cache_path=Path(cache) if cache else None, fetch_pages=fetch_pages,
+    )
 
 
 def load_no_diff_attempt_records(now_epoch: int | None=None) -> list[NoDiffAttempt]:

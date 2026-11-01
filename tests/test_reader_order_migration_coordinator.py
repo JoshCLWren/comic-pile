@@ -709,6 +709,10 @@ async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
             created_at=datetime.now(UTC),
         ),
         Dependency(
+            # Explicit legacy ID 101 does not advance PostgreSQL's sequence.
+            # Keep this unrelated synthetic edge away from the next sequence
+            # allocation so test order cannot produce a dependencies_pkey collision.
+            id=10_000_000 + issues[1].id if dependency_id is not None else None,
             source_issue_id=issues[1].id,
             target_issue_id=issues[2].id,
             note="residual explicit edge",

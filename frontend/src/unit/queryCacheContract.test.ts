@@ -359,21 +359,12 @@ describe('targeted cache effects', () => {
 
     // Both membership lists reset: the active Queue and the excluded shelf a
     // series crosses into or out of (#3807).
-    expect(resetQueries).toHaveBeenCalledTimes(4)
+    expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
     })
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.excluded.pages(),
-    })
-    // The Roll exclusion drill-down caches the same rows and totals the
-    // bootstrap reports, so a deleted or reordered series must not survive in
-    // its cached pages (#3330).
-    expect(resetQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.exclusions('blocked'),
-    })
-    expect(resetQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.exclusions('inactive'),
     })
     expect(invalidateQueries).toHaveBeenCalledTimes(3)
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -397,15 +388,9 @@ describe('targeted cache effects', () => {
     await invalidateAfterUndo(client)
 
     // The queue half is composed from the queue-movement effect, not re-implemented.
-    expect(resetQueries).toHaveBeenCalledTimes(4)
+    expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
-    expect(resetQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.exclusions('blocked'),
-    })
-    expect(resetQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.exclusions('inactive'),
-    })
     expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),

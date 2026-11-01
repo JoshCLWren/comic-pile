@@ -143,7 +143,7 @@ issue, create a linked issue instead of widening scope.
    the issue immediately carries truthful factory state for a local session:
 
    ```bash
-   gh api -X POST repos/JoshCLWren/comic-pile/issues/<number>/labels \
+   gh api -X PUT repos/JoshCLWren/comic-pile/issues/<number>/labels \
      -F "labels[]=ralph-task" -F "labels[]=ralph-status:in-progress" \
      -F "labels[]=ralph-priority:<band>" \
      -F "labels[]=factory" -F "labels[]=factory:building" -F "labels[]=factory:local" \
@@ -154,6 +154,8 @@ issue, create a linked issue instead of widening scope.
    `infrastructure`, etc.) + `ralph-status:in-progress` + `factory` + `factory:building` +
    exactly one owner (`factory:local` for a local session). Fetch current labels first
    (`gh issue view <n> --json labels`) so none are dropped.
+
+   Use PUT for replacement: POST only adds labels and retains old owners, stages, and statuses.
 
 **Claim immediately after picking** — before deep reading or editing — so the dispatcher sees
 the lease and moves on. Race etiquette: if `make start-task` fails with "not pending", a

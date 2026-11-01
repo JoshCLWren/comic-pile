@@ -4,7 +4,7 @@ use axum::{
     extract::Request,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use comicpile_roll_service::{config::Config, router as roll_router, AppState};
@@ -89,6 +89,9 @@ fn app() -> Router {
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
         .route("/api/v2/reading-boundaries", post(native_dispatch))
+        .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
+        .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
+        .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))

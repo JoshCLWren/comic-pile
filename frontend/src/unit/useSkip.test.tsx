@@ -71,12 +71,8 @@ const bootstrapState = (
   roll_pool: [],
   snoozed_threads: [],
   snoozed_count: 0,
-  blocked_count: 0,
-  blocked_threads: [],
   skipped_thread_ids: pendingThreadId === null ? [7] : [],
   skipped_threads: pendingThreadId === null ? [{ id: 7, title: 'Saga', format: 'Comic' }] : [],
-  stale_thread_count: 0,
-  stale_thread: null,
 })
 
 describe('skip hooks', () => {

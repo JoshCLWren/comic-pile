@@ -109,9 +109,6 @@ def _register_roll(app: FastAPI) -> None:
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
-    # New client resources (e.g. the Roll exclusion drill-down for #3330) are
-    # versioned-only: no bare /api/* twin.
-    app.include_router(roll.v1_router, prefix="/api/v1/roll", tags=["roll"])
 
 
 def _register_admin(app: FastAPI) -> None:

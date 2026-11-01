@@ -114,16 +114,16 @@ it('keeps queue removal and restore on their own non-destructive endpoints', asy
   expect(post).toHaveBeenCalledWith('/v1/threads/5/restore')
 })
 
-it('calls queue endpoints with expected paths', async () => {
+it('calls queue resource endpoints with expected paths', async () => {
   await queueApi.moveToPosition(3, 2)
   await queueApi.moveToFront(4)
   await queueApi.moveToBack(5)
-  await queueApi.shuffle()
+  await queueApi.shuffle('shuffle-key-1')
 
-  expect(put).toHaveBeenCalledWith('/v1/queue/threads/3/position/', { new_position: 2 })
-  expect(put).toHaveBeenCalledWith('/v1/queue/threads/4/front/')
-  expect(put).toHaveBeenCalledWith('/v1/queue/threads/5/back/')
-  expect(post).toHaveBeenCalledWith('/v1/queue/shuffle/')
+  expect(patch).toHaveBeenCalledWith('/v2/queue-entries/3', { position: 2 })
+  expect(patch).toHaveBeenCalledWith('/v2/queue-entries/4', { position: 1 })
+  expect(patch).toHaveBeenCalledWith('/v2/queue-entries/5', { position: 2147483647 })
+  expect(post).toHaveBeenCalledWith('/v2/queue-orders', { idempotency_key: 'shuffle-key-1' })
 })
 
 it('calls dependency endpoints with expected paths', async () => {

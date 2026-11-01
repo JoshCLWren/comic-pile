@@ -1,0 +1,39 @@
+name: Rust first-head CI quality
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+jobs:
+  rust-first-head-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Report rolling seven-day Rust PR first-head outcomes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SINCE="$(date -u -d '7 days ago' +%F)"
+          python scripts/report_rust_first_head_ci.py --since "$SINCE" --format json > rust-first-head-quality.json
+          python scripts/report_rust_first_head_ci.py --input rust-first-head-quality.json --format markdown > rust-first-head-quality.md
+          cat rust-first-head-quality.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rust-first-head-quality
+          path: |
+            rust-first-head-quality.json
+            rust-first-head-quality.md
+          retention-days: 30
+          if-no-files-found: error
