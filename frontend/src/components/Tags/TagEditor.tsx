@@ -89,7 +89,9 @@ export function TagEditor({
   const effective = useEffectiveTags(targetType, targetId)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 250)
-  const usable = useTags(debouncedSearch)
+  // The closed editor is still mounted on detail surfaces, so the catalog
+  // reads wait for the reader to open it (#4501).
+  const usable = useTags(debouncedSearch, isOpen)
   const [newName, setNewName] = useState('')
   // Latest typed name outside render state. An in-flight creation resolves
   // against a stale closure of `newName`, so it can only notice that the
@@ -102,7 +104,10 @@ export function TagEditor({
   // fires until the viewer actually types. The server normalizes this search
   // the same way it normalizes stored keys, so spacing variants still match
   // (issue #4182); only the cache key differs.
-  const nameLookup = useTags(debouncedNewName.trim() ? debouncedNewName : undefined)
+  const nameLookup = useTags(
+    debouncedNewName.trim() ? debouncedNewName : undefined,
+    isOpen,
+  )
   const normalizedTypedName = normalizeTagName(newName)
   const debouncedNormalizedName = normalizeTagName(debouncedNewName)
   const [newColor, setNewColor] = useState<string>(DEFAULT_TAG_COLOR_NAME)
