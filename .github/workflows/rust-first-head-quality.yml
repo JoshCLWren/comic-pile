@@ -27,7 +27,7 @@ jobs:
         run: |
           SINCE="$(date -u -d '7 days ago' +%F)"
           python scripts/report_rust_first_head_ci.py --since "$SINCE" --format json > rust-first-head-quality.json
-          python scripts/report_rust_first_head_ci.py --since "$SINCE" --format markdown > rust-first-head-quality.md
+          python scripts/report_rust_first_head_ci.py --input rust-first-head-quality.json --format markdown > rust-first-head-quality.md
           cat rust-first-head-quality.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         with:
