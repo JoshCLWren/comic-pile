@@ -10,9 +10,23 @@
 //! identifier every existing frontend caller already knows; there is no separate
 //! queue-entry row. `position` is the reader-visible dense ordinal the Queue
 //! displays (readable rows before blocked rows), which is also the space the
-//! reposition dialog submits. `ordering_version` is the entry's monotonic
-//! `threads.queue_order_key` revision, bumped whenever a mutation changes that
-//! entry's rank.
+//! reposition dialog submits.
+//!
+//! `ordering_version` is a **content revision of the reader's queue order**, not
+//! a per-entry mutation counter. It is derived from the durable ordering state
+//! (`threads.queue_position`, `threads.is_blocked`, and thread id) on every read,
+//! so every writer that changes the order changes it: these v2 resources,
+//! Python's `move_to_safe_position`, insertion, completion, exclusion, and undo
+//! alike. Two reads with the same token observed the same order; a different
+//! token means the order changed in between.
+//!
+//! This module deliberately does **not** write `threads.queue_order_key`. That
+//! column is reserved by the frozen #3227 plan for sparse, uniquely allocated
+//! order keys scaled by `ORDER_KEY_SCALE` and stays inert until the whole queue
+//! writer/reader cutover lands. Persisting narrow, duplicate integers into it
+//! would corrupt that future ordering authority and reorder any reader that
+//! trusts the documented `COALESCE(queue_order_key, queue_position * scale)`
+//! expression, so the v2 queue resources leave it untouched.
 //!
 //! Every mutation takes the same transaction-scoped advisory lock the Python
 //! queue writer uses, so concurrent moves and shuffles serialize per reader.
@@ -29,7 +43,6 @@ use deadpool_postgres::Object;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio_postgres::Transaction;
 
 /// Advisory-lock namespace shared with `comic_pile.queue.ADVISORY_LOCK_NAMESPACE`.
 const QUEUE_LOCK_NAMESPACE: i32 = 699001;
@@ -41,7 +54,12 @@ pub struct QueueEntryResponse {
     pub thread_id: i32,
     /// One-based dense reader-visible Queue ordinal.
     pub position: i32,
-    /// Monotonic ordering revision for this entry (0 before its first change).
+    /// Content revision of the reader's current queue order.
+    ///
+    /// Derived from the durable ordering state on every read, so it changes
+    /// whenever any writer changes the order and stays equal while the order is
+    /// unchanged. It is a change-detection token, not a persisted per-entry
+    /// counter and not the #3227 sparse order key.
     pub ordering_version: i64,
 }
 
@@ -135,28 +153,40 @@ struct OrderedEntry {
     is_blocked: bool,
 }
 
-/// Load the owner's active queued rows in reader-visible order.
-async fn load_ordered_queue(
-    state: &AppState,
-    transaction: &Transaction<'_>,
-    user: AuthenticatedUser,
-) -> Result<Vec<OrderedEntry>, ApiError> {
-    let rows = transaction
+/// Load the owner's active queued rows from an open client, unordered.
+async fn load_queue_rows<C>(client: &C, user_id: i32) -> Result<Vec<OrderedEntry>, ApiError>
+where
+    C: tokio_postgres::GenericClient + Sync,
+{
+    let rows = client
         .query(
             "SELECT id, queue_position, is_blocked FROM threads \
              WHERE user_id = $1::int AND status = 'active' AND queue_position >= 1",
-            &[&user.id()],
+            &[&user_id],
         )
         .await
         .map_err(db::query_error)?;
-    let mut entries: Vec<OrderedEntry> = rows
+    Ok(rows
         .iter()
         .map(|row| OrderedEntry {
             thread_id: row.get(0),
             queue_position: row.get(1),
             is_blocked: row.get(2),
         })
-        .collect();
+        .collect())
+}
+
+/// Order rows exactly as the Queue displays them.
+///
+/// Readable entries sort ahead of blocked entries; queue rank then id breaks
+/// ties deterministically, exactly like Python's `build_sort_order`. Blocked
+/// grouping always uses [`blocked_thread_ids`], so GET and PATCH share one
+/// authority under every execution mode.
+async fn order_display_rows(
+    state: &AppState,
+    user: AuthenticatedUser,
+    mut entries: Vec<OrderedEntry>,
+) -> Result<Vec<OrderedEntry>, ApiError> {
     let raw: Vec<(i32, i32, bool)> = entries
         .iter()
         .map(|entry| (entry.thread_id, entry.queue_position, entry.is_blocked))
@@ -166,8 +196,6 @@ async fn load_ordered_queue(
             entry.is_blocked = blocked.contains(&entry.thread_id);
         }
     }
-    // Readable entries sort ahead of blocked entries; queue rank then id breaks
-    // ties deterministically, exactly like Python's `build_sort_order`.
     entries.sort_by_key(|entry| (entry.is_blocked, entry.queue_position, entry.thread_id));
     Ok(entries)
 }
@@ -179,6 +207,35 @@ fn ordinal_of(entries: &[OrderedEntry], thread_id: i32) -> Option<usize> {
         .map(|index| index + 1)
 }
 
+/// FNV-1a seed and prime for the queue-order content digest.
+const ORDER_REVISION_SEED: u64 = 0xcbf2_9ce4_8422_2325;
+const ORDER_REVISION_PRIME: u64 = 0x0000_0100_0000_01b3;
+
+/// Derive the reader's queue-order revision from its ordered visible state.
+///
+/// The digest covers `(thread_id, queue_position, is_blocked)` in display order,
+/// so it is a pure function of durable ordering state. It therefore cannot go
+/// stale and does not depend on which writer made a change. Collisions are
+/// confined to the 63-bit digest range and this value is never an
+/// authorization or concurrency-control boundary.
+fn ordering_revision(entries: &[OrderedEntry]) -> i64 {
+    let mut digest = ORDER_REVISION_SEED;
+    for entry in entries {
+        let blocked = u8::from(entry.is_blocked);
+        for byte in entry
+            .thread_id
+            .to_le_bytes()
+            .iter()
+            .chain(entry.queue_position.to_le_bytes().iter())
+            .chain(std::iter::once(&blocked))
+        {
+            digest ^= u64::from(*byte);
+            digest = digest.wrapping_mul(ORDER_REVISION_PRIME);
+        }
+    }
+    (digest >> 1) as i64
+}
+
 /// Read one owned queue entry.
 pub async fn get_queue_entry(
     State(state): State<Arc<AppState>>,
@@ -186,24 +243,14 @@ pub async fn get_queue_entry(
     Path(thread_id): Path<i32>,
 ) -> Result<Json<QueueEntryResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let row = db::query_one_optional(
-        &state,
-        connection,
-        "WITH ordered AS ( \
-             SELECT id, queue_order_key, \
-                    (row_number() OVER (ORDER BY is_blocked, queue_position, id))::int AS ordinal \
-             FROM threads \
-             WHERE user_id = $2::int AND status = 'active' AND queue_position >= 1 \
-         ) \
-         SELECT ordinal, COALESCE(queue_order_key, 0) FROM ordered WHERE id = $1",
-        &[&thread_id, &user.id()],
-    )
-    .await?
-    .ok_or_else(|| not_found(thread_id))?;
+    let rows = load_queue_rows(&**connection, user.id()).await?;
+    drop(Object::take(connection));
+    let entries = order_display_rows(&state, user, rows).await?;
+    let position = ordinal_of(&entries, thread_id).ok_or_else(|| not_found(thread_id))?;
     Ok(Json(QueueEntryResponse {
         thread_id,
-        position: row.get(0),
-        ordering_version: row.get(1),
+        position: i32::try_from(position).unwrap_or(i32::MAX),
+        ordering_version: ordering_revision(&entries),
     }))
 }
 
@@ -237,7 +284,8 @@ pub async fn update_queue_entry(
         .await
         .map_err(db::query_error)?;
 
-    let entries = load_ordered_queue(&state, &transaction, user).await?;
+    let rows = load_queue_rows(&*transaction, user_id).await?;
+    let entries = order_display_rows(&state, user, rows).await?;
     let current = ordinal_of(&entries, thread_id).ok_or_else(|| not_found(thread_id))?;
     let total = entries.len();
     // A rank beyond the end expresses "back" without a custom action method.
@@ -298,15 +346,10 @@ pub async fn update_queue_entry(
              ) \
              UPDATE threads AS t \
              SET queue_position = moved.new_position, \
-                 queue_position_is_manual = (t.queue_position_is_manual OR t.id = $2::int), \
-                 queue_order_key = CASE \
-                     WHEN moved.new_position <> moved.old_position \
-                     THEN COALESCE(t.queue_order_key, 0) + 1 \
-                     ELSE t.queue_order_key \
-                 END \
+                 queue_position_is_manual = (t.queue_position_is_manual OR t.id = $2::int) \
              FROM moved \
              WHERE t.id = moved.id \
-             RETURNING t.id, t.queue_position, moved.old_position, COALESCE(t.queue_order_key, 0)",
+             RETURNING t.id, t.queue_position, moved.old_position, t.is_blocked",
             &[&user_id, &thread_id, &raw_target],
         )
         .await
@@ -315,11 +358,31 @@ pub async fn update_queue_entry(
     let changed = rows
         .iter()
         .any(|row| row.get::<_, i32>(1) != row.get::<_, i32>(2));
-    let ordering_version: i64 = rows
+    // Rebuild the reader's post-move display order so the response reports the
+    // position and order revision the next read will observe. Blocked grouping
+    // comes from the same pre-move snapshot the clamp used, so Option E
+    // eligibility stays authoritative instead of the stored flag alone.
+    let blocked_by_thread: std::collections::HashMap<i32, bool> = entries
         .iter()
-        .find(|row| row.get::<_, i32>(0) == thread_id)
-        .map(|row| row.get(3))
-        .unwrap_or(0);
+        .map(|entry| (entry.thread_id, entry.is_blocked))
+        .collect();
+    let mut after: Vec<OrderedEntry> = rows
+        .iter()
+        .map(|row| {
+            let row_thread: i32 = row.get(0);
+            OrderedEntry {
+                thread_id: row_thread,
+                queue_position: row.get(1),
+                is_blocked: blocked_by_thread
+                    .get(&row_thread)
+                    .copied()
+                    .unwrap_or_else(|| row.get(3)),
+            }
+        })
+        .collect();
+    after.sort_by_key(|entry| (entry.is_blocked, entry.queue_position, entry.thread_id));
+    let position = ordinal_of(&after, thread_id).ok_or_else(|| not_found(thread_id))?;
+    let ordering_version = ordering_revision(&after);
     if changed {
         transaction
             .execute(
@@ -335,7 +398,7 @@ pub async fn update_queue_entry(
 
     Ok(Json(QueueEntryResponse {
         thread_id,
-        position: i32::try_from(target).unwrap_or(i32::MAX),
+        position: i32::try_from(position).unwrap_or(i32::MAX),
         ordering_version,
     }))
 }
@@ -424,8 +487,7 @@ pub async fn create_queue_order(
             .execute(
                 "UPDATE threads AS t \
                  SET queue_position = shuffled.new_position, \
-                     queue_position_is_manual = FALSE, \
-                     queue_order_key = COALESCE(t.queue_order_key, 0) + 1 \
+                     queue_position_is_manual = FALSE \
                  FROM unnest($2::int4[], $3::int4[]) AS shuffled(thread_id, new_position) \
                  WHERE t.id = shuffled.thread_id \
                    AND t.user_id = $1 \
@@ -586,6 +648,11 @@ mod tests {
         Arc::new(AppState::new(config).expect("queue test state"))
     }
 
+    /// Reset the disposable queue schema shared by these tests.
+    ///
+    /// The Option E tables stay empty unless a test seeds them, but they must
+    /// exist because `OPTION_E_ENABLED` ordering reads the same owner-scoped
+    /// snapshot the Rust Roll reader uses.
     async fn reset(state: &AppState) {
         let connection = db::checkout(state).await.expect("test connection");
         connection
@@ -599,8 +666,14 @@ mod tests {
                      queue_position integer NOT NULL, \
                      queue_position_is_manual boolean NOT NULL DEFAULT false, \
                      queue_order_key bigint, \
-                     is_blocked boolean NOT NULL DEFAULT false \
+                     is_blocked boolean NOT NULL DEFAULT false, \
+                     next_unread_issue_id integer, \
+                     catalog_series_id bigint \
                  ); \
+                 ALTER TABLE queue_unit_test.threads \
+                     ADD COLUMN IF NOT EXISTS next_unread_issue_id integer; \
+                 ALTER TABLE queue_unit_test.threads \
+                     ADD COLUMN IF NOT EXISTS catalog_series_id bigint; \
                  CREATE TABLE IF NOT EXISTS queue_unit_test.events ( \
                      id serial PRIMARY KEY, \
                      type text NOT NULL, \
@@ -609,7 +682,81 @@ mod tests {
                      thread_id integer, \
                      context json \
                  ); \
-                 TRUNCATE queue_unit_test.threads, queue_unit_test.events RESTART IDENTITY;",
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.issues ( \
+                     id integer PRIMARY KEY, \
+                     thread_id integer NOT NULL, \
+                     position integer NOT NULL, \
+                     status text NOT NULL, \
+                     issue_number text NOT NULL DEFAULT '1', \
+                     catalog_issue_id bigint \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.dependencies ( \
+                     id integer PRIMARY KEY, \
+                     source_issue_id integer NOT NULL, \
+                     target_issue_id integer NOT NULL, \
+                     origin text, \
+                     classification text, \
+                     provenance text \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.custom_cbl_lists ( \
+                     id integer PRIMARY KEY, \
+                     user_id integer NOT NULL, \
+                     mode text NOT NULL \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.custom_cbl_entries ( \
+                     id integer PRIMARY KEY, \
+                     list_id integer NOT NULL, \
+                     issue_id integer NOT NULL, \
+                     gate text NOT NULL, \
+                     skipped boolean NOT NULL DEFAULT false, \
+                     position integer NOT NULL DEFAULT 1 \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.custom_cbl_overlap_decisions ( \
+                     id integer PRIMARY KEY, \
+                     list_id integer, \
+                     user_id integer, \
+                     continuing_external_identity_id bigint, \
+                     waiting_external_identity_id bigint \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.collection_exclusions ( \
+                     id integer PRIMARY KEY, \
+                     user_id integer, \
+                     issue_id integer, \
+                     thread_id integer, \
+                     provider text, \
+                     external_volume_id text \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.external_identities ( \
+                     id bigint PRIMARY KEY, \
+                     provider text NOT NULL, \
+                     external_id text NOT NULL, \
+                     entity_type text NOT NULL \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.catalog_series ( \
+                     id bigint PRIMARY KEY, \
+                     canonical_external_identity_id bigint \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.catalog_issues ( \
+                     id bigint PRIMARY KEY, \
+                     catalog_series_id bigint, \
+                     canonical_external_identity_id bigint \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.thread_external_series_mappings ( \
+                     thread_id integer, \
+                     external_identity_id bigint, \
+                     status text \
+                 ); \
+                 TRUNCATE queue_unit_test.threads, queue_unit_test.events, \
+                     queue_unit_test.issues, queue_unit_test.dependencies, \
+                     queue_unit_test.custom_cbl_lists, \
+                     queue_unit_test.custom_cbl_entries, \
+                     queue_unit_test.custom_cbl_overlap_decisions, \
+                     queue_unit_test.collection_exclusions, \
+                     queue_unit_test.external_identities, \
+                     queue_unit_test.catalog_series, \
+                     queue_unit_test.catalog_issues, \
+                     queue_unit_test.thread_external_series_mappings \
+                     RESTART IDENTITY;",
             )
             .await
             .expect("queue test schema");
@@ -658,6 +805,97 @@ mod tests {
         row.get(0)
     }
 
+    /// Stored sparse order keys, which the v2 queue resources must never write.
+    async fn queue_order_keys(db: &AppState, user_id: i32) -> Vec<Option<i64>> {
+        let connection = db::checkout(db).await.expect("order key connection");
+        let rows = connection
+            .query(
+                "SELECT id, queue_order_key FROM threads WHERE user_id = $1 ORDER BY id",
+                &[&user_id],
+            )
+            .await
+            .expect("read order keys");
+        drop(Object::take(connection));
+        rows.iter().map(|row| row.get(1)).collect()
+    }
+
+    /// Draw order the Roll pool uses for the reader's readable entries.
+    async fn roll_pick_order(db: &AppState, user_id: i32) -> Vec<i32> {
+        let connection = db::checkout(db).await.expect("pool connection");
+        let rows = connection
+            .query(
+                "SELECT id FROM threads WHERE user_id = $1 \
+                 AND status = 'active' AND queue_position >= 1 AND is_blocked = false \
+                 ORDER BY queue_position, id",
+                &[&user_id],
+            )
+            .await
+            .expect("roll pick order");
+        drop(Object::take(connection));
+        rows.iter().map(|row| row.get(0)).collect()
+    }
+
+    /// Enable Option E grouping for one serialized test, then restore the env.
+    ///
+    /// The handler reads the activation switch per request, so the guard has to
+    /// restore it even on failure. Every DB-backed test here holds `DB_LOCK`, so
+    /// no other test observes the temporary value.
+    struct OptionEEnv(Option<std::ffi::OsString>);
+
+    impl OptionEEnv {
+        fn enable() -> Self {
+            let previous = std::env::var_os("OPTION_E_ENABLED");
+            std::env::set_var("OPTION_E_ENABLED", "true");
+            Self(previous)
+        }
+    }
+
+    impl Drop for OptionEEnv {
+        fn drop(&mut self) {
+            match self.0.take() {
+                Some(value) => std::env::set_var("OPTION_E_ENABLED", value),
+                None => std::env::remove_var("OPTION_E_ENABLED"),
+            }
+        }
+    }
+
+    /// Seed one active Option E thread and, optionally, its unread issue.
+    async fn seed_option_e_thread(
+        db: &AppState,
+        user_id: i32,
+        thread_id: i32,
+        queue_position: i32,
+        stored_blocked: bool,
+        issue_id: Option<i32>,
+    ) {
+        let connection = db::checkout(db).await.expect("option e seed connection");
+        connection
+            .execute(
+                "INSERT INTO threads (id, user_id, status, queue_position, is_blocked, \
+                 next_unread_issue_id) VALUES ($1, $2, 'active', $3, $4, $5)",
+                &[
+                    &thread_id,
+                    &user_id,
+                    &queue_position,
+                    &stored_blocked,
+                    &issue_id,
+                ],
+            )
+            .await
+            .expect("seed option e thread");
+        if let Some(issue_id) = issue_id {
+            connection
+                .execute(
+                    "INSERT INTO issues (id, thread_id, position, status, issue_number) \
+                     VALUES ($1, $2, 1, 'unread', $3)",
+                    &[&issue_id, &thread_id, &issue_id.to_string()],
+                )
+                .await
+                .expect("seed option e issue");
+        }
+        drop(Object::take(connection));
+    }
+
     #[test]
     fn queue_openapi_documents_every_mounted_resource_operation() {
         let document = serde_json::to_value(QueueApi::openapi()).expect("queue OpenAPI document");
@@ -685,6 +923,11 @@ mod tests {
         reset(&state).await;
         let user = AuthenticatedUser::for_test(7);
         seed(&state, 7, &[(1, 1, false), (2, 2, false), (3, 3, false)]).await;
+        let initial = get_queue_entry(State(state.clone()), user, Path(1))
+            .await
+            .expect("initial entry")
+            .0
+            .ordering_version;
 
         let front = update_queue_entry(
             State(state.clone()),
@@ -697,6 +940,10 @@ mod tests {
         assert_eq!(front.0.position, 1);
         assert_eq!(positions(&state, 7).await, vec![(3, 1), (1, 2), (2, 3)]);
         assert_eq!(event_count(&state, "reorder").await, 1);
+        assert_ne!(
+            front.0.ordering_version, initial,
+            "a reordered queue must publish a new ordering revision"
+        );
 
         let middle = update_queue_entry(
             State(state.clone()),
@@ -719,7 +966,383 @@ mod tests {
         .expect("move to back");
         assert_eq!(back.0.position, 3);
         assert_eq!(positions(&state, 7).await, vec![(2, 1), (1, 2), (3, 3)]);
-        assert!(back.0.ordering_version > 0);
+
+        // A no-op move must neither rewrite ranks, record an event, nor change
+        // the published order revision.
+        let reorder_events = event_count(&state, "reorder").await;
+        let repeat = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(3),
+            Json(QueueEntryPatch { position: 3 }),
+        )
+        .await
+        .expect("no-op move");
+        assert_eq!(repeat.0.position, 3);
+        assert_eq!(repeat.0.ordering_version, back.0.ordering_version);
+        assert_eq!(positions(&state, 7).await, vec![(2, 1), (1, 2), (3, 3)]);
+        assert_eq!(event_count(&state, "reorder").await, reorder_events);
+
+        // #3227 reserves `queue_order_key` for sparse, scaled allocation. These
+        // resources must leave it untouched instead of writing narrow integers.
+        assert_eq!(
+            queue_order_keys(&state, 7).await,
+            vec![None, None, None],
+            "v2 queue reorders must not write the reserved sparse order key"
+        );
+    }
+
+    #[tokio::test]
+    async fn reorders_change_the_roll_pick_order() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state().await;
+        reset(&state).await;
+        let user = AuthenticatedUser::for_test(7);
+        seed(&state, 7, &[(1, 1, false), (2, 2, false), (3, 3, false)]).await;
+        assert_eq!(roll_pick_order(&state, 7).await, vec![1, 2, 3]);
+
+        // Front: the moved entry becomes the next Roll pick.
+        let front = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(3),
+            Json(QueueEntryPatch { position: 1 }),
+        )
+        .await
+        .expect("front move")
+        .0;
+        assert_eq!(front.position, 1);
+        assert_eq!(roll_pick_order(&state, 7).await, vec![3, 1, 2]);
+        assert_eq!(
+            get_queue_entry(State(state.clone()), user, Path(3))
+                .await
+                .expect("moved entry")
+                .0
+                .position,
+            1
+        );
+
+        // Middle: the pick order follows the new rank, not the previous one.
+        let middle = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(1),
+            Json(QueueEntryPatch { position: 3 }),
+        )
+        .await
+        .expect("middle move")
+        .0;
+        assert_eq!(middle.position, 3);
+        assert_eq!(roll_pick_order(&state, 7).await, vec![3, 2, 1]);
+
+        // Back: the entry leaves the front of the Roll pool.
+        let back = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(3),
+            Json(QueueEntryPatch { position: i32::MAX }),
+        )
+        .await
+        .expect("back move")
+        .0;
+        assert_eq!(back.position, 3);
+        assert_eq!(roll_pick_order(&state, 7).await, vec![2, 1, 3]);
+
+        // Shuffle: the durable revision leaves every entry drawable exactly once
+        // in the published dense order.
+        let shuffled = create_queue_order(
+            State(state.clone()),
+            user,
+            Json(QueueOrderRequest {
+                idempotency_key: Some("roll-pick-order".into()),
+            }),
+        )
+        .await
+        .expect("shuffle")
+        .1;
+        assert_eq!(shuffled.shuffled, 3);
+        let picks = roll_pick_order(&state, 7).await;
+        assert_eq!(
+            picks
+                .iter()
+                .copied()
+                .collect::<std::collections::BTreeSet<_>>(),
+            [1, 2, 3].into_iter().collect()
+        );
+        assert_eq!(
+            positions(&state, 7)
+                .await
+                .iter()
+                .map(|(id, _)| *id)
+                .collect::<Vec<_>>(),
+            picks
+        );
+    }
+
+    #[tokio::test]
+    async fn blocked_groups_clamp_instead_of_crossing() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state().await;
+        reset(&state).await;
+        let user = AuthenticatedUser::for_test(7);
+        seed(
+            &state,
+            7,
+            &[(1, 1, false), (2, 2, false), (3, 3, true), (4, 4, true)],
+        )
+        .await;
+        assert_eq!(roll_pick_order(&state, 7).await, vec![1, 2]);
+
+        // A readable entry cannot move into the blocked group: the request clamps
+        // to the last readable ordinal.
+        let readable_clamped = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(1),
+            Json(QueueEntryPatch { position: 99 }),
+        )
+        .await
+        .expect("readable clamp")
+        .0;
+        assert_eq!(readable_clamped.position, 2);
+        assert_eq!(
+            positions(&state, 7).await,
+            vec![(2, 1), (1, 2), (3, 3), (4, 4)]
+        );
+        assert_eq!(roll_pick_order(&state, 7).await, vec![2, 1]);
+
+        // A blocked entry cannot move into the readable group: the request clamps
+        // to the first blocked ordinal.
+        let blocked_clamped = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(4),
+            Json(QueueEntryPatch { position: 1 }),
+        )
+        .await
+        .expect("blocked clamp")
+        .0;
+        assert_eq!(blocked_clamped.position, 3);
+        assert_eq!(
+            positions(&state, 7).await,
+            vec![(2, 1), (1, 2), (4, 3), (3, 4)]
+        );
+
+        // Clamping onto its own ordinal is a no-op: no rank rewrite, no event,
+        // no revision change.
+        let reorder_events = event_count(&state, "reorder").await;
+        let blocked_noop = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(4),
+            Json(QueueEntryPatch { position: 1 }),
+        )
+        .await
+        .expect("blocked no-op")
+        .0;
+        assert_eq!(blocked_noop.position, 3);
+        assert_eq!(
+            blocked_noop.ordering_version,
+            blocked_clamped.ordering_version
+        );
+        assert_eq!(
+            positions(&state, 7).await,
+            vec![(2, 1), (1, 2), (4, 3), (3, 4)]
+        );
+        assert_eq!(event_count(&state, "reorder").await, reorder_events);
+
+        // GET reports the same grouped ordinals PATCH clamps in.
+        for (thread_id, expected) in [(2, 1), (1, 2), (4, 3), (3, 4)] {
+            assert_eq!(
+                get_queue_entry(State(state.clone()), user, Path(thread_id))
+                    .await
+                    .expect("grouped entry")
+                    .0
+                    .position,
+                expected,
+                "grouped ordinal for thread {thread_id}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn ordering_revision_tracks_rank_changes_from_any_writer() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state().await;
+        reset(&state).await;
+        let user = AuthenticatedUser::for_test(7);
+        seed(&state, 7, &[(1, 1, false), (2, 2, false), (3, 3, false)]).await;
+        let before = get_queue_entry(State(state.clone()), user, Path(1))
+            .await
+            .expect("initial entry")
+            .0
+            .ordering_version;
+        // Re-reading unchanged durable state is stable and content-derived.
+        assert_eq!(
+            before,
+            get_queue_entry(State(state.clone()), user, Path(2))
+                .await
+                .expect("unchanged entry")
+                .0
+                .ordering_version
+        );
+
+        // Python's `move_to_safe_position`, insertion, completion, and undo
+        // rewrite `queue_position` directly without any v2 queue request. The
+        // published revision must still change, which a written counter could
+        // not guarantee.
+        let connection = db::checkout(&state)
+            .await
+            .expect("direct writer connection");
+        connection
+            .batch_execute(
+                "UPDATE threads SET queue_position = 3 WHERE id = 1 AND user_id = 7; \
+                 UPDATE threads SET queue_position = 1 WHERE id = 3 AND user_id = 7;",
+            )
+            .await
+            .expect("direct rank rewrite");
+        drop(Object::take(connection));
+        let after_python_style_move = get_queue_entry(State(state.clone()), user, Path(1))
+            .await
+            .expect("reordered entry")
+            .0
+            .ordering_version;
+        assert_ne!(after_python_style_move, before);
+
+        // The revision is a content token, not a counter: restoring the previous
+        // ranks reproduces the previous revision.
+        let connection = db::checkout(&state).await.expect("restore connection");
+        connection
+            .batch_execute(
+                "UPDATE threads SET queue_position = 1 WHERE id = 1 AND user_id = 7; \
+                 UPDATE threads SET queue_position = 3 WHERE id = 3 AND user_id = 7;",
+            )
+            .await
+            .expect("restore ranks");
+        drop(Object::take(connection));
+        assert_eq!(
+            before,
+            get_queue_entry(State(state.clone()), user, Path(1))
+                .await
+                .expect("restored entry")
+                .0
+                .ordering_version
+        );
+
+        // GET and PATCH must publish the same revision for the same state.
+        let moved = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(1),
+            Json(QueueEntryPatch { position: 2 }),
+        )
+        .await
+        .expect("revision move")
+        .0;
+        assert_eq!(moved.position, 2);
+        assert_eq!(
+            moved.ordering_version,
+            get_queue_entry(State(state.clone()), user, Path(1))
+                .await
+                .expect("entry after move")
+                .0
+                .ordering_version
+        );
+    }
+
+    #[tokio::test]
+    async fn option_e_grouping_authority_is_shared_by_get_and_patch() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state().await;
+        reset(&state).await;
+        let _option_e = OptionEEnv::enable();
+        let user = AuthenticatedUser::for_test(7);
+        // 1: stored readable, but no unread issue -> evaluated blocked.
+        seed_option_e_thread(&state, 7, 1, 1, false, None).await;
+        // 2: unread issue, no prerequisites -> evaluated readable.
+        seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
+        // 3: stored blocked, but Option E evaluates it readable.
+        seed_option_e_thread(&state, 7, 3, 3, true, Some(30)).await;
+        // 4: unread issue behind an unsatisfied prerequisite -> evaluated blocked.
+        seed_option_e_thread(&state, 7, 4, 4, false, Some(40)).await;
+        let connection = db::checkout(&state).await.expect("prerequisite connection");
+        connection
+            .execute(
+                "INSERT INTO dependencies \
+                     (id, source_issue_id, target_issue_id, origin, classification, provenance) \
+                 VALUES (1, 20, 40, 'reader', 'A', 'option-e-queue-test')",
+                &[],
+            )
+            .await
+            .expect("seed prerequisite");
+        drop(Object::take(connection));
+
+        // Option E groups readable 2,3 before blocked 1,4 even though thread 1 is
+        // stored readable and thread 3 is stored blocked.
+        for (thread_id, expected) in [(2, 1), (3, 2), (1, 3), (4, 4)] {
+            assert_eq!(
+                get_queue_entry(State(state.clone()), user, Path(thread_id))
+                    .await
+                    .expect("option e entry")
+                    .0
+                    .position,
+                expected,
+                "option e GET ordinal for thread {thread_id}"
+            );
+        }
+        let before = get_queue_entry(State(state.clone()), user, Path(1))
+            .await
+            .expect("option e entry")
+            .0
+            .ordering_version;
+
+        // PATCH clamps an evaluated-blocked entry to the first blocked ordinal
+        // instead of the stored readable space.
+        let clamped = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(1),
+            Json(QueueEntryPatch { position: 1 }),
+        )
+        .await
+        .expect("option e clamped move")
+        .0;
+        assert_eq!(clamped.position, 3);
+        assert_eq!(clamped.ordering_version, before);
+        assert_eq!(
+            positions(&state, 7).await,
+            vec![(1, 1), (2, 2), (3, 3), (4, 4)]
+        );
+        assert_eq!(event_count(&state, "reorder").await, 0);
+
+        // An evaluated-readable entry moves within the readable group even though
+        // its stored flag says blocked.
+        let readable = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(3),
+            Json(QueueEntryPatch { position: 1 }),
+        )
+        .await
+        .expect("option e readable move")
+        .0;
+        assert_eq!(readable.position, 1);
+        assert_ne!(readable.ordering_version, before);
+        assert_eq!(
+            positions(&state, 7).await,
+            vec![(1, 1), (3, 2), (2, 3), (4, 4)]
+        );
+        for (thread_id, expected) in [(3, 1), (2, 2), (1, 3), (4, 4)] {
+            assert_eq!(
+                get_queue_entry(State(state.clone()), user, Path(thread_id))
+                    .await
+                    .expect("option e entry after move")
+                    .0
+                    .position,
+                expected,
+                "option e GET ordinal after move for thread {thread_id}"
+            );
+        }
     }
 
     #[tokio::test]
