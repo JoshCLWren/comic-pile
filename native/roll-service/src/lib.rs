@@ -185,7 +185,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-boundaries",
             post(reading_boundary::reading_boundary_batch_v2),
         )
-        .route("/api/v2/queue-entries/:thread_id", get(queue::get_queue_entry).patch(queue::update_queue_entry))
+        .route(
+            "/api/v2/queue-entries/{thread_id}",
+            get(queue::get_queue_entry),
+        )
+        .route(
+            "/api/v2/queue-entries/{thread_id}",
+            patch(queue::update_queue_entry),
+        )
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))

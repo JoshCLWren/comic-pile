@@ -37,6 +37,15 @@ AXUM_ROUTE = re.compile(
     r'\.route\(\s*"(?P<path>/[^"]+)"\s*,\s*'
     r'(?P<method>get|post|put|patch|delete)\s*\('
 )
+# Axum 0.8 spells captures ``{name}``; Vercel rewrites spell them ``:name``.
+# Normalize both parser outputs to the Vercel form so the ingress/rewrite
+# comparisons stay exact instead of silently skipping parameterized routes.
+AXUM_CAPTURE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def _normalized_path(path: str) -> str:
+    """Return the Vercel-style capture spelling for an Axum route path."""
+    return AXUM_CAPTURE.sub(r":\1", path)
 
 
 def _axum_routes(source: str, *, start: str, end: str) -> set[tuple[str, str]]:
@@ -44,7 +53,7 @@ def _axum_routes(source: str, *, start: str, end: str) -> set[tuple[str, str]]:
     assert start in source, f"Missing Rust router marker: {start}"
     body = source.split(start, 1)[1].split(end, 1)[0]
     routes = {
-        (match.group("method").upper(), match.group("path"))
+        (match.group("method").upper(), _normalized_path(match.group("path")))
         for match in AXUM_ROUTE.finditer(body)
     }
     assert routes, f"No Rust HTTP routes found after {start}"
@@ -183,3 +192,15 @@ def test_issue_patch_uses_numeric_public_route_and_only_its_native_entrypoint() 
         ("POST", "/api/_native_issue/health"),
     ):
         assert _destination(routes, method, path) != issue, (method, path)
+
+
+def test_axum_08_captures_normalize_to_vercel_parameters() -> None:
+    """Parameterized Rust routes stay covered instead of vanishing from the guard."""
+    routes = _axum_routes(
+        'pub fn router(state: Arc<AppState>) -> Router { Router::new() '
+        '.route("/api/v2/queue-entries/{thread_id}", get(handler)) } '
+        "#[cfg(test)]",
+        start="pub fn router(",
+        end="#[cfg(test)]",
+    )
+    assert routes == {("GET", "/api/v2/queue-entries/:thread_id")}

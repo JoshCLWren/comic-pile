@@ -79,6 +79,21 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "/api/v2/queue-entries/:thread_id",
+      "methods": ["GET"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/queue-entries/:thread_id",
+      "methods": ["PATCH"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/queue-orders",
+      "methods": ["POST"],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "/api/v1/roll/dismiss-pending",
       "methods": ["POST"],
       "dest": "/api/native_roll.rs"
