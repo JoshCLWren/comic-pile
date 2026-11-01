@@ -4,7 +4,7 @@ use axum::{
     extract::Request,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::{patch, get},
+    routing::{get, patch},
     Json, Router,
 };
 use comicpile_roll_service::{config::Config, router as issue_router, AppState};
@@ -21,18 +21,6 @@ async fn native_health() -> Json<serde_json::Value> {
 }
 
 static ISSUE_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
-
-/// Keep the request's query and authentication intact when the isolated
-/// production probe is forwarded through the same authenticated Rust handler.
-fn normalize_issue_request(request: &mut Request) {
-    if request.uri().path() == "/api/_native_issue/health" {
-        let target = match request.uri().query() {
-            Some(query) => format!("/api/v2/issues/health?{query}"),
-            None => "/api/v2/issues/health".to_owned(),
-        };
-        *request.uri_mut() = target.parse().expect("valid native issue URI");
-    }
-}
 
 async fn native_dispatch(request: Request) -> Response {
     // Log only the fixed ingress path, status and elapsed time. Never log query,
@@ -76,15 +64,9 @@ async fn native_dispatch(request: Request) -> Response {
     result
 }
 
-async fn native_bootstrap(mut request: Request) -> Response {
-    normalize_issue_request(&mut request);
-    native_dispatch(request).await
-}
-
 fn app() -> Router {
     Router::new()
         .route("/api/_native_issue/health", get(native_health))
-        .route("/api/v2/issues/health", get(native_bootstrap))
         .route("/api/v2/issues/:issue_id", patch(native_dispatch))
 }
 
@@ -100,7 +82,7 @@ async fn main() -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{app, normalize_issue_request};
+    use super::app;
     use axum::{
         body::{to_bytes, Body},
         http::{header, Request, StatusCode},
