@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-// Read the authored CSS, not Vite's transformed ?raw module. This guard must
-// inspect the same semantic tokens the browser receives before bundling.
-const styles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
+// Vitest runs in the frontend workspace; import.meta.url may be a non-file URL
+// under jsdom. Read the authored CSS directly to verify its semantic tokens.
+const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
 
 function themeToken(theme: string, name: string): string {
   const block = styles.match(new RegExp(`\\[data-theme="${theme}"\\] \\{([\\s\\S]*?)\\n\\}`))?.[1]
