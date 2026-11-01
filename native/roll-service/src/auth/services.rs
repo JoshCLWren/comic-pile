@@ -14,7 +14,8 @@ use crate::auth::{
     error::{AuthError, AuthResult},
     utils::{hash_password, verify_password},
 };
-use crate::{AppState, db::PoolError};
+use crate::AppState;
+use std::sync::Arc;
 
 /// JWT configuration
 const ALGORITHM: Algorithm = Algorithm::HS256;
@@ -216,7 +217,7 @@ impl AuthService {
         };
 
         match conn.query_opt(query, &[&username]).await {
-            Ok(row) => {
+            Ok(Some(row)) => {
                 Some(UserData {
                     id: row.get(0),
                     username: row.get(1),
@@ -226,7 +227,7 @@ impl AuthService {
                     password_changed_at: row.get(5),
                 })
             }
-            Err(_) => None,
+            Ok(None) | Err(_) => None,
         }
     }
 
@@ -245,7 +246,7 @@ impl AuthService {
         };
 
         match conn.query_opt(query, &[&user_id]).await {
-            Ok(row) => {
+            Ok(Some(row)) => {
                 Some(UserData {
                     id: row.get(0),
                     username: row.get(1),
@@ -255,7 +256,7 @@ impl AuthService {
                     password_changed_at: row.get(5),
                 })
             }
-            Err(_) => None,
+            Ok(None) | Err(_) => None,
         }
     }
 
@@ -352,8 +353,8 @@ impl AuthService {
 
     /// Generate JTI for token
     fn generate_jti(&self) -> String {
-        rand::thread_rng()
-            .sample_iter(&rand::distributions::Alphanumeric)
+        rand::rng()
+            .sample_iter(&rand::distr::Alphanumeric)
             .take(32)
             .map(char::from)
             .collect()
@@ -430,17 +431,17 @@ impl PasswordResetService {
 
         let conn = self.state.pool.get().await?;
         let user = match conn.query_opt(query, &[&email]).await {
-            Ok(row) => {
+            Ok(Some(row)) => {
                 Some((row.get(0), row.get(1), row.get(2)))
             }
-            Err(_) => None,
+            Ok(None) | Err(_) => None,
         };
 
         if let Some((user_id, username, user_email)) = user {
             // Generate reset token
             let reset_token = self.generate_reset_token();
             let token_hash = self.hash_token(&reset_token);
-            let expires_at = Utc::now() + Duration::minutes(30);
+            let expires_at = Utc::now() + chrono::Duration::minutes(30);
 
             // Store reset token
             let query = r#"
@@ -455,7 +456,7 @@ impl PasswordResetService {
             conn.execute(query, &[&user_id, &token_hash, &expires_at]).await?;
 
             // TODO: Send email (for now, just log the token)
-            info!("Password reset token for {}: {}", username, reset_token);
+            // Password-reset secrets must never appear in application logs.
         }
 
         // Always return success to prevent user enumeration
@@ -482,8 +483,8 @@ impl PasswordResetService {
 
         let conn = self.state.pool.get().await?;
         let user = match conn.query_opt(query, &[&token_hash]).await {
-            Ok(row) => Some((row.get(0), row.get(1))),
-            Err(_) => None,
+            Ok(Some(row)) => Some((row.get(0), row.get(1))),
+            Ok(None) | Err(_) => None,
         };
 
         let (user_id, username) = user.ok_or(AuthError::InvalidToken)?;
@@ -510,8 +511,8 @@ impl PasswordResetService {
 
     /// Generate random reset token
     fn generate_reset_token(&self) -> String {
-        rand::thread_rng()
-            .sample_iter(&rand::distributions::Alphanumeric)
+        rand::rng()
+            .sample_iter(&rand::distr::Alphanumeric)
             .take(32)
             .map(char::from)
             .collect()
