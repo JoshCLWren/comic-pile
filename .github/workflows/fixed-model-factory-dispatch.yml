@@ -26,6 +26,7 @@ on:
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/scripts/factory-work-controller.py'
+      - '.github/scripts/factory_attempt_history.py'
       - '.github/scripts/stale_pr_decay.py'
       - '.github/scripts/factory-review-controller.py'
       - '.github/scripts/factory_work_policy.py'
@@ -467,6 +468,10 @@ jobs:
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
           controller='.github/scripts/factory-work-controller.py'
+          # Only retry-history rows are shared. Each assignment still refreshes
+          # live claims/heads and changed comments before selecting its lease.
+          history_cache_dir="$(mktemp -d "$RUNNER_TEMP/factory-attempt-history.XXXXXX")"
+          export FACTORY_ATTEMPT_HISTORY_CACHE="$history_cache_dir/comments.json"
           owner_pattern='^factory:(local|([1-9]|[1-3][0-9]|[4-9][0-9]))$'
 
           heartbeat_worker_for_run() {
