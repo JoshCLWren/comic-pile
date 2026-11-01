@@ -179,7 +179,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(dismiss_pending::dismiss_pending),
         )
         .route(
-            "/api/v2/issues/:issue_id",
+            "/api/v2/issues/{issue_id}",
             patch(issue_handler::read_rate_issue),
         )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
