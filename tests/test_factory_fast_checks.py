@@ -362,15 +362,15 @@ def rust_stubs(tmp_path: Path, *, fail_clippy: bool = False) -> Path:
     stub(
         bin_dir,
         "cargo",
-        'echo "cargo $*" >> ../cargo.log\\n'
+        'echo "cargo $*" >> ../cargo.log\n'
         + (
-            'case "$*" in *clippy*) echo "error[E0308]: mismatched types"; exit 101 ;; esac\\n'
+            'case "$*" in *clippy*) echo "error[E0308]: mismatched types"; exit 101 ;; esac\n'
             if fail_clippy
             else ""
         )
         + "exit 0",
     )
-    stub(bin_dir, "uv", 'echo "uv $*" >> ../uv.log\\nexit 0')
+    stub(bin_dir, "uv", 'echo "uv $*" >> ../uv.log\nexit 0')
     return bin_dir
 
 
@@ -379,11 +379,11 @@ def test_rust_sources_manifests_and_native_rewrites_select_preflight(tmp_path: P
     repo = repo_with(
         tmp_path,
         {
-            "native/roll-service/src/queue.rs": "pub fn demo() {}\\n",
-            "api/native_roll.rs": "fn main() {}\\n",
-            "native/roll-service/Cargo.toml": "[package]\\nname = 'demo'\\n",
-            "Cargo.lock": "lock\\n",
-            "vercel.json": "{}\\n",
+            "native/roll-service/src/queue.rs": "pub fn demo() {}\n",
+            "api/native_roll.rs": "fn main() {}\n",
+            "native/roll-service/Cargo.toml": "[package]\nname = 'demo'\n",
+            "Cargo.lock": "lock\n",
+            "vercel.json": "{}\n",
         },
     )
     result = subprocess.run(
@@ -394,17 +394,17 @@ def test_rust_sources_manifests_and_native_rewrites_select_preflight(tmp_path: P
         check=True,
     )
     plan = set(result.stdout.splitlines())
-    assert "rust\\tnative/roll-service/src/queue.rs" in plan
-    assert "rust\\tapi/native_roll.rs" in plan
-    assert "rust\\tnative/roll-service/Cargo.toml" in plan
-    assert "rust\\tCargo.lock" in plan
-    assert "ingress\\tvercel.json" in plan
-    assert "ingress\\tapi/native_roll.rs" in plan
+    assert "rust\tnative/roll-service/src/queue.rs" in plan
+    assert "rust\tapi/native_roll.rs" in plan
+    assert "rust\tnative/roll-service/Cargo.toml" in plan
+    assert "rust\tCargo.lock" in plan
+    assert "ingress\tvercel.json" in plan
+    assert "ingress\tapi/native_roll.rs" in plan
 
 
 def test_rust_compile_error_blocks_push_and_runs_focused_ingress_guards(tmp_path: Path) -> None:
     """A bad Rust first head is rejected before GitHub Actions."""
-    repo = repo_with(tmp_path, {"native/roll-service/src/queue.rs": "bad rust\\n"})
+    repo = repo_with(tmp_path, {"native/roll-service/src/queue.rs": "bad rust\n"})
     rust_fixture(repo)
     bin_dir = rust_stubs(tmp_path, fail_clippy=True)
     result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
@@ -420,7 +420,7 @@ def test_rust_compile_error_blocks_push_and_runs_focused_ingress_guards(tmp_path
 
 def test_valid_rust_checks_both_crates_and_deletion_still_checks(tmp_path: Path) -> None:
     """The gate covers service Clippy plus root Vercel compilation, including deletes."""
-    repo = repo_with(tmp_path, {"api/native_roll.rs": "fn main() {}\\n"})
+    repo = repo_with(tmp_path, {"api/native_roll.rs": "fn main() {}\n"})
     rust_fixture(repo)
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "Rust file")
@@ -437,7 +437,7 @@ def test_valid_rust_checks_both_crates_and_deletion_still_checks(tmp_path: Path)
 
 def test_vercel_rewrite_only_change_runs_routing_tests_not_cargo(tmp_path: Path) -> None:
     """Vercel changes get the relevant tests without a pointless Rust build."""
-    repo = repo_with(tmp_path, {"vercel.json": '{"rewrites": []}\\n'})
+    repo = repo_with(tmp_path, {"vercel.json": '{"rewrites": []}\n'})
     bin_dir = rust_stubs(tmp_path)
     result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
     assert result.returncode == 0, result.stdout + result.stderr
