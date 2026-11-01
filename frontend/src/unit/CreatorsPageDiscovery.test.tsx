@@ -150,6 +150,24 @@ describe('CreatorsPage discovery mode', () => {
     expect(screen.getByLabelText('Search creators by name')).toBeInTheDocument()
     // Discovery stays inert until its mode is visible.
     expect(mockedDiscoveries).toHaveBeenCalledWith(false)
+    expect(mockedTeamChemistry).toHaveBeenCalledWith(false)
+  })
+
+  it('does not load team chemistry during browsing or searching until explicitly requested', () => {
+    renderPage()
+    expect(mockedTeamChemistry).toHaveBeenLastCalledWith(false)
+
+    fireEvent.change(screen.getByLabelText('Search creators by name'), {
+      target: { value: 'rob' },
+    })
+    expect(mockedTeamChemistry).toHaveBeenLastCalledWith(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show team chemistry' }))
+    expect(mockedTeamChemistry).toHaveBeenLastCalledWith(true)
+    expect(screen.getByRole('button', { name: 'Hide team chemistry' })).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide team chemistry' }))
+    expect(mockedTeamChemistry).toHaveBeenLastCalledWith(false)
   })
 
   it('enables the discovery query only once the discover mode is shown', () => {
