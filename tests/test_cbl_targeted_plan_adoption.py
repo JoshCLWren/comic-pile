@@ -53,8 +53,10 @@ class _DB:
         self.index = 0
         self.commits = 0
         self.rollbacks = 0
+        self.executed_queries: list[str] = []
 
     async def execute(self, _query: object) -> _Rows:
+        self.executed_queries.append(str(_query))
         if any(table in str(_query) for table in ("FROM users", "FROM collection_exclusions")):
             return _Rows([])
         result = self.results[self.index]
@@ -117,6 +119,10 @@ async def test_adoption_mutates_exact_owned_plan() -> None:
 
     assert result.plan is plan
     assert db.commits == 1
+    assert any(
+        "ORDER BY cbl_source_entries.position, cbl_source_entries.id" in query
+        for query in db.executed_queries
+    )
     assert merge.await_args is not None
     assert merge.await_args.args[1] is plan
     refresh_blocked.assert_awaited_once_with(7, db)

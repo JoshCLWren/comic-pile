@@ -96,6 +96,24 @@ matching [`FACTORY_GITHUB_VISIBILITY.md`](FACTORY_GITHUB_VISIBILITY.md). Nothing
 in `scripts/factory_eligibility.py` reads comment provenance; eligibility reads
 issue state, labels, and body only.
 
+## Retry-history reads during dispatch
+
+Each serialized dispatcher assignment step creates a new runner-local retry-history
+snapshot. The first assignment reads every page in the existing rolling window;
+later assignments fully paginate updates since the preceding query **started**, with
+a one-second overlap, and merge changed comment bodies by GitHub comment ID. The
+same trusted-marker parser and retry limits consume the refreshed rows. Failed
+reads never return stale cached evidence. Other callers keep their ordinary full
+reads, and the next dispatch pass starts with a new snapshot.
+
+Ownership, leases, dependencies, contributor exclusions and exact-head reads are
+not cached. A deleted comment can remain conservatively counted until the next
+pass; an edited comment is refreshed in the current pass. Snapshots are also
+discarded after an hour or when their repository/window metadata does not match.
+The `attempt-history` log records `source`, `pages_read`, `comments` and
+`full_history_pages`, so real dispatches can demonstrate reduced reads without
+changing quota reserves or inferring savings from elapsed time.
+
 ## Queue diagnostics
 
 To ask why a specific issue is or is not eligible:
