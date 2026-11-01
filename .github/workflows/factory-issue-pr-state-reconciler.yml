@@ -112,8 +112,8 @@ jobs:
           def check_provenance():
               head_ref, pr_number, expected_issue, comments_path = sys.argv[1:]
               path = Path('.github/scripts/factory-revocation-fence.py')
-    # importlib does not automatically add this script's directory to sys.path.
-    sys.path.insert(0, str(path.parent.resolve()))
+              # importlib does not automatically add this script's directory to sys.path.
+              sys.path.insert(0, str(path.parent.resolve()))
               spec = importlib.util.spec_from_file_location('factory_revocation_fence', path)
               if spec is None or spec.loader is None:
                   return 1
@@ -140,7 +140,6 @@ jobs:
                           # Later repair commits may advance the PR head, so issue
                           # completion follows this persisted PR/issue/producer tuple.
                           return 0
-              return 1
               return 1
 
           try:
