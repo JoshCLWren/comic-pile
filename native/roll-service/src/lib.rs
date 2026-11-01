@@ -170,9 +170,9 @@ async fn bound_request(
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::handlers::{
-        apply_timeout_layer, csrf, forgot_password, login, logout, me, refresh, register, reset_password,
+        csrf, forgot_password, login, logout, me, refresh, register, reset_password,
     };
-    use auth::middleware::{csrf_middleware, rate_limit_middleware};
+    use auth::middleware::csrf_middleware;
 
     Router::new()
         // Health check
@@ -220,12 +220,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         })
         // Apply middleware
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
-        .layer(axum::middleware::from_fn(rate_limit_middleware))
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            csrf_middleware,
-        ))
-        .layer(axum::middleware::from_fn(apply_timeout_layer))
+        .layer(axum::middleware::from_fn(csrf_middleware))
         .with_state(state)
 }
 
