@@ -277,8 +277,6 @@ export async function invalidateAfterQueueMovement(
     // order behind each offset cursor, so those pages reset instead of
     // invalidating: an invalidated page set would keep serving a deleted
     // series and the old count inside the query's stale window.
-    client.resetQueries({ queryKey: queryKeys.roll.exclusions('blocked') }),
-    client.resetQueries({ queryKey: queryKeys.roll.exclusions('inactive') }),
   ])
 }
 
