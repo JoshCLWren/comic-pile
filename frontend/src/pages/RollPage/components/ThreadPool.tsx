@@ -1,126 +1,9 @@
-import { EligibilityExplanation } from '../../../components/EligibilityExplanation'
 import { useEffect, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
 import type { BlockingDependency } from '../../../types'
 import type { RollBootstrapThread, ThreadExclusionReason } from '../../../types/rollBootstrap'
-
-const EXCLUSION_REASON_LABELS: Record<ThreadExclusionReason['reason'], string> = {
-  completed: 'Read the full series',
-  not_in_queue: 'Not in the active queue',
-  blocked: 'Waiting on an earlier issue',
-  snoozed: 'Snoozed',
-  skipped: 'Skipped this session',
-}
-
-function exclusionReasonLabel(thread: ThreadExclusionReason): string {
-  return thread.detail ?? EXCLUSION_REASON_LABELS[thread.reason]
-}
-
-/**
- * Truthful identity context for an out-of-pool series row (issue #3534).
- *
- * Verified provider metadata is preferred. When it is unavailable, a
- * same-named row falls back to its actual Thread pointer instead of guessing a
- * volume. Rows with unique titles stay quiet so the extra context only appears
- * where a reader would otherwise see two indistinguishable names.
- */
-function exclusionIdentityContext(
-  thread: ThreadExclusionReason,
-  hasDuplicateTitle: boolean,
-): string | null {
-  const verifiedContext = [
-    thread.year != null ? `(${thread.year})` : null,
-    thread.volume ? `Vol. ${thread.volume}` : null,
-    thread.publisher ?? null,
-  ]
-    .filter((value): value is string => value !== null)
-    .join(' · ')
-  if (verifiedContext) return verifiedContext
-  if (!hasDuplicateTitle || thread.thread_id == null) return null
-  return `Series #${thread.thread_id}`
-}
-
-/**
- * Pagination state for one Roll exclusion section (issue #3330).
- *
- * `total` is the authoritative category size, never the loaded row count, so
- * headings stay truthful while rows stream in on demand.
- */
-export interface RollExclusionPagination {
-  total: number
-  hasNextPage: boolean
-  isLoading: boolean
-  isError: boolean
-  onLoadMore: () => void
-  onRetry: () => void
-}
-
-interface ExclusionPaginationFooterProps {
-  pagination: RollExclusionPagination
-  loadedCount: number
-  label: string
-}
-
-/**
- * Shared secondary-button treatment for the exclusion pagination footer.
- *
- * `docs/FRONTEND_VISUAL_GRAMMAR.md` reserves the small uppercase eyebrow
- * treatment for status and metadata labels and explicitly excludes buttons
- * and action text from it, so both footer controls use ordinary sentence-case
- * secondary typography. They also share one height, radius, and focus
- * behavior, because they are peers in the same action group.
- */
-const EXCLUSION_FOOTER_BUTTON_CLASS = [
-  'min-h-9 rounded-lg border px-3 text-sm font-semibold',
-  'transition-colors focus:outline-none focus-visible:ring-2',
-  'focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50',
-].join(' ')
-
-/** Bounded "showing N of M" footer shared by exclusion sections. */
-function ExclusionPaginationFooter({
-  pagination,
-  loadedCount,
-  label,
-}: ExclusionPaginationFooterProps) {
-  if (pagination.total <= 0) return null
-
-  const isInitialLoad = pagination.isLoading && loadedCount === 0
-  return (
-    <div
-      className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1"
-      data-testid="exclusion-pagination"
-    >
-      <p
-        className="text-xs font-medium text-[var(--theme-text-dim)]"
-        aria-live="polite"
-      >
-        {isInitialLoad
-          ? `Loading ${label}…`
-          : `Showing ${loadedCount} of ${pagination.total} ${label}`}
-      </p>
-      {pagination.isError ? (
-        <button
-          type="button"
-          onClick={pagination.onRetry}
-          className={`${EXCLUSION_FOOTER_BUTTON_CLASS} border-[var(--theme-warning)]/40 text-[var(--theme-warning)] hover:bg-[var(--theme-warning)]/10`}
-        >
-          Retry
-        </button>
-      ) : pagination.hasNextPage && loadedCount < pagination.total ? (
-        <button
-          type="button"
-          onClick={pagination.onLoadMore}
-          disabled={pagination.isLoading}
-          className={`${EXCLUSION_FOOTER_BUTTON_CLASS} border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]`}
-        >
-          {pagination.isLoading ? 'Loading…' : 'Load more'}
-        </button>
-      ) : null}
-    </div>
-  )
-}
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
@@ -160,34 +43,20 @@ interface ThreadPoolProps {
 
 export function ThreadPool({
   pool,
-  blockedThreads,
-  blockedPagination,
-  blockingDependencyMap,
   dieSize,
   isRatingView,
   selectedThreadId,
-  staleThread,
-  staleThreadCount,
   snoozedThreads,
   snoozedCount,
   snoozedExpanded,
-  blockedExpanded,
   skippedThreads,
   skippedCount,
   skippedExpanded,
-  staleExpanded,
-  inactiveExpanded,
-  inactiveThreads = [],
-  inactivePagination,
-  onToggleInactive,
   onThreadClick,
   onUnsnooze,
   onUnskip,
-  onReadStale,
   onToggleSnoozed,
   onToggleSkipped,
-  onToggleStale,
-  onToggleBlocked,
   onShuffle,
   unsnoozeIsPending,
   unskipIsPending,
@@ -195,15 +64,6 @@ export function ThreadPool({
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
-  // Category totals are authoritative. The loaded arrays may only be bounded
-  // previews or the first page of a drill-down, so a heading must never use
-  // their length as the category size (issue #3330).
-  const blockedTotal = blockedPagination?.total ?? blockedThreads.length
-  const inactiveTotal = inactivePagination?.total ?? inactiveThreads.length
-  const inactiveTitleCounts = new Map<string, number>()
-  for (const thread of inactiveThreads) {
-    inactiveTitleCounts.set(thread.title, (inactiveTitleCounts.get(thread.title) ?? 0) + 1)
-  }
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
   const skippedTotal = skippedCount ?? skippedThreads.length
 
@@ -246,7 +106,7 @@ export function ThreadPool({
       </div>}
 
       {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`${pool.length} in play, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
-        {pool.length === 0 && blockedTotal === 0 && snoozedTotal === 0 && inactiveTotal === 0 ? (
+        {pool.length === 0 && snoozedTotal === 0 ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
             <div>
@@ -268,19 +128,15 @@ export function ThreadPool({
               </ul>
             </div>
           </div>
-        ) : pool.length === 0 && (blockedTotal > 0 || snoozedTotal > 0 || inactiveTotal > 0) ? (
+        ) : pool.length === 0 && snoozedTotal > 0 ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
               <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
-                {inactiveTotal > 0
-                  ? 'No series in play right now'
-                  : 'Every series is blocked or snoozed'}
+                Every series is snoozed
               </p>
               <p className="text-xs text-stone-500 mt-1">
-                {inactiveTotal > 0
-                  ? 'Every series is waiting on something. The lists below say which reason applies to each one.'
-                  : 'Check your queue to see what needs to be read to unlock more options.'}
+                Reset Dice or visit your queue to choose what to read next.
               </p>
             </div>
             <button
@@ -337,109 +193,6 @@ export function ThreadPool({
           })
         )}
       </div>}
-
-      {blockedTotal > 0 && !isRatingView && (
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={onToggleBlocked}
-            aria-expanded={blockedExpanded}
-            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
-          >
-            <span
-              className={`text-stone-400 text-xs transition-transform ${blockedExpanded ? 'rotate-90' : ''}`}
-            >
-              ▶
-            </span>
-            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              {blockedTotal} series waiting for earlier issues
-            </span>
-          </button>
-          {blockedExpanded && (
-            <div className="mt-2 space-y-1">
-              {blockedThreads.map((thread, index) => (
-                <div
-                  key={thread.id || `blocked-missing-${index}`}
-                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
-                >
-                  <span className="text-sm">🔒</span>
-                  <div className="flex-1 min-w-0">
-                    {thread.id ? (
-                      <Link
-                        to={`/thread/${thread.id}`}
-                        className="block text-sm text-[var(--theme-text-muted)] underline truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-                      >
-                        {thread.title}
-                      </Link>
-                    ) : (
-                      <span className="block text-sm text-[var(--theme-text-muted)] truncate">
-                        {thread.title}
-                      </span>
-                    )}
-                    <EligibilityExplanation isBlocked reasons={thread.blocking_reasons} dependencies={blockingDependencyMap[thread.id]} />
-                  </div>
-                </div>
-              ))}
-              {blockedPagination && (
-                <ExclusionPaginationFooter
-                  pagination={blockedPagination}
-                  loadedCount={blockedThreads.length}
-                  label="blocked series"
-                />
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {staleThread && !isRatingView && (
-        <div className="mt-4 md:mt-8">
-          <button
-            type="button"
-            onClick={onToggleStale}
-            aria-expanded={staleExpanded}
-            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
-          >
-            <span
-              className={`text-stone-400 text-xs transition-transform ${staleExpanded ? 'rotate-90' : ''}`}
-            >
-              ▶
-            </span>
-            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              {staleThreadCount} series you haven&apos;t opened recently
-            </span>
-          </button>
-          {staleExpanded && (
-            <div className="mt-2 space-y-1">
-              <div
-                key={staleThread.id}
-                className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-comic-accent)]/5 border border-[var(--theme-comic-accent)]/10 rounded-lg"
-              >
-                <div className="w-8 h-8 bg-[var(--theme-comic-accent)]/10 rounded-lg flex items-center justify-center shrink-0">
-                  <span className="text-sm">⏳</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[var(--theme-comic-accent)]/70 font-medium">
-                    {staleThread.title}
-                  </p>
-                  <p className="text-[9px] text-[var(--theme-comic-accent)]/50">
-                    Last opened {staleThread.days} days ago
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onReadStale(staleThread.id)}
-                  className="inline-flex min-h-7 min-w-7 items-center justify-center px-2 text-xs text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)]/80 hover:bg-[var(--theme-comic-accent)]/10 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-                  title="Roll this series now"
-                  aria-label="Roll this series now"
-                >
-                  🎲
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {snoozedThreads && snoozedTotal > 0 && !isRatingView && (
         <div className="mt-4 md:mt-8">
@@ -525,70 +278,7 @@ export function ThreadPool({
         </div>
       )}
 
-      {inactiveTotal > 0 && !isRatingView && onToggleInactive && (
-        <div className="mt-4 md:mt-8">
-          <button
-            type="button"
-            onClick={onToggleInactive}
-            aria-expanded={inactiveExpanded ?? false}
-            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
-          >
-            <span
-              className={`text-stone-400 text-xs transition-transform ${(inactiveExpanded ?? false) ? 'rotate-90' : ''}`}
-            >
-              ▶
-            </span>
-            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              {inactiveTotal} series out of the roll pool
-            </span>
-          </button>
-          {inactiveExpanded && (
-            <div className="mt-2 space-y-1">
-              {inactiveThreads.map((thread, index) => {
-                const identityContext = exclusionIdentityContext(
-                  thread,
-                  (inactiveTitleCounts.get(thread.title) ?? 0) > 1,
-                )
-                return (
-                  <div
-                    key={thread.thread_id ?? `inactive-missing-${index}`}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
-                  >
-                    {thread.thread_id ? (
-                      <Link
-                        to={`/thread/${thread.thread_id}`}
-                        className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] underline truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-                      >
-                        {thread.title}
-                        {identityContext ? (
-                          <span className="ml-1 text-xs text-[var(--theme-text-dim)]">{identityContext}</span>
-                        ) : null}
-                      </Link>
-                    ) : (
-                      <span className="flex-1 min-w-0 text-sm text-[var(--theme-text-muted)] truncate">
-                        {thread.title}
-                        {identityContext ? (
-                          <span className="ml-1 text-xs text-[var(--theme-text-dim)]">{identityContext}</span>
-                        ) : null}
-                      </span>
-                    )}
-                    <span className="shrink-0 text-xs text-[var(--theme-text-dim)]">
-                      {exclusionReasonLabel(thread)}
-                    </span>
-                  </div>
-                )
-              })}
-              {inactivePagination && (
-                <ExclusionPaginationFooter
-                  pagination={inactivePagination}
-                  loadedCount={inactiveThreads.length}
-                  label="out-of-pool series"
-                />
-              )}
-            </div>
-          )}
-        </div>
-      )}
+
     </div>
   )
 }
