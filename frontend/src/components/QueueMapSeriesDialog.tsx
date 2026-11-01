@@ -473,7 +473,7 @@ export default function QueueMapSeriesDialog({
             {searchError && (
               <p
                 role="alert"
-                className="rounded-lg bg-rose-900/30 border border-rose-700/40 p-3 text-sm text-rose-200"
+                className="rounded-lg bg-[var(--theme-error)]/20 border-[var(--theme-error)]/40 p-3 text-sm text-[var(--theme-text-primary)]"
               >
                 Failed to search ComicVine. Please try again.
               </p>
@@ -481,7 +481,7 @@ export default function QueueMapSeriesDialog({
             {originQuery.isError && (
               <p
                 role="alert"
-                className="rounded-lg bg-rose-900/30 border border-rose-700/40 p-3 text-sm text-rose-200"
+                className="rounded-lg bg-[var(--theme-error)]/20 border-[var(--theme-error)]/40 p-3 text-sm text-[var(--theme-text-primary)]"
               >
                 This series could not be loaded for mapping. Please try again.
               </p>
@@ -493,7 +493,7 @@ export default function QueueMapSeriesDialog({
             )}
             {hasSearchText && isSearchFetching && searchResults.length === 0 && (
               <div className="flex justify-center py-6" aria-label="Searching">
-                <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-[var(--theme-warning)]/30 border-t-[var(--theme-warning)] rounded-full animate-spin" />
               </div>
             )}
             {hasSearchText &&
@@ -573,7 +573,7 @@ export default function QueueMapSeriesDialog({
 
             {preview.isPending && (
               <div className="flex justify-center py-6" aria-label="Loading mapping plan">
-                <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-[var(--theme-warning)]/30 border-t-[var(--theme-warning)] rounded-full animate-spin" />
               </div>
             )}
 
@@ -581,7 +581,7 @@ export default function QueueMapSeriesDialog({
               <div className="space-y-3">
                 <p
                   role="alert"
-                  className="rounded-lg bg-rose-900/30 border border-rose-700/40 p-3 text-sm text-rose-200"
+                  className="rounded-lg bg-[var(--theme-error)]/20 border-[var(--theme-error)]/40 p-3 text-sm text-[var(--theme-text-primary)]"
                 >
                   The mapping plan could not be loaded. Nothing was changed.
                 </p>
@@ -678,7 +678,7 @@ export default function QueueMapSeriesDialog({
                 {commitMessage && (
                   <p
                     role="alert"
-                    className="rounded-lg bg-rose-900/30 border border-rose-700/40 p-3 text-sm text-rose-200"
+                    className="rounded-lg bg-[var(--theme-error)]/20 border-[var(--theme-error)]/40 p-3 text-sm text-[var(--theme-text-primary)]"
                   >
                     {commitMessage}
                   </p>
@@ -709,7 +709,7 @@ export default function QueueMapSeriesDialog({
                           <input
                             id={checkboxId}
                             type="checkbox"
-                            className="h-5 w-5 shrink-0 accent-amber-500"
+                            className="h-5 w-5 shrink-0 accent-[var(--theme-warning)]"
                             checked={selectedRowIds.includes(row.row_id)}
                             onChange={(event) => toggleRow(row.row_id, event.target.checked)}
                           />
