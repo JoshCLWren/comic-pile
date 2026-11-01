@@ -8,7 +8,10 @@ pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
 pub mod option_inputs;
+pub mod reading_blocker_projection;
+pub mod reading_boundary;
 pub mod reading_constraints;
+pub mod reading_eligibility;
 pub mod reading_inputs;
 pub mod reading_session;
 pub mod roll_offer;
@@ -166,6 +169,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
         .route("/api/v2/roll/reset", post(roll_reset::reset))
+        .route("/api/v2/reading-boundaries", post(reading_boundary::reading_boundary_batch_v2))
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
         .route(
