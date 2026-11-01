@@ -51,8 +51,13 @@ def test_cleanup_uses_a_fresh_trusted_runner_and_workflow_token() -> None:
         "FACTORY_WORKER": "${{ inputs.worker }}",
     }
     assert cleanup["permissions"] == {
-        "contents": "read", "issues": "write", "pull-requests": "read",
+        # PR-target label replacement returns 403 with pull-requests:read,
+        # even though the same job can release an ordinary issue lease.
+        "contents": "read", "issues": "write", "pull-requests": "write",
     }
+    entry = yaml.safe_load((ROOT / ".github/workflows/free-model-factory-entry.yml").read_text())
+    assert entry["permissions"]["pull-requests"] == "write"
+    assert workflow["permissions"]["pull-requests"] == "write"
 
 
 @pytest.mark.parametrize("worker", ["1", "58", "99"])
