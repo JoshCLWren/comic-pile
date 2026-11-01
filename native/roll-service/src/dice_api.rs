@@ -122,6 +122,8 @@ mod tests {
                     .method("POST")
                     .uri("/api/v2/roll/dice-command")
                     .header("content-type", "application/json")
+                    .header("cookie", "csrf_token=synthetic-csrf")
+                    .header("x-csrf-token", "synthetic-csrf")
                     .body(Body::from(
                         r#"{"kind":"manual_select","die":12,"idempotency_key":"client-command-123"}"#,
                     ))

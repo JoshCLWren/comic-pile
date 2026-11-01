@@ -91,20 +91,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "/api/v2/auth/forgot-password",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "/api/v2/auth/reset-password",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "/api/auth/me",
       "methods": [
         "GET"

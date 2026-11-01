@@ -1,9 +1,9 @@
-//! Data Transfer Objects for authentication
+//! Data transfer objects for the Rust v2 first-party authentication surface.
 
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-/// Request DTO for user registration
+/// Request body for account registration.
 #[derive(Debug, Deserialize, Validate)]
 pub struct RegisterRequest {
     #[validate(length(min = 3, max = 50))]
@@ -12,43 +12,30 @@ pub struct RegisterRequest {
     #[validate(email)]
     pub email: String,
 
-    #[validate(length(min = 8, max = 72))]
+    #[validate(length(min = 6))]
     pub password: String,
 }
 
-/// Request DTO for user login
+/// Request body for username/password login.
+///
+/// Login deliberately does not impose the registration minimum length: accounts
+/// created before the current policy must still be able to sign in.
 #[derive(Debug, Deserialize, Validate)]
 pub struct LoginRequest {
-    #[validate(length(min = 3, max = 50))]
+    #[validate(length(max = 50))]
     pub username: String,
 
     #[validate(length(min = 1))]
     pub password: String,
 }
 
-/// Request DTO for token refresh
+/// Optional request body for token refresh; the refresh cookie is also accepted.
 #[derive(Debug, Deserialize, Validate)]
 pub struct RefreshTokenRequest {
     pub refresh_token: String,
 }
 
-/// Request DTO for forgot password
-#[derive(Debug, Deserialize, Validate)]
-pub struct ForgotPasswordRequest {
-    #[validate(email)]
-    pub email: String,
-}
-
-/// Request DTO for password reset
-#[derive(Debug, Deserialize, Validate)]
-pub struct ResetPasswordRequest {
-    pub token: String,
-
-    #[validate(length(min = 8, max = 72))]
-    pub new_password: String,
-}
-
-/// Response DTO for token endpoints
+/// Response body for token endpoints, matching the Python wire contract.
 #[derive(Debug, Serialize)]
 pub struct TokenResponse {
     pub access_token: String,
@@ -56,7 +43,18 @@ pub struct TokenResponse {
     pub token_type: String,
 }
 
-/// Response DTO for user information
+impl TokenResponse {
+    /// Build the canonical bearer token response.
+    pub fn bearer(access_token: String, refresh_token: String) -> Self {
+        Self {
+            access_token,
+            refresh_token,
+            token_type: "bearer".to_string(),
+        }
+    }
+}
+
+/// Response body for the current-user endpoint.
 #[derive(Debug, Serialize)]
 pub struct UserResponse {
     pub id: i32,
@@ -65,89 +63,62 @@ pub struct UserResponse {
     pub is_admin: bool,
 }
 
-/// Response DTO for password reset
-#[derive(Debug, Serialize)]
-pub struct PasswordResetResponse {
-    pub message: String,
-}
-
-/// Response DTO for CSRF token
+/// Response body carrying a double-submit CSRF token.
 #[derive(Debug, Serialize)]
 pub struct CsrfResponse {
     pub csrf_token: String,
 }
 
-/// Claims for JWT tokens
+/// JWT claims shared with the Python issuer and verifier.
+///
+/// Python emits ``type`` (not ``typ``), a ``pc`` password-change epoch, ``sub``
+/// as the username and ``jti`` for revocation. Keep every field optional-safe so
+/// tokens issued by either runtime remain valid.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String, // Subject (username)
-    pub jti: String, // JWT ID for revocation
-    pub exp: i64,    // Expiration time
-    pub iat: i64,    // Issued at
-    pub typ: String, // Token type ("access" or "refresh")
-    pub pc: i64,     // Password change epoch
+    pub sub: String,
+    pub jti: String,
+    pub exp: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iat: Option<i64>,
+    #[serde(rename = "type")]
+    pub token_type: String,
+    #[serde(default)]
+    pub pc: i64,
 }
 
 impl Claims {
-    /// Create access token claims
-    pub fn access_token(username: &str, jti: &str, pc: i64) -> Self {
-        let now = chrono::Utc::now().timestamp();
-        Self {
-            sub: username.to_string(),
-            jti: jti.to_string(),
-            exp: now + (30 * 60), // 30 minutes
-            iat: now,
-            typ: "access".to_string(),
-            pc,
-        }
+    /// Create access-token claims valid for 30 minutes.
+    pub fn access(username: &str, jti: &str, password_epoch: i64) -> Self {
+        Self::new(username, jti, password_epoch, "access", 30 * 60)
     }
 
-    /// Create refresh token claims
-    pub fn refresh_token(username: &str, jti: &str, pc: i64) -> Self {
+    /// Create refresh-token claims valid for seven days.
+    pub fn refresh(username: &str, jti: &str, password_epoch: i64) -> Self {
+        Self::new(username, jti, password_epoch, "refresh", 7 * 24 * 60 * 60)
+    }
+
+    fn new(username: &str, jti: &str, password_epoch: i64, token_type: &str, ttl: i64) -> Self {
         let now = chrono::Utc::now().timestamp();
         Self {
             sub: username.to_string(),
             jti: jti.to_string(),
-            exp: now + (7 * 24 * 60 * 60), // 7 days
-            iat: now,
-            typ: "refresh".to_string(),
-            pc,
+            exp: now + ttl,
+            iat: Some(now),
+            token_type: token_type.to_string(),
+            pc: password_epoch,
         }
     }
 }
 
-/// User data from database
+/// User row needed by the authentication service. The password-change epoch is
+/// read as Unix seconds in SQL so the driver never needs a chrono SQL mapping.
 #[derive(Debug)]
 pub struct UserData {
     pub id: i32,
     pub username: String,
     pub email: Option<String>,
-    pub password_hash: String,
+    pub password_hash: Option<String>,
     pub is_admin: bool,
-    pub password_changed_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-impl UserData {
-    /// Get password change epoch (seconds since Unix epoch)
-    pub fn password_epoch(&self) -> i64 {
-        self.password_changed_at
-            .map(|dt| dt.timestamp())
-            .unwrap_or(0)
-    }
-}
-
-/// Database record for checking if token is revoked
-#[derive(Debug)]
-pub struct RevocationCheck {
-    pub is_revoked: bool,
     pub password_epoch: i64,
-}
-
-/// Login attempt tracking
-#[derive(Debug)]
-pub struct LoginAttempt {
-    pub id: i32,
-    pub username: String,
-    pub ip_address: Option<String>,
-    pub created_at: chrono::DateTime<chrono::Utc>,
 }

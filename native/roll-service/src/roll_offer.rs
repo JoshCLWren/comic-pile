@@ -539,6 +539,8 @@ mod tests {
                     .method("POST")
                     .uri("/api/v2/roll/offer")
                     .header("content-type", "application/json")
+                    .header("cookie", "csrf_token=synthetic-csrf")
+                    .header("x-csrf-token", "synthetic-csrf")
                     .body(Body::from(r#"{"idempotency_key":"roll-offer-0123456789"}"#))
                     .unwrap(),
             )

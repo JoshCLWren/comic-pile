@@ -169,9 +169,6 @@ async fn bound_request(
 
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
-    use auth::handlers::{
-        csrf, forgot_password, login, logout, me, refresh, register, reset_password,
-    };
     use auth::middleware::csrf_middleware;
 
     Router::new()
@@ -180,18 +177,17 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/health",
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
         )
-        // Authentication endpoints
-        .route("/api/v2/auth/register", post(register))
-        .route("/api/v2/auth/login", post(login))
-        .route("/api/v2/auth/refresh", post(refresh))
-        .route("/api/v2/auth/logout", post(logout))
-        .route("/api/v2/auth/csrf", get(csrf))
-        .route("/api/v2/auth/me", get(me))
-        .route("/api/v2/auth/forgot-password", post(forgot_password))
-        .route("/api/v2/auth/reset-password", post(reset_password))
-        // Legacy auth endpoint (for backward compatibility during migration)
-        .route("/api/v1/auth/me", get(me))
-        .route("/api/auth/me", get(me))
+        // Account lifecycle. Password recovery stays on the Python mailer path
+        // until an equivalent Rust delivery boundary exists.
+        .route("/api/v2/auth/register", post(auth::handlers::register))
+        .route("/api/v2/auth/login", post(auth::handlers::login))
+        .route("/api/v2/auth/refresh", post(auth::handlers::refresh))
+        .route("/api/v2/auth/logout", post(auth::handlers::logout))
+        .route("/api/v2/auth/csrf", get(auth::handlers::csrf))
+        .route("/api/v2/auth/me", get(auth::handlers::me))
+        // Same-path native identity cutover for the legacy and v1 clients.
+        .route("/api/v1/auth/me", get(auth::handlers::me))
+        .route("/api/auth/me", get(auth::handlers::me))
         // Roll endpoints
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))

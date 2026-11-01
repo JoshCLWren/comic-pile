@@ -1,252 +1,492 @@
-//! HTTP handlers for authentication endpoints
+//! HTTP handlers for the Rust v2 first-party authentication endpoints.
+
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock, RwLock};
 
 use axum::{
     extract::State,
-    http::{header, HeaderMap},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
-use std::sync::Arc;
-use std::sync::OnceLock;
 use tokio::time::{Duration, Instant};
-use tracing::info;
 use validator::Validate;
 
 use crate::auth::{
-    dto::*,
-    error::AuthError,
-    middleware::CsrfToken,
-    services::{AuthService, PasswordResetService},
-    utils::get_client_ip,
+    dto::{
+        CsrfResponse, LoginRequest, RefreshTokenRequest, RegisterRequest, TokenResponse,
+        UserResponse,
+    },
+    error::{AuthError, AuthResult},
+    identity::AuthenticatedUser,
+    services::AuthService,
+    utils::{generate_csrf_token, get_client_ip, is_secure_request, token_digest},
 };
 use crate::AppState;
 
-/// Rate limiting configuration
-const RATE_LIMIT_LOGIN: (u32, Duration) = (5, Duration::from_secs(60));
-const RATE_LIMIT_REFRESH: (u32, Duration) = (20, Duration::from_secs(60));
-const RATE_LIMIT_FORGOT_PASSWORD: (u32, Duration) = (3, Duration::from_secs(60));
+const REFRESH_COOKIE: &str = "refresh_token";
+const CSRF_COOKIE: &str = "csrf_token";
+const REFRESH_COOKIE_MAX_AGE_SECONDS: i64 = 7 * 24 * 60 * 60;
+const CSRF_COOKIE_MAX_AGE_SECONDS: i64 = 24 * 60 * 60;
 
-/// State for rate limiting
-#[derive(Clone)]
-struct RateLimitState {
-    attempts: Arc<std::sync::RwLock<std::collections::HashMap<String, Vec<Instant>>>>,
+/// In-process request limiter. Keys are client IPs, never usernames or secrets.
+#[derive(Default)]
+struct RateLimiter {
+    attempts: RwLock<HashMap<String, Vec<Instant>>>,
 }
 
-impl RateLimitState {
-    fn new() -> Self {
-        Self {
-            attempts: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-        }
-    }
-
-    async fn check_rate_limit(
-        &self,
-        identifier: &str,
-        limit: (u32, Duration),
-    ) -> Result<(), AuthError> {
+impl RateLimiter {
+    fn check(&self, key: &str, limit: usize, window: Duration) -> Result<(), AuthError> {
         let now = Instant::now();
-        let mut attempts = self.attempts.write().unwrap();
-        let user_attempts = attempts
-            .entry(identifier.to_string())
-            .or_insert_with(Vec::new);
-
-        // Remove old attempts
-        user_attempts.retain(|&attempt| now.duration_since(attempt) < limit.1);
-
-        if user_attempts.len() >= limit.0 as usize {
-            return Err(AuthError::AccountLocked);
+        let mut attempts = self.attempts.write().unwrap_or_else(|e| e.into_inner());
+        let entries = attempts.entry(key.to_string()).or_default();
+        entries.retain(|seen| now.duration_since(*seen) < window);
+        if entries.len() >= limit {
+            return Err(AuthError::RateLimited);
         }
-
-        user_attempts.push(now);
+        entries.push(now);
         Ok(())
     }
 }
 
-fn limiter() -> &'static RateLimitState {
-    static LIMITER: OnceLock<RateLimitState> = OnceLock::new();
-    LIMITER.get_or_init(RateLimitState::new)
+fn limiter() -> &'static RateLimiter {
+    static LIMITER: OnceLock<RateLimiter> = OnceLock::new();
+    LIMITER.get_or_init(RateLimiter::default)
 }
 
-/// Register a new user
+fn client_ip(headers: &HeaderMap) -> String {
+    get_client_ip(headers, None)
+}
+
+fn cookie_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
+    headers
+        .get(header::COOKIE)?
+        .to_str()
+        .ok()?
+        .split(';')
+        .map(str::trim)
+        .find_map(|part| {
+            part.strip_prefix(name)
+                .and_then(|rest| rest.strip_prefix('='))
+        })
+        .filter(|value| !value.is_empty())
+}
+
+fn cookie(name: &str, value: &str, max_age: i64, http_only: bool, secure: bool) -> HeaderValue {
+    let mut settings = format!("{name}={value}; Path=/; Max-Age={max_age}; SameSite=Lax");
+    if http_only {
+        settings.push_str("; HttpOnly");
+    }
+    if secure {
+        settings.push_str("; Secure");
+    }
+    HeaderValue::from_str(&settings).expect("generated cookie value is header-safe")
+}
+
+fn cleared_refresh_cookie(secure: bool) -> HeaderValue {
+    let mut settings = format!("{REFRESH_COOKIE}=; Path=/api; Max-Age=0; SameSite=Lax; HttpOnly");
+    if secure {
+        settings.push_str("; Secure");
+    }
+    HeaderValue::from_str(&settings).expect("static cookie value is header-safe")
+}
+
+/// Append the refresh and double-submit CSRF cookies for a successful sign-in.
+fn authentication_headers(headers: &HeaderMap, refresh_token: &str) -> HeaderMap {
+    let secure = is_secure_request(headers);
+    let csrf_token = cookie_value(headers, CSRF_COOKIE)
+        .map(str::to_owned)
+        .unwrap_or_else(generate_csrf_token);
+    let mut response_headers = HeaderMap::new();
+    response_headers.append(
+        header::SET_COOKIE,
+        cookie(
+            REFRESH_COOKIE,
+            refresh_token,
+            REFRESH_COOKIE_MAX_AGE_SECONDS,
+            true,
+            secure,
+        ),
+    );
+    response_headers.append(
+        header::SET_COOKIE,
+        cookie(
+            CSRF_COOKIE,
+            &csrf_token,
+            CSRF_COOKIE_MAX_AGE_SECONDS,
+            false,
+            secure,
+        ),
+    );
+    response_headers
+}
+
+/// Register a new first-party account.
 pub async fn register(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(request): Json<RegisterRequest>,
-) -> AuthResponse<Json<TokenResponse>> {
-    // Validate request
-    if let Err(_errors) = request.validate() {
-        return Err(AuthError::InternalError); // Simplified error handling
-    }
-
-    // Check rate limit (by IP for registration)
-    let ip = get_client_ip(&HeaderMap::new(), None).unwrap_or_else(|| "unknown".to_string());
-    limiter().check_rate_limit(&ip, RATE_LIMIT_LOGIN).await?;
-
-    let auth_service = AuthService::new(state.clone());
-    let result = auth_service.register(&request).await?;
-
-    info!("User registered: {}", request.username);
-    Ok(Json(result))
+) -> AuthResult<(HeaderMap, Json<TokenResponse>)> {
+    request.validate().map_err(|_| AuthError::Validation)?;
+    limiter().check(&client_ip(&headers), 5, Duration::from_secs(60))?;
+    let tokens = AuthService::new(state).register(&request).await?;
+    let response_headers = authentication_headers(&headers, &tokens.refresh_token);
+    Ok((response_headers, Json(tokens)))
 }
 
-/// Login user and return tokens
+/// Authenticate an existing account.
 pub async fn login(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(request): Json<LoginRequest>,
-) -> AuthResponse<Json<TokenResponse>> {
-    // Validate request
-    if let Err(_errors) = request.validate() {
-        return Err(AuthError::InternalError); // Simplified error handling
-    }
-
-    // Check rate limit (by username for login)
-    limiter()
-        .check_rate_limit(&request.username, RATE_LIMIT_LOGIN)
+) -> AuthResult<(HeaderMap, Json<TokenResponse>)> {
+    request.validate().map_err(|_| AuthError::Validation)?;
+    limiter().check(&client_ip(&headers), 5, Duration::from_secs(60))?;
+    let tokens = AuthService::new(state)
+        .login(&request, &client_ip(&headers))
         .await?;
-
-    let auth_service = AuthService::new(state.clone());
-    let result = auth_service.login(&request).await?;
-
-    info!("User logged in: {}", request.username);
-    Ok(Json(result))
+    let response_headers = authentication_headers(&headers, &tokens.refresh_token);
+    Ok((response_headers, Json(tokens)))
 }
 
-/// Refresh access token
+/// Rotate the refresh credential from the body or the HttpOnly cookie.
 pub async fn refresh(
     State(state): State<Arc<AppState>>,
-    Json(request): Json<RefreshTokenRequest>,
-) -> AuthResponse<Json<TokenResponse>> {
-    // Validate request
-    if let Err(_errors) = request.validate() {
-        return Err(AuthError::InternalError); // Simplified error handling
-    }
-
-    // Check rate limit (by refresh token for refresh)
-    let token_hash = hash_token(&request.refresh_token);
-    limiter()
-        .check_rate_limit(&token_hash, RATE_LIMIT_REFRESH)
-        .await?;
-
-    let auth_service = AuthService::new(state.clone());
-    let result = auth_service.refresh_token(&request.refresh_token).await?;
-
-    info!("Token refreshed");
-    Ok(Json(result))
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> AuthResult<(HeaderMap, Json<TokenResponse>)> {
+    let body_token = if body.is_empty() {
+        None
+    } else {
+        serde_json::from_slice::<RefreshTokenRequest>(&body)
+            .ok()
+            .map(|request| request.refresh_token)
+    };
+    let refresh_token = body_token
+        .or_else(|| cookie_value(&headers, REFRESH_COOKIE).map(str::to_owned))
+        .ok_or(AuthError::MissingRefreshToken)?;
+    limiter().check(&token_digest(&refresh_token), 20, Duration::from_secs(60))?;
+    let tokens = AuthService::new(state).refresh(&refresh_token).await?;
+    let response_headers = authentication_headers(&headers, &tokens.refresh_token);
+    Ok((response_headers, Json(tokens)))
 }
 
-/// Logout user by revoking token
+/// Revoke the presented access token and clear the refresh cookie.
 pub async fn logout(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-) -> AuthResponse<Response> {
-    let auth_header = headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-
-    if auth_header.starts_with("Bearer ") {
-        let token = &auth_header[7..];
-        let auth_service = AuthService::new(state.clone());
-        auth_service.logout(token).await?;
+) -> AuthResult<Response> {
+    let access_token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split_once(' '))
+        .filter(|(scheme, token)| scheme.eq_ignore_ascii_case("bearer") && !token.is_empty())
+        .map(|(_, token)| token);
+    if let Some(token) = access_token {
+        AuthService::new(state).logout(token).await?;
     }
-
-    // Clear refresh cookie
-    let response = Response::builder()
-        .status(axum::http::StatusCode::OK)
-        .header(
-            "set-cookie",
-            "refresh_token=; Path=/api; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
-        )
-        .body(axum::body::Body::from(
-            r#"{"message":"Successfully logged out"}"#,
-        ))
-        .unwrap();
-
-    Ok(response)
-}
-
-/// Get CSRF token
-pub async fn csrf(
-    State(_state): State<Arc<AppState>>,
-    csrf_token: CsrfToken,
-) -> AuthResponse<Response> {
-    let token = csrf_token.token().to_string();
-    let mut response = Json(CsrfResponse {
-        csrf_token: token.clone(),
-    })
-    .into_response();
-    response.headers_mut().insert(
+    let mut response_headers = HeaderMap::new();
+    response_headers.append(
         header::SET_COOKIE,
-        axum::http::HeaderValue::from_str(&format!(
-            "csrf_token={token}; Path=/; Max-Age=86400; SameSite=Lax"
-        ))
-        .expect("generated token is safe for cookie"),
+        cleared_refresh_cookie(is_secure_request(&headers)),
     );
-    Ok(response)
+    Ok((
+        StatusCode::OK,
+        response_headers,
+        Json(serde_json::json!({"message": "Successfully logged out"})),
+    )
+        .into_response())
 }
 
-/// Get current user information
+/// Issue or return a double-submit CSRF token.
+pub async fn csrf(headers: HeaderMap) -> Response {
+    let token = cookie_value(&headers, CSRF_COOKIE)
+        .map(str::to_owned)
+        .unwrap_or_else(generate_csrf_token);
+    let mut response_headers = HeaderMap::new();
+    response_headers.append(
+        header::SET_COOKIE,
+        cookie(
+            CSRF_COOKIE,
+            &token,
+            CSRF_COOKIE_MAX_AGE_SECONDS,
+            false,
+            is_secure_request(&headers),
+        ),
+    );
+    (response_headers, Json(CsrfResponse { csrf_token: token })).into_response()
+}
+
+/// Return the current authenticated account profile.
 pub async fn me(
     State(state): State<Arc<AppState>>,
-    user: crate::auth::AuthenticatedUser,
-) -> AuthResponse<Json<UserResponse>> {
-    let auth_service = AuthService::new(state.clone());
-    let user_info = auth_service.get_user_info(user.id()).await?;
-
+    user: AuthenticatedUser,
+) -> AuthResult<Json<UserResponse>> {
+    let user_info = AuthService::new(state).get_user_info(user.id()).await?;
     Ok(Json(user_info))
 }
 
-/// Initiate password reset
-pub async fn forgot_password(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<ForgotPasswordRequest>,
-) -> AuthResponse<Json<PasswordResetResponse>> {
-    // Validate request
-    if let Err(_errors) = request.validate() {
-        return Err(AuthError::InternalError); // Simplified error handling
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::services::decode_claims;
+    use crate::auth::utils::verify_password;
+    use crate::config::Config;
+    use axum::body::Bytes;
+
+    fn state(url: &str) -> Arc<AppState> {
+        Arc::new(
+            AppState::new(
+                Config::from_lookup(|key| match key {
+                    "RUST_ROLL_DATABASE_URL" => Some(url.into()),
+                    "RUST_ROLL_JWT_SECRET" => Some("synthetic-auth-test-secret".into()),
+                    "RUST_ROLL_POOL_SIZE" => Some("1".into()),
+                    _ => None,
+                })
+                .unwrap(),
+            )
+            .unwrap(),
+        )
     }
 
-    // Check rate limit (by email for forgot password)
-    limiter()
-        .check_rate_limit(&request.email, RATE_LIMIT_FORGOT_PASSWORD)
-        .await?;
-
-    let password_reset_service = PasswordResetService::new(state.clone());
-    password_reset_service
-        .initiate_forgot_password(&request.email)
-        .await?;
-
-    Ok(Json(PasswordResetResponse {
-        message: "If an account exists, a reset link has been sent.".to_string(),
-    }))
-}
-
-/// Complete password reset
-pub async fn reset_password(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<ResetPasswordRequest>,
-) -> AuthResponse<Json<PasswordResetResponse>> {
-    // Validate request
-    if let Err(_errors) = request.validate() {
-        return Err(AuthError::InternalError); // Simplified error handling
+    async fn schema_with_auth_tables() -> (String, String) {
+        let Ok(base) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            panic!("RUST_ROLL_TEST_DATABASE_URL is required; auth tests never silently skip");
+        };
+        let (admin, connection) = tokio_postgres::connect(&base, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("auth_handlers_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (
+                     id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                     username text UNIQUE NOT NULL,
+                     email text,
+                     password_hash text,
+                     is_admin boolean NOT NULL DEFAULT false,
+                     password_changed_at timestamptz,
+                     created_at timestamptz NOT NULL DEFAULT NOW()
+                 );
+                 CREATE TABLE {schema}.failed_login_attempts (
+                     id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                     username text NOT NULL,
+                     ip_address text NOT NULL,
+                     attempted_at timestamptz NOT NULL DEFAULT NOW()
+                 );
+                 CREATE TABLE {schema}.revoked_tokens (
+                     id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                     user_id integer NOT NULL,
+                     jti text NOT NULL UNIQUE,
+                     revoked_at timestamptz NOT NULL DEFAULT NOW(),
+                     expires_at timestamptz NOT NULL
+                 );
+                 CREATE TABLE {schema}.password_reset_tokens (
+                     id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                     user_id integer NOT NULL,
+                     token_digest text NOT NULL UNIQUE,
+                     expires_at timestamptz NOT NULL,
+                     used_at timestamptz,
+                     created_at timestamptz NOT NULL DEFAULT NOW()
+                 );"
+            ))
+            .await
+            .unwrap();
+        let scoped = format!("{base}?options=-c%20search_path%3D{schema}");
+        (schema, scoped)
     }
 
-    let password_reset_service = PasswordResetService::new(state.clone());
-    password_reset_service
-        .complete_reset(&request.token, &request.new_password)
-        .await?;
+    fn json_headers(ip: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        headers.insert("x-forwarded-for", HeaderValue::from_str(ip).unwrap());
+        headers
+    }
 
-    Ok(Json(PasswordResetResponse {
-        message: "Password reset successfully.".to_string(),
-    }))
+    #[tokio::test]
+    async fn register_login_refresh_logout_round_trip() {
+        let (schema, url) = schema_with_auth_tables().await;
+        let state = state(&url);
+        let headers = json_headers("198.51.100.10");
+        let register_request = RegisterRequest {
+            username: "round-trip-reader".into(),
+            email: "round-trip@example.com".into(),
+            password: "correct-horse-battery".into(),
+        };
+        let (_, Json(created)) = register(
+            State(state.clone()),
+            headers.clone(),
+            Json(register_request),
+        )
+        .await
+        .unwrap();
+        let claims = decode_claims(
+            &created.access_token,
+            b"synthetic-auth-test-secret",
+            Some("access"),
+        )
+        .unwrap();
+        assert_eq!(claims.sub, "round-trip-reader");
+        assert_eq!(claims.token_type, "access");
+
+        let connection = state.pool.get().await.unwrap();
+        let hash: String = connection
+            .query_one(
+                "SELECT password_hash FROM users WHERE username = $1",
+                &[&"round-trip-reader"],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert!(verify_password("correct-horse-battery", &hash).unwrap());
+        assert!(!verify_password("wrong-password", &hash).unwrap());
+        drop(connection);
+
+        let login_request = LoginRequest {
+            username: "round-trip-reader".into(),
+            password: "correct-horse-battery".into(),
+        };
+        let (login_headers, Json(logged_in)) =
+            login(State(state.clone()), headers, Json(login_request))
+                .await
+                .unwrap();
+        let set_cookies = login_headers
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .collect::<Vec<_>>();
+        assert!(set_cookies
+            .iter()
+            .any(|value| value.starts_with("refresh_token=")));
+        assert!(set_cookies
+            .iter()
+            .any(|value| value.starts_with("csrf_token=")));
+
+        let refresh_body = Bytes::from(
+            serde_json::to_vec(&serde_json::json!({
+                "refresh_token": logged_in.refresh_token
+            }))
+            .unwrap(),
+        );
+        let (_, Json(rotated)) = refresh(State(state.clone()), HeaderMap::new(), refresh_body)
+            .await
+            .unwrap();
+        assert_ne!(rotated.refresh_token, logged_in.refresh_token);
+
+        let replay = refresh(
+            State(state.clone()),
+            HeaderMap::new(),
+            Bytes::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "refresh_token": logged_in.refresh_token
+                }))
+                .unwrap(),
+            ),
+        )
+        .await;
+        assert!(
+            replay.is_err(),
+            "a rotated refresh token must not be replayed"
+        );
+
+        let mut authorization = HeaderMap::new();
+        authorization.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", rotated.access_token)).unwrap(),
+        );
+        logout(State(state.clone()), authorization).await.unwrap();
+        assert!(
+            crate::auth::authenticate(&state, &rotated.access_token)
+                .await
+                .is_err(),
+            "logout must revoke the exact access token"
+        );
+
+        let (admin, connection) = tokio_postgres::connect(
+            std::env::var("RUST_ROLL_TEST_DATABASE_URL")
+                .unwrap()
+                .as_str(),
+            tokio_postgres::NoTls,
+        )
+        .await
+        .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn failed_login_lockout_is_database_backed() {
+        let (schema, url) = schema_with_auth_tables().await;
+        let state = state(&url);
+        let (_, Json(created)) = register(
+            State(state.clone()),
+            json_headers("198.51.100.20"),
+            Json(RegisterRequest {
+                username: "lockout-reader".into(),
+                email: "lockout@example.com".into(),
+                password: "correct-horse-battery".into(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(!created.access_token.is_empty());
+
+        for attempt in 0..5 {
+            let response = login(
+                State(state.clone()),
+                json_headers(&format!("198.51.100.{}", 30 + attempt)),
+                Json(LoginRequest {
+                    username: "lockout-reader".into(),
+                    password: "wrong-password".into(),
+                }),
+            )
+            .await;
+            assert!(response.is_err());
+        }
+        let locked = login(
+            State(state.clone()),
+            json_headers("198.51.100.99"),
+            Json(LoginRequest {
+                username: "lockout-reader".into(),
+                password: "correct-horse-battery".into(),
+            }),
+        )
+        .await;
+        assert!(
+            locked.is_err(),
+            "five recent failures must lock the username"
+        );
+
+        let (admin, connection) = tokio_postgres::connect(
+            std::env::var("RUST_ROLL_TEST_DATABASE_URL")
+                .unwrap()
+                .as_str(),
+            tokio_postgres::NoTls,
+        )
+        .await
+        .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
 }
-
-/// Helper function to hash token for rate limiting
-fn hash_token(token: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(token.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
-
-/// Type alias for auth responses
-type AuthResponse<T> = Result<T, AuthError>;

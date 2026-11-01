@@ -23,8 +23,7 @@ LIB_SOURCE = SERVICE_SOURCE / "lib.rs"
 BASELINE = REPOSITORY_ROOT / "tests" / "native_roll_write_test_baseline.json"
 
 POST_ROUTE_RE = re.compile(
-    r'\.route\(\s*"[^"]+"\s*,\s*post\(\s*(?P<module>[a-z_0-9]+)::'
-    r'(?P<handler>[a-z_0-9]+)\s*\)\s*,?\s*\)',
+    r'\.route\(\s*"[^"]+"\s*,\s*post\(\s*(?P<path>(?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)\s*,?\s*\)',
     re.DOTALL,
 )
 DB_TEST_MARKER = "RUST_ROLL_TEST_DATABASE_URL"
@@ -53,12 +52,16 @@ def _route_matches() -> list[tuple[str, str]]:
     """Return every parsed ``post(module::handler)`` occurrence.
 
     Returns:
-        Module/handler pairs in router order, including aliases.
+        Module/handler pairs in router order, including aliases. The module is
+        the module path (``auth::handlers`` or ``roll_offer``) so nested auth
+        modules resolve to their real source file.
     """
-    return [
-        (match.group("module"), match.group("handler"))
-        for match in POST_ROUTE_RE.finditer(_lib_source())
-    ]
+    matches: list[tuple[str, str]] = []
+    for match in POST_ROUTE_RE.finditer(_lib_source()):
+        path = match.group("path")
+        module, _, handler = path.rpartition("::")
+        matches.append((module, handler))
+    return matches
 
 
 def _mounted_post_routes() -> set[tuple[str, str]]:
@@ -79,7 +82,7 @@ def _test_module(module: str) -> str:
     Returns:
         Test-module source, or an empty string when the module has no tests.
     """
-    source = (SERVICE_SOURCE / f"{module}.rs").read_text(encoding="utf-8")
+    source = (SERVICE_SOURCE / f"{module.replace('::', '/')}.rs").read_text(encoding="utf-8")
     marker = "#[cfg(test)]"
     if marker not in source:
         return ""
@@ -194,7 +197,7 @@ def test_read_only_post_handlers_are_proven_by_real_schema_http_tests() -> None:
             f"{module}::{handler} is no longer mounted; remove its read-only "
             "exemption"
         )
-        source = (SERVICE_SOURCE / f"{module}.rs").read_text(encoding="utf-8")
+        source = (SERVICE_SOURCE / f"{module.replace('::', '/')}.rs").read_text(encoding="utf-8")
         production = source.split("#[cfg(test)]", 1)[0]
         assert WRITE_SQL_RE.search(production) is None, (
             f"{module} contains write SQL; a read-only POST handler must not "

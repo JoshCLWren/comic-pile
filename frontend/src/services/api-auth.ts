@@ -26,9 +26,9 @@ export interface PasswordResetResponse {
 export function createAuthApi(client: HttpClient) {
   return {
     forgotPassword: (data: ForgotPasswordRequest) =>
-      client.post<PasswordResetResponse, ForgotPasswordRequest>('/v2/auth/forgot-password', data),
+      client.post<PasswordResetResponse, ForgotPasswordRequest>('/v1/auth/forgot-password', data),
     resetPassword: (data: ResetPasswordRequest) =>
-      client.post<PasswordResetResponse, ResetPasswordRequest>('/v2/auth/reset-password', data),
+      client.post<PasswordResetResponse, ResetPasswordRequest>('/v1/auth/reset-password', data),
   }
 }
 

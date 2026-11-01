@@ -872,7 +872,7 @@ async fn mutate(
         .iter()
         .copied()
         .chain(skipped_ids.iter().copied())
-        .chain(durable_snoozed(&tx, user.id()).await?.into_iter())
+        .chain(durable_snoozed(&tx, user.id()).await?)
     {
         if seen.insert(id) {
             excluded.push(id);

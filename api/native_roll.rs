@@ -98,8 +98,6 @@ fn app() -> Router {
         .route("/api/v2/auth/logout", post(native_dispatch))
         .route("/api/v2/auth/csrf", get(native_dispatch))
         .route("/api/v2/auth/me", get(native_dispatch))
-        .route("/api/v2/auth/forgot-password", post(native_dispatch))
-        .route("/api/v2/auth/reset-password", post(native_dispatch))
         .route("/api/v1/auth/me", get(native_dispatch))
         .route("/api/auth/me", get(native_dispatch))
 }

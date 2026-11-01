@@ -30,20 +30,15 @@ const CSRF_COOKIE_NAME = 'csrf_token'
 const CSRF_HEADER_NAME = 'X-CSRF-Token'
 const CSRF_PROTECTED_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 const AUTH_ENDPOINT_PATHS = new Set([
-  '/v2/auth/login',
-  '/v2/auth/register',
-  '/v2/auth/refresh',
-  '/v2/auth/forgot-password',
-  '/v2/auth/reset-password',
   '/v1/auth/login',
   '/v1/auth/register',
-  '/v2/auth/refresh',
+  '/v1/auth/refresh',
   '/v1/auth/forgot-password',
   '/v1/auth/reset-password',
 ])
 // Request bodies for these paths carry single-use secrets (reset token, new
 // password). They must never reach console output or error telemetry.
-const SENSITIVE_AUTH_BODY_PATHS = new Set(['/v2/auth/reset-password', '/v1/auth/reset-password'])
+const SENSITIVE_AUTH_BODY_PATHS = new Set(['/v1/auth/reset-password'])
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -147,8 +142,8 @@ async function refreshSessionOn(
   refreshPromise = (async () => {
     try {
       const response = options?.skipAuthRedirect
-        ? await client.post<AuthTokens>('/v2/auth/refresh', undefined, { skipAuthRedirect: true })
-        : await client.post<AuthTokens>('/v2/auth/refresh')
+        ? await client.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
+        : await client.post<AuthTokens>('/v1/auth/refresh')
       if (generation !== credentialGeneration) throw new axios.CanceledError('Session changed during refresh')
       setAccessToken(response.access_token)
       return response.access_token
@@ -203,7 +198,7 @@ async function ensureCsrfToken(client: ApiClient): Promise<string | null> {
   if (!csrfTokenPromise) {
     // SAFETY: only the skipAuthRedirect flag is needed from ApiRequestConfig; other fields have sensible defaults.
     csrfTokenPromise = client
-      .get<{ csrf_token: string }>('/v2/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
+      .get<{ csrf_token: string }>('/v1/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
       .then((response) => response.csrf_token ?? getCookieValue(CSRF_COOKIE_NAME))
       .finally(() => {
         csrfTokenPromise = null
@@ -290,7 +285,7 @@ function errorForDiagnosticLog(error: AxiosError): AxiosError | RedactedRequestD
 function createRequestInterceptor(client: ApiClient) {
   return async (config: InternalAxiosRequestConfig) => {
     // Snapshot the credential epoch before dispatching a refresh request.
-    if (getRequestPathname(config.url ?? '') === '/v2/auth/refresh') {
+    if (getRequestPathname(config.url ?? '') === '/v1/auth/refresh') {
       Object.assign(config, { credentialGeneration })
     }
     const token = getAccessToken()
@@ -348,7 +343,7 @@ function createResponseErrorInterceptor(client: ApiClient) {
     if (isAuthenticationFailure(error) && !originalRequest._retry && !originalRequest.skipAuthRefresh) {
       const requestPathname = getRequestPathname(originalRequest.url ?? '')
       if (AUTH_ENDPOINT_PATHS.has(requestPathname)) {
-        if (requestPathname === '/v2/auth/refresh' && isAuthenticationFailure(error) &&
+        if (requestPathname === '/v1/auth/refresh' && isAuthenticationFailure(error) &&
           (originalRequest.credentialGeneration === undefined || originalRequest.credentialGeneration === credentialGeneration)) {
           markSessionRefreshRejected()
           if (!originalRequest.skipAuthRedirect) {

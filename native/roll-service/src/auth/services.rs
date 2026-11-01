@@ -1,565 +1,397 @@
-//! Authentication business logic services
+//! Authentication business logic for the Rust v2 first-party auth surface.
+//!
+//! Behavior mirrors `app/api/auth.py` and `app/auth.py`: bcrypt credentials,
+//! HS256 access/refresh JWTs sharing one `jti`, database-backed login lockout,
+//! revocation by `jti`, and password-epoch invalidation. Password recovery
+//! delivery remains in Python until an equivalent Rust mailer is introduced.
 
-use chrono::Utc;
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use rand::RngExt;
-use sha2::{Digest, Sha256};
-use std::collections::HashMap;
-use tokio::time::{Duration, Instant};
-use tracing::{error, info, warn};
-
-use crate::auth::{
-    dto::*,
-    error::{AuthError, AuthResult},
-    utils::{hash_password, verify_password},
-};
-use crate::AppState;
 use std::sync::Arc;
 
-/// JWT configuration
-const ALGORITHM: Algorithm = Algorithm::HS256;
-const ACCESS_TOKEN_EXPIRY_MINUTES: i64 = 30;
-const REFRESH_TOKEN_EXPIRY_DAYS: i64 = 7;
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 
-/// Main authentication service
+use crate::auth::{
+    dto::{Claims, LoginRequest, RegisterRequest, TokenResponse, UserData, UserResponse},
+    error::{AuthError, AuthResult},
+    utils::{generate_token, hash_password, token_digest, verify_password},
+};
+use crate::db::{checkout, query_error, query_one_optional};
+use crate::AppState;
+
+const ALGORITHM: Algorithm = Algorithm::HS256;
+const MAX_USERNAME_FAILURES: i64 = 5;
+const MAX_IP_FAILURES: i64 = 10;
+
+/// Account lifecycle service. Stateless beyond the shared application pool.
 pub struct AuthService {
     state: Arc<AppState>,
-    login_attempts: Arc<std::sync::RwLock<HashMap<String, Vec<Instant>>>>,
 }
 
 impl AuthService {
+    /// Create a service bound to the process application state.
     pub fn new(state: Arc<AppState>) -> Self {
-        Self {
-            state,
-            login_attempts: Arc::new(std::sync::RwLock::new(HashMap::new())),
-        }
+        Self { state }
     }
 
-    /// Register a new user
+    /// Register a new account and issue an initial token pair.
     pub async fn register(&self, request: &RegisterRequest) -> AuthResult<TokenResponse> {
-        // Check if username already exists
-        if self.username_exists(&request.username).await? {
-            return Err(AuthError::UsernameExists);
-        }
-
-        // Check if email already exists
-        if self.email_exists(&request.email).await? {
-            return Err(AuthError::EmailExists);
-        }
-
-        // Validate username doesn't contain '@'
         if request.username.contains('@') {
             return Err(AuthError::InvalidUsername);
         }
-
-        // Hash password
         let password_hash = hash_password(&request.password)?;
 
-        // Create user in database
-        let user_id = self
-            .create_user(&request.username, &request.email, &password_hash)
-            .await?;
+        let connection = checkout(&self.state).await?;
+        let existing = connection
+            .query_opt(
+                "SELECT username, email FROM users WHERE username = $1 OR email = $2 LIMIT 1",
+                &[&request.username, &request.email],
+            )
+            .await
+            .map_err(query_error)?;
+        if let Some(row) = existing {
+            let username: String = row.get(0);
+            if username == request.username {
+                return Err(AuthError::UsernameExists);
+            }
+            return Err(AuthError::EmailExists);
+        }
 
-        // Generate tokens
-        let (access_token, refresh_token) =
-            self.generate_tokens(user_id, &request.username, 0).await?;
+        let inserted = connection
+            .query_opt(
+                "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) \
+                 ON CONFLICT DO NOTHING RETURNING id",
+                &[&request.username, &request.email, &password_hash],
+            )
+            .await
+            .map_err(query_error)?;
+        inserted.ok_or(AuthError::UserExists)?;
+        drop(connection);
 
-        Ok(TokenResponse {
-            access_token,
-            refresh_token,
-            token_type: "bearer".to_string(),
-        })
+        self.issue_tokens(&request.username, 0).await
     }
 
-    /// Login user
-    pub async fn login(&self, request: &LoginRequest) -> AuthResult<TokenResponse> {
-        // Check login attempts
-        self.check_login_attempts(&request.username).await?;
+    /// Authenticate a username/password pair.
+    pub async fn login(
+        &self,
+        request: &LoginRequest,
+        client_ip: &str,
+    ) -> AuthResult<TokenResponse> {
+        if request.username.contains('@') {
+            return Err(AuthError::EmailLogin);
+        }
 
-        // Get user by username
-        let user = match self.get_user_by_username(&request.username).await? {
-            Some(user) => user,
-            None => {
-                // Record failed attempt for non-existent user
-                self.record_failed_attempt(&request.username, None).await?;
-                return Err(AuthError::InvalidCredentials);
-            }
-        };
-
-        // Verify password
-        if !verify_password(&request.password, &user.password_hash)? {
-            // Record failed attempt
-            self.record_failed_attempt(&request.username, None).await?;
+        let connection = checkout(&self.state).await?;
+        let username_failures: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM failed_login_attempts \
+                 WHERE username = $1 AND attempted_at >= NOW() - INTERVAL '15 minutes'",
+                &[&request.username],
+            )
+            .await
+            .map_err(query_error)?
+            .get(0);
+        let ip_failures: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM failed_login_attempts \
+                 WHERE ip_address = $1 AND attempted_at >= NOW() - INTERVAL '30 minutes'",
+                &[&client_ip],
+            )
+            .await
+            .map_err(query_error)?
+            .get(0);
+        if username_failures >= MAX_USERNAME_FAILURES || ip_failures >= MAX_IP_FAILURES {
             return Err(AuthError::InvalidCredentials);
         }
 
-        // Clear failed attempts on successful login
-        self.clear_failed_attempts(&request.username).await?;
-
-        // Generate tokens with password epoch
-        let pc = user.password_epoch();
-        let (access_token, refresh_token) =
-            self.generate_tokens(user.id, &user.username, pc).await?;
-
-        Ok(TokenResponse {
-            access_token,
-            refresh_token,
-            token_type: "bearer".to_string(),
-        })
-    }
-
-    /// Refresh access token
-    pub async fn refresh_token(&self, refresh_token: &str) -> AuthResult<TokenResponse> {
-        // Verify refresh token
-        let claims = self.verify_token(refresh_token, "refresh")?;
-
-        // Check if token is revoked
-        if self.is_token_revoked(&claims.sub, &claims.jti).await? {
-            return Err(AuthError::TokenRevoked);
+        let user = self
+            .user_by_username(&connection, &request.username)
+            .await?;
+        let Some(user) = user else {
+            self.record_failed_attempt(&connection, &request.username, client_ip)
+                .await?;
+            return Err(AuthError::InvalidCredentials);
+        };
+        let Some(password_hash) = user.password_hash.as_deref() else {
+            self.record_failed_attempt(&connection, &request.username, client_ip)
+                .await?;
+            return Err(AuthError::InvalidCredentials);
+        };
+        if !verify_password(&request.password, password_hash)? {
+            self.record_failed_attempt(&connection, &request.username, client_ip)
+                .await?;
+            return Err(AuthError::InvalidCredentials);
         }
 
-        // Get user
-        let user = match self.get_user_by_username(&claims.sub).await? {
-            Some(user) => user,
-            None => return Err(AuthError::UserNotFound),
-        };
+        connection
+            .execute(
+                "DELETE FROM failed_login_attempts WHERE username = $1",
+                &[&request.username],
+            )
+            .await
+            .map_err(query_error)?;
+        drop(connection);
 
-        // Check password change
-        let user_pc = user.password_epoch();
-        if claims.pc < user_pc {
+        self.issue_tokens(&user.username, user.password_epoch).await
+    }
+
+    /// Rotate a refresh token, revoking its predecessor to detect replay.
+    pub async fn refresh(&self, refresh_token: &str) -> AuthResult<TokenResponse> {
+        let claims = decode_claims(
+            refresh_token,
+            self.state.jwt_secret.as_bytes(),
+            Some("refresh"),
+        )
+        .map_err(|_| AuthError::InvalidRefreshToken)?;
+        let connection = checkout(&self.state).await?;
+        let row = query_one_optional(
+            &self.state,
+            connection,
+            "SELECT u.id, u.username, \
+             COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0), \
+             EXISTS(SELECT 1 FROM revoked_tokens r WHERE r.jti = $2) \
+             FROM users u WHERE u.username = $1 LIMIT 1",
+            &[&claims.sub, &claims.jti],
+        )
+        .await?;
+        let row = row.ok_or(AuthError::RefreshUserNotFound)?;
+        if row.get::<_, bool>(3) {
+            return Err(AuthError::RefreshTokenRevoked);
+        }
+        let password_epoch: i64 = row.get(2);
+        if claims.pc < password_epoch {
             return Err(AuthError::PasswordChanged);
         }
+        let user_id: i32 = row.get(0);
 
-        // Generate new tokens
-        let (access_token, refresh_token) = self
-            .generate_tokens(user.id, &user.username, user_pc)
-            .await?;
-
-        Ok(TokenResponse {
-            access_token,
-            refresh_token,
-            token_type: "bearer".to_string(),
-        })
+        if !self.revoke_jti(user_id, &claims.jti, claims.exp).await? {
+            return Err(AuthError::RefreshTokenRevoked);
+        }
+        self.issue_tokens(&claims.sub, password_epoch).await
     }
 
-    /// Logout user by revoking token
-    pub async fn logout(&self, token: &str) -> AuthResult<()> {
-        let claims = match self.verify_token(token, "access") {
-            Ok(claims) => claims,
-            Err(_) => return Ok(()), // Don't fail if token is invalid
+    /// Revoke the presented access token. Invalid tokens still log out cleanly.
+    pub async fn logout(&self, access_token: &str) -> AuthResult<()> {
+        let Ok(claims) = decode_claims(access_token, self.state.jwt_secret.as_bytes(), None) else {
+            return Ok(());
         };
-
-        // Revoke the token
-        self.revoke_token(&claims.sub, &claims.jti, claims.exp)
-            .await?;
-
+        let connection = checkout(&self.state).await?;
+        let user_id = connection
+            .query_opt(
+                "SELECT id FROM users WHERE username = $1 LIMIT 1",
+                &[&claims.sub],
+            )
+            .await
+            .map_err(query_error)?
+            .map(|row| row.get::<_, i32>(0));
+        if let Some(user_id) = user_id {
+            drop(connection);
+            self.revoke_jti(user_id, &claims.jti, claims.exp).await?;
+        }
         Ok(())
     }
 
-    /// Get user information
+    /// Return the authenticated account profile.
     pub async fn get_user_info(&self, user_id: i32) -> AuthResult<UserResponse> {
-        let user = self
-            .get_user_by_id(user_id)
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
-
+        let connection = checkout(&self.state).await?;
+        let row = connection
+            .query_opt(
+                "SELECT id, username, email, is_admin FROM users WHERE id = $1 LIMIT 1",
+                &[&user_id],
+            )
+            .await
+            .map_err(query_error)?;
+        let row = row.ok_or(AuthError::UserNotFound)?;
         Ok(UserResponse {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            is_admin: user.is_admin,
+            id: row.get(0),
+            username: row.get(1),
+            email: row.get(2),
+            is_admin: row.get(3),
         })
     }
 
-    /// Check if username exists
-    async fn username_exists(&self, username: &str) -> AuthResult<bool> {
-        let query = r#"
-            SELECT 1 FROM users WHERE username = $1 LIMIT 1
-        "#;
-
-        let result = self
-            .state
-            .pool
-            .get()
-            .await?
-            .query_opt(query, &[&username])
-            .await?;
-
-        Ok(result.is_some())
-    }
-
-    /// Check if email exists
-    async fn email_exists(&self, email: &str) -> AuthResult<bool> {
-        let query = r#"
-            SELECT 1 FROM users WHERE email = $1 LIMIT 1
-        "#;
-
-        let result = self
-            .state
-            .pool
-            .get()
-            .await?
-            .query_opt(query, &[&email])
-            .await?;
-
-        Ok(result.is_some())
-    }
-
-    /// Create user in database
-    async fn create_user(
+    async fn user_by_username(
         &self,
+        connection: &deadpool_postgres::Object,
         username: &str,
-        email: &str,
-        password_hash: &str,
-    ) -> AuthResult<i32> {
-        let query = r#"
-            INSERT INTO users (username, email, password_hash, created_at)
-            VALUES ($1, $2, $3, NOW())
-            RETURNING id
-        "#;
-
-        let conn = self.state.pool.get().await?;
-        let result = conn
-            .query_one(query, &[&username, &email, &password_hash])
-            .await?;
-        Ok(result.get(0))
-    }
-
-    /// Look up a user without converting backend errors into invalid credentials.
-    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserData>> {
-        let query = r#"
-            SELECT id, username, email, password_hash, is_admin, password_changed_at
-            FROM users WHERE username = $1 LIMIT 1
-        "#;
-        let conn = self.state.pool.get().await?;
-        let row = conn.query_opt(query, &[&username]).await?;
+    ) -> AuthResult<Option<UserData>> {
+        let row = connection
+            .query_opt(
+                "SELECT id, username, email, password_hash, is_admin, \
+                 COALESCE(trunc(extract(epoch FROM password_changed_at))::bigint, 0) \
+                 FROM users WHERE username = $1 LIMIT 1",
+                &[&username],
+            )
+            .await
+            .map_err(query_error)?;
         Ok(row.map(|row| UserData {
             id: row.get(0),
             username: row.get(1),
             email: row.get(2),
             password_hash: row.get(3),
             is_admin: row.get(4),
-            password_changed_at: row.get(5),
+            password_epoch: row.get(5),
         }))
     }
 
-    /// Look up an owner without turning a Neon failure into a missing account.
-    async fn get_user_by_id(&self, user_id: i32) -> AuthResult<Option<UserData>> {
-        let query = r#"
-            SELECT id, username, email, password_hash, is_admin, password_changed_at
-            FROM users WHERE id = $1 LIMIT 1
-        "#;
-        let conn = self.state.pool.get().await?;
-        let row = conn.query_opt(query, &[&user_id]).await?;
-        Ok(row.map(|row| UserData {
-            id: row.get(0),
-            username: row.get(1),
-            email: row.get(2),
-            password_hash: row.get(3),
-            is_admin: row.get(4),
-            password_changed_at: row.get(5),
-        }))
-    }
-
-    /// Generate JWT tokens
-    async fn generate_tokens(
-        &self,
-        user_id: i32,
-        username: &str,
-        pc: i64,
-    ) -> AuthResult<(String, String)> {
-        let jti = self.generate_jti();
-
-        // Access token
-        let access_claims = Claims::access_token(username, &jti, pc);
-        let access_token = self.encode_token(&access_claims)?;
-
-        // Refresh token
-        let refresh_claims = Claims::refresh_token(username, &jti, pc);
-        let refresh_token = self.encode_token(&refresh_claims)?;
-
-        // Store refresh token for revocation check
-        self.store_refresh_token(user_id, &jti, refresh_claims.exp)
-            .await?;
-
-        Ok((access_token, refresh_token))
-    }
-
-    /// Encode JWT token
-    fn encode_token(&self, claims: &Claims) -> AuthResult<String> {
-        let key = EncodingKey::from_secret(self.state.jwt_secret.as_bytes());
-        encode(&Header::new(ALGORITHM), claims, &key).map_err(|e| {
-            error!("Failed to encode token: {}", e);
-            AuthError::InternalError
-        })
-    }
-
-    /// Verify JWT token
-    fn verify_token(&self, token: &str, expected_type: &str) -> AuthResult<Claims> {
-        let key = DecodingKey::from_secret(self.state.jwt_secret.as_bytes());
-        let mut validation = Validation::new(ALGORITHM);
-        validation.set_required_spec_claims(&["sub", "jti", "exp", "iat", "typ"]);
-        validation.validate_exp = true;
-        validation.validate_nbf = false;
-        validation.validate_aud = false;
-
-        let token_data = decode::<Claims>(token, &key, &validation).map_err(|e| {
-            warn!("Token verification failed: {}", e);
-            AuthError::InvalidToken
-        })?;
-
-        if token_data.claims.typ != expected_type {
-            return Err(AuthError::InvalidToken);
-        }
-
-        Ok(token_data.claims)
-    }
-
-    /// Check if token is revoked
-    async fn is_token_revoked(&self, username: &str, jti: &str) -> AuthResult<bool> {
-        let query = r#"
-            SELECT 1 FROM revoked_tokens rt
-            JOIN users u ON rt.user_id = u.id
-            WHERE u.username = $1 AND rt.jti = $2
-        "#;
-
-        let conn = self.state.pool.get().await?;
-        let result = conn.query_opt(query, &[&username, &jti]).await?;
-
-        Ok(result.is_some())
-    }
-
-    /// Store refresh token for revocation check
-    async fn store_refresh_token(
-        &self,
-        user_id: i32,
-        jti: &str,
-        expires_at: i64,
-    ) -> AuthResult<()> {
-        let query = r#"
-            INSERT INTO revoked_tokens (user_id, jti, revoked_at, expires_at)
-            VALUES ($1, $2, NOW(), TO_TIMESTAMP($3))
-        "#;
-
-        let conn = self.state.pool.get().await?;
-        conn.execute(query, &[&user_id, &jti, &expires_at]).await?;
-
-        Ok(())
-    }
-
-    /// Revoke token
-    async fn revoke_token(&self, username: &str, jti: &str, expires_at: i64) -> AuthResult<()> {
-        let query = r#"
-            INSERT INTO revoked_tokens (user_id, jti, revoked_at, expires_at)
-            SELECT u.id, $2, NOW(), TO_TIMESTAMP($3)
-            FROM users u WHERE u.username = $1
-        "#;
-
-        let conn = self.state.pool.get().await?;
-        conn.execute(query, &[&username, &jti, &expires_at]).await?;
-
-        Ok(())
-    }
-
-    /// Generate JTI for token
-    fn generate_jti(&self) -> String {
-        rand::rng()
-            .sample_iter(&rand::distr::Alphanumeric)
-            .take(32)
-            .map(char::from)
-            .collect()
-    }
-
-    /// Check login attempts
-    async fn check_login_attempts(&self, username: &str) -> AuthResult<()> {
-        let mut attempts = self.login_attempts.write().unwrap();
-        let user_attempts = attempts
-            .entry(username.to_string())
-            .or_insert_with(Vec::new);
-
-        // Remove attempts older than 5 minutes
-        let now = Instant::now();
-        user_attempts.retain(|&attempt| now.duration_since(attempt) < Duration::from_secs(300));
-
-        if user_attempts.len() >= 5 {
-            return Err(AuthError::AccountLocked);
-        }
-
-        Ok(())
-    }
-
-    /// Record failed login attempt
     async fn record_failed_attempt(
         &self,
+        connection: &deadpool_postgres::Object,
         username: &str,
-        ip_address: Option<String>,
+        client_ip: &str,
     ) -> AuthResult<()> {
-        {
-            let mut attempts = self.login_attempts.write().unwrap();
-            let user_attempts = attempts
-                .entry(username.to_string())
-                .or_insert_with(Vec::new);
-            user_attempts.push(Instant::now());
-        }
-
-        // Store in database for persistent tracking
-        let query = r#"
-            INSERT INTO login_attempts (username, ip_address, created_at)
-            VALUES ($1, $2, NOW())
-        "#;
-
-        let conn = self.state.pool.get().await?;
-        conn.execute(query, &[&username, &ip_address]).await?;
-
+        connection
+            .execute(
+                "INSERT INTO failed_login_attempts (username, ip_address) VALUES ($1, $2)",
+                &[&username, &client_ip],
+            )
+            .await
+            .map_err(query_error)?;
         Ok(())
     }
 
-    /// Clear failed login attempts
-    async fn clear_failed_attempts(&self, username: &str) -> AuthResult<()> {
-        {
-            let mut attempts = self.login_attempts.write().unwrap();
-            attempts.remove(username);
-        }
+    async fn revoke_jti(&self, user_id: i32, jti: &str, expires_at: i64) -> AuthResult<bool> {
+        let connection = checkout(&self.state).await?;
+        let expires_at = expires_at as f64;
+        let inserted = connection
+            .execute(
+                "INSERT INTO revoked_tokens (user_id, jti, revoked_at, expires_at) \
+                 VALUES ($1, $2, NOW(), to_timestamp($3)) ON CONFLICT (jti) DO NOTHING",
+                &[&user_id, &jti, &expires_at],
+            )
+            .await
+            .map_err(query_error)?;
+        Ok(inserted > 0)
+    }
 
-        // Clear from database
-        let query = r#"
-            DELETE FROM login_attempts 
-            WHERE username = $1 AND created_at < NOW() - INTERVAL '5 minutes'
-        "#;
-
-        let conn = self.state.pool.get().await?;
-        conn.execute(query, &[&username]).await?;
-
-        Ok(())
+    async fn issue_tokens(&self, username: &str, password_epoch: i64) -> AuthResult<TokenResponse> {
+        let jti = generate_token(32);
+        let access = Claims::access(username, &jti, password_epoch);
+        let refresh = Claims::refresh(username, &jti, password_epoch);
+        let access_token = encode_token(&access, self.state.jwt_secret.as_bytes())?;
+        let refresh_token = encode_token(&refresh, self.state.jwt_secret.as_bytes())?;
+        Ok(TokenResponse::bearer(access_token, refresh_token))
     }
 }
 
+fn encode_token(claims: &Claims, secret: &[u8]) -> AuthResult<String> {
+    encode(
+        &Header::new(ALGORITHM),
+        claims,
+        &EncodingKey::from_secret(secret),
+    )
+    .map_err(|error| {
+        tracing::error!("token encoding failed: {error}");
+        AuthError::InternalError
+    })
+}
 
-/// Password reset service
+/// Decode and validate a JWT, optionally requiring a specific token `type`.
+pub fn decode_claims(
+    token: &str,
+    secret: &[u8],
+    expected_type: Option<&str>,
+) -> AuthResult<Claims> {
+    let mut validation = Validation::new(ALGORITHM);
+    validation.required_spec_claims.clear();
+    validation.validate_exp = false;
+    validation.validate_nbf = false;
+    validation.validate_aud = false;
+    let claims = decode::<Claims>(token, &DecodingKey::from_secret(secret), &validation)
+        .map_err(|_| AuthError::InvalidToken)?
+        .claims;
+    if claims.sub.is_empty() || claims.jti.is_empty() {
+        return Err(AuthError::InvalidToken);
+    }
+    if expected_type.is_some_and(|expected| claims.token_type != expected) {
+        return Err(AuthError::InvalidToken);
+    }
+    if claims.exp < jsonwebtoken::get_current_timestamp() as i64 {
+        return Err(AuthError::InvalidToken);
+    }
+    Ok(claims)
+}
+
+/// Password-recovery service. Delivery is owned by the Python mailer today, so
+/// this service preserves the shared token-digest and credential-epoch contract
+/// for the future native cutover without exposing an unrouted HTTP handler.
 pub struct PasswordResetService {
     state: Arc<AppState>,
 }
 
 impl PasswordResetService {
+    /// Create a service bound to the process application state.
     pub fn new(state: Arc<AppState>) -> Self {
         Self { state }
     }
 
-    /// Initiate password reset flow
-    pub async fn initiate_forgot_password(&self, email: &str) -> AuthResult<()> {
-        // Check if user exists
-        let query = r#"
-            SELECT id, username, email FROM users WHERE email = $1 LIMIT 1
-        "#;
-
-        let conn = self.state.pool.get().await?;
-        let user = match conn.query_opt(query, &[&email]).await {
-            Ok(Some(row)) => Some((row.get(0), row.get(1), row.get(2))),
-            Ok(None) | Err(_) => None,
+    /// Store a single-use reset digest and return the raw token for delivery.
+    pub async fn begin_reset(&self, email: &str) -> AuthResult<Option<String>> {
+        let connection = checkout(&self.state).await?;
+        let user_id = connection
+            .query_opt("SELECT id FROM users WHERE email = $1 LIMIT 1", &[&email])
+            .await
+            .map_err(query_error)?
+            .map(|row| row.get::<_, i32>(0));
+        let Some(user_id) = user_id else {
+            return Ok(None);
         };
-
-        if let Some((user_id, username, user_email)) = user {
-            // Generate reset token
-            let reset_token = self.generate_reset_token();
-            let token_hash = self.hash_token(&reset_token);
-            let expires_at = Utc::now() + chrono::Duration::minutes(30);
-
-            // Store reset token
-            let query = r#"
-                INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (user_id) DO UPDATE SET
-                    token_hash = $2,
-                    expires_at = $3,
-                    created_at = NOW()
-            "#;
-
-            conn.execute(query, &[&user_id, &token_hash, &expires_at])
-                .await?;
-
-            // TODO: Send email (for now, just log the token)
-            // Password-reset secrets must never appear in application logs.
-        }
-
-        // Always return success to prevent user enumeration
-        Ok(())
+        let raw_token = generate_token(43);
+        let digest = token_digest(&raw_token);
+        let mut connection = connection;
+        let transaction = connection.transaction().await.map_err(query_error)?;
+        transaction
+            .execute(
+                "DELETE FROM password_reset_tokens WHERE user_id = $1",
+                &[&user_id],
+            )
+            .await
+            .map_err(query_error)?;
+        transaction
+            .execute(
+                "INSERT INTO password_reset_tokens (user_id, token_digest, expires_at) \
+                 VALUES ($1, $2, NOW() + INTERVAL '30 minutes')",
+                &[&user_id, &digest],
+            )
+            .await
+            .map_err(query_error)?;
+        transaction.commit().await.map_err(query_error)?;
+        Ok(Some(raw_token))
     }
 
-    /// Complete password reset
+    /// Consume a reset token, rotate the password hash and bump the credential epoch.
     pub async fn complete_reset(&self, token: &str, new_password: &str) -> AuthResult<()> {
-        // Validate password
-        if new_password.len() < 8 {
-            return Err(AuthError::PasswordTooShort);
-        }
-
-        // Hash token
-        let token_hash = self.hash_token(token);
-
-        // Find valid reset token
-        let query = r#"
-            SELECT u.id, u.username FROM password_reset_tokens prt
-            JOIN users u ON prt.user_id = u.id
-            WHERE prt.token_hash = $1 AND prt.expires_at > NOW()
-            LIMIT 1
-        "#;
-
-        let conn = self.state.pool.get().await?;
-        let user: Option<(i32, String)> = match conn.query_opt(query, &[&token_hash]).await {
-            Ok(Some(row)) => Some((row.get(0), row.get(1))),
-            Ok(None) | Err(_) => None,
-        };
-
-        let (user_id, username) = user.ok_or(AuthError::InvalidToken)?;
-
-        // Hash new password
         let password_hash = hash_password(new_password)?;
-
-        // Update user password
-        let query = r#"
-            UPDATE users 
-            SET password_hash = $1, password_changed_at = NOW()
-            WHERE id = $2
-        "#;
-
-        conn.execute(query, &[&password_hash, &user_id]).await?;
-
-        // Invalidate all existing tokens for this user
-        self.revoke_all_user_tokens(user_id).await?;
-
-        info!("Password reset completed for user: {}", username);
-
-        Ok(())
-    }
-
-    /// Generate random reset token
-    fn generate_reset_token(&self) -> String {
-        rand::rng()
-            .sample_iter(&rand::distr::Alphanumeric)
-            .take(32)
-            .map(char::from)
-            .collect()
-    }
-
-    /// Hash token for storage
-    fn hash_token(&self, token: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(token.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
-    /// Revoke all tokens for a user
-    async fn revoke_all_user_tokens(&self, user_id: i32) -> AuthResult<()> {
-        let query = r#"
-            INSERT INTO revoked_tokens (user_id, jti, revoked_at, expires_at)
-            SELECT u.id, rt.jti, NOW(), rt.expires_at
-            FROM refresh_tokens rt
-            JOIN users u ON rt.user_id = u.id
-            WHERE u.id = $1
-        "#;
-
-        let conn = self.state.pool.get().await?;
-        conn.execute(query, &[&user_id]).await?;
-
+        let digest = token_digest(token);
+        let mut connection = checkout(&self.state).await?;
+        let transaction = connection.transaction().await.map_err(query_error)?;
+        let token_id = transaction
+            .query_opt(
+                "SELECT id, user_id FROM password_reset_tokens \
+                 WHERE token_digest = $1 AND used_at IS NULL AND expires_at > NOW() \
+                 LIMIT 1 FOR UPDATE",
+                &[&digest],
+            )
+            .await
+            .map_err(query_error)?;
+        let Some(row) = token_id else {
+            return Err(AuthError::InvalidToken);
+        };
+        let id: i32 = row.get(0);
+        let user_id: i32 = row.get(1);
+        transaction
+            .execute(
+                "UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1 AND used_at IS NULL",
+                &[&id],
+            )
+            .await
+            .map_err(query_error)?;
+        transaction
+            .execute(
+                "UPDATE users SET password_hash = $1, password_changed_at = NOW() WHERE id = $2",
+                &[&password_hash, &user_id],
+            )
+            .await
+            .map_err(query_error)?;
+        transaction.commit().await.map_err(query_error)?;
         Ok(())
     }
 }

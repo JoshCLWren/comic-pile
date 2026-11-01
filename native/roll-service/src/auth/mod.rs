@@ -1,13 +1,9 @@
-//! Complete authentication module for Rust v2
+//! First-party authentication for the native Rust API.
 //!
-//! This module provides all authentication functionality previously implemented in Python and Node.js:
-//! - User registration, login, logout
-//! - JWT token management (access, refresh, revocation)
-//! - Password reset flow
-//! - CSRF protection
-//! - Rate limiting and security features
-//!
-//! The implementation follows the existing Python semantics while providing security hardening.
+//! The account lifecycle (register, login, refresh, logout, CSRF, current user)
+//! is implemented here and mounted under `/api/v2/auth`. Password-recovery
+//! delivery still lives in Python until an equivalent Rust mailer is added; the
+//! shared JWT, password-epoch and reset-digest contracts remain compatible.
 
 pub mod dto;
 pub mod error;
@@ -20,7 +16,6 @@ pub mod utils;
 pub use dto::*;
 pub use error::{AuthError, AuthResult};
 pub use handlers::*;
-pub use identity::AuthenticatedUser;
-pub use middleware::CsrfToken;
+pub use identity::{authenticate, AuthenticatedUser};
 pub use services::{AuthService, PasswordResetService};
 pub use utils::{generate_csrf_token, hash_password, verify_password};
