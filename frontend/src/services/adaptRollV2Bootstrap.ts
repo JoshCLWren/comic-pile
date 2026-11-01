@@ -3,19 +3,11 @@ import type { RollV2BootstrapResponse } from '../types/rollV2'
 
 /**
  * Preserve the established Roll view state while using v2's canonical
- * issue-level candidate projection. All exclusion and tag information
- * must come from native Rust, never a fabricated fallback.
+ * issue-level candidate projection. Visible die-face tags come directly
+ * from native Rust; retired exclusion reports are not required.
  */
 export function adaptRollV2Bootstrap(state: RollV2BootstrapResponse): RollBootstrapResponse {
-  if (
-    !Array.isArray(state.rollable)
-    || !Number.isInteger(state.total_threads)
-    || !Number.isInteger(state.available_threads)
-    || !Number.isInteger(state.excluded_count)
-    || !Array.isArray(state.excluded_threads)
-    || !Number.isInteger(state.inactive_count)
-    || !Array.isArray(state.inactive_threads)
-  ) {
+  if (!Array.isArray(state.rollable)) {
     throw new Error('Incomplete native Roll v2 bootstrap response')
   }
 
