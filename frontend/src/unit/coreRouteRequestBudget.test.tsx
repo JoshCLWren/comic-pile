@@ -11,6 +11,7 @@
  * read (preferences) goes through the service transport seam.
  */
 import { StrictMode, type ReactNode } from 'react'
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import type { InternalAxiosRequestConfig } from 'axios'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -18,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { setDefaultHttpClient } from '../services/httpClient'
+import { createAppQueryClient } from '../query/queryClient'
 import api from '../services/api'
 import { AuthContext } from '../contexts/AuthContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
@@ -43,11 +45,15 @@ function Providers({ children }: { children: ReactNode }) {
   )
 }
 
+let routeQueryClient: QueryClient
+
 function renderAt(path: string, element: ReactNode, strict = false): ReactNode {
   const tree = (
-    <MemoryRouter initialEntries={[path]}>
-      <Providers>{element}</Providers>
-    </MemoryRouter>
+    <QueryClientProvider client={routeQueryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <Providers>{element}</Providers>
+      </MemoryRouter>
+    </QueryClientProvider>
   )
   return strict ? <StrictMode>{tree}</StrictMode> : tree
 }
@@ -202,6 +208,14 @@ function renderShell(): ReactNode {
 
 beforeEach(() => {
   adapterCalls = []
+  // A per-test client keeps these budgets independent of the process-wide
+  // singleton that other unit files populate.
+  routeQueryClient = createAppQueryClient()
+  const defaults = routeQueryClient.getDefaultOptions()
+  routeQueryClient.setDefaultOptions({
+    queries: { ...(defaults.queries ?? {}), retry: false },
+    mutations: { ...(defaults.mutations ?? {}), retry: false },
+  })
 })
 
 afterEach(() => {
