@@ -250,3 +250,22 @@ def test_baseline_is_frozen_and_documented() -> None:
     )
     for module, reason in modules.items():
         assert reason.strip(), f"{module} needs a baseline reason"
+
+
+def test_patch_write_is_guarded_and_proven_by_delegated_database_test() -> None:
+    """An HTTP PATCH is a mutation, even when the handler delegates its SQL."""
+    assert ("issue_handler", "read_rate_issue") in _mounted_post_routes()
+    assert _tests_write_path("issue_handler", "read_rate_issue")
+
+
+def test_missing_delegated_writer_fails_closed(monkeypatch: object, tmp_path: Path) -> None:
+    """A mere auth test never substitutes for the actual PATCH write."""
+    handler = tmp_path / "issue_handler.rs"
+    handler.write_text("pub async fn read_rate_issue() { /* no write */ }\n")
+    writer = tmp_path / "issue_service.rs"
+    writer.write_text(
+        '#[cfg(test)]\nmod tests { #[tokio::test] async fn test() { '
+        'let _ = "RUST_ROLL_TEST_DATABASE_URL"; persist(); } }\n'
+    )
+    monkeypatch.setitem(globals(), "SERVICE_SOURCE", tmp_path)
+    assert not _tests_write_path("issue_handler", "read_rate_issue")
