@@ -69,7 +69,7 @@ from app.schemas.continuity_rule import ContinuityNodeType
 from app.repositories.continuity_repository import plans_for_user
 from app.repositories.reading_plan_list_link_repository import (
     owned_list_entry_counts,
-    owned_plan_list_authority_rows,
+    plan_list_authority_rows,
 )
 from app.repositories.reading_plan_repository import distinct_plan_issue_ids
 from app.services.canonical_constraint_compiler import (
@@ -925,13 +925,17 @@ async def list_continuity_plan_items(
     plan_ids = [plan.id for plan in ordered]
     paths_by_plan = {plan.id: plan_source_paths(plan) for plan in ordered}
     if get_reading_execution_settings().enabled and ordered:
-        # Owner check is part of the JOIN. Never infer an authority from a
-        # matching name or silently fall back to an outdated Plan snapshot.
-        list_rows = await owned_plan_list_authority_rows(
+        # Scope Plans to the reader while retaining List ownership in the
+        # result. A foreign link is not equivalent to a deleted List.
+        list_rows = await plan_list_authority_rows(
             db, user_id=user_id, plan_ids=plan_ids,
         )
         authorities: dict[int, tuple[int, str, datetime]] = {}
-        for plan_id, list_id, mode, list_updated_at in list_rows:
+        for plan_id, list_id, mode, list_updated_at, list_owner_id in list_rows:
+            if list_owner_id != user_id:
+                raise HTTPException(
+                    status_code=409, detail="Reading Plan links to an unowned Reading List"
+                )
             existing = authorities.get(plan_id)
             if existing is not None and existing[0] != list_id:
                 raise HTTPException(status_code=409, detail="Ambiguous Reading List association")
