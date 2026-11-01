@@ -63,6 +63,8 @@ jobs:
   factory:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      worker_session_started: ${{ steps.worker_session.outputs.started }}
     env:
       # Workflow token handles GitHub API, labels, comments, and backlog-zero
       # workflow dispatch. Git fetch/push and PR creation use the dedicated
@@ -983,6 +985,7 @@ jobs:
           [[ -z "$(git status --porcelain)" ]] || { echo 'Kilo smoke modified the worktree' >&2; exit 1; }
 
       - name: Run continuous fixed-model factory session
+        id: worker_session
         if: steps.lane.outputs.configured == 'true'
         env:
           FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
@@ -993,6 +996,7 @@ jobs:
           FACTORY_DISPLAY: ${{ steps.executor.outputs.display || steps.lane.outputs.display }}
           FACTORY_BRANCH_SUFFIX: ${{ steps.executor.outputs.branch_suffix || steps.lane.outputs.branch_suffix }}
         run: |
+          echo 'started=true' >> "$GITHUB_OUTPUT"
           set +e
           bash .github/scripts/free-model-factory-worker.sh
           worker_status=$?
@@ -1122,3 +1126,34 @@ jobs:
             gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
               -f body="$attempt_body" >/dev/null
           fi
+
+  release_pre_session_lease:
+    needs: factory
+    if: ${{ always() && needs.factory.outputs.worker_session_started != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      # A failed smoke may have modified its checkout. Recover from a fresh
+      # trusted main on a separate runner, inside the same per-worker lock.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: ./.github/actions/factory-syntax
+      - name: Release lease after pre-session abort
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FACTORY_WORKER: ${{ inputs.worker }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$FACTORY_WORKER" =~ ^([1-9]|[1-9][0-9])$ ]] || {
+            echo 'Invalid worker ID; refusing lease recovery' >&2
+            exit 1
+          }
+          python3 .github/scripts/factory-work-controller.py release \
+            --worker "$FACTORY_WORKER" --reason "pre-session-abort-run-${GITHUB_RUN_ID}"
