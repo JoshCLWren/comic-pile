@@ -451,9 +451,9 @@ export default function QueueMapSeriesDialog({
         )}
         {step === 'search' && (
           <div className="space-y-4">
-            <p className="text-sm text-stone-300">
+            <p className="text-sm text-[var(--theme-text-muted)]">
               Find the ComicVine volume for{' '}
-              <span className="font-bold text-stone-100">{threadTitle}</span>. Nothing changes
+              <span className="font-bold text-[var(--theme-text-primary)]">{threadTitle}</span>. Nothing changes
               until you review and approve the mapping plan.
             </p>
             <input
@@ -468,7 +468,7 @@ export default function QueueMapSeriesDialog({
               placeholder="Search ComicVine volumes"
               aria-label="Search ComicVine volumes"
               data-testid="queue-map-series-search-input"
-              className="w-full min-h-11 rounded-xl px-4 text-sm text-stone-100 bg-stone-800/50 border border-stone-700/50 placeholder:text-stone-500 focus:outline-none focus:border-amber-500/50"
+              className="w-full min-h-11 rounded-xl px-4 text-sm text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 placeholder:text-[var(--theme-text-muted)] focus:outline-none focus:border-[var(--theme-primary-action)]/50"
             />
             {searchError && (
               <p
@@ -487,7 +487,7 @@ export default function QueueMapSeriesDialog({
               </p>
             )}
             {originQuery.isSuccess && originQuery.data === null && (
-              <p className="rounded-lg bg-stone-800/40 border border-stone-700/50 p-3 text-sm text-stone-300">
+              <p className="rounded-lg bg-[var(--theme-bg-panel)]/40 border border-[var(--theme-border)]/50 p-3 text-sm text-[var(--theme-text-muted)]">
                 This series has no tracked issues to map.
               </p>
             )}
@@ -501,7 +501,7 @@ export default function QueueMapSeriesDialog({
               !isSearchLoading &&
               searchResults.length === 0 &&
               !searchError && (
-                <p className="text-sm text-stone-400">No volumes matched that search.</p>
+                <p className="text-sm text-[var(--theme-text-dim)]">No volumes matched that search.</p>
               )}
             {hasSearchText && (
               <ul className="space-y-2 max-h-72 overflow-y-auto overscroll-contain">
@@ -515,10 +515,10 @@ export default function QueueMapSeriesDialog({
                         disabled={!originReady || isSearchPlaceholder}
                         data-testid="queue-map-series-result"
                         aria-label={meta ? `${series.name} - ${meta}` : series.name}
-                        className="w-full text-left rounded-xl bg-stone-800/50 border border-stone-700/50 p-3 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
+                        className="w-full text-left rounded-xl bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 p-3 hover:border-[var(--theme-comic-accent)]/50 hover:bg-[var(--theme-bg-hover)] transition disabled:opacity-50"
                       >
-                        <span className="block text-sm font-bold text-stone-100">{series.name}</span>
-                        {meta && <span className="block text-xs text-stone-400">{meta}</span>}
+                        <span className="block text-sm font-bold text-[var(--theme-text-primary)]">{series.name}</span>
+                        {meta && <span className="block text-xs text-[var(--theme-text-dim)]">{meta}</span>}
                       </button>
                     </li>
                   )
@@ -531,7 +531,7 @@ export default function QueueMapSeriesDialog({
                 onClick={handleLoadMore}
                 disabled={isSearchFetching}
                 data-testid="queue-map-series-load-more"
-                className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition disabled:opacity-50"
+                className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/60 border border-[var(--theme-border)]/50 hover:bg-[var(--theme-bg-hover)] transition disabled:opacity-50"
               >
                 {isSearchFetching ? 'Loading...' : 'Show more volumes'}
               </button>
@@ -551,9 +551,9 @@ export default function QueueMapSeriesDialog({
 
         {step === 'preview' && selectedSeries && (
           <div className="space-y-4" data-testid="queue-map-series-preview">
-            <p className="text-sm text-stone-300">
+            <p className="text-sm text-[var(--theme-text-muted)]">
               Mapping plan for{' '}
-              <span className="font-bold text-stone-100">{selectedSeries.name}</span>. Only exact
+              <span className="font-bold text-[var(--theme-text-primary)]">{selectedSeries.name}</span>. Only exact
               matches are selected; review-needed rows stay untouched.
             </p>
             {approvableRows.some((row) => row.metadata_refresh_required) && (
@@ -566,7 +566,7 @@ export default function QueueMapSeriesDialog({
               type="button"
               onClick={handleBackToSearch}
               data-testid="queue-map-series-back"
-              className="text-xs font-bold uppercase tracking-wider text-stone-400 underline underline-offset-2 hover:text-stone-200 transition-colors"
+              className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text-muted)] underline underline-offset-2 hover:text-[var(--theme-text-primary)] transition-colors"
             >
               Choose a different volume
             </button>
@@ -593,7 +593,7 @@ export default function QueueMapSeriesDialog({
                     type="button"
                     onClick={onClose}
                     data-testid="queue-map-series-dismiss"
-                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
+                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/60 border border-[var(--theme-border)]/50 hover:bg-[var(--theme-bg-hover)] transition"
                   >
                     Done
                   </button>
@@ -602,7 +602,7 @@ export default function QueueMapSeriesDialog({
                     onClick={() => void preview.refetch()}
                     disabled={preview.isFetching}
                     data-testid="queue-map-series-retry"
-                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-900 bg-amber-500 hover:bg-amber-400 transition disabled:opacity-50"
+                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition disabled:opacity-50"
                   >
                     {preview.isFetching ? 'Retrying...' : 'Try again'}
                   </button>
@@ -622,7 +622,7 @@ export default function QueueMapSeriesDialog({
 
             {preview.data && preview.data.scope.status === 'unavailable' && (
               <div className="space-y-3">
-                <p className="rounded-lg bg-stone-800/40 border border-stone-700/50 p-3 text-sm text-stone-300">
+                <p className="rounded-lg bg-[var(--theme-bg-panel)]/40 border border-[var(--theme-border)]/50 p-3 text-sm text-[var(--theme-text-muted)]">
                   {seriesMappingScopeMessage(preview.data.scope.basis)}
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -640,7 +640,7 @@ export default function QueueMapSeriesDialog({
                     type="button"
                     onClick={onClose}
                     data-testid="queue-map-series-dismiss"
-                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
+                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/60 border border-[var(--theme-border)]/50 hover:bg-[var(--theme-bg-hover)] transition"
                   >
                     Done
                   </button>
@@ -663,7 +663,7 @@ export default function QueueMapSeriesDialog({
                 {commit.isSuccess && (
                   <p
                     role="status"
-                    className="rounded-lg border border-[var(--theme-primary-action)]/40 bg-stone-800/40 p-3 text-sm text-stone-100"
+                    className="rounded-lg border border-[var(--theme-primary-action)]/40 bg-[var(--theme-bg-panel)]/40 p-3 text-sm text-[var(--theme-text-primary)]"
                   >
                     {commit.data.confirmed_issue_ids.length}{' '}
                     {commit.data.confirmed_issue_ids.length === 1 ? 'issue' : 'issues'} {includesMetadataRefresh ? 'updated from' : 'mapped to'}{' '}
@@ -685,7 +685,7 @@ export default function QueueMapSeriesDialog({
                 )}
 
                 {approvableRows.length === 0 && !commit.isSuccess && (
-                  <p className="rounded-lg bg-stone-800/40 border border-stone-700/50 p-3 text-sm text-stone-300">
+                  <p className="rounded-lg bg-[var(--theme-bg-panel)]/40 border border-[var(--theme-border)]/50 p-3 text-sm text-[var(--theme-text-muted)]">
                     {preview.data.counts.already_confirmed > 0
                       ? `${preview.data.counts.already_confirmed} ${preview.data.counts.already_confirmed === 1 ? 'issue already links' : 'issues already link'} to this volume. Remaining rows need individual review or a different volume.`
                       : 'No exact matches for your issues in this volume. Ambiguous and special rows are never mapped automatically.'}
@@ -703,7 +703,7 @@ export default function QueueMapSeriesDialog({
                         key={row.row_id}
                         data-testid="queue-map-series-row"
                         data-classification={row.classification}
-                        className="flex items-center gap-3 rounded-xl bg-stone-800/50 border border-stone-700/50 p-3"
+                        className="flex items-center gap-3 rounded-xl bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 p-3"
                       >
                         {isApprovable && !commit.isSuccess ? (
                           <input
@@ -718,10 +718,10 @@ export default function QueueMapSeriesDialog({
                         )}
                         <label
                           htmlFor={isApprovable && !commit.isSuccess ? checkboxId : undefined}
-                          className="min-w-0 flex-1 text-sm text-stone-100"
+                          className="min-w-0 flex-1 text-sm text-[var(--theme-text-primary)]"
                         >
                           <span className="font-bold">{issueNumberLabel(row)}</span>
-                          {row.title ? <span className="text-stone-300"> {row.title}</span> : null}
+                          {row.title ? <span className="text-[var(--theme-text-muted)]"> {row.title}</span> : null}
                         </label>
                         <span
                           className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${STATUS_ACCENT_CLASS[row.classification]}`}
@@ -735,7 +735,7 @@ export default function QueueMapSeriesDialog({
 
                 {providerInventoryCount > 0 && (
                   <p
-                    className="text-xs text-stone-500"
+                    className="text-xs text-[var(--theme-text-dim)]"
                     data-testid="queue-map-series-provider-inventory"
                   >
                     {providerInventoryCount} other{' '}
@@ -750,7 +750,7 @@ export default function QueueMapSeriesDialog({
                     onClick={onClose}
                     disabled={commit.isPending}
                     data-testid="queue-map-series-dismiss"
-                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition disabled:opacity-50"
+                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/60 border border-[var(--theme-border)]/50 hover:bg-[var(--theme-bg-hover)] transition disabled:opacity-50"
                   >
                     {commit.isSuccess ? 'Done' : 'Cancel'}
                   </button>
@@ -771,7 +771,7 @@ export default function QueueMapSeriesDialog({
                       onClick={approveSelected}
                       disabled={commit.isPending || selectedRowIds.length === 0}
                       data-testid="queue-map-series-approve"
-                      className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-900 bg-amber-500 hover:bg-amber-400 transition disabled:opacity-50"
+                      className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition disabled:opacity-50"
                     >
                       {commit.isPending
                         ? 'Mapping...'
