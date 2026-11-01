@@ -72,7 +72,7 @@ issue/PR in, so review fleet machinery can recognize and pick up the work.
 
 ## Issue and PR lifecycle
 
-1. Claim with an atomic full label-set replacement (`gh api -X POST .../issues/N/labels` with
+1. Claim with an atomic full label-set replacement (`gh api -X PUT .../issues/N/labels` with
    the complete set — never sequential add/remove): issue gets `ralph-status:in-progress`,
    `factory`, `factory:building`, one owner. Follow the `github-issue-kanban` skill and
    `docs/AUTONOMOUS_FACTORY_POLICY.md`.
@@ -87,8 +87,8 @@ issue/PR in, so review fleet machinery can recognize and pick up the work.
    | Issue | `ralph-status:in-review`, `factory`, `factory:review`, `factory:unowned` (+ priority/task/quality labels) |
    | PR | `factory`, `factory:review`, `factory:unowned` |
 
-   Replace each set atomically via `gh api -X POST repos/JoshCLWren/comic-pile/issues/N/labels`
-   with every label in one call.
+   Replace each set atomically via `gh api -X PUT repos/JoshCLWren/comic-pile/issues/N/labels`
+   with every label in one call. POST only adds labels, leaving old owners and stages in place.
 
 4. Every push to the PR head requires the same `factory:review` state to stay truthful
    (a push invalidates `factory:ci` / `factory:ready`).
