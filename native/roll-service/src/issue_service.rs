@@ -167,6 +167,16 @@ pub(crate) async fn persist(
         "status": request.status,
         "rating": request.rating,
     });
+    // Lock the owner thread before the issue; owner transfers and concurrent
+    // progress writers must not escape the ownership check.
+    let owner = tx.query_opt(
+        "SELECT t.id FROM threads t JOIN issues i ON i.thread_id=t.id
+         WHERE i.id=$1 AND t.user_id=$2 FOR UPDATE OF t,i",
+        &[&issue_id, &user.id()],
+    ).await.map_err(db::query_error)?
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Issue not found".into()))?;
+    let thread_id: i32 = owner.get(0);
+
     // Replays, including a lost response to a no-op, return their original receipt.
     // Same user/key with a different issue or payload is a conflict.
     let existing = tx.query_opt(
@@ -193,15 +203,6 @@ pub(crate) async fn persist(
         return Ok(result);
     }
 
-    // Lock the owner thread before the issue; owner transfers and concurrent
-    // progress writers must not escape the ownership check.
-    let owner = tx.query_opt(
-        "SELECT t.id FROM threads t JOIN issues i ON i.thread_id=t.id
-         WHERE i.id=$1 AND t.user_id=$2 FOR UPDATE OF t",
-        &[&issue_id, &user.id()],
-    ).await.map_err(db::query_error)?
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Issue not found".into()))?;
-    let thread_id: i32 = owner.get(0);
     let issue = tx.query_one(
         "SELECT status, issue_number FROM issues
          WHERE id=$1 AND thread_id=$2 FOR UPDATE",
