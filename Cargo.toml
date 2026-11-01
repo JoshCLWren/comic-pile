@@ -17,6 +17,10 @@ vercel_runtime = { version = "2.4", features = ["axum"] }
 name = "native_roll"
 path = "api/native_roll.rs"
 
+[[bin]]
+name = "native_issue"
+path = "api/native_issue.rs"
+
 [profile.release]
 codegen-units = 1
 lto = "fat"

@@ -7,6 +7,8 @@ pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
+pub mod issue_handler;
+pub mod issue_service;
 pub mod option_inputs;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
@@ -25,7 +27,7 @@ use axum::{
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use config::{Config, ConfigError, JwtSecret};
@@ -192,6 +194,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
+        .route(
+            "/api/v2/issues/{issue_id}",
+            patch(issue_handler::read_rate_issue),
+        )
+        .route("/api/v2/issues/cards", post(issue_handler::issue_cards))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(
