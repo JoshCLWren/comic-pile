@@ -5,7 +5,7 @@ use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::http::StatusCode;
 use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
     path::{Component, Path},
     time::{SystemTime, UNIX_EPOCH},
@@ -316,7 +316,7 @@ fn session_error(error: tokio_postgres::Error) -> ApiError {
 async fn bootstrap_once(
     state: &AppState,
     user: AuthenticatedUser,
-    timezone: Option<&str>,
+    _timezone: Option<&str>,
     policy: SessionPolicy,
     now: f64,
 ) -> Result<SessionBootstrap, ApiError> {
@@ -338,18 +338,8 @@ async fn bootstrap_once(
         tx.batch_execute("SET LOCAL TIME ZONE 'UTC'")
             .await
             .map_err(session_error)?;
-        // Same lock key as Python get_or_create, held through initialization and snapshot.
-        tx.query_one(
-            "SELECT pg_advisory_xact_lock($1::bigint)",
-            &[&(user.id() as i64)],
-        )
-        .await
-        .map_err(session_error)?;
         if tx
-            .query_opt(
-                "SELECT id FROM users WHERE id = $1 FOR KEY SHARE",
-                &[&user.id()],
-            )
+            .query_opt("SELECT id FROM users WHERE id = $1", &[&user.id()])
             .await
             .map_err(session_error)?
             .is_none()
@@ -360,23 +350,17 @@ async fn bootstrap_once(
             ));
         }
         let existing = resolve_current_session(&tx, user, now, policy).await?;
-        let created = existing.is_none();
         let mut session = match existing {
             Some(s) => s,
-            None => decode_session(
-                &tx.query_one(
-                    "INSERT INTO sessions (user_id, started_at,
-              start_die, reading_mode_suggested) VALUES ($1,to_timestamp($2),$3,false)
-              RETURNING row_to_json(sessions)::text",
-                    &[&user.id(), &now, &policy.start_die],
-                )
-                .await
-                .map_err(session_error)?,
-            )?,
+            None => {
+                return Err(ApiError(
+                    StatusCode::NOT_FOUND,
+                    "No active session".to_string(),
+                ))
+            }
         };
-        // Pending selection is disposable UI state. A legacy writer can leave
-        // a stale issue pointer (or a dangling thread) behind; dropping that
-        // pointer must not wedge every native Roll request with a 500.
+        // Pending selection is disposable UI state. Return a nulled projection for
+        // stale pointers without persisting any repair; write paths repair on offer/reset/dismiss.
         let (thread_valid, issue_valid) = pending_validity(
             &tx,
             user,
@@ -385,88 +369,22 @@ async fn bootstrap_once(
         )
         .await?;
         if !thread_valid {
-            tx.execute(
-                "UPDATE sessions
-                 SET pending_thread_id=NULL,pending_issue_id=NULL,
-                     pending_thread_updated_at=NULL
-                 WHERE id=$1 AND user_id=$2",
-                &[&session.id, &user.id()],
-            )
-            .await
-            .map_err(session_error)?;
             session.pending_thread_id = None;
             session.pending_issue_id = None;
             session.pending_thread_updated_at = None;
         } else if !issue_valid {
-            tx.execute(
-                "UPDATE sessions SET pending_issue_id=NULL WHERE id=$1 AND user_id=$2",
-                &[&session.id, &user.id()],
-            )
-            .await
-            .map_err(session_error)?;
             session.pending_issue_id = None;
         }
-        if session.bandwidth_source.is_none() {
-            tx.batch_execute("SAVEPOINT bandwidth_inference")
-                .await
-                .map_err(session_error)?;
-            // Python's first history SELECT autoflushes a new ORM session, so
-            // started_at is available before infer_bandwidth applies its daypart.
-            let prediction =
-                super::session_bandwidth::predict(&tx, user, Some(&session.started_at)).await;
-            let (level, confidence) = match prediction {
-                Ok(prediction) => prediction,
-                Err(_) => {
-                    tx.batch_execute("ROLLBACK TO SAVEPOINT bandwidth_inference")
-                        .await
-                        .map_err(session_error)?;
-                    tracing::warn!("bandwidth inference failed; using balanced default");
-                    ("balanced", 0.1)
-                }
-            };
-            tx.batch_execute("RELEASE SAVEPOINT bandwidth_inference")
-                .await
-                .map_err(session_error)?;
-            tx.execute(
-                "UPDATE sessions SET predicted_bandwidth=$2, active_bandwidth=$2,
-              bandwidth_confidence=$3, bandwidth_source='inferred', bandwidth_version='v1',
-              bandwidth_updated_at=to_timestamp($4) WHERE id=$1 AND user_id=$5",
-                &[&session.id, &level, &confidence, &now, &user.id()],
-            )
-            .await
-            .map_err(session_error)?;
-        }
-        session = decode_session(
-            &tx.query_one(
-                "SELECT row_to_json(s)::text FROM sessions s WHERE id=$1 AND user_id=$2",
-                &[&session.id, &user.id()],
-            )
-            .await
-            .map_err(session_error)?,
-        )?;
-        if created {
-            checkpoint(&tx, user, &session, now).await?;
-        }
-        // Python captures the browser timezone after the session-start checkpoint.
-        if let Some(zone) = timezone
-            .filter(|_| session.timezone.is_none())
-            .and_then(browser_timezone)
-        {
-            tx.execute(
-                "UPDATE sessions SET timezone=$2 WHERE id=$1 AND user_id=$3",
-                &[&session.id, &zone, &user.id()],
-            )
-            .await
-            .map_err(session_error)?;
-            session.timezone = Some(zone);
-        }
+        // Read-only bootstrap: do not infer bandwidth, checkpoint, or persist timezone.
+        // Timezone is returned as stored; client preference is not persisted on GET.
         let (current_die, automatic_die) = dice(&tx, &session).await?;
-        tx.commit().await.map_err(session_error)?;
+        // Rollback to guarantee zero writes for the GET path.
+        tx.rollback().await.map_err(session_error)?;
         Ok(SessionBootstrap {
             session,
             current_die,
             automatic_die,
-            created,
+            created: false,
         })
     })
     .await;
@@ -521,124 +439,11 @@ async fn pending_validity(
 }
 
 // PostgreSQL JSON timestamps omit trailing zeroes; checkpoints use Python isoformat.
-fn python_timestamp(value: &mut Value) {
-    if let Some(s) = value.as_str() {
-        if let Some((head, offset)) = s.rsplit_once('+') {
-            let normalized = if let Some((seconds, fraction)) = head.split_once('.') {
-                format!("{seconds}.{fraction:0<6}+{offset}")
-            } else {
-                format!("{head}+{offset}")
-            };
-            *value = Value::String(normalized);
-        }
-    }
-}
-async fn checkpoint(
-    tx: &Transaction<'_>,
-    user: AuthenticatedUser,
-    session: &ReadingSession,
-    now: f64,
-) -> Result<(), ApiError> {
-    let rows = tx
-        .query(
-            "SELECT row_to_json(t)::text FROM threads t WHERE user_id=$1 ORDER BY id FOR UPDATE",
-            &[&user.id()],
-        )
-        .await
-        .map_err(session_error)?;
-    let issues = tx.query("SELECT row_to_json(i)::text FROM issues i JOIN threads t ON t.id=i.thread_id WHERE t.user_id=$1 ORDER BY i.position, i.id", &[&user.id()])
-        .await.map_err(session_error)?;
-    let mut by_thread = std::collections::HashMap::<i64, Vec<Value>>::new();
-    for row in issues {
-        let mut i: Value = serde_json::from_str(row.get(0)).map_err(|_| corrupt())?;
-        python_timestamp(&mut i["read_at"]);
-        by_thread
-            .entry(i["thread_id"].as_i64().ok_or_else(corrupt)?)
-            .or_default()
-            .push(json!({
-            "id": i["id"], "number": i["issue_number"], "status": i["status"],
-            "read_at": i["read_at"], "position": i["position"] }));
-    }
-    let mut threads = serde_json::Map::new();
-    for row in rows {
-        let mut t: Value = serde_json::from_str(row.get(0)).map_err(|_| corrupt())?;
-        for key in ["last_activity_at", "created_at"] {
-            python_timestamp(&mut t[key]);
-        }
-        let tracking = !t["total_issues"].is_null();
-        let mut capture = serde_json::Map::new();
-        for key in [
-            "title",
-            "format",
-            "issues_remaining",
-            "last_rating",
-            "last_activity_at",
-            "queue_position",
-            "queue_position_is_manual",
-            "status",
-            "notes",
-            "is_test",
-            "is_blocked",
-            "created_at",
-            "user_id",
-        ] {
-            capture.insert(key.into(), t[key].clone());
-        }
-        capture.insert("uses_issue_tracking".into(), json!(tracking));
-        capture.insert(
-            "issue_states".into(),
-            if tracking {
-                json!(by_thread
-                    .remove(&t["id"].as_i64().ok_or_else(corrupt)?)
-                    .unwrap_or_default())
-            } else {
-                Value::Null
-            },
-        );
-        for key in ["total_issues", "next_unread_issue_id", "reading_progress"] {
-            capture.insert(
-                key.into(),
-                if tracking {
-                    t[key].clone()
-                } else {
-                    Value::Null
-                },
-            );
-        }
-        threads.insert(t["id"].to_string(), Value::Object(capture));
-    }
-    let mut session_state = serde_json::to_value(session).map_err(|_| corrupt())?;
-    let keys = [
-        "start_die",
-        "manual_die",
-        "snoozed_thread_ids",
-        "active_bandwidth",
-        "predicted_bandwidth",
-        "bandwidth_confidence",
-        "bandwidth_source",
-        "bandwidth_version",
-        "active_intent",
-        "predicted_intent",
-        "intent_confidence",
-        "intent_source",
-        "intent_version",
-    ];
-    session_state
-        .as_object_mut()
-        .ok_or_else(corrupt)?
-        .retain(|key, _| keys.contains(&key.as_str()));
-    session_state["current_die"] = json!(session.start_die);
-    let threads = Value::Object(threads).to_string();
-    let session_state = session_state.to_string();
-    tx.execute("INSERT INTO snapshots (session_id,event_id,thread_states,session_state,created_at,description,snapshot_kind,schema_version)
-      VALUES ($1,NULL,$2::text::json,$3::text::json,to_timestamp($4),'Session start','session_start',NULL)",
-      &[&session.id,&threads,&session_state,&now]).await.map_err(session_error)?;
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     #[test]
     fn timezone_validation_and_manual_ladder() {
         assert_eq!(
