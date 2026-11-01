@@ -167,6 +167,19 @@ describe('creatorsApi', () => {
         skipAuthRedirect: true,
       })
     })
+
+    it('forwards an abort signal so a superseded search stops in flight', async () => {
+      client.get.mockResolvedValue(LIST_RESPONSE)
+      const controller = new AbortController()
+
+      await creatorsApi.getList({ search: 'rob' }, { signal: controller.signal })
+
+      expect(client.get).toHaveBeenCalledWith('/v1/creators', {
+        params: { search: 'rob' },
+        skipAuthRedirect: true,
+        signal: controller.signal,
+      })
+    })
   })
 
   describe('getSummaries', () => {

@@ -224,6 +224,9 @@ function SectionHeading({ id, children }: { id: string; children: ReactNode }) {
 export default function CreatorDetailPage() {
   const { creatorKey } = useParams<{ creatorKey: string }>()
   const isValidKey = parseCreatorKey(creatorKey) != null
+  // Team chemistry is a library-wide aggregation, so it stays inert until the
+  // reader explicitly asks for this optional panel.
+  const [showTeamChemistry, setShowTeamChemistry] = useState(false)
 
   const {
     summary,
@@ -250,7 +253,7 @@ export default function CreatorDetailPage() {
     data: teamChemistry,
     isError: teamChemistryError,
     refetch: refetchTeamChemistry,
-  } = useCreatorTeamChemistry(isValidKey)
+  } = useCreatorTeamChemistry(isValidKey && showTeamChemistry)
 
   if (!isValidKey) {
     return (
@@ -668,10 +671,19 @@ export default function CreatorDetailPage() {
         </section>
       )}
 
-      {teamChemistry && (
+      <button
+        type="button"
+        onClick={() => setShowTeamChemistry((visible) => !visible)}
+        aria-expanded={showTeamChemistry}
+        className="mt-6 min-h-10 rounded-lg border px-4 py-2 text-sm font-semibold"
+        style={{ borderColor: 'var(--theme-border)', color: 'var(--theme-text-primary)' }}
+      >
+        {showTeamChemistry ? 'Hide team chemistry' : 'Show team chemistry'}
+      </button>
+      {showTeamChemistry && teamChemistry && (
         <CreatorTeamChemistrySection data={teamChemistry} forCreatorKey={creatorKey ?? null} />
       )}
-      {teamChemistryError && (
+      {showTeamChemistry && teamChemistryError && (
         <p role="alert" className="mt-6 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
           Could not load team chemistry for this creator. Your ratings are unchanged.
           <button
