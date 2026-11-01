@@ -19,7 +19,7 @@ use tokio_postgres::IsolationLevel;
 fn unavailable() -> ApiError {
     ApiError(
         StatusCode::SERVICE_UNAVAILABLE,
-        "Database temporarily unavailable",
+        "Database temporarily unavailable".to_string(),
     )
 }
 

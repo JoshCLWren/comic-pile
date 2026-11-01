@@ -10,7 +10,10 @@ pub mod dismiss_pending;
 pub mod issue_handler;
 pub mod issue_service;
 pub mod option_inputs;
+pub mod reading_blocker_projection;
+pub mod reading_boundary;
 pub mod reading_constraints;
+pub mod reading_eligibility;
 pub mod reading_inputs;
 pub mod reading_session;
 pub mod roll_offer;
@@ -108,11 +111,16 @@ pub async fn serve(
 }
 
 /// Python-compatible JSON detail boundary; never serialize a dependency error.
+///
+/// The detail is owned so per-request validation and lookup messages never leak
+/// memory through `'static` borrows. Static messages still allocate on the error
+/// path, which is bounded by request volume and always freed when the response is
+/// sent; it is cheaper than leaking every dynamic message for the life of the process.
 #[derive(Debug)]
-pub struct ApiError(pub StatusCode, pub &'static str);
+pub struct ApiError(pub StatusCode, pub String);
 #[derive(Serialize)]
-struct ErrorBody {
-    detail: &'static str,
+struct ErrorBody<'a> {
+    detail: &'a str,
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
@@ -129,7 +137,7 @@ impl IntoResponse for ApiError {
             )
                 .into_response();
         }
-        let mut response = (self.0, Json(ErrorBody { detail: self.1 })).into_response();
+        let mut response = (self.0, Json(ErrorBody { detail: &self.1 })).into_response();
         if self.0 == StatusCode::UNAUTHORIZED {
             response.headers_mut().insert(
                 axum::http::header::WWW_AUTHENTICATE,
@@ -150,7 +158,11 @@ async fn bound_request(
     let response = tokio::time::timeout(state.request_timeout, next.run(request))
         .await
         .unwrap_or_else(|_| {
-            ApiError(StatusCode::SERVICE_UNAVAILABLE, "Request timed out").into_response()
+            ApiError(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Request timed out".to_string(),
+            )
+            .into_response()
         });
     // No URI, query, headers, credentials, SQL or upstream error strings in request logs.
     tracing::info!(method = %method, status = response.status().as_u16(), elapsed_ms = started.elapsed().as_millis() as u64, "request completed");
@@ -168,6 +180,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
         .route("/api/v2/roll/reset", post(roll_reset::reset))
+        .route(
+            "/api/v2/reading-boundaries",
+            post(reading_boundary::reading_boundary_batch_v2),
+        )
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
         .route(
@@ -178,13 +194,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
-        .route(
-            "/api/v2/issues/{issue_id}",
-            patch(issue_handler::read_rate_issue),
-        )
-        .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
+        .route("/api/v2/issues/{issue_id}", patch(issue_handler::read_rate_issue))
+        .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
-            ApiError(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")
+            ApiError(
+                StatusCode::METHOD_NOT_ALLOWED,
+                "Method Not Allowed".to_string(),
+            )
         })
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
         .with_state(state)

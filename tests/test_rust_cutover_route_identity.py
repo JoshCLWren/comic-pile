@@ -138,7 +138,7 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
         ("GET", "/api/roll/bootstrap"): "/api/index.py",
         ("POST", "/api/v1/roll/"): "/api/index.py",
         ("GET", "/api/v2/roll/bootstrap"): "/api/native_roll.rs",
-        ("POST", "/api/v2/reading-boundaries"): "/api/index.py",
+        ("POST", "/api/v2/reading-boundaries"): "/api/native_roll.rs",
     }
     for (method, path), destination in expected.items():
         actual = _route_destination(method, path)

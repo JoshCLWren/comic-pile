@@ -5,6 +5,10 @@ lookups, and read projections but never executed the offer INSERT. This guard
 requires each mounted POST handler to have a database-backed test that reaches
 that handler's write path, with a frozen, shrink-only baseline for handlers that
 predate the rule or delegate their write to an already-tested module.
+
+POST routes that are pure read projections (a batch body with no INSERT/UPDATE/
+DELETE) cannot have a write path. They must instead prove the mounted HTTP route
+against the canonical app schema in ``native/roll-service/parity``.
 """
 
 from __future__ import annotations
@@ -24,6 +28,16 @@ POST_ROUTE_RE = re.compile(
     re.DOTALL,
 )
 DB_TEST_MARKER = "RUST_ROLL_TEST_DATABASE_URL"
+
+# Mounted POST handlers that are pure read projections. Each entry must stay
+# free of write SQL and carry a DB-backed HTTP parity test (asserted below).
+READ_ONLY_POST_HANDLERS = {
+    ("reading_boundary", "reading_boundary_batch_v2"): "test_http_reading_boundaries.py",
+}
+WRITE_SQL_RE = re.compile(
+    r"\b(?:INSERT\s+INTO|UPDATE\s+[A-Za-z_][A-Za-z0-9_]*\s+SET|DELETE\s+FROM)\b",
+    re.IGNORECASE,
+)
 
 
 def _lib_source() -> str:
@@ -143,7 +157,9 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
     missing = sorted(
         (module, handler)
         for module, handler in mounted
-        if not _tests_write_path(module, handler) and module not in baseline
+        if (module, handler) not in READ_ONLY_POST_HANDLERS
+        and not _tests_write_path(module, handler)
+        and module not in baseline
     )
     assert missing == [], (
         "Native Roll POST handlers without a disposable-Postgres write-path "
@@ -166,6 +182,42 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
         "These modules now have a write-path test; remove them from "
         f"{BASELINE.name}: {now_tested}"
     )
+
+
+def test_read_only_post_handlers_are_proven_by_real_schema_http_tests() -> None:
+    """A read-only POST exemption needs no write SQL and a DB-backed parity test."""
+    mounted = _mounted_post_routes()
+    parity_root = REPOSITORY_ROOT / "native" / "roll-service" / "parity"
+
+    for (module, handler), parity_name in sorted(READ_ONLY_POST_HANDLERS.items()):
+        assert (module, handler) in mounted, (
+            f"{module}::{handler} is no longer mounted; remove its read-only "
+            "exemption"
+        )
+        source = (SERVICE_SOURCE / f"{module}.rs").read_text(encoding="utf-8")
+        production = source.split("#[cfg(test)]", 1)[0]
+        assert WRITE_SQL_RE.search(production) is None, (
+            f"{module} contains write SQL; a read-only POST handler must not "
+            "delete or update rows"
+        )
+        assert ".execute(" not in production, (
+            f"{module} executes a statement directly; keep the read projection "
+            "on query/query_one"
+        )
+
+        parity = parity_root / parity_name
+        assert parity.is_file(), (
+            f"{module} is exempt from the write-path guard, so it needs "
+            f"{parity.relative_to(REPOSITORY_ROOT)} proving the mounted route "
+            "against the canonical schema"
+        )
+        parity_source = parity.read_text(encoding="utf-8")
+        assert DB_TEST_MARKER in parity_source, (
+            f"{parity.name} must run against RUST_ROLL_TEST_DATABASE_URL"
+        )
+        assert "Base.metadata.create_all" in parity_source, (
+            f"{parity.name} must build the canonical app schema"
+        )
 
 
 def test_baseline_is_frozen_and_documented() -> None:

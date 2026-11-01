@@ -469,15 +469,15 @@ async def test_unidentified_legacy_offer_cannot_trigger_automatic_issue_migratio
     )
 
 
-async def test_rating_rejects_an_offer_removed_from_the_queue(
+async def test_rating_completes_an_offer_removed_from_the_queue(
     option_e: None,
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """A pending offer cannot bypass current queue membership at rating time."""
+    """Queue membership at rating time never revokes the comic already offered (#4453)."""
     user = await get_or_create_user_async(async_db)
     thread, issues = await _series(async_db, user.id, "Removed after roll", 1)
-    thread_id, issue_id = thread.id, issues[0].id
+    thread_id, issue_id, next_issue_id = thread.id, issues[0].id, issues[1].id
     await async_db.commit()
     offered = await auth_client.post("/api/v1/roll/")
     assert offered.status_code == 200 and offered.json()["issue_id"] == issue_id
@@ -486,9 +486,86 @@ async def test_rating_rejects_an_offer_removed_from_the_queue(
     current.queue_position = 0
     await async_db.commit()
     response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
-    assert response.status_code == 409
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_id)) == "unread"
-    assert await async_db.scalar(select(Event.id).where(Event.type == "rate")) is None
+    assert response.status_code == 200, response.text
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_id)) == "read"
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == next_issue_id)) == "unread"
+    assert (
+        await async_db.scalar(select(Thread.next_unread_issue_id).where(Thread.id == thread_id))
+        == next_issue_id
+    )
+    rate_events = (await async_db.scalars(select(Event).where(Event.type == "rate"))).all()
+    assert len(rate_events) == 1
+    assert rate_events[0].issue_id == issue_id
+
+
+async def test_rating_completes_the_offer_after_a_session_snooze(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A session snooze at rating time never revokes the comic already offered (#4453)."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _series(async_db, user.id, "Snoozed after roll", 1)
+    thread_id, issue_id, next_issue_id = thread.id, issues[0].id, issues[1].id
+    await async_db.commit()
+    offered = await auth_client.post("/api/v1/roll/")
+    assert offered.status_code == 200 and offered.json()["issue_id"] == issue_id
+    session = await async_db.scalar(
+        select(ReadingSession).where(ReadingSession.user_id == user.id)
+    )
+    assert session is not None
+    session.snoozed_thread_ids = [thread_id]
+    await async_db.commit()
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
+    assert response.status_code == 200, response.text
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_id)) == "read"
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == next_issue_id)) == "unread"
+    assert (
+        await async_db.scalar(select(Thread.next_unread_issue_id).where(Thread.id == thread_id))
+        == next_issue_id
+    )
+    rate_events = (await async_db.scalars(select(Event).where(Event.type == "rate"))).all()
+    assert len(rate_events) == 1
+    assert rate_events[0].issue_id == issue_id
+
+
+async def test_rating_completes_the_offer_after_the_frontier_moves(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A later automatic frontier never steals the comic already offered (#4453)."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _series(async_db, user.id, "Frontier moved after roll", 1)
+    thread_id, issue_id, next_issue_id = thread.id, issues[0].id, issues[1].id
+    offered_number = issues[0].issue_number
+    await async_db.commit()
+    offered = await auth_client.post("/api/v1/roll/")
+    assert offered.status_code == 200 and offered.json()["issue_id"] == issue_id
+    roll_event_id = await async_db.scalar(
+        select(Event.id).where(Event.type == "roll", Event.issue_id == issue_id)
+    )
+    assert roll_event_id is not None
+    # A newly added earlier issue moves the automatic frontier off the offer.
+    earlier = Issue(thread_id=thread_id, issue_number="0", position=0, status="unread")
+    async_db.add(earlier)
+    await async_db.commit()
+    earlier_id = earlier.id
+    response = await auth_client.post(
+        "/api/v1/rate/", json={"rating": 4.0, "issue_number": offered_number}
+    )
+    assert response.status_code == 200, response.text
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_id)) == "read"
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == next_issue_id)) == "unread"
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == earlier_id)) == "unread"
+    assert (
+        await async_db.scalar(select(Thread.next_unread_issue_id).where(Thread.id == thread_id))
+        == earlier_id
+    )
+    rate_events = (await async_db.scalars(select(Event).where(Event.type == "rate"))).all()
+    assert len(rate_events) == 1
+    assert rate_events[0].issue_id == issue_id
+    assert rate_events[0].source_roll_event_id == roll_event_id
 
 
 async def test_live_explanations_agree_for_all_reader_surfaces(
