@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_reading_execution_settings
@@ -251,7 +252,10 @@ async def test_option_e_index_surviving_plan_plus_deleted_linked_list(
     owner = default_user.id
     now = datetime.now(UTC)
     list_a = CustomCBLList(user_id=owner, name="List A", mode="strict", created_at=now, updated_at=now)
-    async_db.add(list_a)
+    deleted_list = CustomCBLList(
+        user_id=owner, name="Deleted List", mode="loose", created_at=now, updated_at=now
+    )
+    async_db.add_all([list_a, deleted_list])
     await async_db.flush()
     auth_plan = ContinuityPlan(
         user_id=owner, name="Auth Plan",
@@ -267,8 +271,24 @@ async def test_option_e_index_surviving_plan_plus_deleted_linked_list(
     )
     async_db.add_all([auth_plan, orphan])
     await async_db.flush()
-    async_db.add(ReadingPlanSource(plan_id=auth_plan.id, raw_source_path=f"custom-cbl:{list_a.id}", custom_cbl_list_id=list_a.id))
+    async_db.add_all([
+        ReadingPlanSource(
+            plan_id=auth_plan.id, raw_source_path=f"custom-cbl:{list_a.id}",
+            custom_cbl_list_id=list_a.id,
+        ),
+        ReadingPlanSource(
+            plan_id=orphan.id, raw_source_path=f"custom-cbl:{deleted_list.id}",
+            custom_cbl_list_id=deleted_list.id,
+        ),
+    ])
     await async_db.flush()
+    # Exercise the real FK ON DELETE SET NULL path, not a fabricated unlinked Plan.
+    await async_db.delete(deleted_list)
+    await async_db.flush()
+    null_link = await async_db.execute(
+        select(ReadingPlanSource.custom_cbl_list_id).where(ReadingPlanSource.plan_id == orphan.id)
+    )
+    assert null_link.scalar_one() is None
     items = await list_continuity_plan_items(async_db, user_id=owner)
     assert len(items) == 2
     names = {i.name for i in items}
