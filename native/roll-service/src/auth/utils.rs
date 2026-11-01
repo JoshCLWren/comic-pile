@@ -1,8 +1,6 @@
 //! Authentication utility functions
 
-use bcrypt::{hash, verify, BcryptError, DEFAULT_COST};
-use chrono::Utc;
-use std::net::IpAddr;
+use bcrypt::{hash, verify, DEFAULT_COST};
 
 /// Hash password using bcrypt
 pub fn hash_password(password: &str) -> Result<String, crate::auth::error::AuthError> {
@@ -16,25 +14,23 @@ pub fn hash_password(password: &str) -> Result<String, crate::auth::error::AuthE
         return Err(crate::auth::error::AuthError::PasswordTooLong);
     }
 
-    hash(password, DEFAULT_COST)
-        .map_err(|e| {
-            eprintln!("Password hashing failed: {}", e);
-            crate::auth::error::AuthError::InternalError
-        })
+    hash(password, DEFAULT_COST).map_err(|e| {
+        eprintln!("Password hashing failed: {}", e);
+        crate::auth::error::AuthError::InternalError
+    })
 }
 
 /// Verify password against hash
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, crate::auth::error::AuthError> {
-    verify(password, hash)
-        .map_err(|e| {
-            eprintln!("Password verification failed: {}", e);
-            crate::auth::error::AuthError::InternalError
-        })
+    verify(password, hash).map_err(|e| {
+        eprintln!("Password verification failed: {}", e);
+        crate::auth::error::AuthError::InternalError
+    })
 }
 
 /// Generate CSRF token
 pub fn generate_csrf_token() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     rand::rng()
         .sample_iter(&rand::distr::Alphanumeric)
         .take(32)
@@ -87,14 +83,13 @@ pub fn is_secure_request(headers: &http::HeaderMap) -> bool {
 pub fn cookie_settings() -> http::HeaderValue {
     let mut cookie_settings = String::new();
     cookie_settings.push_str("HttpOnly; Secure; SameSite=Lax");
-    
-    http::HeaderValue::from_str(&cookie_settings)
-        .expect("Invalid cookie settings")
+
+    http::HeaderValue::from_str(&cookie_settings).expect("Invalid cookie settings")
 }
 
 /// Generate random JTI for token revocation
 pub fn generate_jti() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     rand::rng()
         .sample_iter(&rand::distr::Alphanumeric)
         .take(32)
@@ -143,7 +138,10 @@ pub fn sanitize_username(username: &str) -> Result<String, crate::auth::error::A
     }
 
     // Check for invalid characters
-    if username.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_' && c != '-') {
+    if username
+        .chars()
+        .any(|c| !c.is_ascii_alphanumeric() && c != '_' && c != '-')
+    {
         return Err(crate::auth::error::AuthError::InvalidCredentials);
     }
 

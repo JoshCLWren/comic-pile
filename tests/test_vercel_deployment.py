@@ -163,65 +163,79 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
     assert routes[0] == {
         "src": "/api/v1/auth/me",
         "methods": ["GET"],
-        "dest": "/api/auth/me.ts",
+        "dest": "/api/native_roll.rs",
     }
-    assert routes[1] == {
+    assert routes[1:10] == [
+        {"src": path, "methods": [method], "dest": "/api/native_roll.rs"}
+        for path, method in (
+            ("/api/v2/auth/register", "POST"),
+            ("/api/v2/auth/login", "POST"),
+            ("/api/v2/auth/refresh", "POST"),
+            ("/api/v2/auth/logout", "POST"),
+            ("/api/v2/auth/csrf", "GET"),
+            ("/api/v2/auth/me", "GET"),
+            ("/api/v2/auth/forgot-password", "POST"),
+            ("/api/v2/auth/reset-password", "POST"),
+            ("/api/auth/me", "GET"),
+        )
+    ]
+    assert routes[10] == {
         "src": "/api/_native_roll/health",
         "methods": ["GET"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[2] == {
+    assert routes[11] == {
         "src": "/api/v2/roll/bootstrap",
         "methods": ["GET"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[3] == {
+    assert routes[12] == {
         "src": "/api/v2/roll/dice-command",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[4] == {
+    assert routes[13] == {
         "src": "/api/v2/roll/offer",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[5] == {
+    assert routes[14] == {
         "src": "/api/v2/roll/reset",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[6] == {
+    assert routes[15] == {
         "src": "/api/v2/reading-boundaries",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[7] == {
+    assert routes[16] == {
         "src": "/api/v1/roll/dismiss-pending",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[8] == {
+    assert routes[17] == {
         "src": "/api/roll/dismiss-pending",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[9] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
-    assert routes[10] == {
+    assert routes[18] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
+    assert routes[19] == {
         "src": "/(?:openapi\\.json|docs|redoc|health)",
         "dest": "/api/index.py",
     }
-    assert routes[11]["src"] == "/"
-    assert routes[11]["dest"] == "/index.html"
+    assert routes[20]["src"] == "/"
+    assert routes[20]["dest"] == "/index.html"
     # Route 12 is the /assets/.+ cache headers route (added for edge caching)
-    assert routes[12] == {
+    assert routes[21] == {
         "src": "/assets/.+",
         "continue": True,
         "headers": {"Cache-Control": "public, max-age=31536000, immutable"},
     }
     # Route 13 serves the build's generated route HTML pages (see
     # test_vercel_route_html_rule_serves_every_generated_page).
-    assert routes[13] == _route_html_rule()
-    assert routes[14] == {"handle": "filesystem"}
+    assert routes[22] == _route_html_rule()
+    assert routes[23] == {"handle": "filesystem"}
     assert routes[-1]["src"] == "/(.*)"
     assert routes[-1]["dest"] == "/index.html"
 
@@ -230,7 +244,7 @@ def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
     """Ensure static HTML remains identifiable and receives browser protections."""
     routes = _routes(_load_vercel_config())
 
-    for route in (routes[11], routes[13], routes[-1]):
+    for route in (routes[20], routes[22], routes[-1]):
         headers = _headers(route)
         assert headers["X-ComicPile-Frontend"] == "vercel-static"
         assert headers["Cache-Control"] == "public, max-age=0, must-revalidate"
@@ -246,9 +260,9 @@ def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
 
     # Only the landing route is indexable; every other HTML response the
     # routing layer serves must state its non-indexability.
-    landing_headers = _headers(routes[11])
+    landing_headers = _headers(routes[20])
     assert "X-Robots-Tag" not in landing_headers
-    for route in (routes[13], routes[-1]):
+    for route in (routes[22], routes[-1]):
         assert _headers(route)["X-Robots-Tag"] == "noindex, nofollow"
 
 
@@ -260,7 +274,7 @@ def test_vercel_route_html_rule_serves_every_generated_page() -> None:
     such as ``/creators/compare`` map to ``/creators/compare.html``.
     """
     routes = _routes(_load_vercel_config())
-    html_rule = routes[13]
+    html_rule = routes[22]
 
     assert html_rule == _route_html_rule()
 
@@ -282,7 +296,7 @@ def test_vercel_route_html_rule_lists_exactly_the_generated_alternatives() -> No
     SPA. This assertion fails the configuration change in both directions.
     """
     routes = _routes(_load_vercel_config())
-    src_pattern = str(routes[13]["src"])
+    src_pattern = str(routes[22]["src"])
     suffix = ")(\\.html)?"
 
     assert src_pattern.startswith("/(")
@@ -296,13 +310,13 @@ def test_vercel_route_html_rule_lists_exactly_the_generated_alternatives() -> No
 def test_vercel_dynamic_route_pages_fall_through_to_the_spa_fallback() -> None:
     """Parameterized pages keep the app fallback and SPA noindex robots header."""
     routes = _routes(_load_vercel_config())
-    src_pattern = str(routes[13]["src"])
+    src_pattern = str(routes[22]["src"])
 
     for path in DYNAMIC_ROUTE_PROBES:
         matched = re.fullmatch(src_pattern, path)
         assert matched is None, f"{path} must fall through to the SPA, not a static file"
 
-    assert routes[14] == {"handle": "filesystem"}
+    assert routes[23] == {"handle": "filesystem"}
     fallback = routes[-1]
     assert fallback["src"] == "/(.*)"
     assert fallback["dest"] == "/index.html"
@@ -338,13 +352,21 @@ def test_vercel_node_typescript_relative_imports_use_js_extensions() -> None:
     )
 
 
-def test_node_auth_route_is_isolated_from_python_and_static_routes() -> None:
-    """Keep auth GET in Node, native probe GET in Rust, and other APIs in Python."""
+def test_rust_auth_routes_are_isolated_from_python_and_static_routes() -> None:
+    """Keep migrated auth in Rust and remaining APIs on their own ingress."""
     routes = _routes(_load_vercel_config())
     probes = (
-        ("GET", "/api/v1/auth/me", "/api/auth/me.ts"),
+        ("GET", "/api/v1/auth/me", "/api/native_roll.rs"),
         ("POST", "/api/v1/auth/me", "/api/index.py"),
         ("POST", "/api/v1/auth/refresh", "/api/index.py"),
+        ("POST", "/api/v2/auth/register", "/api/native_roll.rs"),
+        ("POST", "/api/v2/auth/login", "/api/native_roll.rs"),
+        ("POST", "/api/v2/auth/refresh", "/api/native_roll.rs"),
+        ("POST", "/api/v2/auth/logout", "/api/native_roll.rs"),
+        ("POST", "/api/v2/auth/forgot-password", "/api/native_roll.rs"),
+        ("POST", "/api/v2/auth/reset-password", "/api/native_roll.rs"),
+        ("GET", "/api/v2/auth/csrf", "/api/native_roll.rs"),
+        ("GET", "/api/v2/auth/me", "/api/native_roll.rs"),
         ("GET", "/api/v1/roll/bootstrap", "/api/index.py"),
         ("GET", "/api/_native_roll/bootstrap", "/api/index.py"),
         ("GET", "/api/v2/roll/bootstrap", "/api/native_roll.rs"),

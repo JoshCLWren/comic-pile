@@ -1,10 +1,9 @@
 //! Authentication business logic services
 
-use chrono::{DateTime, Utc};
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header, DecodingKey, Validation};
-use rand::Rng;
-use serde::Serialize;
-use sha2::{Sha256, Digest};
+use chrono::Utc;
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use rand::RngExt;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use tokio::time::{Duration, Instant};
 use tracing::{error, info, warn};
@@ -57,10 +56,13 @@ impl AuthService {
         let password_hash = hash_password(&request.password)?;
 
         // Create user in database
-        let user_id = self.create_user(&request.username, &request.email, &password_hash).await?;
+        let user_id = self
+            .create_user(&request.username, &request.email, &password_hash)
+            .await?;
 
         // Generate tokens
-        let (access_token, refresh_token) = self.generate_tokens(user_id, &request.username, 0).await?;
+        let (access_token, refresh_token) =
+            self.generate_tokens(user_id, &request.username, 0).await?;
 
         Ok(TokenResponse {
             access_token,
@@ -75,7 +77,7 @@ impl AuthService {
         self.check_login_attempts(&request.username).await?;
 
         // Get user by username
-        let user = match self.get_user_by_username(&request.username).await {
+        let user = match self.get_user_by_username(&request.username).await? {
             Some(user) => user,
             None => {
                 // Record failed attempt for non-existent user
@@ -96,7 +98,8 @@ impl AuthService {
 
         // Generate tokens with password epoch
         let pc = user.password_epoch();
-        let (access_token, refresh_token) = self.generate_tokens(user.id, &user.username, pc).await?;
+        let (access_token, refresh_token) =
+            self.generate_tokens(user.id, &user.username, pc).await?;
 
         Ok(TokenResponse {
             access_token,
@@ -109,14 +112,14 @@ impl AuthService {
     pub async fn refresh_token(&self, refresh_token: &str) -> AuthResult<TokenResponse> {
         // Verify refresh token
         let claims = self.verify_token(refresh_token, "refresh")?;
-        
+
         // Check if token is revoked
         if self.is_token_revoked(&claims.sub, &claims.jti).await? {
             return Err(AuthError::TokenRevoked);
         }
 
         // Get user
-        let user = match self.get_user_by_username(&claims.sub).await {
+        let user = match self.get_user_by_username(&claims.sub).await? {
             Some(user) => user,
             None => return Err(AuthError::UserNotFound),
         };
@@ -128,7 +131,9 @@ impl AuthService {
         }
 
         // Generate new tokens
-        let (access_token, refresh_token) = self.generate_tokens(user.id, &user.username, user_pc).await?;
+        let (access_token, refresh_token) = self
+            .generate_tokens(user.id, &user.username, user_pc)
+            .await?;
 
         Ok(TokenResponse {
             access_token,
@@ -145,14 +150,17 @@ impl AuthService {
         };
 
         // Revoke the token
-        self.revoke_token(&claims.sub, &claims.jti, claims.exp).await?;
+        self.revoke_token(&claims.sub, &claims.jti, claims.exp)
+            .await?;
 
         Ok(())
     }
 
     /// Get user information
     pub async fn get_user_info(&self, user_id: i32) -> AuthResult<UserResponse> {
-        let user = self.get_user_by_id(user_id).await
+        let user = self
+            .get_user_by_id(user_id)
+            .await?
             .ok_or(AuthError::UserNotFound)?;
 
         Ok(UserResponse {
@@ -168,8 +176,12 @@ impl AuthService {
         let query = r#"
             SELECT 1 FROM users WHERE username = $1 LIMIT 1
         "#;
-        
-        let result = self.state.pool.get().await?
+
+        let result = self
+            .state
+            .pool
+            .get()
+            .await?
             .query_opt(query, &[&username])
             .await?;
 
@@ -181,8 +193,12 @@ impl AuthService {
         let query = r#"
             SELECT 1 FROM users WHERE email = $1 LIMIT 1
         "#;
-        
-        let result = self.state.pool.get().await?
+
+        let result = self
+            .state
+            .pool
+            .get()
+            .await?
             .query_opt(query, &[&email])
             .await?;
 
@@ -190,7 +206,12 @@ impl AuthService {
     }
 
     /// Create user in database
-    async fn create_user(&self, username: &str, email: &str, password_hash: &str) -> AuthResult<i32> {
+    async fn create_user(
+        &self,
+        username: &str,
+        email: &str,
+        password_hash: &str,
+    ) -> AuthResult<i32> {
         let query = r#"
             INSERT INTO users (username, email, password_hash, created_at)
             VALUES ($1, $2, $3, NOW())
@@ -198,72 +219,57 @@ impl AuthService {
         "#;
 
         let conn = self.state.pool.get().await?;
-        let result = conn.query_one(query, &[&username, &email, &password_hash]).await?;
+        let result = conn
+            .query_one(query, &[&username, &email, &password_hash])
+            .await?;
         Ok(result.get(0))
     }
 
-    /// Get user by username
-    async fn get_user_by_username(&self, username: &str) -> Option<UserData> {
+    /// Look up a user without converting backend errors into invalid credentials.
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserData>> {
         let query = r#"
             SELECT id, username, email, password_hash, is_admin, password_changed_at
-            FROM users 
-            WHERE username = $1 
-            LIMIT 1
+            FROM users WHERE username = $1 LIMIT 1
         "#;
-
-        let conn = match self.state.pool.get().await {
-            Ok(conn) => conn,
-            Err(_) => return None,
-        };
-
-        match conn.query_opt(query, &[&username]).await {
-            Ok(Some(row)) => {
-                Some(UserData {
-                    id: row.get(0),
-                    username: row.get(1),
-                    email: row.get(2),
-                    password_hash: row.get(3),
-                    is_admin: row.get(4),
-                    password_changed_at: row.get(5),
-                })
-            }
-            Ok(None) | Err(_) => None,
-        }
+        let conn = self.state.pool.get().await?;
+        let row = conn.query_opt(query, &[&username]).await?;
+        Ok(row.map(|row| UserData {
+            id: row.get(0),
+            username: row.get(1),
+            email: row.get(2),
+            password_hash: row.get(3),
+            is_admin: row.get(4),
+            password_changed_at: row.get(5),
+        }))
     }
 
-    /// Get user by ID
-    async fn get_user_by_id(&self, user_id: i32) -> Option<UserData> {
+    /// Look up an owner without turning a Neon failure into a missing account.
+    async fn get_user_by_id(&self, user_id: i32) -> AuthResult<Option<UserData>> {
         let query = r#"
             SELECT id, username, email, password_hash, is_admin, password_changed_at
-            FROM users 
-            WHERE id = $1 
-            LIMIT 1
+            FROM users WHERE id = $1 LIMIT 1
         "#;
-
-        let conn = match self.state.pool.get().await {
-            Ok(conn) => conn,
-            Err(_) => return None,
-        };
-
-        match conn.query_opt(query, &[&user_id]).await {
-            Ok(Some(row)) => {
-                Some(UserData {
-                    id: row.get(0),
-                    username: row.get(1),
-                    email: row.get(2),
-                    password_hash: row.get(3),
-                    is_admin: row.get(4),
-                    password_changed_at: row.get(5),
-                })
-            }
-            Ok(None) | Err(_) => None,
-        }
+        let conn = self.state.pool.get().await?;
+        let row = conn.query_opt(query, &[&user_id]).await?;
+        Ok(row.map(|row| UserData {
+            id: row.get(0),
+            username: row.get(1),
+            email: row.get(2),
+            password_hash: row.get(3),
+            is_admin: row.get(4),
+            password_changed_at: row.get(5),
+        }))
     }
 
     /// Generate JWT tokens
-    async fn generate_tokens(&self, user_id: i32, username: &str, pc: i64) -> AuthResult<(String, String)> {
+    async fn generate_tokens(
+        &self,
+        user_id: i32,
+        username: &str,
+        pc: i64,
+    ) -> AuthResult<(String, String)> {
         let jti = self.generate_jti();
-        
+
         // Access token
         let access_claims = Claims::access_token(username, &jti, pc);
         let access_token = self.encode_token(&access_claims)?;
@@ -273,7 +279,8 @@ impl AuthService {
         let refresh_token = self.encode_token(&refresh_claims)?;
 
         // Store refresh token for revocation check
-        self.store_refresh_token(user_id, &jti, refresh_claims.exp).await?;
+        self.store_refresh_token(user_id, &jti, refresh_claims.exp)
+            .await?;
 
         Ok((access_token, refresh_token))
     }
@@ -281,11 +288,10 @@ impl AuthService {
     /// Encode JWT token
     fn encode_token(&self, claims: &Claims) -> AuthResult<String> {
         let key = EncodingKey::from_secret(self.state.jwt_secret.as_bytes());
-        encode(&Header::new(ALGORITHM), claims, &key)
-            .map_err(|e| {
-                error!("Failed to encode token: {}", e);
-                AuthError::InternalError
-            })
+        encode(&Header::new(ALGORITHM), claims, &key).map_err(|e| {
+            error!("Failed to encode token: {}", e);
+            AuthError::InternalError
+        })
     }
 
     /// Verify JWT token
@@ -297,11 +303,10 @@ impl AuthService {
         validation.validate_nbf = false;
         validation.validate_aud = false;
 
-        let token_data = decode::<Claims>(token, &key, &validation)
-            .map_err(|e| {
-                warn!("Token verification failed: {}", e);
-                AuthError::InvalidToken
-            })?;
+        let token_data = decode::<Claims>(token, &key, &validation).map_err(|e| {
+            warn!("Token verification failed: {}", e);
+            AuthError::InvalidToken
+        })?;
 
         if token_data.claims.typ != expected_type {
             return Err(AuthError::InvalidToken);
@@ -320,12 +325,17 @@ impl AuthService {
 
         let conn = self.state.pool.get().await?;
         let result = conn.query_opt(query, &[&username, &jti]).await?;
-        
+
         Ok(result.is_some())
     }
 
     /// Store refresh token for revocation check
-    async fn store_refresh_token(&self, user_id: i32, jti: &str, expires_at: i64) -> AuthResult<()> {
+    async fn store_refresh_token(
+        &self,
+        user_id: i32,
+        jti: &str,
+        expires_at: i64,
+    ) -> AuthResult<()> {
         let query = r#"
             INSERT INTO revoked_tokens (user_id, jti, revoked_at, expires_at)
             VALUES ($1, $2, NOW(), TO_TIMESTAMP($3))
@@ -333,7 +343,7 @@ impl AuthService {
 
         let conn = self.state.pool.get().await?;
         conn.execute(query, &[&user_id, &jti, &expires_at]).await?;
-        
+
         Ok(())
     }
 
@@ -347,7 +357,7 @@ impl AuthService {
 
         let conn = self.state.pool.get().await?;
         conn.execute(query, &[&username, &jti, &expires_at]).await?;
-        
+
         Ok(())
     }
 
@@ -363,7 +373,9 @@ impl AuthService {
     /// Check login attempts
     async fn check_login_attempts(&self, username: &str) -> AuthResult<()> {
         let mut attempts = self.login_attempts.write().unwrap();
-        let user_attempts = attempts.entry(username.to_string()).or_insert_with(Vec::new);
+        let user_attempts = attempts
+            .entry(username.to_string())
+            .or_insert_with(Vec::new);
 
         // Remove attempts older than 5 minutes
         let now = Instant::now();
@@ -377,10 +389,18 @@ impl AuthService {
     }
 
     /// Record failed login attempt
-    async fn record_failed_attempt(&self, username: &str, ip_address: Option<String>) -> AuthResult<()> {
-        let mut attempts = self.login_attempts.write().unwrap();
-        let user_attempts = attempts.entry(username.to_string()).or_insert_with(Vec::new);
-        user_attempts.push(Instant::now());
+    async fn record_failed_attempt(
+        &self,
+        username: &str,
+        ip_address: Option<String>,
+    ) -> AuthResult<()> {
+        {
+            let mut attempts = self.login_attempts.write().unwrap();
+            let user_attempts = attempts
+                .entry(username.to_string())
+                .or_insert_with(Vec::new);
+            user_attempts.push(Instant::now());
+        }
 
         // Store in database for persistent tracking
         let query = r#"
@@ -396,8 +416,10 @@ impl AuthService {
 
     /// Clear failed login attempts
     async fn clear_failed_attempts(&self, username: &str) -> AuthResult<()> {
-        let mut attempts = self.login_attempts.write().unwrap();
-        attempts.remove(username);
+        {
+            let mut attempts = self.login_attempts.write().unwrap();
+            attempts.remove(username);
+        }
 
         // Clear from database
         let query = r#"
@@ -411,6 +433,7 @@ impl AuthService {
         Ok(())
     }
 }
+
 
 /// Password reset service
 pub struct PasswordResetService {
@@ -431,9 +454,7 @@ impl PasswordResetService {
 
         let conn = self.state.pool.get().await?;
         let user = match conn.query_opt(query, &[&email]).await {
-            Ok(Some(row)) => {
-                Some((row.get(0), row.get(1), row.get(2)))
-            }
+            Ok(Some(row)) => Some((row.get(0), row.get(1), row.get(2))),
             Ok(None) | Err(_) => None,
         };
 
@@ -453,7 +474,8 @@ impl PasswordResetService {
                     created_at = NOW()
             "#;
 
-            conn.execute(query, &[&user_id, &token_hash, &expires_at]).await?;
+            conn.execute(query, &[&user_id, &token_hash, &expires_at])
+                .await?;
 
             // TODO: Send email (for now, just log the token)
             // Password-reset secrets must never appear in application logs.
@@ -482,7 +504,7 @@ impl PasswordResetService {
         "#;
 
         let conn = self.state.pool.get().await?;
-        let user = match conn.query_opt(query, &[&token_hash]).await {
+        let user: Option<(i32, String)> = match conn.query_opt(query, &[&token_hash]).await {
             Ok(Some(row)) => Some((row.get(0), row.get(1))),
             Ok(None) | Err(_) => None,
         };

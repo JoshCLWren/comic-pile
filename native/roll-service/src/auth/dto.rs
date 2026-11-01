@@ -1,17 +1,17 @@
 //! Data Transfer Objects for authentication
 
 use serde::{Deserialize, Serialize};
-use validator::{Validate, ValidationError};
+use validator::Validate;
 
 /// Request DTO for user registration
 #[derive(Debug, Deserialize, Validate)]
 pub struct RegisterRequest {
     #[validate(length(min = 3, max = 50))]
     pub username: String,
-    
+
     #[validate(email)]
     pub email: String,
-    
+
     #[validate(length(min = 8, max = 72))]
     pub password: String,
 }
@@ -21,7 +21,7 @@ pub struct RegisterRequest {
 pub struct LoginRequest {
     #[validate(length(min = 3, max = 50))]
     pub username: String,
-    
+
     #[validate(length(min = 1))]
     pub password: String,
 }
@@ -43,7 +43,7 @@ pub struct ForgotPasswordRequest {
 #[derive(Debug, Deserialize, Validate)]
 pub struct ResetPasswordRequest {
     pub token: String,
-    
+
     #[validate(length(min = 8, max = 72))]
     pub new_password: String,
 }
@@ -80,12 +80,12 @@ pub struct CsrfResponse {
 /// Claims for JWT tokens
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,          // Subject (username)
-    pub jti: String,          // JWT ID for revocation
-    pub exp: i64,             // Expiration time
-    pub iat: i64,             // Issued at
-    pub typ: String,          // Token type ("access" or "refresh")
-    pub pc: i64,              // Password change epoch
+    pub sub: String, // Subject (username)
+    pub jti: String, // JWT ID for revocation
+    pub exp: i64,    // Expiration time
+    pub iat: i64,    // Issued at
+    pub typ: String, // Token type ("access" or "refresh")
+    pub pc: i64,     // Password change epoch
 }
 
 impl Claims {
