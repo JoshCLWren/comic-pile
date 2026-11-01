@@ -362,7 +362,7 @@ describe('CrossoversPage membership editing', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
-    expect(screen.getAllByText('Type to search comics')).toHaveLength(2)
+    await waitFor(() => expect(screen.getAllByText('Type to search comics')).toHaveLength(2))
     expect(screen.queryByRole('listbox', { name: 'Current thread of series results' })).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Current thread of series'), { target: { value: 'Nova' } })

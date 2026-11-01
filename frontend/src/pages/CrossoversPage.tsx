@@ -63,6 +63,11 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
   const startsAtParam = searchParams.get('starts_at')
   const deepLinkAppliedRef = useRef(false)
 
+  // The thread/enumeration selector only renders inside an expanded crossover,
+  // so its bounded all-series read waits for an actual expansion. A deep link
+  // sets the expansion after the group list resolves, which starts the read.
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+
   const {
     data: groups = [],
     isPending: isLoadingGroups,
@@ -72,8 +77,9 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
 
   const {
     data: threads = [],
+    isPending: isLoadingThreads,
     error: threadsError,
-  } = useAllThreads(api)
+  } = useAllThreads(api, { enabled: expandedId !== null })
 
   const createMutation = useCreateCrossoverGroup(api)
   const renameMutation = useRenameCrossoverGroup(api)
@@ -87,7 +93,6 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editingName, setEditingName] = useState('')
   const [mutationError, setMutationError] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
   const [memberThread, setMemberThread] = useState<ThreadListItem | null>(null)
   const [rangeThread, setRangeThread] = useState<ThreadListItem | null>(null)
   const [rangeSelection, setRangeSelection] = useState<SelectedIssueRange | null>(null)
@@ -394,14 +399,14 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
 
                     <form onSubmit={(event) => void addThreadMember(event, group.id)} aria-label={`Add thread to ${group.name}`} className="grid gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 sm:grid-cols-[1fr_auto]">
                       <div className="min-w-0">
-                        <ContinuityThreadSelector threads={threads} value={memberThread} onChange={setMemberThread} label="Current thread of series" placeholder="Search comics by title" error={threadLoadError} disabled={isAnyMutationPending} />
+                        <ContinuityThreadSelector threads={threads} value={memberThread} onChange={setMemberThread} label="Current thread of series" placeholder="Search comics by title" isLoading={isLoadingThreads} error={threadLoadError} disabled={isAnyMutationPending} />
                         <p className="mt-1 text-xs text-[var(--theme-text-dim)]">Adds one thread membership for the series. Use the issue range form below to add specific issues.</p>
                       </div>
                       <button type="submit" disabled={isAnyMutationPending || !memberThread} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{addMemberMutation.isPending ? 'Saving…' : 'Add thread'}</button>
                     </form>
 
                     <form onSubmit={(event) => void addRange(event, group.id)} aria-label={`Add issue range to ${group.name}`} className="grid gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
-                      <ContinuityThreadSelector threads={threads} value={rangeThread} onChange={(thread) => selectRangeThread(thread)} label="Comic series for issue range" placeholder="Search comics by title" error={threadLoadError} disabled={isAnyMutationPending || isLoadingRangeIssues} />
+                      <ContinuityThreadSelector threads={threads} value={rangeThread} onChange={(thread) => selectRangeThread(thread)} label="Comic series for issue range" placeholder="Search comics by title" isLoading={isLoadingThreads} error={threadLoadError} disabled={isAnyMutationPending || isLoadingRangeIssues} />
                       <div className="min-w-0">
                         {rangeThread ? <ContinuityIssueRangeSelector thread={rangeThread} issues={rangeIssues} value={rangeSelection} onChange={setRangeSelection} label={`Issues from ${rangeThread.title}`} isLoading={isLoadingRangeIssues} error={rangeLoadError} disabled={isAnyMutationPending} /> : <p className="text-xs text-[var(--theme-text-dim)]">Choose a comic series, then choose the first and last issue by comic issue number.</p>}
                       </div>

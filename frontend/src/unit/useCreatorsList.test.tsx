@@ -68,12 +68,15 @@ describe('useCreatorsList', () => {
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
     expect(mockedGetList).toHaveBeenCalledTimes(1)
-    expect(mockedGetList).toHaveBeenCalledWith({
-      search: 'bkv',
-      sort: 'name',
-      limit: CREATOR_LIST_PAGE_SIZE,
-      offset: 0,
-    })
+    expect(mockedGetList).toHaveBeenCalledWith(
+      {
+        search: 'bkv',
+        sort: 'name',
+        limit: CREATOR_LIST_PAGE_SIZE,
+        offset: 0,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
     expect(result.current.items).toHaveLength(1)
     expect(result.current.total).toBe(1)
     expect(result.current.coverage).toEqual(COMPLETE_COVERAGE)
@@ -109,12 +112,15 @@ describe('useCreatorsList', () => {
     })
 
     await waitFor(() => expect(result.current.items).toHaveLength(3))
-    expect(mockedGetList).toHaveBeenLastCalledWith({
-      search: undefined,
-      sort: 'name',
-      limit: CREATOR_LIST_PAGE_SIZE,
-      offset: 2,
-    })
+    expect(mockedGetList).toHaveBeenLastCalledWith(
+      {
+        search: undefined,
+        sort: 'name',
+        limit: CREATOR_LIST_PAGE_SIZE,
+        offset: 2,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
     expect(result.current.items.map((item) => item.canonical_creator_key)).toEqual([
       'creator:1',
       'creator:2',
@@ -186,6 +192,7 @@ describe('useCreatorsList', () => {
     await waitFor(() => expect(result.current.isPending).toBe(false))
     expect(mockedGetList).toHaveBeenCalledWith(
       expect.objectContaining({ sort: 'average_rating' }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
   })
 
@@ -214,12 +221,15 @@ describe('useCreatorsList', () => {
     })
 
     await waitFor(() => expect(mockedGetList).toHaveBeenCalledTimes(2))
-    expect(mockedGetList).toHaveBeenLastCalledWith({
-      search: undefined,
-      sort: 'ratings_count',
-      limit: CREATOR_LIST_PAGE_SIZE,
-      offset: 0,
-    })
+    expect(mockedGetList).toHaveBeenLastCalledWith(
+      {
+        search: undefined,
+        sort: 'ratings_count',
+        limit: CREATOR_LIST_PAGE_SIZE,
+        offset: 0,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
   })
 
   it('ignores a load-more request when there is no next page', async () => {

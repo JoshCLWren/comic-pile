@@ -89,7 +89,21 @@ export function useCrossoverGroupsList(deps: CrossoverApiDeps = {}) {
   })
 }
 
-export function useAllThreads(deps: CrossoverApiDeps = {}) {
+/**
+ * Read every series once for the crossover member selectors.
+ *
+ * The call is potentially several bounded pages, so callers keep it disabled
+ * until a selector that actually needs the series list is visible. The default
+ * preserves the existing always-on behavior for other consumers.
+ *
+ * @param deps - Injectable service seams for tests.
+ * @param options - `enabled` gates the read until a selector needs it.
+ * @returns The thread list query.
+ */
+export function useAllThreads(
+  deps: CrossoverApiDeps = {},
+  { enabled = true }: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: queryKeys.thread.all,
     queryFn: async () => {
@@ -99,6 +113,7 @@ export function useAllThreads(deps: CrossoverApiDeps = {}) {
         throw err instanceof Error ? err : new Error('Unable to load comics for selection.')
       }
     },
+    enabled,
     retry: false,
   })
 }

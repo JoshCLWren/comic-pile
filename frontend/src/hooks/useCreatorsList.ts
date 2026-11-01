@@ -44,8 +44,11 @@ export function creatorListQueryOptions(
 
   return {
     queryKey: queryKeys.creators.list({ search, sort, limit, minRatings }),
-    queryFn: ({ pageParam }: { pageParam: number }) =>
-      listApi.getList({ search, sort, limit, offset: pageParam, min_ratings: minRatings }),
+    queryFn: ({ pageParam, signal }: { pageParam: number; signal: AbortSignal }) =>
+      listApi.getList(
+        { search, sort, limit, offset: pageParam, min_ratings: minRatings },
+        { signal },
+      ),
     initialPageParam: 0,
     getNextPageParam: (lastPage: CreatorListResponse) => {
       if (lastPage.items.length === 0) return undefined
