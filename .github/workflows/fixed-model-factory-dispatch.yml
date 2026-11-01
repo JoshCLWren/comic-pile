@@ -411,9 +411,12 @@ jobs:
           set -Eeuo pipefail
           python3 .github/scripts/factory-work-controller.py stale
 
-      # Rank once before worker leases. The actual controller uses the decision
-      # only within existing interchangeable classes and otherwise falls back.
-      - name: Rank factory completion actions with Jev (active selection)
+      # Rank once before worker leases. Issue selection is preferred while
+      # interchangeable issues are leasable; under WIP/backlog saturation the
+      # pass ranks an existing completion action instead. The controller uses
+      # the decision only within existing interchangeable classes and otherwise
+      # falls back.
+      - name: Rank factory work selection with Jev (active selection)
         if: steps.api_budget.outputs.allow == 'true'
         continue-on-error: true
         shell: bash
@@ -440,7 +443,7 @@ jobs:
           # the controller validates status, class and current eligibility.
           echo "FACTORY_JEV_RANKING_FILE=$RUNNER_TEMP/jev-shadow.json" >> "$GITHUB_ENV"
 
-      - name: Preserve Jev completion decision for later evaluation
+      - name: Preserve Jev selection decision for later evaluation
         if: always() && hashFiles('.github/scripts/factory_jev_shadow.py') != ''
         continue-on-error: true
         uses: actions/upload-artifact@v4

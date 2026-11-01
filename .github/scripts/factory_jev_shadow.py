@@ -58,12 +58,19 @@ FEASIBILITY_LEVELS = [
 ]
 
 
-def comparable_issues(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> list[Candidate]:
-    """Only compare already-eligible ordinary product issues in the same priority class."""
+def _eligible_issue_peers(
+    issues: list[dict[str, Any]],
+    prs: list[dict[str, Any]],
+    *,
+    include_backpressured: bool = False,
+) -> list[Candidate]:
+    """Return every eligible ordinary peer in the highest canonical priority class."""
     by_number = {int(issue["number"]): issue for issue in issues}
     candidates = [
         candidate
-        for candidate in build_candidates(issues, prs)
+        for candidate in build_candidates(
+            issues, prs, include_backpressured_issues=include_backpressured
+        )
         if candidate.kind == "issue"
         and candidate.lane == 3
         and not labels_of(by_number[candidate.number]) & INFRA_LABELS
@@ -74,7 +81,28 @@ def comparable_issues(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -
     return [
         candidate for candidate in candidates
         if (candidate.lane, candidate.priority) == (first.lane, first.priority)
-    ][:MAX_CANDIDATES]
+    ]
+
+
+def comparable_issues(
+    issues: list[dict[str, Any]],
+    prs: list[dict[str, Any]],
+    *,
+    include_backpressured: bool = False,
+) -> list[Candidate]:
+    """Only compare already-eligible ordinary product issues in the same priority class.
+
+    Args:
+        issues: Open issue payloads from GitHub.
+        prs: Open pull-request payloads from GitHub.
+        include_backpressured: Count issues that are only waiting behind the
+            PR WIP or review-backlog gate. They are never leased while
+            backpressure applies; the flag exists so the dispatcher can report
+            the real waiting queue instead of an unexplained empty surface.
+    """
+    return _eligible_issue_peers(
+        issues, prs, include_backpressured=include_backpressured
+    )[:MAX_CANDIDATES]
 
 
 def make_request(candidates: list[Candidate], issues: list[dict[str, Any]]) -> dict[str, Any]:
@@ -169,8 +197,13 @@ def shadow_report(
     candidates = comparable_issues(issues, prs)
     baseline = [candidate.number for candidate in candidates]
     report: dict[str, Any] = {
-        "mode": "active-selection", "model": MODEL, "baseline": baseline,
-        "shadow": baseline[:], "status": "unchanged", "reason": "insufficient peers",
+        "mode": "active-selection",
+        "surface": "issue-selection",
+        "model": MODEL,
+        "baseline": baseline,
+        "shadow": baseline[:],
+        "status": "unchanged",
+        "reason": "insufficient peers",
     }
     if len(candidates) < 2:
         return report
@@ -236,6 +269,8 @@ def apply_jev_ranking(
     Never add candidates, change another class, bypass eligibility, or promote
     uncertain peers. The factory's worker-specific policy ordering runs first.
     """
+    if report.get("surface") not in (None, "issue-selection"):
+        return ordered, False
     if report.get("model") != MODEL or report.get("status") != "scored":
         return ordered, False
     baseline, recommended, qualified = (
@@ -656,6 +691,21 @@ def apply_completion_ranking(
     return result, True, "promoted"
 
 
+def _backpressure_lines(report: dict[str, Any]) -> list[str]:
+    """Render the queue behind the decision so an empty surface is explainable."""
+    snapshot = report.get("backpressure")
+    if not isinstance(snapshot, dict):
+        return []
+    return [
+        "- PR WIP: "
+        f"{snapshot.get('pr_wip')}/{snapshot.get('pr_wip_limit')}; "
+        f"review backlog: {snapshot.get('review_backlog')}/"
+        f"{snapshot.get('review_backlog_limit')}",
+        f"- Leasable issue peers: {snapshot.get('leasable_issue_peers', 0)}",
+        f"- Waiting issue peers behind backpressure: {snapshot.get('waiting_issue_peers', 0)}",
+    ]
+
+
 def completion_markdown(report: dict[str, Any]) -> str:
     """Render the completion decision without publishing state or credentials."""
     lines = [
@@ -670,6 +720,7 @@ def completion_markdown(report: dict[str, Any]) -> str:
         f"- Chosen action: {report.get('chosen') or 'none'}",
         f"- Result: {report['reason']}",
         "- Lease and worker authorization remain deterministic",
+        *_backpressure_lines(report),
     ]
     if "confidence" in report:
         lines.append(f"- Confidence: {report['confidence']:.2f}")
@@ -701,6 +752,7 @@ def markdown(report: dict[str, Any]) -> str:
         f"- Jev recommended order: {refs(report['shadow'])}",
         f"- Result: {report['reason']}",
         "- Actual selection logged by controller; protected policy and leases remain authoritative",
+        *_backpressure_lines(report),
     ]
     if "usage" in report:
         lines += [
@@ -708,6 +760,58 @@ def markdown(report: dict[str, Any]) -> str:
             f"- Latency: {report['latency_ms']} ms",
         ]
     return "\n".join(lines) + "\n"
+
+
+def backpressure_snapshot(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Describe the real queue so an empty decision surface is explainable.
+
+    ``leasable_issue_peers`` counts ordinary product issues the deterministic
+    controller may lease right now. ``waiting_issue_peers`` counts the peers that
+    are statically eligible but held back only by the PR WIP or review-backlog
+    gate. Both counts keep the highest canonical priority class, so the report
+    distinguishes "nothing is ready" from "work is waiting behind the fleet
+    limit" instead of relabeling already-leasable peers as blocked.
+    """
+    leasable_numbers = {
+        candidate.number for candidate in _eligible_issue_peers(issues, prs)
+    }
+    statically_eligible = _eligible_issue_peers(
+        issues, prs, include_backpressured=True
+    )
+    return {
+        "pr_wip": factory_pr_wip_count(prs),
+        "pr_wip_limit": FACTORY_PR_WIP_LIMIT,
+        "review_backlog": factory_review_backlog_count(prs),
+        "review_backlog_limit": FACTORY_REVIEW_BACKLOG_LIMIT,
+        "leasable_issue_peers": len(leasable_numbers),
+        "waiting_issue_peers": sum(
+            1
+            for candidate in statically_eligible
+            if candidate.number not in leasable_numbers
+        ),
+    }
+
+
+def select_report(
+    issues: list[dict[str, Any]],
+    prs: list[dict[str, Any]],
+    api_key: str,
+    *,
+    client: Callable[[dict[str, Any], str], dict[str, Any]] = call_jev,
+) -> dict[str, Any]:
+    """Choose one bounded decision surface and make at most one provider call.
+
+    Issue selection is the owner objective and takes precedence whenever at
+    least two interchangeable issues are actually leasable. While PR WIP or the
+    review backlog saturates the fleet, no issue is leasable, so the pass ranks
+    an existing completion action instead. Both surfaces remain subordinate to
+    deterministic eligibility, leases, priorities, and review rules.
+    """
+    if len(comparable_issues(issues, prs)) >= 2:
+        report = shadow_report(issues, prs, api_key, client=client)
+    else:
+        report = completion_report(issues, prs, api_key, client=client)
+    return {**report, "backpressure": backpressure_snapshot(issues, prs)}
 
 
 def main() -> int:
@@ -721,7 +825,7 @@ def main() -> int:
     prs = json.loads(args.prs.read_text(encoding="utf-8"))
     if not isinstance(issues, list) or not isinstance(prs, list):
         raise ValueError("invalid GitHub candidate snapshot")
-    report = completion_report(issues, prs, os.environ.get("OPENROUTER_JEV_API_KEY", ""))
+    report = select_report(issues, prs, os.environ.get("OPENROUTER_JEV_API_KEY", ""))
     print(markdown(report))
     if args.output:
         args.output.write_text(

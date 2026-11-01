@@ -360,6 +360,7 @@ def assign_candidate(
     worker: str,
     action: str | None = None,
     expected_head: str | None = None,
+    source: str | None = None,
 ) -> bool:
     """Claim a candidate and any linked issue for one fixed-model worker.
 
@@ -367,6 +368,8 @@ def assign_candidate(
     both 'factory:unowned' and active factory ownership. ``action`` and
     ``expected_head`` are validated against an authoritative PR read immediately
     before the lease is written, so a stale Jev decision is never executed.
+    ``source`` records decision provenance (for example a Jev-ranked issue) on
+    the durable lease marker.
     """
     if os.environ.get('GITHUB_ACTIONS', '').strip().lower() == 'true' and not dispatcher_identity_verified():
         return False
@@ -458,6 +461,8 @@ def assign_candidate(
                     lease_kwargs = {'action': action, 'source': 'jev'}
                     if expected_head:
                         lease_kwargs['head'] = expected_head
+                elif source:
+                    lease_kwargs = {'source': source}
                 record_controller_lease_activity(number, worker, kind, **lease_kwargs)
             except Exception:
                 release_verified_claims([*claimed, number])
@@ -1074,6 +1079,14 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
                         f"{[c.number for c in candidates[:8]]}",
                         file=sys.stderr,
                     )
+                else:
+                    print(
+                        f"[factory-controller] Jev NOT APPLIED "
+                        f"surface=issue-selection worker={worker}: "
+                        f"status={jev_report.get('status')} "
+                        f"reason={jev_report.get('reason')}",
+                        file=sys.stderr,
+                    )
         except (OSError, ValueError, TypeError, KeyError) as exc:
             print(
                 f"[factory-controller] Jev unavailable ({type(exc).__name__}); "
@@ -1093,21 +1106,42 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
         ):
             continue
         action = jev_action if jev_used and jev_pr == candidate.number else None
-        assigned = (
-            assign_candidate(
+        # Issue-selection provenance: record source=jev only when the actual
+        # pick differs from the deterministic first live candidate, so the
+        # durable lease never misattributes a canonical choice to the model.
+        canonical_issue: Candidate | None = None
+        jev_source: str | None = None
+        if action is None and jev_used and candidate.kind == "issue":
+            canonical_issue = first_live_candidate(canonical_candidates, worker)
+            if canonical_issue is None or canonical_issue.number != candidate.number:
+                jev_source = "jev"
+        if action is not None:
+            assigned = assign_candidate(
                 candidate,
                 worker,
                 action=action,
                 expected_head=jev_head,
             )
-            if action is not None
-            else assign_candidate(candidate, worker)
-        )
+        elif jev_source is not None:
+            assigned = assign_candidate(candidate, worker, source=jev_source)
+        else:
+            assigned = assign_candidate(candidate, worker)
         if assigned:
             reason = ' conflict-repair' if candidate.conflicted else ''
             print(f'[factory-controller] assigned {candidate.kind} #{candidate.number} lane={candidate.lane} priority={candidate.priority}{reason} to Factory {worker}', file=sys.stderr)
             if action is not None:
                 log_completion_result(candidate, canonical_candidates, worker, action)
+            elif jev_used and candidate.kind == "issue":
+                baseline = (
+                    "none" if canonical_issue is None
+                    else f"#{canonical_issue.number}"
+                )
+                print(
+                    f"[factory-controller] Jev RESULT worker={worker} "
+                    f"assigned=issue #{candidate.number} canonical={baseline} "
+                    f"influenced={'yes' if jev_source is not None else 'no'}",
+                    file=sys.stderr,
+                )
             return candidate
         if action is not None and not fallback_used:
             fallback_used = True
