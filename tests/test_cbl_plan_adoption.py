@@ -112,8 +112,10 @@ class _FakeDB:
         self.flush_count = 0
         self.commit_count = 0
         self.rollback_count = 0
+        self.executed_queries: list[str] = []
 
     async def execute(self, _query: object) -> _Rows:
+        self.executed_queries.append(str(_query))
         if any(table in str(_query) for table in ("FROM users", "FROM collection_exclusions")):
             return _Rows([])
         if self._call_count >= len(self._execute_results):
@@ -1580,3 +1582,23 @@ async def test_targeted_merge_preserves_existing_order() -> None:
     assert [node["ref_id"] for node in plan.nodes_json] == [100, 200]
     assert [node["position"] for node in plan.nodes_json] == [0, 1]
     assert [node["lane_id"] for node in plan.nodes_json] == ["main", "main"]
+
+
+@pytest.mark.asyncio
+async def test_adoption_reads_duplicate_source_positions_in_preview_order() -> None:
+    """Adoption must use the same deterministic position/ID order as CBL preview."""
+    db = _FakeDB()
+    await _adopt(
+        db,
+        entries=[_FakeEntry(id=10, position=0, series_name="X")],
+        facts=[_make_fact(
+            resolved_issue_id=100,
+            resolution_status="existing",
+            position=0,
+            cbl_entry_id=10,
+        )],
+    )
+    assert any(
+        "ORDER BY cbl_source_entries.position, cbl_source_entries.id" in query
+        for query in db.executed_queries
+    )

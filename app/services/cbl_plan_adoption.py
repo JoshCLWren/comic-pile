@@ -1180,7 +1180,7 @@ async def adopt_cbl_material_into_reading_plan(
     entries_result = await db.execute(
         select(CBLSourceEntry)
         .where(CBLSourceEntry.list_id == list_id)
-        .order_by(CBLSourceEntry.position)
+        .order_by(CBLSourceEntry.position, CBLSourceEntry.id)
     )
     entries = list(entries_result.scalars().all())
 
