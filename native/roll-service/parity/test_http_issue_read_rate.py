@@ -254,3 +254,153 @@ async def test_direct_issue_reads_refresh_canonical_blocked_state() -> None:
         await engine.dispose()
         async with admin.begin() as connection:
             await connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))
+
+
+@pytest.mark.asyncio
+async def test_direct_unread_reactivates_completed_series_into_queue() -> None:
+    """A completed/position-0 thread must regain real queue membership on unread.
+
+    `active => queue_position >= 1` is an application-wide invariant
+    (`count_active_threads`, `dense_positions`, reading eligibility, native
+    Skip). `restore_thread` legitimately leaves a fully-read series
+    `completed` at position 0, so a direct unread must append it behind the
+    reader's existing queue instead of leaving an active thread outside it.
+    """
+    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
+    name = f"rust_issue_reactivate_{uuid4().hex}"
+    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    async with admin.begin() as connection:
+        await connection.execute(text(f'CREATE SCHEMA "{name}"'))
+    engine = create_async_engine(
+        url.replace("postgresql://", "postgresql+asyncpg://"),
+        connect_args={"server_settings": {"search_path": f"{name},public"}},
+    )
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(
+                lambda sync_connection: Base.metadata.create_all(
+                    sync_connection, checkfirst=False
+                )
+            )
+
+        now = datetime.now(UTC)
+        username = f"reactivate_{uuid4().hex[:16]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+
+            active = Thread(
+                user_id=owner.id,
+                title="Active Run",
+                format="Comic",
+                queue_position=1,
+                issues_remaining=1,
+                total_issues=1,
+                status="active",
+            )
+            finished = Thread(
+                user_id=owner.id,
+                title="Finished Run",
+                format="Comic",
+                queue_position=0,
+                issues_remaining=0,
+                total_issues=1,
+                status="completed",
+                reading_progress="completed",
+            )
+            db.add_all([active, finished])
+            await db.flush()
+
+            active_issue = Issue(
+                thread_id=active.id,
+                issue_number="1",
+                position=1,
+                status="unread",
+            )
+            finished_issue = Issue(
+                thread_id=finished.id,
+                issue_number="1",
+                position=1,
+                status="read",
+                read_at=now,
+            )
+            db.add_all([active_issue, finished_issue])
+            await db.flush()
+            active.next_unread_issue_id = active_issue.id
+            await db.commit()
+            active_id = active.id
+            finished_id = finished.id
+            finished_issue_id = finished_issue.id
+
+        token = jwt.encode(
+            {
+                "sub": username,
+                "jti": "native-issue-reactivate-fixture",
+                "type": "access",
+                "exp": int((now + timedelta(hours=1)).timestamp()),
+            },
+            SECRET,
+            "HS256",
+        )
+        query = f"options=-csearch_path%3D{name}"
+        env = {
+            **os.environ,
+            "RUST_ROLL_DATABASE_URL": url + ("&" if "?" in url else "?") + query,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_POOL_SIZE": "2",
+            "RUST_ROLL_TEST_ISSUE_ID": str(finished_issue_id),
+            "RUST_ROLL_TEST_BODY": json.dumps(
+                {
+                    "status": "unread",
+                    "idempotency_key": "canonical-reactivate-unread-01",
+                }
+            ),
+        }
+
+        response = await _run_command(env)
+        assert response["status"] == 200, response
+        assert response["body"]["issue"]["status"] == "unread"
+        assert response["body"]["thread"]["status"] == "active"
+        assert response["body"]["thread"]["issues_remaining"] == 1
+
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            row = (
+                await db.execute(
+                    text(
+                        "SELECT status, queue_position FROM threads WHERE id = :thread_id"
+                    ),
+                    {"thread_id": finished_id},
+                )
+            ).one()
+            assert row[0] == "active", "unread must reactivate the completed series"
+            assert row[1] >= 1, "an active series must hold a real queue position"
+            # The existing queue is not renumbered or reordered.
+            active_row = (
+                await db.execute(
+                    text("SELECT queue_position FROM threads WHERE id = :thread_id"),
+                    {"thread_id": active_id},
+                )
+            ).one()
+            assert active_row[0] == 1
+            assert row[1] == active_row[0] + 1, "reactivation appends behind the queue"
+
+            canonical = (
+                await db.execute(
+                    text(
+                        "SELECT count(*) FROM threads"
+                        " WHERE id = :thread_id AND status = 'active'"
+                        "   AND queue_position >= 1"
+                    ),
+                    {"thread_id": finished_id},
+                )
+            ).scalar_one()
+            assert canonical == 1, "must satisfy the canonical active-queue predicate"
+            pool = await _skip_pool_ids(db, owner.id)
+            assert finished_id in pool, "reactivated series must be Skip-eligible"
+            assert active_id in pool
+    finally:
+        await engine.dispose()
+        async with admin.begin() as connection:
+            await connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))

@@ -468,6 +468,31 @@ pub(crate) async fn persist(
         } else {
             None
         };
+        // A direct unread can reactivate a completed series. The application
+        // invariant is `active => queue_position >= 1` (count_active_threads,
+        // dense_positions, reading eligibility and native Skip all require a
+        // real position), and Python's `mark_issue_unread`
+        // (app/services/issue.py) assigns `max_queue_position + 1` before the
+        // status flip. `restore_thread` deliberately leaves a fully-read
+        // restored series `completed` at position 0, so that state is reachable.
+        // This only appends behind the existing queue; it never renumbers or
+        // reorders another thread.
+        if status_changed && remaining > 0 {
+            tx.execute(
+                "UPDATE threads SET queue_position = (
+                     SELECT COALESCE(MAX(other.queue_position), 0) + 1
+                     FROM threads other
+                     WHERE other.user_id = $1
+                       AND other.status = 'active'
+                       AND other.queue_position >= 1
+                       AND other.id <> $2
+                 )
+                 WHERE id = $2 AND status = 'completed' AND queue_position < 1",
+                &[&user.id(), &thread_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
         tx.execute(
             "UPDATE threads SET
                  issues_remaining = CASE WHEN $2 THEN $3 ELSE issues_remaining END,
@@ -753,14 +778,16 @@ mod tests {
                      (10,1,'Excluded run','excluded',3,101,'in_progress',4.0,0,true,NULL,false),
                      (20,2,'Private run','active',1,201,'in_progress',NULL,1,false,NULL,false),
                      (30,1,'Dependent run','active',1,301,'in_progress',NULL,2,false,NULL,true),
-                     (40,1,'Cbl control run','active',1,401,'in_progress',NULL,3,false,NULL,false);
+                     (40,1,'Cbl control run','active',1,401,'in_progress',NULL,3,false,NULL,false),
+                     (50,1,'Finished run','completed',0,NULL,'completed',NULL,0,false,NULL,false);
                  INSERT INTO {schema}.issues VALUES
                      (101,10,'1','unread',1,NULL),
                      (102,10,'2','unread',2,NULL),
                      (110,10,'10','unread',10,NULL),
                      (201,20,'1','unread',1,NULL),
                      (301,30,'1','unread',1,NULL),
-                     (401,40,'1','unread',1,NULL);
+                     (401,40,'1','unread',1,NULL),
+                     (501,50,'1','read',1,NOW());
                  INSERT INTO {schema}.dependencies VALUES
                      (1,102,301,NULL),
                      (2,101,401,'cbl-order:legacy-materialization');
@@ -917,6 +944,61 @@ mod tests {
                 .unwrap()
                 .get::<_, bool>(0),
             "cbl-order edges must never contribute to the derived blocked flag"
+        );
+
+        // A completed series at position 0 is a reachable state (for example a
+        // restored fully-read run). A direct unread reactivates it, and the
+        // invariant `active => queue_position >= 1` means it must join the
+        // queue behind the reader's existing positions without reordering them.
+        let tx = first.transaction().await.unwrap();
+        let reactivated = persist(
+            &tx,
+            user,
+            501,
+            &IssueReadRateRequest {
+                status: Some("unread".into()),
+                rating: None,
+                idempotency_key: "direct-issue-reactivate-01".into(),
+            },
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(reactivated.thread.status, "active");
+        assert_eq!(reactivated.thread.issues_remaining, 1);
+        let reactivated_queue = first
+            .query_one("SELECT status,queue_position FROM threads WHERE id=50", &[])
+            .await
+            .unwrap();
+        assert_eq!(reactivated_queue.get::<_, String>(0), "active");
+        // max_queue_position(user 1) is 3 (threads 30 and 40); the reactivated
+        // series appends at 4 and nothing else moves.
+        assert_eq!(reactivated_queue.get::<_, i32>(1), 4);
+        let positions: Vec<(i32, i32)> = first
+            .query(
+                "SELECT id,queue_position FROM threads WHERE user_id=1 AND id IN (30,40) ORDER BY id",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|row| (row.get(0), row.get(1)))
+            .collect();
+        assert_eq!(positions, vec![(30, 2), (40, 3)]);
+        // Canonical active-queue predicate plus the native Skip pool gate
+        // (`status='active' AND queue_position>=1 AND is_blocked=false`).
+        let eligible: i64 = first
+            .query_one(
+                "SELECT COUNT(*) FROM threads
+                 WHERE id=50 AND status='active' AND queue_position>=1 AND is_blocked=false",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(
+            eligible, 1,
+            "a reactivated completed series must regain queue membership"
         );
 
         let tx = first.transaction().await.unwrap();
