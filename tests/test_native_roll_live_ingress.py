@@ -23,7 +23,8 @@ NATIVE_INGRESSES = {
     "/api/native_roll.rs": ROOT / "api/native_roll.rs",
     "/api/native_issue.rs": ROOT / "api/native_issue.rs",
 }
-AXUM_CAPTURE = re.compile(r"\{[A-Za-z_][A-Za-z_0-9]*\}")
+AXUM_CAPTURE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+VERCEL_CAPTURE = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
 
 # Rust-only handlers already present on main, but NOT yet publicly cut over.
 # A new endpoint must not be added here as a shortcut around live verification.
@@ -40,7 +41,6 @@ AXUM_ROUTE = re.compile(
 # Axum 0.8 spells captures ``{name}``; Vercel rewrites spell them ``:name``.
 # Normalize both parser outputs to the Vercel form so the ingress/rewrite
 # comparisons stay exact instead of silently skipping parameterized routes.
-AXUM_CAPTURE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
 def _normalized_path(path: str) -> str:
@@ -67,13 +67,18 @@ def _vercel_routes() -> list[dict[str, object]]:
     return routes
 
 
+def _vercel_pattern(source: str) -> str:
+    """Translate Vercel ``:param`` captures into their regex equivalent."""
+    return VERCEL_CAPTURE.sub(r"[^/]+", source)
+
+
 def _destination(
     routes: list[dict[str, object]], method: str, path: str
 ) -> str | None:
     """Resolve the FIRST matching rewrite, including its HTTP-method filter."""
     for route in routes:
         source = route.get("src")
-        if not isinstance(source, str) or re.fullmatch(source, path) is None:
+        if not isinstance(source, str) or re.fullmatch(_vercel_pattern(source), path) is None:
             continue
         methods = route.get("methods")
         if methods is not None:
@@ -89,6 +94,7 @@ def _destination(
 def _concrete_path(path: str) -> str:
     """Use a numeric owned Issue ID when checking parameterized Axum routes."""
     concrete = AXUM_CAPTURE.sub("42", path)
+    concrete = VERCEL_CAPTURE.sub("42", concrete)
     assert "{" not in concrete and "}" not in concrete, path
     return concrete
 
@@ -162,7 +168,7 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
                 (registered_method, path)
                 for registered_method, path in ingresses[function]
                 if registered_method == method
-                and re.fullmatch(source, _concrete_path(path))
+                and re.fullmatch(_vercel_pattern(source), _concrete_path(path))
             }
             assert len(matching_ingress) == 1, (
                 f"Vercel sends {method} {source} to {function}, "
