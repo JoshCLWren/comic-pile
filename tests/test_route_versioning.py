@@ -14,6 +14,7 @@ This test file verifies two things:
 
 import pytest
 
+from fastapi import FastAPI
 from fastapi.routing import APIRoute, Mount
 from httpx import AsyncClient
 
@@ -57,23 +58,37 @@ def _collect_routes(app) -> dict[str, frozenset[str]]:
     """Collect all APIRoute paths and methods, including those in IncludedRouters."""
     methods_by_path: dict[str, frozenset[str]] = {}
 
+    def record_methods(path: str, methods: set[str] | None) -> None:
+        methods_by_path[path] = methods_by_path.get(path, frozenset()) | frozenset(
+            methods or ()
+        )
+
     def collect_from_routes(routes):
         for route in routes:
             if isinstance(route, APIRoute):
-                methods_by_path[route.path] = frozenset(route.methods or set())
+                record_methods(route.path, route.methods)
             elif hasattr(route, "original_router") and hasattr(route, "include_context"):
                 # IncludedRouter - collect from the original router with prefix
                 prefix = route.include_context.prefix
                 for r in route.original_router.routes:
                     if isinstance(r, APIRoute):
                         full_path = prefix + r.path
-                        methods_by_path[full_path] = frozenset(r.methods or set())
+                        record_methods(full_path, r.methods)
             elif isinstance(route, Mount):
                 # Recursively collect from mounted apps
                 collect_from_routes(getattr(route.app, "routes", []))
 
     collect_from_routes(app.routes)
     return methods_by_path
+
+
+def test_collect_routes_unions_methods_on_the_same_path() -> None:
+    """Both methods survive when FastAPI registers separate route objects."""
+    app = FastAPI()
+    app.add_api_route("/api/v1/threads/", lambda: None, methods=["GET"])
+    app.add_api_route("/api/v1/threads/", lambda: None, methods=["POST"])
+
+    assert _collect_routes(app)["/api/v1/threads/"] == frozenset({"GET", "POST"})
 
 
 def test_v1_snooze_and_undo_aliases_match_legacy_route_methods() -> None:
