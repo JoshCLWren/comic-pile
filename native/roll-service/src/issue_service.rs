@@ -337,4 +337,199 @@ mod tests {
         bad.idempotency_key = "short".into();
         assert!(validate(&bad).is_err());
     }
+    async fn scoped_client(url: &str, schema: &str) -> tokio_postgres::Client {
+        let (client, connection) =
+            tokio_postgres::connect(url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(&format!("SET search_path TO {schema},public"))
+            .await
+            .unwrap();
+        client
+    }
+
+    #[tokio::test]
+    async fn direct_read_is_owner_scoped_and_does_not_touch_roll_or_queue() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) =
+            tokio_postgres::connect(&url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("direct_issue_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     status text NOT NULL, issues_remaining integer NOT NULL,
+                     next_unread_issue_id integer, reading_progress text,
+                     last_rating double precision, queue_position integer NOT NULL,
+                     queue_position_is_manual boolean NOT NULL, last_activity_at timestamptz
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL,
+                     issue_number text NOT NULL, status text NOT NULL,
+                     position integer NOT NULL, read_at timestamptz
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     user_id integer, type text, timestamp timestamptz DEFAULT NOW(),
+                     thread_id integer, issue_id integer, issue_number text,
+                     rating double precision, issues_read integer, die_after integer,
+                     context json
+                 );
+                 CREATE TABLE {schema}.external_identities (
+                     id integer PRIMARY KEY, provider text, entity_type text,
+                     external_id text, metadata_json json
+                 );
+                 CREATE TABLE {schema}.issue_external_identity_mappings (
+                     id integer PRIMARY KEY, issue_id integer,
+                     external_identity_id integer, status text,
+                     updated_at timestamptz DEFAULT NOW()
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer,
+                     pending_issue_id integer, manual_die integer
+                 );
+                 INSERT INTO {schema}.threads VALUES
+                     (10,1,'excluded',3,101,'in_progress',4.0,0,true,NULL),
+                     (20,2,'active',1,201,'in_progress',NULL,1,false,NULL);
+                 INSERT INTO {schema}.issues VALUES
+                     (101,10,'1','unread',1,NULL),
+                     (102,10,'2','unread',2,NULL),
+                     (110,10,'10','unread',10,NULL),
+                     (201,20,'1','unread',1,NULL);
+                 INSERT INTO {schema}.sessions VALUES (1,1,101,12);
+                 INSERT INTO {schema}.external_identities VALUES
+                     (50,'comicvine','issue','4000-42',
+                      '{{\"image\":{{\"medium_url\":\"https://comicvine.example/covers/issue10.jpg\"}}}}'::json);
+                 INSERT INTO {schema}.issue_external_identity_mappings
+                     (id,issue_id,external_identity_id,status)
+                     VALUES (500,110,50,'confirmed');"
+            ))
+            .await
+            .unwrap();
+
+        let mut first = scoped_client(&url, &schema).await;
+        let user = AuthenticatedUser::for_test(1);
+        let mut command = request(Some("read"), Some(4.5));
+        let tx = first.transaction().await.unwrap();
+        let read = persist(&tx, user, 110, &command).await.unwrap();
+        tx.commit().await.unwrap();
+        assert!(read.read_event_created);
+        assert!(read.rating_event_created);
+        assert_eq!(read.issue.issue_number, "10");
+        assert_eq!(read.issue.status, "read");
+        assert_eq!(read.issue.rating, Some(4.5));
+        assert!(read.issue.has_confirmed_identity);
+        assert_eq!(read.issue.comicvine_issue_id.as_deref(), Some("4000-42"));
+        assert_eq!(
+            read.issue.cover_image_url.as_deref(),
+            Some("https://comicvine.example/covers/issue10.jpg")
+        );
+        assert_eq!(read.thread.status, "excluded");
+        assert_eq!(read.thread.issues_remaining, 2);
+        assert_eq!(read.thread.next_unread_issue_id, Some(101));
+        assert_eq!(
+            first
+                .query_one("SELECT status FROM issues WHERE id=102", &[])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "unread"
+        );
+        let still_pending = first
+            .query_one("SELECT pending_issue_id,manual_die FROM sessions WHERE id=1", &[])
+            .await
+            .unwrap();
+        assert_eq!(still_pending.get::<_, i32>(0), 101);
+        assert_eq!(still_pending.get::<_, i32>(1), 12);
+        let queue = first
+            .query_one(
+                "SELECT queue_position,queue_position_is_manual FROM threads WHERE id=10",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(queue.get::<_, i32>(0), 0);
+        assert!(queue.get::<_, bool>(1));
+
+        let tx = first.transaction().await.unwrap();
+        let replay = persist(&tx, user, 110, &command).await.unwrap();
+        tx.commit().await.unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.issue, read.issue);
+        assert_eq!(replay.thread, read.thread);
+        let count: i64 = first
+            .query_one("SELECT COUNT(*) FROM events WHERE user_id=1", &[])
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(count, 1);
+        command.rating = Some(3.5);
+        let tx = first.transaction().await.unwrap();
+        let collision = persist(&tx, user, 110, &command).await.unwrap_err();
+        tx.rollback().await.unwrap();
+        assert_eq!(collision.0, StatusCode::CONFLICT);
+
+        let correction = IssueReadRateRequest {
+            status: None,
+            rating: Some(3.5),
+            idempotency_key: "direct-issue-correction-01".into(),
+        };
+        let tx = first.transaction().await.unwrap();
+        let corrected = persist(&tx, user, 110, &correction).await.unwrap();
+        tx.commit().await.unwrap();
+        assert!(!corrected.read_event_created);
+        assert!(corrected.rating_event_created);
+        assert_eq!(corrected.issue.rating, Some(3.5));
+        assert_eq!(corrected.thread.status, "excluded");
+        assert_eq!(
+            first
+                .query_one("SELECT COUNT(*) FROM events WHERE type='rate'", &[])
+                .await
+                .unwrap()
+                .get::<_, i64>(0),
+            2
+        );
+
+        let tx = first.transaction().await.unwrap();
+        let foreign = persist(&tx, user, 201, &request(Some("read"), None))
+            .await
+            .unwrap_err();
+        tx.rollback().await.unwrap();
+        assert_eq!(foreign.0, StatusCode::NOT_FOUND);
+        let tx = first.transaction().await.unwrap();
+        let unmapped = persist(
+            &tx,
+            user,
+            101,
+            &IssueReadRateRequest {
+                status: Some("read".into()),
+                rating: None,
+                idempotency_key: "direct-issue-default-01".into(),
+            },
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(unmapped.issue.rating, Some(3.5));
+        assert_eq!(unmapped.issue.mapping_state, "unmapped");
+        assert_eq!(unmapped.issue.cover_image_url, None);
+        assert_eq!(unmapped.thread.next_unread_issue_id, Some(102));
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
 }
