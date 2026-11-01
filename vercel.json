@@ -231,69 +231,6 @@
         "X-Robots-Tag": "noindex, nofollow",
         "X-XSS-Protection": "1; mode=block"
       }
-    },
-    {
-      "src": "/api/v2/auth/register",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "/api/v2/auth/login",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "/api/v2/auth/refresh",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "/api/v2/auth/logout",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "/api/v2/auth/csrf",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "/api/v2/auth/me",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "/api/v2/auth/forgot-password",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "/api/v2/auth/reset-password",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "/api/auth/me",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
     }
   ]
 }
