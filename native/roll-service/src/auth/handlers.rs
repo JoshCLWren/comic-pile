@@ -14,20 +14,27 @@ use validator::Validate;
 
 use crate::auth::{
     dto::{
-        CsrfResponse, LoginRequest, RefreshTokenRequest, RegisterRequest, TokenResponse,
-        UserResponse,
+        CsrfResponse, ForgotPasswordRequest, LoginRequest, PasswordResetResponse,
+        RefreshTokenRequest, RegisterRequest, ResetPasswordRequest, TokenResponse, UserResponse,
     },
     error::{AuthError, AuthResult},
     identity::AuthenticatedUser,
-    services::AuthService,
+    mailer,
+    services::{AuthService, PasswordResetService},
     utils::{generate_csrf_token, get_client_ip, is_secure_request, token_digest},
 };
 use crate::AppState;
 
 const REFRESH_COOKIE: &str = "refresh_token";
 const CSRF_COOKIE: &str = "csrf_token";
+// The refresh cookie is scoped to /api so it is never attached to static
+// assets, and set/clear must use the identical path or logout cannot remove it.
+const REFRESH_COOKIE_PATH: &str = "/api";
+const CSRF_COOKIE_PATH: &str = "/";
 const REFRESH_COOKIE_MAX_AGE_SECONDS: i64 = 7 * 24 * 60 * 60;
 const CSRF_COOKIE_MAX_AGE_SECONDS: i64 = 24 * 60 * 60;
+const FORGOT_PASSWORD_MESSAGE: &str = "If an account exists, a reset link has been sent.";
+const RESET_PASSWORD_MESSAGE: &str = "Password reset successfully.";
 
 /// In-process request limiter. Keys are client IPs, never usernames or secrets.
 #[derive(Default)]
@@ -72,8 +79,15 @@ fn cookie_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
         .filter(|value| !value.is_empty())
 }
 
-fn cookie(name: &str, value: &str, max_age: i64, http_only: bool, secure: bool) -> HeaderValue {
-    let mut settings = format!("{name}={value}; Path=/; Max-Age={max_age}; SameSite=Lax");
+fn cookie(
+    name: &str,
+    value: &str,
+    path: &str,
+    max_age: i64,
+    http_only: bool,
+    secure: bool,
+) -> HeaderValue {
+    let mut settings = format!("{name}={value}; Path={path}; Max-Age={max_age}; SameSite=Lax");
     if http_only {
         settings.push_str("; HttpOnly");
     }
@@ -84,7 +98,8 @@ fn cookie(name: &str, value: &str, max_age: i64, http_only: bool, secure: bool) 
 }
 
 fn cleared_refresh_cookie(secure: bool) -> HeaderValue {
-    let mut settings = format!("{REFRESH_COOKIE}=; Path=/api; Max-Age=0; SameSite=Lax; HttpOnly");
+    let mut settings =
+        format!("{REFRESH_COOKIE}=; Path={REFRESH_COOKIE_PATH}; Max-Age=0; SameSite=Lax; HttpOnly");
     if secure {
         settings.push_str("; Secure");
     }
@@ -103,6 +118,7 @@ fn authentication_headers(headers: &HeaderMap, refresh_token: &str) -> HeaderMap
         cookie(
             REFRESH_COOKIE,
             refresh_token,
+            REFRESH_COOKIE_PATH,
             REFRESH_COOKIE_MAX_AGE_SECONDS,
             true,
             secure,
@@ -113,6 +129,7 @@ fn authentication_headers(headers: &HeaderMap, refresh_token: &str) -> HeaderMap
         cookie(
             CSRF_COOKIE,
             &csrf_token,
+            CSRF_COOKIE_PATH,
             CSRF_COOKIE_MAX_AGE_SECONDS,
             false,
             secure,
@@ -209,12 +226,49 @@ pub async fn csrf(headers: HeaderMap) -> Response {
         cookie(
             CSRF_COOKIE,
             &token,
+            CSRF_COOKIE_PATH,
             CSRF_COOKIE_MAX_AGE_SECONDS,
             false,
             is_secure_request(&headers),
         ),
     );
     (response_headers, Json(CsrfResponse { csrf_token: token })).into_response()
+}
+
+/// Begin an enumeration-safe password-recovery request and deliver the reset
+/// link off the response path.
+pub async fn forgot_password(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(request): Json<ForgotPasswordRequest>,
+) -> AuthResult<Json<PasswordResetResponse>> {
+    request.validate().map_err(|_| AuthError::Validation)?;
+    limiter().check(&client_ip(&headers), 3, Duration::from_secs(60))?;
+    if let Some(delivery) = PasswordResetService::new(state)
+        .begin_reset(&request.email)
+        .await?
+    {
+        // Delivery never blocks the acknowledgement, so provider latency cannot
+        // distinguish a known address from an unknown one.
+        tokio::spawn(async move { mailer::deliver(delivery).await });
+    }
+    Ok(Json(PasswordResetResponse {
+        message: FORGOT_PASSWORD_MESSAGE,
+    }))
+}
+
+/// Complete a password reset and bump the credential epoch.
+pub async fn reset_password(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ResetPasswordRequest>,
+) -> AuthResult<Json<PasswordResetResponse>> {
+    request.validate().map_err(|_| AuthError::Validation)?;
+    PasswordResetService::new(state)
+        .complete_reset(&request.token, &request.new_password)
+        .await?;
+    Ok(Json(PasswordResetResponse {
+        message: RESET_PASSWORD_MESSAGE,
+    }))
 }
 
 /// Return the current authenticated account profile.
@@ -369,6 +423,10 @@ mod tests {
         assert!(set_cookies
             .iter()
             .any(|value| value.starts_with("refresh_token=")));
+        assert!(
+            set_cookies.iter().any(|value| value.contains("Path=/api")),
+            "refresh cookie must be scoped to /api so logout can clear it"
+        );
         assert!(set_cookies
             .iter()
             .any(|value| value.starts_with("csrf_token=")));
@@ -405,7 +463,16 @@ mod tests {
             header::AUTHORIZATION,
             HeaderValue::from_str(&format!("Bearer {}", rotated.access_token)).unwrap(),
         );
-        logout(State(state.clone()), authorization).await.unwrap();
+        let logout_response = logout(State(state.clone()), authorization).await.unwrap();
+        let cleared = logout_response
+            .headers()
+            .get(header::SET_COOKIE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        assert!(
+            cleared.starts_with("refresh_token=") && cleared.contains("Path=/api"),
+            "logout must clear the same /api-scoped refresh cookie that login set"
+        );
         assert!(
             crate::auth::authenticate(&state, &rotated.access_token)
                 .await
@@ -472,6 +539,130 @@ mod tests {
             locked.is_err(),
             "five recent failures must lock the username"
         );
+
+        let (admin, connection) = tokio_postgres::connect(
+            std::env::var("RUST_ROLL_TEST_DATABASE_URL")
+                .unwrap()
+                .as_str(),
+            tokio_postgres::NoTls,
+        )
+        .await
+        .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn password_recovery_is_enumeration_safe_and_rotates_credentials() {
+        let (schema, url) = schema_with_auth_tables().await;
+        let state = state(&url);
+        let (_, Json(created)) = register(
+            State(state.clone()),
+            json_headers("198.51.100.40"),
+            Json(RegisterRequest {
+                username: "recovery-reader".into(),
+                email: "recovery@example.com".into(),
+                password: "correct-horse-battery".into(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let service = PasswordResetService::new(state.clone());
+        let acknowledgement = forgot_password(
+            State(state.clone()),
+            json_headers("198.51.100.39"),
+            Json(ForgotPasswordRequest {
+                email: "unknown@example.com".into(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(acknowledgement.0.message, FORGOT_PASSWORD_MESSAGE);
+        assert!(
+            service
+                .begin_reset("unknown@example.com")
+                .await
+                .unwrap()
+                .is_none(),
+            "unknown email must not create or reveal a reset token"
+        );
+        let delivery = service
+            .begin_reset("recovery@example.com")
+            .await
+            .unwrap()
+            .expect("known email yields a delivery payload");
+        assert_eq!(delivery.username, "recovery-reader");
+        assert_eq!(delivery.recipient_email, "recovery@example.com");
+        assert!(!delivery.token.is_empty());
+
+        // The advertised minimum is enforced before the token is consumed, so a
+        // below-minimum attempt leaves the live token usable.
+        let too_short = reset_password(
+            State(state.clone()),
+            Json(ResetPasswordRequest {
+                token: delivery.token.clone(),
+                new_password: "short".into(),
+            }),
+        )
+        .await;
+        assert!(matches!(too_short, Err(AuthError::PasswordTooShort)));
+
+        let reset = reset_password(
+            State(state.clone()),
+            Json(ResetPasswordRequest {
+                token: delivery.token.clone(),
+                new_password: "brand-new-secret".into(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reset.0.message, "Password reset successfully.");
+
+        let replay = reset_password(
+            State(state.clone()),
+            Json(ResetPasswordRequest {
+                token: delivery.token,
+                new_password: "another-secret".into(),
+            }),
+        )
+        .await;
+        assert!(
+            matches!(replay, Err(AuthError::InvalidResetToken)),
+            "a consumed reset token must not be replayable"
+        );
+
+        assert!(
+            crate::auth::authenticate(&state, &created.access_token)
+                .await
+                .is_err(),
+            "the credential epoch bump must invalidate existing access tokens"
+        );
+        assert!(login(
+            State(state.clone()),
+            json_headers("198.51.100.41"),
+            Json(LoginRequest {
+                username: "recovery-reader".into(),
+                password: "correct-horse-battery".into(),
+            }),
+        )
+        .await
+        .is_err());
+        assert!(login(
+            State(state.clone()),
+            json_headers("198.51.100.42"),
+            Json(LoginRequest {
+                username: "recovery-reader".into(),
+                password: "brand-new-secret".into(),
+            }),
+        )
+        .await
+        .is_ok());
 
         let (admin, connection) = tokio_postgres::connect(
             std::env::var("RUST_ROLL_TEST_DATABASE_URL")

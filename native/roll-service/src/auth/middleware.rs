@@ -33,17 +33,26 @@ pub async fn csrf_middleware(request: Request, next: Next) -> Response {
     let path = request.uri().path().trim_end_matches('/');
     let protected =
         matches!(method, "POST" | "PUT" | "PATCH" | "DELETE") && path.starts_with("/api/");
+    // Recovery endpoints are CSRF-exempt like Python's unauthenticated auth
+    // requests: they carry no ambient credential (the reset token arrives out of
+    // band) and the browser cannot be tricked into a state change without it.
     let exempt = matches!(
         path,
         "/api/v2/auth/login"
             | "/api/v2/auth/register"
             | "/api/v2/auth/refresh"
+            | "/api/v2/auth/forgot-password"
+            | "/api/v2/auth/reset-password"
             | "/api/v1/auth/login"
             | "/api/v1/auth/register"
             | "/api/v1/auth/refresh"
+            | "/api/v1/auth/forgot-password"
+            | "/api/v1/auth/reset-password"
             | "/api/auth/login"
             | "/api/auth/register"
             | "/api/auth/refresh"
+            | "/api/auth/forgot-password"
+            | "/api/auth/reset-password"
     );
     if protected && !exempt {
         let cookie = cookie_token(request.headers());

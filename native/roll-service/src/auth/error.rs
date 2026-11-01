@@ -48,6 +48,9 @@ pub enum AuthError {
     #[error("Password changed; please sign in again.")]
     PasswordChanged,
 
+    #[error("Invalid or expired reset request.")]
+    InvalidResetToken,
+
     #[error("Password must be at least 6 characters.")]
     PasswordTooShort,
 
@@ -115,6 +118,9 @@ impl AuthError {
                 StatusCode::UNAUTHORIZED,
                 "Password changed; please sign in again.",
             ),
+            AuthError::InvalidResetToken => {
+                (StatusCode::BAD_REQUEST, "Invalid or expired reset request.")
+            }
             AuthError::PasswordTooShort => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "Password must be at least 6 characters.",

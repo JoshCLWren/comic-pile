@@ -130,7 +130,7 @@ def _route_html_rule() -> dict[str, object]:
 
 
 def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
-    """Ensure production builds independent static, Rust, Node, and Python outputs."""
+    """Ensure production builds independent static, Rust, and Python outputs."""
     config = _load_vercel_config()
     builds = config["builds"]
 
@@ -142,7 +142,6 @@ def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
         },
         {"src": "api/native_roll.rs", "use": "@vercel/rust"},
         {"src": "api/native_issue.rs", "use": "@vercel/rust"},
-        {"src": "api/auth/me.ts", "use": "@vercel/node"},
         {
             "src": "package.json",
             "use": "@vercel/static-build",
@@ -163,13 +162,29 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
 
     native_roll_routes = [
         ("/api/v1/auth/me", "GET"),
+        ("/api/v1/auth/login", "POST"),
+        ("/api/v1/auth/register", "POST"),
+        ("/api/v1/auth/refresh", "POST"),
+        ("/api/v1/auth/logout", "POST"),
+        ("/api/v1/auth/csrf", "GET"),
+        ("/api/v1/auth/forgot-password", "POST"),
+        ("/api/v1/auth/reset-password", "POST"),
         ("/api/v2/auth/register", "POST"),
         ("/api/v2/auth/login", "POST"),
         ("/api/v2/auth/refresh", "POST"),
         ("/api/v2/auth/logout", "POST"),
         ("/api/v2/auth/csrf", "GET"),
         ("/api/v2/auth/me", "GET"),
+        ("/api/v2/auth/forgot-password", "POST"),
+        ("/api/v2/auth/reset-password", "POST"),
         ("/api/auth/me", "GET"),
+        ("/api/auth/login", "POST"),
+        ("/api/auth/register", "POST"),
+        ("/api/auth/refresh", "POST"),
+        ("/api/auth/logout", "POST"),
+        ("/api/auth/csrf", "GET"),
+        ("/api/auth/forgot-password", "POST"),
+        ("/api/auth/reset-password", "POST"),
         ("/api/_native_roll/health", "GET"),
         ("/api/v2/roll/bootstrap", "GET"),
         ("/api/v2/roll/dice-command", "POST"),
@@ -348,21 +363,29 @@ def test_vercel_node_typescript_relative_imports_use_js_extensions() -> None:
 
 
 def test_native_auth_routes_are_isolated_from_python_and_static_routes() -> None:
-    """Keep migrated auth in Rust and password recovery in Python."""
+    """Keep every live first-party auth operation on the native Rust ingress."""
     routes = _routes(_load_vercel_config())
     probes = (
         ("GET", "/api/v1/auth/me", "/api/native_roll.rs"),
+        ("POST", "/api/v1/auth/login", "/api/native_roll.rs"),
+        ("POST", "/api/v1/auth/register", "/api/native_roll.rs"),
+        ("POST", "/api/v1/auth/refresh", "/api/native_roll.rs"),
+        ("POST", "/api/v1/auth/logout", "/api/native_roll.rs"),
+        ("GET", "/api/v1/auth/csrf", "/api/native_roll.rs"),
+        ("POST", "/api/v1/auth/forgot-password", "/api/native_roll.rs"),
+        ("POST", "/api/v1/auth/reset-password", "/api/native_roll.rs"),
         ("GET", "/api/auth/me", "/api/native_roll.rs"),
+        ("POST", "/api/auth/login", "/api/native_roll.rs"),
+        ("POST", "/api/auth/refresh", "/api/native_roll.rs"),
         ("GET", "/api/v2/auth/me", "/api/native_roll.rs"),
         ("GET", "/api/v2/auth/csrf", "/api/native_roll.rs"),
         ("POST", "/api/v2/auth/login", "/api/native_roll.rs"),
         ("POST", "/api/v2/auth/register", "/api/native_roll.rs"),
         ("POST", "/api/v2/auth/refresh", "/api/native_roll.rs"),
         ("POST", "/api/v2/auth/logout", "/api/native_roll.rs"),
-        ("POST", "/api/v2/auth/forgot-password", "/api/index.py"),
-        ("POST", "/api/v2/auth/reset-password", "/api/index.py"),
+        ("POST", "/api/v2/auth/forgot-password", "/api/native_roll.rs"),
+        ("POST", "/api/v2/auth/reset-password", "/api/native_roll.rs"),
         ("POST", "/api/v1/auth/me", "/api/index.py"),
-        ("POST", "/api/v1/auth/refresh", "/api/index.py"),
         ("GET", "/api/v1/roll/bootstrap", "/api/index.py"),
         ("GET", "/api/_native_roll/bootstrap", "/api/index.py"),
         ("GET", "/api/v2/roll/bootstrap", "/api/native_roll.rs"),

@@ -63,6 +63,29 @@ pub struct UserResponse {
     pub is_admin: bool,
 }
 
+/// Request body for an enumeration-safe password-recovery email.
+#[derive(Debug, Deserialize, Validate)]
+pub struct ForgotPasswordRequest {
+    #[validate(email)]
+    pub email: String,
+}
+
+/// Request body for completing a password reset with a single-use token.
+#[derive(Debug, Deserialize, Validate)]
+pub struct ResetPasswordRequest {
+    #[validate(length(min = 1))]
+    pub token: String,
+
+    #[validate(length(min = 1))]
+    pub new_password: String,
+}
+
+/// Safe acknowledgement returned whether or not an account exists.
+#[derive(Debug, Serialize)]
+pub struct PasswordResetResponse {
+    pub message: &'static str,
+}
+
 /// Response body carrying a double-submit CSRF token.
 #[derive(Debug, Serialize)]
 pub struct CsrfResponse {

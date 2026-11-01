@@ -310,11 +310,19 @@ pub fn decode_claims(
     Ok(claims)
 }
 
-/// Password-recovery service. Delivery is owned by the Python mailer today, so
-/// this service preserves the shared token-digest and credential-epoch contract
-/// for the future native cutover without exposing an unrouted HTTP handler.
+/// Password-recovery service. Delivery is performed by the native mailer, so the
+/// HTTP surface no longer depends on the Python mailer path.
 pub struct PasswordResetService {
     state: Arc<AppState>,
+}
+
+/// Everything the mailer needs for one reset message. The raw token is only
+/// held in memory for the delivery attempt and is never persisted or logged.
+pub struct ResetDelivery {
+    pub recipient_email: String,
+    pub username: String,
+    pub token: String,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl PasswordResetService {
@@ -323,19 +331,24 @@ impl PasswordResetService {
         Self { state }
     }
 
-    /// Store a single-use reset digest and return the raw token for delivery.
-    pub async fn begin_reset(&self, email: &str) -> AuthResult<Option<String>> {
+    /// Store a single-use reset digest and return the delivery payload.
+    pub async fn begin_reset(&self, email: &str) -> AuthResult<Option<ResetDelivery>> {
         let connection = checkout(&self.state).await?;
-        let user_id = connection
-            .query_opt("SELECT id FROM users WHERE email = $1 LIMIT 1", &[&email])
+        let user = connection
+            .query_opt(
+                "SELECT id, username FROM users WHERE email = $1 LIMIT 1",
+                &[&email],
+            )
             .await
-            .map_err(query_error)?
-            .map(|row| row.get::<_, i32>(0));
-        let Some(user_id) = user_id else {
+            .map_err(query_error)?;
+        let Some(user) = user else {
             return Ok(None);
         };
+        let user_id: i32 = user.get(0);
+        let username: String = user.get(1);
         let raw_token = generate_token(43);
         let digest = token_digest(&raw_token);
+        let expires_at = chrono::Utc::now() + chrono::Duration::minutes(30);
         let mut connection = connection;
         let transaction = connection.transaction().await.map_err(query_error)?;
         transaction
@@ -348,13 +361,18 @@ impl PasswordResetService {
         transaction
             .execute(
                 "INSERT INTO password_reset_tokens (user_id, token_digest, expires_at) \
-                 VALUES ($1, $2, NOW() + INTERVAL '30 minutes')",
-                &[&user_id, &digest],
+                 VALUES ($1, $2, to_timestamp($3))",
+                &[&user_id, &digest, &(expires_at.timestamp() as f64)],
             )
             .await
             .map_err(query_error)?;
         transaction.commit().await.map_err(query_error)?;
-        Ok(Some(raw_token))
+        Ok(Some(ResetDelivery {
+            recipient_email: email.to_string(),
+            username,
+            token: raw_token,
+            expires_at,
+        }))
     }
 
     /// Consume a reset token, rotate the password hash and bump the credential epoch.
@@ -373,7 +391,7 @@ impl PasswordResetService {
             .await
             .map_err(query_error)?;
         let Some(row) = token_id else {
-            return Err(AuthError::InvalidToken);
+            return Err(AuthError::InvalidResetToken);
         };
         let id: i32 = row.get(0);
         let user_id: i32 = row.get(1);
