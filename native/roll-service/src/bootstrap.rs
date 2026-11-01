@@ -221,9 +221,18 @@ async fn latest_session_read(
     session_id: i32,
 ) -> Result<Option<Value>, ApiError> {
     let row = connection.query_opt(
-        "SELECT e.issue_id,coalesce(i.issue_number,e.issue_number),t.id,t.title,e.timestamp::text
+        "SELECT e.issue_id,coalesce(i.issue_number,e.issue_number),t.id,t.title,e.timestamp::text,
+                cover_identity.metadata_json::text
          FROM events e LEFT JOIN issues i ON i.id=e.issue_id
          LEFT JOIN threads t ON t.id=coalesce(i.thread_id,e.thread_id) AND t.user_id=$2
+         LEFT JOIN LATERAL (
+             SELECT identity.metadata_json FROM issue_external_identity_mappings mapping
+             JOIN external_identities identity ON identity.id=mapping.external_identity_id
+             WHERE mapping.issue_id=i.id AND mapping.status<>'rejected'
+               AND identity.provider='comicvine' AND identity.entity_type='issue'
+             ORDER BY (mapping.status='confirmed') DESC,mapping.confidence DESC NULLS LAST,mapping.id
+             LIMIT 1
+         ) cover_identity ON TRUE
          WHERE e.session_id=$1 AND e.type='rate'
            AND EXISTS (SELECT 1 FROM sessions s WHERE s.id=e.session_id AND s.user_id=$2)
          ORDER BY e.timestamp DESC,e.id DESC LIMIT 1",
@@ -235,9 +244,17 @@ async fn latest_session_read(
         let thread_id: Option<i32> = row.try_get(2).map_err(db::query_error)?;
         let thread_title: Option<String> = row.try_get(3).map_err(db::query_error)?;
         let read_at: Option<String> = row.try_get(4).map_err(db::query_error)?;
+        let metadata: Option<String> = row.try_get(5).map_err(db::query_error)?;
+        let metadata: Value = metadata
+            .as_deref()
+            .and_then(|source| serde_json::from_str(source).ok())
+            .unwrap_or(Value::Null);
+        let cover_url = extract_cover_source(&metadata)
+            .filter(|source| source.starts_with("https://") || source.starts_with("http://"))
+            .filter(|source| !source.split('/').nth(2).unwrap_or("").contains('@'));
         Ok(
             json!({"issue_id":issue_id,"issue_number":issue_number,"thread_id":thread_id,
-            "thread_title":thread_title,"read_at":read_at}),
+            "thread_title":thread_title,"read_at":read_at,"cover_url":cover_url}),
         )
     })
     .transpose()

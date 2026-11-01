@@ -29,7 +29,7 @@ export type RateResponsePayload = components['schemas']['RateResponse']
 /** The session last-read record shared by the v2 bootstrap and rate responses. */
 export type RollLastReadPayload = NonNullable<
   NonNullable<components['schemas']['RollReconciliation']>['last_read']
->
+> & { cover_url?: string | null }
 
 /** Optional canonical-series reader context the last-read strip may join with. */
 export interface LastReadSeriesStats {
