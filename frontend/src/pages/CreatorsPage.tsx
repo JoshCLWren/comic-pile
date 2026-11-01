@@ -249,6 +249,7 @@ export default function CreatorsPage() {
   const [sort, setSort] = useState<CreatorListSort>('name')
   const [minRatings, setMinRatings] = useState<number>(0)
   const [viewMode, setViewMode] = useState<CreatorsViewMode>('browse')
+  const [showTeamChemistry, setShowTeamChemistry] = useState(false)
   const debouncedSearch = useDebounce(search, SEARCH_DEBOUNCE_MS)
   const activeSearch = debouncedSearch.trim()
   const navigate = useNavigate()
@@ -293,7 +294,7 @@ export default function CreatorsPage() {
     data: teamChemistry,
     isError: teamChemistryError,
     refetch: refetchTeamChemistry,
-  } = useCreatorTeamChemistry()
+  } = useCreatorTeamChemistry(viewMode === 'browse' && showTeamChemistry)
   // Discovery is an optional exploration mode, so it only queries once visible.
   const {
     data: discoveries,
@@ -568,8 +569,17 @@ export default function CreatorsPage() {
             </section>
           )}
 
-          {teamChemistry && <CreatorTeamChemistrySection data={teamChemistry} />}
-          {teamChemistryError && (
+          <button
+            type="button"
+            onClick={() => setShowTeamChemistry((visible) => !visible)}
+            aria-expanded={showTeamChemistry}
+            className="mt-6 min-h-10 rounded-lg border px-4 py-2 text-sm font-semibold"
+            style={{ borderColor: 'var(--theme-border)', color: 'var(--theme-text-primary)' }}
+          >
+            {showTeamChemistry ? 'Hide team chemistry' : 'Show team chemistry'}
+          </button>
+          {showTeamChemistry && teamChemistry && <CreatorTeamChemistrySection data={teamChemistry} />}
+          {showTeamChemistry && teamChemistryError && (
             <p role="alert" className="mt-6 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
               Could not load team chemistry. Your creators and ratings are unchanged.
               <button
