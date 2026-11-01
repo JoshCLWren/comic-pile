@@ -322,6 +322,28 @@ describe('QueueBulkMapSeriesDialog', () => {
     expect(results).toHaveTextContent('Part of the queue could not be loaded')
   })
 
+  it('preserves the incomplete-batch warning through mapping and prop refresh (regression for #4125)', async () => {
+    const { view } = renderBulkDialog({
+      threadIds: [1, 2],
+      isScopeIncomplete: true,
+    })
+    // Warning must appear once the batch opens to mapping
+    await vi.waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Part of the queue could not be loaded')
+    })
+    // Change props (simulating queue refresh with new array identity) must not suppress it
+    view.rerender(
+      <QueueBulkMapSeriesDialog
+        isOpen
+        threadIds={[3, 4]}
+        threadTitles={['Flash', 'Green Lantern']}
+        isScopeIncomplete={true}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Part of the queue could not be loaded')
+  })
+
   it('reports a preserved batch to the host while a run is saved', async () => {
     const onBatchPendingChange = vi.fn()
     render(<QueueBulkMapSeriesDialog isOpen threadIds={[1]} threadTitles={['Batman']} onClose={vi.fn()} onBatchPendingChange={onBatchPendingChange} />)
