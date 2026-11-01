@@ -1,17 +1,16 @@
 //! HTTP handlers for authentication endpoints
 
 use axum::{
-    extract::{Query, State},
-    http::{HeaderMap, Request},
+    extract::State,
+    http::{HeaderMap, header},
     response::{IntoResponse, Response},
     Json,
 };
-use serde::Deserialize;
 use std::sync::Arc;
 use tokio::time::{Duration, Instant};
-use tower::ServiceExt;
-use tower_http::timeout::TimeoutLayer;
-use tracing::{info, warn};
+use tracing::info;
+use std::sync::OnceLock;
+use validator::Validate;
 
 use crate::auth::{
     dto::*,
@@ -20,7 +19,7 @@ use crate::auth::{
     services::{AuthService, PasswordResetService},
     utils::get_client_ip,
 };
-use crate::{AppState, ApiError};
+use crate::AppState;
 
 /// Rate limiting configuration
 const RATE_LIMIT_LOGIN: (u32, Duration) = (5, Duration::from_secs(60));
@@ -57,20 +56,24 @@ impl RateLimitState {
     }
 }
 
+fn limiter() -> &'static RateLimitState {
+    static LIMITER: OnceLock<RateLimitState> = OnceLock::new();
+    LIMITER.get_or_init(RateLimitState::new)
+}
+
 /// Register a new user
 pub async fn register(
     State(state): State<Arc<AppState>>,
-    State(rate_limit): State<Arc<RateLimitState>>,
     Json(request): Json<RegisterRequest>,
-) -> AuthResponse<TokenResponse> {
+) -> AuthResponse<Json<TokenResponse>> {
     // Validate request
     if let Err(errors) = request.validate() {
         return Err(AuthError::InternalError); // Simplified error handling
     }
 
     // Check rate limit (by IP for registration)
-    let ip = get_client_ip(&HeaderMap::new(), None);
-    rate_limit.check_rate_limit(&ip, RATE_LIMIT_LOGIN).await?;
+    let ip = get_client_ip(&HeaderMap::new(), None).unwrap_or_else(|| "unknown".to_string());
+    limiter().check_rate_limit(&ip, RATE_LIMIT_LOGIN).await?;
 
     let auth_service = AuthService::new(state.clone());
     let result = auth_service.register(&request).await?;
@@ -82,16 +85,15 @@ pub async fn register(
 /// Login user and return tokens
 pub async fn login(
     State(state): State<Arc<AppState>>,
-    State(rate_limit): State<Arc<RateLimitState>>,
     Json(request): Json<LoginRequest>,
-) -> AuthResponse<TokenResponse> {
+) -> AuthResponse<Json<TokenResponse>> {
     // Validate request
     if let Err(errors) = request.validate() {
         return Err(AuthError::InternalError); // Simplified error handling
     }
 
     // Check rate limit (by username for login)
-    rate_limit.check_rate_limit(&request.username, RATE_LIMIT_LOGIN).await?;
+    limiter().check_rate_limit(&request.username, RATE_LIMIT_LOGIN).await?;
 
     let auth_service = AuthService::new(state.clone());
     let result = auth_service.login(&request).await?;
@@ -103,17 +105,16 @@ pub async fn login(
 /// Refresh access token
 pub async fn refresh(
     State(state): State<Arc<AppState>>,
-    State(rate_limit): State<Arc<RateLimitState>>,
     Json(request): Json<RefreshTokenRequest>,
-) -> AuthResponse<TokenResponse> {
+) -> AuthResponse<Json<TokenResponse>> {
     // Validate request
     if let Err(errors) = request.validate() {
         return Err(AuthError::InternalError); // Simplified error handling
     }
 
     // Check rate limit (by refresh token for refresh)
-    let token_hash = Self::hash_token(&request.refresh_token);
-    rate_limit.check_rate_limit(&token_hash, RATE_LIMIT_REFRESH).await?;
+    let token_hash = hash_token(&request.refresh_token);
+    limiter().check_rate_limit(&token_hash, RATE_LIMIT_REFRESH).await?;
 
     let auth_service = AuthService::new(state.clone());
     let result = auth_service.refresh_token(&request.refresh_token).await?;
@@ -126,7 +127,7 @@ pub async fn refresh(
 pub async fn logout(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-) -> AuthResponse<Json<serde_json::Value>> {
+) -> AuthResponse<Response> {
     let auth_header = headers.get("authorization")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
@@ -141,9 +142,7 @@ pub async fn logout(
     let response = Response::builder()
         .status(axum::http::StatusCode::OK)
         .header("set-cookie", "refresh_token=; Path=/api; HttpOnly; Secure; SameSite=Lax; Max-Age=0")
-        .body(axum::body::boxed(axum::body::Full::from(
-            r#"{"message":"Successfully logged out"}"#,
-        )))
+        .body(axum::body::Body::from(r#"{"message":"Successfully logged out"}"#))
         .unwrap();
 
     Ok(response)
@@ -153,10 +152,14 @@ pub async fn logout(
 pub async fn csrf(
     State(_state): State<Arc<AppState>>,
     csrf_token: CsrfToken,
-) -> AuthResponse<Json<CsrfResponse>> {
-    Ok(Json(CsrfResponse {
-        csrf_token: csrf_token.token(),
-    }))
+) -> AuthResponse<Response> {
+    let token = csrf_token.token().to_string();
+    let mut response = Json(CsrfResponse { csrf_token: token.clone() }).into_response();
+    response.headers_mut().insert(header::SET_COOKIE,
+        axum::http::HeaderValue::from_str(&format!(
+            "csrf_token={token}; Path=/; Max-Age=86400; SameSite=Lax"
+        )).expect("generated token is safe for cookie"));
+    Ok(response)
 }
 
 /// Get current user information
@@ -173,7 +176,6 @@ pub async fn me(
 /// Initiate password reset
 pub async fn forgot_password(
     State(state): State<Arc<AppState>>,
-    State(rate_limit): State<Arc<RateLimitState>>,
     Json(request): Json<ForgotPasswordRequest>,
 ) -> AuthResponse<Json<PasswordResetResponse>> {
     // Validate request
@@ -182,7 +184,7 @@ pub async fn forgot_password(
     }
 
     // Check rate limit (by email for forgot password)
-    rate_limit.check_rate_limit(&request.email, RATE_LIMIT_FORGOT_PASSWORD).await?;
+    limiter().check_rate_limit(&request.email, RATE_LIMIT_FORGOT_PASSWORD).await?;
 
     let password_reset_service = PasswordResetService::new(state.clone());
     password_reset_service.initiate_forgot_password(&request.email).await?;
@@ -219,9 +221,5 @@ fn hash_token(token: &str) -> String {
 }
 
 /// Type alias for auth responses
-type AuthResponse<T> = Result<T, ApiError>;
+type AuthResponse<T> = Result<T, AuthError>;
 
-/// Apply timeout layer to handlers
-pub fn apply_timeout_layer() -> TimeoutLayer {
-    TimeoutLayer::new(Duration::from_secs(30))
-}
