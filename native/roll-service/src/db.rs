@@ -17,6 +17,7 @@ pub struct Issue {
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub catalog_issue_id: Option<i32>,
     pub rating: Option<f64>,
+    pub user_id: i32,
 }
 
 /// Database model for a thread.

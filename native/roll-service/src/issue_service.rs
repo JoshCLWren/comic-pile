@@ -72,7 +72,7 @@ impl IssueService {
         // Start a transaction for atomic operations
         let mut tx = self.pool.begin().await?;
 
-        // Verify ownership and get the issue
+        // Verify ownership and get the issue with FOR UPDATE for concurrency control
         let issue = sqlx::query_as!(
             Issue,
             r#"
@@ -80,6 +80,7 @@ impl IssueService {
             FROM issues i
             JOIN threads t ON i.thread_id = t.id
             WHERE i.id = $1 AND t.user_id = $2
+            FOR UPDATE
             "#,
             issue_id,
             user.id
@@ -94,13 +95,16 @@ impl IssueService {
 
         let thread_id = issue.thread_id;
 
-        // Check if this is a read operation (status is "read")
+        // Check if this is a read operation (status is "read" or "unread")
         let is_read_operation = request.status.as_deref() == Some("read");
+        let is_unread_operation = request.status.as_deref() == Some("unread");
         let is_rating_only = request.rating.is_some() && request.status.is_none();
 
         // Validate rating if provided
         if let Some(rating) = request.rating {
-            if rating < 0.5 || rating > 5.0 || (rating * 2.0).fract() != 0.0 {
+            // Use integer arithmetic to avoid floating-point precision issues
+            let rating_int = (rating * 2.0) as i32;
+            if rating_int < 1 || rating_int > 10 {
                 return Err(ServiceError::BadRequest(
                     "Rating must be between 0.5 and 5.0 in 0.5 increments",
                 ));
@@ -116,9 +120,13 @@ impl IssueService {
             if issue.read_at.is_some() {
                 // Issue already read - no duplicate read event
             } else {
+                // Set default rating to 3.5 if status is "read" and no rating provided
+                let final_rating_for_update = request.rating.unwrap_or(3.5);
+
                 // Mark as read
                 sqlx::query!(
-                    "UPDATE issues SET status = 'read', read_at = NOW() WHERE id = $1",
+                    "UPDATE issues SET status = 'read', read_at = NOW(), rating = $1 WHERE id = $2",
+                    final_rating_for_update,
                     issue_id
                 )
                 .execute(&mut *tx)
@@ -141,7 +149,20 @@ impl IssueService {
                 .await?;
 
                 read_event_created = true;
+                final_rating = Some(final_rating_for_update);
             }
+        } else if is_unread_operation {
+            // Handle explicit unread correction
+            if issue.read_at.is_some() {
+                // Issue is read - mark as unread
+                sqlx::query!(
+                    "UPDATE issues SET status = 'unread', read_at = NULL WHERE id = $1",
+                    issue_id
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
+            // If already unread, no change
         }
 
         // Handle rating change
@@ -217,7 +238,7 @@ impl IssueService {
         })
     }
 
-    /// Update a thread's next unread issue pointer.
+    /// Update a thread's next unread issue pointer and activity fields.
     async fn update_thread_next_unread(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -263,7 +284,7 @@ impl IssueService {
 
         let status = if has_unread { "active" } else { "completed" };
         sqlx::query!(
-            "UPDATE threads SET status = $1 WHERE id = $2",
+            "UPDATE threads SET status = $1, last_activity_at = NOW() WHERE id = $2",
             status,
             thread_id
         )
