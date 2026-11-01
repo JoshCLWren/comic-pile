@@ -894,6 +894,7 @@ async def _merge_adopted_nodes(
     series_decisions: dict[str, SourceBackedDecision],
     *,
     new_node_lane_id: str = "default",
+    preserve_existing_order: bool = False,
 ) -> AdoptionMergeReport:
     """Merge approved source entries into the plan node set in CBL order.
 
@@ -903,7 +904,8 @@ async def _merge_adopted_nodes(
     already-present nodes for those issues from the plan record so membership
     and source order cannot keep leftovers the reader just dropped. Missing
     importable entries are materialized only when explicitly approved;
-    unresolved/ambiguous entries are never guessed.
+    unresolved/ambiguous entries are never guessed. Targeted adoption sets
+    ``preserve_existing_order`` to append new nodes after the approved order.
 
     Returns:
         The machine-readable reused/created/excluded/unresolved source positions
@@ -1061,28 +1063,22 @@ async def _merge_adopted_nodes(
         drop_source_path=source_path,
         drop_source_positions=excluded_positions,
     )
-    # Restore CBL source order so persisted plan positions match the
-    # preview's final_adopted_order. Adopted nodes come first in
-    # source-processing order; remaining existing nodes keep their original
-    # relative order. All positions are renumbered contiguously from zero.
-    adopted_unique = list(dict.fromkeys(adopted_node_order))
-    adopted_set = set(adopted_unique)
-    reordered: list[dict[str, object]] = []
-    for node_id in adopted_unique:
-        for node in existing_nodes:
-            if str(node.get("id")) == node_id:
+    # A source-owned adoption follows its preview. Targeted adoption instead
+    # extends a reader's existing order, without moving its approved nodes.
+    if not preserve_existing_order:
+        remaining_by_id = {str(node.get("id")): node for node in existing_nodes}
+        reordered: list[dict[str, object]] = []
+        for node_id in dict.fromkeys(adopted_node_order):
+            node = remaining_by_id.pop(node_id, None)
+            if node is not None:
                 reordered.append(node)
-                break
-    for node in existing_nodes:
-        if str(node.get("id")) not in adopted_set:
-            reordered.append(node)
-    existing_nodes = reordered
+        existing_nodes = reordered + list(remaining_by_id.values())
 
-    position = 0
-    for node in existing_nodes:
-        if isinstance(node.get("position"), int):
-            node["position"] = position
-            position += 1
+        lane_positions: dict[str, int] = {}
+        for node in existing_nodes:
+            lane_id = str(node.get("lane_id", "default"))
+            node["position"] = lane_positions.get(lane_id, 0)
+            lane_positions[lane_id] = int(node["position"]) + 1
 
     plan.lanes_json = plan.lanes_json or _default_lane()
     plan.nodes_json = existing_nodes
