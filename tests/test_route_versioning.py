@@ -265,3 +265,17 @@ def test_no_new_bare_api_client_routes() -> None:
             f"or add it to the grandfathered set in test_route_versioning.py "
             f"if it is a legacy route."
         )
+
+
+def test_threads_collection_is_only_the_native_v2_resource() -> None:
+    """The retired v1/bare Python collection no longer has an HTTP handler."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+
+    # Creation remains a POST on the same prefix; only the collection read was
+    # retired to the native v2 resource.
+    assert "GET" not in methods_by_path["/api/v1/threads/"]
+    assert "GET" not in methods_by_path["/api/threads/"]
+    assert "POST" in methods_by_path["/api/v1/threads/"]
+    assert "POST" in methods_by_path["/api/threads/"]
+    assert "/api/v1/threads/stale" in methods_by_path

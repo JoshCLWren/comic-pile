@@ -10,11 +10,8 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from starlette.requests import Request
-from types import SimpleNamespace
-
-from app.api.thread import list_threads
 from app.models import Thread
+from app.services.thread_service import list_queue_threads
 from tests.conftest import get_or_create_user_async
 
 
@@ -42,22 +39,10 @@ async def test_mutation_reset_keeps_first_page_bounded(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = __import__("inspect").unwrap(list_threads)
 
     # First page before mutation
-    page1 = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    page1 = await list_queue_threads(
+        async_db, user.id,
         search=None,
         sort="position",
         page_size=50,
@@ -76,10 +61,8 @@ async def test_mutation_reset_keeps_first_page_bounded(
     await async_db.commit()
 
     # Re-fetch first page — must remain bounded (<= 50 items) with no gaps
-    page_after = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    page_after = await list_queue_threads(
+        async_db, user.id,
         search=None,
         sort="position",
         page_size=50,
@@ -115,26 +98,14 @@ async def test_pagination_no_gaps_or_duplicates_after_mutation(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = __import__("inspect").unwrap(list_threads)
 
     # Fetch all threads to get IDs
     all_ids_before: list[int] = []
     token = None
     for _ in range(10):
-        resp = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
-            search=None,
+        resp = await list_queue_threads(
+        async_db, user.id,
+        search=None,
             sort="position",
             page_size=3,
             page_token=token,
@@ -159,11 +130,9 @@ async def test_pagination_no_gaps_or_duplicates_after_mutation(
     all_ids_after: list[int] = []
     token = None
     for _ in range(10):
-        resp = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
-            search=None,
+        resp = await list_queue_threads(
+        async_db, user.id,
+        search=None,
             sort="position",
             page_size=3,
             page_token=token,
@@ -202,21 +171,9 @@ async def test_large_library_remains_bounded(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = __import__("inspect").unwrap(list_threads)
 
-    resp = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    resp = await list_queue_threads(
+        async_db, user.id,
         search=None,
         sort="position",
         page_size=50,

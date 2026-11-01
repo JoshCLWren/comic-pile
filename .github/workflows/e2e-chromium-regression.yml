@@ -44,7 +44,13 @@ concurrency:
 
 env:
   CI: 'true'
+  # Native Rust v2 and Python share this process-visible credential epoch.
+  ENVIRONMENT: 'test'
   SECRET_KEY: e2e-regression-discovery-secret-key
+  RUST_ROLL_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/comic_pile_e2e_regression
+  RUST_ROLL_JWT_SECRET: e2e-regression-discovery-secret-key
+  RUST_ROLL_ENV: development
+  RUST_ROLL_BIND: 127.0.0.1:8010
   # Browser suites register users and create fixtures at test speed; the
   # e2e backend contract (docker-compose.test.yml) disables rate limiting
   # for the disposable test database.
@@ -101,26 +107,47 @@ jobs:
       - name: Install Chromium
         run: pnpm --filter frontend exec playwright install --with-deps chromium
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build native v2 service
+        run: cargo build --release --locked --manifest-path native/roll-service/Cargo.toml
+
       - name: Apply migrations
         run: .venv/bin/alembic upgrade head
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/comic_pile_e2e_regression
 
-      - name: Start backend
+      - name: Start backend and native v2 ingress
         run: |
-          nohup .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 9000 --workers 2 \
+          nohup .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 9001 --workers 2 \
             > /tmp/backend.log 2>&1 &
+          nohup native/roll-service/target/release/comicpile-roll-service \
+            > /tmp/native.log 2>&1 &
+          nohup .venv/bin/python scripts/e2e_native_ingress.py \
+            > /tmp/ingress.log 2>&1 &
           ready=0
           for i in $(seq 1 45); do
-            if curl -fsS http://127.0.0.1:9000/health >/dev/null; then
+            python_ready=0
+            native_ready=0
+            if curl -fsS http://127.0.0.1:9001/health >/dev/null; then
+              python_ready=1
+            fi
+            if [ "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              http://127.0.0.1:8010/api/v2/threads || true)" = "401" ]; then
+              native_ready=1
+            fi
+            if [ "$python_ready" -eq 1 ] && [ "$native_ready" -eq 1 ] \
+              && curl -fsS http://127.0.0.1:9000/health >/dev/null; then
               ready=1
               break
             fi
             sleep 2
           done
           if [ "$ready" -ne 1 ]; then
-            echo "::error::Backend failed to become healthy on :9000"
+            echo "::error::Backend or native v2 ingress failed on :9000"
             tail -n 200 /tmp/backend.log || true
+            tail -n 200 /tmp/native.log || true
+            tail -n 200 /tmp/ingress.log || true
             exit 1
           fi
         env:
@@ -143,6 +170,8 @@ jobs:
         run: |
           mkdir -p frontend/test-results/regression
           cp /tmp/backend.log frontend/test-results/regression/backend.log || true
+          cp /tmp/native.log frontend/test-results/regression/native.log || true
+          cp /tmp/ingress.log frontend/test-results/regression/ingress.log || true
 
       - name: Publish run summary
         if: always()

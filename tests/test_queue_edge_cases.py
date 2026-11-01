@@ -23,11 +23,11 @@ async def test_move_to_position_clamps_to_max(
     """Moving to position > max_position returns HTTP 400 with error message."""
     thread_id = sample_data["threads"][0].id
 
-    response = await auth_client.get("/api/v1/threads/")
-    data = response.json()
-    threads = data["threads"]
-    active_threads = [t for t in threads if t["status"] == "active"]
-    max_position = len(active_threads)
+    max_position = sum(
+        1
+        for thread in sample_data["threads"]
+        if thread.status == "active" and thread.queue_position >= 1
+    )
 
     response = await auth_client.put(
         f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
@@ -47,11 +47,11 @@ async def test_move_to_position_returns_400_for_position_beyond_queue(
     """Moving to position > max_position returns HTTP 400 with error message."""
     thread_id = sample_data["threads"][0].id
 
-    response = await auth_client.get("/api/v1/threads/")
-    data = response.json()
-    threads = data["threads"]
-    active_threads = [t for t in threads if t["status"] == "active"]
-    max_position = len(active_threads)
+    max_position = sum(
+        1
+        for thread in sample_data["threads"]
+        if thread.status == "active" and thread.queue_position >= 1
+    )
 
     # Attempt to move to position beyond the queue length
     response = await auth_client.put(

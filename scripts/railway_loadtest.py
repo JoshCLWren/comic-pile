@@ -61,7 +61,7 @@ class Route:
 ROUTES: Final[dict[str, Route]] = {
     "health": Route("health", "/health", False),
     "csrf": Route("csrf", "/api/v1/auth/csrf", False),
-    "threads": Route("threads", "/api/v1/threads/", True),
+    "threads": Route("threads", "/api/v2/threads", True),
 }
 
 PROFILES: Final[dict[str, tuple[str, ...]]] = {

@@ -9,15 +9,13 @@ Covers the acceptance criteria for issue #931:
 """
 
 from datetime import UTC, datetime, timedelta
-from inspect import unwrap
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from starlette.requests import Request
 
-from app.api.thread import list_threads
+from app.services.thread_service import list_queue_threads
 from app.models import Thread
 from app.models.user import User
 from app.services.queue_pagination import (
@@ -221,20 +219,8 @@ async def test_list_threads_empty_result(
     user = await get_or_create_user_async(async_db)
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
-    response = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    response = await list_queue_threads(
+        async_db, user.id,
         search=None,
         sort="position",
         page_size=50,
@@ -270,20 +256,8 @@ async def test_list_threads_position_sort(
         await async_db.refresh(t)
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
-    response = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    response = await list_queue_threads(
+        async_db, user.id,
         search=None,
         sort="position",
         page_size=50,
@@ -315,20 +289,8 @@ async def test_list_threads_title_sort(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
-    response = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    response = await list_queue_threads(
+        async_db, user.id,
         search=None,
         sort="title",
         page_size=50,
@@ -369,20 +331,8 @@ async def test_list_threads_created_sort(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
-    response = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    response = await list_queue_threads(
+        async_db, user.id,
         search=None,
         sort="created",
         page_size=50,
@@ -414,24 +364,13 @@ async def test_list_threads_multi_page_position(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
 
     all_ids: list[int] = []
     token = None
     for _ in range(5):
-        response = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
+        response = await list_queue_threads(
+            async_db,
+            user.id,
             search=None,
             sort="position",
             page_size=2,
@@ -468,25 +407,13 @@ async def test_list_threads_multi_page_title(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
 
     all_titles: list[str] = []
     token = None
     for _ in range(5):
-        response = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
-            search=None,
+        response = await list_queue_threads(
+        async_db, user.id,
+        search=None,
             sort="title",
             page_size=2,
             page_token=token,
@@ -529,25 +456,13 @@ async def test_list_threads_multi_page_created(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
 
     all_titles: list[str] = []
     token = None
     for _ in range(5):
-        response = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
-            search=None,
+        response = await list_queue_threads(
+        async_db, user.id,
+        search=None,
             sort="created",
             page_size=2,
             page_token=token,
@@ -583,22 +498,10 @@ async def test_list_threads_stale_cursor_rejected_on_sort_change(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
 
     # Get first page with position sort
-    page1 = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    page1 = await list_queue_threads(
+        async_db, user.id,
         search=None,
         sort="position",
         page_size=2,
@@ -608,11 +511,9 @@ async def test_list_threads_stale_cursor_rejected_on_sort_change(
 
     # Try to use that cursor with a different sort — should fail
     with pytest.raises(Exception, match="does not match"):
-        await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
-            search=None,
+        await list_queue_threads(
+        async_db, user.id,
+        search=None,
             sort="title",
             page_size=2,
             page_token=page1.next_page_token,
@@ -641,22 +542,10 @@ async def test_list_threads_stale_cursor_rejected_on_search_change(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
 
     # Get first page with search="bat"
-    page1 = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    page1 = await list_queue_threads(
+        async_db, user.id,
         search="bat",
         sort="title",
         page_size=1,
@@ -666,11 +555,9 @@ async def test_list_threads_stale_cursor_rejected_on_search_change(
 
     # Try to use that cursor with a different search — should fail
     with pytest.raises(Exception, match="does not match"):
-        await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
-            search="flash",
+        await list_queue_threads(
+        async_db, user.id,
+        search="flash",
             sort="title",
             page_size=1,
             page_token=page1.next_page_token,
@@ -710,30 +597,16 @@ async def test_list_threads_ownership_isolation(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
 
-    resp1 = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user1.id),
-        db=async_db,
+    resp1 = await list_queue_threads(
+        async_db, user1.id,
         search=None,
         sort="position",
         page_size=50,
         page_token=None,
     )
-    resp2 = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user2.id),
-        db=async_db,
+    resp2 = await list_queue_threads(
+        async_db, user2.id,
         search=None,
         sort="position",
         page_size=50,
@@ -769,24 +642,13 @@ async def test_list_threads_duplicate_positions_no_gaps(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
 
     all_ids: list[int] = []
     token = None
     for _ in range(5):
-        response = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
+        response = await list_queue_threads(
+            async_db,
+            user.id,
             search=None,
             sort="position",
             page_size=2,
@@ -823,20 +685,8 @@ async def test_list_threads_search_filter(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
-    response = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    response = await list_queue_threads(
+        async_db, user.id,
         search="bat",
         sort="position",
         page_size=50,
@@ -849,37 +699,6 @@ async def test_list_threads_search_filter(
 
 
 @pytest.mark.asyncio
-async def test_list_threads_invalid_sort_param(
-    async_db: AsyncSession,
-    db_engine: AsyncEngine,
-) -> None:
-    """Invalid sort parameter returns 400."""
-    user = await get_or_create_user_async(async_db)
-    await async_db.commit()
-
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
-    with pytest.raises(Exception, match="sort must be one of"):
-        await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
-            search=None,
-            sort="bogus",
-            page_size=50,
-            page_token=None,
-        )
-
-
-@pytest.mark.asyncio
 async def test_list_threads_invalid_page_token(
     async_db: AsyncSession,
     db_engine: AsyncEngine,
@@ -888,22 +707,10 @@ async def test_list_threads_invalid_page_token(
     user = await get_or_create_user_async(async_db)
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
     with pytest.raises(Exception, match="Invalid Queue page token"):
-        await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
-            search=None,
+        await list_queue_threads(
+        async_db, user.id,
+        search=None,
             sort="position",
             page_size=50,
             page_token="definitely-not-valid!!",
@@ -932,22 +739,10 @@ async def test_list_threads_last_page_has_no_token(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
 
     # Page size equals total — should have no next_page_token
-    response = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    response = await list_queue_threads(
+        async_db, user.id,
         search=None,
         sort="position",
         page_size=3,
@@ -979,20 +774,8 @@ async def test_list_threads_cursor_values_match_last_row(
     await async_db.flush()
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
-    route = unwrap(list_threads)
-    response = await route(
-        request=request,
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    response = await list_queue_threads(
+        async_db, user.id,
         search=None,
         sort="position",
         page_size=2,
@@ -1006,19 +789,6 @@ async def test_list_threads_cursor_values_match_last_row(
         "1" if last.is_blocked else "0",
         str(last.queue_position),
         str(last.id),
-    )
-
-
-def _queue_request() -> Request:
-    """Build a minimal GET request for direct list_threads invocation."""
-    return Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
     )
 
 
@@ -1076,19 +846,15 @@ async def test_list_threads_position_blocked_grouping_across_page_boundary(
     await async_db.flush()
     await async_db.commit()
 
-    request = _queue_request()
-    route = unwrap(list_threads)
-
     first_page_titles: list[str] = []
     all_titles: list[str] = []
     all_ids: list[int] = []
     blocked_flags: list[bool] = []
     token = None
     for page_index in range(5):
-        response = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
+        response = await list_queue_threads(
+            async_db,
+            user.id,
             search=None,
             sort="position",
             page_size=2,
@@ -1141,16 +907,12 @@ async def test_list_threads_position_tied_sort_across_page_boundary(
     await async_db.flush()
     await async_db.commit()
 
-    request = _queue_request()
-    route = unwrap(list_threads)
-
     all_ids: list[int] = []
     token = None
     for _ in range(5):
-        response = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
+        response = await list_queue_threads(
+            async_db,
+            user.id,
             search=None,
             sort="position",
             page_size=2,
@@ -1188,17 +950,12 @@ async def test_list_threads_title_tied_sort_across_page_boundary(
     await async_db.flush()
     await async_db.commit()
 
-    request = _queue_request()
-    route = unwrap(list_threads)
-
     all_ids: list[int] = []
     token = None
     for _ in range(5):
-        response = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
-            search=None,
+        response = await list_queue_threads(
+        async_db, user.id,
+        search=None,
             sort="title",
             page_size=2,
             page_token=token,
@@ -1236,17 +993,12 @@ async def test_list_threads_created_tied_sort_across_page_boundary(
     await async_db.flush()
     await async_db.commit()
 
-    request = _queue_request()
-    route = unwrap(list_threads)
-
     all_ids: list[int] = []
     token = None
     for _ in range(5):
-        response = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
-            search=None,
+        response = await list_queue_threads(
+        async_db, user.id,
+        search=None,
             sort="created",
             page_size=2,
             page_token=token,

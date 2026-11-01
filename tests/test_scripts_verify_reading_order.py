@@ -58,7 +58,7 @@ def _make_get_handler(
     """Create a mock requests.get that routes responses by URL pattern."""
 
     def _get(url: str, **kwargs: object) -> MagicMock:
-        if "/api/threads/" in url and "/v1/" not in url:
+        if "/api/v2/threads" in url:
             return _mock_response(list(threads.values()))
         if "/issues" in url and "dependencies" not in url:
             for thread_id_str, thread_issues in issues.items():

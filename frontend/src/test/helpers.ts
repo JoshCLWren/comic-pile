@@ -589,7 +589,7 @@ export function extractThreadsFromResponse(response: unknown): Thread[] {
 export async function navigateToRatePage(page: Page): Promise<void> {
   // SAFETY: the api client reads this global token slot, which the test sets and clears directly
   const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
-  const threadsResponse = await page.request.get('/api/threads/', {
+  const threadsResponse = await page.request.get('/api/v2/threads', {
     headers: { Authorization: `Bearer ${token}` },
   })
   const threadsData = await threadsResponse.json()

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Issue, ReadingSession, Thread, User
+from app.services.thread_service import list_queue_threads
 from tests.conftest import get_or_create_user_async
 
 
@@ -700,14 +701,14 @@ async def test_list_threads_issues_remaining_correct(
             )
     await async_db.commit()
 
-    response = await auth_client.get("/api/v1/threads/?page_size=10")
-    assert response.status_code == 200
-    data = response.json()
+    page = await list_queue_threads(
+        async_db, user.id, search=None, sort="position", page_size=10, page_token=None
+    )
 
-    thread_map = {t["id"]: t for t in data["threads"]}
+    thread_map = {t.id: t for t in page.threads}
     for tid, expected in expected_remaining.items():
-        assert thread_map[tid]["issues_remaining"] == expected, (
-            f"Thread {tid} expected {expected} unread, got {thread_map[tid]['issues_remaining']}"
+        assert thread_map[tid].issues_remaining == expected, (
+            f"Thread {tid} expected {expected} unread, got {thread_map[tid].issues_remaining}"
         )
 
 
@@ -756,14 +757,14 @@ async def test_list_threads_mixed_migrated_unmigrated(
         )
     await async_db.commit()
 
-    response = await auth_client.get("/api/v1/threads/?page_size=10")
-    assert response.status_code == 200
-    data = response.json()
+    page = await list_queue_threads(
+        async_db, user.id, search=None, sort="position", page_size=10, page_token=None
+    )
 
-    thread_map = {t["id"]: t for t in data["threads"]}
+    thread_map = {t.id: t for t in page.threads}
 
-    assert thread_map[unmigrated.id]["issues_remaining"] == 42
-    assert thread_map[migrated.id]["issues_remaining"] == 3
+    assert thread_map[unmigrated.id].issues_remaining == 42
+    assert thread_map[migrated.id].issues_remaining == 3
 
 
 @pytest.mark.asyncio
@@ -813,17 +814,17 @@ async def test_bulk_issues_remaining_no_n_plus_one(
 
     event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
     try:
-        response = await auth_client.get("/api/v1/threads/?page_size=50")
+        page = await list_queue_threads(
+            async_db, user.id, search=None, sort="position", page_size=50, page_token=None
+        )
     finally:
         event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
 
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data["threads"]) == thread_count
+    assert len(page.threads) == thread_count
 
-    for t_resp in data["threads"]:
-        assert t_resp["issues_remaining"] == 2, (
-            f"Thread {t_resp['id']} expected 2 unread, got {t_resp['issues_remaining']}"
+    for t_resp in page.threads:
+        assert t_resp.issues_remaining == 2, (
+            f"Thread {t_resp.id} expected 2 unread, got {t_resp.issues_remaining}"
         )
 
     per_thread_counts = [
@@ -1317,11 +1318,11 @@ async def test_queue_items_show_normalized_format(
         async_db.add(thread)
     await async_db.commit()
 
-    response = await auth_client.get("/api/v1/threads/")
-    assert response.status_code == 200
-    data = response.json()
+    page = await list_queue_threads(
+        async_db, user.id, search=None, sort="position", page_size=50, page_token=None
+    )
 
-    formats = {item["format"] for item in data["threads"]}
+    formats = {item.format for item in page.threads}
     assert "Comic" in formats
     assert "Digital" in formats
     assert "Manga" in formats
