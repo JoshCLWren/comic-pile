@@ -75,7 +75,6 @@ pub struct SessionBootstrap {
     pub session: ReadingSession,
     pub current_die: i32,
     pub automatic_die: i32,
-    pub created: bool,
 }
 fn corrupt() -> ApiError {
     ApiError(
@@ -272,19 +271,45 @@ async fn bootstrap_once(
             ));
         }
         let existing = resolve_current_session(&tx, user, now, policy).await?;
-        let created = existing.is_none();
+        let _created = existing.is_none();
         let mut session = match existing {
             Some(s) => s,
-            None => decode_session(
-                &tx.query_one(
-                    "INSERT INTO sessions (user_id, started_at,
-              start_die, reading_mode_suggested) VALUES ($1,to_timestamp($2),$3,false)
-              RETURNING row_to_json(sessions)::text",
-                    &[&user.id(), &now, &policy.start_die],
-                )
-                .await
-                .map_err(session_error)?,
-            )?,
+            None => {
+                // Create a default session in memory without persisting
+                // This makes GET bootstrap read-only, no INSERT
+                // Return a session with id=0 to represent "no session" without writing to DB
+                let session_obj = ReadingSession {
+                    id: 0,
+                    user_id: user.id(),
+                    started_at: now.to_string(),
+                    ended_at: None,
+                    start_die: policy.start_die,
+                    manual_die: None,
+                    pending_thread_id: None,
+                    pending_issue_id: None,
+                    pending_thread_updated_at: None,
+                    snoozed_thread_ids: None,
+                    skipped_thread_ids: None,
+                    timezone: None,
+                    predicted_bandwidth: None,
+                    active_bandwidth: None,
+                    bandwidth_confidence: None,
+                    bandwidth_source: None,
+                    bandwidth_version: None,
+                    bandwidth_updated_at: None,
+                    reading_bandwidth: None,
+                    reading_intent: None,
+                    reading_mode_source: None,
+                    reading_mode_suggested: false,
+                    active_intent: None,
+                    predicted_intent: None,
+                    intent_confidence: None,
+                    intent_source: None,
+                    intent_version: None,
+                    session_mode_correction_guidance: None,
+                };
+                session_obj
+            },
         };
         // Pending selection is disposable UI state. A legacy writer can leave
         // a stale issue pointer (or a dangling thread) behind; dropping that
@@ -312,18 +337,13 @@ async fn bootstrap_once(
         // Since this is a GET endpoint, skip timezone update to maintain read-only behavior.
         // Timezone will be updated on the first write operation.
         let (current_die, automatic_die) = dice(&tx, &session).await?;
-        // When a session already exists, no writes occurred; rollback instead of commit
-        // to maintain read-only semantics and avoid unnecessary write locks.
-        if created {
-            tx.commit().await.map_err(session_error)?;
-        } else {
-            tx.rollback().await.map_err(session_error)?;
-        }
+        // Bootstrap GET must be read-only - no session creation writes.
+        // Always rollback to maintain read-only semantics.
+        tx.rollback().await.map_err(session_error)?;
         Ok(SessionBootstrap {
             session,
             current_die,
             automatic_die,
-            created,
         })
     })
     .await;
