@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -26,10 +27,14 @@ vi.mock('../services/api-identity', () => ({
 
 const mockedInboxApi = vi.mocked(identityInboxApi)
 
-function createWrapper() {
+function createWrapper(path = '/queue') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    return (
+      <MemoryRouter initialEntries={[path]}>
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      </MemoryRouter>
+    )
   }
 }
 
@@ -218,6 +223,14 @@ describe('useIdentityInboxStatus', () => {
     await waitFor(() => expect(result.current.data).toBeDefined())
     expect(queryKeys.identityInbox.list({ offset: 0, limit: 1 })).toBeDefined()
     expect(mockedInboxApi.list).toHaveBeenCalledWith(0, 1)
+  })
+
+  it('suppresses the totals probe while the inbox page owns the total', async () => {
+    const wrapper = createWrapper('/identity-inbox')
+    const { result } = renderHook(() => useIdentityInboxStatus(), { wrapper })
+
+    await waitFor(() => expect(result.current.fetchStatus).toBe('idle'))
+    expect(mockedInboxApi.list).not.toHaveBeenCalled()
   })
 })
 
