@@ -305,3 +305,137 @@ async def test_session_bootstrap_parity(scenario):
         async with admin.begin() as c:
             await c.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         await admin.dispose()
+
+
+@pytest.mark.asyncio
+async def test_corrupt_session_json_recovers_in_place_and_keeps_pending_roll():
+    """A session row with one unreadable field must not wedge Roll forever."""
+    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
+    schema = f"native_session_corrupt_{uuid4().hex}"
+    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    async with admin.begin() as c:
+        await c.execute(text(f'CREATE SCHEMA "{schema}"'))
+    engine = create_async_engine(
+        url.replace("postgresql://", "postgresql+asyncpg://"),
+        connect_args={"server_settings": {"search_path": schema}},
+    )
+    try:
+        async with engine.begin() as c:
+            await c.run_sync(Base.metadata.create_all)
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            reader = User(username="corrupt-reader")
+            db.add(reader)
+            await db.flush()
+            thread = Thread(
+                user_id=reader.id,
+                title="Pending",
+                format="Comic",
+                queue_position=1,
+                total_issues=2,
+            )
+            db.add(thread)
+            await db.flush()
+            issue = Issue(
+                thread_id=thread.id, issue_number="1", position=1, status="unread"
+            )
+            db.add(issue)
+            await db.flush()
+            session = ReadingSession(
+                user_id=reader.id,
+                started_at=NOW - timedelta(hours=8),
+                start_die=8,
+                pending_thread_id=thread.id,
+                pending_issue_id=issue.id,
+                pending_thread_updated_at=NOW - timedelta(minutes=5),
+            )
+            db.add(session)
+            await db.flush()
+            db.add(
+                Event(
+                    session_id=session.id,
+                    type="roll",
+                    selected_thread_id=thread.id,
+                    result=4,
+                    timestamp=NOW - timedelta(minutes=6),
+                )
+            )
+            await db.commit()
+            session_id, thread_id, issue_id = session.id, thread.id, issue.id
+        # A persisted JSON string cannot deserialize into Vec<i32>. This is the
+        # class of drift that previously made every bootstrap return 500.
+        async with engine.begin() as c:
+            await c.execute(
+                text(
+                    "UPDATE sessions SET snoozed_thread_ids = '\"corrupt\"'::json "
+                    "WHERE id=:id"
+                ),
+                {"id": session_id},
+            )
+
+        separator = "&" if "?" in url else "?"
+        env = {
+            **os.environ,
+            "RUST_ROLL_DATABASE_URL": (
+                f"{url}{separator}application_name={schema}"
+                "&options=-csearch_path%3D" + schema
+            ),
+            "RUST_ROLL_JWT_SECRET": SECRET,
+            "RUST_ROLL_TEST_TOKEN": jwt.encode(
+                {"sub": "corrupt-reader", "jti": "fixture", "type": "access"},
+                SECRET,
+                "HS256",
+            ),
+            "RUST_ROLL_TEST_NOW": str(NOW.timestamp()),
+        }
+
+        async def native():
+            p = await asyncio.create_subprocess_exec(
+                str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
+                env=env,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                out, err = await asyncio.wait_for(p.communicate(), 20)
+                return p.returncode, json.loads(out) if out else None, err
+            finally:
+                if p.returncode is None:
+                    p.kill()
+                    await p.wait()
+
+        code, body, err = await native()
+        assert code == 0, err.decode()
+        # Repair keeps the same session so pending state and event history survive.
+        assert body["created"] is False
+        assert body["session"]["id"] == session_id
+        assert body["session"]["pending_thread_id"] == thread_id
+        assert body["session"]["pending_issue_id"] == issue_id
+        assert body["session"]["snoozed_thread_ids"] is None
+
+        async with engine.connect() as c:
+            assert await c.scalar(text("SELECT count(*) FROM sessions")) == 1
+            assert await c.scalar(
+                text("SELECT ended_at FROM sessions WHERE id=:id"), {"id": session_id}
+            ) is None
+            assert await c.scalar(text("SELECT count(*) FROM snapshots")) == 0
+            assert await c.scalar(
+                text(
+                    "SELECT count(*) FROM events WHERE session_id=:id AND type='roll'"
+                ),
+                {"id": session_id},
+            ) == 1
+
+        # A second bootstrap is stable: no replacement session, no checkpoint churn.
+        code, again, err = await native()
+        assert code == 0, err.decode()
+        assert again["created"] is False
+        assert again["session"]["id"] == session_id
+        assert again["session"]["pending_issue_id"] == issue_id
+        async with engine.connect() as c:
+            assert await c.scalar(text("SELECT count(*) FROM sessions")) == 1
+            assert await c.scalar(text("SELECT count(*) FROM snapshots")) == 0
+    finally:
+        await engine.dispose()
+        async with admin.begin() as c:
+            await c.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        await admin.dispose()

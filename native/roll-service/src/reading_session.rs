@@ -84,7 +84,95 @@ fn corrupt() -> ApiError {
     )
 }
 fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {
-    serde_json::from_str(row.try_get::<_, &str>(0).map_err(session_error)?).map_err(|_| corrupt())
+    let json = row.try_get::<_, &str>(0).map_err(session_error)?;
+    decode_session_json(json)
+}
+
+/// Decode one session row, normalizing fields whose persisted JSON shape drifted.
+///
+/// `row_to_json` always emits valid JSON, so a deserialization failure means a
+/// persisted column no longer matches [`ReadingSession`] (for example a legacy
+/// `NULL` boolean or a malformed JSON list). Replacing the whole session would
+/// drop the pending roll and its durable events, and an unrepaired session makes
+/// every Roll bootstrap return 500 until some other actor ends it. Repair only
+/// the individually unreadable fields and keep the session identity so pending
+/// state, events and roll results survive.
+fn decode_session_json(json: &str) -> Result<ReadingSession, ApiError> {
+    match serde_json::from_str(json) {
+        Ok(session) => Ok(session),
+        Err(_) => {
+            let mut value: Value = serde_json::from_str(json).map_err(|_| corrupt())?;
+            let repaired = repair_session_value(&mut value);
+            if repaired.is_empty() {
+                return Err(corrupt());
+            }
+            let session: ReadingSession = serde_json::from_value(value).map_err(|_| corrupt())?;
+            tracing::warn!(
+                session_id = session.id,
+                fields = ?repaired,
+                "repaired reading session fields with unusable values"
+            );
+            Ok(session)
+        }
+    }
+}
+
+/// Null out optional session fields that do not deserialize, and coerce the one
+/// required boolean. Required identity fields are left alone so genuine schema
+/// corruption still fails closed instead of fabricating a session.
+fn repair_session_value(value: &mut Value) -> Vec<&'static str> {
+    fn repair_optional<T: serde::de::DeserializeOwned>(
+        object: &mut serde_json::Map<String, Value>,
+        key: &'static str,
+        repaired: &mut Vec<&'static str>,
+    ) {
+        let Some(field) = object.get_mut(key) else {
+            return;
+        };
+        if serde_json::from_value::<Option<T>>(field.clone()).is_err() {
+            *field = Value::Null;
+            repaired.push(key);
+        }
+    }
+    let Some(object) = value.as_object_mut() else {
+        return Vec::new();
+    };
+    let mut repaired = Vec::new();
+    for key in ["manual_die", "pending_thread_id", "pending_issue_id"] {
+        repair_optional::<i32>(object, key, &mut repaired);
+    }
+    for key in ["snoozed_thread_ids", "skipped_thread_ids"] {
+        repair_optional::<Vec<i32>>(object, key, &mut repaired);
+    }
+    for key in [
+        "ended_at",
+        "pending_thread_updated_at",
+        "timezone",
+        "predicted_bandwidth",
+        "active_bandwidth",
+        "bandwidth_source",
+        "bandwidth_version",
+        "bandwidth_updated_at",
+        "reading_bandwidth",
+        "reading_intent",
+        "reading_mode_source",
+        "active_intent",
+        "predicted_intent",
+        "intent_source",
+        "intent_version",
+    ] {
+        repair_optional::<String>(object, key, &mut repaired);
+    }
+    for key in ["bandwidth_confidence", "intent_confidence"] {
+        repair_optional::<f64>(object, key, &mut repaired);
+    }
+    if let Some(field) = object.get_mut("reading_mode_suggested") {
+        if !field.is_boolean() {
+            *field = Value::Bool(false);
+            repaired.push("reading_mode_suggested");
+        }
+    }
+    repaired
 }
 const RESOLVE_FROM: &str = "FROM sessions s LEFT JOIN LATERAL
  (SELECT max(timestamp) AS last_event FROM events WHERE session_id = s.id) e ON true
@@ -578,6 +666,79 @@ mod tests {
         }
         assert!(SessionPolicy::new(0, 6).is_err());
         assert!(SessionPolicy::new(6, 21).is_err());
+    }
+
+    fn session_json() -> Value {
+        json!({
+            "id": 7,
+            "user_id": 3,
+            "started_at": "2026-10-29T08:00:00+00:00",
+            "ended_at": null,
+            "start_die": 6,
+            "manual_die": null,
+            "pending_thread_id": 11,
+            "pending_issue_id": 12,
+            "pending_thread_updated_at": "2026-10-29T07:55:00+00:00",
+            "snoozed_thread_ids": [11],
+            "skipped_thread_ids": null,
+            "timezone": null,
+            "predicted_bandwidth": null,
+            "active_bandwidth": null,
+            "bandwidth_confidence": null,
+            "bandwidth_source": null,
+            "bandwidth_version": null,
+            "bandwidth_updated_at": null,
+            "reading_bandwidth": null,
+            "reading_intent": null,
+            "reading_mode_source": null,
+            "reading_mode_suggested": true,
+            "active_intent": null,
+            "predicted_intent": null,
+            "intent_confidence": null,
+            "intent_source": null,
+            "intent_version": null,
+            "session_mode_correction_guidance": null
+        })
+    }
+
+    #[test]
+    fn healthy_session_json_needs_no_repair() {
+        let session = decode_session_json(&session_json().to_string()).unwrap();
+        assert_eq!(session.id, 7);
+        assert_eq!(session.pending_thread_id, Some(11));
+        assert_eq!(session.snoozed_thread_ids, Some(vec![11]));
+        assert!(session.reading_mode_suggested);
+    }
+
+    #[test]
+    fn unreadable_session_fields_are_repaired_without_losing_pending_state() {
+        let mut value = session_json();
+        value["snoozed_thread_ids"] = json!({"not": "a list"});
+        value["reading_mode_suggested"] = Value::Null;
+        let repaired = repair_session_value(&mut value);
+        assert_eq!(repaired, ["snoozed_thread_ids", "reading_mode_suggested"]);
+
+        // The same payload that previously produced "Invalid reading session state"
+        // now decodes with identity, pending roll and events untouched.
+        let session = decode_session_json(&value.to_string()).unwrap();
+        assert_eq!(session.id, 7);
+        assert_eq!(session.user_id, 3);
+        assert_eq!(session.pending_thread_id, Some(11));
+        assert_eq!(session.pending_issue_id, Some(12));
+        assert_eq!(
+            session.pending_thread_updated_at.as_deref(),
+            Some("2026-10-29T07:55:00+00:00")
+        );
+        assert_eq!(session.snoozed_thread_ids, None);
+        assert!(!session.reading_mode_suggested);
+    }
+
+    #[test]
+    fn unrecoverable_session_identity_still_fails_closed() {
+        let mut value = session_json();
+        value["id"] = json!("not-an-integer");
+        let error = decode_session_json(&value.to_string()).unwrap_err();
+        assert_eq!(error.1, "Invalid reading session state");
     }
 
     #[tokio::test]
