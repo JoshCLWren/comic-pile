@@ -33,21 +33,21 @@ export const AUTHENTICATED_SHELL = budget(
 )
 
 /**
- * Confirmed redundant call, blocked on shared-file allocation.
+ * Target budget for public credential forms.
  *
- * `/login` and `/register` short-circuit the bootstrap when no token is stored
- * (`App.tsx` `isPublicAuthPage`), producing zero requests. `/forgot-password`
- * and `/reset-password` are the same class of public credential form but still
- * pay {@link GUEST_AUTH_PROBE}. Target budget is `[]`; see task-4504.md for the
- * exact App.tsx allocation request.
+ * `/login`, `/register`, `/forgot-password`, and `/reset-password` all render
+ * without an auth probe when no access token is stored: the API's own
+ * `isOnAuthPage` definition already treats these as public auth pages. A
+ * stored token still takes the full validation path, so an authenticated or
+ * stale-token visitor is probed and redirected/cleared correctly.
  */
 export const PUBLIC_CREDENTIAL_FORM_TARGET: readonly string[] = []
 
 const PUBLIC_ENTRIES = {
   '/login': [],
   '/register': [],
-  '/forgot-password': GUEST_AUTH_PROBE,
-  '/reset-password': GUEST_AUTH_PROBE,
+  '/forgot-password': PUBLIC_CREDENTIAL_FORM_TARGET,
+  '/reset-password': PUBLIC_CREDENTIAL_FORM_TARGET,
   '/demo': budget(...GUEST_AUTH_PROBE, 'GET /api/v1/demo/roll x1'),
   '/': GUEST_AUTH_PROBE,
   '/unknown': GUEST_AUTH_PROBE,

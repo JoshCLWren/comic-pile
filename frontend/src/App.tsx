@@ -273,7 +273,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function validateSession(): Promise<void> {
       if (!isActive || bootstrapGeneration !== sessionGeneration.current) return
-      const isPublicAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
+      // Public credential forms render as guests when no access token is
+      // stored. This matches the API client's own `isOnAuthPage` definition,
+      // so a cookieless visitor never pays an /auth/me -> /auth/refresh probe
+      // before the form is usable. A stored (or injected) token still takes the
+      // full validation path below, preserving authenticated redirects and
+      // clearing a rejected token.
+      const isPublicAuthPage =
+        window.location.pathname === '/login' ||
+        window.location.pathname === '/register' ||
+        window.location.pathname === '/forgot-password' ||
+        window.location.pathname === '/reset-password'
       if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN && isPublicAuthPage) {
         resetBootstrapRetry()
         setAuthState(prev => ({
