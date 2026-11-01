@@ -1135,7 +1135,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      pull-requests: write
     steps:
       # A failed smoke may have modified its checkout. Recover from a fresh
       # trusted main on a separate runner, inside the same per-worker lock.
