@@ -98,16 +98,18 @@ jobs:
             [[ "$(issue_from_head "$head_ref")" == "$expected_issue" ]] || return 1
 
             comments="$(mktemp)"
+            # A GitHub API/network/permission failure is operational, not missing
+            # provenance. Return 2 so it is retried only by the caller's bounded
+            # loop and then fails the job instead of turning the run green.
             gh api --paginate --slurp \
-              "repos/${GITHUB_REPOSITORY}/issues/${pr}/comments?per_page=100" >"$comments" || return 1
+              "repos/${GITHUB_REPOSITORY}/issues/${pr}/comments?per_page=100" >"$comments" || return 2
 
             python3 - "$head_ref" "$pr" "$expected_issue" "$comments" <<'PY'
           import importlib.util
           import json
           import sys
-          from pathlib import Path
-
           import traceback
+          from pathlib import Path
 
           def check_provenance():
               head_ref, pr_number, expected_issue, comments_path = sys.argv[1:]
@@ -116,15 +118,17 @@ jobs:
               sys.path.insert(0, str(path.parent.resolve()))
               spec = importlib.util.spec_from_file_location('factory_revocation_fence', path)
               if spec is None or spec.loader is None:
-                  return 1
+                  # Failing to construct the loader is operational, not a
+                  # missing/untrusted provenance marker.
+                  return 2
               fence = importlib.util.module_from_spec(spec)
               sys.modules[spec.name] = fence
               spec.loader.exec_module(fence)
-    
+
               branch = fence.BRANCH_RE.match(head_ref)
               if branch is None or branch.group('issue') != expected_issue:
                   return 1
-    
+
               comments = json.loads(Path(comments_path).read_text(encoding='utf-8'))
               for comment in fence.flatten_comments(comments):
                   if not fence.comment_is_trusted(comment):
@@ -263,10 +267,13 @@ jobs:
           # Do not refetch the same full PR list once per open factory issue.
           SWEEP_PULLS="$(gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/pulls?state=all&per_page=100")"
+          # Capture the issue list explicitly: a process-substitution failure is
+          # invisible to `set -e` and would let a failed sweep exit green.
+          factory_issues="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label factory \
+            --limit 1000 --json number --jq '.[].number')"
           while IFS= read -r issue; do
             [[ -n "$issue" ]] || continue
             state="$(gh issue view "$issue" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)"
             [[ "$state" == 'OPEN' ]] || continue
             reconcile_issue "$issue"
-          done < <(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label factory \
-            --limit 1000 --json number --jq '.[].number')
+          done <<< "$factory_issues"
