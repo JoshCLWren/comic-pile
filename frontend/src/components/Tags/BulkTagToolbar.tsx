@@ -21,7 +21,8 @@ export interface BulkTagToolbarProps {
 export function BulkTagToolbar({ selectedIds, onClearSelection, onDone }: BulkTagToolbarProps) {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 250)
-  const usable = useTags(debouncedSearch)
+  // An empty selection renders nothing, so it must not read the catalog.
+  const usable = useTags(debouncedSearch, selectedIds.length > 0)
   const [picked, setPicked] = useState<Tag | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
 

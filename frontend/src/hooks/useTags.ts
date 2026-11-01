@@ -16,11 +16,19 @@ import { invalidateAfterTagMutation } from '../query/cacheEffects'
  *
  * The inline picker passes the debounced search text; the key stays canonical
  * because `queryKeys.tags.list` normalizes the filter.
+ *
+ * `enabled` keeps closed editors from spending a catalog request: the picker
+ * is mounted while closed so its local open/focus state stays stable, but the
+ * usable-tag catalog is only needed once the reader opens it (#4501).
+ *
+ * @param search - Optional debounced name filter.
+ * @param enabled - False while the consuming picker is not open.
  */
-export function useTags(search?: string) {
+export function useTags(search?: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.tags.list(search),
     queryFn: () => tagsApi.list(search),
+    enabled,
   })
 }
 

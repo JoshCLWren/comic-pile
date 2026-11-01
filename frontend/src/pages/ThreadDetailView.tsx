@@ -125,11 +125,15 @@ export default function ThreadDetailView() {
     isPending: connectedPending,
     isError: connectedError,
   } = useConnectedThreads(threadId)
+  // Key the crossover batch on the route-declared thread id, not the loaded
+  // thread record. The id is already validated above, so the batch can run in
+  // parallel with the thread-detail read instead of waiting behind a
+  // waterfall (#4501).
   const {
     groupsByThreadId: crossoverGroupsByThreadId,
     isPending: crossoversPending,
     error: crossoversError,
-  } = useCrossoverGroups(thread ? [thread.id] : [])
+  } = useCrossoverGroups(threadId != null ? [threadId] : [])
 
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
