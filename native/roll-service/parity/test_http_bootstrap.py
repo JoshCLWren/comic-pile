@@ -156,34 +156,22 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         assert {row["thread"]["id"] for row in body["rollable"]} == {
             t.id, stale_other.id, stale_snoozed.id, stale_skipped.id
         }
-        assert body["stale_thread_count"] == 2
-        assert body["stale_thread"]["id"] in {t.id, stale_other.id}
-        assert body["stale_thread"]["id"] not in {foreign_id, stale_snoozed.id, stale_skipped.id}
         candidate = body["rollable"][0]
         assert candidate["thread"]["id"] == t.id
         assert candidate["thread"]["tags"][0]["name"] == "Favorites"
-        # Two genuinely excluded series: completed and unqueued. The legacy
-        # snoozed/skipped rows remain separate display categories.
-        assert body["total_threads"] == 6
-        assert body["available_threads"] == 4
-        assert body["excluded_count"] == 2
-        assert body["inactive_count"] == 2
+        # Removed diagnostic reports must not leak whole-library rows or
+        # counts. The retained session display chips are independently scoped.
+        for key in (
+            "stale_thread_count", "stale_thread", "blocked_count", "blocked_threads",
+            "total_threads", "available_threads", "excluded_count",
+            "excluded_threads", "inactive_count", "inactive_threads",
+        ):
+            assert key not in body, key
         assert {row["id"] for row in body["snoozed_threads"]} == {stale_snoozed.id}
         assert {row["id"] for row in body["skipped_threads"]} == {stale_skipped.id}
-        assert {
-            row["thread_id"]: row["reason"] for row in body["inactive_threads"]
-        } == {completed_id: "completed", unqueued_id: "not_in_queue"}
-        assert {
-            row["thread_id"]: row["reason"] for row in body["excluded_threads"]
-        } == {
-            completed_id: "completed",
-            unqueued_id: "not_in_queue",
-        }
         assert {row["thread"]["id"] for row in body["rollable"]}.isdisjoint(
             {completed_id, unqueued_id, foreign_id}
         )
-        assert t.id not in {row["id"] for row in body["blocked_threads"]}
-        assert t.id not in {row["thread_id"] for row in body["excluded_threads"]}
         assert candidate["thread"]["id"] != foreign_id
         assert candidate["issue"]["id"] == next_id
         assert candidate["issue"]["cover_url"] == "https://example.com/cover.jpg"
