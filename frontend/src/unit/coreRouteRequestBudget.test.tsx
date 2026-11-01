@@ -91,7 +91,7 @@ const queueThreads = [1, 2].map((id) => ({
 
 const queueHandler: Responder = (call) => {
   if (call.url === '/v1/sessions/current/') return session
-  if (call.url === '/v1/threads/') {
+  if (call.url === '/v1/threads/' || call.url === '/v1/threads') {
     return { threads: queueThreads, next_page_token: null, active_count: 2 }
   }
   if (call.url === '/v1/threads/excluded/threads') {
