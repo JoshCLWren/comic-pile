@@ -138,6 +138,7 @@ async def adopt_cbl_into_existing_reading_plan(
         series_overrides or {},
         series_decisions,
         new_node_lane_id=_adoption_lane_id(plan),
+        preserve_existing_order=True,
     )
 
     node_models = _to_node_models(plan.nodes_json)
