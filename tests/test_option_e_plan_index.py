@@ -241,3 +241,39 @@ async def test_option_e_index_rejects_multiple_authoritative_lists_for_same_plan
     with pytest.raises(HTTPException) as exc:
         await list_continuity_plan_items(async_db, user_id=owner)
     assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_option_e_index_surviving_plan_plus_deleted_linked_list(
+    async_db: AsyncSession, default_user: User, option_e: None,
+) -> None:
+    """One plan with authority plus one orphaned plan must list both, no 409."""
+    owner = default_user.id
+    now = datetime.now(UTC)
+    list_a = CustomCBLList(user_id=owner, name="List A", mode="strict", created_at=now, updated_at=now)
+    async_db.add(list_a)
+    await async_db.flush()
+    auth_plan = ContinuityPlan(
+        user_id=owner, name="Auth Plan",
+        ordering_mode="strict_sequential",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[], created_at=now, updated_at=now,
+    )
+    orphan = ContinuityPlan(
+        user_id=owner, name="Orphan Plan",
+        ordering_mode="informational",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[], created_at=now, updated_at=now,
+    )
+    async_db.add_all([auth_plan, orphan])
+    await async_db.flush()
+    async_db.add(ReadingPlanSource(plan_id=auth_plan.id, raw_source_path=f"custom-cbl:{list_a.id}", custom_cbl_list_id=list_a.id))
+    await async_db.flush()
+    items = await list_continuity_plan_items(async_db, user_id=owner)
+    assert len(items) == 2
+    names = {i.name for i in items}
+    assert names == {"Auth Plan", "Orphan Plan"}
+    auth_item = next(i for i in items if i.name == "Auth Plan")
+    assert auth_item.source_paths == [f"custom-cbl:{list_a.id}"]
+    orphan_item = next(i for i in items if i.name == "Orphan Plan")
+    assert orphan_item.source_paths == []
