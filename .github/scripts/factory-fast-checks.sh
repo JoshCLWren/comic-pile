@@ -58,7 +58,7 @@ factory_fast_check_plan() {
       frontend/*.ts|frontend/*.tsx|frontend/*.mjs) printf 'frontend\t%s\n' "$path" ;;
     esac
     case "$path" in
-      *.rs|Cargo.toml|Cargo.lock|rust-toolchain.toml|.cargo/config.toml)
+      *.rs|Cargo.toml|*/Cargo.toml|Cargo.lock|*/Cargo.lock|rust-toolchain.toml|*/rust-toolchain.toml|.cargo/config.toml|*/.cargo/config.toml)
         printf 'rust\t%s\n' "$path"
         ;;
     esac
