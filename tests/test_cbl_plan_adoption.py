@@ -1351,3 +1351,209 @@ async def test_strict_plan_hard_constraints_use_canonical_dependency_semantics()
     # normalized ReadingPlanDependency links. This test verifies the
     # correct ordering_mode is passed to enable that compilation.
     assert result.reused_positions == [1]
+
+
+@pytest.mark.asyncio
+async def test_adopted_nodes_preserve_cbl_source_order() -> None:
+    """Adopted nodes get positions in CBL source order, not appended after existing nodes.
+
+    Regression test for #4399: previously existing nodes kept their original
+    positions and new nodes were appended at max+1, breaking preview-vs-persisted
+    order fidelity when CBL source order interleaves existing and new issues.
+    """
+    cbl_list = _FakeCBLList(
+        id=1, source_path="/x.xml", name="X",
+        content_hash="hash", revision_sha="rev", active=True,
+    )
+    existing = _FakePlan(
+        id=30,
+        user_id=1,
+        name="Order Plan",
+        ordering_mode="informational",
+        nodes_json=[
+            {
+                "id": "n-100", "node_type": "issue", "ref_id": 100,
+                "lane_id": "default", "position": 0,
+                "is_checkpoint": False, "convergence_gate": [],
+            },
+            {
+                "id": "n-101", "node_type": "issue", "ref_id": 101,
+                "lane_id": "default", "position": 1,
+                "is_checkpoint": False, "convergence_gate": [],
+            },
+            {
+                "id": "n-102", "node_type": "issue", "ref_id": 102,
+                "lane_id": "default", "position": 2,
+                "is_checkpoint": False, "convergence_gate": [],
+            },
+        ],
+        lanes_json=[{"id": "default", "name": "Default", "order": 0}],
+    )
+    entries = [
+        _FakeEntry(id=10, position=0, series_name="SeriesA"),
+        _FakeEntry(id=11, position=1, series_name="SeriesB"),
+        _FakeEntry(id=12, position=2, series_name="SeriesC"),
+        _FakeEntry(id=13, position=3, series_name="SeriesD"),
+    ]
+    facts = [
+        _make_fact(
+            resolved_issue_id=100, resolution_status="existing",
+            position=0, cbl_entry_id=10, series_name="SeriesA",
+        ),
+        _make_fact(
+            resolved_issue_id=None, resolution_status="no_owned_issue_for_comicvine_id",
+            position=1, cbl_entry_id=11, series_name="SeriesB",
+            comicvine_issue_id="cv-b",
+        ),
+        _make_fact(
+            resolved_issue_id=101, resolution_status="existing",
+            position=2, cbl_entry_id=12, series_name="SeriesC",
+        ),
+        _make_fact(
+            resolved_issue_id=None, resolution_status="no_owned_issue_for_comicvine_id",
+            position=3, cbl_entry_id=13, series_name="SeriesD",
+            comicvine_issue_id="cv-d",
+        ),
+    ]
+    db = _FakeDB(execute_results=[_Rows([cbl_list]), _Rows(entries)])
+    report = MagicMock()
+    report.entries = tuple(facts)
+
+    fake_issue_b = MagicMock()
+    fake_issue_b.id = 200
+    fake_issue_d = MagicMock()
+    fake_issue_d.id = 201
+
+    with patch(
+        "app.services.cbl_plan_adoption.reconcile_cbl_source_list",
+        new_callable=AsyncMock,
+        return_value=report,
+    ), patch(
+        "app.services.cbl_plan_adoption._find_existing_adopted_plan",
+        new_callable=AsyncMock,
+        return_value=existing,
+    ), patch(
+        "app.services.cbl_plan_adoption._ensure_missing_issue_created",
+        new_callable=AsyncMock,
+        side_effect=[(fake_issue_b, True), (fake_issue_d, True)],
+    ), patch(
+        "app.services.cbl_plan_adoption.validate_node_ownership",
+        new_callable=AsyncMock,
+    ), patch(
+        "app.services.cbl_plan_adoption.replace_compiled_rules",
+        new_callable=AsyncMock,
+        return_value=True,
+    ), patch(
+        "app.services.cbl_plan_adoption.refresh_user_blocked_status",
+        new_callable=AsyncMock,
+    ):
+        result = await adopt_cbl_material_into_reading_plan(
+            db,
+            user_id=1,
+            list_id=1,
+            entry_decisions={
+                0: SourceBackedDecision.INCLUDE,
+                1: SourceBackedDecision.INCLUDE,
+                2: SourceBackedDecision.INCLUDE,
+                3: SourceBackedDecision.INCLUDE,
+            },
+            series_decisions={},
+        )
+
+    plan = result.plan
+    ref_ids = [node["ref_id"] for node in plan.nodes_json]
+    positions = [node["position"] for node in plan.nodes_json]
+    # CBL source order: [100(existing), 200(new), 101(existing), 201(new)]
+    # Remaining existing (102, not in CBL entries) comes after adopted nodes.
+    assert ref_ids == [100, 200, 101, 201, 102], ref_ids
+    assert positions == [0, 1, 2, 3, 4], positions
+    # Verify no gap: positions are contiguous from zero
+    assert positions == list(range(len(positions)))
+
+
+@pytest.mark.asyncio
+async def test_adopted_nodes_positions_contiguous_after_reorder() -> None:
+    """All node positions are renumbered contiguously from zero after merge.
+
+    Ensures the strict sequential contiguity invariant (ge=0, unique within
+    lane, contiguous from zero) holds even when existing nodes had scattered
+    positions before the CBL adoption merge.
+    """
+    cbl_list = _FakeCBLList(
+        id=1, source_path="/x.xml", name="X",
+        content_hash="hash", revision_sha="rev", active=True,
+    )
+    existing = _FakePlan(
+        id=31,
+        user_id=1,
+        name="Scattered Plan",
+        ordering_mode="informational",
+        nodes_json=[
+            {
+                "id": "n-100", "node_type": "issue", "ref_id": 100,
+                "lane_id": "default", "position": 5,
+                "is_checkpoint": False, "convergence_gate": [],
+            },
+            {
+                "id": "n-101", "node_type": "issue", "ref_id": 101,
+                "lane_id": "default", "position": 9,
+                "is_checkpoint": False, "convergence_gate": [],
+            },
+        ],
+        lanes_json=[{"id": "default", "name": "Default", "order": 0}],
+    )
+    entries = [
+        _FakeEntry(id=20, position=0, series_name="SeriesZ"),
+    ]
+    facts = [
+        _make_fact(
+            resolved_issue_id=None, resolution_status="no_owned_issue_for_comicvine_id",
+            position=0, cbl_entry_id=20, series_name="SeriesZ",
+            comicvine_issue_id="cv-z",
+        ),
+    ]
+    db = _FakeDB(execute_results=[_Rows([cbl_list]), _Rows(entries)])
+    report = MagicMock()
+    report.entries = tuple(facts)
+
+    fake_issue_z = MagicMock()
+    fake_issue_z.id = 300
+
+    with patch(
+        "app.services.cbl_plan_adoption.reconcile_cbl_source_list",
+        new_callable=AsyncMock,
+        return_value=report,
+    ), patch(
+        "app.services.cbl_plan_adoption._find_existing_adopted_plan",
+        new_callable=AsyncMock,
+        return_value=existing,
+    ), patch(
+        "app.services.cbl_plan_adoption._ensure_missing_issue_created",
+        new_callable=AsyncMock,
+        return_value=(fake_issue_z, True),
+    ), patch(
+        "app.services.cbl_plan_adoption.validate_node_ownership",
+        new_callable=AsyncMock,
+    ), patch(
+        "app.services.cbl_plan_adoption.replace_compiled_rules",
+        new_callable=AsyncMock,
+        return_value=True,
+    ), patch(
+        "app.services.cbl_plan_adoption.refresh_user_blocked_status",
+        new_callable=AsyncMock,
+    ):
+        result = await adopt_cbl_material_into_reading_plan(
+            db,
+            user_id=1,
+            list_id=1,
+            entry_decisions={0: SourceBackedDecision.INCLUDE},
+            series_decisions={},
+        )
+
+    plan = result.plan
+    ref_ids = [node["ref_id"] for node in plan.nodes_json]
+    positions = [node["position"] for node in plan.nodes_json]
+    # Adopted node (300, CBL position 0) first, then remaining existing (100, 101)
+    assert ref_ids == [300, 100, 101], ref_ids
+    assert positions == [0, 1, 2], positions
+    assert positions == list(range(len(positions)))

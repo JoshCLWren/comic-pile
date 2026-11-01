@@ -935,6 +935,7 @@ async def _merge_adopted_nodes(
     unresolved_positions: list[int] = []
     excluded_issue_ids: set[int] = set()
     excluded_node_ids: set[str] = set()
+    adopted_node_order: list[str] = []
 
     for entry in entries:
         fact = facts_by_entry_id.get(entry.id)
@@ -1028,6 +1029,7 @@ async def _merge_adopted_nodes(
                 node, source_path=source_path, placement=placement, label=label
             )
             issues_by_id.setdefault(existing_issue_id, node)
+            adopted_node_order.append(str(node.get("id")))
             if not created_now:
                 reused_positions.append(entry.position)
             continue
@@ -1047,6 +1049,7 @@ async def _merge_adopted_nodes(
         existing_nodes.append(new_node)
         issues_by_id[existing_issue_id] = new_node
         nodes_by_id[str(new_node["id"])] = new_node
+        adopted_node_order.append(str(new_node["id"]))
         next_position += 1
         if not created_now:
             reused_positions.append(entry.position)
@@ -1058,6 +1061,29 @@ async def _merge_adopted_nodes(
         drop_source_path=source_path,
         drop_source_positions=excluded_positions,
     )
+    # Restore CBL source order so persisted plan positions match the
+    # preview's final_adopted_order. Adopted nodes come first in
+    # source-processing order; remaining existing nodes keep their original
+    # relative order. All positions are renumbered contiguously from zero.
+    adopted_unique = list(dict.fromkeys(adopted_node_order))
+    adopted_set = set(adopted_unique)
+    reordered: list[dict[str, object]] = []
+    for node_id in adopted_unique:
+        for node in existing_nodes:
+            if str(node.get("id")) == node_id:
+                reordered.append(node)
+                break
+    for node in existing_nodes:
+        if str(node.get("id")) not in adopted_set:
+            reordered.append(node)
+    existing_nodes = reordered
+
+    position = 0
+    for node in existing_nodes:
+        if isinstance(node.get("position"), int):
+            node["position"] = position
+            position += 1
+
     plan.lanes_json = plan.lanes_json or _default_lane()
     plan.nodes_json = existing_nodes
     return AdoptionMergeReport(
