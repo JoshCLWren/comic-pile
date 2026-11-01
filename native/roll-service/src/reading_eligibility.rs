@@ -37,10 +37,9 @@ pub fn evaluate(
     // Build adjacency for topological processing
     let mut incoming: HashMap<i32, Vec<ConstraintEdge>> = HashMap::new();
     let edges = validated.unsatisfied_edges().map_err(|e| match e {
-        ValidationError::InvalidSnapshot { message } => crate::ApiError(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            message,
-        ),
+        ValidationError::InvalidSnapshot { message } => {
+            crate::ApiError(axum::http::StatusCode::INTERNAL_SERVER_ERROR, message)
+        }
         ValidationError::Cycle {
             message: _,
             edges: _,
@@ -138,18 +137,7 @@ pub fn evaluate(
         let mut blocker_map: BTreeMap<(String, Option<i32>), Blocker> = BTreeMap::new();
 
         for edge in blocked_edges {
-            let key = (
-                edge.origin.clone(),
-                if edge.prerequisite_origin.is_some() {
-                    None
-                } else {
-                    // Extract list_id from origin string like "list JLI strict order"
-                    edge.origin
-                        .strip_prefix("list ")
-                        .and_then(|s| s.split(' ').next())
-                        .and_then(|s| s.parse().ok())
-                },
-            );
+            let key = (edge.origin.clone(), edge.list_id);
 
             let entry = blocker_map.entry(key).or_insert_with(|| {
                 if edge.prerequisite_origin.is_some() {
@@ -169,11 +157,7 @@ pub fn evaluate(
                 } else if edge.origin.contains("hold") {
                     Blocker {
                         kind: "hold".to_string(),
-                        list_id: edge
-                            .origin
-                            .strip_prefix("list ")
-                            .and_then(|s| s.split(' ').next())
-                            .and_then(|s| s.parse().ok()),
+                        list_id: edge.list_id,
                         waiting_on_issue_ids: vec![],
                         prerequisite_id: None,
                         gate_issue_id: None,
@@ -183,11 +167,7 @@ pub fn evaluate(
                 } else if edge.origin.contains("strict_order") {
                     Blocker {
                         kind: "strict_order".to_string(),
-                        list_id: edge
-                            .origin
-                            .strip_prefix("list ")
-                            .and_then(|s| s.split(' ').next())
-                            .and_then(|s| s.parse().ok()),
+                        list_id: edge.list_id,
                         waiting_on_issue_ids: vec![],
                         prerequisite_id: None,
                         gate_issue_id: None,
@@ -197,11 +177,7 @@ pub fn evaluate(
                 } else if edge.origin.contains("after_previous") {
                     Blocker {
                         kind: "after_previous".to_string(),
-                        list_id: edge
-                            .origin
-                            .strip_prefix("list ")
-                            .and_then(|s| s.split(' ').next())
-                            .and_then(|s| s.parse().ok()),
+                        list_id: edge.list_id,
                         waiting_on_issue_ids: vec![],
                         prerequisite_id: None,
                         gate_issue_id: None,

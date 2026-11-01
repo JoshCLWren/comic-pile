@@ -410,7 +410,7 @@ fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
         ) {
             let list = lists.get_mut(&row.list_id).ok_or(ApiError(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Invalid reading snapshot",
+                "Invalid reading snapshot".to_string(),
             ))?;
             list.overlap_decisions.push(OverlapDecision {
                 continuing_volume_id: c,

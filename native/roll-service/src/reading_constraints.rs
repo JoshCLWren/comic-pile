@@ -76,6 +76,10 @@ pub struct ConstraintEdge {
     pub origin: String,
     pub prerequisite_origin: Option<String>,
     pub provenance: Vec<String>,
+    /// Owning Reading List for list-ordered edges, so projection never parses a name.
+    /// Internal plumbing only: the Python cycle-error contract has no such field.
+    #[serde(skip)]
+    pub list_id: Option<i32>,
 }
 impl ConstraintEdge {
     fn new(a: i32, b: i32, origin: &str) -> Self {
@@ -85,6 +89,13 @@ impl ConstraintEdge {
             origin: origin.into(),
             prerequisite_origin: None,
             provenance: vec![],
+            list_id: None,
+        }
+    }
+    fn in_list(a: i32, b: i32, origin: &str, list_id: i32) -> Self {
+        Self {
+            list_id: Some(list_id),
+            ..Self::new(a, b, origin)
         }
     }
 }
@@ -374,20 +385,22 @@ fn constraint_edges(snapshot: &Snapshot) -> Result<BTreeSet<ConstraintEdge>, Val
             }
             if waiting.is_empty() {
                 for pair in entries.windows(2) {
-                    edges.insert(ConstraintEdge::new(
+                    edges.insert(ConstraintEdge::in_list(
                         pair[0].issue_id,
                         pair[1].issue_id,
                         &origin,
+                        l.list_id,
                     ));
                 }
             } else {
                 let entry_volumes: Vec<_> = entries.iter().map(|e| volumes[&e.issue_id]).collect();
                 for index in 1..entries.len() {
                     for cover in strict_covers(index, &entry_volumes, &waiting) {
-                        edges.insert(ConstraintEdge::new(
+                        edges.insert(ConstraintEdge::in_list(
                             entries[cover].issue_id,
                             entries[index].issue_id,
                             &origin,
+                            l.list_id,
                         ));
                     }
                 }
@@ -398,18 +411,29 @@ fn constraint_edges(snapshot: &Snapshot) -> Result<BTreeSet<ConstraintEdge>, Val
         for (index, entry) in entries.iter().enumerate() {
             let origin = format!("list {name} hold");
             if let Some(previous) = previous_hold {
-                edges.insert(ConstraintEdge::new(previous, entry.issue_id, &origin));
+                edges.insert(ConstraintEdge::in_list(
+                    previous,
+                    entry.issue_id,
+                    &origin,
+                    l.list_id,
+                ));
             }
             if entry.gate == "after_previous" && index > 0 {
-                edges.insert(ConstraintEdge::new(
+                edges.insert(ConstraintEdge::in_list(
                     entries[index - 1].issue_id,
                     entry.issue_id,
                     &format!("list {name} after_previous"),
+                    l.list_id,
                 ));
             }
             if entry.gate == "hold" {
                 for source in since_hold.drain(..) {
-                    edges.insert(ConstraintEdge::new(source, entry.issue_id, &origin));
+                    edges.insert(ConstraintEdge::in_list(
+                        source,
+                        entry.issue_id,
+                        &origin,
+                        l.list_id,
+                    ));
                 }
                 previous_hold = Some(entry.issue_id);
             } else {
@@ -433,6 +457,7 @@ fn constraint_edges(snapshot: &Snapshot) -> Result<BTreeSet<ConstraintEdge>, Val
             origin: format!("prerequisite {} ({}{suffix})", p.prerequisite_id, p.origin),
             prerequisite_origin: Some(p.origin.clone()),
             provenance: p.provenance.clone(),
+            list_id: None,
         });
     }
     Ok(edges)

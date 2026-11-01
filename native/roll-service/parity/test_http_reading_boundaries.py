@@ -27,7 +27,11 @@ from app.models.custom_cbl import (
     CustomCBLOverlapDecision,
 )
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
-from app.schemas.reading_boundary import ReadingBoundaryExplanationV2
+from app.schemas.reading_boundary import (
+    ReadingBoundaryBatchRequest,
+    ReadingBoundaryExplanationV2,
+)
+from app.services.errors import NotFoundError
 from app.services.reading_boundary_service import get_reading_boundary_explanations
 
 SECRET = "synthetic-native-reading-boundary-secret"
@@ -126,6 +130,14 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
                 issues_remaining=1,
                 total_issues=2,
             )
+            finished = Thread(
+                user_id=owner.id,
+                title="Finished Series",
+                format="Comic",
+                queue_position=6,
+                issues_remaining=0,
+                total_issues=2,
+            )
             unmapped = Thread(
                 user_id=owner.id,
                 title="Unmapped Series",
@@ -142,7 +154,7 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
                 issues_remaining=1,
                 total_issues=1,
             )
-            db.add_all([fourth, jli, miracle, held, unmapped, foreign])
+            db.add_all([fourth, jli, miracle, held, finished, unmapped, foreign])
             await db.flush()
 
             issues = {
@@ -159,6 +171,10 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
                 "h1": Issue(thread_id=held.id, issue_number="1", position=1,
                             status="read", read_at=now - timedelta(days=5)),
                 "h2": Issue(thread_id=held.id, issue_number="2", position=2, status="unread"),
+                "finished1": Issue(thread_id=finished.id, issue_number="1", position=1,
+                                   status="read", read_at=now - timedelta(days=3)),
+                "finished2": Issue(thread_id=finished.id, issue_number="2", position=2,
+                                   status="read", read_at=now - timedelta(days=2)),
                 "u1": Issue(thread_id=unmapped.id, issue_number="1", position=1, status="unread"),
                 "foreign": Issue(thread_id=foreign.id, issue_number="1", position=1, status="unread"),
             }
@@ -222,7 +238,7 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
                     CustomCBLEntry(list_id=strict.id, issue_id=issues["m1"].id,
                                    position=2, gate="none"),
                     CustomCBLEntry(list_id=strict.id, issue_id=issues["j2"].id,
-                                   position=3, gate="none"),
+                                   position=3, gate="after_previous"),
                     CustomCBLEntry(list_id=strict.id, issue_id=issues["m2"].id,
                                    position=4, gate="none"),
                     CustomCBLEntry(list_id=strict.id, issue_id=issues["j3"].id,
@@ -257,7 +273,7 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
             )
             await db.commit()
 
-            requested = [fourth.id, jli.id, miracle.id, held.id, unmapped.id]
+            requested = [fourth.id, jli.id, miracle.id, held.id, unmapped.id, finished.id]
             canonical = await get_reading_boundary_explanations(
                 db,
                 user_id=owner.id,
@@ -278,6 +294,14 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
                     }
                 )
             )
+            with pytest.raises(NotFoundError) as not_found:
+                await get_reading_boundary_explanations(
+                    db,
+                    user_id=owner.id,
+                    thread_ids=[foreign.id],
+                    include_historical=False,
+                )
+            expected_not_found = {"detail": str(not_found.value)}
             foreign_id = foreign.id
 
         token = jwt.encode(
@@ -318,7 +342,17 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
         env["RUST_ROLL_TEST_BODY"] = json.dumps({"thread_ids": [foreign_id]})
         denied, _, _, _ = await _run_example(env)
         assert denied["status"] == 404, denied
-        assert denied["body"] == {"detail": "Thread not found"}
+        assert denied["body"] == expected_not_found
+
+        for rejected in (
+            {"thread_ids": []},
+            {"thread_ids": list(range(1, 202))},
+        ):
+            with pytest.raises(ValueError):
+                ReadingBoundaryBatchRequest(**rejected)
+            env["RUST_ROLL_TEST_BODY"] = json.dumps(rejected)
+            invalid, _, _, _ = await _run_example(env)
+            assert invalid["status"] == 422, invalid
     finally:
         get_reading_execution_settings.cache_clear()
         await engine.dispose()

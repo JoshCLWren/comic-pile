@@ -212,14 +212,14 @@ pub async fn bootstrap_at(
     .await
     .unwrap_or(Err(ApiError(
         StatusCode::SERVICE_UNAVAILABLE,
-        "Database temporarily unavailable",
+        "Database temporarily unavailable".to_string(),
     )))
 }
 fn session_error(error: tokio_postgres::Error) -> ApiError {
     if error.code() == Some(&tokio_postgres::error::SqlState::T_R_DEADLOCK_DETECTED) {
         ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Reading session deadlock",
+            "Reading session deadlock".to_string(),
         )
     } else {
         db::query_error(error)
@@ -268,7 +268,7 @@ async fn bootstrap_once(
         {
             return Err(ApiError(
                 StatusCode::UNAUTHORIZED,
-                "Could not validate credentials",
+                "Could not validate credentials".to_string(),
             ));
         }
         let existing = resolve_current_session(&tx, user, now, policy).await?;
@@ -385,7 +385,7 @@ async fn bootstrap_once(
     match result {
         Err(_) => Err(ApiError(
             StatusCode::SERVICE_UNAVAILABLE,
-            "Database temporarily unavailable",
+            "Database temporarily unavailable".to_string(),
         )),
         Ok(result) => {
             if result.is_ok() {

@@ -22,6 +22,20 @@ pub struct ReadingBoundaryBatchRequest {
     pub thread_ids: Vec<i32>,
 }
 
+/// Canonical v2 batch bound from `ReadingBoundaryBatchRequest.thread_ids`.
+pub const MAX_BATCH_THREAD_IDS: usize = 200;
+
+/// Reject an empty or oversized batch exactly where Pydantic would.
+pub fn validate_thread_ids(thread_ids: &[i32]) -> Result<(), ApiError> {
+    if thread_ids.is_empty() || thread_ids.len() > MAX_BATCH_THREAD_IDS {
+        return Err(ApiError(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "thread_ids must contain between 1 and 200 entries".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Serialize)]
 pub struct BoundaryReadingList {
     pub list_id: i32,
@@ -597,10 +611,10 @@ pub async fn project_boundary_explanation(
     labels: &BoundaryShadowLabels,
     thread_id: i32,
 ) -> Result<ReadingBoundaryExplanationV2, ApiError> {
-    let thread = labels
-        .threads
-        .get(&thread_id)
-        .ok_or(ApiError(StatusCode::NOT_FOUND, "Thread not found"))?;
+    let thread = labels.threads.get(&thread_id).ok_or(ApiError(
+        StatusCode::NOT_FOUND,
+        format!("Thread {thread_id} not found"),
+    ))?;
     let state = snapshot.threads.get(&thread_id);
     let next_issue = state
         .and_then(|s| s.next_issue_id)
@@ -657,16 +671,19 @@ async fn get_reading_boundary_explanations(
     user: AuthenticatedUser,
     thread_ids: Vec<i32>,
 ) -> Result<ReadingBoundaryBatchResponseV2, ApiError> {
+    validate_thread_ids(&thread_ids)?;
     let requested: HashSet<i32> = thread_ids.iter().copied().collect();
     let labels = load_boundary_labels(&db::checkout(state).await?, user, &requested).await?;
 
-    let missing: Vec<i32> = thread_ids
+    let missing = thread_ids
         .iter()
-        .filter(|id| !labels.threads.contains_key(id))
         .copied()
-        .collect();
-    if !missing.is_empty() {
-        return Err(ApiError(StatusCode::NOT_FOUND, "Thread not found"));
+        .find(|id| !labels.threads.contains_key(id));
+    if let Some(thread_id) = missing {
+        return Err(ApiError(
+            StatusCode::NOT_FOUND,
+            format!("Thread {thread_id} not found"),
+        ));
     }
 
     let validated = option_inputs::load_option_inputs(state, user).await?;
@@ -773,6 +790,20 @@ pub async fn reading_boundary_batch_v2(
 mod tests {
     use super::*;
     use crate::reading_constraints::ThreadEligibility;
+
+    #[test]
+    fn batch_bounds_match_the_canonical_python_request() {
+        assert!(validate_thread_ids(&[1]).is_ok());
+        assert!(validate_thread_ids(&[1; MAX_BATCH_THREAD_IDS]).is_ok());
+
+        let empty = validate_thread_ids(&[]).expect_err("empty batch is rejected");
+        assert_eq!(empty.0, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(empty.1, "thread_ids must contain between 1 and 200 entries");
+
+        let oversized = vec![1; MAX_BATCH_THREAD_IDS + 1];
+        let rejected = validate_thread_ids(&oversized).expect_err("oversized batch is rejected");
+        assert_eq!(rejected.0, StatusCode::UNPROCESSABLE_ENTITY);
+    }
 
     #[test]
     fn prerequisite_origin_label_mapping() {

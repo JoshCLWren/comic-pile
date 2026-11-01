@@ -156,7 +156,11 @@ async fn bound_request(
     let response = tokio::time::timeout(state.request_timeout, next.run(request))
         .await
         .unwrap_or_else(|_| {
-            ApiError(StatusCode::SERVICE_UNAVAILABLE, "Request timed out").into_response()
+            ApiError(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Request timed out".to_string(),
+            )
+            .into_response()
         });
     // No URI, query, headers, credentials, SQL or upstream error strings in request logs.
     tracing::info!(method = %method, status = response.status().as_u16(), elapsed_ms = started.elapsed().as_millis() as u64, "request completed");
@@ -188,9 +192,12 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
-        .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
+        .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
-            ApiError(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")
+            ApiError(
+                StatusCode::METHOD_NOT_ALLOWED,
+                "Method Not Allowed".to_string(),
+            )
         })
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
         .with_state(state)

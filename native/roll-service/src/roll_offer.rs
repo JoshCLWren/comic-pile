@@ -63,7 +63,10 @@ pub struct RollOfferResponse {
 }
 
 fn invalid_key() -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, "Invalid idempotency key".to_string())
+    ApiError(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "Invalid idempotency key".to_string(),
+    )
 }
 
 fn validate_key(key: &str) -> Result<(), ApiError> {
@@ -86,7 +89,10 @@ fn empty_pool() -> ApiError {
 }
 
 fn unavailable() -> ApiError {
-    ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Roll offer unavailable".to_string())
+    ApiError(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Roll offer unavailable".to_string(),
+    )
 }
 
 /// Cookie IDs are exclusion hints only. Intersecting with the live Option E

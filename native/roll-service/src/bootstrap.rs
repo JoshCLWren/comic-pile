@@ -1074,6 +1074,7 @@ mod recovery_diagnostic_tests {
             origin: "reading_order".into(),
             prerequisite_origin: None,
             provenance: vec![],
+            list_id: None,
         }
     }
 
