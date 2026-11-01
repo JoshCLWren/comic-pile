@@ -55,7 +55,9 @@ pub enum AuthError {
     InternalError,
     
     #[error("Database error")]
-    DatabaseError(#[from] crate::db::PoolError),
+    DatabasePool(#[from] deadpool_postgres::PoolError),
+    #[error("Database query error")]
+    DatabaseQuery(#[from] tokio_postgres::Error),
 }
 
 impl IntoResponse for AuthError {
@@ -77,7 +79,7 @@ impl IntoResponse for AuthError {
             AuthError::InvalidUsername => (StatusCode::BAD_REQUEST, "Username cannot contain '@'"),
             AuthError::AccountLocked => (StatusCode::TOO_MANY_REQUESTS, "Account temporarily locked"),
             AuthError::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error"),
-            AuthError::DatabaseError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error"),
+            AuthError::DatabasePool(_) | AuthError::DatabaseQuery(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error"),
         };
 
         let body = ErrorResponse {
