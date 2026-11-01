@@ -224,9 +224,7 @@ fn blocker_editor(
             prerequisite_id: None,
         });
     }
-    if blocker.prerequisite_id.is_none() {
-        return None;
-    }
+    blocker.prerequisite_id?;
     let source_id = blocker.waiting_on_issue_ids.first().copied();
     Some(BoundaryEditorTarget {
         kind: "prerequisite".to_string(),
@@ -610,7 +608,7 @@ pub async fn project_boundary_explanation(
     let thread = labels
         .threads
         .get(&thread_id)
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Thread not found"))?;
+        .ok_or(ApiError(StatusCode::NOT_FOUND, "Thread not found"))?;
     let state = snapshot.threads.get(&thread_id);
     let next_issue = state
         .and_then(|s| s.next_issue_id)
@@ -625,14 +623,11 @@ pub async fn project_boundary_explanation(
         .collect();
     let requirements = crate::reading_blocker_projection::requirement_count(&gates);
 
-    let boundary_state = if state.is_none() {
-        "unavailable"
-    } else if next_issue.is_none() {
-        "complete"
-    } else if state.unwrap().eligible {
-        "available"
-    } else {
-        "blocked"
+    let boundary_state = match state {
+        None => "unavailable",
+        Some(_) if next_issue.is_none() => "complete",
+        Some(evaluated) if evaluated.eligible => "available",
+        Some(_) => "blocked",
     };
 
     Ok(ReadingBoundaryExplanationV2 {

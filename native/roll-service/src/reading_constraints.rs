@@ -726,7 +726,6 @@ mod tests {
                         },
                     ],
                     overlap_decisions: vec![],
-                    name: String::new(),
                 });
             }
             if exclude_other {
@@ -776,7 +775,6 @@ mod tests {
                 },
             ],
             overlap_decisions: vec![],
-            name: String::new(),
         });
         let error = ValidatedReadingInputs::new(cyclic, &BTreeMap::from([(9, "Curated".into())]))
             .err()

@@ -17,24 +17,23 @@ use std::{
 use tokio_postgres::{IsolationLevel, Transaction};
 use unicode_casefold::UnicodeCaseFold;
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize)]
 pub struct ReadingEntry {
     pub issue_id: i32,
     pub gate: String,
     pub skipped: bool,
 }
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize)]
 pub struct OverlapDecision {
     pub continuing_volume_id: String,
     pub waiting_volume_id: String,
 }
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize)]
 pub struct ReadingList {
     pub list_id: i32,
     pub mode: String,
     pub entries: Vec<ReadingEntry>,
     pub overlap_decisions: Vec<OverlapDecision>,
-    pub name: String,
 }
 #[derive(Debug, Serialize)]
 pub struct Prerequisite {
@@ -345,7 +344,6 @@ fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
                 mode: row.mode,
                 entries: vec![],
                 overlap_decisions: vec![],
-                name: String::new(), // Name will be populated during eligibility snapshot build
             },
         );
     }
@@ -561,7 +559,6 @@ mod tests {
             mode: "strict".into(),
             entries: vec![],
             overlap_decisions: vec![decision("comicvine:12", "comicvine:12")],
-            name: String::new(),
         });
         assert!(inputs.require_resolved().is_err());
         inputs.lists[0].overlap_decisions = vec![
@@ -577,7 +574,6 @@ mod tests {
             mode: "strict".into(),
             entries: vec![],
             overlap_decisions: vec![decision("comicvine:12", "comicvine:13")],
-            name: String::new(),
         });
         assert!(inputs.require_resolved().is_ok());
     }

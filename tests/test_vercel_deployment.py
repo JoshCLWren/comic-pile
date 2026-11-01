@@ -191,32 +191,37 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         "dest": "/api/native_roll.rs",
     }
     assert routes[6] == {
-        "src": "/api/v1/roll/dismiss-pending",
+        "src": "/api/v2/reading-boundaries",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
     assert routes[7] == {
+        "src": "/api/v1/roll/dismiss-pending",
+        "methods": ["POST"],
+        "dest": "/api/native_roll.rs",
+    }
+    assert routes[8] == {
         "src": "/api/roll/dismiss-pending",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[8] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
-    assert routes[9] == {
+    assert routes[9] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
+    assert routes[10] == {
         "src": "/(?:openapi\\.json|docs|redoc|health)",
         "dest": "/api/index.py",
     }
-    assert routes[10]["src"] == "/"
-    assert routes[10]["dest"] == "/index.html"
-    # Route 10 is the /assets/.+ cache headers route (added for edge caching)
-    assert routes[11] == {
+    assert routes[11]["src"] == "/"
+    assert routes[11]["dest"] == "/index.html"
+    # Route 12 is the /assets/.+ cache headers route (added for edge caching)
+    assert routes[12] == {
         "src": "/assets/.+",
         "continue": True,
         "headers": {"Cache-Control": "public, max-age=31536000, immutable"},
     }
-    # Route 11 serves the build's generated route HTML pages (see
+    # Route 13 serves the build's generated route HTML pages (see
     # test_vercel_route_html_rule_serves_every_generated_page).
-    assert routes[12] == _route_html_rule()
-    assert routes[13] == {"handle": "filesystem"}
+    assert routes[13] == _route_html_rule()
+    assert routes[14] == {"handle": "filesystem"}
     assert routes[-1]["src"] == "/(.*)"
     assert routes[-1]["dest"] == "/index.html"
 
@@ -225,7 +230,7 @@ def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
     """Ensure static HTML remains identifiable and receives browser protections."""
     routes = _routes(_load_vercel_config())
 
-    for route in (routes[10], routes[12], routes[-1]):
+    for route in (routes[11], routes[13], routes[-1]):
         headers = _headers(route)
         assert headers["X-ComicPile-Frontend"] == "vercel-static"
         assert headers["Cache-Control"] == "public, max-age=0, must-revalidate"
@@ -241,9 +246,9 @@ def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
 
     # Only the landing route is indexable; every other HTML response the
     # routing layer serves must state its non-indexability.
-    landing_headers = _headers(routes[10])
+    landing_headers = _headers(routes[11])
     assert "X-Robots-Tag" not in landing_headers
-    for route in (routes[12], routes[-1]):
+    for route in (routes[13], routes[-1]):
         assert _headers(route)["X-Robots-Tag"] == "noindex, nofollow"
 
 
@@ -255,7 +260,7 @@ def test_vercel_route_html_rule_serves_every_generated_page() -> None:
     such as ``/creators/compare`` map to ``/creators/compare.html``.
     """
     routes = _routes(_load_vercel_config())
-    html_rule = routes[12]
+    html_rule = routes[13]
 
     assert html_rule == _route_html_rule()
 
@@ -277,7 +282,7 @@ def test_vercel_route_html_rule_lists_exactly_the_generated_alternatives() -> No
     SPA. This assertion fails the configuration change in both directions.
     """
     routes = _routes(_load_vercel_config())
-    src_pattern = str(routes[12]["src"])
+    src_pattern = str(routes[13]["src"])
     suffix = ")(\\.html)?"
 
     assert src_pattern.startswith("/(")
@@ -291,13 +296,13 @@ def test_vercel_route_html_rule_lists_exactly_the_generated_alternatives() -> No
 def test_vercel_dynamic_route_pages_fall_through_to_the_spa_fallback() -> None:
     """Parameterized pages keep the app fallback and SPA noindex robots header."""
     routes = _routes(_load_vercel_config())
-    src_pattern = str(routes[12]["src"])
+    src_pattern = str(routes[13]["src"])
 
     for path in DYNAMIC_ROUTE_PROBES:
         matched = re.fullmatch(src_pattern, path)
         assert matched is None, f"{path} must fall through to the SPA, not a static file"
 
-    assert routes[13] == {"handle": "filesystem"}
+    assert routes[14] == {"handle": "filesystem"}
     fallback = routes[-1]
     assert fallback["src"] == "/(.*)"
     assert fallback["dest"] == "/index.html"
