@@ -20,7 +20,7 @@ SECRET = "synthetic-native-http-secret"
 
 @pytest.mark.asyncio
 async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_candidate():
-    """Exercise the mounted GET, its session writes, eligibility SQL and output fields."""
+    """Exercise the mounted GET, read-only eligibility SQL and output fields."""
     url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
     name = f"rust_http_{uuid4().hex}"
     admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
@@ -107,6 +107,7 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
                 pending_thread_updated_at=now-timedelta(minutes=2),
                 bandwidth_source="manual",active_bandwidth="balanced",
                 predicted_bandwidth="light",
+                timezone="America/Chicago",
                 snoozed_thread_ids=[stale_snoozed.id], skipped_thread_ids=[stale_skipped.id],
             )
             db.add(session)

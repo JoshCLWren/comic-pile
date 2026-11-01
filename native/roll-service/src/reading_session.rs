@@ -224,6 +224,15 @@ fn session_error(error: tokio_postgres::Error) -> ApiError {
         db::query_error(error)
     }
 }
+/// Format epoch seconds as the UTC ISO-8601 spelling Python emits.
+fn iso_timestamp(seconds: f64) -> String {
+    let whole = seconds.trunc();
+    let nanos = ((seconds - whole) * 1_000_000_000.0).round() as u32;
+    chrono::DateTime::from_timestamp(whole as i64, nanos)
+        .map(|value| value.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, false))
+        .unwrap_or_else(|| seconds.to_string())
+}
+
 async fn bootstrap_once(
     state: &AppState,
     user: AuthenticatedUser,
@@ -280,7 +289,7 @@ async fn bootstrap_once(
                 ReadingSession {
                     id: 0,
                     user_id: user.id(),
-                    started_at: now.to_string(),
+                    started_at: iso_timestamp(now),
                     ended_at: None,
                     start_die: policy.start_die,
                     manual_die: None,

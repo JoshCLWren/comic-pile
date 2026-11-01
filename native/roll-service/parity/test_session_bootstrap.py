@@ -1,4 +1,4 @@
-"""Native session state AND durable writes versus Python, using disposable schemas only."""
+"""Native read-only session bootstrap versus Python, using disposable schemas only."""
 
 import asyncio
 import json
@@ -7,17 +7,19 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
-from zoneinfo import ZoneInfo
 
 import pytest
 from jose import jwt
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.database import Base
-from app.models import Event, Issue, ReadingSession, Snapshot, Thread, User
+from app.models import Event, Issue, ReadingSession, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
-from comic_pile.reading_session import get_current_die_for_session, get_or_create
+from comic_pile.reading_session import (
+    get_current_die_for_session,
+    resolve_current_session,
+)
 
 NOW = datetime(2026, 10, 29, 8, 0, tzinfo=UTC)
 SECRET = "synthetic-session-parity"
@@ -52,7 +54,7 @@ def normalize(value):
     "invalid-zone", "preserve-zone", "inferred-history", "era-history", "boundary",
 ])
 async def test_session_bootstrap_parity(scenario):
-    """Compare every persisted field, dice, checkpoints, retry effects and foreign access."""
+    """Compare the read-only projection, dice, owner gate and zero-write proof."""
     url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
     schema = f"native_session_{uuid4().hex}"
     admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
@@ -166,140 +168,84 @@ async def test_session_bootstrap_parity(scenario):
         code, _, err = await native(RUST_ROLL_TEST_RESOLVE_ONLY="1")
         assert code == 0, err.decode()
         assert await durable() == initial  # read-only resolution never creates state
-        # Run Python in a transaction externally rolled back to give Rust identical initial data.
-        async with engine.connect() as connection:
-            outer = await connection.begin()
-            async with AsyncSession(bind=connection, expire_on_commit=False, join_transaction_mode="create_savepoint") as db:
-                with patch("comic_pile.reading_session.datetime", Clock), patch("comic_pile.bandwidth.datetime", Clock), patch("app.models.reading_session.datetime", Clock):
-                    s = await get_or_create(db, reader_id)
-                    await db.refresh(s)
-                    if s.timezone is None:
-                        try:
-                            zone = env["RUST_ROLL_TEST_TIMEZONE"].strip()
-                            ZoneInfo(zone)
-                            s.timezone = zone
-                            await db.commit()
-                        except (ValueError, KeyError):
-                            pass
-                    current_die = await get_current_die_for_session(s, db)
-                    automatic_die = await get_current_die_for_session(s, db, automatic=True)
-                    expected = {c.name: getattr(s, c.name) for c in ReadingSession.__table__.columns}
-                    checkpoints = (await db.scalars(select(Snapshot).where(Snapshot.session_id == s.id))).all()
-                    expected_snapshots = [normalize({"thread_states": x.thread_states, "session_state": x.session_state,
-                                                   "snapshot_kind": x.snapshot_kind, "schema_version": x.schema_version}) for x in checkpoints]
-            await outer.rollback()
-        # Sequence values are not transactional. Reset to the fixture's last identity.
-        async with engine.begin() as c:
-            await c.execute(text("SELECT setval(pg_get_serial_sequence('sessions','id'), (SELECT max(id) FROM sessions))"))
+
+        # Read-only oracle: resolve the authoritative session without creating,
+        # inferring bandwidth, or applying the browser timezone.
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            with patch("comic_pile.reading_session.datetime", Clock):
+                resolved = await resolve_current_session(db, reader_id)
+                if resolved is None:
+                    start_die = int(os.environ.get("START_DIE", "6"))
+                    expected = {
+                        "id": 0,
+                        "user_id": reader_id,
+                        "started_at": NOW.isoformat(),
+                        "ended_at": None,
+                        "start_die": start_die,
+                        "manual_die": None,
+                        "pending_thread_id": None,
+                        "pending_issue_id": None,
+                        "pending_thread_updated_at": None,
+                        "snoozed_thread_ids": None,
+                        "skipped_thread_ids": None,
+                        "timezone": None,
+                        "predicted_bandwidth": None,
+                        "active_bandwidth": None,
+                        "bandwidth_confidence": None,
+                        "bandwidth_source": None,
+                        "bandwidth_version": None,
+                        "bandwidth_updated_at": None,
+                        "reading_bandwidth": None,
+                        "reading_intent": None,
+                        "reading_mode_source": None,
+                        "reading_mode_suggested": False,
+                        "active_intent": None,
+                        "predicted_intent": None,
+                        "intent_confidence": None,
+                        "intent_source": None,
+                        "intent_version": None,
+                        "session_mode_correction_guidance": None,
+                    }
+                    current_die = automatic_die = start_die
+                else:
+                    await db.refresh(resolved)
+                    expected = {
+                        c.name: getattr(resolved, c.name)
+                        for c in ReadingSession.__table__.columns
+                    }
+                    current_die = await get_current_die_for_session(resolved, db)
+                    automatic_die = await get_current_die_for_session(
+                        resolved, db, automatic=True
+                    )
+
         code, actual, err = await native()
         assert code == 0, err.decode()
         assert normalize(actual["session"]) == normalize(expected)
         assert actual["current_die"] == current_die
         assert actual["automatic_die"] == automatic_die
-        async with AsyncSession(engine) as db:
-            checkpoints = (await db.scalars(select(Snapshot).where(Snapshot.session_id == actual["session"]["id"]))).all()
-            actual_snapshots = [normalize({"thread_states": x.thread_states, "session_state": x.session_state,
-                                          "snapshot_kind": x.snapshot_kind, "schema_version": x.schema_version}) for x in checkpoints]
-        assert actual_snapshots == expected_snapshots
-        after = await durable()
-        for table in ("threads", "issues", "events"):
-            assert after[table] == initial[table]
+        assert "created" not in actual
+        # GET bootstrap is strictly read-only: no session, snapshot, event or
+        # thread row may change, including on the first request.
+        assert await durable() == initial
+
         code, again, err = await native()
         assert code == 0, err.decode()
-        assert not again["created"]
+        assert "created" not in again
         assert again["session"] == actual["session"]
-        assert await durable() == after
+        assert await durable() == initial
         # Missing and foreign reading-session IDs never resolve through the owner gate.
-        for session_id in (other_id, max(x["id"] for x in after["sessions"])+1):
+        for session_id in (other_id, max(x["id"] for x in initial["sessions"]) + 1):
             code, _, err = await native(RUST_ROLL_TEST_SESSION_ID=str(session_id))
             assert code != 0
             assert b"404 Not Found Session not found" in err
-        assert await durable() == after
-        # Concurrent GETs serialize and return the same authoritative session.
+        assert await durable() == initial
+        # Concurrent GETs return the same authoritative session without writing.
         results = await asyncio.gather(*(native() for _ in range(5)))
-        assert all(code == 0 and result["session"] == actual["session"] for code, result, _ in results)
-        assert await durable() == after
-        if scenario == "first":
-            # Fresh first-session concurrency, rather than only concurrent reuse.
-            async with engine.begin() as c:
-                await c.execute(text("DELETE FROM sessions WHERE user_id=:reader"), {"reader": reader_id})
-            results = await asyncio.gather(*(native() for _ in range(5)))
-            assert all(code == 0 for code, _, _ in results)
-            assert len({result["session"]["id"] for _, result, _ in results}) == 1
-            assert sum(result["created"] for _, result, _ in results) == 1
-            async with engine.begin() as c:
-                await c.execute(text("DELETE FROM sessions WHERE user_id=:reader"), {"reader": reader_id})
-                # A checkpoint failure must roll back the newly inserted session too.
-                await c.execute(text("""CREATE FUNCTION fail_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $$
-                    BEGIN RAISE EXCEPTION 'synthetic checkpoint failure'; END $$"""))
-                await c.execute(text("CREATE TRIGGER fail_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION fail_checkpoint()"))
-            before_failure = await durable()
-            code, _, err = await native()
-            assert code != 0 and b"500 Internal Server Error" in err
-            assert await durable() == before_failure
-            async with engine.begin() as c:
-                await c.execute(text("DROP TRIGGER fail_checkpoint ON snapshots"))
-                await c.execute(text("""CREATE FUNCTION wait_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $$
-                    BEGIN PERFORM pg_advisory_xact_lock(-731707); RETURN NEW; END $$"""))
-                await c.execute(text("CREATE TRIGGER wait_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION wait_checkpoint()"))
-            # Cancel bootstrap_at in Rust, not the child process: the future must
-            # drop its in-flight transaction while the pool stays alive.
-            # One connection forces the post-cancel checkout to encounter a busy
-            # connection if Pending fails to discard it.
-            async with engine.begin() as blocker:
-                await blocker.execute(text("SELECT pg_advisory_xact_lock(-731707)"))
-                p = await asyncio.create_subprocess_exec(
-                    str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
-                    env={**env, "RUST_ROLL_TEST_CANCEL_ON_STDIN": "1", "RUST_ROLL_POOL_SIZE": "1"},
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                try:
-                    for _ in range(200):
-                        async with admin.connect() as c:
-                            waiting = await c.scalar(text(
-                                "SELECT count(*) FROM pg_stat_activity "
-                                "WHERE application_name=:name AND wait_event='advisory'"
-                            ), {"name": schema})
-                        if waiting:
-                            break
-                        await asyncio.sleep(0.01)
-                    else:
-                        pytest.fail("native checkpoint did not reach controlled lock")
-                    assert p.stdin is not None
-                    p.stdin.write(b"x")
-                    await p.stdin.drain()
-                    out, err = await asyncio.wait_for(p.communicate(), 10)
-                    assert p.returncode == 0, err.decode()
-                    assert json.loads(out) == {"cancelled": True, "checkout_usable": True}
-                    # The process has exited without releasing the blocking lock.
-                    # No uncommitted session or snapshot can later become visible.
-                    assert await durable() == before_failure
-                finally:
-                    if p.returncode is None:
-                        p.kill()
-                        await p.wait()
-            assert await durable() == before_failure
-            async with engine.begin() as c:
-                await c.execute(text("DROP TRIGGER wait_checkpoint ON snapshots"))
-            # One synthetic deadlock rolls back; the next attempt creates one checkpoint.
-            async with engine.begin() as c:
-                await c.execute(text("CREATE SEQUENCE checkpoint_attempt"))
-                await c.execute(text("""CREATE FUNCTION retry_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $$
-                    BEGIN
-                      IF nextval('checkpoint_attempt') = 1 THEN
-                        RAISE EXCEPTION 'synthetic deadlock' USING ERRCODE='40P01';
-                      END IF;
-                      RETURN NEW;
-                    END $$"""))
-                await c.execute(text("CREATE TRIGGER retry_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION retry_checkpoint()"))
-            code, recovered, err = await native()
-            assert code == 0 and recovered["created"], err.decode()
-            async with engine.connect() as c:
-                assert await c.scalar(text("SELECT last_value FROM checkpoint_attempt")) == 2
-                assert await c.scalar(text("SELECT count(*) FROM sessions WHERE user_id=:reader"), {"reader": reader_id}) == 1
-                assert await c.scalar(text("SELECT count(*) FROM snapshots")) == 1
+        assert all(
+            code == 0 and result["session"] == actual["session"]
+            for code, result, _ in results
+        )
+        assert await durable() == initial
     finally:
         await engine.dispose()
         async with admin.begin() as c:
