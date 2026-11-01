@@ -11,7 +11,7 @@ vi.mock('react-router-dom', async (importOriginal) => ({
 }))
 
 describe('ThreadPool bootstrap edge branches', () => {
-  it('handles a zero selected id and a blocked thread without a reason', () => {
+  it('retains keyboard access with a zero selected id while ignoring retired blocked reports', () => {
     const onThreadClick = vi.fn()
 
     render(
@@ -49,8 +49,8 @@ describe('ThreadPool bootstrap edge branches', () => {
     fireEvent.keyDown(thread, { key: 'Enter' })
     expect(onThreadClick).toHaveBeenCalledWith({ id: 1, title: 'Saga', format: 'Comic' })
 
-    expect(screen.getByRole('link', { name: 'Monstress' })).toHaveAttribute('href', '/thread/2')
-    expect(screen.getByText('Reading requirements are unavailable. Open the series to retry.')).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Monstress' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading requirements are unavailable. Open the series to retry.')).not.toBeInTheDocument()
     expect(screen.queryByText('Read the prerequisite first')).not.toBeInTheDocument()
   })
 })
