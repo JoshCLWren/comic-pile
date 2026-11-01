@@ -182,26 +182,6 @@ class ThreadExclusionReason(BaseModel):
     last_activity_at: str | None = None
 
 
-class RollExclusionPageResponse(BaseModel):
-    """One deterministic page of the Roll exclusion drill-down (issue #3330).
-
-    The initial Roll bootstrap deliberately carries only bounded previews. This
-    page is the authoritative drill-down for a single exclusion category, and
-    its ``total`` is computed with the same predicate that produced the
-    bootstrap category count, so the two can never disagree.
-    """
-
-    category: Literal["blocked", "inactive"]
-    items: list[ThreadExclusionReason] = Field(default_factory=list)
-    total: int = Field(..., ge=0, description="Every series in this category, not just this page.")
-    limit: int = Field(..., ge=1, description="Echoed page size.")
-    offset: int = Field(..., ge=0, description="Echoed page offset.")
-    next_cursor: str | None = Field(
-        default=None,
-        description="Offset cursor for the next page, null when this page is the last.",
-    )
-
-
 class RollBootstrapResponse(BaseModel):
     """Bounded bootstrap payload for the Roll initial render.
 
