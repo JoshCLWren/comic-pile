@@ -87,13 +87,10 @@ export function useQueueSeriesMappingCommit() {
     Parameters<typeof seriesMappingApi.commit>[0]
   >({
     mutationFn: (request) => seriesMappingApi.commit(request),
-    retry: (failureCount, error) => {
-      // Enable retries for lost responses and server errors
-      if (failureCount >= 3) return false // Max 3 retries
-      if (isIndeterminateApiOutcome(error)) return true // Retry lost responses
-      if (error instanceof Error && error.message.includes('500')) return true // Retry server errors
-      return false // Don't retry other errors
-    },
+    // The commit carries an idempotency key, so replaying an indeterminate
+    // failure (5xx or a lost transport response) cannot double-apply the
+    // mapping. A definitive 4xx refusal is surfaced immediately.
+    retry: (failureCount, error) => failureCount < 3 && isIndeterminateApiOutcome(error),
     onSuccess: async (result) => {
       await invalidateComicVineIssueIntelligenceMany(queryClient, result.confirmed_issue_ids)
       await invalidateAfterQueueMutation(queryClient)

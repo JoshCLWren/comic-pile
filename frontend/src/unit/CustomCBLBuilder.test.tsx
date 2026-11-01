@@ -284,7 +284,7 @@ describe('CustomCBLBuilder', () => {
     Object.defineProperty(navigation, 'scrollIntoView', { value: scrollTo })
     fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
     expect(scrollTo).toHaveBeenCalledTimes(1)
-    expect(navigation).toHaveFocus()
+    await waitFor(() => expect(navigation).toHaveFocus())
     fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
     expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Remove Mobile Reading Series #61' }))
