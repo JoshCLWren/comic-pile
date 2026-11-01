@@ -169,11 +169,30 @@ async fn bound_request(
 
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
+    use auth::handlers::{
+        apply_timeout_layer, csrf, forgot_password, login, logout, me, refresh, register, reset_password,
+    };
+    use auth::middleware::{csrf_middleware, rate_limit_middleware};
+
     Router::new()
+        // Health check
         .route(
             "/health",
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
         )
+        // Authentication endpoints
+        .route("/api/v2/auth/register", post(register))
+        .route("/api/v2/auth/login", post(login))
+        .route("/api/v2/auth/refresh", post(refresh))
+        .route("/api/v2/auth/logout", post(logout))
+        .route("/api/v2/auth/csrf", get(csrf))
+        .route("/api/v2/auth/me", get(me))
+        .route("/api/v2/auth/forgot-password", post(forgot_password))
+        .route("/api/v2/auth/reset-password", post(reset_password))
+        // Legacy auth endpoint (for backward compatibility during migration)
+        .route("/api/v1/auth/me", get(me))
+        .route("/api/auth/me", get(me))
+        // Roll endpoints
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
@@ -199,7 +218,14 @@ pub fn router(state: Arc<AppState>) -> Router {
                 "Method Not Allowed".to_string(),
             )
         })
+        // Apply middleware
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
+        .layer(axum::middleware::from_fn(rate_limit_middleware))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            csrf_middleware,
+        ))
+        .layer(axum::middleware::from_fn(apply_timeout_layer))
         .with_state(state)
 }
 
