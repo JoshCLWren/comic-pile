@@ -116,62 +116,20 @@ describe('ThreadPool Component', () => {
     expect(shuffle).toHaveAccessibleDescription(/randomizes the complete active queue/i)
   })
 
-  it('collapses blocked threads and exposes a toggle', () => {
-    const onToggleBlocked = vi.fn()
+  it('never displays the retired blocked panel even with legacy bootstrap data', () => {
     const blockedThread: RollBootstrapThread = {
-      id: 3,
-      title: 'Blocked Thread',
-      format: 'Mainline',
-      issue_number: '1',
-      route_labels: ['Blocked'],
+      id: 3, title: 'Blocked Thread', format: 'Mainline', issue_number: '1',
     }
-
-    const { rerender } = renderPool({
-      pool: mockPool,
+    renderPool({
       blockedThreads: [blockedThread],
-      blockingDependencyMap: { 3: [{ thread_id: 3, thread_title: 'Dependency Thread', issue_number: '9', label: 'dependency' }] },
+      blockingDependencyMap: {
+        3: [{ thread_id: 7, thread_title: 'Dependency Thread', issue_number: '9', label: 'dependency' }],
+      },
+      blockedExpanded: true,
     })
-    // Inject the spy by re-rendering with the handler.
-    rerender(
-      <MemoryRouter>
-        <ThreadPool
-          pool={mockPool}
-          blockedThreads={[blockedThread]}
-          blockingDependencyMap={{ 3: [{ thread_id: 3, thread_title: 'Dependency Thread', issue_number: '9', label: 'dependency' }] }}
-          dieSize={20}
-          isRatingView={false}
-          selectedThreadId={null}
-          staleThread={null}
-          staleThreadCount={0}
-          snoozedThreads={mockSnoozedThreads}
-          snoozedExpanded={false}
-          skippedThreads={mockSkippedThreads}
-          skippedExpanded={false}
-          blockedExpanded={false}
-          staleExpanded={false}
-          onThreadClick={() => {}}
-          onUnsnooze={() => {}}
-          onUnskip={() => {}}
-          onReadStale={() => {}}
-          onToggleSnoozed={() => {}}
-          onToggleSkipped={() => {}}
-          onToggleStale={() => {}}
-          onToggleBlocked={onToggleBlocked}
-          onShuffle={() => {}}
-          unsnoozeIsPending={false}
-          unskipIsPending={false}
-          shuffleIsPending={false}
-        />
-      </MemoryRouter>,
-    )
-
-    const toggle = screen.getByText(/1 series waiting for earlier issues/i)
-    expect(toggle).toBeInTheDocument()
-    // Blocked thread titles stay hidden until the section is expanded.
+    expect(screen.queryByText(/series waiting for earlier issues/i)).not.toBeInTheDocument()
     expect(screen.queryByText('Blocked Thread')).not.toBeInTheDocument()
-
-    fireEvent.click(toggle)
-    expect(onToggleBlocked).toHaveBeenCalledTimes(1)
+    expect(screen.getAllByRole('button', { name: /die face/i })).toHaveLength(2)
   })
 
   it('renders the empty-state when there is nothing to roll', () => {
