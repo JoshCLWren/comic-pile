@@ -218,13 +218,10 @@ impl IssueService {
         .fetch_one(&mut *tx)
         .await?;
 
-        let updated_thread = sqlx::query_as!(
-            Thread,
-            "SELECT * FROM threads WHERE id = $1",
-            thread_id
-        )
-        .fetch_one(&mut *tx)
-        .await?;
+        let updated_thread =
+            sqlx::query_as!(Thread, "SELECT * FROM threads WHERE id = $1", thread_id)
+                .fetch_one(&mut *tx)
+                .await?;
 
         // Commit the transaction
         tx.commit().await?;

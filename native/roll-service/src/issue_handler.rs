@@ -46,7 +46,7 @@ pub async fn read_rate_issue(
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| ServiceError::Unauthorized("Missing authorization header"))?;
-    
+
     let token = auth_header
         .split_once(' ')
         .and_then(|(scheme, token)| {
@@ -57,7 +57,7 @@ pub async fn read_rate_issue(
             }
         })
         .ok_or_else(|| ServiceError::Unauthorized("Invalid authorization header format"))?;
-    
+
     let authenticated_user = authenticate(&state, token).await?;
 
     // Create the issue service
