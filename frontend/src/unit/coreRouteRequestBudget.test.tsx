@@ -3,89 +3,37 @@
  *
  * Each case mounts the real route component through the real service layer
  * with only the HTTP transport doubled, so the assertions count the exact
- * HTTP method + path + query parameters the browser would send. They fail on
- * needless calls and stay silent for cache-served warm navigation.
+ * HTTP method + path + query parameters the browser would send. Exact per-key
+ * counts (not `Set`s) make a duplicate in-flight or retry call fail.
+ *
+ * The shell case records the identity-inbox read at the Axios adapter because
+ * that service module still uses the default Axios instance; the other shell
+ * read (preferences) goes through the service transport seam.
  */
 import { StrictMode, type ReactNode } from 'react'
+import type { InternalAxiosRequestConfig } from 'axios'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { setDefaultHttpClient } from '../services/httpClient'
-import { createHttpClientStub } from './httpClientStub'
+import api from '../services/api'
 import { AuthContext } from '../contexts/AuthContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import type { AuthState } from '../services/authState'
 import Navigation from '../components/Navigation'
 import { PreferencesSync } from '../hooks/usePreferences'
 import QueuePage from '../pages/QueuePage'
-import { identityInboxApi } from '../services/api-identity'
-
-vi.mock('../services/api-identity', () => ({
-  identityInboxApi: { list: vi.fn() },
-}))
 import RollPage from '../pages/RollPage'
 import HistoryPage from '../pages/HistoryPage'
 import SessionPage from '../pages/SessionPage'
-
-type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
-  | JsonValue[]
-  | { [key: string]: JsonValue }
-
-type RecordedCall = {
-  method: string
-  url: string
-  params?: Record<string, string | number>
-  data?: JsonValue
-}
-
-type Responder = (call: RecordedCall) => JsonValue | Promise<JsonValue>
-
-function makeRecordingClient(responder: Responder) {
-  const calls: RecordedCall[] = []
-  const client = createHttpClientStub()
-  const respond = (
-    method: string,
-    url: string,
-    params?: Record<string, string | number>,
-    data?: JsonValue,
-  ) => {
-    const call = { method, url, params, data }
-    calls.push(call)
-    return Promise.resolve(responder(call))
-  }
-  client.get.mockImplementation(
-    (url: string, config?: { params?: Record<string, string | number> }) =>
-      respond('GET', url, config?.params),
-  )
-  client.delete.mockImplementation(
-    (url: string, config?: { params?: Record<string, string | number> }) =>
-      respond('DELETE', url, config?.params),
-  )
-  client.post.mockImplementation((url: string, data?: JsonValue) =>
-    respond('POST', url, undefined, data),
-  )
-  client.put.mockImplementation((url: string, data?: JsonValue) =>
-    respond('PUT', url, undefined, data),
-  )
-  client.patch.mockImplementation((url: string, data?: JsonValue) =>
-    respond('PATCH', url, undefined, data),
-  )
-  return { calls, client }
-}
-
-function key(call: RecordedCall): string {
-  const params = call.params
-    ? `?${Object.keys(call.params).sort().map((name) => `${name}=${String(call.params?.[name])}`).join('&')}`
-    : ''
-  return `${call.method} ${call.url}${params}`
-}
+import {
+  createRequestRecorder,
+  requestCounts,
+  type RecordedCall,
+  type Responder,
+} from './requestRecorder'
 
 function Providers({ children }: { children: ReactNode }) {
   return (
@@ -201,6 +149,27 @@ const authState: AuthState = {
   lastRetryAt: null,
 }
 
+const originalAdapter = api.defaults.adapter
+let adapterCalls: RecordedCall[] = []
+
+function installAdapterRecorder(): void {
+  api.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
+    adapterCalls.push({
+      method: (config.method ?? 'get').toUpperCase(),
+      url: config.url ?? '',
+      // SAFETY: the identity service always sends offset/limit search params.
+      params: config.params as Record<string, string | number>,
+    })
+    return {
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+      data: { items: [], total: 0, offset: 0, limit: 1 },
+    }
+  }
+}
+
 function renderShell(): ReactNode {
   return (
     <MemoryRouter initialEntries={['/queue']}>
@@ -231,12 +200,18 @@ function renderShell(): ReactNode {
   )
 }
 
+beforeEach(() => {
+  adapterCalls = []
+})
+
+afterEach(() => {
+  api.defaults.adapter = originalAdapter
+})
+
 describe('core route request budgets', () => {
-  it('authenticated shell cold-loads preferences and inbox status once each', async () => {
-    const inboxList = vi.mocked(identityInboxApi.list)
-    inboxList.mockReset()
-    inboxList.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 })
-    const { calls, client } = makeRecordingClient((call) => {
+  it('authenticated shell cold-loads preferences and inbox status exactly once each', async () => {
+    installAdapterRecorder()
+    const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v1/users/me/preferences') return { theme: 'classic', user_id: 1 }
       return {}
     })
@@ -244,16 +219,22 @@ describe('core route request budgets', () => {
 
     render(renderShell())
 
-    await waitFor(() => expect(calls.some((call) => call.url === '/v1/users/me/preferences')).toBe(true))
-    await waitFor(() => expect(inboxList).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(calls.some((call) => call.url === '/v1/users/me/preferences')).toBe(true),
+    )
+    await waitFor(() => expect(adapterCalls.length).toBeGreaterThan(0))
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    expect(new Set(calls.map(key))).toEqual(new Set(['GET /v1/users/me/preferences']))
-    expect(inboxList).toHaveBeenCalledWith(0, 1)
+    expect(requestCounts(calls)).toEqual({
+      'GET /v1/users/me/preferences': 1,
+    })
+    expect(requestCounts(adapterCalls)).toEqual({
+      'GET /v1/identity-inbox?limit=1&offset=0': 1,
+    })
   })
 
   it('Roll cold-loads one bootstrap read, even under StrictMode', async () => {
-    const { calls, client } = makeRecordingClient((call) => {
+    const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v2/roll/bootstrap') return bootstrap
       return {}
     })
@@ -273,7 +254,7 @@ describe('core route request budgets', () => {
   })
 
   it('Queue cold-loads each bounded batch once and reuses the cache on warm remount', async () => {
-    const { calls, client } = makeRecordingClient(queueHandler)
+    const { calls, client } = createRequestRecorder(queueHandler)
     setDefaultHttpClient(client)
 
     const view = render(renderAt('/queue', <QueuePage />))
@@ -283,26 +264,24 @@ describe('core route request budgets', () => {
     )
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    expect(new Set(calls.map(key))).toEqual(
-      new Set([
-        'GET /v1/threads/?page_size=50&sort=position',
-        'GET /v1/sessions/current/',
-        'GET /v1/threads/excluded/threads?page_size=50&sort=created',
-        'POST /v2/reading-boundaries',
-        'POST /v1/threads/groups:batch',
-        'POST /v1/threads:getBlockingInfo',
-      ]),
-    )
+    expect(requestCounts(calls)).toEqual({
+      'GET /v1/threads/?page_size=50&sort=position': 1,
+      'GET /v1/sessions/current/': 1,
+      'GET /v1/threads/excluded/threads?page_size=50&sort=created': 1,
+      'POST /v2/reading-boundaries': 1,
+      'POST /v1/threads/groups:batch': 1,
+      'POST /v1/threads:getBlockingInfo': 1,
+    })
 
     view.unmount()
     const warmed = calls.length
     render(renderAt('/queue', <QueuePage />))
     await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(calls.length).toBe(warmed)
+    expect(calls).toHaveLength(warmed)
   })
 
   it('Queue search commits one request for the final debounced value', async () => {
-    const { calls, client } = makeRecordingClient(queueHandler)
+    const { calls, client } = createRequestRecorder(queueHandler)
     setDefaultHttpClient(client)
 
     render(renderAt('/queue', <QueuePage />))
@@ -330,7 +309,7 @@ describe('core route request budgets', () => {
   })
 
   it('History cold-loads exactly one session list page', async () => {
-    const { calls, client } = makeRecordingClient((call) => {
+    const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v1/sessions/') return { sessions: [], next_page_token: null }
       return {}
     })
@@ -341,11 +320,11 @@ describe('core route request budgets', () => {
     await waitFor(() => expect(calls.some((call) => call.url === '/v1/sessions/')).toBe(true))
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    expect(calls.map(key)).toEqual(['GET /v1/sessions/'])
+    expect(requestCounts(calls)).toEqual({ 'GET /v1/sessions/': 1 })
   })
 
-  it('Session detail cold-loads details and snapshots once', async () => {
-    const { calls, client } = makeRecordingClient((call) => {
+  it('Session detail cold-loads details and snapshots exactly once', async () => {
+    const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v1/sessions/7/details') {
         return {
           session_id: 7,
@@ -372,11 +351,14 @@ describe('core route request budgets', () => {
       ),
     )
 
-    await waitFor(() => expect(calls.some((call) => call.url === '/v1/sessions/7/snapshots')).toBe(true))
+    await waitFor(() =>
+      expect(calls.some((call) => call.url === '/v1/sessions/7/snapshots')).toBe(true),
+    )
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    expect(new Set(calls.map(key))).toEqual(
-      new Set(['GET /v1/sessions/7/details', 'GET /v1/sessions/7/snapshots']),
-    )
+    expect(requestCounts(calls)).toEqual({
+      'GET /v1/sessions/7/details': 1,
+      'GET /v1/sessions/7/snapshots': 1,
+    })
   })
 })

@@ -63,25 +63,23 @@ test.describe('Issue #4501: core-view request budgets', () => {
     await expect(page.getByRole('button', { name: 'Edit tags' }).first()).toBeVisible()
     await page.waitForTimeout(500)
 
-    expect(
-      recorder.calls.filter((call) => call.method === 'GET' && call.path === '/api/v1/tags/'),
-    ).toEqual([])
+    const catalogCalls = () =>
+      recorder.calls.filter(
+        (call) => call.method === 'GET' && call.path === '/api/v1/tags/',
+      )
+
+    expect(catalogCalls()).toHaveLength(0)
     expect(
       recorder.calls.filter(
         (call) => call.method === 'POST' && call.path === '/api/v1/threads/groups:batch',
-      ).length,
-    ).toBeGreaterThan(0)
+      ),
+    ).toHaveLength(1)
 
     await page.getByRole('button', { name: 'Edit tags' }).first().click()
     await expect(page.getByRole('dialog')).toBeVisible()
-    await expect
-      .poll(
-        () =>
-          recorder.calls.filter(
-            (call) => call.method === 'GET' && call.path === '/api/v1/tags/',
-          ).length,
-      )
-      .toBeGreaterThan(0)
+    await expect.poll(() => catalogCalls().length).toBe(1)
+    await page.waitForTimeout(300)
+    expect(catalogCalls()).toHaveLength(1)
     recorder.stop()
   })
 
