@@ -89,7 +89,7 @@
       "dest": "/api/native_issue.rs"
     },
     {
-      "src": "/api/v2/issues/:issue_id",
+      "src": "^/api/v2/issues/[0-9]+$",
       "methods": ["PATCH"],
       "dest": "/api/native_issue.rs"
     },
