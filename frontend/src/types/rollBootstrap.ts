@@ -49,25 +49,6 @@ export interface ThreadExclusionReason {
   last_activity_at?: string | null
 }
 
-/** Categories the Roll exclusion drill-down can page through (issue #3330). */
-export type RollExclusionCategory = 'blocked' | 'inactive'
-
-/**
- * One deterministic page of a Roll exclusion category.
- *
- * `total` is the authoritative category size, computed by the backend from the
- * same predicate as the bootstrap category count, so a heading can never show
- * the loaded preview size as if it were the total.
- */
-export interface RollExclusionPageResponse {
-  category: RollExclusionCategory
-  items: ThreadExclusionReason[]
-  total: number
-  limit: number
-  offset: number
-  next_cursor: string | null
-}
-
 /** One direct continuity blocker for a pending roll. */
 export interface RollRecoveryBlocker {
   rule_id: number | null
