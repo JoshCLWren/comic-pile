@@ -3,7 +3,20 @@ import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
 import type { BlockingDependency } from '../../../types'
+import type { BlockingDependency } from '../../../types'
 import type { RollBootstrapThread, ThreadExclusionReason } from '../../../types/rollBootstrap'
+
+/** Transitional type for callers that still compile older Roll fixture props.
+ * Pagination is no longer rendered or fetched on the Roll page.
+ */
+export interface RollExclusionPagination {
+  total: number
+  hasNextPage: boolean
+  isLoading: boolean
+  isError: boolean
+  onLoadMore: () => void
+  onRetry: () => void
+}
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
