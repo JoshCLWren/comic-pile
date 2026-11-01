@@ -942,7 +942,10 @@ async def list_continuity_plan_items(
         # Source badges and editor links must expose the actual owned List,
         # even when historical Plan nodes lack CBL provenance.
         for plan in ordered:
-            source_path = f"custom-cbl:{authorities[plan.id][0]}"
+            authority = authorities.get(plan.id)
+            if authority is None:
+                continue
+            source_path = f"custom-cbl:{authority[0]}"
             paths_by_plan[plan.id] = [
                 source_path,
                 *(path for path in paths_by_plan[plan.id] if path != source_path),
@@ -957,7 +960,26 @@ async def list_continuity_plan_items(
         )
         summaries: list[ContinuityPlanListItem] = []
         for plan in ordered:
-            list_id, list_mode, list_updated_at = authorities[plan.id]
+            authority = authorities.get(plan.id)
+            if authority is None:
+                summaries.append(
+                    ContinuityPlanListItem(
+                        id=plan.id,
+                        name=plan.name,
+                        ordering_mode="informational",
+                        lane_count=1,
+                        step_count=0,
+                        source_paths=paths_by_plan[plan.id],
+                        source_names={
+                            path: source_names[path]
+                            for path in paths_by_plan[plan.id]
+                            if path in source_names
+                        },
+                        updated_at=plan.updated_at,
+                    )
+                )
+                continue
+            list_id, list_mode, list_updated_at = authority
             active_mode: PlanOrderingMode = (
                 "strict_sequential" if list_mode == "strict" else "informational"
             )
