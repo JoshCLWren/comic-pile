@@ -18,6 +18,7 @@ The three existing themes are `classic`, `ink-gold`, and `command-center`. New f
 | --- | --- | --- |
 | Page | `--theme-bg-page` | Primary application canvas |
 | Panel | `--theme-bg-panel` | Cards, grouped controls, inset surfaces |
+| Hover surface | `--theme-bg-hover` | Interactive hover fill for secondary buttons, list rows, and compact controls |
 | Border | `--theme-border` | Ordinary panel/control separation |
 | Primary text | `--theme-text-primary` | Main readable text |
 | Muted text | `--theme-text-muted` | Secondary labels and context |

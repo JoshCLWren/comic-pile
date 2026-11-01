@@ -45,6 +45,7 @@ body {
 [data-theme="classic"] {
   --theme-bg-page: #1a1410;
   --theme-bg-panel: rgba(255, 255, 255, 0.04);
+  --theme-bg-hover: rgba(255, 255, 255, 0.12);
   --theme-border: rgba(255, 255, 255, 0.08);
   --theme-text-primary: #e8d5b0;
   --theme-text-muted: #a0937e;
@@ -77,6 +78,7 @@ body {
 [data-theme="ink-gold"] {
   --theme-bg-page: #191005;
   --theme-bg-panel: #271b0c;
+  --theme-bg-hover: #3b2a13;
   --theme-border: #3d2c16;
   --theme-text-primary: #f3dfae;
   --theme-text-muted: #c8a96f;
@@ -109,6 +111,7 @@ body {
 [data-theme="command-center"] {
   --theme-bg-page: #0b0c1e;
   --theme-bg-panel: rgba(0, 0, 0, 0.6);
+  --theme-bg-hover: rgba(255, 255, 255, 0.1);
   --theme-border: rgba(255, 255, 255, 0.1);
   --theme-text-primary: #e0f7fa;
   --theme-text-muted: #a0d8f2;
