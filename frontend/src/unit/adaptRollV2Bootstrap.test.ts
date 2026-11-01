@@ -19,32 +19,24 @@ const sample = {
     issue: { id: 404, number: '12' },
     routes: [{ kind: 'group', name: 'Reading list' }],
   }],
-  total_threads: 4,
-  available_threads: 1,
-  excluded_count: 3,
-  excluded_threads: [{ thread_id: 7, title: 'Completed', format: 'Comic', reason: 'completed' }],
-  inactive_count: 1,
-  inactive_threads: [{ thread_id: 7, title: 'Completed', format: 'Comic', reason: 'completed' }],
 // SAFETY: This intentionally partial v2 fixture covers only the adapter's
 // relevant runtime invariants; unused session fields are never inspected.
 } as RollV2BootstrapResponse
 
 describe('native v2 Roll bootstrap compatibility', () => {
-  it('retains the actual die-face tags, exact issue, route labels and inactive drilldown', () => {
+  it('retains die-face tags, exact issue and route labels without diagnostic reports', () => {
     const state = adaptRollV2Bootstrap(sample)
     expect(state.roll_pool[0].tags?.map(tag => tag.name)).toEqual(['Favorites'])
     expect(state.roll_pool[0].issue_id).toBe(404)
     expect(state.roll_pool[0].issue_number).toBe('12')
     expect(state.roll_pool[0].route_labels).toEqual(['Reading list'])
-    expect(state.inactive_count).toBe(1)
-    expect(state.inactive_threads?.[0].reason).toBe('completed')
-    expect(state.excluded_count).toBe(3)
-    expect(state.total_threads).toBe(4)
+    for (const diagnostic of ['blocked_count', 'stale_thread_count', 'inactive_count', 'excluded_count']) {
+      expect(state).not.toHaveProperty(diagnostic)
+    }
   })
 
-  it('fails closed when the native response omits exclusion counts', () => {
-    const { inactive_count: _ignored, ...incomplete } = sample
-    // SAFETY: This intentionally malformed payload is being tested for runtime rejection.
+  it('fails closed when the native response omits rollable candidates', () => {
+    const { rollable: _ignored, ...incomplete } = sample
     expect(() => adaptRollV2Bootstrap(incomplete as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 bootstrap response')
   })
