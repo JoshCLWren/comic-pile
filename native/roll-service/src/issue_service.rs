@@ -248,6 +248,67 @@ pub(crate) async fn cards(
     })
 }
 
+/// Canonical blocked thread ids for one owner, read inside the caller's transaction.
+///
+/// This is the SQL form of `comic_pile.dependencies._get_blocked_thread_ids_uncached`:
+/// a thread is blocked when its current unread frontier issue
+/// (`threads.next_unread_issue_id`) has an unread prerequisite over a canonical
+/// `dependencies` edge. Historical CBL materialization rows (`cbl-order:%`
+/// notes) are inert and never block. Keep the predicate identical rather than
+/// introducing a second notion of "blocked".
+async fn canonical_blocked_thread_ids(
+    tx: &Transaction<'_>,
+    user_id: i32,
+) -> Result<Vec<i32>, ApiError> {
+    let rows = tx
+        .query(
+            "SELECT DISTINCT target_thread.id
+             FROM threads target_thread
+             JOIN issues next_unread_issue
+               ON next_unread_issue.id = target_thread.next_unread_issue_id
+             JOIN dependencies dependency
+               ON dependency.target_issue_id = next_unread_issue.id
+             JOIN issues source_issue
+               ON source_issue.id = dependency.source_issue_id
+             JOIN threads source_thread
+               ON source_thread.id = source_issue.thread_id
+             WHERE target_thread.user_id = $1
+               AND source_thread.user_id = $1
+               AND target_thread.next_unread_issue_id IS NOT NULL
+               AND source_issue.status <> 'read'
+               AND next_unread_issue.status <> 'read'
+               AND (dependency.note IS NULL OR dependency.note NOT LIKE 'cbl-order:%')",
+            &[&user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(rows.iter().map(|row| row.get(0)).collect())
+}
+
+/// Refresh the persisted derived `threads.is_blocked` flag for one owner.
+///
+/// `is_blocked` is denormalized issue-read state, so every writer that changes
+/// read state must refresh it in the same transaction. Native Skip
+/// (`native/roll-service/src/skip.rs`) and the legacy queue projection both
+/// filter on the stored column; a stale value lets a re-blocked thread enter the
+/// pool or hides a just-unblocked one. Mirrors
+/// `comic_pile.dependencies.refresh_user_blocked_status`.
+async fn refresh_blocked_threads(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+    let blocked = canonical_blocked_thread_ids(tx, user_id).await?;
+    // `id = ANY($2)` is false for an empty array, so this blocks exactly the
+    // canonical set and clears every other stale flag in one owner-scoped write.
+    tx.execute(
+        "UPDATE threads t
+         SET is_blocked = (t.id = ANY($2::int[]))
+         WHERE t.user_id = $1
+           AND t.is_blocked IS DISTINCT FROM (t.id = ANY($2::int[]))",
+        &[&user_id, &blocked],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
 async fn progress(tx: &Transaction<'_>, thread_id: i32) -> Result<ThreadProgress, ApiError> {
     let row = tx
         .query_one(
@@ -424,6 +485,13 @@ pub(crate) async fn persist(
             &[&thread_id, &status_changed, &remaining, &next_id, &rating_for_thread],
         ).await.map_err(db::query_error)?;
     }
+
+    // A direct read/unread changes the prerequisite frontier for this and
+    // other owned threads, so refresh the persisted derived flag before the
+    // transaction commits. Rating-only corrections cannot change it, but the
+    // refresh is a no-op then; keeping it unconditional matches the Python
+    // oracle and cannot leave a stale flag behind.
+    refresh_blocked_threads(tx, user.id()).await?;
 
     // An already-read issue with a new rating must create correction history.
     // Every client action records its key, including an otherwise idempotent no-op.
@@ -643,7 +711,15 @@ mod tests {
                      status text NOT NULL, issues_remaining integer NOT NULL,
                      next_unread_issue_id integer, reading_progress text,
                      last_rating double precision, queue_position integer NOT NULL,
-                     queue_position_is_manual boolean NOT NULL, last_activity_at timestamptz
+                     queue_position_is_manual boolean NOT NULL,
+                     last_activity_at timestamptz,
+                     is_blocked boolean NOT NULL DEFAULT false
+                 );
+                 CREATE TABLE {schema}.dependencies (
+                     id integer PRIMARY KEY,
+                     source_issue_id integer NOT NULL,
+                     target_issue_id integer NOT NULL,
+                     note text
                  );
                  CREATE TABLE {schema}.issues (
                      id integer PRIMARY KEY, thread_id integer NOT NULL,
@@ -674,13 +750,20 @@ mod tests {
                      manual_die integer, ended_at timestamptz
                  );
                  INSERT INTO {schema}.threads VALUES
-                     (10,1,'Excluded run','excluded',3,101,'in_progress',4.0,0,true,NULL),
-                     (20,2,'Private run','active',1,201,'in_progress',NULL,1,false,NULL);
+                     (10,1,'Excluded run','excluded',3,101,'in_progress',4.0,0,true,NULL,false),
+                     (20,2,'Private run','active',1,201,'in_progress',NULL,1,false,NULL,false),
+                     (30,1,'Dependent run','active',1,301,'in_progress',NULL,2,false,NULL,true),
+                     (40,1,'Cbl control run','active',1,401,'in_progress',NULL,3,false,NULL,false);
                  INSERT INTO {schema}.issues VALUES
                      (101,10,'1','unread',1,NULL),
                      (102,10,'2','unread',2,NULL),
                      (110,10,'10','unread',10,NULL),
-                     (201,20,'1','unread',1,NULL);
+                     (201,20,'1','unread',1,NULL),
+                     (301,30,'1','unread',1,NULL),
+                     (401,40,'1','unread',1,NULL);
+                 INSERT INTO {schema}.dependencies VALUES
+                     (1,102,301,NULL),
+                     (2,101,401,'cbl-order:legacy-materialization');
                  INSERT INTO {schema}.sessions VALUES (1,1,10,101,NULL,12,NULL);
                  INSERT INTO {schema}.external_identities VALUES
                      (50,'comicvine','issue','4000-42',
@@ -776,6 +859,64 @@ mod tests {
                 .unwrap()
                 .get::<_, i64>(0),
             2
+        );
+
+        // The persisted derived `threads.is_blocked` flag is what native Skip
+        // and the legacy queue filter on. A direct read must clear it for every
+        // dependent thread; a direct unread must set it again.
+        let tx = first.transaction().await.unwrap();
+        let unblocked = persist(
+            &tx,
+            user,
+            102,
+            &IssueReadRateRequest {
+                status: Some("read".into()),
+                rating: None,
+                idempotency_key: "direct-issue-unblock-01".into(),
+            },
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert!(unblocked.read_event_created);
+        assert!(
+            !first
+                .query_one("SELECT is_blocked FROM threads WHERE id=30", &[])
+                .await
+                .unwrap()
+                .get::<_, bool>(0),
+            "reading the prerequisite must clear the dependent thread's flag"
+        );
+        let tx = first.transaction().await.unwrap();
+        let reblocked = persist(
+            &tx,
+            user,
+            102,
+            &IssueReadRateRequest {
+                status: Some("unread".into()),
+                rating: None,
+                idempotency_key: "direct-issue-reblock-01".into(),
+            },
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert!(!reblocked.read_event_created);
+        assert!(
+            first
+                .query_one("SELECT is_blocked FROM threads WHERE id=30", &[])
+                .await
+                .unwrap()
+                .get::<_, bool>(0),
+            "marking the prerequisite unread must restore the blocked flag"
+        );
+        assert!(
+            !first
+                .query_one("SELECT is_blocked FROM threads WHERE id=40", &[])
+                .await
+                .unwrap()
+                .get::<_, bool>(0),
+            "cbl-order edges must never contribute to the derived blocked flag"
         );
 
         let tx = first.transaction().await.unwrap();
