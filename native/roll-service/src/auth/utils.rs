@@ -11,9 +11,24 @@ pub const MIN_PASSWORD_LENGTH: usize = 6;
 /// bcrypt silently truncates beyond 72 bytes, so reject longer inputs instead.
 pub const MAX_BCRYPT_PASSWORD_BYTES: usize = 72;
 
+#[cfg(test)]
+thread_local! {
+    /// Bcrypt hashes performed on the current test thread. A thread-local keeps
+    /// the probe isolated from unrelated tests running in parallel.
+    static BCRYPT_HASH_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Number of bcrypt hashes performed on this thread (test-only probe).
+#[cfg(test)]
+pub(crate) fn bcrypt_hash_calls() -> usize {
+    BCRYPT_HASH_CALLS.with(std::cell::Cell::get)
+}
+
 /// Hash a password with bcrypt using the library's default cost.
 pub fn hash_password(password: &str) -> Result<String, AuthError> {
     validate_password_length(password)?;
+    #[cfg(test)]
+    BCRYPT_HASH_CALLS.with(|calls| calls.set(calls.get() + 1));
     hash(password, DEFAULT_COST).map_err(|error| {
         tracing::error!("password hashing failed: {error}");
         AuthError::InternalError

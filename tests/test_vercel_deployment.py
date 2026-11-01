@@ -341,9 +341,11 @@ _RELATIVE_MODULE_SPECIFIER_RE = re.compile(
 def test_vercel_node_typescript_relative_imports_use_js_extensions() -> None:
     """Node ESM on Vercel cannot load extensionless relative imports.
 
-    ``@vercel/node`` compiles ``api/auth/me.ts`` to ``me.js`` and leaves import
-    specifiers intact. With ``"type": "module"``, ``from '../src/auth'`` becomes
-    ``ERR_MODULE_NOT_FOUND`` for ``/var/task/api/src/auth`` (issue #4295).
+    ``@vercel/node`` compiled the (now retired) ``api/auth/me.ts`` entry to
+    ``me.js`` and left import specifiers intact. With ``"type": "module"``,
+    ``from '../src/auth'`` became ``ERR_MODULE_NOT_FOUND`` for
+    ``/var/task/api/src/auth`` (issue #4295). Any remaining TypeScript under
+    ``api/`` keeps the same Node ESM constraint.
     """
     offenders: list[str] = []
     api_root = REPOSITORY_ROOT / "api"

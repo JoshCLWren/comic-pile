@@ -2,8 +2,9 @@
 //!
 //! Behavior mirrors `app/api/auth.py` and `app/auth.py`: bcrypt credentials,
 //! HS256 access/refresh JWTs sharing one `jti`, database-backed login lockout,
-//! revocation by `jti`, and password-epoch invalidation. Password recovery
-//! delivery remains in Python until an equivalent Rust mailer is introduced.
+//! revocation by `jti`, and password-epoch invalidation. Password recovery,
+//! including single-use token consumption and Gmail SMTP delivery, is native
+//! here; see [`crate::auth::mailer`] and [`crate::auth::BackgroundTasks`].
 
 use std::sync::Arc;
 
@@ -377,31 +378,28 @@ impl PasswordResetService {
 
     /// Consume a reset token, rotate the password hash and bump the credential epoch.
     pub async fn complete_reset(&self, token: &str, new_password: &str) -> AuthResult<()> {
-        let password_hash = hash_password(new_password)?;
         let digest = token_digest(token);
         let mut connection = checkout(&self.state).await?;
         let transaction = connection.transaction().await.map_err(query_error)?;
-        let token_id = transaction
+        // Consume the single-use token before hashing. An anonymous caller can
+        // submit arbitrary tokens, so the cheap indexed reject must happen
+        // before the cost-12 bcrypt hash, not after it. The conditional UPDATE
+        // is atomic under concurrency, and a rollback below restores `used_at`
+        // if hashing or the password update fails.
+        let consumed = transaction
             .query_opt(
-                "SELECT id, user_id FROM password_reset_tokens \
+                "UPDATE password_reset_tokens SET used_at = NOW() \
                  WHERE token_digest = $1 AND used_at IS NULL AND expires_at > NOW() \
-                 LIMIT 1 FOR UPDATE",
+                 RETURNING user_id",
                 &[&digest],
             )
             .await
             .map_err(query_error)?;
-        let Some(row) = token_id else {
+        let Some(row) = consumed else {
             return Err(AuthError::InvalidResetToken);
         };
-        let id: i32 = row.get(0);
-        let user_id: i32 = row.get(1);
-        transaction
-            .execute(
-                "UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1 AND used_at IS NULL",
-                &[&id],
-            )
-            .await
-            .map_err(query_error)?;
+        let user_id: i32 = row.get(0);
+        let password_hash = hash_password(new_password)?;
         transaction
             .execute(
                 "UPDATE users SET password_hash = $1, password_changed_at = NOW() WHERE id = $2",

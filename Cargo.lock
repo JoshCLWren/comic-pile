@@ -365,6 +365,7 @@ version = "0.1.0"
 dependencies = [
  "axum 0.8.9",
  "comicpile-roll-service",
+ "http-body",
  "serde_json",
  "tokio",
  "tower",

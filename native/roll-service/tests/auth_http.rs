@@ -8,12 +8,18 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, AppState};
+use comicpile_roll_service::{auth::BackgroundTasks, config::Config, router, AppState};
 use serde_json::Value;
-use std::sync::Arc;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
 
 const SECRET: &str = "synthetic-auth-http-secret";
+
+/// A recovery-delivery future captured by the test registrar.
+type DeliveryFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 async fn schema() -> (String, String) {
     let base = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
@@ -221,6 +227,81 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{rejected}");
     assert_eq!(rejected["detail"], "Invalid or expired reset request.");
+
+    let (admin, connection) = tokio_postgres::connect(
+        std::env::var("RUST_ROLL_TEST_DATABASE_URL")
+            .unwrap()
+            .as_str(),
+        tokio_postgres::NoTls,
+    )
+    .await
+    .unwrap();
+    tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    admin
+        .batch_execute(&format!("DROP SCHEMA {name} CASCADE"))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn forgot_password_registers_delivery_as_tracked_background_work() {
+    let (name, url) = schema().await;
+    let state = state(&url);
+
+    let (status, registered_body, _) = send(
+        &state,
+        post(
+            "/api/v1/auth/register",
+            serde_json::json!({
+                "username": "delivery-reader",
+                "email": "delivery-reader@example.com",
+                "password": "correct-horse-battery"
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{registered_body}");
+
+    // A bare `tokio::spawn` would bypass this registrar entirely; on Vercel the
+    // invocation could then freeze before SMTP delivery finished.
+    let registrations = Arc::new(AtomicUsize::new(0));
+    let captured: Arc<Mutex<Option<DeliveryFuture>>> = Arc::new(Mutex::new(None));
+    let handle = BackgroundTasks::new({
+        let registrations = Arc::clone(&registrations);
+        let captured = Arc::clone(&captured);
+        move |future| {
+            registrations.fetch_add(1, Ordering::SeqCst);
+            *captured.lock().unwrap() = Some(future);
+        }
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/forgot-password")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("x-forwarded-for", "198.51.100.91")
+        .extension(handle)
+        .body(Body::from(
+            serde_json::json!({"email": "delivery-reader@example.com"}).to_string(),
+        ))
+        .unwrap();
+    let (status, acknowledgement, _) = send(&state, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        acknowledgement["message"],
+        "If an account exists, a reset link has been sent."
+    );
+    assert_eq!(
+        registrations.load(Ordering::SeqCst),
+        1,
+        "recovery delivery must be handed to tracked background work"
+    );
+    assert!(
+        captured.lock().unwrap().is_some(),
+        "the registered delivery future must be retained by the runtime registrar"
+    );
 
     let (admin, connection) = tokio_postgres::connect(
         std::env::var("RUST_ROLL_TEST_DATABASE_URL")

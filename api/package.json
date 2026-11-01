@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "node --test dist/auth.test.js dist/authDatabaseUrl.test.js auth-me-packaging.test.js",
+    "test": "node --test dist/auth.test.js dist/authDatabaseUrl.test.js",
     "test:watch": "node --test dist/auth.test.js dist/authDatabaseUrl.test.js --watch"
   },
   "dependencies": {

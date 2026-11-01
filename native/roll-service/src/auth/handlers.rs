@@ -22,6 +22,7 @@ use crate::auth::{
     mailer,
     services::{AuthService, PasswordResetService},
     utils::{generate_csrf_token, get_client_ip, is_secure_request, token_digest},
+    BackgroundTasks,
 };
 use crate::AppState;
 
@@ -35,8 +36,10 @@ const REFRESH_COOKIE_MAX_AGE_SECONDS: i64 = 7 * 24 * 60 * 60;
 const CSRF_COOKIE_MAX_AGE_SECONDS: i64 = 24 * 60 * 60;
 const FORGOT_PASSWORD_MESSAGE: &str = "If an account exists, a reset link has been sent.";
 const RESET_PASSWORD_MESSAGE: &str = "Password reset successfully.";
+const RESET_PASSWORD_LIMIT_PER_MINUTE: usize = 5;
 
-/// In-process request limiter. Keys are client IPs, never usernames or secrets.
+/// In-process request limiter. Keys are endpoint-scoped client IPs (or token
+/// digests for refresh), never usernames, passwords or secrets.
 #[derive(Default)]
 struct RateLimiter {
     attempts: RwLock<HashMap<String, Vec<Instant>>>,
@@ -145,7 +148,8 @@ pub async fn register(
     Json(request): Json<RegisterRequest>,
 ) -> AuthResult<(HeaderMap, Json<TokenResponse>)> {
     request.validate().map_err(|_| AuthError::Validation)?;
-    limiter().check(&client_ip(&headers), 5, Duration::from_secs(60))?;
+    let ip = client_ip(&headers);
+    limiter().check(&format!("register:{ip}"), 5, Duration::from_secs(60))?;
     let tokens = AuthService::new(state).register(&request).await?;
     let response_headers = authentication_headers(&headers, &tokens.refresh_token);
     Ok((response_headers, Json(tokens)))
@@ -158,10 +162,9 @@ pub async fn login(
     Json(request): Json<LoginRequest>,
 ) -> AuthResult<(HeaderMap, Json<TokenResponse>)> {
     request.validate().map_err(|_| AuthError::Validation)?;
-    limiter().check(&client_ip(&headers), 5, Duration::from_secs(60))?;
-    let tokens = AuthService::new(state)
-        .login(&request, &client_ip(&headers))
-        .await?;
+    let ip = client_ip(&headers);
+    limiter().check(&format!("login:{ip}"), 5, Duration::from_secs(60))?;
+    let tokens = AuthService::new(state).login(&request, &ip).await?;
     let response_headers = authentication_headers(&headers, &tokens.refresh_token);
     Ok((response_headers, Json(tokens)))
 }
@@ -182,7 +185,11 @@ pub async fn refresh(
     let refresh_token = body_token
         .or_else(|| cookie_value(&headers, REFRESH_COOKIE).map(str::to_owned))
         .ok_or(AuthError::MissingRefreshToken)?;
-    limiter().check(&token_digest(&refresh_token), 20, Duration::from_secs(60))?;
+    limiter().check(
+        &format!("refresh:{}", token_digest(&refresh_token)),
+        20,
+        Duration::from_secs(60),
+    )?;
     let tokens = AuthService::new(state).refresh(&refresh_token).await?;
     let response_headers = authentication_headers(&headers, &tokens.refresh_token);
     Ok((response_headers, Json(tokens)))
@@ -240,17 +247,21 @@ pub async fn csrf(headers: HeaderMap) -> Response {
 pub async fn forgot_password(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
+    tasks: BackgroundTasks,
     Json(request): Json<ForgotPasswordRequest>,
 ) -> AuthResult<Json<PasswordResetResponse>> {
     request.validate().map_err(|_| AuthError::Validation)?;
-    limiter().check(&client_ip(&headers), 3, Duration::from_secs(60))?;
+    let ip = client_ip(&headers);
+    limiter().check(&format!("forgot:{ip}"), 3, Duration::from_secs(60))?;
     if let Some(delivery) = PasswordResetService::new(state)
         .begin_reset(&request.email)
         .await?
     {
         // Delivery never blocks the acknowledgement, so provider latency cannot
-        // distinguish a known address from an unknown one.
-        tokio::spawn(async move { mailer::deliver(delivery).await });
+        // distinguish a known address from an unknown one. It is still
+        // registered as tracked background work: a bare `tokio::spawn` would let
+        // a serverless isolate freeze before SMTP completes.
+        tasks.spawn(async move { mailer::deliver(delivery).await });
     }
     Ok(Json(PasswordResetResponse {
         message: FORGOT_PASSWORD_MESSAGE,
@@ -260,9 +271,16 @@ pub async fn forgot_password(
 /// Complete a password reset and bump the credential epoch.
 pub async fn reset_password(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(request): Json<ResetPasswordRequest>,
 ) -> AuthResult<Json<PasswordResetResponse>> {
     request.validate().map_err(|_| AuthError::Validation)?;
+    let ip = client_ip(&headers);
+    limiter().check(
+        &format!("reset:{ip}"),
+        RESET_PASSWORD_LIMIT_PER_MINUTE,
+        Duration::from_secs(60),
+    )?;
     PasswordResetService::new(state)
         .complete_reset(&request.token, &request.new_password)
         .await?;
@@ -284,7 +302,7 @@ pub async fn me(
 mod tests {
     use super::*;
     use crate::auth::services::decode_claims;
-    use crate::auth::utils::verify_password;
+    use crate::auth::utils::{bcrypt_hash_calls, token_digest, verify_password};
     use crate::config::Config;
     use axum::body::Bytes;
 
@@ -577,6 +595,7 @@ mod tests {
         let acknowledgement = forgot_password(
             State(state.clone()),
             json_headers("198.51.100.39"),
+            BackgroundTasks::default(),
             Json(ForgotPasswordRequest {
                 email: "unknown@example.com".into(),
             }),
@@ -601,10 +620,11 @@ mod tests {
         assert_eq!(delivery.recipient_email, "recovery@example.com");
         assert!(!delivery.token.is_empty());
 
-        // The advertised minimum is enforced before the token is consumed, so a
-        // below-minimum attempt leaves the live token usable.
+        // A below-minimum attempt rolls the token consumption back, so the live
+        // token remains usable for the corrected request.
         let too_short = reset_password(
             State(state.clone()),
+            json_headers("198.51.100.43"),
             Json(ResetPasswordRequest {
                 token: delivery.token.clone(),
                 new_password: "short".into(),
@@ -615,6 +635,7 @@ mod tests {
 
         let reset = reset_password(
             State(state.clone()),
+            json_headers("198.51.100.43"),
             Json(ResetPasswordRequest {
                 token: delivery.token.clone(),
                 new_password: "brand-new-secret".into(),
@@ -626,6 +647,7 @@ mod tests {
 
         let replay = reset_password(
             State(state.clone()),
+            json_headers("198.51.100.43"),
             Json(ResetPasswordRequest {
                 token: delivery.token,
                 new_password: "another-secret".into(),
@@ -679,5 +701,103 @@ mod tests {
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn reset_rejects_garbage_tokens_without_paying_bcrypt_cost() {
+        let (_schema, url) = schema_with_auth_tables().await;
+        let state = state(&url);
+        let connection = state.pool.get().await.unwrap();
+        let user_id: i32 = connection
+            .query_one(
+                "INSERT INTO users (username, email, password_hash, password_changed_at) \
+                 VALUES ('reset-cost-reader', 'reset-cost@example.com', 'old-hash', \
+                         NOW() - INTERVAL '1 day') RETURNING id",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        connection
+            .execute(
+                "INSERT INTO password_reset_tokens (user_id, token_digest, expires_at) \
+                 VALUES ($1, $2, NOW() + INTERVAL '30 minutes')",
+                &[&user_id, &token_digest("live-reset-token")],
+            )
+            .await
+            .unwrap();
+        drop(connection);
+
+        let before = bcrypt_hash_calls();
+        let rejected = PasswordResetService::new(state.clone())
+            .complete_reset("anonymous-garbage-token", "brand-new-secret")
+            .await;
+        assert!(matches!(rejected, Err(AuthError::InvalidResetToken)));
+        assert_eq!(
+            bcrypt_hash_calls(),
+            before,
+            "an invalid reset token must be rejected before bcrypt hashing"
+        );
+
+        PasswordResetService::new(state.clone())
+            .complete_reset("live-reset-token", "brand-new-secret")
+            .await
+            .expect("a live reset token must still rotate the password");
+        assert_eq!(
+            bcrypt_hash_calls(),
+            before + 1,
+            "a live reset token hashes the new password exactly once"
+        );
+
+        let connection = state.pool.get().await.unwrap();
+        let row = connection
+            .query_one(
+                "SELECT u.password_hash,
+                        u.password_changed_at > NOW() - INTERVAL '1 minute',
+                        t.used_at IS NOT NULL
+                 FROM users u JOIN password_reset_tokens t ON t.user_id = u.id
+                 WHERE u.id = $1 AND t.token_digest = $2",
+                &[&user_id, &token_digest("live-reset-token")],
+            )
+            .await
+            .unwrap();
+        let hash: String = row.get(0);
+        let epoch_bumped: bool = row.get(1);
+        let consumed: bool = row.get(2);
+        assert!(verify_password("brand-new-secret", &hash).unwrap());
+        assert!(epoch_bumped, "a reset must bump the credential epoch");
+        assert!(consumed, "a live reset token must be marked used");
+    }
+
+    #[tokio::test]
+    async fn reset_password_requests_are_rate_limited_per_client() {
+        let (_schema, url) = schema_with_auth_tables().await;
+        let state = state(&url);
+        let ip = "198.51.100.240";
+        for _ in 0..RESET_PASSWORD_LIMIT_PER_MINUTE {
+            let response = reset_password(
+                State(state.clone()),
+                json_headers(ip),
+                Json(ResetPasswordRequest {
+                    token: "garbage-token".into(),
+                    new_password: "brand-new-secret".into(),
+                }),
+            )
+            .await;
+            assert!(matches!(response, Err(AuthError::InvalidResetToken)));
+        }
+        let limited = reset_password(
+            State(state.clone()),
+            json_headers(ip),
+            Json(ResetPasswordRequest {
+                token: "garbage-token".into(),
+                new_password: "brand-new-secret".into(),
+            }),
+        )
+        .await;
+        assert!(
+            matches!(limited, Err(AuthError::RateLimited)),
+            "reset-password must reject requests beyond the per-client limit"
+        );
     }
 }

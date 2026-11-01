@@ -5,6 +5,7 @@
 //! implemented here and mounted under `/api/v2/auth`. The shared JWT,
 //! password-epoch and reset-digest contracts remain Python-compatible.
 
+mod delivery;
 pub mod dto;
 pub mod error;
 pub mod handlers;
@@ -14,6 +15,7 @@ pub mod middleware;
 pub mod services;
 pub mod utils;
 
+pub use delivery::BackgroundTasks;
 pub use dto::*;
 pub use error::{AuthError, AuthResult};
 pub use handlers::*;
