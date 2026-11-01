@@ -368,7 +368,7 @@ pub(crate) async fn durable_snoozed(
             continue;
         }
         let later = starts.iter().filter(|&&time| time > latest).count() as u64;
-        let pair = ((count as u64) + 1) / 2;
+        let pair = (count as u64).div_ceil(2);
         let mut previous = 0u64;
         let mut needed = 1u64;
         for _ in 0..pair {
