@@ -208,11 +208,25 @@ async def test_gmail_provider_failure_raises_without_token_in_message(
     assert "token-that-must-not-leak" not in str(exc_info.value)
 
 
+def test_test_environment_never_selects_live_smtp(_clean_mailer_state: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An inherited real SMTP app password cannot send mail from pytest."""
+    monkeypatch.setenv("TEST_ENVIRONMENT", "true")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("GMAIL_SMTP_USERNAME", "owner@gmail.com")
+    monkeypatch.setenv("GMAIL_SMTP_APP_PASSWORD", "apparently-real-password")
+    clear_settings_cache()
+    assert isinstance(get_password_reset_mailer(), FakePasswordResetMailer)
+    monkeypatch.delenv("TEST_ENVIRONMENT")
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    assert isinstance(get_password_reset_mailer(), FakePasswordResetMailer)
+
+
 def test_mailer_resolution_prefers_gmail_when_configured_else_fake(
     _clean_mailer_state: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Configured Gmail settings resolve SMTP; otherwise use the deterministic fake."""
+    """Outside test mode, configured Gmail resolves SMTP."""
+    monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
     assert isinstance(get_password_reset_mailer(), FakePasswordResetMailer)
     monkeypatch.setenv("GMAIL_SMTP_USERNAME", "owner@gmail.com")
     monkeypatch.setenv("GMAIL_SMTP_APP_PASSWORD", "app-password")
