@@ -1,11 +1,11 @@
 //! Reader-facing blocker gate projection.
 //! Mirrors Python's reading_blocker_projection module.
 
-use crate::reading_constraints::{Blocker, ConstraintEdge};
+use crate::reading_constraints::Blocker;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::HashSet;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DescribedBlockerGate {
     pub blocker: Blocker,
     pub described_issue_ids: Vec<i32>,
@@ -59,14 +59,18 @@ mod tests {
                 list_id: None,
                 waiting_on_issue_ids: vec![1, 2],
                 prerequisite_id: Some(1),
+                gate_issue_id: None,
                 origin: Some("reader".to_string()),
+                provenance: vec!["reader".to_string()],
             },
             Blocker {
                 kind: "hold".to_string(),
                 list_id: Some(10),
                 waiting_on_issue_ids: vec![2, 3],
                 prerequisite_id: None,
+                gate_issue_id: None,
                 origin: None,
+                provenance: vec![],
             },
         ];
 

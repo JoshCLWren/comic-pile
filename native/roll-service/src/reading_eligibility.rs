@@ -1,24 +1,18 @@
 //! Option E eligibility evaluation for native Rust.
 //! Mirrors Python's reading_list_evaluator.evaluate() function.
 
-use crate::reading_constraints::{Blocker, EligibleFrontier, ValidatedReadingInputs};
-use crate::reading_blocker_projection::DescribedBlockerGate;
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ThreadEligibility {
-    pub thread_id: i32,
-    pub next_issue_id: Option<i32>,
-    pub eligible: bool,
-    pub blockers: Vec<Blocker>,
-}
+use crate::reading_constraints::{
+    Blocker, ConstraintEdge, ThreadEligibility, ValidatedReadingInputs, ValidationError,
+};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Evaluate the complete reading constraint graph and produce thread eligibility.
 /// Mirrors Python's reading_list_evaluator.evaluate().
-pub fn evaluate(validated: &ValidatedReadingInputs) -> Result<HashMap<i32, ThreadEligibility>, crate::ApiError> {
+pub fn evaluate(
+    validated: &ValidatedReadingInputs,
+) -> Result<HashMap<i32, ThreadEligibility>, crate::ApiError> {
     let inputs = validated.inputs();
-    let topological_order = validated.topological_order();
+    let _topological_order = validated.topological_order();
 
     // Build issue -> thread mapping
     let issue_thread: HashMap<i32, i32> = inputs
@@ -42,13 +36,22 @@ pub fn evaluate(validated: &ValidatedReadingInputs) -> Result<HashMap<i32, Threa
 
     // Build adjacency for topological processing
     let mut incoming: HashMap<i32, Vec<ConstraintEdge>> = HashMap::new();
-    let edges = validated.unsatisfied_edges()?;
+    let edges = validated.unsatisfied_edges().map_err(|e| match e {
+        ValidationError::InvalidSnapshot { message } => crate::ApiError(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Box::leak(message.into_boxed_str()),
+        ),
+        ValidationError::Cycle {
+            message: _,
+            edges: _,
+        } => crate::ApiError(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "Reading constraint cycle",
+        ),
+    })?;
 
     for edge in edges {
-        incoming
-            .entry(edge.target_issue_id)
-            .or_default()
-            .push(edge);
+        incoming.entry(edge.target_issue_id).or_default().push(edge);
     }
 
     // Determine read status and excluded status
@@ -64,7 +67,7 @@ pub fn evaluate(validated: &ValidatedReadingInputs) -> Result<HashMap<i32, Threa
     let mut next_unread: HashMap<i32, i32> = HashMap::new();
     let mut issue_satisfied: HashMap<i32, bool> = HashMap::new();
 
-    for &issue_id in topological_order {
+    for &issue_id in _topological_order {
         let is_read = read_issues.contains(&issue_id);
         let is_satisfied = is_read;
 
@@ -110,9 +113,10 @@ pub fn evaluate(validated: &ValidatedReadingInputs) -> Result<HashMap<i32, Threa
         let next_issue_id = next_issue_id.unwrap();
 
         // Check if this issue is blocked by unsatisfied edges
+        let empty_vec: Vec<ConstraintEdge> = vec![];
         let blocked_edges: Vec<&ConstraintEdge> = incoming
             .get(&next_issue_id)
-            .unwrap_or(&vec![])
+            .unwrap_or(&empty_vec)
             .iter()
             .filter(|e| !read_issues.contains(&e.source_issue_id))
             .collect();
@@ -136,83 +140,88 @@ pub fn evaluate(validated: &ValidatedReadingInputs) -> Result<HashMap<i32, Threa
         for edge in blocked_edges {
             let key = (
                 edge.origin.clone(),
-                edge.prerequisite_origin.as_ref().map(|_| edge.origin.clone()),
+                if edge.prerequisite_origin.is_some() {
+                    None
+                } else {
+                    // Extract list_id from origin string like "list JLI strict order"
+                    edge.origin
+                        .strip_prefix("list ")
+                        .and_then(|s| s.split(' ').next())
+                        .and_then(|s| s.parse().ok())
+                },
             );
 
-            let entry = blocker_map
-                .entry((
-                    edge.origin.clone(),
-                    if edge.prerequisite_origin.is_some() {
-                        None
-                    } else {
-                        // Extract list_id from origin string like "list JLI strict order"
-                        edge.origin
+            let entry = blocker_map.entry(key).or_insert_with(|| {
+                if edge.prerequisite_origin.is_some() {
+                    Blocker {
+                        kind: "prerequisite".to_string(),
+                        list_id: None,
+                        waiting_on_issue_ids: vec![],
+                        prerequisite_id: edge
+                            .provenance
+                            .iter()
+                            .find_map(|p| p.strip_prefix("prerequisite "))
+                            .and_then(|s| s.split(' ').next())
+                            .and_then(|s| s.strip_suffix('('))
+                            .and_then(|s| s.parse().ok()),
+                        gate_issue_id: None,
+                        origin: edge.prerequisite_origin.clone(),
+                        provenance: edge.provenance.clone(),
+                    }
+                } else if edge.origin.contains("hold") {
+                    Blocker {
+                        kind: "hold".to_string(),
+                        list_id: edge
+                            .origin
                             .strip_prefix("list ")
                             .and_then(|s| s.split(' ').next())
-                            .and_then(|s| s.parse().ok())
-                    },
-                ))
-                .or_insert_with(|| {
-                    if edge.prerequisite_origin.is_some() {
-                        Blocker {
-                            kind: "prerequisite".to_string(),
-                            list_id: None,
-                            waiting_on_issue_ids: vec![],
-                            prerequisite_id: edge
-                                .provenance
-                                .iter()
-                                .find_map(|p| p.strip_prefix("prerequisite "))
-                                .and_then(|s| s.split(' ').next())
-                                .and_then(|s| s.strip_suffix('('))
-                                .and_then(|s| s.parse().ok()),
-                            origin: edge.prerequisite_origin.clone(),
-                        }
-                    } else if edge.origin.contains("hold") {
-                        Blocker {
-                            kind: "hold".to_string(),
-                            list_id: edge
-                                .origin
-                                .strip_prefix("list ")
-                                .and_then(|s| s.split(' ').next())
-                                .and_then(|s| s.parse().ok()),
-                            waiting_on_issue_ids: vec![],
-                            prerequisite_id: None,
-                            origin: None,
-                        }
-                    } else if edge.origin.contains("strict_order") {
-                        Blocker {
-                            kind: "strict_order".to_string(),
-                            list_id: edge
-                                .origin
-                                .strip_prefix("list ")
-                                .and_then(|s| s.split(' ').next())
-                                .and_then(|s| s.parse().ok()),
-                            waiting_on_issue_ids: vec![],
-                            prerequisite_id: None,
-                            origin: None,
-                        }
-                    } else if edge.origin.contains("after_previous") {
-                        Blocker {
-                            kind: "after_previous".to_string(),
-                            list_id: edge
-                                .origin
-                                .strip_prefix("list ")
-                                .and_then(|s| s.split(' ').next())
-                                .and_then(|s| s.parse().ok()),
-                            waiting_on_issue_ids: vec![],
-                            prerequisite_id: None,
-                            origin: None,
-                        }
-                    } else {
-                        Blocker {
-                            kind: edge.origin.clone(),
-                            list_id: None,
-                            waiting_on_issue_ids: vec![],
-                            prerequisite_id: None,
-                            origin: None,
-                        }
+                            .and_then(|s| s.parse().ok()),
+                        waiting_on_issue_ids: vec![],
+                        prerequisite_id: None,
+                        gate_issue_id: None,
+                        origin: None,
+                        provenance: vec![],
                     }
-                });
+                } else if edge.origin.contains("strict_order") {
+                    Blocker {
+                        kind: "strict_order".to_string(),
+                        list_id: edge
+                            .origin
+                            .strip_prefix("list ")
+                            .and_then(|s| s.split(' ').next())
+                            .and_then(|s| s.parse().ok()),
+                        waiting_on_issue_ids: vec![],
+                        prerequisite_id: None,
+                        gate_issue_id: None,
+                        origin: None,
+                        provenance: vec![],
+                    }
+                } else if edge.origin.contains("after_previous") {
+                    Blocker {
+                        kind: "after_previous".to_string(),
+                        list_id: edge
+                            .origin
+                            .strip_prefix("list ")
+                            .and_then(|s| s.split(' ').next())
+                            .and_then(|s| s.parse().ok()),
+                        waiting_on_issue_ids: vec![],
+                        prerequisite_id: None,
+                        gate_issue_id: None,
+                        origin: None,
+                        provenance: vec![],
+                    }
+                } else {
+                    Blocker {
+                        kind: edge.origin.clone(),
+                        list_id: None,
+                        waiting_on_issue_ids: vec![],
+                        prerequisite_id: None,
+                        gate_issue_id: None,
+                        origin: None,
+                        provenance: vec![],
+                    }
+                }
+            });
 
             entry.waiting_on_issue_ids.push(edge.source_issue_id);
         }
@@ -243,11 +252,10 @@ pub fn evaluate(validated: &ValidatedReadingInputs) -> Result<HashMap<i32, Threa
 mod tests {
     use super::*;
     use crate::{
-        option_inputs::{CoreReadingInputs, OptionInputs, ReadingEntry, ReadingIssue, ReadingList, ReadingThread, UnresolvedReference},
-        reading_constraints::{ConstraintEdge, ValidatedReadingInputs},
-        reading_inputs::StoredThreadEligibility,
+        option_inputs::OptionInputs,
+        reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
     };
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     fn test_inputs() -> OptionInputs {
         OptionInputs {
@@ -328,13 +336,15 @@ mod tests {
     #[test]
     fn evaluate_blocked_by_prerequisite() {
         let mut inputs = test_inputs();
-        inputs.prerequisites.push(crate::option_inputs::Prerequisite {
-            prerequisite_id: 1,
-            source_issue_id: 11,
-            target_issue_id: 20,
-            origin: "reader".to_string(),
-            provenance: vec!["classification:A".to_string(), "reader".to_string()],
-        });
+        inputs
+            .prerequisites
+            .push(crate::option_inputs::Prerequisite {
+                prerequisite_id: 1,
+                source_issue_id: 11,
+                target_issue_id: 20,
+                origin: "reader".to_string(),
+                provenance: vec!["classification:A".to_string(), "reader".to_string()],
+            });
 
         let validated = ValidatedReadingInputs::new(inputs, &BTreeMap::new()).unwrap();
         let result = evaluate(&validated).unwrap();

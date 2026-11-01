@@ -2,12 +2,7 @@
 //! Implements the same contract as Python's POST /api/v2/reading-boundaries.
 
 use crate::{
-    auth::AuthenticatedUser,
-    db,
-    option_inputs,
-    reading_blocker_projection,
-    reading_constraints::{Blocker, ConstraintEdge, EligibleFrontier, ThreadEligibility, ValidatedReadingInputs},
-    reading_eligibility,
+    auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
     ApiError, AppState,
 };
 use axum::{
@@ -18,7 +13,7 @@ use axum::{
 use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     sync::Arc,
 };
 
@@ -134,7 +129,7 @@ struct BoundaryPrerequisiteLabels {
 }
 
 #[derive(Debug, Serialize)]
-struct BoundaryShadowLabels {
+pub struct BoundaryShadowLabels {
     threads: HashMap<i32, BoundaryThreadLabels>,
     issues: HashMap<i32, BoundaryIssueLabels>,
     lists: HashMap<i32, BoundaryListLabels>,
@@ -148,11 +143,6 @@ const KIND_TEXT: &[(&str, &str)] = &[
     ("after_previous", "Wait for previous"),
 ];
 
-const PREREQUISITE_ORIGIN: &[(&str, &str)] = &[
-    ("reader", "Reader prerequisite"),
-    ("converted", "Converted prerequisite"),
-];
-
 fn prerequisite_origin_label(origin: Option<&str>) -> String {
     match origin {
         Some("reader") => "Reader prerequisite".to_string(),
@@ -161,10 +151,7 @@ fn prerequisite_origin_label(origin: Option<&str>) -> String {
     }
 }
 
-fn issue_label(
-    labels: &BoundaryShadowLabels,
-    issue_id: i32,
-) -> BoundaryIssue {
+fn issue_label(labels: &BoundaryShadowLabels, issue_id: i32) -> BoundaryIssue {
     labels
         .issues
         .get(&issue_id)
@@ -174,7 +161,9 @@ fn issue_label(
             thread_title: row.thread_title.clone(),
             issue_number: row.issue_number.clone(),
             volume_label: row.volume_label.clone(),
-            label: format!("{} #{}", row.thread_title, row.issue_number).trim().to_string(),
+            label: format!("{} #{}", row.thread_title, row.issue_number)
+                .trim()
+                .to_string(),
             reading_lists: row
                 .reading_lists
                 .iter()
@@ -196,10 +185,7 @@ fn issue_label(
         })
 }
 
-fn issue_names(
-    labels: &BoundaryShadowLabels,
-    issue_ids: &[i32],
-) -> String {
+fn issue_names(labels: &BoundaryShadowLabels, issue_ids: &[i32]) -> String {
     issue_ids
         .iter()
         .map(|&id| issue_label(labels, id).label)
@@ -275,7 +261,14 @@ fn gate_label(
         prerequisite_origin_label(blocker.origin.as_deref())
     } else {
         let list_name = list_name(snapshot, labels, blocker.list_id);
-        format!("{} in {list_name}", KIND_TEXT.iter().find(|(k, _)| *k == blocker.kind).map(|(_, v)| *v).unwrap_or(&blocker.kind))
+        format!(
+            "{} in {list_name}",
+            KIND_TEXT
+                .iter()
+                .find(|(k, _)| *k == blocker.kind)
+                .map(|(_, v)| *v)
+                .unwrap_or(&blocker.kind)
+        )
     }
 }
 
@@ -325,13 +318,16 @@ fn summary(
         );
     }
     if !blockers.is_empty() {
-        return format!("{} is blocked by an active reading rule.", next_issue.as_ref().unwrap().label);
+        return format!(
+            "{} is blocked by an active reading rule.",
+            next_issue.as_ref().unwrap().label
+        );
     }
     format!("{} is available next.", next_issue.as_ref().unwrap().label)
 }
 
 #[derive(Debug, Serialize)]
-struct ReadingEligibilitySnapshot {
+pub struct ReadingEligibilitySnapshot {
     user_id: i32,
     threads: HashMap<i32, crate::reading_constraints::ThreadEligibility>,
     queued_thread_ids: HashSet<i32>,
@@ -416,7 +412,7 @@ async fn load_boundary_labels(
         .map_err(db::query_error)?;
 
     let list_ids: Vec<i32> = list_rows.iter().map(|r| r.get(0)).collect();
-    let active_list_ids = if list_ids.is_empty() {
+    let active_list_ids: HashSet<i32> = if list_ids.is_empty() {
         HashSet::new()
     } else {
         let entry_list_ids = db
@@ -453,7 +449,7 @@ async fn load_boundary_labels(
         let entry_rows = db
             .query(
                 "SELECT list_id, issue_id FROM custom_cbl_entries WHERE list_id = ANY($1)",
-                &[&active_list_ids.iter().copied().collect::<Vec<_>>()],
+                &[&active_list_ids.iter().copied().collect::<Vec<i32>>()],
             )
             .await
             .map_err(db::query_error)?;
@@ -465,22 +461,23 @@ async fn load_boundary_labels(
             }
             let list_id: i32 = entry.get(0);
             if let Some(list_row) = lists.get(&list_id) {
-                issue_reading_lists
-                    .entry(issue_id)
-                    .or_default()
-                    .push(BoundaryReadingListMembership {
+                issue_reading_lists.entry(issue_id).or_default().push(
+                    BoundaryReadingListMembership {
                         list_id: list_row.list_id,
                         name: list_row.name.clone(),
                         mode: list_row.mode.clone(),
-                    });
+                    },
+                );
             }
         }
     }
 
     // Attach memberships to issue labels
-    for (issue_id, mut label) in issue_labels.drain() {
-        label.reading_lists = issue_reading_lists.remove(&issue_id).unwrap_or_default();
-        issue_labels.insert(issue_id, label);
+    for (issue_id, lists) in issue_reading_lists {
+        if let Some(mut label) = issue_labels.remove(&issue_id) {
+            label.reading_lists = lists;
+            issue_labels.insert(issue_id, label);
+        }
     }
 
     // Load reader prerequisites only (not historical)
@@ -499,7 +496,10 @@ async fn load_boundary_labels(
               AND (si.thread_id = ANY($2) OR ti.thread_id = ANY($2))
             ORDER BY d.id
             "#,
-            &[&user_id, &requested_thread_ids.iter().copied().collect::<Vec<_>>()],
+            &[
+                &user_id,
+                &requested_thread_ids.iter().copied().collect::<Vec<_>>(),
+            ],
         )
         .await
         .map_err(db::query_error)?;
@@ -529,8 +529,14 @@ async fn load_boundary_labels(
     for (prereq_id, prereq) in &prerequisites {
         let source_thread = issue_labels[&prereq.source_issue_id].thread_id;
         let target_thread = issue_labels[&prereq.target_issue_id].thread_id;
-        incident_ids.entry(source_thread).or_default().insert(*prereq_id);
-        incident_ids.entry(target_thread).or_default().insert(*prereq_id);
+        incident_ids
+            .entry(source_thread)
+            .or_default()
+            .insert(*prereq_id);
+        incident_ids
+            .entry(target_thread)
+            .or_default()
+            .insert(*prereq_id);
     }
 
     let prerequisite_ids_by_thread = incident_ids
@@ -579,7 +585,10 @@ async fn _volume_labels_by_thread(
         let name: Option<String> = row.get(1);
         if let Some(name) = name {
             if !name.trim().is_empty() {
-                grouped.entry(thread_id).or_default().push(name.trim().to_string());
+                grouped
+                    .entry(thread_id)
+                    .or_default()
+                    .push(name.trim().to_string());
             }
         }
     }
@@ -629,17 +638,28 @@ pub async fn project_boundary_explanation(
     Ok(ReadingBoundaryExplanationV2 {
         thread_id,
         state: boundary_state.to_string(),
-        summary: summary(&thread.title, state, next_issue.as_ref(), &blockers, requirements),
-        next: next_issue.map(|issue| ReadingBoundaryNext {
-            issue,
-            editor: Some(BoundaryEditorTarget {
-                kind: "issue".to_string(),
-                label: issue.label.clone(),
-                list_id: None,
-                thread_id: Some(issue.thread_id),
-                issue_id: Some(issue.issue_id),
-                prerequisite_id: None,
-            }),
+        summary: summary(
+            &thread.title,
+            state,
+            next_issue.as_ref(),
+            &blockers,
+            requirements,
+        ),
+        next: next_issue.map(|issue| {
+            let issue_issue_id = issue.issue_id;
+            let issue_thread_id = issue.thread_id;
+            let issue_label = issue.label.clone();
+            ReadingBoundaryNext {
+                issue,
+                editor: Some(BoundaryEditorTarget {
+                    kind: "issue".to_string(),
+                    label: issue_label,
+                    list_id: None,
+                    thread_id: Some(issue_thread_id),
+                    issue_id: Some(issue_issue_id),
+                    prerequisite_id: None,
+                }),
+            }
         }),
         blockers,
     })
@@ -679,7 +699,7 @@ async fn get_reading_boundary_explanations(
 fn build_eligibility_snapshot(
     validated: &ValidatedReadingInputs,
     labels: &BoundaryShadowLabels,
-    requested_thread_ids: &HashSet<i32>,
+    _requested_thread_ids: &HashSet<i32>,
 ) -> Result<ReadingEligibilitySnapshot, ApiError> {
     let core = validated.inputs();
     let inputs = core;
@@ -694,7 +714,7 @@ fn build_eligibility_snapshot(
         .collect();
 
     // Build excluded issue IDs
-    let excluded_issue_ids: HashSet<i32> = inputs.excluded_issue_ids.clone();
+    let excluded_issue_ids: HashSet<i32> = inputs.excluded_issue_ids.iter().copied().collect();
 
     // Build unread counts
     let mut unread_counts = HashMap::new();
@@ -706,7 +726,7 @@ fn build_eligibility_snapshot(
 
     // Build issue labels and thread mappings
     let mut issue_numbers = HashMap::new();
-    let mut issue_labels = HashMap::new();
+    let issue_labels = HashMap::new();
     let mut issue_thread_ids = HashMap::new();
     for issue in &inputs.core.issues {
         issue_numbers.insert(issue.id, issue.issue_number.clone());
@@ -720,11 +740,12 @@ fn build_eligibility_snapshot(
         thread_labels.insert(thread.id, thread.title.clone());
     }
 
-    // Build list labels
-    let mut list_labels = HashMap::new();
-    for list in &inputs.lists {
-        list_labels.insert(list.list_id, list.name.clone());
-    }
+    // Build list labels from provided labels (not from raw input which may not have names)
+    let list_labels: HashMap<i32, String> = labels
+        .lists
+        .values()
+        .map(|l| (l.list_id, l.name.clone()))
+        .collect();
 
     // Build active prerequisite IDs
     let active_prerequisite_ids: HashSet<i32> = inputs
@@ -764,14 +785,23 @@ pub async fn reading_boundary_batch_v2(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reading_constraints::{Blocker, ThreadEligibility};
+    use crate::reading_constraints::ThreadEligibility;
 
     #[test]
     fn prerequisite_origin_label_mapping() {
-        assert_eq!(prerequisite_origin_label(Some("reader")), "Reader prerequisite");
-        assert_eq!(prerequisite_origin_label(Some("converted")), "Converted prerequisite");
+        assert_eq!(
+            prerequisite_origin_label(Some("reader")),
+            "Reader prerequisite"
+        );
+        assert_eq!(
+            prerequisite_origin_label(Some("converted")),
+            "Converted prerequisite"
+        );
         assert_eq!(prerequisite_origin_label(None), "Historical prerequisite");
-        assert_eq!(prerequisite_origin_label(Some("unknown")), "Historical prerequisite");
+        assert_eq!(
+            prerequisite_origin_label(Some("unknown")),
+            "Historical prerequisite"
+        );
     }
 
     #[test]

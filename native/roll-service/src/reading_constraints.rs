@@ -99,6 +99,34 @@ pub enum ValidationError {
         edges: Vec<ConstraintEdge>,
     },
 }
+
+/// Concrete unread requirements and their stable list or prerequisite origin.
+/// Mirrors Python's reading_list_evaluator.Blocker.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Blocker {
+    pub kind: String,
+    pub list_id: Option<i32>,
+    pub waiting_on_issue_ids: Vec<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gate_issue_id: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prerequisite_id: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    #[serde(default)]
+    pub provenance: Vec<String>,
+}
+
+/// An active Thread's derived frontier and every applicable restriction.
+/// Mirrors Python's reading_list_evaluator.ThreadEligibility.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThreadEligibility {
+    pub thread_id: i32,
+    pub next_issue_id: Option<i32>,
+    pub eligible: bool,
+    pub blockers: Vec<Blocker>,
+}
+
 fn invalid(message: impl Into<String>) -> ValidationError {
     ValidationError::InvalidSnapshot {
         message: message.into(),
@@ -698,6 +726,7 @@ mod tests {
                         },
                     ],
                     overlap_decisions: vec![],
+                    name: String::new(),
                 });
             }
             if exclude_other {
@@ -747,6 +776,7 @@ mod tests {
                 },
             ],
             overlap_decisions: vec![],
+            name: String::new(),
         });
         let error = ValidatedReadingInputs::new(cyclic, &BTreeMap::from([(9, "Curated".into())]))
             .err()
