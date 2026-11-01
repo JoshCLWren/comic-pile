@@ -80,10 +80,10 @@ test.describe('Issue #4503 route request budgets', () => {
 
     await page.goto('/continuity-plans/new')
     await expect(page.getByRole('heading', { name: 'New Reading Plan' })).toBeVisible()
-    await settleCalls(page, () => countCalls(calls, 'GET', '/api/v1/threads/'), 1)
+    await settleCalls(page, () => countCalls(calls, 'GET', '/api/v2/threads'), 1)
     await settleCalls(page, () => countCalls(calls, 'GET', '/api/v1/reading-order-groups/'), 1)
 
-    expect(countCalls(calls, 'GET', '/api/v1/threads/')).toBe(1)
+    expect(countCalls(calls, 'GET', '/api/v2/threads')).toBe(1)
     expect(countCalls(calls, 'GET', '/api/v1/reading-order-groups/')).toBe(1)
   })
 
@@ -94,10 +94,10 @@ test.describe('Issue #4503 route request budgets', () => {
     await page.goto('/continuity-plans/events')
     await expect(page.getByRole('heading', { name: 'Crossover events' })).toBeVisible()
     await settleCalls(page, () => countCalls(calls, 'GET', '/api/v1/reading-order-groups/'), 1)
-    await settleCalls(page, () => countCalls(calls, 'GET', '/api/v1/threads/'), 1)
+    await settleCalls(page, () => countCalls(calls, 'GET', '/api/v2/threads'), 1)
 
     expect(countCalls(calls, 'GET', '/api/v1/reading-order-groups/')).toBe(1)
-    expect(countCalls(calls, 'GET', '/api/v1/threads/')).toBe(1)
+    expect(countCalls(calls, 'GET', '/api/v2/threads')).toBe(1)
   })
 
   test('reading plan detail requests the reader and plan tags once', async ({ authenticatedPage }) => {

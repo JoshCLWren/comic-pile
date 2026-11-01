@@ -147,7 +147,9 @@ function responseFor(method: string, path: string, query: CanonicalQuery) {
   if (path === '/api/v1/identity-inbox') {
     return inboxPage(Number(query.offset?.[0] ?? 0), Number(query.limit?.[0] ?? 20))
   }
-  if (path === '/api/v1/threads/') return { threads: [], next_page_token: null, total: 0 }
+  if (path === '/api/v2/threads' || path === '/api/v1/threads/') {
+    return { threads: [], next_page_token: null, total: 0 }
+  }
   if (path === '/api/v1/reading-order-groups/') return []
   if (path === '/api/v1/custom-cbls') {
     return [{ id: 7, name: 'List Seven', description: null, mode: 'strict', issue_count: 0, updated_at: '2026-08-12T00:00:00Z' }]
@@ -190,7 +192,7 @@ const GET = (path: string, params: Record<string, string | number> = {}) =>
   canonicalUrl('GET', path, canonicalQuery(params))
 
 const CONTINUITY_INDEX = GET('/api/v1/continuity-plans/')
-const THREADS_PAGE = GET('/api/v1/threads/', { page_size: 100 })
+const THREADS_PAGE = GET('/api/v2/threads', { page_size: 100 })
 const DEPENDENCY_GROUPS = GET('/api/v1/reading-order-groups/')
 const PLAN_READER = GET('/api/v1/continuity-plans/7/reader')
 const PLAN_DETAIL = GET('/api/v1/continuity-plans/7')
@@ -375,7 +377,7 @@ describe('/continuity-plans/:id', () => {
 describe('/continuity-plans/:id/edit', () => {
   it('cold legacy edit requests the plan, planner collections, and tags once', async () => {
     renderRoute('/continuity-plans/7/edit')
-    await settle(4)
+    await settle(5)
     expectExact([PLAN_READER, PLAN_DETAIL, THREADS_PAGE, DEPENDENCY_GROUPS, PLAN_TAGS])
   })
 })
