@@ -454,27 +454,22 @@ async def rate_thread(
     live_issue: Issue | None = None
     live_source_event_id: int | None = None
     canonical_issues: list[Issue] | None = None
+    # Issue #4453: eligibility decides which comic Roll *offers*; it never
+    # revokes permission to finish the comic already offered. Validate the
+    # offer's exact identity (ownership plus issue number) and refuse when the
+    # offer cannot be resolved, but never re-test candidacy, frontier, hold,
+    # prerequisite, list mode, queue rank, exclusion, or session snooze state.
     if current_session is not None and not is_direct and eligibility is not None:
-        state = eligibility.threads.get(thread_id)
         offered = await fetch_owned_roll_issue(
             db, user_id=user_id, reading_session_id=current_session.id, thread_id=thread_id,
         )
-        if (
-            thread_id not in eligibility.candidate_ids()
-            or state is None
-            or offered is None
-            or offered[1].id != state.next_issue_id
-        ):
-            raise HTTPException(status_code=409, detail="The pending issue is stale or unavailable. Cancel it and roll again.")
+        if offered is None:
+            raise HTTPException(
+                status_code=409,
+                detail="The pending issue is no longer available to read. Roll again.",
+            )
         if rate_data.issue_number is not None and rate_data.issue_number != offered[1].issue_number:
             raise HTTPException(status_code=409, detail="The rated issue does not match the pending offer")
-        excluded = await derive_effective_roll_excluded_thread_ids(
-            db, user_id,
-            session_snoozed_ids=current_session.snoozed_thread_ids,
-            session_skipped_ids=current_session.skipped_thread_ids,
-        )
-        if thread_id in excluded:
-            raise HTTPException(status_code=409, detail="The pending issue is excluded from this reading session")
         live_source_event_id, live_issue = offered[0].id, offered[1]
         canonical_issues = await issues_ordered(db, thread_id)
     # Capture compact thread pre-state for v2 delta (only changed fields)
