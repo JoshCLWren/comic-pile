@@ -20,17 +20,16 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from inspect import unwrap
-from types import SimpleNamespace, TracebackType
+from types import TracebackType
 
 import pytest
 from sqlalchemy import delete, event, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from starlette.requests import Request
 
-from app.api.thread import list_threads
 from app.models import Thread
 from app.schemas import QueueThreadListResponse
+from app.services.thread_service import list_queue_threads
 from comic_pile.queue import move_to_back, move_to_position, shuffle_queue
 from tests.conftest import get_or_create_user_async
 
@@ -105,11 +104,9 @@ async def _fetch_page(
     Returns:
         The paginated Queue response for the requested page.
     """
-    route = unwrap(list_threads)
-    return await route(
-        request=request,
-        current_user=SimpleNamespace(id=user_id),
-        db=db,
+    return await list_queue_threads(
+        db,
+        user_id,
         search=None,
         sort=sort,
         page_size=page_size,

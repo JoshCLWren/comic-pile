@@ -5392,31 +5392,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Threads
-         * @description List threads with deterministic cursor-based pagination.
-         *
-         *     Every retained sort has a deterministic cursor contract with stable
-         *     tie-breakers so that search results remain correct across multiple pages.
-         *     Changing ``search`` or ``sort`` invalidates any prior cursor.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         search: Optional case-insensitive title search filter.
-         *         sort: Sort order – ``position`` (default), ``title``, or ``created``.
-         *         page_size: Threads per page (default 50, max 200).
-         *         page_token: Opaque cursor token for pagination continuation.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         Paginated queue items plus ``next_page_token`` when more pages exist.
-         *
-         *     Raises:
-         *         HTTPException: If a retired ``collection_id`` query parameter is present,
-         *             the sort value is unsupported, or the page token is stale/malformed.
-         */
-        get: operations["list_threads_api_v1_threads__get"];
+        get?: never;
         put?: never;
         /**
          * Create Thread
@@ -22847,43 +22823,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_threads_api_v1_threads__get: {
-        parameters: {
-            query?: {
-                search?: string | null;
-                /** @description Sort order: position, title, or created */
-                sort?: string;
-                /** @description Number of threads to return per page (default 50, max 200) */
-                page_size?: number;
-                /** @description Opaque cursor token for pagination continuation */
-                page_token?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QueueThreadListResponse"];
                 };
             };
             /** @description Validation Error */

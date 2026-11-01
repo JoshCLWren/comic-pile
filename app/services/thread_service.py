@@ -472,6 +472,10 @@ async def list_queue_threads(
 ) -> QueueThreadListResponse:
     """List ACTIVE threads with deterministic cursor-based pagination.
 
+    This function is retained as the frozen behavioral oracle for the native
+    Rust ``GET /api/v2/threads`` parity suite (#4342). No HTTP route calls it:
+    the v1 collection path was removed when live consumers moved to v2.
+
     Every retained sort has a deterministic cursor contract with stable
     tie-breakers so that search results remain correct across multiple pages.
     Changing ``search`` or ``sort`` invalidates any prior cursor.

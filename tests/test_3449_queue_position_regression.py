@@ -328,15 +328,19 @@ async def test_sparse_existing_positions_agree_across_api_surfaces(
     await async_db.commit()
     expected = {first.id: 1, last.id: 2}
 
-    queue = await auth_client.get("/api/v1/threads/", params={"page_size": 1})
-    assert queue.status_code == 200, queue.text
-    page = queue.json()
-    assert page["threads"][0]["queue_position"] == 1
-    second_page = await auth_client.get(
-        "/api/v1/threads/", params={"page_size": 1, "page_token": page["next_page_token"]}
+    page = await thread_service.list_queue_threads(
+        async_db, default_user.id, search=None, sort="position", page_size=1, page_token=None
     )
-    assert second_page.status_code == 200, second_page.text
-    assert second_page.json()["threads"][0]["queue_position"] == 2
+    assert page.threads[0].queue_position == 1
+    second_page = await thread_service.list_queue_threads(
+        async_db,
+        default_user.id,
+        search=None,
+        sort="position",
+        page_size=1,
+        page_token=page.next_page_token,
+    )
+    assert second_page.threads[0].queue_position == 2
 
     for thread_id, position in expected.items():
         detail = await auth_client.get(f"/api/v1/threads/{thread_id}")
@@ -385,11 +389,10 @@ async def test_display_positions_agree_after_queue_removal(
         await thread_service.update_thread(
             async_db, default_user.id, first.id, ThreadUpdate(issues_remaining=0)
         )
-    queue = await auth_client.get("/api/v1/threads/")
-    assert queue.status_code == 200, queue.text
-    assert [(row["id"], row["queue_position"]) for row in queue.json()["threads"]] == [
-        (last.id, 1)
-    ]
+    page = await thread_service.list_queue_threads(
+        async_db, default_user.id, search=None, sort="position", page_size=50, page_token=None
+    )
+    assert [(row.id, row.queue_position) for row in page.threads] == [(last.id, 1)]
     detail = await auth_client.get(f"/api/v1/threads/{last.id}")
     assert detail.status_code == 200, detail.text
     assert detail.json()["queue_position"] == 1

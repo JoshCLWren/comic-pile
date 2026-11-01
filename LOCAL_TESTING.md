@@ -53,7 +53,7 @@ Unit tests use the `auth_api_client_async` fixture which auto-creates a test use
 async def test_my_feature(auth_api_client_async: AsyncClient, async_db: AsyncSession):
     # auth_api_client_async is already authenticated as test_user@example.com
     # async_db is a test database session
-    response = await auth_api_client_async.get("/api/threads/")
+    response = await auth_api_client_async.get("/api/v1/threads/completed/threads")
     assert response.status_code == 200
 ```
 

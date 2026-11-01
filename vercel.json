@@ -267,6 +267,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "/api/v2/threads",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "/api/v1/roll/dismiss-pending",
       "methods": [
         "POST"

@@ -146,7 +146,7 @@ async function listAllActiveThreadIds(
   const ids: number[] = []
   let pageToken: string | undefined
   do {
-    const threadsResponse = await request.get('/api/threads/', {
+    const threadsResponse = await request.get('/api/v2/threads', {
       headers,
       params: pageToken
         ? { page_size: 200, page_token: pageToken }

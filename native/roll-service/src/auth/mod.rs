@@ -19,6 +19,6 @@ pub use delivery::BackgroundTasks;
 pub use dto::*;
 pub use error::{AuthError, AuthResult};
 pub use handlers::*;
-pub use identity::{authenticate, AuthenticatedUser};
+pub use identity::{authenticate, authenticate_claims, AuthenticatedUser, VerifiedAccessClaims};
 pub use services::{AuthService, PasswordResetService};
 pub use utils::{generate_csrf_token, hash_password, verify_password};

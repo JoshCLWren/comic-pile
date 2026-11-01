@@ -61,7 +61,7 @@ test.describe('Queue virtualization blank region (#2725)', () => {
     const listUrls: string[] = []
     page.on('request', (request) => {
       const url = request.url()
-      if (url.includes('/v1/threads/') || url.includes('/api/threads')) {
+      if (url.includes('/v2/threads')) {
         if (request.method() === 'GET') {
           listUrls.push(url)
         }

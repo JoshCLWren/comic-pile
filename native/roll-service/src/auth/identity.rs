@@ -46,6 +46,38 @@ struct AccessClaims {
     jti: String,
     password_epoch: Value,
 }
+/// Signature-validated access-token claims that still require a PostgreSQL
+/// revocation and credential-epoch check.
+///
+/// A handler that already folds the user/revocation/epoch lookup into its own
+/// single owner-scoped statement uses this extractor so the request keeps one
+/// issued SQL statement including authentication. Never treat these claims as
+/// an authenticated owner on their own.
+pub struct VerifiedAccessClaims(AccessClaims);
+
+impl VerifiedAccessClaims {
+    /// Token subject used to resolve the one owned user row.
+    pub fn username(&self) -> &str {
+        &self.0.username
+    }
+
+    /// Token id used to resolve revocation state.
+    pub fn jti(&self) -> &str {
+        &self.0.jti
+    }
+
+    /// `pc` credential epoch as Python interprets it; absent means zero.
+    pub fn expected_epoch(&self) -> Result<i64, ApiError> {
+        if self.0.password_epoch.is_null() {
+            return Ok(0);
+        }
+        integer(&self.0.password_epoch).ok_or(ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal Server Error".to_string(),
+        ))
+    }
+}
+
 fn claims(token: &str, secret: &[u8]) -> Result<AccessClaims, ApiError> {
     let invalid = || unauthorized("Invalid or expired token");
     let mut validation = Validation::new(Algorithm::HS256);
@@ -117,26 +149,41 @@ fn integer(value: &Value) -> Option<i64> {
 /// Authentication performs no reading writes and never rotates refresh credentials.
 pub async fn authenticate(state: &AppState, token: &str) -> Result<AuthenticatedUser, ApiError> {
     let claims = claims(token, state.jwt_secret.as_bytes())?;
+    authenticate_claims(state, &VerifiedAccessClaims(claims)).await
+}
+
+/// Apply the PostgreSQL revocation and credential-epoch checks to verified claims.
+///
+/// This is the only place an owner identity is minted from token claims. Callers
+/// that fold the same lookup into one owner-scoped statement validate its
+/// `revoked`/`password_epoch` result with [`VerifiedAccessClaims::expected_epoch`]
+/// instead of calling this helper, so they do not issue a second statement.
+pub async fn authenticate_claims(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+) -> Result<AuthenticatedUser, ApiError> {
     let connection = crate::db::checkout(state).await?;
     let row = crate::db::query_one_optional(state, connection,
         "SELECT u.id, COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0), EXISTS(SELECT 1 FROM revoked_tokens r WHERE r.jti = $2) FROM users u WHERE u.username = $1 LIMIT 1",
-        &[&claims.username, &claims.jti]).await?
+        &[&claims.username(), &claims.jti()]).await?
         .ok_or_else(|| unauthorized("User not found"))?;
     if row.get::<_, bool>(2) {
         return Err(unauthorized("Token has been revoked"));
     }
-    let password_epoch = if claims.password_epoch.is_null() {
-        0
-    } else {
-        integer(&claims.password_epoch).ok_or(ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal Server Error".to_string(),
-        ))?
-    };
-    if password_epoch < row.get::<_, i64>(1) {
+    if claims.expected_epoch()? < row.get::<_, i64>(1) {
         return Err(unauthorized("Password changed; please sign in again."));
     }
     Ok(AuthenticatedUser { id: row.get(0) })
+}
+
+impl FromRequestParts<Arc<AppState>> for VerifiedAccessClaims {
+    type Rejection = ApiError;
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(Self(claims(bearer(parts)?, state.jwt_secret.as_bytes())?))
+    }
 }
 
 impl FromRequestParts<Arc<AppState>> for AuthenticatedUser {

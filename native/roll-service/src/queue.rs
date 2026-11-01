@@ -112,14 +112,18 @@ fn not_found(thread_id: i32) -> ApiError {
 }
 
 fn option_e_enabled() -> bool {
-    std::env::var("OPTION_E_ENABLED")
+    let enabled = std::env::var("OPTION_E_ENABLED")
         .map(|value| {
             matches!(
                 value.trim().to_ascii_lowercase().as_str(),
                 "1" | "true" | "t" | "yes" | "y" | "on"
             )
         })
-        .unwrap_or(false)
+        .unwrap_or(false);
+    enabled
+        && std::env::var("OPTION_E_APPROVED_PREVIEW")
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false)
 }
 
 /// Return the blocked grouping authority used by Queue ordering.
@@ -840,13 +844,15 @@ mod tests {
     /// The handler reads the activation switch per request, so the guard has to
     /// restore it even on failure. Every DB-backed test here holds `DB_LOCK`, so
     /// no other test observes the temporary value.
-    struct OptionEEnv(Option<std::ffi::OsString>);
+    struct OptionEEnv(Option<std::ffi::OsString>, Option<std::ffi::OsString>);
 
     impl OptionEEnv {
         fn enable() -> Self {
-            let previous = std::env::var_os("OPTION_E_ENABLED");
+            let enabled = std::env::var_os("OPTION_E_ENABLED");
+            let approval = std::env::var_os("OPTION_E_APPROVED_PREVIEW");
             std::env::set_var("OPTION_E_ENABLED", "true");
-            Self(previous)
+            std::env::set_var("OPTION_E_APPROVED_PREVIEW", "queue-unit-test");
+            Self(enabled, approval)
         }
     }
 
@@ -855,6 +861,10 @@ mod tests {
             match self.0.take() {
                 Some(value) => std::env::set_var("OPTION_E_ENABLED", value),
                 None => std::env::remove_var("OPTION_E_ENABLED"),
+            }
+            match self.1.take() {
+                Some(value) => std::env::set_var("OPTION_E_APPROVED_PREVIEW", value),
+                None => std::env::remove_var("OPTION_E_APPROVED_PREVIEW"),
             }
         }
     }

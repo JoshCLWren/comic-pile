@@ -90,7 +90,7 @@ test.describe('Bounded incremental Queue loading (#932)', () => {
     );
 
     // Only abort cursor-paginated continuation requests; let the first page load.
-    await page.route('**/v1/threads/**', async (route) => {
+    await page.route('**/v2/threads*', async (route) => {
       const url = route.request().url();
       if (url.includes('page_token')) {
         await route.abort();
@@ -112,7 +112,7 @@ test.describe('Bounded incremental Queue loading (#932)', () => {
     await expect(retry).toBeVisible({ timeout: 10000 });
 
     // Recover: stop aborting and retry the incremental load.
-    await page.unroute('**/v1/threads/**');
+    await page.unroute('**/v2/threads*');
     await retry.click();
 
     await scrollAppUntil(

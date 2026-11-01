@@ -9,19 +9,6 @@ from app.middleware import limiter
 
 
 @pytest.mark.asyncio
-async def test_rate_limit_on_threads_list(auth_client: AsyncClient) -> None:
-    """Test that rate limiting is applied to GET /threads/ endpoint."""
-    limiter.reset()
-
-    for _ in range(100):
-        response = await auth_client.get("/api/v1/threads/")
-        assert response.status_code == 200
-
-    response = await auth_client.get("/api/v1/threads/")
-    assert response.status_code == 429
-
-
-@pytest.mark.asyncio
 async def test_rate_limit_on_thread_create(auth_client: AsyncClient) -> None:
     """Test that rate limiting is applied to POST /threads/ endpoint."""
     limiter.reset()
@@ -85,5 +72,5 @@ async def test_rate_limit_headers(auth_client: AsyncClient) -> None:
     """Test that rate limiting response headers are present."""
     limiter.reset()
 
-    response = await auth_client.get("/api/v1/threads/")
+    response = await auth_client.get("/api/v1/threads/completed/threads")
     assert response.status_code == 200

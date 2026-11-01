@@ -194,6 +194,7 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         ("/api/v2/queue-entries/:thread_id", "GET"),
         ("/api/v2/queue-entries/:thread_id", "PATCH"),
         ("/api/v2/queue-orders", "POST"),
+        ("/api/v2/threads", "GET"),
         ("/api/v1/roll/dismiss-pending", "POST"),
         ("/api/roll/dismiss-pending", "POST"),
     ]

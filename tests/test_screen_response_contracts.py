@@ -281,7 +281,9 @@ def test_current_session_contract_is_exact_and_named() -> None:
 
 def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
     """Affected retained routes advertise their intended response models."""
-    assert _response_schema("/api/v1/threads/") == {
+    # The active collection moved to native v2; the finished shelf still
+    # publishes the same bounded queue-item contract.
+    assert _response_schema("/api/v1/threads/completed/threads") == {
         "$ref": "#/components/schemas/QueueThreadListResponse"
     }
     assert _response_schema("/api/v1/threads/{thread_id}") == {

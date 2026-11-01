@@ -77,8 +77,8 @@ it('calls thread endpoints with expected paths', async () => {
   await threadsApi.list({ search: 'bat' })
   await threadsApi.get(9)
 
-  expect(get).toHaveBeenCalledWith('/v1/threads/', { params: undefined })
-  expect(get).toHaveBeenCalledWith('/v1/threads/', { params: { search: 'bat' } })
+  expect(get).toHaveBeenCalledWith('/v2/threads', { params: undefined })
+  expect(get).toHaveBeenCalledWith('/v2/threads', { params: { search: 'bat' } })
   expect(get).toHaveBeenCalledWith('/v1/threads/9')
 })
 
