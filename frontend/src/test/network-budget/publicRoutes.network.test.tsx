@@ -8,7 +8,7 @@ vi.mock('../../pages/RollPage', () => ({
   default: () => <div data-testid="roll-page-stub" />,
 }))
 import { setAccessToken } from '../../services/api'
-import { renderAppAtRoute } from './appNetworkHarness'
+import { TEST_USER, renderAppAtRoute } from './appNetworkHarness'
 import { GUEST_AUTH_PROBE, publicBudget } from './routeBudgets'
 
 beforeEach(() => {
@@ -36,6 +36,35 @@ describe('public route network budgets', () => {
       expect(app.rows()).toEqual([])
       expect(app.ledger.unhandled()).toEqual([])
       expect(app.currentPath()).toBe(path)
+    },
+  )
+
+  test.each(['/login', '/register', '/forgot-password', '/reset-password'])(
+    '%s treats a cookie-only session as a guest without probing',
+    async path => {
+      // A valid HttpOnly refresh cookie with no access token is the rare
+      // cleared-storage case. Public auth pages deliberately do not probe for
+      // it, so all four forms share one policy instead of two bootstrap modes.
+      let refreshed = false
+      const app = renderAppAtRoute(path, {
+        auth: 'guest',
+        handlers: {
+          'GET /api/v1/auth/me': () =>
+            refreshed
+              ? { data: TEST_USER }
+              : { status: 401, data: { detail: 'Not authenticated' } },
+          'POST /api/v1/auth/refresh': () => {
+            refreshed = true
+            return { data: { access_token: 'cookie-only-token', refresh_token: 'cookie-refresh' } }
+          },
+        },
+      })
+      await app.settle()
+
+      expect(app.rows()).toEqual([])
+      expect(refreshed).toBe(false)
+      expect(app.currentPath()).toBe(path)
+      expect(screen.queryByText('Checking authentication...')).not.toBeInTheDocument()
     },
   )
 

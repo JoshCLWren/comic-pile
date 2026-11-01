@@ -278,7 +278,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // so a cookieless visitor never pays an /auth/me -> /auth/refresh probe
       // before the form is usable. A stored (or injected) token still takes the
       // full validation path below, preserving authenticated redirects and
-      // clearing a rejected token.
+      // clearing a rejected token. A cookie-only session (valid refresh cookie,
+      // no stored token) is deliberately treated as a guest on these public
+      // forms, exactly like /login and /register; no credential state is read
+      // or written and the forms stay CSRF-exempt single-purpose POSTs.
       const isPublicAuthPage =
         window.location.pathname === '/login' ||
         window.location.pathname === '/register' ||
