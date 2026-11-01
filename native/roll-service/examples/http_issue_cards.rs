@@ -19,6 +19,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .method("POST")
                 .uri("/api/v2/issues/cards")
                 .header("authorization", format!("Bearer {token}"))
+                .header("cookie", "csrf_token=synthetic-csrf")
+                .header("x-csrf-token", "synthetic-csrf")
                 .header("content-type", "application/json")
                 .body(Body::from(body))?,
         )

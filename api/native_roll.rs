@@ -7,10 +7,17 @@ use axum::{
     routing::{get, patch, post},
     Json, Router,
 };
-use comicpile_roll_service::{config::Config, router as roll_router, AppState};
-use std::sync::{Arc, OnceLock};
-use tower::{Service, ServiceBuilder};
-use vercel_runtime::{axum::VercelLayer, Error};
+use comicpile_roll_service::{
+    auth::BackgroundTasks, config::Config, router as roll_router, AppState,
+};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, OnceLock},
+    task::{Context, Poll},
+};
+use tower::Service;
+use vercel_runtime::{axum::StreamingUtils, AppState as VercelState, Error, ResponseBody};
 
 async fn native_health() -> Json<serde_json::Value> {
     Json(serde_json::json!({
@@ -81,6 +88,48 @@ async fn native_bootstrap(mut request: Request) -> Response {
     native_dispatch(request).await
 }
 
+/// Vercel's stock layer drops the per-invocation runtime state, which owns the
+/// `wait_until` tracker. Background auth work (password-recovery email) is only
+/// guaranteed to finish when it is registered there, so this service forwards
+/// that state into every request as a [`BackgroundTasks`] extension before
+/// dispatching to the router.
+#[derive(Clone)]
+struct NativeVercelService {
+    router: Router,
+}
+
+impl<B> Service<(VercelState, axum::http::Request<B>)> for NativeVercelService
+where
+    B: http_body::Body<Data = axum::body::Bytes> + Send + 'static,
+    B::Error: Into<Error>,
+{
+    type Response = vercel_runtime::Response<ResponseBody>;
+    type Error = Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, (state, request): (VercelState, axum::http::Request<B>)) -> Self::Future {
+        let mut router = self.router.clone();
+        Box::pin(async move {
+            let (parts, body) = request.into_parts();
+            let mut request = axum::http::Request::from_parts(parts, axum::body::Body::new(body));
+            request
+                .extensions_mut()
+                .insert(BackgroundTasks::new(move |future| {
+                    state.wait_until(future);
+                }));
+            let response = match router.call(request).await {
+                Ok(response) => response,
+                Err(never) => match never {},
+            };
+            StreamingUtils::process_response(response).await
+        })
+    }
+}
+
 fn app() -> Router {
     Router::new()
         .route("/api/_native_roll/health", get(native_health))
@@ -95,26 +144,49 @@ fn app() -> Router {
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/v2/auth/register", post(native_dispatch))
+        .route("/api/v2/auth/login", post(native_dispatch))
+        .route("/api/v2/auth/refresh", post(native_dispatch))
+        .route("/api/v2/auth/logout", post(native_dispatch))
+        .route("/api/v2/auth/csrf", get(native_dispatch))
+        .route("/api/v2/auth/me", get(native_dispatch))
+        .route("/api/v2/auth/forgot-password", post(native_dispatch))
+        .route("/api/v2/auth/reset-password", post(native_dispatch))
+        .route("/api/v1/auth/me", get(native_dispatch))
+        .route("/api/auth/me", get(native_dispatch))
+        .route("/api/v1/auth/login", post(native_dispatch))
+        .route("/api/v1/auth/register", post(native_dispatch))
+        .route("/api/v1/auth/refresh", post(native_dispatch))
+        .route("/api/v1/auth/logout", post(native_dispatch))
+        .route("/api/v1/auth/csrf", get(native_dispatch))
+        .route("/api/v1/auth/forgot-password", post(native_dispatch))
+        .route("/api/v1/auth/reset-password", post(native_dispatch))
+        .route("/api/auth/login", post(native_dispatch))
+        .route("/api/auth/register", post(native_dispatch))
+        .route("/api/auth/refresh", post(native_dispatch))
+        .route("/api/auth/logout", post(native_dispatch))
+        .route("/api/auth/csrf", get(native_dispatch))
+        .route("/api/auth/forgot-password", post(native_dispatch))
+        .route("/api/auth/reset-password", post(native_dispatch))
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    vercel_runtime::run(
-        ServiceBuilder::new()
-            .layer(VercelLayer::new())
-            .service(app()),
-    )
-    .await
+    vercel_runtime::run(NativeVercelService { router: app() }).await
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{app, normalize_bootstrap_request};
+    use super::{app, normalize_bootstrap_request, NativeVercelService};
     use axum::{
         body::{to_bytes, Body},
         http::{header, Request, StatusCode},
+        routing::get,
+        Router,
     };
+    use comicpile_roll_service::auth::BackgroundTasks;
     use tower::Service;
+    use vercel_runtime::{AppState as VercelState, LogContext};
 
     #[tokio::test]
     async fn isolated_bootstrap_preserves_auth_and_query_through_native_ingress() {
@@ -174,6 +246,39 @@ mod tests {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&body).expect("valid JSON"),
             serde_json::json!({"status": "ok", "runtime": "rust", "service": "roll"})
+        );
+    }
+
+    #[tokio::test]
+    async fn vercel_service_propagates_the_wait_until_tracker_to_handlers() {
+        async fn probe(parts: axum::http::request::Parts) -> StatusCode {
+            if parts.extensions.get::<BackgroundTasks>().is_some() {
+                StatusCode::OK
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        }
+
+        #[cfg(unix)]
+        let log_context = LogContext::new(None, None, None);
+        #[cfg(not(unix))]
+        let log_context = LogContext::new();
+
+        let mut service = NativeVercelService {
+            router: Router::new().route("/probe", get(probe)),
+        };
+        let request = Request::builder()
+            .method("GET")
+            .uri("/probe")
+            .body(Body::empty())
+            .expect("valid probe request");
+        let response = Service::call(&mut service, (VercelState::new(log_context), request))
+            .await
+            .expect("vercel service response");
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "handlers must receive the invocation's tracked background registrar"
         );
     }
 }

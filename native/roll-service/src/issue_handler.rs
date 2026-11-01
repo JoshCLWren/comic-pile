@@ -79,6 +79,8 @@ mod tests {
                     .method("PATCH")
                     .uri("/api/v2/issues/42")
                     .header("content-type", "application/json")
+                    .header("cookie", "csrf_token=synthetic-csrf")
+                    .header("x-csrf-token", "synthetic-csrf")
                     .body(Body::from(
                         r#"{"status":"read","idempotency_key":"test-issue-012345"}"#,
                     ))

@@ -12,9 +12,10 @@ parity gates #4311. A bootstrap request currently gets 404, never partial JSON.
 ## Build and test
 
 Install rustup, the platform C compiler, pkg-config and OpenSSL development
-headers. Commands run from `native/roll-service`; `rust-toolchain.toml` pins
-Rust 1.85.0 including rustfmt/clippy, and Cargo.lock pins all dependencies.
-Cargo's resolver selects dependencies compatible with that minimum Rust version.
+headers. Commands run from `native/roll-service`; `rust-toolchain.toml` selects
+the stable toolchain including rustfmt/clippy, and Cargo.lock pins all
+dependencies. `rust-version = "1.88"` documents the minimum toolchain the pinned
+lockfile supports.
 
 ```sh
 cargo fmt --all --check

@@ -1,6 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["cle1"],
+  "regions": [
+    "cle1"
+  ],
   "crons": [
     {
       "path": "/api/v1/cron/release-sync",
@@ -31,10 +33,6 @@
       "use": "@vercel/rust"
     },
     {
-      "src": "api/auth/me.ts",
-      "use": "@vercel/node"
-    },
-    {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -45,37 +43,212 @@
   "routes": [
     {
       "src": "/api/v1/auth/me",
-      "methods": ["GET"],
-      "dest": "/api/auth/me.ts"
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v1/auth/login",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v1/auth/register",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v1/auth/refresh",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v1/auth/logout",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v1/auth/csrf",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v1/auth/forgot-password",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v1/auth/reset-password",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/auth/register",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/auth/login",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/auth/refresh",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/auth/logout",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/auth/csrf",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/auth/me",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/auth/forgot-password",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/auth/reset-password",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/auth/me",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/auth/login",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/auth/register",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/auth/refresh",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/auth/logout",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/auth/csrf",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/auth/forgot-password",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/auth/reset-password",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api/_native_roll/health",
-      "methods": ["GET"],
+      "methods": [
+        "GET"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api/v2/roll/bootstrap",
-      "methods": ["GET"],
+      "methods": [
+        "GET"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api/v2/roll/dice-command",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api/v2/roll/offer",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api/v2/roll/reset",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api/v2/reading-boundaries",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
@@ -95,12 +268,16 @@
     },
     {
       "src": "/api/v1/roll/dismiss-pending",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api/roll/dismiss-pending",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "dest": "/api/native_roll.rs"
     },
     {
