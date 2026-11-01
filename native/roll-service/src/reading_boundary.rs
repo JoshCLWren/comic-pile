@@ -808,7 +808,11 @@ pub async fn reading_boundary_single_v2(
         .map_err(|error| error.into_response())?
         .threads;
     let explanation = explanations.remove(&thread_id).ok_or_else(|| {
-        ApiError(StatusCode::NOT_FOUND, format!("Thread {thread_id} not found")).into_response()
+        ApiError(
+            StatusCode::NOT_FOUND,
+            format!("Thread {thread_id} not found"),
+        )
+        .into_response()
     })?;
     Ok(Json(explanation))
 }
