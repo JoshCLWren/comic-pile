@@ -1,9 +1,10 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import type { BlockingDependency } from '../types'
 import { vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
 import type { RollBootstrapThread } from '../types/rollBootstrap'
+
+type ThreadPoolProps = Parameters<typeof ThreadPool>[0]
 
 const mockPool: RollBootstrapThread[] = [
   {
@@ -22,54 +23,30 @@ const mockPool: RollBootstrapThread[] = [
   },
 ]
 
-const mockBlockedThreads: RollBootstrapThread[] = []
-const mockBlockingDependencyMap: Record<number, BlockingDependency[]> = {}
-const mockSnoozedThreads: Array<{ id: number; title: string; format: string }> = []
-const mockSkippedThreads: Array<{ id: number; title: string; format: string }> = []
+const baseProps: ThreadPoolProps = {
+  pool: mockPool,
+  dieSize: 20,
+  isRatingView: false,
+  selectedThreadId: null,
+  snoozedThreads: [],
+  snoozedExpanded: false,
+  skippedThreads: [],
+  skippedExpanded: false,
+  onThreadClick: () => {},
+  onUnsnooze: () => {},
+  onUnskip: () => {},
+  onToggleSnoozed: () => {},
+  onToggleSkipped: () => {},
+  onShuffle: () => {},
+  unsnoozeIsPending: false,
+  unskipIsPending: false,
+  shuffleIsPending: false,
+}
 
-function renderPool(overrides: Partial<{
-  pool: RollBootstrapThread[]
-  blockedThreads: RollBootstrapThread[]
-  blockingDependencyMap: Record<number, BlockingDependency[]>
-  blockedExpanded: boolean
-}> = {}) {
-  const {
-    pool = mockPool,
-    blockedThreads = mockBlockedThreads,
-    blockingDependencyMap = mockBlockingDependencyMap,
-    blockedExpanded = false,
-  } = overrides
-
+function renderPool(overrides: Partial<ThreadPoolProps> = {}) {
   return render(
     <MemoryRouter>
-      <ThreadPool
-        pool={pool}
-        blockedThreads={blockedThreads}
-        blockingDependencyMap={blockingDependencyMap}
-        dieSize={20}
-        isRatingView={false}
-        selectedThreadId={null}
-        staleThread={null}
-        staleThreadCount={0}
-        snoozedThreads={mockSnoozedThreads}
-        snoozedExpanded={false}
-        skippedThreads={mockSkippedThreads}
-        skippedExpanded={false}
-        blockedExpanded={blockedExpanded}
-        staleExpanded={false}
-        onThreadClick={() => {}}
-        onUnsnooze={() => {}}
-        onUnskip={() => {}}
-        onReadStale={() => {}}
-        onToggleSnoozed={() => {}}
-        onToggleSkipped={() => {}}
-        onToggleStale={() => {}}
-        onToggleBlocked={() => {}}
-        onShuffle={() => {}}
-        unsnoozeIsPending={false}
-        unskipIsPending={false}
-        shuffleIsPending={false}
-      />
+      <ThreadPool {...baseProps} {...overrides} />
     </MemoryRouter>,
   )
 }
@@ -116,112 +93,56 @@ describe('ThreadPool Component', () => {
     expect(shuffle).toHaveAccessibleDescription(/randomizes the complete active queue/i)
   })
 
-  it('never displays the retired blocked panel even with legacy bootstrap data', () => {
-    const blockedThread: RollBootstrapThread = {
-      id: 3, title: 'Blocked Thread', format: 'Mainline', issue_number: '1',
-    }
-    renderPool({
-      blockedThreads: [blockedThread],
-      blockingDependencyMap: {
-        3: [{ thread_id: 7, thread_title: 'Dependency Thread', issue_number: '9', label: 'dependency' }],
-      },
-      blockedExpanded: true,
-    })
-    expect(screen.queryByText(/series waiting for earlier issues/i)).not.toBeInTheDocument()
-    expect(screen.queryByText('Blocked Thread')).not.toBeInTheDocument()
+  it('never displays retired blocked, stale or out-of-pool diagnostic panels', () => {
+    renderPool()
+
     expect(screen.getAllByRole('button', { name: /die face/i })).toHaveLength(2)
+    for (const text of [
+      /series waiting for earlier issues/i,
+      /series you haven't opened recently/i,
+      /series out of the roll pool/i,
+      /load more/i,
+    ]) {
+      expect(screen.queryByText(text)).not.toBeInTheDocument()
+    }
   })
 
   it('renders the empty-state when there is nothing to roll', () => {
-    renderPool({ pool: [], blockedThreads: [], blockingDependencyMap: {} })
+    renderPool({ pool: [] })
 
     expect(screen.getByText(/Nothing to roll yet/i)).toBeInTheDocument()
   })
 
   it('shows skipped threads when expanded and calls onUnskip', () => {
     const onUnskip = vi.fn()
-    const onToggleSkipped = vi.fn()
 
-    render(
-      <MemoryRouter>
-        <ThreadPool
-          pool={[]}
-          blockedThreads={[]}
-          blockingDependencyMap={{}}
-          dieSize={6}
-          isRatingView={false}
-          selectedThreadId={null}
-          staleThread={null}
-          staleThreadCount={0}
-          snoozedThreads={[]}
-          snoozedExpanded={false}
-          skippedThreads={[{ id: 10, title: 'Skipped Saga', format: 'Comic' }]}
-          skippedExpanded={true}
-          blockedExpanded={false}
-          staleExpanded={false}
-          onThreadClick={() => {}}
-          onUnsnooze={() => {}}
-          onUnskip={onUnskip}
-          onReadStale={() => {}}
-          onToggleSnoozed={() => {}}
-          onToggleSkipped={onToggleSkipped}
-          onToggleStale={() => {}}
-          onToggleBlocked={() => {}}
-          onShuffle={() => {}}
-          unsnoozeIsPending={false}
-          unskipIsPending={false}
-          shuffleIsPending={false}
-        />
-      </MemoryRouter>,
-    )
+    renderPool({
+      pool: [],
+      skippedThreads: [{ id: 10, title: 'Skipped Saga', format: 'Comic' }],
+      skippedExpanded: true,
+      onUnskip,
+    })
 
     expect(screen.getByText('Skipped Saga')).toBeInTheDocument()
-    const unskipBtn = screen.getByRole('button', { name: /unskip this comic/i })
-    fireEvent.click(unskipBtn)
+    fireEvent.click(screen.getByRole('button', { name: /unskip this comic/i }))
     expect(onUnskip).toHaveBeenCalledWith(10)
   })
 
   it('hides skipped threads when collapsed and toggles expansion', () => {
     const onToggleSkipped = vi.fn()
 
-    render(
-      <MemoryRouter>
-        <ThreadPool
-          pool={[]}
-          blockedThreads={[]}
-          blockingDependencyMap={{}}
-          dieSize={6}
-          isRatingView={false}
-          selectedThreadId={null}
-          staleThread={null}
-          staleThreadCount={0}
-          snoozedThreads={[]}
-          snoozedExpanded={false}
-          skippedThreads={[{ id: 10, title: 'Skipped Saga', format: 'Comic' }]}
-          skippedExpanded={false}
-          blockedExpanded={false}
-          staleExpanded={false}
-          onThreadClick={() => {}}
-          onUnsnooze={() => {}}
-          onUnskip={() => {}}
-          onReadStale={() => {}}
-          onToggleSnoozed={() => {}}
-          onToggleSkipped={onToggleSkipped}
-          onToggleStale={vi.fn()}
-          onToggleBlocked={() => {}}
-          onShuffle={() => {}}
-          unsnoozeIsPending={false}
-          unskipIsPending={false}
-          shuffleIsPending={false}
-        />
-      </MemoryRouter>,
-    )
+    renderPool({
+      pool: [],
+      skippedThreads: [{ id: 10, title: 'Skipped Saga', format: 'Comic' }],
+      skippedExpanded: false,
+      onToggleSkipped,
+    })
 
     expect(screen.queryByText('Skipped Saga')).not.toBeInTheDocument()
-    const toggle = screen.getByText(/Skipped \(1\)/i)
-    fireEvent.click(toggle)
+    fireEvent.click(screen.getByText(/Skipped \(1\)/i))
     expect(onToggleSkipped).toHaveBeenCalledTimes(1)
   })
+
   it('renders each die face with its visible thread tags (#3425)', () => {
     renderPool({
       pool: [

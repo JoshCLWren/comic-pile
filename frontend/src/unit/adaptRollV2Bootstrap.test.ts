@@ -37,6 +37,7 @@ describe('native v2 Roll bootstrap compatibility', () => {
 
   it('fails closed when the native response omits rollable candidates', () => {
     const { rollable: _ignored, ...incomplete } = sample
+    // SAFETY: deliberately incomplete fixture exercises the adapter's runtime guard.
     expect(() => adaptRollV2Bootstrap(incomplete as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 bootstrap response')
   })

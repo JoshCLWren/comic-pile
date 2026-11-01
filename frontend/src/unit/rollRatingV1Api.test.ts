@@ -15,7 +15,7 @@ beforeEach(() => {
   globalThis.sessionStorage?.removeItem('comicpile:roll:pending-manual-die')
   globalThis.sessionStorage?.removeItem('comicpile:roll:pending-offer')
   globalThis.document.cookie = 'comicpile_roll_snoozes=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-  client.get.mockReset().mockResolvedValue({ rollable: [], total_threads: 0, available_threads: 0, excluded_count: 0, excluded_threads: [], inactive_count: 0, inactive_threads: [] })
+  client.get.mockReset().mockResolvedValue({ rollable: [] })
   client.post.mockReset().mockResolvedValue({})
 })
 

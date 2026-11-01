@@ -8,11 +8,10 @@ Functions return ORM models or plain tuples/dicts; callers
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import Text, and_, func, or_, select, update
+from sqlalchemy import Text, func, or_, select, update
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.elements import ColumnElement
 
 from app.repositories.reading_eligibility_queries import (
     candidate_predicate,
@@ -518,39 +517,6 @@ async def fetch_bootstrap_library_rows(
         .order_by(Thread.queue_position)
     )
     return list(result.all())
-
-
-def _inactive_exclusion_predicate(
-    *,
-    eligibility: ReadingEligibilitySnapshot | None,
-    session_excluded_ids: Sequence[int],
-) -> ColumnElement[bool]:
-    """Return the SQL predicate for the Roll "out of the roll pool" category.
-
-    This mirrors the inactive branch of ``_classify_library`` exactly: a
-    completed series is inactive, and an active series is inactive only when it
-    is not queued, is not blocked, and is not snoozed or skipped in any scope.
-    Keeping the predicate in one place is what lets the bootstrap count and the
-    paginated drill-down agree for the same scope (issue #3330).
-
-    Args:
-        eligibility: Validated live result, or None for legacy execution.
-        session_excluded_ids: Snoozed, backoff-snoozed, and skipped thread IDs.
-
-    Returns:
-        Predicate selecting inactive series for one owner.
-    """
-    not_queued_active = and_(
-        Thread.status == "active",
-        Thread.queue_position < 1,
-        candidate_predicate(eligibility),
-    )
-    if session_excluded_ids:
-        not_queued_active = and_(
-            not_queued_active,
-            Thread.id.not_in(list(session_excluded_ids)),
-        )
-    return or_(Thread.status == "completed", not_queued_active)
 
 
 async def fetch_active_session(

@@ -1,5 +1,4 @@
 import type {
-  BlockingDependency,
   ReadingBandwidth,
   ReadingIntent,
   RollLastReadPayload,
@@ -22,31 +21,6 @@ export interface RollBootstrapThread {
   last_activity_at?: string | null
   /** Visible direct tags, so a die face shows tag context before rolling (#3425). */
   tags?: Tag[]
-}
-
-/** One series excluded from the roll pool, with the reason the user can understand. */
-export interface ThreadExclusionReason {
-  /**
-   * Stable Thread id for the row.
-   *
-   * The server always sends it, but the UI treats it as optional so a
-   * contract-violating row renders honest plain text instead of linking to a
-   * speculative `/thread/undefined` route.
-   */
-  thread_id?: number
-  title: string
-  format: string
-  /** Truthful identity context for disambiguating same-named out-of-pool series. */
-  year?: number | string | null
-  volume?: string | null
-  publisher?: string | null
-  reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue"
-  detail?: string | null
-  /** Live eligibility labels for a blocked series, when the server has them. */
-  blocking_reasons?: string[]
-  /** Navigable dependency details for a blocked series, when the server has them. */
-  blocking_dependencies?: BlockingDependency[]
-  last_activity_at?: string | null
 }
 
 /** One direct continuity blocker for a pending roll. */
@@ -160,10 +134,14 @@ export interface RollBootstrapResponse {
   snoozed_count: number
   skipped_thread_ids: number[]
   skipped_threads: RollBootstrapThread[]
-  blocked_count: number
-  blocked_threads: RollBootstrapThread[]
-  stale_thread_count: number
-  stale_thread: RollBootstrapThread | null
+  /**
+   * Retained from the v1 bootstrap for transitional stale-read reconciliation.
+   * Native v2 does not send either field, so callers must treat them as absent.
+   */
+  blocked_count?: number
+  blocked_threads?: RollBootstrapThread[]
+  stale_thread_count?: number
+  stale_thread?: RollBootstrapThread | null
   timezone?: string | null
   /**
    * Session last-read projection (#2720). The retained v1 bootstrap does not
@@ -171,13 +149,4 @@ export interface RollBootstrapResponse {
    * seeded by a rate response is the authoritative client-side fallback.
    */
   last_read?: RollLastReadPayload | null
-
-  // Issue #3125: exclusion transparency — every series not in the pool is
-  // explained so the user can see why options vanish.
-  total_threads?: number
-  available_threads?: number
-  excluded_count?: number
-  excluded_threads?: ThreadExclusionReason[]
-  inactive_count?: number
-  inactive_threads?: ThreadExclusionReason[]
 }

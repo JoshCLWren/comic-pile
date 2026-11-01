@@ -11,32 +11,23 @@ vi.mock('react-router-dom', async (importOriginal) => ({
 }))
 
 describe('ThreadPool bootstrap edge branches', () => {
-  it('retains keyboard access with a zero selected id while ignoring retired blocked reports', () => {
+  it('retains keyboard access with a zero selected id and no retired blocked reports', () => {
     const onThreadClick = vi.fn()
 
     render(
       <MemoryRouter><ThreadPool
         pool={[{ id: 1, title: 'Saga', format: 'Comic' }]}
-        blockedThreads={[{ id: 2, title: 'Monstress', format: 'Comic' }]}
-        blockingDependencyMap={{}}
         isRatingView={false}
         selectedThreadId={0}
-        staleThread={null}
-        staleThreadCount={0}
         snoozedThreads={[]}
         snoozedExpanded={false}
         skippedThreads={[]}
         skippedExpanded={false}
-        blockedExpanded
-        staleExpanded={false}
         onThreadClick={onThreadClick}
         onUnsnooze={vi.fn()}
         onUnskip={vi.fn()}
-        onReadStale={vi.fn()}
         onToggleSnoozed={vi.fn()}
         onToggleSkipped={vi.fn()}
-        onToggleStale={vi.fn()}
-        onToggleBlocked={vi.fn()}
         onShuffle={vi.fn()}
         unsnoozeIsPending={false}
         unskipIsPending={false}

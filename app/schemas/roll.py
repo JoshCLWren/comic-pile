@@ -168,8 +168,7 @@ class ThreadExclusionReason(BaseModel):
     """One series excluded from the roll pool, with the reason the user can understand.
 
     ``blocking_reasons`` and ``blocking_dependencies`` carry the live eligibility
-    explanation for blocked series so a paginated exclusion page (issue #3330)
-    can explain the wait without a second per-thread lookup.
+    explanation for blocked series in the retained v1 bootstrap projection.
     """
 
     thread_id: int

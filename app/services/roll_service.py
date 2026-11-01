@@ -79,7 +79,6 @@ from comic_pile.recommendation_version import (
 from comic_pile.reading_session import (
     get_current_die_for_session,
     get_or_create,
-    resolve_current_session,
 )
 
 from app.config import get_recommendation_settings

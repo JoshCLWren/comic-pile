@@ -2,52 +2,24 @@ import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
-import type { BlockingDependency } from '../../../types'
-import type { BlockingDependency } from '../../../types'
-import type { RollBootstrapThread, ThreadExclusionReason } from '../../../types/rollBootstrap'
-
-/** Transitional type for callers that still compile older Roll fixture props.
- * Pagination is no longer rendered or fetched on the Roll page.
- */
-export interface RollExclusionPagination {
-  total: number
-  hasNextPage: boolean
-  isLoading: boolean
-  isError: boolean
-  onLoadMore: () => void
-  onRetry: () => void
-}
+import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
-  blockedThreads: RollBootstrapThread[]
-  blockedPagination?: RollExclusionPagination
-  blockingDependencyMap: Record<number, BlockingDependency[]>
   dieSize?: number
   isRatingView: boolean
   selectedThreadId: number | null
-  staleThread: (RollBootstrapThread & { days: number }) | null
-  staleThreadCount: number
   snoozedThreads: Array<{ id: number; title: string; format: string }>
   snoozedCount?: number
   snoozedExpanded: boolean
-  blockedExpanded: boolean
   skippedThreads: Array<{ id: number; title: string; format: string }>
   skippedCount?: number
   skippedExpanded: boolean
-  staleExpanded: boolean
-  inactiveExpanded?: boolean
-  inactiveThreads?: ThreadExclusionReason[]
-  inactivePagination?: RollExclusionPagination
-  onToggleInactive?: () => void
   onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
   onUnskip: (threadId: number) => void
-  onReadStale: (threadId: number) => void
   onToggleSnoozed: () => void
   onToggleSkipped: () => void
-  onToggleStale: () => void
-  onToggleBlocked: () => void
   onShuffle: () => void
   unsnoozeIsPending: boolean
   unskipIsPending: boolean

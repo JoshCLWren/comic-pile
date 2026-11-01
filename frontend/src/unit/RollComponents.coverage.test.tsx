@@ -48,25 +48,23 @@ const thread: Thread = {
   created_at: '2000-01-01T00:00:00Z',
 }
 const callbacks = () => ({
-  onThreadClick: vi.fn(), onUnsnooze: vi.fn(), onUnskip: vi.fn(), onReadStale: vi.fn(), onToggleSnoozed: vi.fn(),
-  onToggleSkipped: vi.fn(), onToggleStale: vi.fn(), onToggleBlocked: vi.fn(), onShuffle: vi.fn(),
+  onThreadClick: vi.fn(), onUnsnooze: vi.fn(), onUnskip: vi.fn(), onToggleSnoozed: vi.fn(),
+  onToggleSkipped: vi.fn(), onShuffle: vi.fn(),
 })
-
-type ThreadPoolProps = Parameters<typeof ThreadPool>[0]
 
 describe('ThreadPool diagnostic removal (#4441)', () => {
   it('renders the empty state and retains available issue controls', async () => {
     const actions = callbacks()
     const { rerender } = render(
-      <MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} staleExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>,
+      <MemoryRouter><ThreadPool pool={[]} isRatingView={false} selectedThreadId={null} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>,
     )
     expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /add a series/i }))
     rerender(
-      <MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} staleExpanded={true} inactiveThreads={[{ thread_id: 4, title: 'Inactive', format: 'Comic', reason: 'completed' }]} inactiveExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>,
+      <MemoryRouter><ThreadPool pool={[thread]} isRatingView={false} selectedThreadId={null} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>,
     )
-    expect(screen.queryByText('Blocked')).not.toBeInTheDocument()
-    expect(screen.queryByText('Inactive')).not.toBeInTheDocument()
+    expect(screen.queryByText(/waiting for earlier issues/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/out of the roll pool/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Die face 1: Saga/i })).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /Die face 1: Saga/i }))
     expect(actions.onThreadClick).toHaveBeenCalledWith(thread)
@@ -74,7 +72,7 @@ describe('ThreadPool diagnostic removal (#4441)', () => {
 
   it('keeps snooze and skip controls without retired reports', async () => {
     const actions = callbacks()
-    render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[{id:3,title:'Snoozed',format:'Comic'}]} snoozedExpanded={true} skippedThreads={[{id:4,title:'Skipped',format:'Comic'}]} skippedExpanded={true} blockedExpanded={true} staleExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    render(<MemoryRouter><ThreadPool pool={[]} isRatingView={false} selectedThreadId={null} snoozedThreads={[{id:3,title:'Snoozed',format:'Comic'}]} snoozedExpanded={true} skippedThreads={[{id:4,title:'Skipped',format:'Comic'}]} skippedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Unsnooze this comic' }))
     expect(actions.onUnsnooze).toHaveBeenCalledWith(3)

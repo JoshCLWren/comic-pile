@@ -62,10 +62,6 @@ from comic_pile.reading_session import get_current_die_for_session, get_or_creat
 
 router = APIRouter(tags=["roll"])
 
-#: Versioned-only router for new client resources. Mounted solely under
-#: ``/api/v1/roll`` so new endpoints never introduce bare ``/api/*`` routes
-#: (see ``tests/test_route_versioning.py`` and docs/API.md).
-v1_router = APIRouter(tags=["roll"])
 logger = logging.getLogger(__name__)
 
 

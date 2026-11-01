@@ -56,7 +56,7 @@ import CorrectionSheet from '../../components/CorrectionSheet'
 /**
  * Route entry for the Roll page. The component composes the focused retained
  * feature modules (`useRollBootstrapSync`, `useRollPendingSession`,
- * `useRollRating`, `useRollSnooze`, `useRollDependencies`, `useRollActions`,
+ * `useRollRating`, `useRollSnooze`, `useRollActions`,
  * `useRollModals`, `useRollViewport`) plus the page-level navigation and
  * error boundary concerns.
  * Data and mutation ownership stays in the page so a second cache layer is

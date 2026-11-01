@@ -279,7 +279,6 @@ if TYPE_CHECKING:
         OverrideRequest,
         RollBootstrapResponse,
         RollBootstrapThread,
-        RollExclusionPageResponse,
         RollRequest,
         RollResponse,
         SessionModeResponse,
