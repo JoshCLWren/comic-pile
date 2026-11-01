@@ -659,7 +659,11 @@ describe('QueueMapSeriesDialog', () => {
     await user.type(search, 'Saga Two')
 
     await user.click(await screen.findByRole('button', { name: /Saga \(Book Two\)/ }))
-    await user.click(await screen.findByTestId('queue-map-series-approve'))
+    // The first successful commit must not hide approval or leave its success
+    // notice attached to the second ComicVine volume.
+    expect(await screen.findByTestId('queue-map-series-approve')).toBeEnabled()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    await user.click(screen.getByTestId('queue-map-series-approve'))
     await waitFor(() => expect(mockedCommit).toHaveBeenCalledTimes(2))
     expect(mockedCommit.mock.calls[1][0]).toMatchObject({
       idempotency_key: 'queue-mapping-7-1-31111-1700000000',
@@ -771,6 +775,14 @@ describe('QueueMapSeriesDialog', () => {
 
     expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
     expect(mockedCommit).toHaveBeenCalledTimes(2)
+    // A gateway timeout may occur after the server has committed. Replay the
+    // complete request unchanged, especially its preview and idempotency key.
+    expect(mockedCommit.mock.calls[0][0]).toEqual({
+      preview_token: 'preview-tok',
+      idempotency_key: 'queue-mapping-7-1-20764-1700000000',
+      approved_row_ids: ['issue:2'],
+    })
+    expect(mockedCommit.mock.calls[1][0]).toEqual(mockedCommit.mock.calls[0][0])
     expect(onMapped).toHaveBeenCalledWith([2])
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
@@ -792,8 +804,22 @@ describe('QueueMapSeriesDialog', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Could not confirm the mapping result. Any saved mappings are safe; map again to replay the request.',
     )
+    expect(mockedCommit).toHaveBeenCalledTimes(4)
+    // Three automatic replays exhaust the retry budget; a subsequent manual
+    // approval must still use the original key to confirm an unknown save.
+    const originalRequest = mockedCommit.mock.calls[0][0]
+    for (const [request] of mockedCommit.mock.calls) {
+      expect(request).toEqual(originalRequest)
+    }
     expect(onMapped).not.toHaveBeenCalled()
     expect(invalidateQueueSpy).not.toHaveBeenCalled()
+
+    mockedCommit.mockResolvedValueOnce(COMMIT_SUCCESS)
+    await user.click(screen.getByTestId('queue-map-series-approve'))
+    expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
+    expect(mockedCommit).toHaveBeenCalledTimes(5)
+    expect(mockedCommit.mock.calls[4][0]).toEqual(originalRequest)
+    expect(onMapped).toHaveBeenCalledWith([2])
   })
 
   it('re-reads the plan when the commit reports a stale preview', async () => {
