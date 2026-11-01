@@ -7,6 +7,8 @@ pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
+pub mod issue_handler;
+pub mod issue_service;
 pub mod option_inputs;
 pub mod reading_constraints;
 pub mod reading_inputs;
@@ -176,6 +178,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
+        .route("/api/v2/issues/:issue_id", patch(issue_handler::read_rate_issue))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found") })
         .method_not_allowed_fallback(|| async {
             ApiError(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")

@@ -27,6 +27,10 @@
       "use": "@vercel/rust"
     },
     {
+      "src": "api/native_issue.rs",
+      "use": "@vercel/rust"
+    },
+    {
       "src": "api/auth/me.ts",
       "use": "@vercel/node"
     },
@@ -78,6 +82,16 @@
       "src": "/api/roll/dismiss-pending",
       "methods": ["POST"],
       "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/_native_issue/health",
+      "methods": ["GET"],
+      "dest": "/api/native_issue.rs"
+    },
+    {
+      "src": "/api/v2/issues/:issue_id",
+      "methods": ["PATCH"],
+      "dest": "/api/native_issue.rs"
     },
     {
       "src": "/api(?:/.*)?",
