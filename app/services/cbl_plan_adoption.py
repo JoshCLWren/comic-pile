@@ -894,6 +894,7 @@ async def _merge_adopted_nodes(
     series_decisions: dict[str, SourceBackedDecision],
     *,
     new_node_lane_id: str = "default",
+    preserve_existing_order: bool = False,
 ) -> AdoptionMergeReport:
     """Merge approved source entries into the plan node set in CBL order.
 
@@ -903,7 +904,8 @@ async def _merge_adopted_nodes(
     already-present nodes for those issues from the plan record so membership
     and source order cannot keep leftovers the reader just dropped. Missing
     importable entries are materialized only when explicitly approved;
-    unresolved/ambiguous entries are never guessed.
+    unresolved/ambiguous entries are never guessed. Targeted adoption sets
+    ``preserve_existing_order`` to append new nodes after the approved order.
 
     Returns:
         The machine-readable reused/created/excluded/unresolved source positions
@@ -935,6 +937,7 @@ async def _merge_adopted_nodes(
     unresolved_positions: list[int] = []
     excluded_issue_ids: set[int] = set()
     excluded_node_ids: set[str] = set()
+    adopted_node_order: list[str] = []
 
     for entry in entries:
         fact = facts_by_entry_id.get(entry.id)
@@ -1028,6 +1031,7 @@ async def _merge_adopted_nodes(
                 node, source_path=source_path, placement=placement, label=label
             )
             issues_by_id.setdefault(existing_issue_id, node)
+            adopted_node_order.append(str(node.get("id")))
             if not created_now:
                 reused_positions.append(entry.position)
             continue
@@ -1047,6 +1051,7 @@ async def _merge_adopted_nodes(
         existing_nodes.append(new_node)
         issues_by_id[existing_issue_id] = new_node
         nodes_by_id[str(new_node["id"])] = new_node
+        adopted_node_order.append(str(new_node["id"]))
         next_position += 1
         if not created_now:
             reused_positions.append(entry.position)
@@ -1058,6 +1063,23 @@ async def _merge_adopted_nodes(
         drop_source_path=source_path,
         drop_source_positions=excluded_positions,
     )
+    # A source-owned adoption follows its preview. Targeted adoption instead
+    # extends a reader's existing order, without moving its approved nodes.
+    if not preserve_existing_order:
+        remaining_by_id = {str(node.get("id")): node for node in existing_nodes}
+        reordered: list[dict[str, object]] = []
+        for node_id in dict.fromkeys(adopted_node_order):
+            node = remaining_by_id.pop(node_id, None)
+            if node is not None:
+                reordered.append(node)
+        existing_nodes = reordered + list(remaining_by_id.values())
+
+        lane_positions: dict[str, int] = {}
+        for node in existing_nodes:
+            lane_id = str(node.get("lane_id", "default"))
+            node["position"] = lane_positions.get(lane_id, 0)
+            lane_positions[lane_id] = int(node["position"]) + 1
+
     plan.lanes_json = plan.lanes_json or _default_lane()
     plan.nodes_json = existing_nodes
     return AdoptionMergeReport(
@@ -1158,7 +1180,7 @@ async def adopt_cbl_material_into_reading_plan(
     entries_result = await db.execute(
         select(CBLSourceEntry)
         .where(CBLSourceEntry.list_id == list_id)
-        .order_by(CBLSourceEntry.position)
+        .order_by(CBLSourceEntry.position, CBLSourceEntry.id)
     )
     entries = list(entries_result.scalars().all())
 
