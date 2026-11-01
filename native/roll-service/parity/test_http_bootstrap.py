@@ -156,6 +156,7 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         assert {row["thread"]["id"] for row in body["rollable"]} == {
             t.id, stale_other.id, stale_snoozed.id, stale_skipped.id
         }
+        assert body["pool_reason"] == "ready"
         candidate = body["rollable"][0]
         assert candidate["thread"]["id"] == t.id
         assert candidate["thread"]["tags"][0]["name"] == "Favorites"

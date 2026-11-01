@@ -55,10 +55,6 @@ function bootstrapWithMode(mode: SessionModeState | null | undefined): RollBoots
     snoozed_count: 0,
     skipped_thread_ids: [],
     skipped_threads: [],
-    blocked_count: 0,
-    blocked_threads: [],
-    stale_thread_count: 0,
-    stale_thread: null,
     session_mode: toSessionMode(mode),
   }
 }

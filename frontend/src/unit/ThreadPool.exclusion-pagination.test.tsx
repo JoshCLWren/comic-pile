@@ -55,7 +55,7 @@ describe('Roll diagnostics removal (#4441)', () => {
   })
 
   it('treats a zero eligible pool as empty without materializing out-of-pool rows', () => {
-    mount()
+    mount({ emptyPoolReason: 'no_series' })
 
     expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Add a Series/i })).toBeInTheDocument()

@@ -744,6 +744,9 @@ pub async fn bootstrap_v2(
     // Option E faces the next offer draws from. Legacy session state is
     // deliberately not consulted here; it is display-only below.
     let eligible = crate::roll_pool::in_play_frontiers(&candidates, current_die);
+    // A single reason, derived from the same validated inputs, keeps the empty
+    // pool state truthful without re-materializing whole-library diagnostics.
+    let pool_reason = crate::reading_constraints::pool_reason(validated.inputs(), &candidates);
     let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
 
     let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
@@ -905,6 +908,7 @@ pub async fn bootstrap_v2(
             "mode_version": session.bandwidth_version
         },
         "rollable": rollable,
+        "pool_reason": pool_reason,
         "last_read": last_read,
         "snoozed_threads": snoozed_threads,
         "snoozed_count": snoozed_count,

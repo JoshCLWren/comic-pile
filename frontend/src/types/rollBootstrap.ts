@@ -9,6 +9,17 @@ import type { Tag } from '../services/api-tags'
 
 export type { ReadingBandwidth, ReadingIntent, SessionMode, SessionModeCorrectionGuidance } from './index'
 
+/**
+ * Why the Roll pool has no in-play faces. One minimal reason derived from the
+ * already-loaded Option E inputs; never a list, count or whole-library report.
+ */
+export type RollPoolReason =
+  | 'ready'
+  | 'no_series'
+  | 'all_blocked'
+  | 'all_completed'
+  | 'all_out_of_pool'
+
 /** Lightweight thread summary returned by the Roll bootstrap endpoint. */
 export interface RollBootstrapThread {
   id: number
@@ -134,14 +145,8 @@ export interface RollBootstrapResponse {
   snoozed_count: number
   skipped_thread_ids: number[]
   skipped_threads: RollBootstrapThread[]
-  /**
-   * Retained from the v1 bootstrap for transitional stale-read reconciliation.
-   * Native v2 does not send either field, so callers must treat them as absent.
-   */
-  blocked_count?: number
-  blocked_threads?: RollBootstrapThread[]
-  stale_thread_count?: number
-  stale_thread?: RollBootstrapThread | null
+  /** Minimal empty-pool explanation; absent only for legacy fixtures. */
+  pool_reason?: RollPoolReason
   timezone?: string | null
   /**
    * Session last-read projection (#2720). The retained v1 bootstrap does not

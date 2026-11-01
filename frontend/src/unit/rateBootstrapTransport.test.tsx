@@ -92,15 +92,7 @@ function bootstrapState(overrides: Partial<RollBootstrapResponse> = {}): RollBoo
     snoozed_count: 0,
     skipped_thread_ids: [],
     skipped_threads: [],
-    blocked_count: 0,
-    blocked_threads: [],
-    stale_thread_count: 1,
-    stale_thread: {
-      id: 1,
-      title: 'Saga',
-      format: 'comic',
-      last_activity_at: '2026-07-01T00:00:00Z',
-    },
+    pool_reason: 'ready',
     ...overrides,
   }
 }
@@ -109,8 +101,6 @@ const authoritativeState = () => bootstrapState({
   pending_thread_id: null,
   last_rolled_result: null,
   active_thread: null,
-  stale_thread_count: 0,
-  stale_thread: null,
 })
 
 function wrap() {
@@ -167,9 +157,7 @@ describe('Rate publishes one authoritative Roll bootstrap', () => {
 
     expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1)
     expect(mockedBootstrapApi.get.mock.calls.length - initialFetches).toBe(1)
-    await waitFor(() => expect(result.current.bootstrap.data?.stale_thread_count).toBe(0))
-    expect(result.current.bootstrap.data?.stale_thread).toBeNull()
-    expect(result.current.bootstrap.data?.pending_thread_id).toBeNull()
+    await waitFor(() => expect(result.current.bootstrap.data?.pending_thread_id).toBeNull())
     expect(result.current.bootstrap.data?.last_rolled_result).toBeNull()
     expect(result.current.state.errorMessage).toBe('')
   })
@@ -195,7 +183,7 @@ describe('Rate publishes one authoritative Roll bootstrap', () => {
 
     expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1)
     expect(mockedBootstrapApi.get.mock.calls.length - initialFetches).toBe(1)
-    await waitFor(() => expect(result.current.bootstrap.data?.stale_thread_count).toBe(0))
+    await waitFor(() => expect(result.current.bootstrap.data?.pending_thread_id).toBeNull())
   })
 
   it('rates a simple-migration thread with the same single post-rate fetch', async () => {
@@ -227,11 +215,11 @@ describe('Rate publishes one authoritative Roll bootstrap', () => {
 
     expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1)
     expect(mockedBootstrapApi.get.mock.calls.length - initialFetches).toBe(1)
-    await waitFor(() => expect(result.current.bootstrap.data?.stale_thread_count).toBe(0))
+    await waitFor(() => expect(result.current.bootstrap.data?.pending_thread_id).toBeNull())
     expect(result.current.state.errorMessage).toBe('')
   })
 
-  it('surfaces a failed authoritative refresh without repeating the rating mutation', async () => {
+  it('keeps the rating when the authoritative snapshot is unavailable without repeating the mutation', async () => {
     mockedBootstrapApi.get
       .mockResolvedValueOnce(bootstrapState())
       .mockRejectedValue(new Error('bootstrap unavailable'))
@@ -248,9 +236,7 @@ describe('Rate publishes one authoritative Roll bootstrap', () => {
 
     expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1)
     expect(mockedBootstrapApi.get.mock.calls.length - initialFetches).toBe(1)
-    expect(result.current.state.errorMessage).toBe(
-      'Rating saved but failed to refresh. Please refresh the page.',
-    )
+    expect(result.current.state.errorMessage).toBe('')
   })
 })
 
@@ -307,7 +293,7 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
     expect(result.current.state.errorMessage).toBe('')
   })
 
-  it('reports a failed authoritative refresh on the simple-migration path without retrying the rating', async () => {
+  it('keeps the simple-migration rating when the authoritative snapshot is unavailable', async () => {
     const mutate = vi.fn<(payload: RatePayload) => Promise<RateMutationOutcome>>()
       .mockResolvedValue({ rate: THREAD, bootstrap: null })
     const rateMutation: DirectRateMutation = { mutate, isPending: false }
@@ -340,8 +326,6 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
 
     expect(mutate).toHaveBeenCalledTimes(1)
     expect(refetchBootstrap).not.toHaveBeenCalled()
-    expect(result.current.state.errorMessage).toBe(
-      'Rating saved but failed to refresh. Please refresh the page.',
-    )
+    expect(result.current.state.errorMessage).toBe('')
   })
 })

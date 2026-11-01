@@ -63,9 +63,9 @@ interface UseRollActionsParams {
 
 /**
  * Owns the retained roll orchestration and thread actions: the timed dice
- * roll, the thread action sheet, stale-read entry, die controls, and the
- * pending-conflict recovery path. Mutations are passed in from the page so
- * this module never creates a second server-state layer.
+ * roll, the thread action sheet, die controls, and the pending-conflict
+ * recovery path. Mutations are passed in from the page so this module never
+ * creates a second server-state layer.
  */
 export function useRollActions({
   state,
@@ -84,7 +84,6 @@ export function useRollActions({
     rollTimeoutRef,
     suppressPendingAutoOpenRef,
     selectedThread,
-    staleThread,
     setSelectedThread,
     setIsActionSheetOpen,
     setIsSetCurrentIssueOpen,
@@ -113,37 +112,6 @@ export function useRollActions({
   function handleThreadClick(thread: RollBootstrapThread) {
     setSelectedThread(thread)
     setIsActionSheetOpen(true)
-  }
-
-  async function handleReadStale(threadId: number) {
-    const thread = staleThread?.id === threadId ? staleThread : null
-    if (!thread) return
-    try {
-      const response = await threadsApi.setPending(thread.id)
-      const threadMetadata: ThreadMetadata = {
-        id: response.thread_id,
-        title: response.title,
-        format: response.format,
-        issues_remaining: response.issues_remaining,
-        queue_position: response.queue_position,
-        total_issues: response.total_issues,
-        reading_progress: response.reading_progress ?? null,
-        issue_id: response.issue_id,
-        issue_number: response.issue_number,
-        next_issue_id: response.next_issue_id,
-        next_issue_number: response.next_issue_number,
-        last_rolled_result: response.result ?? response.last_rolled_result,
-      }
-      if (response.total_issues === null) {
-        // SAFETY: threadMetadata is assembled from the roll response fields RatingThread requires when total_issues is null.
-        setThreadToMigrate(threadMetadata as RatingThread)
-        setShowMigrationDialog(true)
-      } else {
-        enterRatingView(response.thread_id, response.result, threadMetadata)
-      }
-    } catch (error) {
-      console.error('Failed to set pending thread:', error)
-    }
   }
 
   /**
@@ -398,7 +366,6 @@ export function useRollActions({
 
   return {
     handleThreadClick,
-    handleReadStale,
     handleShufflePool,
     performShuffle,
     handleAction,

@@ -2,13 +2,18 @@ import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
-import type { RollBootstrapThread } from '../../../types/rollBootstrap'
+import type { RollBootstrapThread, RollPoolReason } from '../../../types/rollBootstrap'
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   dieSize?: number
   isRatingView: boolean
   selectedThreadId: number | null
+  /**
+   * Minimal empty-pool explanation from the same Option E inputs. It never
+   * carries a list or whole-library report, only why the dice have no faces.
+   */
+  emptyPoolReason?: RollPoolReason
   snoozedThreads: Array<{ id: number; title: string; format: string }>
   snoozedCount?: number
   snoozedExpanded: boolean
@@ -31,6 +36,7 @@ export function ThreadPool({
   dieSize,
   isRatingView,
   selectedThreadId,
+  emptyPoolReason,
   snoozedThreads,
   snoozedCount,
   snoozedExpanded,
@@ -91,7 +97,61 @@ export function ThreadPool({
       </div>}
 
       {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`${pool.length} in play, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
-        {pool.length === 0 && snoozedTotal === 0 ? (
+        {pool.length === 0 && emptyPoolReason === 'all_blocked' ? (
+          <div className="text-center py-6 space-y-4">
+            <div className="text-4xl">🔒</div>
+            <div>
+              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
+                Series are waiting on earlier issues
+              </p>
+              <p className="text-xs text-stone-500 mt-1">
+                Your in-play series are blocked by an earlier issue. Check your queue to see what needs to be read to unlock the dice.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/queue')}
+              className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
+            >
+              Go to Queue
+            </button>
+          </div>
+        ) : pool.length === 0 && emptyPoolReason === 'all_completed' ? (
+          <div className="text-center py-6 space-y-4">
+            <div className="text-4xl">📚</div>
+            <div>
+              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
+                Every series is completed
+              </p>
+              <p className="text-xs text-stone-500 mt-1">
+                You&apos;ve read every issue in your queue. Add a new series to keep rolling.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/queue', { state: { openCreate: true } })}
+              className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
+            >
+              + Add a Series
+            </button>
+          </div>
+        ) : pool.length === 0 && emptyPoolReason === 'all_out_of_pool' ? (
+          <div className="text-center py-6 space-y-4">
+            <div className="text-4xl">📚</div>
+            <div>
+              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
+                No series are in play
+              </p>
+              <p className="text-xs text-stone-500 mt-1">
+                Your unread issues are not in the active queue or are excluded from the pool. Check your queue to put them back in play.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/queue')}
+              className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
+            >
+              Go to Queue
+            </button>
+          </div>
+        ) : pool.length === 0 && (snoozedTotal === 0 || emptyPoolReason === 'no_series') ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
             <div>

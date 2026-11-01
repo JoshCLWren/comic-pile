@@ -578,6 +578,7 @@ export default function RollPage() {
               dieSize={dieSize}
               isRatingView={state.isRatingView}
               selectedThreadId={state.selectedThreadId}
+              emptyPoolReason={bootstrap?.pool_reason}
 
               snoozedThreads={snoozedThreads}
               snoozedCount={bootstrap?.snoozed_count ?? snoozedThreads.length}

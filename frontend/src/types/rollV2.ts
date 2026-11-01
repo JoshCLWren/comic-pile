@@ -1,5 +1,5 @@
 import type { SessionMode, SessionThread } from './index'
-import type { RollRecoveryInfo } from './rollBootstrap'
+import type { RollPoolReason, RollRecoveryInfo } from './rollBootstrap'
 import type { Tag } from '../services/api-tags'
 
 export type { RollBootstrapResponse, RollBootstrapThread } from './rollBootstrap'
@@ -107,6 +107,8 @@ export interface RollV2BootstrapResponse {
   roll_recovery?: RollRecoveryInfo | null
   bandwidth: RollV2BandwidthState
   rollable: RollV2Item[]
+  /** Minimal empty-pool explanation derived from the same Option E inputs. */
+  pool_reason: RollPoolReason
   last_read: RollV2LastRead | null
   snoozed_threads: RollV2Thread[]
   snoozed_count: number

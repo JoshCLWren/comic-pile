@@ -217,4 +217,53 @@ describe('ThreadPool Component', () => {
       }),
     ).toBeInTheDocument()
   })
+
+  it('explains an all-blocked library instead of claiming the queue is empty', () => {
+    renderPool({ pool: [], emptyPoolReason: 'all_blocked' })
+
+    expect(screen.getByText(/series are waiting on earlier issues/i)).toBeInTheDocument()
+    expect(screen.getByText(/blocked by an earlier issue/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Go to Queue' })).toBeInTheDocument()
+    expect(screen.queryByText(/Nothing to roll yet/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/reading queue is empty/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Add a Series/i })).not.toBeInTheDocument()
+  })
+
+  it('explains an all-completed library with an add-series action', () => {
+    renderPool({ pool: [], emptyPoolReason: 'all_completed' })
+
+    expect(screen.getByText(/every series is completed/i)).toBeInTheDocument()
+    expect(screen.getByText(/read every issue in your queue/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Add a Series/i })).toBeInTheDocument()
+    expect(screen.queryByText(/Nothing to roll yet/i)).not.toBeInTheDocument()
+  })
+
+  it('explains an all-out-of-pool library with a queue action', () => {
+    renderPool({ pool: [], emptyPoolReason: 'all_out_of_pool' })
+
+    expect(screen.getByText(/no series are in play/i)).toBeInTheDocument()
+    expect(screen.getByText(/not in the active queue or are excluded/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Go to Queue' })).toBeInTheDocument()
+    expect(screen.queryByText(/Nothing to roll yet/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/series waiting for earlier issues/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps the true empty queue state for a library with no series', () => {
+    renderPool({ pool: [], emptyPoolReason: 'no_series' })
+
+    expect(screen.getByText(/Nothing to roll yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/reading queue is empty/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Add a Series/i })).toBeInTheDocument()
+  })
+
+  it('prefers a truthful empty-pool reason over the snoozed fallback', () => {
+    renderPool({
+      pool: [],
+      emptyPoolReason: 'all_completed',
+      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+    })
+
+    expect(screen.getByText(/every series is completed/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Every series is snoozed/i)).not.toBeInTheDocument()
+  })
 })

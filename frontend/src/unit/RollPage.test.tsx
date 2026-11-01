@@ -99,10 +99,6 @@ const bootstrap = {
   snoozed_count: 0,
   skipped_thread_ids: [],
   skipped_threads: [],
-  blocked_count: 0,
-  blocked_threads: [],
-  stale_thread_count: 0,
-  stale_thread: null,
 }
 
 function renderRollPage() {
@@ -166,11 +162,7 @@ it('ignores retired diagnostic reports while retaining the active pool (#4441)',
   mockedUseRollBootstrap.mockReturnValue({
     data: {
       ...bootstrap,
-      blocked_count: 287,
-      blocked_threads: [
-        { id: 11, title: 'Blocked A', format: 'Comic' },
-        { id: 12, title: 'Blocked B', format: 'Comic' },
-      ],
+      pool_reason: 'all_blocked',
     },
     refetch: vi.fn().mockResolvedValue(bootstrap),
     isPending: false,

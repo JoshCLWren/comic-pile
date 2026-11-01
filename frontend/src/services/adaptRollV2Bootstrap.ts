@@ -1,5 +1,17 @@
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollBootstrapResponse, RollPoolReason } from '../types/rollBootstrap'
 import type { RollV2BootstrapResponse } from '../types/rollV2'
+
+const POOL_REASONS: readonly RollPoolReason[] = [
+  'ready',
+  'no_series',
+  'all_blocked',
+  'all_completed',
+  'all_out_of_pool',
+]
+
+function isPoolReason(value: unknown): value is RollPoolReason {
+  return POOL_REASONS.some((reason) => reason === value)
+}
 
 /**
  * Preserve the established Roll view state while using v2's canonical
@@ -7,7 +19,7 @@ import type { RollV2BootstrapResponse } from '../types/rollV2'
  * from native Rust; retired exclusion reports are not required.
  */
 export function adaptRollV2Bootstrap(state: RollV2BootstrapResponse): RollBootstrapResponse {
-  if (!Array.isArray(state.rollable)) {
+  if (!Array.isArray(state.rollable) || !isPoolReason(state.pool_reason)) {
     throw new Error('Incomplete native Roll v2 bootstrap response')
   }
 
