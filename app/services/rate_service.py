@@ -454,15 +454,24 @@ async def rate_thread(
     live_issue: Issue | None = None
     live_source_event_id: int | None = None
     canonical_issues: list[Issue] | None = None
+    # Issue #4453: eligibility decides which comic Roll *offers*; it never
+    # revokes permission to finish the comic already offered. Validate the
+    # offer's exact identity (ownership plus issue number) and refuse when the
+    # offer cannot be resolved, but never re-test candidacy, frontier, hold,
+    # prerequisite, list mode, queue rank, exclusion, or session snooze state.
     if current_session is not None and not is_direct and eligibility is not None:
         offered = await fetch_owned_roll_issue(
             db, user_id=user_id, reading_session_id=current_session.id, thread_id=thread_id,
         )
-        if offered is not None:
-            if rate_data.issue_number is not None and rate_data.issue_number != offered[1].issue_number:
-                raise HTTPException(status_code=409, detail="The rated issue does not match the pending offer")
-            live_source_event_id, live_issue = offered[0].id, offered[1]
-            canonical_issues = await issues_ordered(db, thread_id)
+        if offered is None:
+            raise HTTPException(
+                status_code=409,
+                detail="The pending issue is no longer available to read. Roll again.",
+            )
+        if rate_data.issue_number is not None and rate_data.issue_number != offered[1].issue_number:
+            raise HTTPException(status_code=409, detail="The rated issue does not match the pending offer")
+        live_source_event_id, live_issue = offered[0].id, offered[1]
+        canonical_issues = await issues_ordered(db, thread_id)
     # Capture compact thread pre-state for v2 delta (only changed fields)
     pre_thread_state = await _capture_thread_pre_state(
         thread, db, issues=canonical_issues, force_issue_tracking=eligibility is not None,
