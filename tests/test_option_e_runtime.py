@@ -14,6 +14,7 @@ from app.models.collection_exclusion import CollectionExclusion
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.services.reading_eligibility_service import get_execution_eligibility
+from app.services.thread_service import list_queue_threads
 from comic_pile.queue import get_bounded_roll_pool_rows
 from tests.conftest import get_or_create_user_async
 
@@ -364,20 +365,22 @@ async def test_activation_is_app_wide_with_reader_data_isolation(
 
 async def test_empty_and_fully_excluded_queues_have_valid_live_sort_sql(
     option_e: None,
-    auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
     """No eligible IDs must not become a bare Boolean ORDER BY constant."""
-    empty = await auth_client.get("/api/v1/threads/", params={"sort": "position"})
-    assert empty.status_code == 200 and empty.json()["threads"] == []
     user = await get_or_create_user_async(async_db)
+    empty = await list_queue_threads(
+        async_db, user.id, search=None, sort="position", page_size=50, page_token=None
+    )
+    assert empty.threads == []
     thread, _ = await _series(async_db, user.id, "Entirely excluded", 1)
     async_db.add(CollectionExclusion(user_id=user.id, thread_id=thread.id))
     await async_db.commit()
-    excluded = await auth_client.get("/api/v1/threads/", params={"sort": "position"})
-    assert excluded.status_code == 200
-    assert len(excluded.json()["threads"]) == 1
-    assert excluded.json()["threads"][0]["is_blocked"] is True
+    excluded = await list_queue_threads(
+        async_db, user.id, search=None, sort="position", page_size=50, page_token=None
+    )
+    assert len(excluded.threads) == 1
+    assert excluded.threads[0].is_blocked is True
 
 
 async def test_exclusion_delete_rolls_back_when_stored_graph_is_invalid(
@@ -608,9 +611,11 @@ async def test_live_explanations_agree_for_all_reader_surfaces(
     assert detail.status_code == 200
     assert detail.json()["next_unread_issue_id"] == later_issue_id
     assert detail.json()["blocking_reasons"] == explanation["blocking_reasons"]
-    page = await auth_client.get("/api/v1/threads/", params={"page_size": 50})
-    queue_row = next(row for row in page.json()["threads"] if row["id"] == later_id)
-    assert queue_row["blocking_reasons"] == explanation["blocking_reasons"]
+    page = await list_queue_threads(
+        async_db, user.id, search=None, sort="position", page_size=50, page_token=None
+    )
+    queue_row = next(row for row in page.threads if row.id == later_id)
+    assert queue_row.blocking_reasons == explanation["blocking_reasons"]
 
     reader = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/reader")
     assert reader.status_code == 200

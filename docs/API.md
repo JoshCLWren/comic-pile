@@ -40,26 +40,42 @@ The exact canonical families and the allowed legacy aliases are maintained in
 
 Thread CRUD operations and queue management.
 
-### GET /threads/
+### GET /api/v2/threads
 
-List all threads ordered by queue position.
+Read the authenticated reader's active queue as a bounded, cursor-paginated
+collection. This is the native Rust resource that replaced the retired Python
+`GET /api/v1/threads/` (the `POST /threads/` creation route is unchanged).
+
+Query parameters: `search`, `sort` (`position`, `title`, `created`),
+`page_size` (1-200, default 50) and the opaque `page_token` continuation.
 
 **Response**: `200 OK`
 
 ```json
-[
-  {
-    "id": 1,
-    "title": "Batman Vol. 1",
-    "format": "TPB",
-    "issues_remaining": 6,
-    "position": 1,
-    "status": "active",
-    "last_rating": 4.5,
-    "last_activity_at": "2025-12-30T10:30:00",
-    "created_at": "2025-12-30T08:00:00"
-  }
-]
+{
+  "threads": [
+    {
+      "id": 1,
+      "title": "Batman Vol. 1",
+      "format": "Comic",
+      "issues_remaining": 6,
+      "queue_position": 1,
+      "status": "active",
+      "last_activity_at": "2025-12-30T10:30:00Z",
+      "is_blocked": false,
+      "blocking_reasons": [],
+      "total_issues": 12,
+      "next_unread_issue_number": "7",
+      "notes": null,
+      "created_at": "2025-12-30T08:00:00Z",
+      "comicvine_mapping": null,
+      "manual_creator_credits": [],
+      "tags": []
+    }
+  ],
+  "next_page_token": null,
+  "active_count": 1
+}
 ```
 
 ### POST /threads/

@@ -21,6 +21,18 @@ file drifts from `IssueApi::openapi()`. This is the canonical Rust contract, not
 a FastAPI-generated operation; the coordinated frontend client and caller
 cutover remain #4444/#4337 work.
 
+`threads-v2.openapi.json` is the generated native contract for
+`GET /api/v2/threads` (#4342). Regenerate it with:
+
+```sh
+cd native/roll-service
+cargo run --example threads_openapi > ../contracts/threads-v2.openapi.json
+```
+
+Its checked-in drift test is `threads::tests::checked_in_openapi_contract_is_current`.
+The normal consumer is `frontend/src/services/api-threads.ts` (`list` only; the
+remaining thread mutations stay on their existing v1 paths).
+
 The real normal consumer is `frontend/src/services/rollBootstrapApi.ts`.
 Recovery uses `frontend/src/services/protectedRollMutationApi.ts`. Both keep
 their existing v1 URL. The legacy `/api/roll/bootstrap` alias shares the Python

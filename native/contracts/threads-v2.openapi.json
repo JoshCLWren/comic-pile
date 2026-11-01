@@ -1,0 +1,333 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "comicpile-roll-service",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v2/threads": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Documentation-only operation used to emit the generated OpenAPI contract.",
+        "operationId": "list_threads_documentation",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive title search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "position, title, or created",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "1-200 rows per page (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "Opaque continuation cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped active threads page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid sort or page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid bounds or retired collection_id"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ComicVineMappingHealth": {
+        "type": "object",
+        "description": "Compact confirmed ComicVine mapping health for one queue row.",
+        "required": [
+          "status",
+          "tracked_issue_count",
+          "confirmed_issue_count",
+          "needs_mapping_count",
+          "needs_review_count",
+          "metadata_missing_count"
+        ],
+        "properties": {
+          "confirmed_issue_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "metadata_missing_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "needs_mapping_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "needs_review_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tracked_issue_count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "QueueSeriesMetadata": {
+        "type": "object",
+        "description": "Confirmed provider series metadata for one queue row.",
+        "properties": {
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadListItem": {
+        "type": "object",
+        "description": "One reader threads collection item.",
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "status",
+          "is_blocked",
+          "blocking_reasons",
+          "created_at",
+          "manual_creator_credits",
+          "tags"
+        ],
+        "properties": {
+          "blocking_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "comicvine_mapping": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComicVineMappingHealth"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_activity_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manual_creator_credits": {},
+          "next_unread_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_metadata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/QueueSeriesMetadata"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadTag"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadListResponse": {
+        "type": "object",
+        "description": "Paginated reader threads collection.",
+        "required": [
+          "threads",
+          "active_count"
+        ],
+        "properties": {
+          "active_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadListItem"
+            }
+          }
+        }
+      },
+      "ThreadTag": {
+        "type": "object",
+        "description": "One tag visible to the reader.",
+        "required": [
+          "id",
+          "name",
+          "normalized_name",
+          "scope",
+          "color",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "normalized_name": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

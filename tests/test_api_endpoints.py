@@ -7,6 +7,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ReadingSession, Thread, User
+from app.services import thread_service
+from tests.conftest import get_or_create_user_async
 
 
 @pytest.mark.asyncio
@@ -78,46 +80,49 @@ async def test_create_thread_validation(auth_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_threads(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test GET /api/v1/threads/ returns active Queue threads only (#2567)."""
+async def test_list_threads(
+    async_db: AsyncSession, default_user: User, sample_data: dict
+) -> None:
+    """The Queue collection projection returns active threads only (#2567)."""
     _ = sample_data
-    response = await auth_client.get("/api/v1/threads/")
-    assert response.status_code == 200
+    page = await thread_service.list_queue_threads(
+        async_db, default_user.id, search=None, sort="position", page_size=50, page_token=None
+    )
 
-    data = response.json()
-    assert "threads" in data
-    threads = data["threads"]
+    threads = page.threads
     assert len(threads) == 4
-    assert threads[0]["title"] == "Superman"
-    assert threads[1]["title"] == "Batman"
-    assert threads[2]["title"] == "Flash"
-    assert threads[3]["title"] == "Aquaman"
-    assert all(thread["status"] == "active" for thread in threads)
+    assert threads[0].title == "Superman"
+    assert threads[1].title == "Batman"
+    assert threads[2].title == "Flash"
+    assert threads[3].title == "Aquaman"
+    assert all(thread.status == "active" for thread in threads)
 
 
 @pytest.mark.asyncio
-async def test_list_threads_search(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test GET /api/v1/threads/?search= filters active threads by title (#2567)."""
+async def test_list_threads_search(
+    async_db: AsyncSession, default_user: User, sample_data: dict
+) -> None:
+    """Queue search filters active threads by title (#2567)."""
     _ = sample_data
 
-    response = await auth_client.get("/api/v1/threads/", params={"search": "man"})
-    assert response.status_code == 200
-
-    data = response.json()
-    assert "threads" in data
-    threads = data["threads"]
-    titles = {thread["title"] for thread in threads}
+    page = await thread_service.list_queue_threads(
+        async_db, default_user.id, search="man", sort="position", page_size=50, page_token=None
+    )
+    titles = {thread.title for thread in page.threads}
     # Wonder Woman is completed, so it must not leak into active Queue search.
     assert titles == {"Superman", "Batman", "Aquaman"}
 
 
 @pytest.mark.asyncio
-async def test_list_threads_empty(auth_client: AsyncClient) -> None:
-    """Test GET /api/v1/threads/ with no threads returns empty list."""
-    response = await auth_client.get("/api/v1/threads/")
-    assert response.status_code == 200
-    data = response.json()
-    assert data == {"threads": [], "next_page_token": None, "active_count": 0}
+async def test_list_threads_empty(async_db: AsyncSession) -> None:
+    """An empty Queue collection returns no rows and no cursor."""
+    user = await get_or_create_user_async(async_db, username="empty_queue_reader")
+    page = await thread_service.list_queue_threads(
+        async_db, user.id, search=None, sort="position", page_size=50, page_token=None
+    )
+    assert page.threads == []
+    assert page.next_page_token is None
+    assert page.active_count == 0
 
 
 @pytest.mark.asyncio
@@ -209,7 +214,22 @@ async def test_queue_and_completed_paginate_independently(
     assert before.status_code == 200
     count_before = len(before.json()["threads"])
 
-    active = await collect("/api/v1/threads/", {"page_size": 2})
+    active_items = []
+    active_token: str | None = None
+    for _ in range(10):
+        active_page = await thread_service.list_queue_threads(
+            async_db,
+            user_id,
+            search=None,
+            sort="position",
+            page_size=2,
+            page_token=active_token,
+        )
+        active_items.extend(active_page.threads)
+        active_token = active_page.next_page_token
+        if active_token is None:
+            break
+    active = [{"id": thread.id, "status": thread.status} for thread in active_items]
     assert len(active) == 10
     assert all(thread["status"] == "active" for thread in active)
     assert len({thread["id"] for thread in active}) == 10
@@ -1046,22 +1066,20 @@ async def test_list_threads_includes_notes(
     async_db.add_all([thread_with_notes, thread_without_notes])
     await async_db.commit()
 
-    response = await auth_client.get("/api/v1/threads/")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert "threads" in data
-    threads = data["threads"]
+    page = await thread_service.list_queue_threads(
+        async_db, user.id, search=None, sort="position", page_size=50, page_token=None
+    )
+    threads = page.threads
     assert len(threads) >= 2
 
-    flash_thread = next((t for t in threads if t["title"] == "Flash"), None)
-    aquaman_thread = next((t for t in threads if t["title"] == "Aquaman"), None)
+    flash_thread = next((t for t in threads if t.title == "Flash"), None)
+    aquaman_thread = next((t for t in threads if t.title == "Aquaman"), None)
 
     assert flash_thread is not None
-    assert flash_thread["notes"] == "Fast-paced storytelling"
+    assert flash_thread.notes == "Fast-paced storytelling"
 
     assert aquaman_thread is not None
-    assert aquaman_thread["notes"] is None
+    assert aquaman_thread.notes is None
 
 
 @pytest.mark.asyncio

@@ -164,7 +164,9 @@ pub fn evaluate(
                         origin: None,
                         provenance: vec![],
                     }
-                } else if edge.origin.contains("strict_order") {
+                } else if edge.origin.contains("strict_order")
+                    || edge.origin.contains("strict order")
+                {
                     Blocker {
                         kind: "strict_order".to_string(),
                         list_id: edge.list_id,
@@ -207,6 +209,24 @@ pub fn evaluate(
             blocker.waiting_on_issue_ids.sort_unstable();
             blocker.waiting_on_issue_ids.dedup();
         }
+        // Match Python's stable reader-facing blocker order so projected
+        // reasons and deduplicated requirement labels stay identical.
+        blockers.sort_by(|left, right| {
+            (
+                &left.kind,
+                left.list_id.unwrap_or(-1),
+                left.gate_issue_id.unwrap_or(-1),
+                left.prerequisite_id.unwrap_or(-1),
+                &left.waiting_on_issue_ids,
+            )
+                .cmp(&(
+                    &right.kind,
+                    right.list_id.unwrap_or(-1),
+                    right.gate_issue_id.unwrap_or(-1),
+                    right.prerequisite_id.unwrap_or(-1),
+                    &right.waiting_on_issue_ids,
+                ))
+        });
 
         result.insert(
             thread.id,
