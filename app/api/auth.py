@@ -2,7 +2,6 @@
 
 import logging
 import secrets
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
@@ -31,7 +30,6 @@ from app.repositories.failed_login_repository import (
     record_failed_attempt,
 )
 from app.repositories.revoked_token_repository import (
-    add_revoked_token,
     get_user_by_username_with_revocation_check,
 )
 from app.repositories.user_repository import (
@@ -341,20 +339,9 @@ async def refresh_access_token(
 
     new_jti = secrets.token_urlsafe(32)
     pc = user_pc
-    username = user.username
-    user_id = user.id
-    # Rotate the live credential: revoke the predecessor so a replayed refresh
-    # token cannot mint another session. Extract rows before the commit to avoid
-    # async lazy-loading after the session expires.
-    await add_revoked_token(
-        db,
-        user_id=user_id,
-        jti=jti,
-        expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
-    )
     ensure_csrf_cookie(request, response)
-    access_token = create_access_token(data={"sub": username, "jti": new_jti, "pc": pc})
-    refresh_token = create_refresh_token(data={"sub": username, "jti": new_jti, "pc": pc})
+    access_token = create_access_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
+    refresh_token = create_refresh_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
     _set_refresh_cookie(response, request, refresh_token)
     _log_refresh_outcome(request, outcome="success", reason="refreshed")
 
