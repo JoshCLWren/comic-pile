@@ -103,8 +103,8 @@ impl IssueService {
         // Validate rating if provided
         if let Some(rating) = request.rating {
             // Use integer arithmetic to avoid floating-point precision issues
-            let rating_int = (rating * 2.0) as i32;
-            if rating_int < 1 || rating_int > 10 {
+            let scaled = rating * 2.0;
+            if scaled.fract() != 0.0 || scaled < 1.0 || scaled > 10.0 {
                 return Err(ServiceError::BadRequest(
                     "Rating must be between 0.5 and 5.0 in 0.5 increments",
                 ));
@@ -279,14 +279,24 @@ impl IssueService {
         .fetch_one(tx)
         .await?;
 
-        let status = if has_unread { "active" } else { "completed" };
-        sqlx::query!(
-            "UPDATE threads SET status = $1, last_activity_at = NOW() WHERE id = $2",
-            status,
+        // Only change lifecycle status when not explicitly excluded/inactive.
+        // Rating-only corrections on excluded threads must not reactivate.
+        let current_status = sqlx::query_scalar!(
+            "SELECT status FROM threads WHERE id = $1",
             thread_id
         )
-        .execute(tx)
+        .fetch_one(tx)
         .await?;
+        if current_status.as_deref() != Some("excluded") && current_status.as_deref() != Some("inactive") {
+            let status = if has_unread { "active" } else { "completed" };
+            sqlx::query!(
+                "UPDATE threads SET status = $1, last_activity_at = NOW() WHERE id = $2",
+                status,
+                thread_id
+            )
+            .execute(tx)
+            .await?;
+        }
 
         Ok(())
     }

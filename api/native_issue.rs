@@ -85,8 +85,7 @@ fn app() -> Router {
     Router::new()
         .route("/api/_native_issue/health", get(native_health))
         .route("/api/v2/issues/health", get(native_bootstrap))
-        .route("/api/v2/issues/{issue_id}", patch(native_dispatch))
-        .route("/api/_native_issue/health", get(native_bootstrap))
+        .route("/api/v2/issues/:issue_id", patch(native_dispatch))
 }
 
 #[tokio::main]
