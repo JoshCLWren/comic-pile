@@ -5,9 +5,9 @@ import logging
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,6 @@ from app.schemas import (
     ExplainableFactorResponse,
     OverrideRequest,
     RecommendationExplanationResponse,
-    RollExclusionPageResponse,
     RollRequest,
     RollResponse,
     SessionModeResponse,
@@ -846,52 +845,6 @@ async def update_session_mode(
         intent_source=normalize_reading_mode_source(intent_source),
         intent_version=intent_version,
         session_mode_correction_guidance=guidance,
-    )
-
-
-@v1_router.get("/exclusions", response_model=RollExclusionPageResponse)
-async def roll_exclusion_page(
-    current_user: Annotated[User, Depends(get_current_user)],
-    category: Annotated[
-        Literal["blocked", "inactive"],
-        Query(description="Roll exclusion category to page through."),
-    ],
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    db: AsyncSession = Depends(get_db),
-) -> RollExclusionPageResponse:
-    """Return one deterministic page of a Roll exclusion category.
-
-    Issue #3330: the Roll bootstrap carries bounded previews, so its collapsed
-    headings used to report the preview size as the category total and offered
-    no way to reach the rest. This endpoint is the authoritative drill-down for
-    a single category; its ``total`` comes from the same predicate that produced
-    the bootstrap count, so the heading and the rows can never disagree.
-
-    Args:
-        current_user: The authenticated user.
-        category: ``blocked`` or ``inactive``.
-        limit: Maximum rows in this page (1-100).
-        offset: Rows to skip in the deterministic category order.
-        db: Async database session.
-
-    Returns:
-        RollExclusionPageResponse with this page's rows and the category total.
-    """
-    page = await RollService(db).load_exclusion_page(
-        user_id=current_user.id,
-        category=category,
-        limit=limit,
-        offset=offset,
-    )
-    loaded_through = offset + len(page.items)
-    return RollExclusionPageResponse(
-        category=page.category,
-        items=page.items,
-        total=page.total,
-        limit=limit,
-        offset=offset,
-        next_cursor=str(loaded_through) if loaded_through < page.total else None,
     )
 
 
