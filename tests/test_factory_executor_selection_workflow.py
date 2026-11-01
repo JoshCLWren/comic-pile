@@ -213,10 +213,14 @@ def test_unavailability_snapshot_cannot_be_overwritten_as_worker_record(tmp_path
     import os
     import subprocess
 
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    report = workflow.split("- name: Report terminal heartbeat", 1)[1]
-    script = report.split("run: |\n", 1)[1]
-    script = "\n".join(line[10:] for line in script.splitlines())
+    import yaml
+
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    report = next(
+        step for step in workflow["jobs"]["factory"]["steps"]
+        if step.get("name") == "Report terminal heartbeat"
+    )
+    script = report["run"]
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     gh = bin_dir / "gh"
