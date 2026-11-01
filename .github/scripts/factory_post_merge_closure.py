@@ -487,11 +487,19 @@ def _repo_slug() -> str:
 
     Returns:
         The repository slug from GITHUB_REPOSITORY or the local gh remotes.
+
+    Raises:
+        RuntimeError: If gh returns no usable slug.
     """
     slug = os.environ.get("GITHUB_REPOSITORY")
     if slug:
         return slug
-    return _run_gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner").strip()
+    resolved = _run_gh(
+        "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"
+    )
+    if not isinstance(resolved, str):
+        raise RuntimeError("gh repo view returned no repository slug")
+    return resolved.strip()
 
 
 def _pr_info(pr_number: int) -> dict[str, str]:
@@ -1850,13 +1858,20 @@ This issue is a product contract and acceptance parent.
                         ):
                             with patch.object(mod, "_run_gh", return_value=existing):
                                 with patch.object(
-                                    mod,
-                                    "_comment_issue",
-                                    side_effect=lambda _issue, body: comments.append(body),
-                                ):
-                                    result = close_merged_pr_issue(4024)
+                                    mod, "_replace_labels"
+                                ) as mock_replace:
+                                    with patch.object(
+                                        mod,
+                                        "_comment_issue",
+                                        side_effect=lambda _issue, body: comments.append(body),
+                                    ):
+                                        result = close_merged_pr_issue(4024)
         self.assertEqual(result, "open-dependency: #4008")
         self.assertEqual(comments, [])
+        # The label write is real in production but must never escape the
+        # self-test: it previously performed an unauthenticated gh call and
+        # made every merge-drain run red (#4464).
+        mock_replace.assert_called_once()
 
     def test_closed_declared_dependency_allows_closure(self) -> None:
         """CBL regression #4017/#4016: a closed prerequisite does not block."""
@@ -2883,6 +2898,10 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.self_test:
+        # Keep the self-test hermetic: the tests stub the gh call sites, and a
+        # deterministic slug prevents a fallback ``gh repo view`` on machines
+        # without GITHUB_REPOSITORY (GitHub Actions always sets it).
+        os.environ.setdefault("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
         suite = unittest.defaultTestLoader.loadTestsFromTestCase(FactoryPostMergeClosureTests)
         return 0 if unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful() else 1
 
