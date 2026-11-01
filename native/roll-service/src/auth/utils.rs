@@ -35,8 +35,8 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, crate::auth::
 /// Generate CSRF token
 pub fn generate_csrf_token() -> String {
     use rand::Rng;
-    rand::thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
+    rand::rng()
+        .sample_iter(&rand::distr::Alphanumeric)
         .take(32)
         .map(char::from)
         .collect()
@@ -95,8 +95,8 @@ pub fn cookie_settings() -> http::HeaderValue {
 /// Generate random JTI for token revocation
 pub fn generate_jti() -> String {
     use rand::Rng;
-    rand::thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
+    rand::rng()
+        .sample_iter(&rand::distr::Alphanumeric)
         .take(32)
         .map(char::from)
         .collect()
