@@ -158,11 +158,9 @@ pub fn evaluate(
                         list_id: None,
                         waiting_on_issue_ids: vec![],
                         prerequisite_id: edge
-                            .provenance
-                            .iter()
-                            .find_map(|p| p.strip_prefix("prerequisite "))
-                            .and_then(|s| s.split(' ').next())
-                            .and_then(|s| s.strip_suffix('('))
+                            .origin
+                            .strip_prefix("prerequisite ")
+                            .and_then(|s| s.split_whitespace().next())
                             .and_then(|s| s.parse().ok()),
                         gate_issue_id: None,
                         origin: edge.prerequisite_origin.clone(),

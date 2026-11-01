@@ -35,7 +35,6 @@ pub struct BoundaryIssue {
     pub thread_id: i32,
     pub thread_title: String,
     pub issue_number: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub volume_label: Option<String>,
     pub label: String,
     pub reading_lists: Vec<BoundaryReadingList>,
@@ -47,7 +46,6 @@ pub struct ReadingBoundaryBlocker {
     pub origin: String,
     pub reason: String,
     pub waiting_on: Vec<BoundaryIssue>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub editor: Option<BoundaryEditorTarget>,
 }
 
@@ -55,20 +53,15 @@ pub struct ReadingBoundaryBlocker {
 pub struct BoundaryEditorTarget {
     pub kind: String,
     pub label: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub list_id: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub thread_id: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub issue_id: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub prerequisite_id: Option<i32>,
 }
 
 #[derive(Serialize)]
 pub struct ReadingBoundaryNext {
     pub issue: BoundaryIssue,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub editor: Option<BoundaryEditorTarget>,
 }
 
@@ -77,7 +70,6 @@ pub struct ReadingBoundaryExplanationV2 {
     pub thread_id: i32,
     pub state: String,
     pub summary: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub next: Option<ReadingBoundaryNext>,
     pub blockers: Vec<ReadingBoundaryBlocker>,
 }
