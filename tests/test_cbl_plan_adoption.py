@@ -1557,3 +1557,26 @@ async def test_adopted_nodes_positions_contiguous_after_reorder() -> None:
     assert ref_ids == [300, 100, 101], ref_ids
     assert positions == [0, 1, 2], positions
     assert positions == list(range(len(positions)))
+
+
+@pytest.mark.asyncio
+async def test_targeted_merge_preserves_existing_order() -> None:
+    """Adding a later CBL volume must not move it ahead of the approved plan."""
+    from app.services.cbl_plan_adoption import _merge_adopted_nodes
+
+    plan = _FakePlan(nodes_json=[{
+        "id": "earlier", "node_type": "issue", "ref_id": 100,
+        "lane_id": "main", "position": 0,
+    }])
+    entries = [_FakeEntry(id=10, position=0, series_name="Later")]
+    facts = {10: _make_fact(
+        position=0, cbl_entry_id=10, resolved_issue_id=200,
+        resolution_status="existing",
+    )}
+    await _merge_adopted_nodes(
+        _FakeDB(), plan, plan.user_id, entries, facts, "/later.cbl", {}, {}, {},
+        new_node_lane_id="main", preserve_existing_order=True,
+    )
+    assert [node["ref_id"] for node in plan.nodes_json] == [100, 200]
+    assert [node["position"] for node in plan.nodes_json] == [0, 1]
+    assert [node["lane_id"] for node in plan.nodes_json] == ["main", "main"]
