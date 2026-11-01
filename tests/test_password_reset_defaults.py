@@ -32,6 +32,7 @@ def _clean_email_config(monkeypatch: pytest.MonkeyPatch):
 
 def test_production_needs_only_gmail_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """Production uses the Gmail identity and ComicPile origin by default."""
+    monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("GMAIL_SMTP_USERNAME", "owner@gmail.com")
     monkeypatch.setenv("GMAIL_SMTP_APP_PASSWORD", "app-password")
@@ -48,6 +49,7 @@ def test_production_needs_only_gmail_credentials(monkeypatch: pytest.MonkeyPatch
 
 def test_non_production_uses_local_origin(monkeypatch: pytest.MonkeyPatch) -> None:
     """Non-production reset links never point at production by default."""
+    monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.setenv("GMAIL_SMTP_USERNAME", "owner@gmail.com")
     monkeypatch.setenv("GMAIL_SMTP_APP_PASSWORD", "app-password")
