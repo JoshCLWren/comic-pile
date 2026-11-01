@@ -194,7 +194,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
-        .route("/api/v2/issues/{issue_id}", patch(issue_handler::read_rate_issue))
+        .route(
+            "/api/v2/issues/{issue_id}",
+            patch(issue_handler::read_rate_issue),
+        )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(

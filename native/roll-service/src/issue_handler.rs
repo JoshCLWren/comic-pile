@@ -7,7 +7,10 @@ use crate::{
     issue_service::{self, IssueReadRateRequest, IssueReadRateResponse},
     ApiError, AppState,
 };
-use axum::{extract::{Path, State}, Json};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
 use std::sync::Arc;
 use tokio_postgres::IsolationLevel;
 
@@ -21,7 +24,8 @@ pub async fn read_rate_issue(
     issue_service::validate(&request)?;
     let mut pending = Pending::new(db::checkout(&state).await?);
     let result = {
-        let tx = pending.connection()
+        let tx = pending
+            .connection()
             .build_transaction()
             .isolation_level(IsolationLevel::ReadCommitted)
             .start()
@@ -39,7 +43,10 @@ pub async fn read_rate_issue(
 mod tests {
     use super::*;
     use crate::{config::Config, router};
-    use axum::{body::Body, http::{Request, StatusCode}};
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -48,16 +55,22 @@ mod tests {
             "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
             _ => None,
-        }).unwrap();
+        })
+        .unwrap();
         let app = router(Arc::new(AppState::new(config).unwrap()));
-        let response = app.oneshot(
-            Request::builder()
-                .method("PATCH")
-                .uri("/api/v2/issues/42")
-                .header("content-type", "application/json")
-                .body(Body::from(r#"{"status":"read","idempotency_key":"test-issue-012345"}"#))
-                .unwrap()
-        ).await.unwrap();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/v2/issues/42")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"status":"read","idempotency_key":"test-issue-012345"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

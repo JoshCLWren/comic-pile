@@ -61,14 +61,14 @@ pub(crate) fn validate(request: &IssueReadRateRequest) -> Result<(), ApiError> {
     {
         return Err(invalid("Invalid issue idempotency key"));
     }
-    if !matches!(request.status.as_deref(), None | Some("read") | Some("unread")) {
+    if !matches!(
+        request.status.as_deref(),
+        None | Some("read") | Some("unread")
+    ) {
         return Err(invalid("Invalid issue status"));
     }
     if let Some(rating) = request.rating {
-        if !rating.is_finite()
-            || !(0.5..=5.0).contains(&rating)
-            || (rating * 2.0).fract() != 0.0
-        {
+        if !rating.is_finite() || !(0.5..=5.0).contains(&rating) || (rating * 2.0).fract() != 0.0 {
             return Err(invalid("Rating must be 0.5 to 5.0 in half steps"));
         }
     }
@@ -85,8 +85,9 @@ async fn card(
 ) -> Result<IssueCard, ApiError> {
     // This is a single owned-card projection. The confirmed provider URL is
     // passed through exactly, without download, rewriting or image processing.
-    let row = tx.query_one(
-        "SELECT i.id, i.thread_id, i.issue_number, i.status,
+    let row = tx
+        .query_one(
+            "SELECT i.id, i.thread_id, i.issue_number, i.status,
                 to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
                 (SELECT e.rating FROM events e WHERE e.user_id=$2 AND e.issue_id=i.id
                     AND e.type='rate' AND e.rating IS NOT NULL
@@ -113,8 +114,10 @@ async fn card(
              LIMIT 1
          ) mapping ON true
          WHERE i.id=$1 AND t.user_id=$2",
-        &[&issue_id, &user.id()],
-    ).await.map_err(db::query_error)?;
+            &[&issue_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
     let mapping_state: String = row.get(6);
     let confirmed = mapping_state == "confirmed";
     Ok(IssueCard {
@@ -132,11 +135,14 @@ async fn card(
 }
 
 async fn progress(tx: &Transaction<'_>, thread_id: i32) -> Result<ThreadProgress, ApiError> {
-    let row = tx.query_one(
-        "SELECT id,status,issues_remaining,next_unread_issue_id,reading_progress,last_rating
+    let row = tx
+        .query_one(
+            "SELECT id,status,issues_remaining,next_unread_issue_id,reading_progress,last_rating
          FROM threads WHERE id=$1",
-        &[&thread_id],
-    ).await.map_err(db::query_error)?;
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
     Ok(ThreadProgress {
         thread_id: row.get(0),
         status: row.get(1),
@@ -160,7 +166,9 @@ pub(crate) async fn persist(
     tx.query_one(
         "SELECT pg_advisory_xact_lock($1::bigint)",
         &[&(user.id() as i64)],
-    ).await.map_err(db::query_error)?;
+    )
+    .await
+    .map_err(db::query_error)?;
 
     let payload = json!({
         "issue_id": issue_id,
@@ -169,53 +177,80 @@ pub(crate) async fn persist(
     });
     // Lock the owner thread before the issue; owner transfers and concurrent
     // progress writers must not escape the ownership check.
-    let owner = tx.query_opt(
-        "SELECT t.id FROM threads t JOIN issues i ON i.thread_id=t.id
+    let owner = tx
+        .query_opt(
+            "SELECT t.id FROM threads t JOIN issues i ON i.thread_id=t.id
          WHERE i.id=$1 AND t.user_id=$2 FOR UPDATE OF t,i",
-        &[&issue_id, &user.id()],
-    ).await.map_err(db::query_error)?
+            &[&issue_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
         .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Issue not found".into()))?;
     let thread_id: i32 = owner.get(0);
 
     // Replays, including a lost response to a no-op, return their original receipt.
     // Same user/key with a different issue or payload is a conflict.
-    let existing = tx.query_opt(
-        "SELECT context::text FROM events
+    let existing = tx
+        .query_opt(
+            "SELECT context::text FROM events
          WHERE user_id=$1 AND context->>'issue_command_key'=$2
          ORDER BY id DESC LIMIT 1",
-        &[&user.id(), &request.idempotency_key],
-    ).await.map_err(db::query_error)?;
+            &[&user.id(), &request.idempotency_key],
+        )
+        .await
+        .map_err(db::query_error)?;
     if let Some(row) = existing {
         let saved: String = row.get(0);
         let context: Value = serde_json::from_str(&saved).map_err(|_| {
-            ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid stored issue receipt".into())
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid stored issue receipt".into(),
+            )
         })?;
         if context.get("issue_command_payload") != Some(&payload) {
-            return Err(ApiError(StatusCode::CONFLICT, "Idempotency key reused for different action".into()));
+            return Err(ApiError(
+                StatusCode::CONFLICT,
+                "Idempotency key reused for different action".into(),
+            ));
         }
-        let receipt = context.get("issue_command_receipt").cloned().ok_or_else(|| {
-            ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Missing stored issue receipt".into())
-        })?;
+        let receipt = context
+            .get("issue_command_receipt")
+            .cloned()
+            .ok_or_else(|| {
+                ApiError(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Missing stored issue receipt".into(),
+                )
+            })?;
         let mut result: IssueReadRateResponse = serde_json::from_value(receipt).map_err(|_| {
-            ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid stored issue receipt".into())
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid stored issue receipt".into(),
+            )
         })?;
         result.replayed = true;
         return Ok(result);
     }
 
-    let issue = tx.query_one(
-        "SELECT status, issue_number FROM issues
+    let issue = tx
+        .query_one(
+            "SELECT status, issue_number FROM issues
          WHERE id=$1 AND thread_id=$2 FOR UPDATE",
-        &[&issue_id, &thread_id],
-    ).await.map_err(db::query_error)?;
+            &[&issue_id, &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
     let old_status: String = issue.get(0);
     let issue_number: String = issue.get(1);
-    let old_rating_row = tx.query_opt(
-        "SELECT rating FROM events
+    let old_rating_row = tx
+        .query_opt(
+            "SELECT rating FROM events
          WHERE user_id=$1 AND issue_id=$2 AND type='rate' AND rating IS NOT NULL
          ORDER BY timestamp DESC,id DESC LIMIT 1",
-        &[&user.id(), &issue_id],
-    ).await.map_err(db::query_error)?;
+            &[&user.id(), &issue_id],
+        )
+        .await
+        .map_err(db::query_error)?;
     let old_rating: Option<f64> = old_rating_row.map(|row| row.get(0));
     let newly_read = request.status.as_deref() == Some("read") && old_status != "read";
     let newly_unread = request.status.as_deref() == Some("unread") && old_status == "read";
@@ -228,25 +263,36 @@ pub(crate) async fn persist(
         tx.execute(
             "UPDATE issues SET status='read', read_at=NOW() WHERE id=$1 AND thread_id=$2",
             &[&issue_id, &thread_id],
-        ).await.map_err(db::query_error)?;
+        )
+        .await
+        .map_err(db::query_error)?;
     } else if newly_unread {
         tx.execute(
             "UPDATE issues SET status='unread', read_at=NULL WHERE id=$1 AND thread_id=$2",
             &[&issue_id, &thread_id],
-        ).await.map_err(db::query_error)?;
+        )
+        .await
+        .map_err(db::query_error)?;
     }
 
     if status_changed || rating_changed {
-        let count_row = tx.query_one(
-            "SELECT count(*)::int,
+        let count_row = tx
+            .query_one(
+                "SELECT count(*)::int,
                 (SELECT id FROM issues WHERE thread_id=$1 AND status='unread'
                  ORDER BY position,id LIMIT 1)
              FROM issues WHERE thread_id=$1 AND status='unread'",
-            &[&thread_id],
-        ).await.map_err(db::query_error)?;
+                &[&thread_id],
+            )
+            .await
+            .map_err(db::query_error)?;
         let remaining: i32 = count_row.get(0);
         let next_id: Option<i32> = count_row.get(1);
-        let rating_for_thread = if rating_changed { requested_rating } else { None };
+        let rating_for_thread = if rating_changed {
+            requested_rating
+        } else {
+            None
+        };
         tx.execute(
             "UPDATE threads SET
                  issues_remaining = CASE WHEN $2 THEN $3 ELSE issues_remaining END,
@@ -275,20 +321,36 @@ pub(crate) async fn persist(
         "issue_command"
     };
     let issues_read: i32 = i32::from(newly_read);
-    let recorded_rating = if event_type == "rate" { final_rating } else { None };
+    let recorded_rating = if event_type == "rate" {
+        final_rating
+    } else {
+        None
+    };
     let context = json!({
         "source": "direct",
         "issue_command_key": request.idempotency_key,
         "issue_command_payload": payload,
     });
-    let event_id: i32 = tx.query_one(
-        "INSERT INTO events
+    let event_id: i32 = tx
+        .query_one(
+            "INSERT INTO events
             (user_id,type,timestamp,thread_id,issue_id,issue_number,
              rating,issues_read,context)
          VALUES ($1,$2,NOW(),$3,$4,$5,$6,$7,$8::text::json) RETURNING id",
-        &[&user.id(), &event_type, &thread_id, &issue_id, &issue_number,
-          &recorded_rating, &issues_read, &context.to_string()],
-    ).await.map_err(db::query_error)?.get(0);
+            &[
+                &user.id(),
+                &event_type,
+                &thread_id,
+                &issue_id,
+                &issue_number,
+                &recorded_rating,
+                &issues_read,
+                &context.to_string(),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
 
     let result = IssueReadRateResponse {
         issue: card(tx, user, issue_id).await?,
@@ -300,12 +362,17 @@ pub(crate) async fn persist(
     };
     let mut saved = context;
     saved["issue_command_receipt"] = serde_json::to_value(&result).map_err(|_| {
-        ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Cannot store issue receipt".into())
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Cannot store issue receipt".into(),
+        )
     })?;
     tx.execute(
         "UPDATE events SET context=$2::text::json WHERE id=$1 AND user_id=$3",
         &[&event_id, &saved.to_string(), &user.id()],
-    ).await.map_err(db::query_error)?;
+    )
+    .await
+    .map_err(db::query_error)?;
     Ok(result)
 }
 
@@ -338,8 +405,9 @@ mod tests {
         assert!(validate(&bad).is_err());
     }
     async fn scoped_client(url: &str, schema: &str) -> tokio_postgres::Client {
-        let (client, connection) =
-            tokio_postgres::connect(url, tokio_postgres::NoTls).await.unwrap();
+        let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
         tokio::spawn(async move {
             let _ = connection.await;
         });
@@ -355,8 +423,9 @@ mod tests {
         let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) =
-            tokio_postgres::connect(&url, tokio_postgres::NoTls).await.unwrap();
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
         tokio::spawn(async move {
             let _ = connection.await;
         });
@@ -448,7 +517,10 @@ mod tests {
             "unread"
         );
         let still_pending = first
-            .query_one("SELECT pending_issue_id,manual_die FROM sessions WHERE id=1", &[])
+            .query_one(
+                "SELECT pending_issue_id,manual_die FROM sessions WHERE id=1",
+                &[],
+            )
             .await
             .unwrap();
         assert_eq!(still_pending.get::<_, i32>(0), 101);
@@ -531,5 +603,4 @@ mod tests {
             .await
             .unwrap();
     }
-
 }
