@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
-import { useRollExclusions } from '../../hooks/useRollExclusions'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useClearManualDie,
@@ -24,7 +23,6 @@ import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api-threads'
 import type { ReadingModeState, SessionModeUpdateRequest, SnoozeCorrectionInfo, CorrectionChoiceId } from '../../types'
-import { mergeBlockingDependencies, toBlockedPoolRow } from './rollExclusionRows'
 import { FEATURES } from '../../config/features'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
@@ -33,7 +31,6 @@ import { useRollPendingSession } from './useRollPendingSession'
 import { useRollRating } from './useRollRating'
 import { useRollSnooze } from './useRollSnooze'
 import { useRollSkip } from './useRollSkip'
-import { useRollDependencies } from './useRollDependencies'
 import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
 import { useRollViewport } from './useRollViewport'
@@ -229,13 +226,6 @@ export default function RollPage() {
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
 
-  // Issue #3330: the bootstrap only carries bounded previews of these two
-  // categories. Load the authoritative drill-down lazily, only while the
-  // reader has the section expanded, so the initial Roll payload stays bounded
-  // and the collapsed heading still reports the real category total.
-  const blockedExclusions = useRollExclusions('blocked', { enabled: state.blockedExpanded })
-  const inactiveExclusions = useRollExclusions('inactive', { enabled: state.inactiveExpanded })
-
   useRollPendingSession({ state, bootstrap, rollPool })
 
   const rating = useRollRating({
@@ -292,8 +282,6 @@ export default function RollPage() {
     expectedPendingThreadId: bootstrap?.pending_thread_id ?? undefined,
     onRefreshFailed: reportSkipRefreshFailed,
   })
-
-  const dependencies = useRollDependencies({ state, bootstrap })
 
   const actions = useRollActions({
     state,
@@ -414,25 +402,6 @@ export default function RollPage() {
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const skippedThreads = bootstrap?.skipped_threads ?? []
-  const blockedPreview = useMemo(() => bootstrap?.blocked_threads ?? [], [bootstrap?.blocked_threads])
-  const inactivePreview = useMemo(() => bootstrap?.inactive_threads ?? [], [bootstrap?.inactive_threads])
-  const blockedCount = bootstrap?.blocked_count ?? blockedPreview.length
-  const inactiveCount = bootstrap?.inactive_count ?? inactivePreview.length
-
-  // The bootstrap preview stands in until the first drill-down page lands, so
-  // expanding a section never flashes an empty list. Page rows replace it with
-  // the same deterministic slice plus dependency details for every loaded row.
-  const blockedThreads = useMemo(() => {
-    if (blockedExclusions.items.length === 0) return blockedPreview
-    return blockedExclusions.items.map(toBlockedPoolRow)
-  }, [blockedExclusions.items, blockedPreview])
-  const inactiveThreads = inactiveExclusions.items.length > 0
-    ? inactiveExclusions.items
-    : inactivePreview
-  const blockingDependencyMap = useMemo(
-    () => mergeBlockingDependencies(state.blockingDependencyMap, blockedExclusions.items),
-    [blockedExclusions.items, state.blockingDependencyMap],
-  )
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -440,7 +409,7 @@ export default function RollPage() {
   )
   const pool = filteredThreads.slice(0, dieSize)
   const displayDie = isDiceSide(state.currentDie) ? state.currentDie : 6
-  const hasRollableContent = pool.length > 0 || blockedCount > 0 || snoozedThreads.length > 0
+  const hasRollableContent = pool.length > 0 || snoozedThreads.length > 0
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
     // A timed-out bootstrap stays pending through the shared retry policy
@@ -606,56 +575,22 @@ export default function RollPage() {
 
             <ThreadPool
               pool={pool}
-              blockedThreads={blockedThreads}
-              blockedPagination={{
-                total: blockedExclusions.pages.length > 0 ? blockedExclusions.total : blockedCount,
-                hasNextPage: blockedExclusions.hasNextPage,
-                isLoading: blockedExclusions.isPending,
-                isError: blockedExclusions.isError,
-                onLoadMore: blockedExclusions.fetchNextPage,
-                // A failed "Load more" resumes the missing page instead of
-                // reloading every page the reader already read (#3330).
-                onRetry: () => {
-                  void blockedExclusions.retry()
-                },
-              }}
-              blockingDependencyMap={blockingDependencyMap}
               dieSize={dieSize}
               isRatingView={state.isRatingView}
               selectedThreadId={state.selectedThreadId}
-              staleThread={state.staleThread}
-              staleThreadCount={state.staleThreadCount}
+
               snoozedThreads={snoozedThreads}
               snoozedCount={bootstrap?.snoozed_count ?? snoozedThreads.length}
               snoozedExpanded={state.snoozedExpanded}
-              blockedExpanded={state.blockedExpanded}
               skippedThreads={skippedThreads}
               skippedCount={bootstrap?.skipped_thread_ids?.length ?? skippedThreads.length}
               skippedExpanded={state.skippedExpanded}
-              staleExpanded={state.staleExpanded}
-              inactiveExpanded={state.inactiveExpanded}
-              inactiveThreads={inactiveThreads}
-              inactivePagination={{
-                total: inactiveExclusions.pages.length > 0 ? inactiveExclusions.total : inactiveCount,
-                hasNextPage: inactiveExclusions.hasNextPage,
-                isLoading: inactiveExclusions.isPending,
-                isError: inactiveExclusions.isError,
-                onLoadMore: inactiveExclusions.fetchNextPage,
-                // A failed "Load more" resumes the missing page instead of
-                // reloading every page the reader already read (#3330).
-                onRetry: () => {
-                  void inactiveExclusions.retry()
-                },
-              }}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}
               onUnskip={skip.handleUnskip}
-              onReadStale={actions.handleReadStale}
               onToggleSnoozed={() => state.setSnoozedExpanded(!state.snoozedExpanded)}
               onToggleSkipped={() => state.setSkippedExpanded(!state.skippedExpanded)}
-              onToggleStale={() => state.setStaleExpanded(!state.staleExpanded)}
-              onToggleBlocked={dependencies.handleToggleBlocked}
-              onToggleInactive={() => state.setInactiveExpanded(!state.inactiveExpanded)}
+
               onShuffle={actions.handleShufflePool}
               unsnoozeIsPending={unsnoozeMutation.isPending}
               unskipIsPending={unskipMutation.isPending}
