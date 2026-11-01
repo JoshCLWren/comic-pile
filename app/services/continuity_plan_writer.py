@@ -966,9 +966,9 @@ async def list_continuity_plan_items(
                     ContinuityPlanListItem(
                         id=plan.id,
                         name=plan.name,
-                        ordering_mode="informational",
-                        lane_count=1,
-                        step_count=0,
+                        ordering_mode=plan.ordering_mode,
+                        lane_count=len(plan.lanes_json) if plan.lanes_json else 1,
+                        step_count=len(plan.nodes_json) if plan.nodes_json else 0,
                         source_paths=paths_by_plan[plan.id],
                         source_names={
                             path: source_names[path]
