@@ -645,6 +645,16 @@ async def test_native_threads_collection_matches_python_oracle(
             assert denied["body"] == {"detail": "Token has been revoked"}
             assert denied["page_statements"] == 1
 
+            # A truthy switch without owner approval must retain legacy ordering.
+            unapproved_env = dict(env)
+            unapproved_env["OPTION_E_ENABLED"] = "true"
+            unapproved_env["OPTION_E_APPROVED_PREVIEW"] = "   "
+            unapproved_env["RUST_ROLL_TEST_URI"] = "/api/v2/threads?sort=position"
+            unapproved = await _run_example(unapproved_env)
+            assert unapproved["status"] == 200, unapproved
+            assert unapproved["page_statements"] == 1
+            assert unapproved["body"] == first
+
             # Option E preview: evaluated grouping, availability, frontier and
             # blockers, plus the bounded input snapshot before the page.
             monkeypatch.setenv("OPTION_E_ENABLED", "true")
@@ -654,6 +664,7 @@ async def test_native_threads_collection_matches_python_oracle(
             get_reading_execution_settings.cache_clear()
             option_env = dict(env)
             option_env["OPTION_E_ENABLED"] = "true"
+            option_env["OPTION_E_APPROVED_PREVIEW"] = "native-parity-threads-fixture"
             option_expected = await _expected(db, owner.id)
             option_env["RUST_ROLL_TEST_URI"] = "/api/v2/threads?sort=position"
             before = await _db_transactions(admin)
