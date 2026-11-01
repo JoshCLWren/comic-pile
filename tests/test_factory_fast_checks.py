@@ -345,3 +345,101 @@ def test_fork_runner_installs_hook_toolchain_before_committing() -> None:
         "install-git-hooks.sh"
     )
     assert source.index("install-git-hooks.sh") < source.index("git commit")
+
+
+def rust_fixture(repo: Path) -> None:
+    """Install the real preflight runner in an isolated synthetic git checkout."""
+    source = ROOT / "scripts/check-rust-factory-prepush.sh"
+    dest = repo / "scripts/check-rust-factory-prepush.sh"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(source.read_text())
+
+
+def rust_stubs(tmp_path: Path, *, fail_clippy: bool = False) -> Path:
+    """Stub the external toolchain without needing a compiler or database."""
+    bin_dir = tmp_path / "bin"
+    stub(bin_dir, "rustup", "exit 0")
+    stub(
+        bin_dir,
+        "cargo",
+        'echo "cargo $*" >> ../cargo.log\\n'
+        + (
+            'case "$*" in *clippy*) echo "error[E0308]: mismatched types"; exit 101 ;; esac\\n'
+            if fail_clippy
+            else ""
+        )
+        + "exit 0",
+    )
+    stub(bin_dir, "uv", 'echo "uv $*" >> ../uv.log\\nexit 0')
+    return bin_dir
+
+
+def test_rust_sources_manifests_and_native_rewrites_select_preflight(tmp_path: Path) -> None:
+    """Rust, Cargo and native ingress changes must not be invisible to the gate."""
+    repo = repo_with(
+        tmp_path,
+        {
+            "native/roll-service/src/queue.rs": "pub fn demo() {}\\n",
+            "api/native_roll.rs": "fn main() {}\\n",
+            "native/roll-service/Cargo.toml": "[package]\\nname = 'demo'\\n",
+            "Cargo.lock": "lock\\n",
+            "vercel.json": "{}\\n",
+        },
+    )
+    result = subprocess.run(
+        ["bash", "-c", f"source {HELPER!s}; factory_fast_check_paths HEAD | factory_fast_check_plan"],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    plan = set(result.stdout.splitlines())
+    assert "rust\\tnative/roll-service/src/queue.rs" in plan
+    assert "rust\\tapi/native_roll.rs" in plan
+    assert "rust\\tnative/roll-service/Cargo.toml" in plan
+    assert "rust\\tCargo.lock" in plan
+    assert "ingress\\tvercel.json" in plan
+    assert "ingress\\tapi/native_roll.rs" in plan
+
+
+def test_rust_compile_error_blocks_push_and_runs_focused_ingress_guards(tmp_path: Path) -> None:
+    """A bad Rust first head is rejected before GitHub Actions."""
+    repo = repo_with(tmp_path, {"native/roll-service/src/queue.rs": "bad rust\\n"})
+    rust_fixture(repo)
+    bin_dir = rust_stubs(tmp_path, fail_clippy=True)
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "error[E0308]" in result.stdout
+    assert "Rust format/Clippy/native build" in result.stdout
+    assert "cargo +1.85.0 fmt" in (tmp_path / "cargo.log").read_text()
+    assert "cargo +1.85.0 clippy" in (tmp_path / "cargo.log").read_text()
+    assert "test_native_roll_live_ingress.py" in (tmp_path / "uv.log").read_text()
+    assert "test_native_roll_write_test_guard.py" in (tmp_path / "uv.log").read_text()
+    assert "test_vercel_deployment.py" in (tmp_path / "uv.log").read_text()
+
+
+def test_valid_rust_checks_both_crates_and_deletion_still_checks(tmp_path: Path) -> None:
+    """The gate covers service Clippy plus root Vercel compilation, including deletes."""
+    repo = repo_with(tmp_path, {"api/native_roll.rs": "fn main() {}\\n"})
+    rust_fixture(repo)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "Rust file")
+    (repo / "api/native_roll.rs").unlink()
+    bin_dir = rust_stubs(tmp_path)
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    cargo = (tmp_path / "cargo.log").read_text()
+    assert "cargo +1.85.0 fmt" in cargo
+    assert "cargo +1.85.0 clippy" in cargo
+    assert "cargo +stable fmt" in cargo
+    assert "cargo +stable check" in cargo
+
+
+def test_vercel_rewrite_only_change_runs_routing_tests_not_cargo(tmp_path: Path) -> None:
+    """Vercel changes get the relevant tests without a pointless Rust build."""
+    repo = repo_with(tmp_path, {"vercel.json": '{"rewrites": []}\\n'})
+    bin_dir = rust_stubs(tmp_path)
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (tmp_path / "cargo.log").exists()
+    assert "test_vercel_deployment.py" in (tmp_path / "uv.log").read_text()
