@@ -114,7 +114,10 @@ def test_provider_httpx_log_redacts_query_credentials(parameter: str) -> None:
         level=logging.INFO,
         pathname="",
         lineno=0,
-        msg=f'HTTP Request: GET "https://comicvine.gamespot.com/api/search/?{parameter}={credential}&format=json" "HTTP/1.1 200 OK"',
+        msg=(
+            'HTTP Request: GET "https://comicvine.gamespot.com/api/search/'
+            f'?{parameter}={credential}&format=json" "HTTP/1.1 200 OK"'
+        ),
         args=(),
         exc_info=None,
     )
