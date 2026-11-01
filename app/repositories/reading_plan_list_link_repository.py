@@ -16,13 +16,13 @@ from app.models.thread import Thread
 
 
 
-async def owned_plan_list_authority_rows(
+async def plan_list_authority_rows(
     db: AsyncSession, *, user_id: int, plan_ids: list[int],
-) -> list[tuple[int, int, str, datetime]]:
-    """Bulk-load the authoritative Lists for Plans, scoped to the same owner.
+) -> list[tuple[int, int, str, datetime, int]]:
+    """Load linked Lists for owned Plans, retaining ownership for validation.
 
-    Keep SQL construction in repositories; the service validates exact-one
-    authority and decides whether missing or ambiguous links are fatal.
+    Never filter out a foreign List link: the caller must reject it instead
+    of mistaking that link for a deleted List and showing stale Plan data.
     """
     if not plan_ids:
         return []
@@ -32,15 +32,17 @@ async def owned_plan_list_authority_rows(
             CustomCBLList.id,
             CustomCBLList.mode,
             CustomCBLList.updated_at,
+            CustomCBLList.user_id,
         )
         .join(CustomCBLList, ReadingPlanSource.custom_cbl_list_id == CustomCBLList.id)
+        .join(ContinuityPlan, ReadingPlanSource.plan_id == ContinuityPlan.id)
         .where(
             ReadingPlanSource.plan_id.in_(plan_ids),
-            CustomCBLList.user_id == user_id,
+            ContinuityPlan.user_id == user_id,
         )
     )).all()
-    return [(plan_id, list_id, mode, updated_at)
-            for plan_id, list_id, mode, updated_at in rows]
+    return [(plan_id, list_id, mode, updated_at, list_owner_id)
+            for plan_id, list_id, mode, updated_at, list_owner_id in rows]
 
 
 async def owned_list_entry_counts(

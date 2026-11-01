@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_reading_execution_settings
@@ -117,22 +118,30 @@ async def test_index_uses_list_mode_membership_and_latest_list_timestamp(
 
 
 @pytest.mark.asyncio
-async def test_option_e_index_rejects_unlinked_plan_instead_of_showing_stale_order(
+async def test_option_e_index_allows_orphaned_plan_after_list_deletion(
     async_db: AsyncSession, default_user: User, option_e: None,
 ) -> None:
-    """Missing authority is an error, not an invitation to edit a stale Plan."""
+    """An orphaned plan (linked list deleted) must be listed without authority."""
     now = datetime.now(UTC)
-    async_db.add(ContinuityPlan(
-        user_id=default_user.id, name="Unlinked Plan",
+    plan = ContinuityPlan(
+        user_id=default_user.id, name="Orphaned Plan",
         ordering_mode="strict_sequential",
         lanes_json=[{"id": "main", "name": "Main", "order": 0}],
         nodes_json=[],
         created_at=now, updated_at=now,
-    ))
+    )
+    async_db.add(plan)
     await async_db.flush()
-    with pytest.raises(HTTPException) as exc:
-        await list_continuity_plan_items(async_db, user_id=default_user.id)
-    assert exc.value.status_code == 409
+    # No ReadingPlanSource row - the plan is orphaned after its linked list was deleted.
+    items = await list_continuity_plan_items(async_db, user_id=default_user.id)
+    assert len(items) == 1
+    assert items[0].id == plan.id
+    assert items[0].name == "Orphaned Plan"
+    assert items[0].ordering_mode == "strict_sequential"
+    assert items[0].lane_count == 1
+    assert items[0].step_count == 0
+    # Orphaned plans have empty source_paths since there's no authoritative list
+    assert items[0].source_paths == []
 
 
 @pytest.mark.asyncio
@@ -204,3 +213,87 @@ async def test_option_e_index_never_accepts_foreign_list_authority(
         await list_continuity_plan_items(async_db, user_id=default_user.id)
     assert exc.value.status_code == 409
     assert "Private foreign reading order" not in str(exc.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_option_e_index_rejects_multiple_authoritative_lists_for_same_plan(
+    async_db: AsyncSession, default_user: User, option_e: None,
+) -> None:
+    """Multiple distinct owned Lists linked to the same Plan must fail clearly."""
+    owner = default_user.id
+    now = datetime.now(UTC)
+    plan = ContinuityPlan(
+        user_id=owner, name="Ambiguous Plan",
+        ordering_mode="strict_sequential",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[], created_at=now, updated_at=now,
+    )
+    async_db.add(plan)
+    await async_db.flush()
+    list_a = CustomCBLList(user_id=owner, name="List A", mode="loose", created_at=now, updated_at=now)
+    list_b = CustomCBLList(user_id=owner, name="List B", mode="strict", created_at=now, updated_at=now)
+    async_db.add_all([list_a, list_b])
+    await async_db.flush()
+    async_db.add_all([
+        ReadingPlanSource(plan_id=plan.id, raw_source_path=f"custom-cbl:{list_a.id}", custom_cbl_list_id=list_a.id),
+        ReadingPlanSource(plan_id=plan.id, raw_source_path=f"custom-cbl:{list_b.id}", custom_cbl_list_id=list_b.id),
+    ])
+    await async_db.flush()
+    with pytest.raises(HTTPException) as exc:
+        await list_continuity_plan_items(async_db, user_id=owner)
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_option_e_index_surviving_plan_plus_deleted_linked_list(
+    async_db: AsyncSession, default_user: User, option_e: None,
+) -> None:
+    """One plan with authority plus one orphaned plan must list both, no 409."""
+    owner = default_user.id
+    now = datetime.now(UTC)
+    list_a = CustomCBLList(user_id=owner, name="List A", mode="strict", created_at=now, updated_at=now)
+    deleted_list = CustomCBLList(
+        user_id=owner, name="Deleted List", mode="loose", created_at=now, updated_at=now
+    )
+    async_db.add_all([list_a, deleted_list])
+    await async_db.flush()
+    auth_plan = ContinuityPlan(
+        user_id=owner, name="Auth Plan",
+        ordering_mode="strict_sequential",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[], created_at=now, updated_at=now,
+    )
+    orphan = ContinuityPlan(
+        user_id=owner, name="Orphan Plan",
+        ordering_mode="informational",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[], created_at=now, updated_at=now,
+    )
+    async_db.add_all([auth_plan, orphan])
+    await async_db.flush()
+    async_db.add_all([
+        ReadingPlanSource(
+            plan_id=auth_plan.id, raw_source_path=f"custom-cbl:{list_a.id}",
+            custom_cbl_list_id=list_a.id,
+        ),
+        ReadingPlanSource(
+            plan_id=orphan.id, raw_source_path=f"custom-cbl:{deleted_list.id}",
+            custom_cbl_list_id=deleted_list.id,
+        ),
+    ])
+    await async_db.flush()
+    # Exercise the real FK ON DELETE SET NULL path, not a fabricated unlinked Plan.
+    await async_db.delete(deleted_list)
+    await async_db.flush()
+    null_link = await async_db.execute(
+        select(ReadingPlanSource.custom_cbl_list_id).where(ReadingPlanSource.plan_id == orphan.id)
+    )
+    assert null_link.scalar_one() is None
+    items = await list_continuity_plan_items(async_db, user_id=owner)
+    assert len(items) == 2
+    names = {i.name for i in items}
+    assert names == {"Auth Plan", "Orphan Plan"}
+    auth_item = next(i for i in items if i.name == "Auth Plan")
+    assert auth_item.source_paths == [f"custom-cbl:{list_a.id}"]
+    orphan_item = next(i for i in items if i.name == "Orphan Plan")
+    assert orphan_item.source_paths == []
