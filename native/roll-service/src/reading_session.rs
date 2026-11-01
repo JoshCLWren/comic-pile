@@ -753,8 +753,6 @@ mod tests {
             .await
             .unwrap()
             .get(0);
-        let session_json: Value = serde_json::from_str(&session.unwrap()).unwrap();
-        
         // The pending pointers should still exist in the database (not persisted)
         let db_pending_thread: Option<i32> = client
             .query_one(&format!("SELECT pending_thread_id FROM {schema}.sessions WHERE id=1"), &[])
