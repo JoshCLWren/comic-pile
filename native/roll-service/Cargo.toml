@@ -13,6 +13,7 @@ chrono = "0.4"
 chrono-tz = "0.10"
 deadpool-postgres = "0.14"
 dotenvy = "0.15"
+http = "1.1"
 jsonwebtoken = { version = "9", default-features = false }
 native-tls = "0.2"
 postgres-native-tls = "0.5"

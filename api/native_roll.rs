@@ -92,6 +92,16 @@ fn app() -> Router {
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/v2/auth/register", post(native_dispatch))
+        .route("/api/v2/auth/login", post(native_dispatch))
+        .route("/api/v2/auth/refresh", post(native_dispatch))
+        .route("/api/v2/auth/logout", post(native_dispatch))
+        .route("/api/v2/auth/csrf", get(native_dispatch))
+        .route("/api/v2/auth/me", get(native_dispatch))
+        .route("/api/v2/auth/forgot-password", post(native_dispatch))
+        .route("/api/v2/auth/reset-password", post(native_dispatch))
+        .route("/api/v1/auth/me", get(native_dispatch))
+        .route("/api/auth/me", get(native_dispatch))
 }
 
 #[tokio::main]

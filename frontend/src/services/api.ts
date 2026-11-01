@@ -30,6 +30,11 @@ const CSRF_COOKIE_NAME = 'csrf_token'
 const CSRF_HEADER_NAME = 'X-CSRF-Token'
 const CSRF_PROTECTED_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 const AUTH_ENDPOINT_PATHS = new Set([
+  '/v2/auth/login',
+  '/v2/auth/register',
+  '/v2/auth/refresh',
+  '/v2/auth/forgot-password',
+  '/v2/auth/reset-password',
   '/v1/auth/login',
   '/v1/auth/register',
   '/v1/auth/refresh',
@@ -38,7 +43,7 @@ const AUTH_ENDPOINT_PATHS = new Set([
 ])
 // Request bodies for these paths carry single-use secrets (reset token, new
 // password). They must never reach console output or error telemetry.
-const SENSITIVE_AUTH_BODY_PATHS = new Set(['/v1/auth/reset-password'])
+const SENSITIVE_AUTH_BODY_PATHS = new Set(['/v2/auth/reset-password', '/v1/auth/reset-password'])
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -198,7 +203,7 @@ async function ensureCsrfToken(client: ApiClient): Promise<string | null> {
   if (!csrfTokenPromise) {
     // SAFETY: only the skipAuthRedirect flag is needed from ApiRequestConfig; other fields have sensible defaults.
     csrfTokenPromise = client
-      .get<{ csrf_token: string }>('/v1/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
+      .get<{ csrf_token: string }>('/v2/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
       .then((response) => response.csrf_token ?? getCookieValue(CSRF_COOKIE_NAME))
       .finally(() => {
         csrfTokenPromise = null
