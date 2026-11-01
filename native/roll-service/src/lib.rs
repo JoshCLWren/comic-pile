@@ -109,11 +109,16 @@ pub async fn serve(
 }
 
 /// Python-compatible JSON detail boundary; never serialize a dependency error.
+///
+/// The detail is owned so per-request validation and lookup messages never leak
+/// memory through `'static` borrows. Static messages still allocate on the error
+/// path, which is bounded by request volume and always freed when the response is
+/// sent; it is cheaper than leaking every dynamic message for the life of the process.
 #[derive(Debug)]
-pub struct ApiError(pub StatusCode, pub &'static str);
+pub struct ApiError(pub StatusCode, pub String);
 #[derive(Serialize)]
-struct ErrorBody {
-    detail: &'static str,
+struct ErrorBody<'a> {
+    detail: &'a str,
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
@@ -130,7 +135,7 @@ impl IntoResponse for ApiError {
             )
                 .into_response();
         }
-        let mut response = (self.0, Json(ErrorBody { detail: self.1 })).into_response();
+        let mut response = (self.0, Json(ErrorBody { detail: &self.1 })).into_response();
         if self.0 == StatusCode::UNAUTHORIZED {
             response.headers_mut().insert(
                 axum::http::header::WWW_AUTHENTICATE,

@@ -48,8 +48,8 @@ pub struct DiceMutation {
     pub replayed: bool,
 }
 
-fn invalid(detail: &'static str) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail)
+fn invalid(detail: &str) -> ApiError {
+    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail.to_string())
 }
 
 pub(crate) fn validate(key: &str, command: &DiceCommand) -> Result<(), ApiError> {
@@ -166,7 +166,7 @@ pub async fn persist_in_transaction(
     {
         return Err(ApiError(
             StatusCode::UNAUTHORIZED,
-            "Could not validate credentials",
+            "Could not validate credentials".to_string(),
         ));
     }
 
@@ -185,9 +185,9 @@ pub async fn persist_in_transaction(
     if let Some(row) = previous {
         let context: String = row.get(3);
         let original: Value = serde_json::from_str(&context)
-            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid event receipt"))?;
+            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid event receipt".to_string()))?;
         let expected = serde_json::to_value(command)
-            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid dice command"))?;
+            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid dice command".to_string()))?;
         if original.get("dice_command") != Some(&expected) {
             return Err(ApiError(
                 StatusCode::CONFLICT,

@@ -80,7 +80,7 @@ pub struct SessionBootstrap {
 fn corrupt() -> ApiError {
     ApiError(
         StatusCode::INTERNAL_SERVER_ERROR,
-        "Invalid reading session state",
+        "Invalid reading session state".to_string(),
     )
 }
 fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {

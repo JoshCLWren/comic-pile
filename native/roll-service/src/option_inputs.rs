@@ -73,7 +73,7 @@ impl OptionInputs {
         {
             Err(ApiError(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Unresolved reading reference",
+                "Unresolved reading reference".to_string(),
             ))
         } else {
             Ok(())
@@ -294,7 +294,7 @@ async fn load_transaction(
         tracing::error!(%error, "Invalid Option E snapshot response");
         ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid reading snapshot",
+            "Invalid reading snapshot".to_string(),
         )
     })?;
     assemble_snapshot(snapshot)
@@ -356,7 +356,7 @@ fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
         }
         let list = lists.get_mut(&row.list_id).ok_or(ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid reading snapshot",
+            "Invalid reading snapshot".to_string(),
         ))?;
         list.entries.push(ReadingEntry {
             issue_id: row.issue_id,
@@ -494,7 +494,7 @@ pub async fn load_option_diagnostics(
     match result {
         Err(_) => Err(ApiError(
             StatusCode::SERVICE_UNAVAILABLE,
-            "Database temporarily unavailable",
+            "Database temporarily unavailable".to_string(),
         )),
         Ok(Err(error)) => Err(error),
         Ok(Ok(inputs)) => {
@@ -519,11 +519,11 @@ pub async fn load_option_inputs(
         |error| match error {
             crate::reading_constraints::ValidationError::Cycle { .. } => ApiError(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Reading constraint cycle",
+                "Reading constraint cycle".to_string(),
             ),
             crate::reading_constraints::ValidationError::InvalidSnapshot { .. } => ApiError(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Unresolved reading reference",
+                "Unresolved reading reference".to_string(),
             ),
         },
     )

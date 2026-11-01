@@ -25,7 +25,7 @@ impl AuthenticatedUser {
 }
 
 fn unauthorized(detail: &'static str) -> ApiError {
-    ApiError(StatusCode::UNAUTHORIZED, detail)
+    ApiError(StatusCode::UNAUTHORIZED, detail.to_string())
 }
 
 fn bearer(parts: &Parts) -> Result<&str, ApiError> {
@@ -127,11 +127,11 @@ pub async fn authenticate(state: &AppState, token: &str) -> Result<Authenticated
     }
     let password_epoch = if claims.password_epoch.is_null() {
         0
-    } else {
+} else {
         integer(&claims.password_epoch).ok_or(ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal Server Error",
-        ))?
+            "Internal Server Error".to_string(),
+        ))?;
     };
     if password_epoch < row.get::<_, i64>(1) {
         return Err(unauthorized("Password changed; please sign in again."));

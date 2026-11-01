@@ -53,7 +53,7 @@ pub(crate) async fn persist_reset(
         if updated != 1 {
             return Err(ApiError(
                 StatusCode::CONFLICT,
-                "Reading session changed; try again",
+                "Reading session changed; try again".to_string(),
             ));
         }
     }

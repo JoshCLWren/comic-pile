@@ -108,13 +108,13 @@ fn now_seconds() -> Result<f64, ApiError> {
 }
 
 fn internal() -> ApiError {
-    ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+    ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error".to_string())
 }
 
 fn unavailable() -> ApiError {
     ApiError(
         StatusCode::SERVICE_UNAVAILABLE,
-        "Database temporarily unavailable",
+        "Database temporarily unavailable".to_string(),
     )
 }
 
@@ -787,13 +787,13 @@ impl Drop for Pending {
 }
 
 fn conflict() -> ApiError {
-    ApiError(StatusCode::CONFLICT, "No pending roll to skip. Roll first.")
+    ApiError(StatusCode::CONFLICT, "No pending roll to skip. Roll first.".to_string())
 }
 
 fn empty_pool() -> ApiError {
     ApiError(
         StatusCode::BAD_REQUEST,
-        "No alternative threads available to skip to",
+        "No alternative threads available to skip to".to_string(),
     )
 }
 

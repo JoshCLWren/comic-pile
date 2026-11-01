@@ -39,14 +39,14 @@ pub fn evaluate(
     let edges = validated.unsatisfied_edges().map_err(|e| match e {
         ValidationError::InvalidSnapshot { message } => crate::ApiError(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Box::leak(message.into_boxed_str()),
+            message,
         ),
         ValidationError::Cycle {
             message: _,
             edges: _,
         } => crate::ApiError(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            "Reading constraint cycle",
+            "Reading constraint cycle".to_string(),
         ),
     })?;
 
