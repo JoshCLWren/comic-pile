@@ -89,6 +89,10 @@ fn app() -> Router {
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
         .route("/api/v2/reading-boundaries", post(native_dispatch))
+        .route(
+            "/api/v2/reading-boundaries/{thread_id}",
+            get(native_dispatch),
+        )
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
@@ -148,6 +152,46 @@ mod tests {
             response.status() == StatusCode::SERVICE_UNAVAILABLE
                 || response.status() == StatusCode::UNAUTHORIZED,
             "isolated path must reach native startup or bearer authentication"
+        );
+    }
+
+    #[test]
+    fn single_boundary_native_ingress_precedes_python_fallback() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../vercel.json")).unwrap();
+        let routes = config["routes"].as_array().unwrap();
+        let native = routes
+            .iter()
+            .position(|route| {
+                route["src"] == "/api/v2/reading-boundaries/([^/]+)"
+                    && route["dest"] == "/api/native_roll.rs"
+                    && route["methods"] == serde_json::json!(["GET"])
+            })
+            .expect("single v2 boundary GET must reach the native Rust runtime");
+        let python_fallback = routes
+            .iter()
+            .position(|route| route["src"] == "/api(?:/.*)?")
+            .expect("legacy catch-all must remain during cutover");
+        assert!(native < python_fallback);
+    }
+
+    #[tokio::test]
+    async fn single_boundary_get_reaches_native_dispatch() {
+        let mut router = app();
+        let request = Request::builder()
+            .method("GET")
+            .uri("/api/v2/reading-boundaries/7")
+            .body(Body::empty())
+            .unwrap();
+        let response = router.call(request).await.unwrap();
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime"),
+            Some(&axum::http::HeaderValue::from_static("rust"))
+        );
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "native entrypoint must not fall through to a Python or missing route"
         );
     }
 
