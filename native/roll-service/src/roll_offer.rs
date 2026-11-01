@@ -63,7 +63,10 @@ pub struct RollOfferResponse {
 }
 
 fn invalid_key() -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, "Invalid idempotency key")
+    ApiError(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "Invalid idempotency key".to_string(),
+    )
 }
 
 fn validate_key(key: &str) -> Result<(), ApiError> {
@@ -81,12 +84,15 @@ fn validate_key(key: &str) -> Result<(), ApiError> {
 fn empty_pool() -> ApiError {
     ApiError(
         StatusCode::BAD_REQUEST,
-        "No eligible comics to roll. Add comics or reset temporary snoozes.",
+        "No eligible comics to roll. Add comics or reset temporary snoozes.".to_string(),
     )
 }
 
 fn unavailable() -> ApiError {
-    ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Roll offer unavailable")
+    ApiError(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Roll offer unavailable".to_string(),
+    )
 }
 
 /// Cookie IDs are exclusion hints only. Intersecting with the live Option E
@@ -279,7 +285,7 @@ pub(crate) async fn persist_offer(
     if updated != 1 {
         return Err(ApiError(
             StatusCode::CONFLICT,
-            "Reading session changed; try again",
+            "Reading session changed; try again".to_string(),
         ));
     }
     Ok(row.get(0))
@@ -294,7 +300,7 @@ pub async fn offer(
     if request.snoozed_thread_ids.len() > MAX_COOKIE_SNOOZES {
         return Err(ApiError(
             StatusCode::UNPROCESSABLE_ENTITY,
-            "Too many temporary snoozes",
+            "Too many temporary snoozes".to_string(),
         ));
     }
     let active = reading_session::bootstrap(
@@ -310,7 +316,7 @@ pub async fn offer(
     let candidates = validated.eligible_frontiers().map_err(|_| {
         ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid reading constraints",
+            "Invalid reading constraints".to_string(),
         )
     })?;
 
@@ -357,7 +363,7 @@ pub async fn offer(
         .map_err(db::query_error)?
         .ok_or(ApiError(
             StatusCode::CONFLICT,
-            "Reading session changed; try again",
+            "Reading session changed; try again".to_string(),
         ))?;
     let previous_offer: Option<i32> = locked.try_get(0).map_err(db::query_error)?;
 

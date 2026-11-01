@@ -48,8 +48,8 @@ pub struct DiceMutation {
     pub replayed: bool,
 }
 
-fn invalid(detail: &'static str) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail)
+fn invalid(detail: &str) -> ApiError {
+    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail.to_string())
 }
 
 pub(crate) fn validate(key: &str, command: &DiceCommand) -> Result<(), ApiError> {
@@ -166,7 +166,7 @@ pub async fn persist_in_transaction(
     {
         return Err(ApiError(
             StatusCode::UNAUTHORIZED,
-            "Could not validate credentials",
+            "Could not validate credentials".to_string(),
         ));
     }
 
@@ -184,14 +184,22 @@ pub async fn persist_in_transaction(
         .map_err(db::query_error)?;
     if let Some(row) = previous {
         let context: String = row.get(3);
-        let original: Value = serde_json::from_str(&context)
-            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid event receipt"))?;
-        let expected = serde_json::to_value(command)
-            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid dice command"))?;
+        let original: Value = serde_json::from_str(&context).map_err(|_| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid event receipt".to_string(),
+            )
+        })?;
+        let expected = serde_json::to_value(command).map_err(|_| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid dice command".to_string(),
+            )
+        })?;
         if original.get("dice_command") != Some(&expected) {
             return Err(ApiError(
                 StatusCode::CONFLICT,
-                "Idempotency key already used for a different dice command",
+                "Idempotency key already used for a different dice command".to_string(),
             ));
         }
         return Ok(DiceMutation {
@@ -212,7 +220,10 @@ pub async fn persist_in_transaction(
             .map_err(db::query_error)?
             .is_none()
         {
-            return Err(ApiError(StatusCode::NOT_FOUND, "Thread not found"));
+            return Err(ApiError(
+                StatusCode::NOT_FOUND,
+                "Thread not found".to_string(),
+            ));
         }
     }
     if let Some(issue_id) = command.issue_id() {
@@ -228,7 +239,10 @@ pub async fn persist_in_transaction(
             .map_err(db::query_error)?
             .is_none()
         {
-            return Err(ApiError(StatusCode::NOT_FOUND, "Issue not found"));
+            return Err(ApiError(
+                StatusCode::NOT_FOUND,
+                "Issue not found".to_string(),
+            ));
         }
     }
 
