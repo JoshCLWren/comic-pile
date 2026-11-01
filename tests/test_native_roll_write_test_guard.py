@@ -17,6 +17,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_SOURCE = REPOSITORY_ROOT / "native" / "roll-service" / "src"
 LIB_SOURCE = SERVICE_SOURCE / "lib.rs"
@@ -258,7 +260,7 @@ def test_patch_write_is_guarded_and_proven_by_delegated_database_test() -> None:
     assert _tests_write_path("issue_handler", "read_rate_issue")
 
 
-def test_missing_delegated_writer_fails_closed(monkeypatch: object, tmp_path: Path) -> None:
+def test_missing_delegated_writer_fails_closed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """A mere auth test never substitutes for the actual PATCH write."""
     handler = tmp_path / "issue_handler.rs"
     handler.write_text("pub async fn read_rate_issue() { /* no write */ }\n")
