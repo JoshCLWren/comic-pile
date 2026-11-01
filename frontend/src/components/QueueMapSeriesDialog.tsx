@@ -307,8 +307,8 @@ export default function QueueMapSeriesDialog({
   // approval while a re-read preview naturally produces a fresh one.
   const previewToken = preview.data?.preview_token ?? null
   const idempotencyKey =
-    previewToken && originIssueId != null
-      ? `queue-mapping-${threadId}-${originIssueId}-${preview.data?.issued_at ?? 0}`
+    previewToken && originIssueId != null && selectedSeries != null
+      ? `queue-mapping-${threadId}-${originIssueId}-${selectedSeries.comicvine_volume_id}-${preview.data?.issued_at ?? 0}`
       : null
 
   const commitErrorDetail = commit.isError ? getApiErrorDetail(commit.error) : null
