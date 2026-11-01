@@ -25,7 +25,7 @@ export function useRollBootstrapSync({
   bootstrapError,
   navigate,
 }: UseRollBootstrapSyncParams): void {
-  const { setCurrentDie, setRolledResult, setDiceState, setStaleThread, setStaleThreadCount } = state
+  const { setCurrentDie, setRolledResult, setDiceState } = state
 
   useEffect(() => {
     if (isBootstrapError && bootstrapError) {
@@ -41,20 +41,4 @@ export function useRollBootstrapSync({
       setDiceState('rolled')
     }
   }, [bootstrap?.current_die, bootstrap?.last_rolled_result, setCurrentDie, setRolledResult, setDiceState])
-
-  useEffect(() => {
-    const staleFromBootstrap = bootstrap?.stale_thread ?? null
-    const count = bootstrap?.stale_thread_count ?? 0
-    if (staleFromBootstrap && count > 0) {
-      const lastActivity = staleFromBootstrap.last_activity_at
-        ? new Date(staleFromBootstrap.last_activity_at)
-        : new Date()
-      const diffDays = Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
-      setStaleThread({ ...staleFromBootstrap, days: Math.max(diffDays, 7) })
-      setStaleThreadCount(count)
-    } else {
-      setStaleThread(null)
-      setStaleThreadCount(0)
-    }
-  }, [bootstrap?.stale_thread, bootstrap?.stale_thread_count, setStaleThread, setStaleThreadCount])
 }

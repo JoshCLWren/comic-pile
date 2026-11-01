@@ -99,10 +99,6 @@ const bootstrap = {
   snoozed_count: 0,
   skipped_thread_ids: [],
   skipped_threads: [],
-  blocked_count: 0,
-  blocked_threads: [],
-  stale_thread_count: 0,
-  stale_thread: null,
 }
 
 function renderRollPage() {
@@ -162,17 +158,11 @@ it('renders the bounded bootstrap pool without Collections state', () => {
   expect(screen.queryByText(/collection/i)).not.toBeInTheDocument()
 })
 
-it('labels exclusion sections with bootstrap totals instead of preview lengths (#3330)', () => {
+it('ignores retired diagnostic reports while retaining the active pool (#4441)', () => {
   mockedUseRollBootstrap.mockReturnValue({
     data: {
       ...bootstrap,
-      blocked_count: 287,
-      blocked_threads: [
-        { id: 11, title: 'Blocked A', format: 'Comic' },
-        { id: 12, title: 'Blocked B', format: 'Comic' },
-      ],
-      inactive_count: 23,
-      inactive_threads: [{ id: 21, title: 'Inactive A', format: 'Comic' }],
+      pool_reason: 'all_blocked',
     },
     refetch: vi.fn().mockResolvedValue(bootstrap),
     isPending: false,
@@ -182,10 +172,11 @@ it('labels exclusion sections with bootstrap totals instead of preview lengths (
 
   renderRollPage()
 
-  expect(screen.getByText('287 series waiting for earlier issues')).toBeInTheDocument()
-  expect(screen.getByText('23 series out of the roll pool')).toBeInTheDocument()
+  expect(screen.queryByText('287 series waiting for earlier issues')).not.toBeInTheDocument()
+  expect(screen.queryByText('23 series out of the roll pool')).not.toBeInTheDocument()
   expect(screen.queryByText('2 series waiting for earlier issues')).not.toBeInTheDocument()
   expect(screen.queryByText('1 series out of the roll pool')).not.toBeInTheDocument()
+  expect(screen.getByLabelText(/2 in play, 2 mapped results/i)).toBeInTheDocument()
 })
 
 it('opens the retained thread action sheet from a bootstrap pool item', async () => {

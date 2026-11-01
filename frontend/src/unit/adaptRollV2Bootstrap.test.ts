@@ -7,6 +7,7 @@ import type { RollV2BootstrapResponse } from '../types/rollV2'
 const sample = {
   session_id: 17,
   user_id: 1,
+  pool_reason: 'ready',
   rollable: [{
     thread: {
       id: 101, title: 'Tagged comic', format: 'Comic',
@@ -19,33 +20,38 @@ const sample = {
     issue: { id: 404, number: '12' },
     routes: [{ kind: 'group', name: 'Reading list' }],
   }],
-  total_threads: 4,
-  available_threads: 1,
-  excluded_count: 3,
-  excluded_threads: [{ thread_id: 7, title: 'Completed', format: 'Comic', reason: 'completed' }],
-  inactive_count: 1,
-  inactive_threads: [{ thread_id: 7, title: 'Completed', format: 'Comic', reason: 'completed' }],
 // SAFETY: This intentionally partial v2 fixture covers only the adapter's
 // relevant runtime invariants; unused session fields are never inspected.
 } as RollV2BootstrapResponse
 
 describe('native v2 Roll bootstrap compatibility', () => {
-  it('retains the actual die-face tags, exact issue, route labels and inactive drilldown', () => {
+  it('retains die-face tags, exact issue and route labels without diagnostic reports', () => {
     const state = adaptRollV2Bootstrap(sample)
     expect(state.roll_pool[0].tags?.map(tag => tag.name)).toEqual(['Favorites'])
     expect(state.roll_pool[0].issue_id).toBe(404)
     expect(state.roll_pool[0].issue_number).toBe('12')
     expect(state.roll_pool[0].route_labels).toEqual(['Reading list'])
-    expect(state.inactive_count).toBe(1)
-    expect(state.inactive_threads?.[0].reason).toBe('completed')
-    expect(state.excluded_count).toBe(3)
-    expect(state.total_threads).toBe(4)
+    for (const diagnostic of ['blocked_count', 'stale_thread_count', 'inactive_count', 'excluded_count']) {
+      expect(state).not.toHaveProperty(diagnostic)
+    }
+    expect(state.pool_reason).toBe('ready')
   })
 
-  it('fails closed when the native response omits exclusion counts', () => {
-    const { inactive_count: _ignored, ...incomplete } = sample
-    // SAFETY: This intentionally malformed payload is being tested for runtime rejection.
+  it('fails closed when the native response omits rollable candidates', () => {
+    const { rollable: _ignored, ...incomplete } = sample
+    // SAFETY: deliberately incomplete fixture exercises the adapter's runtime guard.
     expect(() => adaptRollV2Bootstrap(incomplete as RollV2BootstrapResponse))
+      .toThrow('Incomplete native Roll v2 bootstrap response')
+  })
+
+  it('fails closed when the native response omits or invents an empty-pool reason', () => {
+    const { pool_reason: _ignored, ...withoutReason } = sample
+    // SAFETY: deliberately incomplete fixture exercises the adapter's runtime guard.
+    expect(() => adaptRollV2Bootstrap(withoutReason as RollV2BootstrapResponse))
+      .toThrow('Incomplete native Roll v2 bootstrap response')
+    const malformed = { ...sample, pool_reason: 'mystery' }
+    // SAFETY: deliberately malformed fixture exercises the reason allow-list.
+    expect(() => adaptRollV2Bootstrap(malformed as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 bootstrap response')
   })
 

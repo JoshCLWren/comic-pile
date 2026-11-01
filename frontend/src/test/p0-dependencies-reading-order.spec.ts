@@ -154,9 +154,19 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     await gotoRollPage(page)
     await waitForRollPageReady(page)
 
-    await expect(page.getByText(/series waiting for earlier issues/i)).toBeVisible({
-      timeout: 15000,
+    // #4441 retired the blocked Roll diagnostic section. The dependency still
+    // holds the dependent series out of the eligible pool, which is the real
+    // product behavior this test owns.
+    await expect(page.getByText(/series waiting for earlier issues/i)).toHaveCount(0)
+    const token = await getAuthToken(page)
+    const bootstrap = await page.request.get('/api/v2/roll/bootstrap', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
+    expect(bootstrap.ok(), await bootstrap.text()).toBeTruthy()
+    // SAFETY: the test reads only the rollable thread ids it asserts on
+    const roll = (await bootstrap.json()) as { rollable: Array<{ thread: { id: number } }> }
+    expect(roll.rollable.some((item) => item.thread.id === blocked.id)).toBe(false)
+    expect(roll.rollable.some((item) => item.thread.id === blocking.id)).toBe(true)
   })
 
   test('issue-level dependency is created and visible', async ({

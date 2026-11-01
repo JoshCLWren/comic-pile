@@ -292,10 +292,6 @@ describe('data hooks', () => {
       roll_pool: [],
       snoozed_threads: [],
       snoozed_count: 0,
-      blocked_count: 0,
-      blocked_threads: [],
-      stale_thread_count: 0,
-      stale_thread: null,
     }
     bootstrapApi.get.mockResolvedValue(initialData)
     const hook = renderHook(() => useRollBootstrap(), { wrapper: createWrapper() })
