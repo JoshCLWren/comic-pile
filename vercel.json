@@ -252,12 +252,12 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "/api/v2/queue-entries/:thread_id",
+      "src": "^/api/v2/queue-entries/[0-9]+$",
       "methods": ["GET"],
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "/api/v2/queue-entries/:thread_id",
+      "src": "^/api/v2/queue-entries/[0-9]+$",
       "methods": ["PATCH"],
       "dest": "/api/native_roll.rs"
     },

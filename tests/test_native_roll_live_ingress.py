@@ -38,9 +38,9 @@ AXUM_ROUTE = re.compile(
     r'\.route\(\s*"(?P<path>/[^"]+)"\s*,\s*'
     r'(?P<method>get|post|put|patch|delete)\s*\('
 )
-# Axum 0.8 spells captures ``{name}``; Vercel rewrites spell them ``:name``.
-# Normalize both parser outputs to the Vercel form so the ingress/rewrite
-# comparisons stay exact instead of silently skipping parameterized routes.
+# Axum 0.8 spells captures ``{name}``; normalize them to stable tokens
+# for comparisons. In vercel.json, routes[].src is PCRE, not a high-level
+# rewrite pattern, and MUST NOT expand ``:name`` capture-looking strings.
 
 
 def _normalized_path(path: str) -> str:
@@ -68,8 +68,8 @@ def _vercel_routes() -> list[dict[str, object]]:
 
 
 def _vercel_pattern(source: str) -> str:
-    """Translate Vercel ``:param`` captures into their regex equivalent."""
-    return VERCEL_CAPTURE.sub(r"[^/]+", source)
+    """Use the literal PCRE route source as Vercel does, without translation."""
+    return source
 
 
 def _destination(
@@ -156,6 +156,9 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
         if not isinstance(function, str) or function not in ingresses:
             continue
         source = route.get("src")
+        assert isinstance(source, str) and re.search(r"/:[A-Za-z_]", source) is None, (
+            f"Vercel routes[].src is PCRE, not high-level rewrite syntax: {source}"
+        )
         methods = route.get("methods")
         assert isinstance(source, str) and (
             source.startswith("/api/") or source.startswith("^/api/")
