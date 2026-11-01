@@ -33,6 +33,7 @@ DB_TEST_MARKER = "RUST_ROLL_TEST_DATABASE_URL"
 # free of write SQL and carry a DB-backed HTTP parity test (asserted below).
 READ_ONLY_POST_HANDLERS = {
     ("reading_boundary", "reading_boundary_batch_v2"): "test_http_reading_boundaries.py",
+    ("issue_handler", "issue_cards"): "test_http_issue_cards.py",
 }
 WRITE_SQL_RE = re.compile(
     r"\b(?:INSERT\s+INTO|UPDATE\s+[A-Za-z_][A-Za-z0-9_]*\s+SET|DELETE\s+FROM)\b",

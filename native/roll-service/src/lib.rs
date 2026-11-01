@@ -198,6 +198,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/issues/{issue_id}",
             patch(issue_handler::read_rate_issue),
         )
+        .route("/api/v2/issues/cards", post(issue_handler::issue_cards))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(

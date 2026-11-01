@@ -99,6 +99,11 @@
       "dest": "/api/native_issue.rs"
     },
     {
+      "src": "^/api/v2/issues/cards$",
+      "methods": ["POST"],
+      "dest": "/api/native_issue.rs"
+    },
+    {
       "src": "/api(?:/.*)?",
       "dest": "/api/index.py"
     },

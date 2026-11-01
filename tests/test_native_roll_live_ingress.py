@@ -172,11 +172,14 @@ def test_issue_patch_uses_numeric_public_route_and_only_its_native_entrypoint() 
     issue = "/api/native_issue.rs"
     assert _destination(routes, "PATCH", "/api/v2/issues/42") == issue
     assert _destination(routes, "PATCH", "/api/v2/issues/101") == issue
+    assert _destination(routes, "POST", "/api/v2/issues/cards") == issue
     assert _destination(routes, "GET", "/api/_native_issue/health") == issue
     for method, path in (
         ("GET", "/api/v2/issues/42"),
         ("POST", "/api/v2/issues/42"),
         ("PATCH", "/api/v2/issues/not-an-id"),
+        ("GET", "/api/v2/issues/cards"),
+        ("PATCH", "/api/v2/issues/cards"),
         ("POST", "/api/_native_issue/health"),
     ):
         assert _destination(routes, method, path) != issue, (method, path)

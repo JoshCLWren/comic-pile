@@ -4,7 +4,7 @@ use axum::{
     extract::Request,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, patch},
+    routing::{get, patch, post},
     Json, Router,
 };
 use comicpile_roll_service::{config::Config, router as issue_router, AppState};
@@ -68,6 +68,7 @@ fn app() -> Router {
     Router::new()
         .route("/api/_native_issue/health", get(native_health))
         .route("/api/v2/issues/{issue_id}", patch(native_dispatch))
+        .route("/api/v2/issues/cards", post(native_dispatch))
 }
 
 #[tokio::main]

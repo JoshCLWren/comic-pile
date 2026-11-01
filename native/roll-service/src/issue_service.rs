@@ -4,31 +4,64 @@ use crate::{auth::AuthenticatedUser, db, ApiError};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use tokio_postgres::Transaction;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Upper bound for one visible issue-card group. Keeps the set request bounded
+/// instead of degenerating into a per-card or whole-library lookup.
+pub(crate) const MAX_CARD_ISSUES: usize = 200;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IssueReadRateRequest {
+    /// Explicit new status. Omit to leave read state unchanged.
     pub status: Option<String>,
+    /// Effective issue rating in 0.5-point steps. Omit to keep the stored rating.
     pub rating: Option<f64>,
+    /// Client-generated retry key. Same key/payload replays the same receipt.
     pub idempotency_key: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 pub struct IssueCard {
+    /// Owned issue identifier.
     pub issue_id: i32,
+    /// Owning thread identifier.
     pub thread_id: i32,
+    /// Display series/run title.
+    pub thread_title: String,
+    /// Exact issue number within the run.
     pub issue_number: String,
+    /// Stored read state (``read`` or ``unread``).
     pub status: String,
+    /// UTC read timestamp, when read.
     pub read_at: Option<String>,
+    /// Effective per-issue saved rating.
     pub rating: Option<f64>,
+    /// Whether a confirmed ComicVine issue mapping exists.
     pub has_confirmed_identity: bool,
+    /// Stored mapping state (``confirmed``, ``candidate``, ...).
     pub mapping_state: String,
+    /// Confirmed provider issue identifier, never a provisional candidate.
     pub comicvine_issue_id: Option<String>,
+    /// Exact provider-supplied CDN URL. Null when unmapped; never image bytes.
     pub cover_image_url: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct IssueCardsRequest {
+    /// Visible issue identifiers requested for one bounded batch.
+    pub issue_ids: Vec<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
+pub struct IssueCardsResponse {
+    /// Owned cards in first-request order; foreign or missing IDs are omitted.
+    pub items: Vec<IssueCard>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 pub struct ThreadProgress {
     pub thread_id: i32,
     pub status: String,
@@ -38,7 +71,7 @@ pub struct ThreadProgress {
     pub last_rating: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 pub struct IssueReadRateResponse {
     pub issue: IssueCard,
     pub thread: ThreadProgress,
@@ -78,16 +111,46 @@ pub(crate) fn validate(request: &IssueReadRateRequest) -> Result<(), ApiError> {
     Ok(())
 }
 
+pub(crate) fn validate_cards(request: &IssueCardsRequest) -> Result<(), ApiError> {
+    if request.issue_ids.is_empty() || request.issue_ids.len() > MAX_CARD_ISSUES {
+        return Err(invalid("Provide 1 to 200 issue ids"));
+    }
+    if request.issue_ids.iter().any(|issue_id| *issue_id <= 0) {
+        return Err(invalid("Issue ids must be positive"));
+    }
+    Ok(())
+}
+
+fn card_from_row(row: &tokio_postgres::Row) -> IssueCard {
+    // Only a confirmed mapping may expose provider identity or a cover URL.
+    // The exact provider-supplied URL is passed through without rewriting.
+    let mapping_state: String = row.get(7);
+    let confirmed = mapping_state == "confirmed";
+    IssueCard {
+        issue_id: row.get(0),
+        thread_id: row.get(1),
+        thread_title: row.get(2),
+        issue_number: row.get(3),
+        status: row.get(4),
+        read_at: row.get(5),
+        rating: row.get(6),
+        has_confirmed_identity: confirmed,
+        mapping_state,
+        comicvine_issue_id: if confirmed { row.get(8) } else { None },
+        cover_image_url: if confirmed { row.get(9) } else { None },
+    }
+}
+
 async fn card(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
     issue_id: i32,
 ) -> Result<IssueCard, ApiError> {
-    // This is a single owned-card projection. The confirmed provider URL is
-    // passed through exactly, without download, rewriting or image processing.
+    // This is the mutated single owned card; the batch path below uses the
+    // same fields and mapping precedence for every visible issue group.
     let row = tx
         .query_one(
-            "SELECT i.id, i.thread_id, i.issue_number, i.status,
+            "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status,
                 to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
                 (SELECT e.rating FROM events e WHERE e.user_id=$2 AND e.issue_id=i.id
                     AND e.type='rate' AND e.rating IS NOT NULL
@@ -109,8 +172,10 @@ async fn card(
              FROM issue_external_identity_mappings m
              JOIN external_identities x ON x.id=m.external_identity_id
              WHERE m.issue_id=i.id AND x.entity_type='issue'
+               AND m.status<>'rejected'
                AND lower(x.provider) IN ('comicvine', 'comic_vine')
-             ORDER BY (m.status='confirmed') DESC, m.updated_at DESC, m.id DESC
+             ORDER BY (m.status='confirmed') DESC, m.confidence DESC NULLS LAST,
+                      m.updated_at DESC, m.id DESC
              LIMIT 1
          ) mapping ON true
          WHERE i.id=$1 AND t.user_id=$2",
@@ -118,19 +183,68 @@ async fn card(
         )
         .await
         .map_err(db::query_error)?;
-    let mapping_state: String = row.get(6);
-    let confirmed = mapping_state == "confirmed";
-    Ok(IssueCard {
-        issue_id: row.get(0),
-        thread_id: row.get(1),
-        issue_number: row.get(2),
-        status: row.get(3),
-        read_at: row.get(4),
-        rating: row.get(5),
-        has_confirmed_identity: confirmed,
-        mapping_state,
-        comicvine_issue_id: if confirmed { row.get(7) } else { None },
-        cover_image_url: if confirmed { row.get(8) } else { None },
+    Ok(card_from_row(&row))
+}
+
+/// Bounded owner-scoped batch card projection for one visible issue group.
+/// One set-based query resolves read state, rating, mapping state and the exact
+/// stored provider CDN URL. No per-card round trip or provider metadata call.
+pub(crate) async fn cards(
+    connection: &tokio_postgres::Client,
+    user: AuthenticatedUser,
+    issue_ids: &[i32],
+) -> Result<IssueCardsResponse, ApiError> {
+    let mut requested: Vec<i32> = Vec::new();
+    for issue_id in issue_ids {
+        if !requested.contains(issue_id) {
+            requested.push(*issue_id);
+        }
+    }
+    let rows = connection
+        .query(
+            "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status,
+                to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
+                (SELECT e.rating FROM events e WHERE e.user_id=$1 AND e.issue_id=i.id
+                    AND e.type='rate' AND e.rating IS NOT NULL
+                    ORDER BY e.timestamp DESC, e.id DESC LIMIT 1),
+                COALESCE(mapping.status, 'unmapped'), mapping.external_id,
+                mapping.cover_url
+         FROM issues i
+         JOIN threads t ON t.id=i.thread_id
+         LEFT JOIN LATERAL (
+             SELECT m.status, x.external_id,
+                 CASE WHEN m.status='confirmed' THEN
+                     COALESCE(
+                         NULLIF(x.metadata_json#>>'{image,medium_url}', ''),
+                         NULLIF(x.metadata_json#>>'{image,original_url}', ''),
+                         NULLIF(x.metadata_json->>'cover_image_url', ''),
+                         NULLIF(x.metadata_json->>'image_url', '')
+                     )
+                 ELSE NULL END AS cover_url
+             FROM issue_external_identity_mappings m
+             JOIN external_identities x ON x.id=m.external_identity_id
+             WHERE m.issue_id=i.id AND x.entity_type='issue'
+               AND m.status<>'rejected'
+               AND lower(x.provider) IN ('comicvine', 'comic_vine')
+             ORDER BY (m.status='confirmed') DESC, m.confidence DESC NULLS LAST,
+                      m.updated_at DESC, m.id DESC
+             LIMIT 1
+         ) mapping ON true
+         WHERE t.user_id=$1 AND i.id=ANY($2::int[])",
+            &[&user.id(), &requested],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut by_id: HashMap<i32, IssueCard> = HashMap::with_capacity(rows.len());
+    for row in &rows {
+        let card = card_from_row(row);
+        by_id.insert(card.issue_id, card);
+    }
+    Ok(IssueCardsResponse {
+        items: requested
+            .into_iter()
+            .filter_map(|issue_id| by_id.remove(&issue_id))
+            .collect(),
     })
 }
 
@@ -373,12 +487,88 @@ pub(crate) async fn persist(
     )
     .await
     .map_err(db::query_error)?;
+    // Q17: retire the pending Roll selection only when this exact issue was the
+    // selected one. Reading a different manual issue must leave the offer alone.
+    tx.execute(
+        "UPDATE sessions SET pending_thread_id=NULL, pending_issue_id=NULL,
+             pending_thread_updated_at=NULL
+         WHERE user_id=$1 AND pending_issue_id=$2 AND ended_at IS NULL",
+        &[&user.id(), &issue_id],
+    )
+    .await
+    .map_err(db::query_error)?;
     Ok(result)
 }
+
+/// Generated OpenAPI document for the direct issue resource.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(issue_read_rate_documentation, issue_cards_documentation),
+    components(schemas(
+        IssueReadRateRequest,
+        IssueReadRateResponse,
+        IssueCardsRequest,
+        IssueCardsResponse,
+        IssueCard,
+        ThreadProgress
+    )),
+    modifiers(&IssueSecurityAddon)
+)]
+pub struct IssueApi;
+
+struct IssueSecurityAddon;
+impl utoipa::Modify for IssueSecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "HTTPBearer",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
+        }
+    }
+}
+
+/// Documentation-only operation used to emit the generated PATCH contract.
+#[utoipa::path(
+    patch,
+    path = "/api/v2/issues/{issue_id}",
+    tag = "issues",
+    params(("issue_id" = i32, Path, description = "Exact owned issue identifier")),
+    request_body = IssueReadRateRequest,
+    responses(
+        (status = 200, description = "Reconciled issue and thread state", body = IssueReadRateResponse),
+        (status = 404, description = "Issue not found for this reader"),
+        (status = 409, description = "Idempotency key reused for a different action"),
+        (status = 422, description = "Invalid status, rating or idempotency key")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+fn issue_read_rate_documentation() {}
+
+/// Documentation-only operation used to emit the generated batch card contract.
+#[utoipa::path(
+    post,
+    path = "/api/v2/issues/cards",
+    tag = "issues",
+    request_body = IssueCardsRequest,
+    responses(
+        (status = 200, description = "Owner-scoped cards in request order", body = IssueCardsResponse),
+        (status = 422, description = "Invalid or unbounded issue id list")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+fn issue_cards_documentation() {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use utoipa::OpenApi;
 
     fn request(status: Option<&str>, rating: Option<f64>) -> IssueReadRateRequest {
         IssueReadRateRequest {
@@ -403,6 +593,16 @@ mod tests {
         let mut bad = request(Some("read"), None);
         bad.idempotency_key = "short".into();
         assert!(validate(&bad).is_err());
+        assert!(validate_cards(&IssueCardsRequest {
+            issue_ids: vec![1, 2]
+        })
+        .is_ok());
+        assert!(validate_cards(&IssueCardsRequest { issue_ids: vec![] }).is_err());
+        assert!(validate_cards(&IssueCardsRequest {
+            issue_ids: vec![1; MAX_CARD_ISSUES + 1]
+        })
+        .is_err());
+        assert!(validate_cards(&IssueCardsRequest { issue_ids: vec![0] }).is_err());
     }
     async fn scoped_client(url: &str, schema: &str) -> tokio_postgres::Client {
         let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls)
@@ -439,6 +639,7 @@ mod tests {
                 "CREATE SCHEMA {schema};
                  CREATE TABLE {schema}.threads (
                      id integer PRIMARY KEY, user_id integer NOT NULL,
+                     title text NOT NULL,
                      status text NOT NULL, issues_remaining integer NOT NULL,
                      next_unread_issue_id integer, reading_progress text,
                      last_rating double precision, queue_position integer NOT NULL,
@@ -463,21 +664,24 @@ mod tests {
                  CREATE TABLE {schema}.issue_external_identity_mappings (
                      id integer PRIMARY KEY, issue_id integer,
                      external_identity_id integer, status text,
+                     confidence double precision,
                      updated_at timestamptz DEFAULT NOW()
                  );
                  CREATE TABLE {schema}.sessions (
                      id integer PRIMARY KEY, user_id integer,
-                     pending_issue_id integer, manual_die integer
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz,
+                     manual_die integer, ended_at timestamptz
                  );
                  INSERT INTO {schema}.threads VALUES
-                     (10,1,'excluded',3,101,'in_progress',4.0,0,true,NULL),
-                     (20,2,'active',1,201,'in_progress',NULL,1,false,NULL);
+                     (10,1,'Excluded run','excluded',3,101,'in_progress',4.0,0,true,NULL),
+                     (20,2,'Private run','active',1,201,'in_progress',NULL,1,false,NULL);
                  INSERT INTO {schema}.issues VALUES
                      (101,10,'1','unread',1,NULL),
                      (102,10,'2','unread',2,NULL),
                      (110,10,'10','unread',10,NULL),
                      (201,20,'1','unread',1,NULL);
-                 INSERT INTO {schema}.sessions VALUES (1,1,101,12);
+                 INSERT INTO {schema}.sessions VALUES (1,1,10,101,NULL,12,NULL);
                  INSERT INTO {schema}.external_identities VALUES
                      (50,'comicvine','issue','4000-42',
                       '{{\"image\":{{\"medium_url\":\"https://comicvine.example/covers/issue10.jpg\"}}}}'::json);
@@ -598,9 +802,82 @@ mod tests {
         assert_eq!(unmapped.issue.mapping_state, "unmapped");
         assert_eq!(unmapped.issue.cover_image_url, None);
         assert_eq!(unmapped.thread.next_unread_issue_id, Some(102));
+        // Reading the exact pending issue retires that offer (Q17); the earlier
+        // different manual read above left it untouched.
+        let cleared = first
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id FROM sessions WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            cleared.get::<_, Option<i32>>(0),
+            None,
+            "pending thread must clear with its selected issue"
+        );
+        assert_eq!(cleared.get::<_, Option<i32>>(1), None);
+
+        let bounded = cards(&first, user, &[110, 999_999, 110, 201, 101])
+            .await
+            .unwrap();
+        assert_eq!(
+            bounded
+                .items
+                .iter()
+                .map(|card| card.issue_id)
+                .collect::<Vec<_>>(),
+            vec![110, 101]
+        );
+        assert_eq!(bounded.items[0].thread_title, "Excluded run");
+        assert_eq!(bounded.items[0].rating, Some(3.5));
+        assert_eq!(bounded.items[0].mapping_state, "confirmed");
+        assert_eq!(
+            bounded.items[0].cover_image_url.as_deref(),
+            Some("https://comicvine.example/covers/issue10.jpg")
+        );
+        assert_eq!(bounded.items[1].mapping_state, "unmapped");
+        assert_eq!(bounded.items[1].cover_image_url, None);
+
         admin
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
             .await
             .unwrap();
+    }
+
+    #[test]
+    fn checked_in_openapi_contract_is_current() {
+        let generated = IssueApi::openapi()
+            .to_pretty_json()
+            .expect("serializable OpenAPI document");
+        let checked_in = include_str!("../../../native/contracts/issue-v2.openapi.json");
+        assert_eq!(
+            checked_in.trim_end(),
+            generated.trim_end(),
+            "Regenerate native/contracts/issue-v2.openapi.json with \
+             cargo run --example issue_openapi"
+        );
+    }
+
+    #[test]
+    fn generated_openapi_declares_both_owner_scoped_issue_operations() {
+        let document =
+            serde_json::to_value(IssueApi::openapi()).expect("serializable OpenAPI document");
+        let patch = &document["paths"]["/api/v2/issues/{issue_id}"]["patch"];
+        assert_eq!(patch["security"][0]["HTTPBearer"], serde_json::json!([]));
+        assert_eq!(
+            patch["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            serde_json::json!("#/components/schemas/IssueReadRateRequest")
+        );
+        let cards = &document["paths"]["/api/v2/issues/cards"]["post"];
+        assert_eq!(cards["security"][0]["HTTPBearer"], serde_json::json!([]));
+        assert_eq!(
+            cards["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            serde_json::json!("#/components/schemas/IssueCardsRequest")
+        );
+        assert_eq!(
+            document["components"]["securitySchemes"]["HTTPBearer"]["scheme"],
+            serde_json::json!("bearer")
+        );
     }
 }

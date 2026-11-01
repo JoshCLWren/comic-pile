@@ -4,7 +4,9 @@ use crate::{
     auth::AuthenticatedUser,
     db,
     dice_api::Pending,
-    issue_service::{self, IssueReadRateRequest, IssueReadRateResponse},
+    issue_service::{
+        self, IssueCardsRequest, IssueCardsResponse, IssueReadRateRequest, IssueReadRateResponse,
+    },
     ApiError, AppState,
 };
 use axum::{
@@ -37,6 +39,19 @@ pub async fn read_rate_issue(
     };
     pending.release();
     Ok(Json(result))
+}
+
+/// Return one bounded owner-scoped card projection for the visible issue group.
+pub async fn issue_cards(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<IssueCardsRequest>,
+) -> Result<Json<IssueCardsResponse>, ApiError> {
+    issue_service::validate_cards(&request)?;
+    let connection = db::checkout(&state).await?;
+    Ok(Json(
+        issue_service::cards(&connection, user, &request.issue_ids).await?,
+    ))
 }
 
 #[cfg(test)]
