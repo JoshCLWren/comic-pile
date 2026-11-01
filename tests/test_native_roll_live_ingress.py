@@ -1,8 +1,9 @@
 """Prevent 'Rust code merged but real HTTP requests still use Python' cutovers.
 
-The native Roll service's Axum routes are not automatically exposed by Vercel.
-A production method/path needs BOTH an outer api/native_roll.rs route and a
-method-matched vercel.json rewrite ahead of the Python catch-all.
+The shared native Rust service's Axum routes are not automatically exposed by
+Vercel. A production method/path needs BOTH a registration in the appropriate
+isolated native entrypoint and a method-matched vercel.json rewrite ahead of
+the Python catch-all.
 
 The two Skip handlers were already staged in the shared Rust library without
 native ingress before this guard was added. Keep them explicitly allowlisted
@@ -17,9 +18,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUST_SERVICE = ROOT / "native/roll-service/src/lib.rs"
-RUST_INGRESS = ROOT / "api/native_roll.rs"
 VERCEL_CONFIG = ROOT / "vercel.json"
-NATIVE_FUNCTION = "/api/native_roll.rs"
+NATIVE_INGRESSES = {
+    "/api/native_roll.rs": ROOT / "api/native_roll.rs",
+    "/api/native_issue.rs": ROOT / "api/native_issue.rs",
+}
+AXUM_CAPTURE = re.compile(r"\{[A-Za-z_][A-Za-z_0-9]*\}")
 
 # Rust-only handlers already present on main, but NOT yet publicly cut over.
 # A new endpoint must not be added here as a shortcut around live verification.
@@ -73,64 +77,106 @@ def _destination(
     return None
 
 
-def _production_routes() -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+def _concrete_path(path: str) -> str:
+    """Use a numeric owned Issue ID when checking parameterized Axum routes."""
+    concrete = AXUM_CAPTURE.sub("42", path)
+    assert "{" not in concrete and "}" not in concrete, path
+    return concrete
+
+
+def _production_routes() -> tuple[
+    set[tuple[str, str]], dict[str, set[tuple[str, str]]]
+]:
     service = _axum_routes(
         RUST_SERVICE.read_text(encoding="utf-8"),
         start="pub fn router(",
         end="#[cfg(test)]",
     )
-    ingress = _axum_routes(
-        RUST_INGRESS.read_text(encoding="utf-8"),
-        start="fn app() -> Router",
-        end="#[tokio::main]",
-    )
-    return service, ingress
+    ingresses = {
+        function: _axum_routes(
+            source.read_text(encoding="utf-8"),
+            start="fn app() -> Router",
+            end="#[tokio::main]",
+        )
+        for function, source in NATIVE_INGRESSES.items()
+    }
+    return service, ingresses
 
 
 def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
-    """A Rust service handler without a rewrite is NOT a completed cutover."""
-    service, ingress = _production_routes()
+    """Every service route requires an exposed method and an exact native target."""
+    service, ingresses = _production_routes()
     vercel = _vercel_routes()
     public_service = {route for route in service if route[1].startswith("/api/")}
     assert any(path.endswith("/roll/bootstrap") for _, path in public_service)
 
     for method, path in sorted(public_service - STAGED_RUST_ROUTES):
-        assert (method, path) in ingress, (
-            f"{method} {path} exists in Rust service but api/native_roll.rs "
-            "does not expose it"
+        owners = [
+            function
+            for function, routes in ingresses.items()
+            if (method, path) in routes
+        ]
+        assert len(owners) == 1, (
+            f"{method} {path} must have exactly one native Rust ingress; "
+            f"found {owners!r}"
         )
-        actual = _destination(vercel, method, path)
-        assert actual == NATIVE_FUNCTION, (
-            f"{method} {path} exists in Rust but real production ingress "
-            f"still routes to {actual!r}, not {NATIVE_FUNCTION}"
+        actual = _destination(vercel, method, _concrete_path(path))
+        assert actual == owners[0], (
+            f"{method} {path} exists in the Rust service, but Vercel sends "
+            f"its real URL to {actual!r}, not {owners[0]!r}"
         )
 
     for method, path in sorted(public_service & STAGED_RUST_ROUTES):
-        assert _destination(vercel, method, path) != NATIVE_FUNCTION, (
+        assert _destination(vercel, method, _concrete_path(path)) not in NATIVE_INGRESSES, (
             f"{method} {path} is now routed to Rust: remove its explicit "
             "STAGED_RUST_ROUTES exception and verify its cutover"
         )
 
 
 def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
-    """An ingress rewrite alone cannot prove the Rust app accepts the request."""
-    service, ingress = _production_routes()
+    """Both native entrypoints must register the method and path sent by Vercel."""
+    service, ingresses = _production_routes()
     for route in _vercel_routes():
-        if route.get("dest") != NATIVE_FUNCTION:
+        function = route.get("dest")
+        if not isinstance(function, str) or function not in ingresses:
             continue
         source = route.get("src")
         methods = route.get("methods")
-        assert isinstance(source, str) and source.startswith("/api/")
+        assert isinstance(source, str) and (
+            source.startswith("/api/") or source.startswith("^/api/")
+        )
         assert isinstance(methods, list) and methods, (
             f"Native rewrite {source} must specify its allowed HTTP methods"
         )
         for method in methods:
-            assert (method, source) in ingress, (
-                f"Vercel sends {method} {source} to Rust, "
-                "but api/native_roll.rs does not register that operation"
+            matching_ingress = {
+                (registered_method, path)
+                for registered_method, path in ingresses[function]
+                if registered_method == method
+                and re.fullmatch(source, _concrete_path(path))
+            }
+            assert len(matching_ingress) == 1, (
+                f"Vercel sends {method} {source} to {function}, "
+                f"but that entrypoint has {len(matching_ingress)} matching routes"
             )
-            if not source.startswith("/api/_native_roll/"):
-                assert (method, source) in service, (
-                    f"Vercel sends {method} {source} to Rust, "
-                    "but the native Roll service does not register it"
+            if "/api/_native_" not in source:
+                assert matching_ingress <= service, (
+                    f"Vercel sends {method} {source} to {function}, "
+                    "but the shared native Rust service does not register it"
                 )
+
+
+def test_issue_patch_uses_numeric_public_route_and_only_its_native_entrypoint() -> None:
+    """Wrong methods, missing IDs, and probe routes must not invoke the Issue writer."""
+    routes = _vercel_routes()
+    issue = "/api/native_issue.rs"
+    assert _destination(routes, "PATCH", "/api/v2/issues/42") == issue
+    assert _destination(routes, "PATCH", "/api/v2/issues/101") == issue
+    assert _destination(routes, "GET", "/api/_native_issue/health") == issue
+    for method, path in (
+        ("GET", "/api/v2/issues/42"),
+        ("POST", "/api/v2/issues/42"),
+        ("PATCH", "/api/v2/issues/not-an-id"),
+        ("POST", "/api/_native_issue/health"),
+    ):
+        assert _destination(routes, method, path) != issue, (method, path)
