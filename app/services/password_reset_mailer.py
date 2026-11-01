@@ -314,7 +314,8 @@ def get_password_reset_mailer() -> PasswordResetMailer:
     # the invoking factory's shell. Explicit test doubles remain supported.
     if _mailer_override is not None:
         return _mailer_override
-    if os.environ.get("TEST_ENVIRONMENT", "").lower() in {"true", "1", "yes"} or os.environ.get("ENVIRONMENT", "").lower() == "test":
+    is_test_run = os.environ.get("TEST_ENVIRONMENT", "").lower() in {"true", "1", "yes"}
+    if is_test_run or os.environ.get("ENVIRONMENT", "").lower() == "test":
         return get_fake_mailer()
 
     settings = get_email_settings()
