@@ -75,7 +75,9 @@ const mockedCommit = vi.mocked(seriesMappingApi.commit)
 
 function createWrapper() {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    // Retry is asserted per-mutation; keep the delays synchronous so a
+    // deliberately indeterminate outcome does not stall the test suite.
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false, retryDelay: 0 } },
   })
   return function Wrapper({ children }: PropsWithChildren) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -139,7 +141,7 @@ function previewResponse(
 }
 
 const COMMIT_SUCCESS: SeriesMappingCommitResponse = {
-  idempotency_key: 'queue-mapping-7-1-1700000000',
+  idempotency_key: 'queue-mapping-7-1-20764-1700000000',
   confirmed_issue_ids: [2],
   already_confirmed_issue_ids: [],
   needs_review_issue_ids: [3],
@@ -348,6 +350,7 @@ describe('QueueMapSeriesDialog', () => {
     )
     // The reported bug: the approval button read "Map 0 issues" for a matching miniseries.
     expect(screen.getByTestId('queue-map-series-approve')).toHaveTextContent('Map 5 issues')
+    expect(screen.getByTestId('queue-map-series-approve')).toHaveClass('text-[var(--theme-primary-action-text)]')
     expect(screen.queryByTestId('queue-map-series-provider-inventory')).not.toBeInTheDocument()
   })
 
@@ -361,7 +364,7 @@ describe('QueueMapSeriesDialog', () => {
     await waitFor(() => expect(mockedCommit).toHaveBeenCalledTimes(1))
     expect(mockedCommit).toHaveBeenCalledWith({
       preview_token: 'preview-tok',
-      idempotency_key: 'queue-mapping-7-1-1700000000',
+      idempotency_key: 'queue-mapping-7-1-20764-1700000000',
       approved_row_ids: ['issue:2'],
     })
     expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
@@ -407,6 +410,7 @@ describe('QueueMapSeriesDialog', () => {
 
     expect(await screen.findByText('The mapping plan could not be loaded. Nothing was changed.')).toBeInTheDocument()
     expect(screen.getByTestId('queue-map-series-retry')).toHaveTextContent('Try again')
+    expect(screen.getByTestId('queue-map-series-retry')).toHaveClass('text-[var(--theme-primary-action-text)]')
     await user.click(screen.getByTestId('queue-map-series-dismiss'))
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(mockedCommit).not.toHaveBeenCalled()
@@ -628,6 +632,44 @@ describe('QueueMapSeriesDialog', () => {
     expect(mockedPreview).toHaveBeenCalledTimes(2)
   })
 
+  it('approves a second volume with its own idempotency key', async () => {
+    // Greptile #4126 finding 3: after approving one volume for a series, the
+    // reader must be able to return and approve a different volume instead of
+    // replaying the first approval.
+    const user = userEvent.setup()
+    mockedSearchSeries.mockImplementation((query: string) =>
+      Promise.resolve(
+        query === 'Saga Two'
+          ? searchResponse([VOLUME_2], { query })
+          : searchResponse([VOLUME], { query }),
+      ),
+    )
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+    await waitFor(() => expect(mockedCommit).toHaveBeenCalledTimes(1))
+    expect(mockedCommit.mock.calls[0][0]).toMatchObject({
+      idempotency_key: 'queue-mapping-7-1-20764-1700000000',
+    })
+
+    await user.click(screen.getByTestId('queue-map-series-back'))
+    const search = screen.getByTestId('queue-map-series-search-input')
+    await user.clear(search)
+    await user.type(search, 'Saga Two')
+
+    await user.click(await screen.findByRole('button', { name: /Saga \(Book Two\)/ }))
+    // The first successful commit must not hide approval or leave its success
+    // notice attached to the second ComicVine volume.
+    expect(await screen.findByTestId('queue-map-series-approve')).toBeEnabled()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    await user.click(screen.getByTestId('queue-map-series-approve'))
+    await waitFor(() => expect(mockedCommit).toHaveBeenCalledTimes(2))
+    expect(mockedCommit.mock.calls[1][0]).toMatchObject({
+      idempotency_key: 'queue-mapping-7-1-31111-1700000000',
+    })
+  })
+
   it('unchecks and rechecks safe rows, updating the approval count', async () => {
     const user = userEvent.setup()
     mockedPreview.mockResolvedValueOnce(
@@ -714,10 +756,42 @@ describe('QueueMapSeriesDialog', () => {
     expect(invalidateQueueSpy).not.toHaveBeenCalled()
   })
 
+  it('retries a lost commit response and accepts the replayed success', async () => {
+    // Issue #3776 / Greptile #4126: a lost response may hide an already-committed
+    // mapping. The idempotency key makes a replay safe, so the reader should not
+    // be told to map again when the retry can confirm the result.
+    const user = userEvent.setup()
+    mockedCommit
+      .mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { status: 504, data: {} },
+        message: 'Gateway Timeout',
+      })
+      .mockResolvedValueOnce(COMMIT_SUCCESS)
+    const { onMapped } = renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
+    expect(mockedCommit).toHaveBeenCalledTimes(2)
+    // A gateway timeout may occur after the server has committed. Replay the
+    // complete request unchanged, especially its preview and idempotency key.
+    expect(mockedCommit.mock.calls[0][0]).toEqual({
+      preview_token: 'preview-tok',
+      idempotency_key: 'queue-mapping-7-1-20764-1700000000',
+      approved_row_ids: ['issue:2'],
+    })
+    expect(mockedCommit.mock.calls[1][0]).toEqual(mockedCommit.mock.calls[0][0])
+    expect(onMapped).toHaveBeenCalledWith([2])
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('does not claim nothing changed when the commit outcome is unknown', async () => {
     // Issue #3776: a lost 5xx response may hide an already-committed mapping.
+    // Every retry fails too, so the dialog must surface the unknown outcome.
     const user = userEvent.setup()
-    mockedCommit.mockRejectedValueOnce({
+    mockedCommit.mockRejectedValue({
       isAxiosError: true,
       response: { status: 504, data: {} },
       message: 'Gateway Timeout',
@@ -730,8 +804,22 @@ describe('QueueMapSeriesDialog', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Could not confirm the mapping result. Any saved mappings are safe; map again to replay the request.',
     )
+    expect(mockedCommit).toHaveBeenCalledTimes(4)
+    // Three automatic replays exhaust the retry budget; a subsequent manual
+    // approval must still use the original key to confirm an unknown save.
+    const originalRequest = mockedCommit.mock.calls[0][0]
+    for (const [request] of mockedCommit.mock.calls) {
+      expect(request).toEqual(originalRequest)
+    }
     expect(onMapped).not.toHaveBeenCalled()
     expect(invalidateQueueSpy).not.toHaveBeenCalled()
+
+    mockedCommit.mockResolvedValueOnce(COMMIT_SUCCESS)
+    await user.click(screen.getByTestId('queue-map-series-approve'))
+    expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
+    expect(mockedCommit).toHaveBeenCalledTimes(5)
+    expect(mockedCommit.mock.calls[4][0]).toEqual(originalRequest)
+    expect(onMapped).toHaveBeenCalledWith([2])
   })
 
   it('re-reads the plan when the commit reports a stale preview', async () => {
@@ -745,6 +833,9 @@ describe('QueueMapSeriesDialog', () => {
     await user.click(await screen.findByTestId('queue-map-series-approve'))
 
     await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(2))
+    // A 409 is a definitive refusal, not an indeterminate outcome: the commit
+    // must not be replayed against a preview the server already rejected.
+    expect(mockedCommit).toHaveBeenCalledTimes(1)
     expect(onMapped).not.toHaveBeenCalled()
     expect(invalidateQueueSpy).not.toHaveBeenCalled()
   })
@@ -996,9 +1087,10 @@ describe('QueueMapSeriesDialog', () => {
 
     it('reports an unconfirmed commit outcome for review instead of a failure', async () => {
       // A lost response may hide an already-committed mapping (issue #3776), so
-      // the bulk run must not report the series as a failed save.
+      // the bulk run must not report the series as a failed save. Every retry
+      // fails too, so the unknown outcome reaches the review path.
       const user = userEvent.setup()
-      mockedCommit.mockRejectedValueOnce({
+      mockedCommit.mockRejectedValue({
         isAxiosError: true,
         response: { status: 504, data: {} },
         message: 'Gateway Timeout',
