@@ -6,8 +6,9 @@ use crate::{
     ApiError, AppState,
 };
 use axum::{
-    extract::{Json as AxumJson, State},
+    extract::{Json as AxumJson, Path, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
     Json,
 };
 use deadpool_postgres::Object;
@@ -776,6 +777,46 @@ fn build_eligibility_snapshot(
     })
 }
 
+/// Use the published FastAPI v2 path-validation status and detail for non-integer IDs.
+fn parse_single_thread_id(raw: &str) -> Result<i32, Response> {
+    raw.parse::<i32>().map_err(|_| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({
+                "detail": [{
+                    "type": "int_parsing",
+                    "loc": ["path", "thread_id"],
+                    "msg": "Input should be a valid integer, unable to parse string as an integer",
+                    "input": raw
+                }]
+            })),
+        )
+            .into_response()
+    })
+}
+
+/// Serve the already-published single-thread v2 resource using the canonical
+/// Rust batch evaluator, without a second eligibility model or historical fields.
+pub async fn reading_boundary_single_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(raw_thread_id): Path<String>,
+) -> Result<Json<ReadingBoundaryExplanationV2>, Response> {
+    let thread_id = parse_single_thread_id(&raw_thread_id)?;
+    let mut explanations = get_reading_boundary_explanations(&state, user, vec![thread_id])
+        .await
+        .map_err(|error| error.into_response())?
+        .threads;
+    let explanation = explanations.remove(&thread_id).ok_or_else(|| {
+        ApiError(
+            StatusCode::NOT_FOUND,
+            format!("Thread {thread_id} not found"),
+        )
+        .into_response()
+    })?;
+    Ok(Json(explanation))
+}
+
 pub async fn reading_boundary_batch_v2(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -803,6 +844,56 @@ mod tests {
         let oversized = vec![1; MAX_BATCH_THREAD_IDS + 1];
         let rejected = validate_thread_ids(&oversized).expect_err("oversized batch is rejected");
         assert_eq!(rejected.0, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn single_thread_id_validation_preserves_v2_error_shape() {
+        assert_eq!(parse_single_thread_id("123").unwrap(), 123);
+        let response = parse_single_thread_id("not-a-number")
+            .expect_err("non-integer paths must be rejected by the Rust handler");
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn single_resource_serializes_direct_v2_explanation_not_batch_or_history() {
+        let explanation = ReadingBoundaryExplanationV2 {
+            thread_id: 7,
+            state: "ready".to_string(),
+            summary: "Ready to read".to_string(),
+            next: None,
+            blockers: vec![],
+        };
+        let json = serde_json::to_value(explanation).unwrap();
+        assert_eq!(json["thread_id"], 7);
+        assert_eq!(json["state"], "ready");
+        assert!(json["blockers"].is_array());
+        assert!(json.get("historical").is_none());
+        assert!(json.get("threads").is_none());
+    }
+
+    #[tokio::test]
+    async fn single_resource_requires_authentication_before_database() {
+        use crate::{config::Config, router};
+        use axum::{body::Body, http::Request};
+        use tower::ServiceExt;
+
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let app = router(Arc::new(AppState::new(config).unwrap()));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v2/reading-boundaries/7")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]

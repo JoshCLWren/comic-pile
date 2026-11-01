@@ -182,6 +182,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-boundaries",
             post(reading_boundary::reading_boundary_batch_v2),
         )
+        .route(
+            "/api/v2/reading-boundaries/{thread_id}",
+            get(reading_boundary::reading_boundary_single_v2),
+        )
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
         .route(

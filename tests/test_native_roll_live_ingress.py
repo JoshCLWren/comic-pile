@@ -112,6 +112,11 @@ def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
         )
 
 
+def _vercel_source_for_axum_path(path: str) -> str:
+    """Match Axum path parameters to Vercel single-segment regex captures."""
+    return re.sub(r"\{[A-Za-z_][A-Za-z0-9_]*\}", "([^/]+)", path)
+
+
 def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
     """An ingress rewrite alone cannot prove the Rust app accepts the request."""
     service, ingress = _production_routes()
@@ -125,12 +130,18 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
             f"Native rewrite {source} must specify its allowed HTTP methods"
         )
         for method in methods:
-            assert (method, source) in ingress, (
+            assert (method, source) in {
+                (registered_method, _vercel_source_for_axum_path(path))
+                for registered_method, path in ingress
+            }, (
                 f"Vercel sends {method} {source} to Rust, "
                 "but api/native_roll.rs does not register that operation"
             )
             if not source.startswith("/api/_native_roll/"):
-                assert (method, source) in service, (
+                assert (method, source) in {
+                    (registered_method, _vercel_source_for_axum_path(path))
+                    for registered_method, path in service
+                }, (
                     f"Vercel sends {method} {source} to Rust, "
                     "but the native Roll service does not register it"
                 )
