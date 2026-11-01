@@ -1,78 +1,63 @@
-//! Issue read/rate endpoint handler.
-
+//! Native, authenticated PATCH /api/v2/issues/{issue_id}.
+//! Manual completion validates ownership, not Option E eligibility.
 use crate::{
-    auth::{authenticate, AuthenticatedUser},
-    config::Config,
-    db::DbPool,
-    error::ServiceError,
-    issue_service::{IssueReadRateRequest, IssueReadRateResponse, IssueService},
-    AppState,
+    auth::AuthenticatedUser,
+    db,
+    dice_api::Pending,
+    issue_service::{self, IssueReadRateRequest, IssueReadRateResponse},
+    ApiError, AppState,
 };
-use axum::{
-    extract::{Path, State},
-    http::{HeaderMap, StatusCode},
-    response::Json,
-};
-use serde::Deserialize;
+use axum::{extract::{Path, State}, Json};
 use std::sync::Arc;
+use tokio_postgres::IsolationLevel;
 
-/// Request body for issue read/rate operation.
-#[derive(Debug, Deserialize)]
-pub struct IssueReadRateRequestWrapper {
-    pub status: Option<String>,
-    pub rating: Option<f64>,
-}
-
-/// Handle PATCH /api/v2/issues/{issue_id} for direct issue reading and rating.
-///
-/// This endpoint implements:
-/// - Real, authenticated, owner-scoped, idempotent direct-issue reading command
-/// - Takes exact owned issue ID and rating (0.5-5, step 0.5, default 3.5 when user leaves slider unchanged)
-/// - Validates identity, not Option E eligibility
-/// - Atomically persists issue read status + rating/activity event/history
-/// - Updates thread's earliest genuinely unread frontier/remaining/complete status
-/// - Returns reconciled issue/thread/rating data for the UI
-/// - Never silently mark preceding issues read or satisfy uncompleted prerequisites
-/// - Same issue read again avoids duplicate read events, allows rating correction
-/// - Rating correction is not an unread operation
+/// Commit status, rating, history and frontier atomically.
 pub async fn read_rate_issue(
     State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
-    headers: HeaderMap,
-    Json(request): Json<IssueReadRateRequestWrapper>,
-) -> Result<Json<IssueReadRateResponse>, ServiceError> {
-    // Extract authorization header and authenticate user
-    let auth_header = headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| ServiceError::Unauthorized("Missing authorization header"))?;
-
-    let token = auth_header
-        .split_once(' ')
-        .and_then(|(scheme, token)| {
-            if scheme.eq_ignore_ascii_case("bearer") {
-                Some(token)
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| ServiceError::Unauthorized("Invalid authorization header format"))?;
-
-    let authenticated_user = authenticate(&state, token).await?;
-
-    // Create the issue service
-    let issue_service = IssueService::new(state.pool.clone(), Arc::new(Config::from_vercel_env()?));
-
-    // Convert the request to the internal format
-    let internal_request = IssueReadRateRequest {
-        status: request.status,
-        rating: request.rating,
+    Json(request): Json<IssueReadRateRequest>,
+) -> Result<Json<IssueReadRateResponse>, ApiError> {
+    issue_service::validate(&request)?;
+    let mut pending = Pending::new(db::checkout(&state).await?);
+    let result = {
+        let tx = pending.connection()
+            .build_transaction()
+            .isolation_level(IsolationLevel::ReadCommitted)
+            .start()
+            .await
+            .map_err(db::query_error)?;
+        let receipt = issue_service::persist(&tx, user, issue_id, &request).await?;
+        tx.commit().await.map_err(db::query_error)?;
+        receipt
     };
+    pending.release();
+    Ok(Json(result))
+}
 
-    // Process the read/rate operation
-    let response = issue_service
-        .read_rate_issue(authenticated_user, issue_id, internal_request)
-        .await?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{config::Config, router};
+    use axum::{body::Body, http::{Request, StatusCode}};
+    use tower::ServiceExt;
 
-    Ok(Json(response))
+    #[tokio::test]
+    async fn issue_patch_checks_authentication_without_database_config_access() {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        }).unwrap();
+        let app = router(Arc::new(AppState::new(config).unwrap()));
+        let response = app.oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/api/v2/issues/42")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"status":"read","idempotency_key":"test-issue-012345"}"#))
+                .unwrap()
+        ).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
 }
