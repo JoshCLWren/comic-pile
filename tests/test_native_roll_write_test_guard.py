@@ -1,9 +1,9 @@
-"""Guard: every native Roll write handler needs a disposable-Postgres test.
+"""Guard: every native Rust HTTP mutation needs a disposable-Postgres test.
 
 The #4423 production 500 shipped because the suite covered auth, request shape,
 lookups, and read projections but never executed the offer INSERT. This guard
-requires each mounted POST handler to have a database-backed test that reaches
-that handler's write path, with a frozen, shrink-only baseline for handlers that
+requires every mounted POST/PATCH/PUT/DELETE handler to have a database-backed
+test that reaches the actual write path, with a frozen, shrink-only baseline for handlers that
 predate the rule or delegate their write to an already-tested module.
 
 POST routes that are pure read projections (a batch body with no INSERT/UPDATE/
@@ -17,17 +17,25 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_SOURCE = REPOSITORY_ROOT / "native" / "roll-service" / "src"
 LIB_SOURCE = SERVICE_SOURCE / "lib.rs"
 BASELINE = REPOSITORY_ROOT / "tests" / "native_roll_write_test_baseline.json"
 
-POST_ROUTE_RE = re.compile(
-    r'\.route\(\s*"[^"]+"\s*,\s*post\(\s*(?P<module>[a-z_0-9]+)::'
+WRITE_ROUTE_RE = re.compile(
+    r'\.route\(\s*"[^"]+"\s*,\s*(?:post|patch|put|delete)\(\s*(?P<module>[a-z_0-9]+)::'
     r'(?P<handler>[a-z_0-9]+)\s*\)\s*,?\s*\)',
     re.DOTALL,
 )
 DB_TEST_MARKER = "RUST_ROLL_TEST_DATABASE_URL"
+
+# PATCH issue handler delegates its write to a transaction-bound service.
+# Require the real delegation and the writer's own DB-backed mutation test.
+DELEGATED_WRITE_TESTS = {
+    ("issue_handler", "read_rate_issue"): ("issue_service", "persist"),
+}
 
 # Mounted POST handlers that are pure read projections. Each entry must stay
 # free of write SQL and carry a DB-backed HTTP parity test (asserted below).
@@ -51,19 +59,19 @@ def _lib_source() -> str:
 
 
 def _route_matches() -> list[tuple[str, str]]:
-    """Return every parsed ``post(module::handler)`` occurrence.
+    """Return every parsed mutating HTTP handler occurrence.
 
     Returns:
         Module/handler pairs in router order, including aliases.
     """
     return [
         (match.group("module"), match.group("handler"))
-        for match in POST_ROUTE_RE.finditer(_lib_source())
+        for match in WRITE_ROUTE_RE.finditer(_lib_source())
     ]
 
 
 def _mounted_post_routes() -> set[tuple[str, str]]:
-    """Return the distinct module/handler pairs mounted on POST routes.
+    """Return the module/handler pairs for all mutating HTTP routes.
 
     Returns:
         Unique pairs referenced by ``post(module::handler)`` in the router.
@@ -102,7 +110,16 @@ def _tests_write_path(module: str, handler: str) -> bool:
     Returns:
         True when the module's tests reference the handler write path.
     """
-    tests = _test_module(module)
+    delegate = DELEGATED_WRITE_TESTS.get((module, handler))
+    if delegate is not None:
+        writer_module, writer = delegate
+        production = (SERVICE_SOURCE / f"{module}.rs").read_text(encoding="utf-8")
+        if f"{writer_module}::{writer}(" not in production.split("#[cfg(test)]", 1)[0]:
+            return False
+        tests = _test_module(writer_module)
+        handler = writer
+    else:
+        tests = _test_module(module)
     if not tests or DB_TEST_MARKER not in tests or "#[tokio::test]" not in tests:
         return False
     # Word-boundary match so a read helper like `existing_offer(` does not
@@ -141,19 +158,22 @@ def _baseline_allowed() -> set[str]:
 def test_router_parser_sees_every_post_call() -> None:
     """A new route syntax must fail loudly instead of silently losing coverage."""
     parsed = _route_matches()
-    post_calls = _lib_source().count("post(")
+    post_calls = sum(
+        _lib_source().count(f"{method}(")
+        for method in ("post", "patch", "put", "delete")
+    )
     assert len(parsed) == post_calls, (
-        f"Parsed {len(parsed)} POST routes but lib.rs contains {post_calls} "
-        "`post(` calls. Update the guard parser instead of dropping a handler."
+        f"Parsed {len(parsed)} HTTP mutations but lib.rs contains {post_calls} "
+        "post/patch/put/delete calls. Update the guard parser, not the exceptions."
     )
 
 
 def test_every_mounted_post_handler_has_a_write_test() -> None:
-    """Fail when a mounted handler has no DB-backed write-path test."""
+    """Fail when a mounted mutation lacks a DB-backed write-path test."""
     mounted = _mounted_post_routes()
     baseline = _baseline_modules()
 
-    assert mounted, "router parse found no POST routes; update the guard parser"
+    assert mounted, "router parse found no write routes; update the guard parser"
 
     missing = sorted(
         (module, handler)
@@ -163,7 +183,7 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
         and module not in baseline
     )
     assert missing == [], (
-        "Native Roll POST handlers without a disposable-Postgres write-path "
+        "Native Rust mutation handlers without a disposable-Postgres write-path "
         f"test: {missing}. Add a test that calls the handler or its "
         "persist_<handler> writer, not just auth/request-shape/read helpers."
     )
@@ -232,3 +252,22 @@ def test_baseline_is_frozen_and_documented() -> None:
     )
     for module, reason in modules.items():
         assert reason.strip(), f"{module} needs a baseline reason"
+
+
+def test_patch_write_is_guarded_and_proven_by_delegated_database_test() -> None:
+    """An HTTP PATCH is a mutation, even when the handler delegates its SQL."""
+    assert ("issue_handler", "read_rate_issue") in _mounted_post_routes()
+    assert _tests_write_path("issue_handler", "read_rate_issue")
+
+
+def test_missing_delegated_writer_fails_closed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A mere auth test never substitutes for the actual PATCH write."""
+    handler = tmp_path / "issue_handler.rs"
+    handler.write_text("pub async fn read_rate_issue() { /* no write */ }\n")
+    writer = tmp_path / "issue_service.rs"
+    writer.write_text(
+        '#[cfg(test)]\nmod tests { #[tokio::test] async fn test() { '
+        'let _ = "RUST_ROLL_TEST_DATABASE_URL"; persist(); } }\n'
+    )
+    monkeypatch.setitem(globals(), "SERVICE_SOURCE", tmp_path)
+    assert not _tests_write_path("issue_handler", "read_rate_issue")
