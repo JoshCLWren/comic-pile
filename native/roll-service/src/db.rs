@@ -2,53 +2,12 @@
 use crate::{auth::AuthenticatedUser, ApiError, AppState};
 use axum::http::StatusCode;
 use deadpool_postgres::Object;
-use serde::{Deserialize, Serialize};
 use tokio_postgres::{types::ToSql, Row};
-
-/// Database model for an issue.
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
-pub struct Issue {
-    pub id: i32,
-    pub thread_id: i32,
-    pub issue_number: String,
-    pub position: i32,
-    pub status: String,
-    pub read_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub catalog_issue_id: Option<i32>,
-    pub rating: Option<f64>,
-    pub user_id: i32,
-}
-
-/// Database model for a thread.
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
-pub struct Thread {
-    pub id: i32,
-    pub title: String,
-    pub format: String,
-    pub issues_remaining: i32,
-    pub total_issues: Option<i32>,
-    pub next_unread_issue_id: Option<i32>,
-    pub reading_progress: Option<String>,
-    pub queue_position: i32,
-    pub queue_order_key: Option<i64>,
-    pub status: String,
-    pub last_rating: Option<f64>,
-    pub last_activity_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub notes: Option<String>,
-    pub manual_creator_credits: Vec<serde_json::Value>,
-    pub is_test: bool,
-    pub is_blocked: bool,
-    pub queue_position_is_manual: bool,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub user_id: i32,
-    pub catalog_series_id: Option<i32>,
-}
 
 fn unavailable() -> ApiError {
     ApiError(
         StatusCode::SERVICE_UNAVAILABLE,
-        "Database temporarily unavailable",
+        "Database temporarily unavailable".to_string(),
     )
 }
 
@@ -103,7 +62,10 @@ pub(crate) fn query_error(error: tokio_postgres::Error) -> ApiError {
     {
         unavailable()
     } else {
-        ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal Server Error".to_string(),
+        )
     }
 }
 
@@ -121,7 +83,10 @@ pub async fn require_owned_thread(
         &[&id, &user.id()],
     )
     .await?
-    .ok_or(ApiError(StatusCode::NOT_FOUND, "Thread not found"))?;
+    .ok_or(ApiError(
+        StatusCode::NOT_FOUND,
+        "Thread not found".to_string(),
+    ))?;
     Ok(())
 }
 
@@ -139,7 +104,10 @@ pub async fn require_owned_reading_session(
         &[&id, &user.id()],
     )
     .await?
-    .ok_or(ApiError(StatusCode::NOT_FOUND, "Session not found"))?;
+    .ok_or(ApiError(
+        StatusCode::NOT_FOUND,
+        "Session not found".to_string(),
+    ))?;
     Ok(())
 }
 
