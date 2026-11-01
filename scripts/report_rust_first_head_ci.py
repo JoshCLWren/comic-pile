@@ -36,9 +36,9 @@ def records(value: object) -> list[dict[str, object]]:
     if not isinstance(value, list):
         return []
     return [
-        {str(key): item for key, item in value.items()}
-        for value in value
-        if isinstance(value, dict)
+        {str(key): member for key, member in row.items()}
+        for row in value
+        if isinstance(row, dict)
     ]
 
 
@@ -73,7 +73,7 @@ def paged(repo: str, path: str, pages: int, *, collection: str = "") -> list[dic
 
 def provenance(body: str, label: str) -> str:
     """Extract explicit model/worker provenance; never infer an identity."""
-    match = re.search(rf"(?im)^{re.escape(label)}:\\s*(.+?)\\s*$", body)
+    match = re.search(rf"(?im)^{re.escape(label)}:\s*(.+?)\s*$", body)
     return match.group(1).strip() if match else "unknown"
 
 
@@ -172,7 +172,7 @@ def report(repo: str, since: str, pages: int) -> dict[str, object]:
         "attribution": "PR-body Model and Worker fields only",
         "head_definition": "earliest retained pull_request Actions run, grouped by head_sha",
         "coverage_limit": f"last {pages * 100} PRs and {pages * 100} workflow runs",
-        "pull_requests": sorted(output, key=lambda item: int(item["number"]), reverse=True),
+        "pull_requests": sorted(output, key=lambda item: value_int(item, "number"), reverse=True),
     }
 
 
@@ -221,11 +221,16 @@ def main() -> None:
     parser.add_argument("--since", default="2026-10-29")
     parser.add_argument("--pages", type=int, default=10)
     parser.add_argument("--format", choices=["json", "markdown"], default="markdown")
+    parser.add_argument("--input", type=Path, help="Render an existing JSON report without new API calls")
     args = parser.parse_args()
     date.fromisoformat(args.since)
     if not 1 <= args.pages <= 30:
         parser.error("--pages must be between 1 and 30")
-    data = report(args.repo, args.since, args.pages)
+    data = (
+        json.loads(args.input.read_text(encoding="utf-8"))
+        if args.input is not None
+        else report(args.repo, args.since, args.pages)
+    )
     print(json.dumps(data, indent=2) if args.format == "json" else markdown(data))
 
 
