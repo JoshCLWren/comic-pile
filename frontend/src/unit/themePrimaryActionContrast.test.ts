@@ -6,7 +6,7 @@ function themeToken(theme: string, name: string): string {
   const value = block?.match(new RegExp(`\\s${name}: ([^;]+);`))?.[1]?.trim()
   if (!value) throw new Error(`Missing ${name} for theme ${theme}`)
 
-  const referencedToken = value.match(/^var\\((--[\\w-]+)\\)$/)?.[1]
+  const referencedToken = value.match(/^var\((--[\w-]+)\)$/)?.[1]
   return referencedToken ? themeToken(theme, referencedToken) : value
 }
 
