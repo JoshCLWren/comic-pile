@@ -195,6 +195,7 @@ name = "comicpile-roll-service"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64",
  "chrono",
  "chrono-tz",
  "deadpool-postgres",

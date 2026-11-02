@@ -164,10 +164,9 @@ export function useRollRating({
 
   const handleSimpleMigrationComplete = useCallback(
     (issueNumber: string) => {
-      // Rating a stale thread moves it out of the stale set. The Rate mutation
-      // already fetches and publishes authoritative Roll state, so this handler
-      // consumes that snapshot instead of issuing a second bootstrap request.
-      const wasStale = bootstrap?.stale_thread?.id === activeRatingThread!.id
+      // The Rate mutation already fetches and publishes authoritative Roll
+      // state, so this handler consumes that snapshot instead of issuing a
+      // second bootstrap request.
       setShowSimpleMigration(false)
       rateMutation
         .mutate({
@@ -199,9 +198,6 @@ export function useRollRating({
           setSelectedThreadId(null)
           setActiveRatingThread(null)
           setErrorMessage('')
-          if (wasStale && !outcome.bootstrap) {
-            setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
-          }
         })
         .catch((error: unknown) => {
           setErrorMessage(getApiErrorDetail(error))
@@ -211,7 +207,6 @@ export function useRollRating({
       activeRatingThread,
       rating,
       rateMutation,
-      bootstrap,
       setShowSimpleMigration,
       suppressPendingAutoOpenRef,
       setIsRolling,
@@ -247,11 +242,9 @@ export function useRollRating({
 
     if (!activeRatingThread) return
 
-    // Capture stale-set membership before the mutation: a rated thread leaves the
-    // stale set. The Rate mutation publishes authoritative Roll state for every
-    // successful rating, so the stale counters and next roll come from that
-    // snapshot rather than from a page-level bootstrap refetch.
-    const wasStale = bootstrap?.stale_thread?.id === activeRatingThread.id
+    // The Rate mutation publishes authoritative Roll state for every successful
+    // rating, so the next roll comes from that snapshot rather than a page-level
+    // bootstrap refetch.
 
     try {
       const outcome = await rateMutation.mutate({
@@ -273,11 +266,6 @@ export function useRollRating({
           issue_number: rateResponse.next_unread_issue_number ?? null,
           last_rolled_result: null,
         })
-      }
-
-      if (wasStale && !outcome.bootstrap) {
-        setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
-        return
       }
 
       // Capture the just-rated comic reference before the thread state is cleared

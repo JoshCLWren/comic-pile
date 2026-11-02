@@ -29,12 +29,8 @@ function bootstrapWith(overrides: Partial<RollBootstrapResponse> = {}): RollBoot
     roll_pool: [],
     snoozed_threads: [],
     snoozed_count: 0,
-    blocked_count: 0,
-    blocked_threads: [],
     skipped_thread_ids: [],
     skipped_threads: [],
-    stale_thread_count: 0,
-    stale_thread: null,
     ...overrides,
   } as RollBootstrapResponse
 }

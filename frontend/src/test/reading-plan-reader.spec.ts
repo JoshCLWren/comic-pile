@@ -163,8 +163,9 @@ test('Option E explains strict Julix blockers consistently and supports direct l
     await expect(page.getByRole('region', { name: 'Next issue availability' })).toContainText(reason)
     await expect(page.getByText('Nothing blocks this series', { exact: true })).toHaveCount(0)
     await page.goto('/')
-    await page.getByRole('button', { name: /series waiting for earlier issues/ }).click()
-    await expect(page.getByText(reason, { exact: true }).first()).toBeVisible()
+    // #4441 retired the blocked Roll diagnostic section; the reason still has
+    // truthful homes on the thread detail, Queue card and CBL reader below.
+    await expect(page.getByText(/series waiting for earlier issues/i)).toHaveCount(0)
     await page.goto('/queue')
     const card = page.getByTestId('queue-thread-item').filter({ hasText: 'Julix King of Fear' })
     await expect(card).toContainText(reason)

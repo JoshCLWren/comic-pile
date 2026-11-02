@@ -1,4 +1,4 @@
-import { defaultHttpClient, type HttpClient } from './httpClient'
+import { defaultHttpClient, type ApiRequestConfig, type HttpClient } from './httpClient'
 
 const RECOVERY_CONFIG = { skipAuthRedirect: true }
 
@@ -237,7 +237,7 @@ export function createCreatorsApi(client: HttpClient) {
       )
     },
 
-    getList: (params: CreatorListParams = {}) => {
+    getList: (params: CreatorListParams = {}, { signal }: { signal?: AbortSignal } = {}) => {
       const queryParams: Record<string, string | number> = {}
       const search = params.search?.trim()
       if (search) {
@@ -255,10 +255,11 @@ export function createCreatorsApi(client: HttpClient) {
       if (params.min_ratings !== undefined && params.min_ratings > 0) {
         queryParams.min_ratings = params.min_ratings
       }
-      return client.get<CreatorListResponse>('/v1/creators', {
-        params: queryParams,
-        ...RECOVERY_CONFIG,
-      })
+      const config: ApiRequestConfig = { params: queryParams, ...RECOVERY_CONFIG }
+      if (signal) {
+        config.signal = signal
+      }
+      return client.get<CreatorListResponse>('/v1/creators', config)
     },
   }
 }

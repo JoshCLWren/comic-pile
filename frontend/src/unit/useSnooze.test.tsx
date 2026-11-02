@@ -73,12 +73,8 @@ const bootstrapState = (
     ? [{ id: 7, title: 'Doom Patrol', format: 'series' }]
     : [],
   snoozed_count: pendingThreadId === null ? 1 : 0,
-  blocked_count: 0,
-  blocked_threads: [],
   skipped_thread_ids: [],
   skipped_threads: [],
-  stale_thread_count: 0,
-  stale_thread: null,
 })
 
 describe('snooze hooks', () => {

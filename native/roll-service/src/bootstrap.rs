@@ -11,7 +11,6 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use rand::seq::IndexedRandom;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
@@ -29,12 +28,6 @@ fn unavailable() -> ApiError {
         StatusCode::INTERNAL_SERVER_ERROR,
         "Invalid native Roll response".to_string(),
     )
-}
-
-/// Match Python's random.choice over the complete eligible stale set. The
-/// queue order must not make the first stale thread a permanent recommendation.
-fn choose_stale_thread<'a>(stale: &'a [Value], rng: &mut impl rand::Rng) -> Option<&'a Value> {
-    stale.choose(rng)
 }
 
 fn thread_value(row: &tokio_postgres::Row) -> Result<Value, ApiError> {
@@ -221,9 +214,18 @@ async fn latest_session_read(
     session_id: i32,
 ) -> Result<Option<Value>, ApiError> {
     let row = connection.query_opt(
-        "SELECT e.issue_id,coalesce(i.issue_number,e.issue_number),t.id,t.title,e.timestamp::text
+        "SELECT e.issue_id,coalesce(i.issue_number,e.issue_number),t.id,t.title,e.timestamp::text,
+                cover_identity.metadata_json::text
          FROM events e LEFT JOIN issues i ON i.id=e.issue_id
          LEFT JOIN threads t ON t.id=coalesce(i.thread_id,e.thread_id) AND t.user_id=$2
+         LEFT JOIN LATERAL (
+             SELECT identity.metadata_json FROM issue_external_identity_mappings mapping
+             JOIN external_identities identity ON identity.id=mapping.external_identity_id
+             WHERE mapping.issue_id=i.id AND mapping.status<>'rejected'
+               AND identity.provider='comicvine' AND identity.entity_type='issue'
+             ORDER BY (mapping.status='confirmed') DESC,mapping.confidence DESC NULLS LAST,mapping.id
+             LIMIT 1
+         ) cover_identity ON TRUE
          WHERE e.session_id=$1 AND e.type='rate'
            AND EXISTS (SELECT 1 FROM sessions s WHERE s.id=e.session_id AND s.user_id=$2)
          ORDER BY e.timestamp DESC,e.id DESC LIMIT 1",
@@ -235,9 +237,17 @@ async fn latest_session_read(
         let thread_id: Option<i32> = row.try_get(2).map_err(db::query_error)?;
         let thread_title: Option<String> = row.try_get(3).map_err(db::query_error)?;
         let read_at: Option<String> = row.try_get(4).map_err(db::query_error)?;
+        let metadata: Option<String> = row.try_get(5).map_err(db::query_error)?;
+        let metadata: Value = metadata
+            .as_deref()
+            .and_then(|source| serde_json::from_str(source).ok())
+            .unwrap_or(Value::Null);
+        let cover_url = extract_cover_source(&metadata)
+            .filter(|source| source.starts_with("https://") || source.starts_with("http://"))
+            .filter(|source| !source.split('/').nth(2).unwrap_or("").contains('@'));
         Ok(
             json!({"issue_id":issue_id,"issue_number":issue_number,"thread_id":thread_id,
-            "thread_title":thread_title,"read_at":read_at}),
+            "thread_title":thread_title,"read_at":read_at,"cover_url":cover_url}),
         )
     })
     .transpose()
@@ -375,7 +385,7 @@ pub(crate) async fn durable_snoozed(
             continue;
         }
         let later = starts.iter().filter(|&&time| time > latest).count() as u64;
-        let pair = ((count as u64) + 1) / 2;
+        let pair = (count as u64).div_ceil(2);
         let mut previous = 0u64;
         let mut needed = 1u64;
         for _ in 0..pair {
@@ -777,6 +787,9 @@ pub async fn bootstrap_v2(
     // Option E faces the next offer draws from. Legacy session state is
     // deliberately not consulted here; it is display-only below.
     let eligible = crate::roll_pool::in_play_frontiers(&candidates, current_die);
+    // A single reason, derived from the same validated inputs, keeps the empty
+    // pool state truthful without re-materializing whole-library diagnostics.
+    let pool_reason = crate::reading_constraints::pool_reason(validated.inputs(), &candidates);
     let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
 
     let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
@@ -834,70 +847,25 @@ pub async fn bootstrap_v2(
     }
     let last_read = latest_session_read(&conn, user, session.id).await?;
 
-    let summary_rows = conn
-        .query(
-            "SELECT t.id,t.title,t.format,t.last_activity_at::text,
-          (coalesce(t.last_activity_at,t.created_at) < now() - interval '7 days') AS stale,
-          t.status,t.queue_position
-         FROM threads t WHERE t.user_id=$1 ORDER BY t.queue_position,t.id",
-            &[&user.id()],
+    // Legacy snooze/skip chips require only their referenced threads. Query
+    // those owner-scoped IDs rather than scanning the whole library to build
+    // blocked, inactive and stale diagnostics that Roll no longer displays.
+    let display_ids: Vec<i32> = snoozed.iter().chain(skipped.iter()).copied().collect();
+    let summary_rows = if display_ids.is_empty() {
+        Vec::new()
+    } else {
+        conn.query(
+            "SELECT id,title,format,last_activity_at::text FROM threads
+             WHERE user_id=$1 AND id=ANY($2::int[])",
+            &[&user.id(), &display_ids],
         )
         .await
-        .map_err(db::query_error)?;
+        .map_err(db::query_error)?
+    };
     let mut known: HashMap<i32, Value> = HashMap::new();
-    let mut stale = Vec::new();
-    let eligible_threads: HashSet<i32> = candidates.iter().map(|c| c.thread_id).collect();
-    let mut blocked: Vec<i32> = Vec::new();
-    let mut exclusions: Vec<Value> = Vec::new();
-    let mut inactive: Vec<Value> = Vec::new();
-    let mut total_threads = 0_usize;
-    let mut available_threads = 0_usize;
     for row in &summary_rows {
         let id: i32 = row.try_get(0).map_err(db::query_error)?;
-        let stale_flag: Option<bool> = row.try_get(4).map_err(db::query_error)?;
-        let info = thread_value(row)?;
-        let eligible_for_stale = candidates.iter().any(|candidate| candidate.thread_id == id);
-        if stale_flag.unwrap_or(false) && eligible_for_stale && !legacy_excluded.contains(&id) {
-            stale.push(info.clone());
-        }
-        let status: String = row.try_get(5).map_err(db::query_error)?;
-        let queue_position: i32 = row.try_get(6).map_err(db::query_error)?;
-        if status == "active" || status == "completed" {
-            total_threads += 1;
-            // Option E's live graph, not the stale persisted is_blocked flag,
-            // is authoritative for queued thread eligibility.
-            let blocked_now =
-                status == "active" && queue_position >= 1 && !eligible_threads.contains(&id);
-            // Legacy session snoozes/skips are display-only categories below.
-            // They are not Option E eligibility reasons and must not make an
-            // in-play thread look excluded from the pool.
-            let (reason, detail): (&str, Option<&str>) = if status == "completed" {
-                ("completed", Some("Read the full series"))
-            } else if blocked_now {
-                blocked.push(id);
-                ("blocked", None)
-            } else if queue_position < 1 {
-                ("not_in_queue", Some("Not in the active queue"))
-            } else {
-                available_threads += 1;
-                ("available", None)
-            };
-            if reason != "available" {
-                let explanation = json!({
-                    "thread_id": id,
-                    "title": info["title"],
-                    "format": info["format"],
-                    "reason": reason,
-                    "detail": detail,
-                    "last_activity_at": info["last_activity_at"]
-                });
-                if reason == "completed" || reason == "not_in_queue" {
-                    inactive.push(explanation.clone());
-                }
-                exclusions.push(explanation);
-            }
-        }
-        known.insert(id, info);
+        known.insert(id, thread_value(row)?);
     }
     let summary = |ids: &[i32]| {
         ids.iter()
@@ -908,7 +876,6 @@ pub async fn bootstrap_v2(
     let mut snoozed_threads = summary(&snoozed);
     let snoozed_count = snoozed.iter().filter(|id| known.contains_key(id)).count();
     let mut skipped_threads = summary(&skipped);
-    let mut blocked_threads = summary(&blocked);
 
     let roll_recovery = pending_roll_recovery(
         &validated,
@@ -924,22 +891,12 @@ pub async fn bootstrap_v2(
         .and_then(Value::as_i64);
     let mode_source = normalized_source(&session.bandwidth_source);
     let intent_source = normalized_source(&session.intent_source);
-    let mut stale_thread = choose_stale_thread(&stale, &mut rand::rng()).cloned();
     let mut tag_ids: Vec<i32> = rollable
         .iter()
         .filter_map(|item| item.pointer("/thread/id").and_then(Value::as_i64))
         .map(|id| id as i32)
         .collect();
-    for row in snoozed_threads
-        .iter()
-        .chain(skipped_threads.iter())
-        .chain(blocked_threads.iter())
-    {
-        if let Some(id) = row["id"].as_i64() {
-            tag_ids.push(id as i32);
-        }
-    }
-    if let Some(ref row) = stale_thread {
+    for row in snoozed_threads.iter().chain(skipped_threads.iter()) {
         if let Some(id) = row["id"].as_i64() {
             tag_ids.push(id as i32);
         }
@@ -964,16 +921,6 @@ pub async fn bootstrap_v2(
     for row in &mut skipped_threads {
         attach_tags(row);
     }
-    for row in &mut blocked_threads {
-        attach_tags(row);
-    }
-    if let Some(ref mut row) = stale_thread {
-        attach_tags(row);
-    }
-    let excluded_count = exclusions.len();
-    let inactive_count = inactive.len();
-    exclusions.truncate(20);
-    inactive.truncate(20);
     let response = json!({
         "session_id": session.id,
         "user_id": user.id(),
@@ -1004,56 +951,15 @@ pub async fn bootstrap_v2(
             "mode_version": session.bandwidth_version
         },
         "rollable": rollable,
+        "pool_reason": pool_reason,
         "last_read": last_read,
         "snoozed_threads": snoozed_threads,
         "snoozed_count": snoozed_count,
         "skipped_thread_ids": skipped,
         "skipped_threads": skipped_threads,
-        "blocked_count": blocked.len(),
-        "blocked_threads": blocked_threads,
-        "stale_thread_count": stale.len(),
-        "stale_thread": stale_thread,
-        "total_threads": total_threads,
-        "available_threads": available_threads,
-        "excluded_count": excluded_count,
-        "excluded_threads": exclusions,
-        "inactive_count": inactive_count,
-        "inactive_threads": inactive,
         "timezone": session.timezone
     });
     Ok(Json(response))
-}
-
-#[cfg(test)]
-mod stale_selection_tests {
-    use super::choose_stale_thread;
-    use rand::{rngs::StdRng, SeedableRng};
-    use serde_json::json;
-    use std::collections::HashSet;
-
-    #[test]
-    fn empty_and_single_candidate_match_python_choice_boundary() {
-        let mut rng = StdRng::seed_from_u64(4299);
-        assert!(choose_stale_thread(&[], &mut rng).is_none());
-        let stale = [json!({"id": 7, "title": "Only stale candidate"})];
-        assert_eq!(choose_stale_thread(&stale, &mut rng), Some(&stale[0]));
-    }
-
-    #[test]
-    fn stale_choice_reaches_the_entire_candidate_set() {
-        let mut rng = StdRng::seed_from_u64(4299);
-        let stale = [json!({"id": 7}), json!({"id": 11}), json!({"id": 19})];
-        let selected: HashSet<_> = (0..128)
-            .map(|_| {
-                choose_stale_thread(&stale, &mut rng).unwrap()["id"]
-                    .as_i64()
-                    .unwrap()
-            })
-            .collect();
-        // A fixed seed keeps this regression deterministic. stale.first()
-        // would only ever return 7, regardless of the available candidates.
-        assert_eq!(selected, HashSet::from([7, 11, 19]));
-    }
 }
 
 #[cfg(test)]

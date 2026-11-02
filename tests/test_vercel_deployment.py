@@ -141,6 +141,7 @@ def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
             "config": {"excludeFiles": "{target/**,native/**/target/**}"},
         },
         {"src": "api/native_roll.rs", "use": "@vercel/rust"},
+        {"src": "api/native_issue.rs", "use": "@vercel/rust"},
         {"src": "api/auth/me.ts", "use": "@vercel/node"},
         {
             "src": "package.json",
@@ -201,32 +202,67 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         "dest": "/api/native_roll.rs",
     }
     assert routes[8] == {
+        "src": "^/api/v2/queue-entries/[0-9]+$",
+        "methods": ["GET"],
+        "dest": "/api/native_roll.rs",
+    }
+    assert routes[9] == {
+        "src": "^/api/v2/queue-entries/[0-9]+$",
+        "methods": ["PATCH"],
+        "dest": "/api/native_roll.rs",
+    }
+    assert routes[10] == {
+        "src": "/api/v2/queue-orders",
+        "methods": ["POST"],
+        "dest": "/api/native_roll.rs",
+    }
+    assert routes[11] == {
+        "src": "/api/v2/threads",
+        "methods": ["GET"],
+        "dest": "/api/native_roll.rs",
+    }
+    assert routes[12] == {
         "src": "/api/v1/roll/dismiss-pending",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[9] == {
+    assert routes[13] == {
         "src": "/api/roll/dismiss-pending",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[10] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
-    assert routes[11] == {
+    assert routes[14] == {
+        "src": "/api/_native_issue/health",
+        "methods": ["GET"],
+        "dest": "/api/native_issue.rs",
+    }
+    assert routes[15] == {
+        "src": "^/api/v2/issues/[0-9]+$",
+        "methods": ["PATCH"],
+        "dest": "/api/native_issue.rs",
+    }
+    assert routes[16] == {
+        "src": "^/api/v2/issues/cards$",
+        "methods": ["POST"],
+        "dest": "/api/native_issue.rs",
+    }
+    assert routes[17] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
+    assert routes[18] == {
         "src": "/(?:openapi\\.json|docs|redoc|health)",
         "dest": "/api/index.py",
     }
-    assert routes[12]["src"] == "/"
-    assert routes[12]["dest"] == "/index.html"
-    # Route 13 is the /assets/.+ cache headers route (added for edge caching)
-    assert routes[13] == {
+    assert routes[19]["src"] == "/"
+    assert routes[19]["dest"] == "/index.html"
+    # Route 20 is the /assets/.+ cache headers route (added for edge caching)
+    assert routes[20] == {
         "src": "/assets/.+",
         "continue": True,
         "headers": {"Cache-Control": "public, max-age=31536000, immutable"},
     }
-    # Route 14 serves the build's generated route HTML pages (see
+    # Route 21 serves the build's generated route HTML pages (see
     # test_vercel_route_html_rule_serves_every_generated_page).
-    assert routes[14] == _route_html_rule()
-    assert routes[15] == {"handle": "filesystem"}
+    assert routes[21] == _route_html_rule()
+    assert routes[22] == {"handle": "filesystem"}
     assert routes[-1]["src"] == "/(.*)"
     assert routes[-1]["dest"] == "/index.html"
 
@@ -235,7 +271,7 @@ def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
     """Ensure static HTML remains identifiable and receives browser protections."""
     routes = _routes(_load_vercel_config())
 
-    for route in (routes[12], routes[14], routes[-1]):
+    for route in (routes[19], routes[21], routes[-1]):
         headers = _headers(route)
         assert headers["X-ComicPile-Frontend"] == "vercel-static"
         assert headers["Cache-Control"] == "public, max-age=0, must-revalidate"
@@ -251,9 +287,9 @@ def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
 
     # Only the landing route is indexable; every other HTML response the
     # routing layer serves must state its non-indexability.
-    landing_headers = _headers(routes[12])
+    landing_headers = _headers(routes[19])
     assert "X-Robots-Tag" not in landing_headers
-    for route in (routes[14], routes[-1]):
+    for route in (routes[21], routes[-1]):
         assert _headers(route)["X-Robots-Tag"] == "noindex, nofollow"
 
 
@@ -265,7 +301,7 @@ def test_vercel_route_html_rule_serves_every_generated_page() -> None:
     such as ``/creators/compare`` map to ``/creators/compare.html``.
     """
     routes = _routes(_load_vercel_config())
-    html_rule = routes[14]
+    html_rule = routes[21]
 
     assert html_rule == _route_html_rule()
 
@@ -287,7 +323,7 @@ def test_vercel_route_html_rule_lists_exactly_the_generated_alternatives() -> No
     SPA. This assertion fails the configuration change in both directions.
     """
     routes = _routes(_load_vercel_config())
-    src_pattern = str(routes[14]["src"])
+    src_pattern = str(routes[21]["src"])
     suffix = ")(\\.html)?"
 
     assert src_pattern.startswith("/(")
@@ -301,13 +337,13 @@ def test_vercel_route_html_rule_lists_exactly_the_generated_alternatives() -> No
 def test_vercel_dynamic_route_pages_fall_through_to_the_spa_fallback() -> None:
     """Parameterized pages keep the app fallback and SPA noindex robots header."""
     routes = _routes(_load_vercel_config())
-    src_pattern = str(routes[14]["src"])
+    src_pattern = str(routes[21]["src"])
 
     for path in DYNAMIC_ROUTE_PROBES:
         matched = re.fullmatch(src_pattern, path)
         assert matched is None, f"{path} must fall through to the SPA, not a static file"
 
-    assert routes[15] == {"handle": "filesystem"}
+    assert routes[22] == {"handle": "filesystem"}
     fallback = routes[-1]
     assert fallback["src"] == "/(.*)"
     assert fallback["dest"] == "/index.html"
@@ -360,6 +396,23 @@ def test_node_auth_route_is_isolated_from_python_and_static_routes() -> None:
         ("POST", "/api/v2/roll/reset", "/api/native_roll.rs"),
         ("GET", "/api/_native_roll/health", "/api/native_roll.rs"),
         ("POST", "/api/_native_roll/health", "/api/index.py"),
+        ("GET", "/api/_native_issue/health", "/api/native_issue.rs"),
+        ("POST", "/api/_native_issue/health", "/api/index.py"),
+        ("PATCH", "/api/v2/issues/42", "/api/native_issue.rs"),
+        ("PATCH", "/api/v2/issues/99", "/api/native_issue.rs"),
+        ("POST", "/api/v2/issues/cards", "/api/native_issue.rs"),
+        ("GET", "/api/v2/issues/cards", "/api/index.py"),
+        ("PATCH", "/api/v2/issues/cards", "/api/index.py"),
+        ("GET", "/api/v2/issues/42", "/api/index.py"),
+        ("POST", "/api/v2/issues/42", "/api/index.py"),
+        ("PATCH", "/api/v2/issues/not-an-id", "/api/index.py"),
+        ("GET", "/api/v2/queue-entries/240", "/api/native_roll.rs"),
+        ("PATCH", "/api/v2/queue-entries/240", "/api/native_roll.rs"),
+        ("GET", "/api/v2/queue-entries/1018106", "/api/native_roll.rs"),
+        ("PATCH", "/api/v2/queue-entries/1018106", "/api/native_roll.rs"),
+        ("POST", "/api/v2/queue-entries/240", "/api/index.py"),
+        ("GET", "/api/v2/queue-entries/not-an-id", "/api/index.py"),
+        ("PATCH", "/api/v2/queue-entries/not-an-id", "/api/index.py"),
         ("GET", "/api/v2/reading-boundaries", "/api/index.py"),
         ("GET", "/health", "/api/index.py"),
         ("GET", "/", "/index.html"),

@@ -23,7 +23,6 @@ limiter = Limiter(key_func=get_remote_address)
 
 | Endpoint | Limit | Description |
 |----------|-------|-------------|
-| `GET /threads/` | 100/minute | List all threads |
 | `POST /threads/` | 30/minute | Create new thread |
 | `GET /threads/{thread_id}` | 200/minute | Get thread details |
 | `PUT /threads/{thread_id}` | 30/minute | Update thread |
@@ -94,10 +93,10 @@ Rate limits are applied using the `@limiter.limit()` decorator on endpoint funct
 from fastapi import Request
 from app.middleware import limiter
 
-@router.get("/threads/", response_model=list[ThreadResponse])
+@router.get("/threads/completed/threads", response_model=QueueThreadListResponse)
 @limiter.limit("100/minute")
-def list_threads(request: Request, db: Session = Depends(get_db)) -> list[ThreadResponse]:
-    """List all threads ordered by position."""
+def list_completed_threads(request: Request, db: Session = Depends(get_db)) -> QueueThreadListResponse:
+    """List the reader's finished series."""
     # ...
 ```
 

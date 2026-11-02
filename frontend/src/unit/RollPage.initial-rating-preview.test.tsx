@@ -107,10 +107,6 @@ const pendingBootstrap = {
   snoozed_count: 0,
   skipped_thread_ids: [],
   skipped_threads: [],
-  blocked_count: 0,
-  blocked_threads: [],
-  stale_thread_count: 0,
-  stale_thread: null,
 }
 
 // SAFETY: The mocked useRollBootstrap return value is read by the page hooks;

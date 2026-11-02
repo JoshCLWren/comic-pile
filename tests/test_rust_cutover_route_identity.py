@@ -125,6 +125,13 @@ def test_reading_boundaries_client_preserves_its_distinct_api_v2_contract() -> N
     assert "'/v1/reading-boundaries'" not in source
 
 
+def test_threads_collection_client_uses_the_native_v2_resource() -> None:
+    """The reader threads collection is one v2 resource, not a v1 language port."""
+    source = _service("api-threads.ts")
+    assert "client.get<ThreadListResponse>('/v2/threads'" in source
+    assert "client.get<ThreadListResponse>('/v1/threads/'" not in source
+
+
 def test_current_runtime_routing_is_explicit_and_independent_of_version() -> None:
     """Snapshot of *routing*, not a declaration that v1 means Python.
 
@@ -139,6 +146,10 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
         ("POST", "/api/v1/roll/"): "/api/index.py",
         ("GET", "/api/v2/roll/bootstrap"): "/api/native_roll.rs",
         ("POST", "/api/v2/reading-boundaries"): "/api/native_roll.rs",
+        ("GET", "/api/v2/threads"): "/api/native_roll.rs",
+        # The retired Python v1 collection read now reaches the catch-all and
+        # returns 404; creation stays on the same path (#4342).
+        ("GET", "/api/v1/threads/"): "/api/index.py",
     }
     for (method, path), destination in expected.items():
         actual = _route_destination(method, path)

@@ -555,6 +555,100 @@ pub struct EligibleFrontier {
     pub queue_position: i32,
 }
 
+/// Why the Roll pool has no in-play faces.
+///
+/// Derived from the already-loaded Option E inputs and the eligible frontier
+/// set. This is a single reason, never a list or a whole-library report, and it
+/// adds no database work: it exists so a genuinely non-empty library does not
+/// render the false "reading queue is empty" state (#4441).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PoolReason {
+    /// At least one next-unread frontier is eligible for the dice pool.
+    Ready,
+    /// The reader owns no series at all.
+    NoSeries,
+    /// In-play series exist, but every next-unread frontier waits on a prerequisite.
+    AllBlocked,
+    /// Every owned issue is read.
+    AllCompleted,
+    /// Unread issues exist, but none is in the active queue or all are excluded.
+    AllOutOfPool,
+}
+
+/// Classify an empty Roll pool without materializing any diagnostic rows.
+pub fn pool_reason(inputs: &OptionInputs, candidates: &[EligibleFrontier]) -> PoolReason {
+    if !candidates.is_empty() {
+        return PoolReason::Ready;
+    }
+    if inputs.core.threads.is_empty() {
+        return PoolReason::NoSeries;
+    }
+    let snapshot = Snapshot::from_inputs(inputs, &BTreeMap::new());
+    let Ok(edges) = constraint_edges(&snapshot) else {
+        return PoolReason::AllBlocked;
+    };
+    let excluded = &inputs.excluded_issue_ids;
+    let incomplete: HashSet<i32> = inputs
+        .core
+        .issues
+        .iter()
+        .filter(|issue| issue.status != "read" && !excluded.contains(&issue.id))
+        .map(|issue| issue.id)
+        .collect();
+    let blocked: HashSet<i32> = edges
+        .iter()
+        .filter(|edge| incomplete.contains(&edge.source_issue_id))
+        .map(|edge| edge.target_issue_id)
+        .collect();
+    let mut next_unread: HashMap<i32, (i32, i32)> = HashMap::new();
+    for issue in &inputs.core.issues {
+        if issue.status != "unread" || excluded.contains(&issue.id) {
+            continue;
+        }
+        let key = (issue.position, issue.id);
+        let first = next_unread.entry(issue.thread_id).or_insert(key);
+        if key < *first {
+            *first = key;
+        }
+    }
+    let active: HashSet<i32> = inputs
+        .core
+        .threads
+        .iter()
+        .filter(|thread| thread.status == "active")
+        .map(|thread| thread.id)
+        .collect();
+    let mut blocked_frontier = false;
+    for stored in &inputs.core.stored {
+        if !active.contains(&stored.thread_id) || stored.queue_position < 1 {
+            continue;
+        }
+        let Some((_, issue_id)) = next_unread.get(&stored.thread_id) else {
+            continue;
+        };
+        if blocked.contains(issue_id) {
+            blocked_frontier = true;
+        } else {
+            // The eligible frontier set already covers this case; stay honest
+            // rather than claiming a blocked-only library if it ever diverges.
+            return PoolReason::Ready;
+        }
+    }
+    if blocked_frontier {
+        return PoolReason::AllBlocked;
+    }
+    if inputs
+        .core
+        .issues
+        .iter()
+        .any(|issue| issue.status == "unread")
+    {
+        return PoolReason::AllOutOfPool;
+    }
+    PoolReason::AllCompleted
+}
+
 /// Only this type may be consumed by future native eligible-candidate projection.
 /// Private fields prevent raw/incomplete loader data from masquerading as validated.
 pub struct ValidatedReadingInputs {
@@ -666,8 +760,10 @@ impl ValidatedReadingInputs {
 mod tests {
     use super::*;
     use crate::{
-        option_inputs::{ReadingEntry, ReadingList, UnresolvedReference},
-        reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread},
+        option_inputs::{
+            Prerequisite as OptionPrerequisite, ReadingEntry, ReadingList, UnresolvedReference,
+        },
+        reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
     };
     fn inputs() -> OptionInputs {
         OptionInputs {
@@ -818,5 +914,113 @@ mod tests {
             ValidatedReadingInputs::new(unresolved, &BTreeMap::new()),
             Err(ValidationError::InvalidSnapshot { .. })
         ));
+    }
+
+    fn pool_inputs(
+        thread_status: &str,
+        queue_position: i32,
+        issue_status: &str,
+        excluded: bool,
+    ) -> OptionInputs {
+        let mut source = OptionInputs {
+            core: CoreReadingInputs {
+                threads: vec![ReadingThread {
+                    id: 8,
+                    status: thread_status.into(),
+                    title: "Series".into(),
+                }],
+                issues: vec![ReadingIssue {
+                    id: 13,
+                    thread_id: 8,
+                    position: 1,
+                    status: issue_status.into(),
+                    issue_number: "1".into(),
+                }],
+                stored: vec![StoredThreadEligibility {
+                    thread_id: 8,
+                    next_issue_id: None,
+                    is_blocked: false,
+                    queue_position,
+                }],
+            },
+            thread_volumes: BTreeMap::new(),
+            lists: vec![],
+            prerequisites: vec![],
+            excluded_issue_ids: BTreeSet::new(),
+            unresolved: vec![],
+        };
+        if excluded {
+            source.excluded_issue_ids.insert(13);
+        }
+        source
+    }
+
+    fn reason(source: OptionInputs) -> PoolReason {
+        let validated = ValidatedReadingInputs::new(source, &BTreeMap::new()).unwrap();
+        let candidates = validated.eligible_frontiers().unwrap();
+        pool_reason(validated.inputs(), &candidates)
+    }
+
+    #[test]
+    fn empty_pool_reason_distinguishes_completed_out_of_pool_and_no_series() {
+        assert_eq!(
+            reason(pool_inputs("active", 1, "read", false)),
+            PoolReason::AllCompleted
+        );
+        assert_eq!(
+            reason(pool_inputs("active", 1, "unread", true)),
+            PoolReason::AllOutOfPool
+        );
+        assert_eq!(
+            reason(pool_inputs("active", 0, "unread", false)),
+            PoolReason::AllOutOfPool
+        );
+        assert_eq!(
+            reason(pool_inputs("completed", 1, "unread", false)),
+            PoolReason::AllOutOfPool
+        );
+        let mut empty = pool_inputs("active", 1, "unread", false);
+        empty.core.threads.clear();
+        empty.core.issues.clear();
+        empty.core.stored.clear();
+        assert_eq!(reason(empty), PoolReason::NoSeries);
+    }
+
+    #[test]
+    fn empty_pool_reason_reports_all_blocked_and_ready_frontiers() {
+        assert_eq!(
+            reason(pool_inputs("active", 1, "unread", false)),
+            PoolReason::Ready
+        );
+
+        // An owner-scoped prerequisite from an unqueued series blocks the only
+        // in-play frontier, so the pool is empty for a real reading-order reason.
+        let mut blocked = pool_inputs("active", 1, "unread", false);
+        blocked.core.threads.push(ReadingThread {
+            id: 9,
+            status: "active".into(),
+            title: "Prequel series".into(),
+        });
+        blocked.core.issues.push(ReadingIssue {
+            id: 22,
+            thread_id: 9,
+            position: 1,
+            status: "unread".into(),
+            issue_number: "1".into(),
+        });
+        blocked.core.stored.push(StoredThreadEligibility {
+            thread_id: 9,
+            next_issue_id: None,
+            is_blocked: false,
+            queue_position: 0,
+        });
+        blocked.prerequisites.push(OptionPrerequisite {
+            prerequisite_id: 77,
+            source_issue_id: 22,
+            target_issue_id: 13,
+            origin: "reader".into(),
+            provenance: vec![],
+        });
+        assert_eq!(reason(blocked), PoolReason::AllBlocked);
     }
 }

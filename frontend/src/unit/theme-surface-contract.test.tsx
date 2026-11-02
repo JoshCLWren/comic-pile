@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { render, screen, waitFor, within } from '@testing-library/react'
@@ -154,6 +154,36 @@ function tokenValuesPerTheme(css: string, token: string): string[] {
   })
 }
 
+const THEME_TOKEN_PATTERN = /--theme-[a-z0-9]+(?:-[a-z0-9]+)*/g
+
+/**
+ * Collect every `--theme-*` custom property referenced by shipped frontend
+ * source. Test files are excluded because they may name retired tokens in
+ * deliberately negative assertions.
+ */
+function collectConsumedThemeTokens(): Set<string> {
+  const tokens = new Set<string>()
+  const sourceRoot = resolve(process.cwd(), 'src')
+
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = resolve(directory, entry.name)
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules') visit(path)
+        continue
+      }
+      if (!/\.(?:ts|tsx|css)$/.test(entry.name)) continue
+      if (/\.(?:test|spec)\.(?:ts|tsx)$/.test(entry.name)) continue
+      for (const match of readFileSync(path, 'utf8').matchAll(THEME_TOKEN_PATTERN)) {
+        tokens.add(match[0])
+      }
+    }
+  }
+
+  visit(sourceRoot)
+  return tokens
+}
+
 function extractGradientBodyRule(css: string): string | undefined {
   const rules: string[] = []
   let start = css.indexOf('\nbody {')
@@ -174,6 +204,28 @@ describe('semantic theme stylesheet contract (#1646)', () => {
       const tokens = extractTokenMap(extractThemeBlock(css, theme))
       for (const token of SEMANTIC_TOKENS) {
         expect(tokens.get(token), `${token} missing in ${theme}`).toBeTruthy()
+      }
+    }
+  })
+
+  // Issue #4469 review: the series-mapping dialogs used
+  // `hover:bg-[var(--theme-bg-hover)]`, but no theme declared that property, so
+  // hovered surfaces computed to `transparent`. Every `--theme-*` role consumed
+  // by shipped source must be declared for all three themes.
+  it('declares every consumed --theme-* role in every theme block (#4469)', () => {
+    const css = loadStylesheet()
+    const consumed = collectConsumedThemeTokens()
+
+    expect(consumed.size).toBeGreaterThan(0)
+    expect(consumed.has('--theme-bg-hover'), 'hover role must be referenced by source').toBe(true)
+
+    for (const theme of THEMES) {
+      const declared = extractTokenMap(extractThemeBlock(css, theme))
+      for (const token of consumed) {
+        expect(
+          declared.get(token),
+          `${token} is consumed by source but not declared for ${theme}`,
+        ).toBeTruthy()
       }
     }
   })

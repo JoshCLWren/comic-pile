@@ -8,6 +8,7 @@ import {
   invalidateAfterQueueMutation,
   invalidateComicVineIssueIntelligenceMany,
 } from '../query/cacheEffects'
+import { isIndeterminateApiOutcome } from '../utils/apiError'
 
 /**
  * Resolve the issue that anchors a thread-level series-mapping preview (issue #2773).
@@ -86,6 +87,10 @@ export function useQueueSeriesMappingCommit() {
     Parameters<typeof seriesMappingApi.commit>[0]
   >({
     mutationFn: (request) => seriesMappingApi.commit(request),
+    // The commit carries an idempotency key, so replaying an indeterminate
+    // failure (5xx or a lost transport response) cannot double-apply the
+    // mapping. A definitive 4xx refusal is surfaced immediately.
+    retry: (failureCount, error) => failureCount < 3 && isIndeterminateApiOutcome(error),
     onSuccess: async (result) => {
       await invalidateComicVineIssueIntelligenceMany(queryClient, result.confirmed_issue_ids)
       await invalidateAfterQueueMutation(queryClient)

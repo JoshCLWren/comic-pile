@@ -121,6 +121,9 @@ def test_explicitly_factory_enrolled_manual_and_agent_prs_reach_review_queue() -
     opted_out = dict(item)
     opted_out["body"] = "Closes #2401\n\n<!-- factory-execution:manual-only -->"
     assert not policy.pr_is_static_candidate(opted_out, {}, no_diff_attempts=0)
+    opted_out_line = dict(item)
+    opted_out_line["body"] = "Closes #2401\n\nmanual-only"
+    assert not policy.pr_is_static_candidate(opted_out_line, {}, no_diff_attempts=0)
 
 
 def test_producing_worker_cannot_receive_own_semantic_review():

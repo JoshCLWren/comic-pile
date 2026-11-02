@@ -372,6 +372,18 @@ test('manual-only PR is not claimed by trusted CHANGES_REQUESTED routing', async
   assert.equal(calls.length, 0);
 });
 
+test('standalone manual-only line is not claimed by trusted CHANGES_REQUESTED routing', async () => {
+  const context = reviewContext({
+    author_association: 'NONE',
+    user: { login: 'github-actions[bot]' },
+    state: 'CHANGES_REQUESTED',
+    performed_via_github_app: { slug: 'github-actions' },
+  });
+  context.payload.pull_request.body = 'Hold this PR.\nmanual-only\n';
+  const { calls } = await runWith(context);
+  assert.equal(calls.length, 0);
+});
+
 test('trusted CHANGES_REQUESTED routing is unchanged and does not query threads', async () => {
   const { calls, graphqlCalls } = await run({
     author_association: 'NONE',

@@ -4392,42 +4392,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roll/exclusions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Roll Exclusion Page
-         * @description Return one deterministic page of a Roll exclusion category.
-         *
-         *     Issue #3330: the Roll bootstrap carries bounded previews, so its collapsed
-         *     headings used to report the preview size as the category total and offered
-         *     no way to reach the rest. This endpoint is the authoritative drill-down for
-         *     a single category; its ``total`` comes from the same predicate that produced
-         *     the bootstrap count, so the heading and the rows can never disagree.
-         *
-         *     Args:
-         *         current_user: The authenticated user.
-         *         category: ``blocked`` or ``inactive``.
-         *         limit: Maximum rows in this page (1-100).
-         *         offset: Rows to skip in the deterministic category order.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         RollExclusionPageResponse with this page's rows and the category total.
-         */
-        get: operations["roll_exclusion_page_api_v1_roll_exclusions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/roll/override": {
         parameters: {
             query?: never;
@@ -5428,31 +5392,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Threads
-         * @description List threads with deterministic cursor-based pagination.
-         *
-         *     Every retained sort has a deterministic cursor contract with stable
-         *     tie-breakers so that search results remain correct across multiple pages.
-         *     Changing ``search`` or ``sort`` invalidates any prior cursor.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         search: Optional case-insensitive title search filter.
-         *         sort: Sort order – ``position`` (default), ``title``, or ``created``.
-         *         page_size: Threads per page (default 50, max 200).
-         *         page_token: Opaque cursor token for pagination continuation.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         Paginated queue items plus ``next_page_token`` when more pages exist.
-         *
-         *     Raises:
-         *         HTTPException: If a retired ``collection_id`` query parameter is present,
-         *             the sort value is unsupported, or the page token is stale/malformed.
-         */
-        get: operations["list_threads_api_v1_threads__get"];
+        get?: never;
         put?: never;
         /**
          * Create Thread
@@ -14390,44 +14330,6 @@ export interface components {
             token: string;
         };
         /**
-         * RollExclusionPageResponse
-         * @description One deterministic page of the Roll exclusion drill-down (issue #3330).
-         *
-         *     The initial Roll bootstrap deliberately carries only bounded previews. This
-         *     page is the authoritative drill-down for a single exclusion category, and
-         *     its ``total`` is computed with the same predicate that produced the
-         *     bootstrap category count, so the two can never disagree.
-         */
-        RollExclusionPageResponse: {
-            /**
-             * Category
-             * @enum {string}
-             */
-            category: "blocked" | "inactive";
-            /** Items */
-            items?: components["schemas"]["ThreadExclusionReason"][];
-            /**
-             * Limit
-             * @description Echoed page size.
-             */
-            limit: number;
-            /**
-             * Next Cursor
-             * @description Offset cursor for the next page, null when this page is the last.
-             */
-            next_cursor?: string | null;
-            /**
-             * Offset
-             * @description Echoed page offset.
-             */
-            offset: number;
-            /**
-             * Total
-             * @description Every series in this category, not just this page.
-             */
-            total: number;
-        };
-        /**
          * RollLastRead
          * @description Session-scoped last read information.
          */
@@ -15901,35 +15803,6 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
-        };
-        /**
-         * ThreadExclusionReason
-         * @description One series excluded from the roll pool, with the reason the user can understand.
-         *
-         *     ``blocking_reasons`` and ``blocking_dependencies`` carry the live eligibility
-         *     explanation for blocked series so a paginated exclusion page (issue #3330)
-         *     can explain the wait without a second per-thread lookup.
-         */
-        ThreadExclusionReason: {
-            /** Blocking Dependencies */
-            blocking_dependencies?: components["schemas"]["BlockingDependency"][];
-            /** Blocking Reasons */
-            blocking_reasons?: string[];
-            /** Detail */
-            detail?: string | null;
-            /** Format */
-            format: string;
-            /** Last Activity At */
-            last_activity_at?: string | null;
-            /**
-             * Reason
-             * @enum {string}
-             */
-            reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue";
-            /** Thread Id */
-            thread_id: number;
-            /** Title */
-            title: string;
         };
         /**
          * ThreadExternalSeriesMappingResponse
@@ -22012,40 +21885,6 @@ export interface operations {
             };
         };
     };
-    roll_exclusion_page_api_v1_roll_exclusions_get: {
-        parameters: {
-            query: {
-                /** @description Roll exclusion category to page through. */
-                category: "blocked" | "inactive";
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollExclusionPageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     override_roll_api_v1_roll_override_post: {
         parameters: {
             query?: never;
@@ -22984,43 +22823,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_threads_api_v1_threads__get: {
-        parameters: {
-            query?: {
-                search?: string | null;
-                /** @description Sort order: position, title, or created */
-                sort?: string;
-                /** @description Number of threads to return per page (default 50, max 200) */
-                page_size?: number;
-                /** @description Opaque cursor token for pagination continuation */
-                page_token?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QueueThreadListResponse"];
                 };
             };
             /** @description Validation Error */

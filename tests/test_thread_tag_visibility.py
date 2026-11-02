@@ -18,13 +18,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from httpx import AsyncClient
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import TagAssignment, Thread, User
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.tag_service import TagService
+from app.services.thread_service import list_queue_threads
 from tests.conftest import get_or_create_user_async
 
 
@@ -58,7 +58,6 @@ async def _private_tag(db: AsyncSession, user: User, name: str):
 
 @pytest.mark.asyncio
 async def test_queue_rows_expose_visible_thread_tags(
-    auth_client: AsyncClient,
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
@@ -71,19 +70,19 @@ async def test_queue_rows_expose_visible_thread_tags(
         default_user, physical.id, "Thread", tagged.id
     )
 
-    response = await auth_client.get("/api/v1/threads/")
-    assert response.status_code == 200, response.text
-    rows = {row["title"]: row for row in response.json()["threads"]}
+    page = await list_queue_threads(
+        async_db, default_user.id, search=None, sort="position", page_size=50, page_token=None
+    )
+    rows = {row.title: row for row in page.threads}
 
-    assert [tag["name"] for tag in rows["Spider-Man"]["tags"]] == ["Physical"]
-    assert rows["Spider-Man"]["tags"][0]["color"] == physical.color
-    assert rows["Spider-Man"]["tags"][0]["scope"] == "private"
-    assert rows["Untagged Saga"]["tags"] == []
+    assert [tag.name for tag in rows["Spider-Man"].tags] == ["Physical"]
+    assert rows["Spider-Man"].tags[0].color == physical.color
+    assert rows["Spider-Man"].tags[0].scope == "private"
+    assert rows["Untagged Saga"].tags == []
 
 
 @pytest.mark.asyncio
 async def test_queue_rows_never_leak_another_users_private_tag(
-    auth_client: AsyncClient,
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
@@ -105,11 +104,12 @@ async def test_queue_rows_never_leak_another_users_private_tag(
     )
     await async_db.commit()
 
-    response = await auth_client.get("/api/v1/threads/")
-    assert response.status_code == 200, response.text
-    rows = {row["title"]: row for row in response.json()["threads"]}
+    page = await list_queue_threads(
+        async_db, default_user.id, search=None, sort="position", page_size=50, page_token=None
+    )
+    rows = {row.title: row for row in page.threads}
 
-    assert rows["Namor"]["tags"] == []
+    assert rows["Namor"].tags == []
 
 
 @pytest.mark.asyncio

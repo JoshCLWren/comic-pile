@@ -38,12 +38,19 @@ make verify-e2e-regression SCOPE=all  # full inventory sweep
 pnpm --filter frontend run test:e2e:regression -- --scope p0 --list
 ```
 
-Prerequisites mirror the normal Playwright suite: the app must serve on
+Prerequisites mirror the normal Playwright suite: one origin must serve on
 `BASE_URL` (default `http://127.0.0.1:9000`) with a reachable database, and
 the backend must run with `TEST_ENVIRONMENT=true` so the disposable test
 database uses the browser-suite contract (rate limits disabled — the fixture
 layer registers users and creates data at test speed, exactly like
 `docker-compose.test.yml` does for `api-test`).
+
+Native v2 resources are real production paths, so the same-origin server must
+route `/api/v2/*` to the Rust service and everything else to FastAPI. The CI
+workflow uses `scripts/e2e_native_ingress.py` (Python on `:9001`, native Roll on
+`:8010`, ingress on `:9000`) and gives both processes the same `SECRET_KEY`
+through `ENVIRONMENT=test`. Without that routing, Queue and Roll fail with the
+native path's 404/401 rather than exercising the product.
 
 ## CI workflow
 
@@ -52,9 +59,10 @@ layer registers users and creates data at test speed, exactly like
 - **Schedule:** daily at 04:47 UTC.
 - **Dispatch:** Actions → *E2E Chromium Regression* → *Run workflow* with a
   `scope` (`p1-p2` default) and worker count.
-- The job builds the frontend, applies migrations, starts the backend on
-  `:9000`, runs the inventory-selected suite with Chromium only, and uploads
-  artifacts for every run — including failures.
+- The job builds the frontend and native v2 service, applies migrations, starts
+  FastAPI and the native service behind the `:9000` ingress, runs the
+  inventory-selected suite with Chromium only, and uploads artifacts for every
+  run — including failures.
 
 ### Artifacts
 

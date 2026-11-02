@@ -7,7 +7,7 @@ const rollBootstrapApi = createRollBootstrapApi(client)
 
 beforeEach(() => {
   client.post.mockReset().mockResolvedValue({ session_id: 1, created: false })
-  client.get.mockReset().mockResolvedValue({ rollable: [], total_threads: 0, available_threads: 0, excluded_count: 0, excluded_threads: [], inactive_count: 0, inactive_threads: [] })
+  client.get.mockReset().mockResolvedValue({ rollable: [], pool_reason: 'no_series' })
 })
 
 it('sends a valid browser IANA timezone as the bootstrap query parameter', async () => {
@@ -35,7 +35,7 @@ it('treats a blank timezone like a missing value instead of sending garbage', as
 })
 
 
-it('does not read the bootstrap if explicit initialization fails', async () => {
+it('does not read bootstrap when explicit initialization fails', async () => {
   client.post.mockRejectedValueOnce(new Error('session init unavailable'))
   await expect(rollBootstrapApi.get()).rejects.toThrow('session init unavailable')
   expect(client.get).not.toHaveBeenCalled()

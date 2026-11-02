@@ -76,7 +76,7 @@ def get_all_threads(token: str) -> dict[str, dict]:
         if page_token:
             params["page_token"] = page_token
         response = requests.get(
-            f"{API_BASE}/api/threads/",
+            f"{API_BASE}/api/v2/threads",
             headers={"Authorization": f"Bearer {token}"},
             params=params,
             timeout=REQUESTS_TIMEOUT,

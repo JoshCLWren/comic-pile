@@ -94,8 +94,8 @@ async def test_traffic_endpoint_requires_authentication(client: AsyncClient) -> 
 
 async def test_traffic_endpoint_reports_route_counters(auth_client: AsyncClient) -> None:
     """Authenticated callers see counters for previously completed requests."""
-    listed = await auth_client.get("/api/v1/threads/")
-    assert listed.status_code in (200, 404)
+    listed = await auth_client.get("/api/v1/threads/stale")
+    assert listed.status_code == 200
 
     # The snapshot cannot contain its own request: middleware records each
     # hit only after the response completes. Assert on the earlier call.
@@ -108,7 +108,7 @@ async def test_traffic_endpoint_reports_route_counters(auth_client: AsyncClient)
         (counter.method, counter.route, counter.status_class): counter.count
         for counter in payload.counters
     }
-    assert counted[("GET", "/api/v1/threads/", "2xx")] == 1
+    assert counted[("GET", "/api/v1/threads/stale", "2xx")] == 1
 
 
 async def test_unmatched_api_paths_collapse_into_catch_all_template(

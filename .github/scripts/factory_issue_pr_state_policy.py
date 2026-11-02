@@ -41,7 +41,8 @@ def body_blocks_reconciliation(body: str | None) -> bool:
     """Return whether a body forbids rewriting this target's factory labels.
 
     Mirrors ``stale_pr_decay.process_stale_prs``: a standalone
-    ``<!-- factory-execution:manual-only -->`` directive is an operator hold.
+    ``<!-- factory-execution:manual-only -->`` directive or a standalone
+    ``manual-only`` line is an operator hold.
     ``gh issue list --label factory`` includes pull requests, so the scheduled
     reconciler must skip those PR bodies the same way stale-expiration does.
     """

@@ -2,7 +2,7 @@
 name = "comicpile-vercel-native"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 publish = false
 
 [dependencies]
@@ -16,6 +16,10 @@ vercel_runtime = { version = "2.4", features = ["axum"] }
 [[bin]]
 name = "native_roll"
 path = "api/native_roll.rs"
+
+[[bin]]
+name = "native_issue"
+path = "api/native_issue.rs"
 
 [profile.release]
 codegen-units = 1

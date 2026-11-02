@@ -27,7 +27,7 @@ the supported, documented surface. New client code must call these paths:
 | Roll | `/api/v1/roll` |
 | Sessions | `/api/v1/sessions` |
 | Snooze | `/api/v1/snooze` |
-| Threads | `/api/v1/threads` |
+| Threads | `/api/v1/threads` (collection read moved to native `GET /api/v2/threads`) |
 | Undo | `/api/v1/undo` |
 
 ## Intentional legacy aliases (`/api`)

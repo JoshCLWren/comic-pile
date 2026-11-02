@@ -96,7 +96,7 @@ export function LastReadStrip({
         ) : (
           <div
             aria-label="Cover unavailable"
-            className="flex h-20 w-14 shrink-0 items-center justify-center rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-surface)] text-lg font-black text-[var(--theme-text-dim)]"
+            className="flex h-20 w-14 shrink-0 items-center justify-center rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-lg font-black text-[var(--theme-text-dim)]"
           >
             {title.slice(0, 1).toUpperCase()}
           </div>

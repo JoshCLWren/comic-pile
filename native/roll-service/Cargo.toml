@@ -2,11 +2,12 @@
 name = "comicpile-roll-service"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 publish = false
 
 [dependencies]
 axum = "0.8"
+base64 = "0.22"
 chrono = "0.4"
 chrono-tz = "0.10"
 deadpool-postgres = "0.14"

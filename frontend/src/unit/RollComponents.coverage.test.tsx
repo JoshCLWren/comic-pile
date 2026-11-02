@@ -1,9 +1,7 @@
-import { useState } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-import { cast } from '../utils/cast'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
@@ -50,137 +48,37 @@ const thread: Thread = {
   created_at: '2000-01-01T00:00:00Z',
 }
 const callbacks = () => ({
-  onThreadClick: vi.fn(), onUnsnooze: vi.fn(), onUnskip: vi.fn(), onReadStale: vi.fn(), onToggleSnoozed: vi.fn(),
-  onToggleSkipped: vi.fn(), onToggleStale: vi.fn(), onToggleBlocked: vi.fn(), onShuffle: vi.fn(),
+  onThreadClick: vi.fn(), onUnsnooze: vi.fn(), onUnskip: vi.fn(), onToggleSnoozed: vi.fn(),
+  onToggleSkipped: vi.fn(), onShuffle: vi.fn(),
 })
 
-type ThreadPoolProps = Parameters<typeof ThreadPool>[0]
-
-// SAFETY: staleExpanded is controlled by RollPage state, so a static prop can never expand the
-// section. This harness owns the same toggle state the real page owns, letting the test drive the
-// collapse/expand interaction instead of asserting against a frozen prop.
-function StaleSectionHarness(props: Omit<ThreadPoolProps, 'staleExpanded' | 'onToggleStale'>) {
-  const [staleExpanded, setStaleExpanded] = useState(false)
-  return (
-    <MemoryRouter>
-      <ThreadPool
-        {...props}
-        staleExpanded={staleExpanded}
-        onToggleStale={() => setStaleExpanded((value) => !value)}
-      />
-    </MemoryRouter>
-  )
-}
-
-describe('ThreadPool', () => {
-  it('renders empty, blocked, pool, stale, and snoozed states', async () => {
-    const empty = callbacks()
-    const { rerender } = render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} staleExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...empty} /></MemoryRouter>)
+describe('ThreadPool diagnostic removal (#4441)', () => {
+  it('renders the empty state and retains available issue controls', async () => {
+    const actions = callbacks()
+    const { rerender } = render(
+      <MemoryRouter><ThreadPool pool={[]} isRatingView={false} selectedThreadId={null} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>,
+    )
     expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /add a series/i }))
-    expect(empty.onShuffle).not.toHaveBeenCalled()
-
-    const actions = callbacks()
-    // SAFETY: Test injects a synthetic staleThread with extra days field to cover the stale branch; the cast widens Thread to the stale shape the component reads.
-    rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }} isRatingView={false} selectedThreadId={null} staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 4 })} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} staleExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
-    expect(screen.getByText(/Every series is blocked or snoozed/)).toBeInTheDocument()
-    await userEvent.setup().click(screen.getByRole('button', { name: /go to queue/i }))
-    expect(actions.onToggleBlocked).not.toHaveBeenCalled()
-
-    // SAFETY: Same synthetic staleThread widening for the second stale branch.
-    rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={1} staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 2 })} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} staleExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
-    await userEvent.setup().click(screen.getByRole('button', { name: /snoozed/i }))
-    await userEvent.setup().click(screen.getAllByText('Saga')[0]!)
+    rerender(
+      <MemoryRouter><ThreadPool pool={[thread]} isRatingView={false} selectedThreadId={null} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>,
+    )
+    expect(screen.queryByText(/waiting for earlier issues/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/out of the roll pool/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Die face 1: Saga/i })).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: /Die face 1: Saga/i }))
     expect(actions.onThreadClick).toHaveBeenCalledWith(thread)
-    fireEvent.keyDown(screen.getAllByText('Saga')[0]!.closest('[role="button"]')!, { key: 'Enter' })
-    expect(actions.onThreadClick).toHaveBeenCalledTimes(2)
   })
 
-  it('covers expanded blocked, stale, snoozed, selected, rolling, and disabled controls', async () => {
+  it('keeps snooze and skip controls without retired reports', async () => {
     const actions = callbacks()
-    // SAFETY: Synthetic stale thread with days field exercises the stale rendering branch; the type widens Thread to the stale shape.
-    const stale = cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, title: 'Stale Saga', days: 9 })
-    render(<StaleSectionHarness pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} />)
-    await userEvent.setup().click(screen.getByRole('button', { name: /series waiting for earlier issues/i }))
-    expect(screen.getByText('Prerequisite')).toBeInTheDocument()
-    const hiddenBlockerLink = screen.getByRole('link', { name: 'Open Saga' })
-    expect(hiddenBlockerLink).toHaveAttribute('href', '/thread/9')
-    fireEvent.keyDown(screen.getByRole('button', { name: /series waiting for earlier issues/i }), { key: 'ArrowDown' })
-    await userEvent.setup().click(screen.getByRole('button', { name: /Snoozed \(1\)/i }))
+    render(<MemoryRouter><ThreadPool pool={[]} isRatingView={false} selectedThreadId={null} snoozedThreads={[{id:3,title:'Snoozed',format:'Comic'}]} snoozedExpanded={true} skippedThreads={[{id:4,title:'Skipped',format:'Comic'}]} skippedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Unsnooze this comic' }))
     expect(actions.onUnsnooze).toHaveBeenCalledWith(3)
-    // SAFETY: The stale card is rendered once the stale section is expanded; toggle it open first so the roll button is reachable.
-    const staleToggle = screen.getByRole('button', { name: /series you haven't opened recently/i })
-    expect(staleToggle).toHaveAttribute('aria-expanded', 'false')
-    await userEvent.setup().click(staleToggle)
-    expect(staleToggle).toHaveAttribute('aria-expanded', 'true')
-    const rollButton = screen.getByRole('button', { name: /roll this series now/i })
-    expect(rollButton.className).toContain('focus-visible:ring-[var(--theme-focus-ring)]')
-    await userEvent.setup().click(rollButton)
-    expect(actions.onReadStale).toHaveBeenCalledWith(thread.id)
-  })
-
-  it('handles rating-view pool layout and pending controls', async () => {
-    const actions = callbacks()
-    const second = { ...thread, id: 4, title: 'Second' }
-    // SAFETY: Minimal staleThread fixture with synthetic days field covers the rating-view pool branch.
-    render(<MemoryRouter><ThreadPool
-      pool={[thread, second]}
-      blockedThreads={[{ ...thread, id: 5, title: 'Blocked without a reason' }]}
-      blockingDependencyMap={{}}
-      isRatingView
-      selectedThreadId={null}
-      staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 1 })}
-      staleThreadCount={1}
-      snoozedThreads={[{ id: 6, title: 'Snoozed', format: 'Comic' }]}
-      snoozedExpanded
-      skippedThreads={[]}
-      skippedExpanded
-      blockedExpanded
-      staleExpanded={false}
-      unsnoozeIsPending
-      unskipIsPending
-      shuffleIsPending
-      {...actions}
-    /></MemoryRouter>)
-    expect(screen.queryByText('Saga')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Shuffle queue' })).not.toBeInTheDocument()
-    expect(screen.queryByText(/hidden \(blocked/)).not.toBeInTheDocument()
-  })
-
-  it('pluralizes multiple blocked threads and triggers read-stale on space key', async () => {
-    // L158 `blockedThreads.length !== 1 ? 's' : ''` plus the stale roll button's native Space activation
-    const actions = callbacks()
-    const stale = { ...thread, title: 'Stale Saga', days: 9 }
-    // SAFETY: Synthetic stale thread cast widens Thread to the stale shape with days for the pluralization test.
-    render(<StaleSectionHarness
-      pool={[thread]}
-      blockedThreads={[{ ...thread, id: 2, title: 'Blocked A' }, { ...thread, id: 3, title: 'Blocked B' }]}
-      blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }}
-      isRatingView={false}
-      selectedThreadId={null}
-      staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>(stale)}
-      staleThreadCount={1}
-      snoozedThreads={[]}
-      snoozedExpanded={false}
-      skippedThreads={[]}
-      skippedExpanded={false}
-      blockedExpanded
-      unsnoozeIsPending={false}
-      unskipIsPending={false}
-      shuffleIsPending={false}
-      {...actions}
-    />)
-    expect(screen.getByText(/2 series waiting for earlier issues/)).toBeInTheDocument()
-    // SAFETY: the stale section is collapsed by default; the roll affordance is only
-    // reachable after expanding it, so toggle it open first.
-    await userEvent.setup().click(screen.getByRole('button', { name: /series you haven't opened recently/i }))
-    const staleRollButton = screen.getByRole('button', { name: /roll this series now/i })
-    // SAFETY: the roll control is a native <button>, so Space activates it on keyup the way a
-    // browser would; drive the real activation path instead of a bare keydown event.
-    staleRollButton.focus()
-    await userEvent.keyboard(' ')
-    expect(actions.onReadStale).toHaveBeenCalledWith(thread.id)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Unskip this comic' }))
+    expect(actions.onUnskip).toHaveBeenCalledWith(4)
+    expect(screen.queryByText(/waiting for earlier issues/i)).not.toBeInTheDocument()
   })
 })
 

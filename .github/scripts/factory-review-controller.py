@@ -231,7 +231,12 @@ def replace_factory_labels(number: int, owner: str, stage: str) -> None:
     last_exc: RuntimeError | None = None
     for attempt in range(3):
         try:
-            current = labels_of(target_json(number))
+            target = target_json(number)
+            # Shared write choke point: never add or rewrite factory labels on
+            # a manual-only hold. Leftover factory* labels stay for humans.
+            if eligibility.is_manual_only(str(target.get("body") or "")):
+                return
+            current = labels_of(target)
             labels = {
                 label
                 for label in current

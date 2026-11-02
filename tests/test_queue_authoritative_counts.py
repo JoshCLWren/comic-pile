@@ -19,17 +19,15 @@ This module proves four contracts:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from inspect import unwrap
-from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
-from app.api.thread import list_threads
 from app.models import Thread
 from app.schemas import QueueThreadListResponse
+from app.services.thread_service import list_queue_threads
 from comic_pile.queue import move_to_position
 from tests.conftest import get_or_create_user_async
 
@@ -87,11 +85,9 @@ async def _fetch_first_page(db: AsyncSession, user_id: int) -> QueueThreadListRe
     Returns:
         The first page of the Queue response (50 rows).
     """
-    route = unwrap(list_threads)
-    return await route(
-        request=_make_request(),
-        current_user=SimpleNamespace(id=user_id),
-        db=db,
+    return await list_queue_threads(
+        db,
+        user_id,
         search=None,
         sort="position",
         page_size=PAGE_SIZE,
@@ -122,11 +118,9 @@ async def test_active_count_is_independent_of_search_and_sort(
     user = await get_or_create_user_async(async_db)
     await _seed_active_queue(async_db, user.id, QUEUE_SIZE)
 
-    route = unwrap(list_threads)
-    searched = await route(
-        request=_make_request(),
-        current_user=SimpleNamespace(id=user.id),
-        db=async_db,
+    searched = await list_queue_threads(
+        async_db,
+        user.id,
         search="Queue Thread 00001",
         sort="position",
         page_size=PAGE_SIZE,

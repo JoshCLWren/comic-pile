@@ -127,6 +127,8 @@ def test_manual_only_body_blocks_reconciliation() -> None:
     assert not policy.body_blocks_reconciliation(
         "To opt out, use `<!-- factory-execution:manual-only -->`."
     )
+    assert policy.body_blocks_reconciliation("Hold this factory PR.\nmanual-only\n")
+    assert not policy.body_blocks_reconciliation("Discussing a manual-only hold in prose.\n")
 
 
 def test_blocked_by_body_cli_reports_skip_for_manual_only(tmp_path: Path) -> None:
