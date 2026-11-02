@@ -122,8 +122,8 @@ def mark_heavy_init_started() -> None:
     global _heavy_init_started_at
 
     with _lock:
-        if _heavy_init_started_at is None:
-            _heavy_init_started_at = time.perf_counter()
+        # A failed attempt must not make the next attempt inherit idle age.
+        _heavy_init_started_at = time.perf_counter()
 
 
 def mark_heavy_init_complete() -> float:
