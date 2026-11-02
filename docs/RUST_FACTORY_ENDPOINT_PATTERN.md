@@ -41,6 +41,32 @@ Python fallback.
    achieved the requested behavior. Keep the owner objective open until
    applicable caller migration, deletion and production acceptance are done.
 
+## Conflict-resistant ingress tests (required for every new Rust endpoint)
+
+Native cutovers change a shared `vercel.json` route list, but they must **not**
+renumber unrelated test expectations. Use the method/path/entrypoint discovery
+in `tests/test_native_roll_live_ingress.py` for the complete Rust surface;
+use the semantic route lookup in `tests/test_vercel_deployment.py` for
+specific contract and security-header checks. **Do not introduce
+`routes[37]`-style assertions, fixed native-route counts, or mass index
+updates** when adding an endpoint. Any test added for an endpoint should
+probe its real HTTP method, numeric ID validation and wrong-method fallback.
+
+The deploy regression resolves exactly one route by `src` (plus HTTP method
+when needed) and verifies that all native rewrites precede the Python
+catch-all, which itself precedes the static/SPA routes. Missing or duplicate
+routes, shadowing, and missing security headers must continue to fail; an
+unrelated route inserted before the catch-all must not.
+
+Start new endpoint branches at current `main`. Before requesting exact-head
+review, reconcile branch drift or genuine conflicts with the latest `main`,
+then rerun local routing tests and CI on the final head. **Do not enable
+automatic rebases for every open PR on each main update**: that repeatedly
+invalidates exact-head CI, independent reviews and concurrent factory leases.
+Use the normal mergeability/ready-drain gate and resolve conflicts when
+needed. Preserve all newer routes when reconciling an older PR; never restore
+an obsolete `vercel.json` wholesale.
+
 ## Pre-push checks
 
 From the repository root:

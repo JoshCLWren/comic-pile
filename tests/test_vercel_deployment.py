@@ -3,6 +3,8 @@
 import json
 import re
 from pathlib import Path
+
+import pytest
 from typing import cast
 
 
@@ -68,6 +70,60 @@ def _routes(config: dict[str, object]) -> list[dict[str, object]]:
         Ordered Vercel route definitions.
     """
     return cast("list[dict[str, object]]", config["routes"])
+
+
+def _route_index(
+    routes: list[dict[str, object]],
+    *,
+    src: str | None = None,
+    handle: str | None = None,
+    method: str | None = None,
+) -> int:
+    """Locate exactly one route by identity, without coupling tests to its position."""
+    if (src is None) == (handle is None):
+        raise ValueError("Exactly one of src or handle is required")
+    matches = [
+        index
+        for index, route in enumerate(routes)
+        if (src is None or route.get("src") == src)
+        and (handle is None or route.get("handle") == handle)
+        and (method is None or method in cast("list[str]", route.get("methods", [])))
+    ]
+    assert len(matches) == 1, (
+        f"Expected one route for src={src!r}, handle={handle!r}, "
+        f"method={method!r}; found {len(matches)}"
+    )
+    return matches[0]
+
+
+def _route(routes: list[dict[str, object]], src: str) -> dict[str, object]:
+    """Return a uniquely identified route, even when other routes are inserted."""
+    return routes[_route_index(routes, src=src)]
+
+
+def _assert_route_priorities(routes: list[dict[str, object]]) -> None:
+    """Protect meaningful Vercel precedence, not arbitrary array offsets."""
+    api_fallback = _route_index(routes, src="/api(?:/.*)?")
+    native_indices = [
+        index
+        for index, route in enumerate(routes)
+        if route.get("dest") in {"/api/native_roll.rs", "/api/native_issue.rs"}
+    ]
+    assert native_indices, "No native ingress routes are configured"
+    assert all(index < api_fallback for index in native_indices), (
+        "Native routes must precede the Python API catch-all"
+    )
+
+    docs = _route_index(routes, src="/(?:openapi\\.json|docs|redoc|health)")
+    landing = _route_index(routes, src="/")
+    assets = _route_index(routes, src="/assets/.+")
+    html = _route_index(routes, src=_route_html_src_pattern())
+    filesystem = _route_index(routes, handle="filesystem")
+    spa = _route_index(routes, src="/(.*)")
+    assert api_fallback < docs < landing < assets < html < filesystem < spa, (
+        "API, static HTML and SPA fallback precedence must be preserved"
+    )
+    assert spa == len(routes) - 1, "SPA catch-all must remain the last route"
 
 
 def _headers(route: dict[str, object]) -> dict[str, str]:
@@ -157,52 +213,87 @@ def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
 
 
 def test_vercel_routes_backend_before_spa_fallback() -> None:
-    """Ensure API and documentation requests cannot be swallowed by the SPA."""
+    """Validate route identity and precedence without hard-coded offsets."""
     routes = _routes(_load_vercel_config())
+    _assert_route_priorities(routes)
 
-    assert routes[0] == {
+    assert _route(routes, "/api/v2/auth/register") == {
         "src": "/api/v2/auth/register",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert routes[23] == {
+    assert _route(routes, "/api/auth/reset-password") == {
         "src": "/api/auth/reset-password",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert all(route["dest"] == "/api/native_roll.rs" for route in routes[:24])
-    assert routes[26] == {
+    assert _route(routes, "/api/v2/reading-sessions") == {
         "src": "/api/v2/reading-sessions",
         "methods": ["POST"],
         "dest": "/api/native_roll.rs",
     }
-    assert all(route["dest"] in ("/api/native_roll.rs", "/api/native_issue.rs") for route in routes[24:40])
-    assert routes[40] == {"src": "/api(?:/.*)?", "dest": "/api/index.py"}
-    assert routes[41] == {
+    auth_routes = [
+        route
+        for route in routes
+        if re.fullmatch(r"/api/(?:v[12]/)?auth/[^/]+", str(route.get("src", "")))
+    ]
+    assert auth_routes
+    assert all(route.get("dest") == "/api/native_roll.rs" for route in auth_routes)
+    assert _route(routes, "/api(?:/.*)?") == {
+        "src": "/api(?:/.*)?",
+        "dest": "/api/index.py",
+    }
+    assert _route(routes, "/(?:openapi\\.json|docs|redoc|health)") == {
         "src": "/(?:openapi\\.json|docs|redoc|health)",
         "dest": "/api/index.py",
     }
-    assert routes[42]["src"] == "/"
-    assert routes[42]["dest"] == "/index.html"
-    # Route 43 is the /assets/.+ cache headers route (added for edge caching)
-    assert routes[43] == {
+    assert _route(routes, "/")["dest"] == "/index.html"
+    assert _route(routes, "/assets/.+") == {
         "src": "/assets/.+",
         "continue": True,
         "headers": {"Cache-Control": "public, max-age=31536000, immutable"},
     }
-    # Route 44 serves the build's generated route HTML pages (see
-    # test_vercel_route_html_rule_serves_every_generated_page).
-    assert routes[44] == _route_html_rule()
-    assert routes[45] == {"handle": "filesystem"}
-    assert routes[-1]["src"] == "/(.*)"
-    assert routes[-1]["dest"] == "/index.html"
+    assert _route(routes, _route_html_src_pattern()) == _route_html_rule()
+    assert routes[_route_index(routes, handle="filesystem")] == {
+        "handle": "filesystem"
+    }
+    assert _route(routes, "/(.*)")["dest"] == "/index.html"
+
+
+def test_unrelated_native_route_insertion_keeps_deployment_guards_stable() -> None:
+    """Adding a new Rust endpoint cannot shift unrelated route assertions."""
+    routes = _routes(_load_vercel_config())
+    insertion = _route_index(routes, src="/api(?:/.*)?")
+    expanded = [
+        *routes[:insertion],
+        {
+            "src": "/api/v2/new-rust-resource",
+            "methods": ["GET"],
+            "dest": "/api/native_roll.rs",
+        },
+        *routes[insertion:],
+    ]
+
+    _assert_route_priorities(expanded)
+    assert _route(expanded, _route_html_src_pattern()) == _route_html_rule()
+    assert _route(expanded, "/")["dest"] == "/index.html"
+
+
+def test_python_catchall_cannot_shadow_a_native_route() -> None:
+    """Moving the Python fallback before Rust routes must fail deterministically."""
+    routes = _routes(_load_vercel_config()).copy()
+    fallback = routes.pop(_route_index(routes, src="/api(?:/.*)?"))
+    routes.insert(0, fallback)
+
+    with pytest.raises(AssertionError, match="Native routes must precede"):
+        _assert_route_priorities(routes)
 
 
 def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
     """Ensure static HTML remains identifiable and receives browser protections."""
     routes = _routes(_load_vercel_config())
 
-    for route in (routes[42], routes[44], routes[-1]):
+    for route in (_route(routes, "/"), _route(routes, _route_html_src_pattern()), routes[-1]):
         headers = _headers(route)
         assert headers["X-ComicPile-Frontend"] == "vercel-static"
         assert headers["Cache-Control"] == "public, max-age=0, must-revalidate"
@@ -218,9 +309,9 @@ def test_static_html_exposes_routing_evidence_and_security_headers() -> None:
 
     # Only the landing route is indexable; every other HTML response the
     # routing layer serves must state its non-indexability.
-    landing_headers = _headers(routes[42])
+    landing_headers = _headers(_route(routes, "/"))
     assert "X-Robots-Tag" not in landing_headers
-    for route in (routes[44], routes[-1]):
+    for route in (_route(routes, _route_html_src_pattern()), routes[-1]):
         assert _headers(route)["X-Robots-Tag"] == "noindex, nofollow"
 
 
@@ -232,7 +323,7 @@ def test_vercel_route_html_rule_serves_every_generated_page() -> None:
     such as ``/creators/compare`` map to ``/creators/compare.html``.
     """
     routes = _routes(_load_vercel_config())
-    html_rule = routes[44]
+    html_rule = _route(routes, _route_html_src_pattern())
 
     assert html_rule == _route_html_rule()
 
@@ -254,7 +345,7 @@ def test_vercel_route_html_rule_lists_exactly_the_generated_alternatives() -> No
     SPA. This assertion fails the configuration change in both directions.
     """
     routes = _routes(_load_vercel_config())
-    src_pattern = str(routes[44]["src"])
+    src_pattern = str(_route(routes, _route_html_src_pattern())["src"])
     suffix = ")(\\.html)?"
 
     assert src_pattern.startswith("/(")
@@ -268,13 +359,13 @@ def test_vercel_route_html_rule_lists_exactly_the_generated_alternatives() -> No
 def test_vercel_dynamic_route_pages_fall_through_to_the_spa_fallback() -> None:
     """Parameterized pages keep the app fallback and SPA noindex robots header."""
     routes = _routes(_load_vercel_config())
-    src_pattern = str(routes[44]["src"])
+    src_pattern = str(_route(routes, _route_html_src_pattern())["src"])
 
     for path in DYNAMIC_ROUTE_PROBES:
         matched = re.fullmatch(src_pattern, path)
         assert matched is None, f"{path} must fall through to the SPA, not a static file"
 
-    assert routes[45] == {"handle": "filesystem"}
+    assert routes[_route_index(routes, handle="filesystem")] == {"handle": "filesystem"}
     fallback = routes[-1]
     assert fallback["src"] == "/(.*)"
     assert fallback["dest"] == "/index.html"
