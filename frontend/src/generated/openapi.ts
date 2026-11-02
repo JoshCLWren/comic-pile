@@ -12158,6 +12158,8 @@ export interface components {
             has_unresolved: boolean;
             /** Issue Id */
             issue_id: number;
+            /** Metadata Hydration Status */
+            metadata_hydration_status?: "unmapped" | "needed" | "complete" | "not_completed";
             /** Thread Id */
             thread_id: number;
             /** Thread Title */
