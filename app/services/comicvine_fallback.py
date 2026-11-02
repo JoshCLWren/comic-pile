@@ -171,10 +171,12 @@ async def _hydrate_with_retries(
     for attempt in range(1, COMICVINE_FALLBACK_MAX_ATTEMPTS + 1):
         try:
             hydrated_identity = await hydrate_issue(db, client, issue_id, refresh=True)
+            # Check hydration status before commit to avoid MissingGreenlet after expiration.
+            needs_hydration = metadata_needs_hydration(hydrated_identity)
             await db.commit()
             # A provider request can succeed while returning only a sparse row.
             # Persist that evidence, but never mark the issue deep-hydrated.
-            if metadata_needs_hydration(hydrated_identity):
+            if needs_hydration:
                 logger.info(
                     "comicvine_fallback_incomplete identity_id=%s comicvine_issue_id=%s",
                     identity_id,
