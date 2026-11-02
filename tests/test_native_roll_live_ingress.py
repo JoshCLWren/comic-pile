@@ -38,9 +38,9 @@ AXUM_ROUTE = re.compile(
     r'\.route\(\s*"(?P<path>/[^"]+)"\s*,\s*'
     r'(?P<method>get|post|put|patch|delete)\s*\('
 )
-# Axum 0.8 spells captures ``{name}``; Vercel rewrites spell them ``:name``.
-# Normalize both parser outputs to the Vercel form so the ingress/rewrite
-# comparisons stay exact instead of silently skipping parameterized routes.
+# Axum 0.8 spells captures ``{name}``; normalize these to stable tokens.
+# Vercel routes[].src is PCRE, not high-level rewrite syntax: a literal
+# ``:name`` cannot match the concrete HTTP path.
 
 
 def _normalized_path(path: str) -> str:
@@ -68,8 +68,8 @@ def _vercel_routes() -> list[dict[str, object]]:
 
 
 def _vercel_pattern(source: str) -> str:
-    """Translate Vercel ``:param`` captures into their regex equivalent."""
-    return VERCEL_CAPTURE.sub(r"[^/]+", source)
+    """Treat Vercel routes[].src as a literal PCRE pattern."""
+    return source
 
 
 def _destination(
@@ -93,8 +93,11 @@ def _destination(
 
 def _concrete_path(path: str) -> str:
     """Use a numeric owned Issue ID when checking parameterized Axum routes."""
-    concrete = AXUM_CAPTURE.sub("42", path)
-    concrete = VERCEL_CAPTURE.sub("42", concrete)
+    # First normalize Axum curly braces {thread_id} to Vercel colon syntax :thread_id
+    normalized = AXUM_CAPTURE.sub(r":\1", path)
+    # Then convert the colon syntax to numeric for concrete path matching
+    concrete = VERCEL_CAPTURE.sub("42", normalized)
+    # Verify curly braces are gone (Axum syntax converted)
     assert "{" not in concrete and "}" not in concrete, path
     return concrete
 
@@ -156,6 +159,9 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
         if not isinstance(function, str) or function not in ingresses:
             continue
         source = route.get("src")
+        assert isinstance(source, str) and re.search(r"/:[A-Za-z_]", source) is None, (
+            f"Vercel routes[].src must use regex, not :param: {source}"
+        )
         methods = route.get("methods")
         assert isinstance(source, str) and (
             source.startswith("/api/") or source.startswith("^/api/")
@@ -209,4 +215,8 @@ def test_axum_08_captures_normalize_to_vercel_parameters() -> None:
         start="pub fn router(",
         end="#[cfg(test)]",
     )
+    # This test validates that the _axum_routes function correctly normalizes
+    # Axum routes from curly brace syntax ({thread_id}) to colon syntax (:thread_id),
+    # which is the expected intermediate step in the route normalization process.
+    # The actual vercel.json routes use regex patterns like [0-9]+$ for numeric matching.
     assert routes == {("GET", "/api/v2/queue-entries/:thread_id")}

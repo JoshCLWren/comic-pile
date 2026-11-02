@@ -197,12 +197,12 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         "dest": "/api/native_roll.rs",
     }
     assert routes[7] == {
-        "src": "/api/v2/queue-entries/:thread_id",
+        "src": "^/api/v2/queue-entries/[0-9]+$",
         "methods": ["GET"],
         "dest": "/api/native_roll.rs",
     }
     assert routes[8] == {
-        "src": "/api/v2/queue-entries/:thread_id",
+        "src": "^/api/v2/queue-entries/[0-9]+$",
         "methods": ["PATCH"],
         "dest": "/api/native_roll.rs",
     }
@@ -400,6 +400,13 @@ def test_node_auth_route_is_isolated_from_python_and_static_routes() -> None:
         ("GET", "/api/v2/issues/42", "/api/index.py"),
         ("POST", "/api/v2/issues/42", "/api/index.py"),
         ("PATCH", "/api/v2/issues/not-an-id", "/api/index.py"),
+        ("GET", "/api/v2/queue-entries/240", "/api/native_roll.rs"),
+        ("PATCH", "/api/v2/queue-entries/240", "/api/native_roll.rs"),
+        ("GET", "/api/v2/queue-entries/1018106", "/api/native_roll.rs"),
+        ("PATCH", "/api/v2/queue-entries/1018106", "/api/native_roll.rs"),
+        ("POST", "/api/v2/queue-entries/240", "/api/index.py"),
+        ("GET", "/api/v2/queue-entries/not-an-id", "/api/index.py"),
+        ("PATCH", "/api/v2/queue-entries/not-an-id", "/api/index.py"),
         ("GET", "/api/v2/reading-boundaries", "/api/index.py"),
         ("GET", "/health", "/api/index.py"),
         ("GET", "/", "/index.html"),
