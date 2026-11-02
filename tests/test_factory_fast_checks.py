@@ -244,6 +244,54 @@ def test_missing_openapi_toolchain_blocks_generated_schema_change(tmp_path: Path
     assert "OpenAPI check toolchain (uv)" in result.stdout
 
 
+def test_manifest_only_change_checks_frozen_pnpm_lockfile(tmp_path: Path) -> None:
+    """A package-only change fails before push if its lockfile is stale."""
+    repo = repo_with(tmp_path, {"package.json": '{"devDependencies": {"x": "2"}}\n'})
+    bin_dir = tmp_path / "bin"
+    stub(
+        bin_dir,
+        "pnpm",
+        'echo "pnpm $*" >> ../pnpm.log\n'
+        'case "$*" in\n'
+        '  *install*--frozen-lockfile*) echo "ERR_PNPM_OUTDATED_LOCKFILE"; exit 1 ;;\n'
+        'esac\nexit 0',
+    )
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "ERR_PNPM_OUTDATED_LOCKFILE" in result.stdout
+    assert "frontend toolchain setup (pnpm install)" in result.stdout
+    calls = (tmp_path / "pnpm.log").read_text()
+    assert "install --frozen-lockfile" in calls
+    assert "typecheck" not in calls
+
+
+def test_package_and_lockfile_changes_select_dependency_gate(tmp_path: Path) -> None:
+    """Root and frontend dependency files must select frozen installs."""
+    repo = repo_with(
+        tmp_path,
+        {
+            "package.json": "{}\n",
+            "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+            "frontend/package.json": "{}\n",
+            "pnpm-workspace.yaml": "packages: []\n",
+        },
+    )
+    result = subprocess.run(
+        ["bash", "-c", f"source {HELPER!s}; factory_fast_check_paths HEAD | factory_fast_check_plan"],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    for path in (
+        "package.json",
+        "pnpm-lock.yaml",
+        "frontend/package.json",
+        "pnpm-workspace.yaml",
+    ):
+        assert f"dependencies\t{path}" in result.stdout.splitlines()
+
+
 def test_ruff_failure_blocks_push(tmp_path: Path) -> None:
     repo = repo_with(tmp_path, {"app/service.py": "helper()\n"})
     bin_dir = tmp_path / "bin"
