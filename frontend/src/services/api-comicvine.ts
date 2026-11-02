@@ -204,6 +204,7 @@ export interface IssueIdentityResponse {
   confirmed_mappings: IssueIdentityMapping[]
   candidate_mappings: IssueIdentityMapping[]
   has_unresolved: boolean
+  metadata_hydration_status?: 'unmapped' | 'needed' | 'complete' | 'not_completed'
 }
 
 export interface MetadataRefreshResponse {
