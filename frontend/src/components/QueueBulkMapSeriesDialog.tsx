@@ -385,18 +385,7 @@ export default function QueueBulkMapSeriesDialog({
       </Modal>
 
       {currentItem && (
-        <>
-          {batchIncomplete && (
-            <p
-              role="alert"
-              className="rounded-lg border border-[var(--theme-warning)]/40 bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-text-primary)]"
-            >
-              Part of the queue could not be loaded, so this run may not cover every series that
-              needs a ComicVine match. Reopen Map Series once the queue finishes loading to include
-              the rest.
-            </p>
-          )}
-          <QueueMapSeriesDialog
+        <QueueMapSeriesDialog
             isOpen={mappingOpen}
             threadId={currentItem.threadId}
             threadTitle={currentItem.threadTitle}
@@ -405,9 +394,9 @@ export default function QueueBulkMapSeriesDialog({
             onSkip={handleCurrentSkipped}
             onFailed={handleCurrentFailed}
             batchProgress={batchProgress}
+            batchIncomplete={batchIncomplete}
             onFinishBatch={handleFinish}
           />
-        </>
       )}
 
       <Modal isOpen={resultsOpen} title="Mapping Results" onClose={handleDone} size="large">
