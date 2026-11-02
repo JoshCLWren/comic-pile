@@ -23,7 +23,7 @@ async function getCsrfToken(
   page: import('@playwright/test').Page,
   token: string | null,
 ): Promise<string> {
-  const response = await page.request.get('/api/auth/csrf', {
+  const response = await page.request.get('/api/v2/auth/csrf', {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok()).toBeTruthy()

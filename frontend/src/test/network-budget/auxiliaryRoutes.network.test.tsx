@@ -93,6 +93,10 @@ describe('auxiliary route network budgets', () => {
 
     expect(app.currentPath()).toBe('/')
     const ownRows = app.rows().filter(row => !isPeerRollRow(row))
-    expect(ownRows).toEqual(['GET /api/v1/auth/csrf x1', ...AUTHENTICATED_SHELL])
+    // Auth now reaches the native v2 ingress, so its request may interleave
+    // with the Python shell reads. Budgets assert presence/count, not order.
+    expect([...ownRows].sort()).toEqual(
+      ['GET /api/v2/auth/csrf x1', ...AUTHENTICATED_SHELL].sort(),
+    )
   })
 })

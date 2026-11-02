@@ -6,7 +6,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     await page.setViewportSize(viewport)
     const token = await getAuthToken(page)
     expect(token).toBeTruthy()
-    const csrfResponse = await page.request.get('/api/auth/csrf', {
+    const csrfResponse = await page.request.get('/api/v2/auth/csrf', {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(csrfResponse.ok()).toBeTruthy()

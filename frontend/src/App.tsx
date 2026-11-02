@@ -158,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           // AuthProvider owns this recovery attempt. Suppress the interceptor's
           // automatic refresh so an exhausted retry cannot rotate the cookie twice.
-          const validate = () => api.get<AuthUser>('/v1/auth/me', {
+          const validate = () => api.get<AuthUser>('/v2/auth/me', {
             timeout,
             skipAuthRedirect: true,
             skipAuthRefresh: true,
@@ -215,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const retryAuth = useCallback(() => {
     // Manual recovery takes over from the automatic budget before touching the
-    // recovery promise, so a pending timer cannot issue a second /v1/auth/me.
+    // recovery promise, so a pending timer cannot issue a second /v2/auth/me.
     resetBootstrapRetry()
     setAuthState(prev => ({
       ...prev,
@@ -365,7 +365,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearSessionCache(client)
     setAccessToken(accessToken)
     try {
-      const response = await api.get<AuthUser>('/v1/auth/me', { skipAuthRedirect: true })
+      const response = await api.get<AuthUser>('/v2/auth/me', { skipAuthRedirect: true })
       if (generation !== sessionGeneration.current) return
       setAuthState(prev => ({
         ...prev,

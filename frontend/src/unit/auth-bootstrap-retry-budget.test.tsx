@@ -7,7 +7,7 @@ import type { AuthContextValue } from '../contexts/AuthContext'
 /**
  * Transport-level request accounting for one page load (#4269).
  *
- * These assertions count the real `/v1/auth/me` calls issued by the mounted
+ * These assertions count the real `/v2/auth/me` calls issued by the mounted
  * AuthProvider; they never mock the retry counter itself.
  *
  * - healthy session: exactly 1 request
@@ -17,7 +17,7 @@ import type { AuthContextValue } from '../contexts/AuthContext'
  * - logout/account switch: 0 requests after the session generation changes
  * - StrictMode: 1 initial request, not one per simulated effect mount
  *
- * Measured transport calls per single page load (`/v1/auth/me` transport
+ * Measured transport calls per single page load (`/v2/auth/me` transport
  * invocations counted by this harness, `Math.random` pinned to 0, 91 simulated
  * seconds after load):
  *
@@ -33,7 +33,7 @@ import type { AuthContextValue } from '../contexts/AuthContext'
  * | StrictMode persistent 503                  | 6             | 6     |
  *
  * The reduction is a request-count reduction, not a wall-clock claim: each
- * cancelled late timer removes one `/v1/auth/me` Vercel Function invocation
+ * cancelled late timer removes one `/v2/auth/me` Vercel Function invocation
  * (and its token/user DB read) that previously fired after recovery or after a
  * manual attempt had already taken ownership. Fewer invocations mean less
  * Active CPU and fewer cold-start opportunities per page load; this harness
@@ -122,7 +122,7 @@ function renderStrictProvider() {
 }
 
 function authMeCalls() {
-  return mocks.get.mock.calls.filter(([url]) => url === '/v1/auth/me')
+  return mocks.get.mock.calls.filter(([url]) => url === '/v2/auth/me')
 }
 
 async function flushTimers(milliseconds = 0): Promise<void> {

@@ -277,7 +277,7 @@ describe('post-reset re-login', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }))
 
     await waitFor(() => {
-      expect(apiClient.post).toHaveBeenCalledWith('/v1/auth/login', {
+      expect(apiClient.post).toHaveBeenCalledWith('/v2/auth/login', {
         username: 'reader',
         password: 'newpassword',
       })

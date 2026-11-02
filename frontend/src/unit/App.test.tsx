@@ -510,7 +510,7 @@ describe('anonymous no-token probe suppression', () => {
       await waitFor(() => {
         expect(screen.getByTestId('login-page')).toBeInTheDocument()
       })
-      expect(mockApiGet).not.toHaveBeenCalledWith('/v1/auth/me', expect.anything())
+      expect(mockApiGet).not.toHaveBeenCalledWith('/v2/auth/me', expect.anything())
     } finally {
       window.history.replaceState({}, '', originalPath || '/')
     }
@@ -534,7 +534,7 @@ describe('anonymous no-token probe suppression', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
     })
-    expect(mockApiGet).toHaveBeenCalledWith('/v1/auth/me', {
+    expect(mockApiGet).toHaveBeenCalledWith('/v2/auth/me', {
       skipAuthRefresh: true,
       timeout: 15000,
       skipAuthRedirect: true,

@@ -5,7 +5,7 @@ import type { Page } from '@playwright/test'
 import { createThread, getAuthToken } from './helpers'
 
 async function getCsrf(page: Page, token: string | null): Promise<string> {
-  const response = await page.request.get('/api/auth/csrf', {
+  const response = await page.request.get('/api/v2/auth/csrf', {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   })
   expect(response.ok()).toBeTruthy()

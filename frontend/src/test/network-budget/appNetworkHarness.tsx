@@ -18,7 +18,7 @@ import {
 } from './requestLedger'
 import { AuthStatusProbe, LocationProbe, NavigationBridge } from './appNetworkProbes'
 
-/** Account shape returned by `GET /api/v1/auth/me`. */
+/** Account shape returned by `GET /api/v2/auth/me`. */
 export interface HarnessUser {
   id: number
   username: string
@@ -33,7 +33,7 @@ export type AuthMode = 'authenticated' | 'guest'
 export interface RenderAppOptions {
   /** Whether the bootstrap probe authenticates. Defaults to `authenticated`. */
   auth?: AuthMode
-  /** Account returned by `/v1/auth/me` when authenticated. */
+  /** Account returned by `/v2/auth/me` when authenticated. */
   user?: HarnessUser
   /** Render inside React's StrictMode to include development double-effects. */
   strictMode?: boolean
@@ -102,9 +102,9 @@ function unauthenticated(): LedgerResponse {
  */
 export function defaultHandlers(auth: AuthMode, user: HarnessUser): HandlerMap {
   return {
-    'GET /api/v1/auth/me': () => (auth === 'authenticated' ? { data: user } : unauthenticated()),
-    'GET /api/v1/auth/csrf': () => ({ data: { csrf_token: 'harness-csrf' } }),
-    'POST /api/v1/auth/refresh': () => (auth === 'authenticated' ? { data: { access_token: 'harness-token', refresh_token: 'harness-refresh' } } : unauthenticated()),
+    'GET /api/v2/auth/me': () => (auth === 'authenticated' ? { data: user } : unauthenticated()),
+    'GET /api/v2/auth/csrf': () => ({ data: { csrf_token: 'harness-csrf' } }),
+    'POST /api/v2/auth/refresh': () => (auth === 'authenticated' ? { data: { access_token: 'harness-token', refresh_token: 'harness-refresh' } } : unauthenticated()),
     'GET /api/v1/users/me/preferences': () => ({ data: { theme: 'classic', user_id: user.id } }),
     'GET /api/v1/identity-inbox': () => ({ data: { items: [], total: 0, offset: 0, limit: 1 } }),
     'GET /api/v1/releases/': () => ({ data: { releases: [], total: 0 } }),

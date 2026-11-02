@@ -45,7 +45,7 @@ test.describe('AUTH-001: Authentication and startup', () => {
     // A 401 here is the test's own intent (bad credentials), not app noise.
     allowExpectedBrowserFailures.allow({
       category: 'console',
-      message: 'api/v1/auth/login',
+      message: 'api/v2/auth/login',
     })
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('input[name="username"]', { state: 'visible' })

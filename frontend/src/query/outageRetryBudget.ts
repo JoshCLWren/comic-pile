@@ -21,7 +21,7 @@ import { isNonNullObject } from '../utils/runtimeChecks'
  *    refetches the failed active queries once per distinct query key
  *    (`resumeQueriesAfterOutage`). A probe succeeds the same way.
  * 5. While authentication is in a known degraded state the AuthProvider owns
- *    probing (`/v1/auth/me` with its own bounded budget), so query retries are
+ *    probing (`/v2/auth/me` with its own bounded budget), so query retries are
  *    suppressed entirely. A successful auth recovery uses the same single-key
  *    resume, so the reader sees one refetch per failed query, not one per
  *    observer.

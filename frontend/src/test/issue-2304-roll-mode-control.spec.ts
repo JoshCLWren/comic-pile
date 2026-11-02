@@ -135,7 +135,7 @@ test.describe('Roll-mode control state grammar at phone width (#2304)', () => {
 
     // Pin die d8 on the server, mirroring the manual-pick dialog flow.
     // SAFETY: the test reads only the csrf token from the response body
-    const csrf = (await (await page.request.get('/api/auth/csrf', {
+    const csrf = (await (await page.request.get('/api/v2/auth/csrf', {
       headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
     })).json()) as { csrf_token?: string }
     const token = await getAuthToken(page)
