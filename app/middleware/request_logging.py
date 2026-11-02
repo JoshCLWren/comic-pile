@@ -216,7 +216,9 @@ def _rounded_optional(value: float | None) -> float | None:
     return round(value, 2) if value is not None else None
 
 
-def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
+def add_request_logging_middleware(
+    app: FastAPI, environment: str, *, defer_startup_event: bool = False
+) -> None:
     """Register request diagnostics and error logging middleware.
 
     Args:
@@ -226,7 +228,6 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
     # Initialize performance budget manager
     budget_manager = get_performance_budget_manager()
 
-    @app.on_event("startup")
     async def record_startup_completion() -> None:
         """Emit one process-scoped startup timing event after lifespan startup."""
         # Main marks the real start/end of lifespan work. Standalone FastAPI
@@ -253,6 +254,13 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "level": "WARNING",
             },
         )
+
+    if defer_startup_event:
+        # Keep request middleware ordering unchanged while letting the main
+        # application append startup logging after its awaited initialization.
+        app.state.record_startup_completion = record_startup_completion
+    else:
+        app.add_event_handler("startup", record_startup_completion)
 
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):
