@@ -170,8 +170,17 @@ async def _hydrate_with_retries(
     """Run one bounded provider hydration with retry and rate-limit handling."""
     for attempt in range(1, COMICVINE_FALLBACK_MAX_ATTEMPTS + 1):
         try:
-            await hydrate_issue(db, client, issue_id, refresh=True)
+            hydrated_identity = await hydrate_issue(db, client, issue_id, refresh=True)
             await db.commit()
+            # A provider request can succeed while returning only a sparse row.
+            # Persist that evidence, but never mark the issue deep-hydrated.
+            if metadata_needs_hydration(hydrated_identity):
+                logger.info(
+                    "comicvine_fallback_incomplete identity_id=%s comicvine_issue_id=%s",
+                    identity_id,
+                    issue_id,
+                )
+                return False
             logger.info(
                 "comicvine_fallback_hydrated identity_id=%s comicvine_issue_id=%s attempt=%s",
                 identity_id,
