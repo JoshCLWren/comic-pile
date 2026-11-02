@@ -415,17 +415,24 @@ jobs:
       - name: Smoke production rejected login
         run: |
           set -euo pipefail
-          # A distinct nonexistent username per deployed SHA avoids locking
-          # out any real account or accumulating retries under one identity.
-          username="auth_smoke_${GITHUB_SHA:0:12}"
+          # One synthetic nonexistent username per SHA, never an actual reader.
+          username="auth_smoke_$(git rev-parse --short=12 HEAD)"
           payload="$(jq -nc --arg username "$username" '{username: $username, password: "synthetic-invalid-credential"}')"
-          response="$(curl --silent --show-error --max-time 25 \
+          body_file="$(mktemp)"
+          trap 'rm -f "$body_file"' EXIT
+          status="$(curl --silent --show-error --max-time 25 \
             --request POST \
             --header 'content-type: application/json' \
             --data "$payload" \
-            --write-out '\n%{http_code}' \
+            --write-out '%{http_code}' \
+            --output "$body_file" \
             https://comic-pile.vercel.app/api/v1/auth/login)"
-          status="${response##*
+          detail="$(jq -r '.detail // ""' "$body_file")"
+          if [[ "$status" != "401" || "$detail" != "Incorrect username or password" ]]; then
+            echo "::error::Production rejected-login contract failed, HTTP $status" >&2
+            exit 1
+          fi
+          echo "Production rejected-login contract passed (HTTP 401)"
 
   # Keep-N=1: live production alias only. No rollback candidate.
   # Fail-soft so prune errors do not fail a finished migrate/deploy/smoke.
