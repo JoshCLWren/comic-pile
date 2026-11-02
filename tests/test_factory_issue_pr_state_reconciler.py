@@ -43,6 +43,13 @@ def _reconcile_issue_body(workflow: str) -> str:
     return workflow[start:end]
 
 
+def _replace_issue_state_body(workflow: str) -> str:
+    """Return the bash replace_issue_state writer from the workflow file."""
+    start = workflow.index("replace_issue_state() {")
+    end = workflow.index("reconcile_issue() {", start)
+    return workflow[start:end]
+
+
 def _iso_timestamp(epoch: int) -> str:
     """Return a GitHub-style UTC timestamp for an epoch."""
     return datetime.fromtimestamp(epoch, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -350,15 +357,63 @@ def test_lease_action_cli_reports_hold_for_active_local_lease(tmp_path: Path) ->
     assert result.stdout.strip() == policy.LEASE_ACTION_HOLD_LOCAL
 
 
-def test_reconcile_issue_checks_live_lease_before_replace() -> None:
-    """The sweep must pass a freshly read issue through the policy before write."""
+def test_claim_after_history_walk_is_caught_at_writer_boundary(tmp_path: Path) -> None:
+    """A claim landing after the history walk must stop the writer.
+
+    The pre-repair guard read the issue at T1 and the writer re-read labels at
+    T2, so a claim in that window was visible to the write yet discarded. The
+    writer now reads once at the boundary, applies the shared lease policy to
+    that payload, and builds the replacement labels from the same payload.
+    """
+    policy = _policy()
+    now = 1_800_000_000
+    issue_file = tmp_path / "boundary-issue.json"
+    issue_file.write_text(
+        json.dumps(
+            _issue_payload(
+                ["factory", "factory:local", "factory:building", "ralph-status:in-progress"],
+                _iso_timestamp(now - 1),
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    decision = subprocess.run(
+        [
+            sys.executable,
+            str(POLICY_SCRIPT),
+            "--lease-action-issue-file",
+            str(issue_file),
+            "--now-epoch",
+            str(now),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert decision.stdout.strip() == policy.LEASE_ACTION_HOLD_LOCAL
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    body = _replace_issue_state_body(workflow)
+    read_at = body.index('gh api "repos/${GITHUB_REPOSITORY}/issues/${issue}"')
+    policy_at = body.index("--lease-action-issue-file")
+    labels_at = body.index('labels="$(jq')
+    put_at = body.index('--method PUT')
+    assert read_at < policy_at < labels_at < put_at
+    assert "return 0" in body[policy_at:put_at]
+    # Both the policy decision and the target labels consume the boundary read.
+    assert '"$issue_file"' in body[read_at:labels_at]
+    assert '"$issue_file"' in body[labels_at:put_at]
+    # No second labels fetch can discard an owner the policy just accepted.
+    assert "/labels?per_page=100" not in body
+
+
+def test_reconcile_issue_has_no_separate_pre_write_lease_read() -> None:
+    """The history walk must not duplicate the writer's boundary ownership read."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     body = _reconcile_issue_body(workflow)
 
-    stage_at = body.index('--records-json "$records"')
-    guard_at = body.index("--lease-action-issue-file")
-    replace_at = body.index('replace_issue_state "$issue" "$stage"')
-    assert stage_at < guard_at < replace_at
-    assert '[[ "$lease_action" != "reconcile" ]]' in body[guard_at:replace_at]
-    assert "return 0" in body[guard_at:replace_at]
+    assert "--lease-action-issue-file" not in body
+    assert "lease_file" not in body
     assert body.count('replace_issue_state "$issue" "$stage"') == 1
+    assert workflow.count("--lease-action-issue-file") == 1

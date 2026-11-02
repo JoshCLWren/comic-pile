@@ -348,10 +348,13 @@ Rules:
   exact-head trusted review markers when recovering a missing stage; otherwise
   it requests `factory:review`. Green CI alone never establishes readiness.
   A stage rewrite derived from trusted PR history never replaces an active owner
-  lease: the sweep preserves `factory:local` while its shared local-lease TTL is
-  fresh or its activity is unknown, and it treats numbered owners as
-  controller-owned because only the controller resolves active fixed-worker/run
-  evidence. A release is always followed by the same atomic full-set replacement.
+  lease: the final label writer applies the shared lease policy to the same live
+  issue read that builds its replacement label set, preserving `factory:local`
+  while its local-lease TTL is fresh or its activity is unknown and treating
+  numbered owners as controller-owned because only the controller resolves
+  active fixed-worker/run evidence. GitHub's label replacement has no
+  compare-and-swap, so a claim landing in the final read-to-write interval
+  remains a residual race.
 - A contributor PR, Josh-authored manual PR, or local factory PR follows the same review,
   repair handoff, exact-head CI, and merge-drain stages. Branches named
   `local/*`, `agent/*`, and `chatgpt/*` are eligible when enrolled with
