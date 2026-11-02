@@ -1400,7 +1400,9 @@ mod initialize_session_db_tests {
             _ => None,
         })
         .unwrap();
-        config.database.options(&format!("-c search_path={schema},public"));
+        config
+            .database
+            .options(&format!("-c search_path={schema},public"));
         let state = Arc::new(AppState::new(config).unwrap());
 
         let Json(first) = initialize_session(
@@ -1445,7 +1447,10 @@ mod initialize_session_db_tests {
             .await
             .unwrap();
         assert_eq!(row.get::<_, i64>(0), 1);
-        assert_eq!(row.get::<_, Option<String>>(1).as_deref(), Some("America/Chicago"));
+        assert_eq!(
+            row.get::<_, Option<String>>(1).as_deref(),
+            Some("America/Chicago")
+        );
 
         state.pool.close();
         drop(state);
