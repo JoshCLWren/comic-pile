@@ -47,6 +47,8 @@ pub struct AppState {
     pub pool: Pool,
     pub jwt_secret: JwtSecret,
     pub request_timeout: Duration,
+    pub access_token_expire_minutes: i64,
+    pub refresh_token_expire_days: i64,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -74,6 +76,8 @@ impl AppState {
             pool,
             jwt_secret: config.jwt_secret,
             request_timeout: config.request_timeout,
+            access_token_expire_minutes: config.access_token_expire_minutes,
+            refresh_token_expire_days: config.refresh_token_expire_days,
         })
     }
 }
@@ -173,10 +177,53 @@ async fn bound_request(
 
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
+    use auth::middleware::csrf_middleware;
     Router::new()
         .route(
             "/health",
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
+        )
+        .route("/api/v2/auth/register", post(auth::handlers::register))
+        .route("/api/v2/auth/login", post(auth::handlers::login))
+        .route("/api/v2/auth/refresh", post(auth::handlers::refresh))
+        .route("/api/v2/auth/logout", post(auth::handlers::logout))
+        .route("/api/v2/auth/csrf", get(auth::handlers::csrf))
+        .route("/api/v2/auth/me", get(auth::handlers::me))
+        .route(
+            "/api/v2/auth/forgot-password",
+            post(auth::handlers::forgot_password),
+        )
+        .route(
+            "/api/v2/auth/reset-password",
+            post(auth::handlers::reset_password),
+        )
+        .route("/api/v1/auth/register", post(auth::handlers::register))
+        .route("/api/v1/auth/login", post(auth::handlers::login))
+        .route("/api/v1/auth/refresh", post(auth::handlers::refresh))
+        .route("/api/v1/auth/logout", post(auth::handlers::logout))
+        .route("/api/v1/auth/csrf", get(auth::handlers::csrf))
+        .route("/api/v1/auth/me", get(auth::handlers::me))
+        .route(
+            "/api/v1/auth/forgot-password",
+            post(auth::handlers::forgot_password),
+        )
+        .route(
+            "/api/v1/auth/reset-password",
+            post(auth::handlers::reset_password),
+        )
+        .route("/api/auth/register", post(auth::handlers::register))
+        .route("/api/auth/login", post(auth::handlers::login))
+        .route("/api/auth/refresh", post(auth::handlers::refresh))
+        .route("/api/auth/logout", post(auth::handlers::logout))
+        .route("/api/auth/csrf", get(auth::handlers::csrf))
+        .route("/api/auth/me", get(auth::handlers::me))
+        .route(
+            "/api/auth/forgot-password",
+            post(auth::handlers::forgot_password),
+        )
+        .route(
+            "/api/auth/reset-password",
+            post(auth::handlers::reset_password),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route(
@@ -223,6 +270,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             )
         })
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
+        .layer(axum::middleware::from_fn(csrf_middleware))
         .with_state(state)
 }
 

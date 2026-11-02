@@ -412,6 +412,37 @@ jobs:
             --retry 10 --retry-delay 2 --retry-all-errors \
             https://comic-pile.vercel.app/health >/dev/null
 
+      - name: Smoke production rejected login on the Rust runtime
+        run: |
+          set -euo pipefail
+          # One synthetic nonexistent username per SHA, never an actual reader.
+          username="auth_smoke_$(git rev-parse --short=12 HEAD)"
+          payload="$(jq -nc --arg username "$username" '{username: $username, password: "synthetic-invalid-credential"}')"
+          body_file="$(mktemp)"
+          header_file="$(mktemp)"
+          trap 'rm -f "$body_file" "$header_file"' EXIT
+          status="$(curl --silent --show-error --max-time 25 \
+            --request POST \
+            --header 'content-type: application/json' \
+            --data "$payload" \
+            --dump-header "$header_file" \
+            --write-out '%{http_code}' \
+            --output "$body_file" \
+            https://comic-pile.vercel.app/api/v1/auth/login)"
+          detail="$(jq -r '.detail // ""' "$body_file")"
+          runtime="$(awk 'BEGIN{IGNORECASE=1} /^x-comicpile-api-runtime:/ {gsub(/\r/,""); print $2}' "$header_file" | tail -1)"
+          if [[ "$status" != "401" || "$detail" != "Incorrect username or password" ]]; then
+            echo "::error::Production rejected-login contract failed, HTTP $status" >&2
+            exit 1
+          fi
+          # Python returns the identical status/detail, so the runtime marker is
+          # what proves this request actually executed in native Rust.
+          if [[ "$runtime" != "rust" ]]; then
+            echo "::error::Production rejected login did not run on the Rust runtime (marker: ${runtime:-missing})" >&2
+            exit 1
+          fi
+          echo "Production rejected-login contract passed (HTTP 401, runtime rust)"
+
   # Keep-N=1: live production alias only. No rollback candidate.
   # Fail-soft so prune errors do not fail a finished migrate/deploy/smoke.
   prune:

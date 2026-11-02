@@ -20,6 +20,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .uri("/api/v2/reading-boundaries")
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
+                .header("cookie", "csrf_token=synthetic-parity-csrf")
+                .header("x-csrf-token", "synthetic-parity-csrf")
                 .body(Body::from(body))?,
         )
         .await?;
