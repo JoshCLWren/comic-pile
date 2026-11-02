@@ -293,3 +293,26 @@ def test_shortlist_favors_priority_then_green_ci() -> None:
     rows[1]["statusCheckRollup"] = [{"name": "CI Summary", "conclusion": "FAILURE"}]
     selected = review.choices(rows, {101: [], 102: [], 103: []}, NOW)
     assert [item.number for item in selected] == [103, 101, 102]
+
+
+def test_jev_review_uses_existing_dispatcher_driven_merge_drain() -> None:
+    """No independent cron or failure coupling; existing hourly quota survives."""
+    workflows = SCRIPTS.parent / "workflows"
+    drain = (workflows / "factory-ready-merge-drain.yml").read_text(encoding="utf-8")
+    dispatcher = (workflows / "fixed-model-factory-dispatch.yml").read_text(
+        encoding="utf-8"
+    )
+    assert not (workflows / "hourly-jev-coderabbit-review.yml").exists()
+    assert "gh workflow run factory-ready-merge-drain.yml" in dispatcher
+    step_name = "      - name: Ask Jev for CodeRabbit review on the existing drain cadence"
+    assert drain.count(step_name) == 1
+    step = drain.split(step_name, 1)[1].split("\n      - name:", 1)[0]
+    assert "continue-on-error: true" in step
+    assert "GH_TOKEN: ${{ github.token }}" in step
+    assert "OPENROUTER_JEV_API_KEY: ${{ secrets.OPENROUTER_JEV_API_KEY }}" in step
+    assert "PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}" in step
+    assert "--state all --limit 120" in step
+    assert "hourly_coderabbit_review.py" in step
+    # Preserve the existing redundant merge drain fallback, not another timer.
+    assert "cron: '2-57/15 * * * *'" in drain
+    assert drain.count("    - cron:") == 1
