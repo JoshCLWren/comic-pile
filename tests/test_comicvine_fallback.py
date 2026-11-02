@@ -464,7 +464,13 @@ async def test_hydration_success_commits_once(monkeypatch: pytest.MonkeyPatch) -
         assert client_arg is client
         assert issue_id == 123
         assert refresh is True
-        return _identity(metadata={}, updated_at=datetime.now(UTC))
+        return _identity(
+            metadata={
+                "raw_provider_payload": _deep_raw_payload(),
+                DEEP_METADATA_REFRESHED_AT_KEY: datetime.now(UTC).isoformat(),
+            },
+            updated_at=datetime.now(UTC),
+        )
 
     monkeypatch.setattr(comicvine_fallback, "hydrate_issue", fake_hydrate)
 
@@ -472,6 +478,32 @@ async def test_hydration_success_commits_once(monkeypatch: pytest.MonkeyPatch) -
 
     assert result is True
     assert calls == 1
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_sparse_provider_success_does_not_count_as_deep_hydration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successful request may persist incomplete provider data, but is not hydrated."""
+    db = AsyncMock(spec=AsyncSession)
+    client = cast(ComicVineClient, object())
+
+    async def fake_hydrate(
+        _db: AsyncSession,
+        _client: ComicVineClient,
+        _issue_id: int,
+        *,
+        refresh: bool = False,
+    ) -> ExternalIdentity:
+        assert refresh
+        return _identity(metadata={"issue_number": "1"}, updated_at=datetime.now(UTC))
+
+    monkeypatch.setattr(comicvine_fallback, "hydrate_issue", fake_hydrate)
+
+    succeeded = await _hydrate_with_retries(db, client, identity_id=10, issue_id=123)
+
+    assert succeeded is False
     db.commit.assert_awaited_once()
 
 
