@@ -211,13 +211,15 @@ export default function QueueBulkMapSeriesDialog({
     setConfirmedByThread({})
     setConfirmedIssueIds([])
     setCurrentIndex(0)
-    setBatchIncomplete(isScopeIncomplete)
+    // Preserve the existing batchIncomplete state during prop refresh
+    // (e.g., queue refresh with new array identity). Only reset when isScopeLoading
+    // changes, which indicates a genuine queue scope change that should affect incomplete status.
+    setBatchIncomplete((prev) => prev || isScopeIncomplete)
     setPhase(nextBatch.length > 0 ? 'mapping' : 'results')
     // The batch is fixed from here on: a queue refresh after a saved mapping
     // drops the loaded pages, and re-draining would reopen the preparing dialog
     // beneath the mapping or results dialog after every saved series.
     onBatchCaptured?.()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [isOpen, isScopeLoading, phase, resumeAtFirstPending, onBatchCaptured])
 
   const currentItem = batch[currentIndex]
