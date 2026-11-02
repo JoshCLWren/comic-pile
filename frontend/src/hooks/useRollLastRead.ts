@@ -86,7 +86,7 @@ export function useRollLastRead(
     rating: fromRate?.last_rating ?? null,
     issuesRemaining: fromRate?.issues_remaining ?? null,
     totalIssues: fromRate?.total_issues ?? null,
-    coverUrl: metadata?.image_url ?? null,
+    coverUrl: metadata?.image_url ?? lastRead.cover_url ?? null,
     seriesStats: identityResolved
       ? {
           averageRating: series.average_rating,
