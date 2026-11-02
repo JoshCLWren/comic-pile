@@ -48,6 +48,11 @@ from app.schemas.comicvine_resolution import (
     MetadataRefreshResponse,
     SeriesImportStatusResponse,
 )
+from app.services.comicvine_fallback import (
+    metadata_needs_hydration,
+    refresh_issue_metadata,
+)
+from app.services.ownership import get_owned_issue_or_404
 from app.services.comicvine_url import looks_like_url, parse_comicvine_url
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership import get_owned_thread_or_404
@@ -537,8 +542,6 @@ async def get_issue_identity_state(
         if mapping.status == "confirmed":
             confirmed.append(item)
             if identity.provider == "comicvine":
-                from app.services.comicvine_fallback import metadata_needs_hydration
-
                 hydration_status = (
                     "needed" if metadata_needs_hydration(identity) else "complete"
                 )
@@ -684,9 +687,6 @@ async def save_confirmed_comicvine_identity(
     Returns:
         Stored identity state even when the metadata provider is unavailable.
     """
-    from app.services.comicvine_fallback import metadata_needs_hydration, refresh_issue_metadata
-    from app.services.ownership import get_owned_issue_or_404
-
     await get_owned_issue_or_404(db, user_id, issue_id)
     existing_identity = await catalog_repository.get_provider_issue_identity(
         db, provider="comicvine", external_id=str(comicvine_issue_id),

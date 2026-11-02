@@ -149,7 +149,10 @@ async def refresh_issue_metadata(identity_id: int) -> bool:
         while traceback is not None:
             filename = Path(traceback.tb_frame.f_code.co_filename)
             if "app" in filename.parts or "comic_pile" in filename.parts:
-                source = f"{filename.name}:{traceback.tb_lineno}"
+                # Capture the innermost (originating) application frame so the
+                # diagnostic points at the root cause rather than the catch site.
+                if source == "unknown":
+                    source = f"{filename.name}:{traceback.tb_lineno}"
             traceback = traceback.tb_next
         logger.warning(
             "comicvine_fallback_inline_failed identity_id=%s error=%s source=%s",
