@@ -406,8 +406,9 @@ impl PasswordResetService {
             .map_err(query_error)?;
         transaction
             .execute(
-                "INSERT INTO password_reset_tokens (user_id, token_digest, expires_at) \
-                 VALUES ($1, $2, to_timestamp($3))",
+                "INSERT INTO password_reset_tokens \
+                 (user_id, token_digest, expires_at, created_at) \
+                 VALUES ($1, $2, to_timestamp($3), NOW())",
                 &[&user_id, &digest, &(expires_at.timestamp() as f64)],
             )
             .await

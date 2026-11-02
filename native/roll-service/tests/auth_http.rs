@@ -66,7 +66,7 @@ async fn schema() -> (String, String) {
                  token_digest text NOT NULL UNIQUE,
                  expires_at timestamptz NOT NULL,
                  used_at timestamptz,
-                 created_at timestamptz NOT NULL DEFAULT NOW()
+                 created_at timestamptz NOT NULL
              );"
         ))
         .await

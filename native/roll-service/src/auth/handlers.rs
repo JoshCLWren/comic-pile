@@ -411,7 +411,7 @@ mod tests {
                      token_digest text NOT NULL UNIQUE,
                      expires_at timestamptz NOT NULL,
                      used_at timestamptz,
-                     created_at timestamptz NOT NULL DEFAULT NOW()
+                     created_at timestamptz NOT NULL
                  );"
             ))
             .await
@@ -764,8 +764,9 @@ mod tests {
             .get(0);
         connection
             .execute(
-                "INSERT INTO password_reset_tokens (user_id, token_digest, expires_at) \
-                 VALUES ($1, $2, NOW() + INTERVAL '30 minutes')",
+                "INSERT INTO password_reset_tokens \
+                 (user_id, token_digest, expires_at, created_at) \
+                 VALUES ($1, $2, NOW() + INTERVAL '30 minutes', NOW())",
                 &[&user_id, &token_digest("live-reset-token")],
             )
             .await
