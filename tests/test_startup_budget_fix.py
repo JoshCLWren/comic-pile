@@ -76,6 +76,29 @@ def test_production_cold_start_over_budget_serves_requests_and_records_violation
         clear_settings_cache()
 
 
+def test_old_worker_age_does_not_trigger_false_startup_violation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 312-second process age cannot override 400 ms of readiness work."""
+    _prepare_production(monkeypatch)
+
+    def _idle_worker_snapshot() -> StartupSnapshot:
+        return _snapshot_with(312_336.22, 400.0)
+
+    monkeypatch.setattr("app.startup_diagnostics.startup_event_snapshot", _idle_worker_snapshot)
+
+    app = create_app(serve_frontend=False, defer_router_imports=True)
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/ping")
+            assert response.status_code == 200
+            assert response.headers["X-App-Cold-Request"] == "1"
+
+        assert get_performance_budget_manager().get_startup_violations() == []
+    finally:
+        clear_settings_cache()
+
+
 def test_production_startup_inside_budget_records_no_violation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
