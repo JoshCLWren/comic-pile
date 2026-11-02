@@ -35,6 +35,25 @@ jobs:
         with:
           ref: main
 
+      - name: Ask Jev for CodeRabbit review on the existing drain cadence
+        # The dispatcher reliably invokes this workflow; an independent hourly
+        # GitHub cron was starved. Review failures must not block safe merges.
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENROUTER_JEV_API_KEY: ${{ secrets.OPENROUTER_JEV_API_KEY }}
+          PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          # Include recently closed PRs for repository-wide review cooldown.
+          gh pr list --repo "$GITHUB_REPOSITORY" --state all --limit 120 \
+            --json number,title,state,headRefOid,isDraft,createdAt,closedAt,updatedAt,labels,mergeStateStatus,statusCheckRollup \
+            > "$RUNNER_TEMP/coderabbit-review-prs.json"
+          python3 .github/scripts/hourly_coderabbit_review.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --prs "$RUNNER_TEMP/coderabbit-review-prs.json"
+
       - name: Install factory syntax parsers
         uses: ./.github/actions/factory-syntax
 
