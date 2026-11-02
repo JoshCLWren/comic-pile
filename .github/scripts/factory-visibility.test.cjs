@@ -101,18 +101,20 @@ test('canonical local worker tokens map to the local owner', () => {
 
 test('fixed-model worker tokens map from the roster, not a numeric ceiling', () => {
   assert.equal(ownerFor('opencode-free-model-factory-46'), 'factory:46');
-  assert.equal(ownerFor('opencode-free-model-factory-49'), 'factory:49');
-  assert.equal(ownerFor('opencode-free-model-factory-73'), 'factory:73');
+  assert.equal(ownerFor('opencode-free-model-factory-51'), 'factory:51');
   assert.equal(ownerFor('opencode-free-model-factory-74'), 'factory:74');
   assert.equal(ownerFor('opencode-free-model-factory-75'), 'factory:75');
+  assert.equal(ownerFor('opencode-free-model-factory-95'), 'factory:95');
   assert.equal(ownerFor('opencode-free-model-factory-77'), 'factory:unowned');
-  assert.equal(ownerFor('opencode-omniroute-factory-73'), 'factory:73');
+  assert.equal(ownerFor('opencode-omniroute-factory-95'), 'factory:95');
   assert.equal(ownerFor('opencode-nvidia-factory-11'), 'factory:11');
   // Off-roster / retired ids stay unowned even when historically in 6..71.
   assert.equal(ownerFor('opencode-nvidia-factory-6'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-32'), 'factory:unowned');
+  assert.equal(ownerFor('opencode-free-model-factory-49'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-71'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-72'), 'factory:unowned');
+  assert.equal(ownerFor('opencode-free-model-factory-73'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-76'), 'factory:unowned');
 });
 
@@ -121,7 +123,7 @@ test('head-contributor markers resolve roster workers above the old ceiling', ()
   const body = '<!-- comic-pile-factory-head-contributor-v1:pr-7:head-' + 'a'.repeat(40) + ':worker-77:epoch-2 -->';
   assert.equal(workerFrom(body), '77');
   assert.equal(ownerFor(workerFrom(body)), 'factory:unowned');
-  assert.equal(ownerFor('worker-73'), 'factory:73');
+  assert.equal(ownerFor('worker-95'), 'factory:95');
   assert.equal(ownerFor('72'), 'factory:unowned');
 });
 
@@ -129,18 +131,18 @@ test('legacy model-specific label metadata is normalized', async () => {
   const updates = [];
   const github = githubFor({
     extraDefinitions: [{
-      name: 'factory:49',
+      name: 'factory:74',
       color: '5319e7',
-      description: 'Fixed-model Factory 49: legacy model-specific description',
+      description: 'Fixed-model Factory 74: legacy model-specific description',
     }],
     updateLabel: async input => updates.push(input),
   });
 
   await reconcile({ github, context: contextFor('workflow_dispatch', {}) });
 
-  const update = updates.find(candidate => candidate.name === 'factory:49');
+  const update = updates.find(candidate => candidate.name === 'factory:74');
   assert.ok(update);
-  assert.equal(update.description, 'Current next-action owner is ComicPile Factory 49');
+  assert.equal(update.description, 'Current next-action owner is ComicPile Factory 74');
 });
 
 test('label reconciliation replaces both groups with one atomic call', async () => {
@@ -343,12 +345,12 @@ test('fixed-model progress comments use the durable fixed owner', async () => {
       comment: {
         author_association: 'OWNER',
         user: { login: 'JoshCLWren' },
-        body: '<!-- comic-pile-factory-implement-progress-v3:issue-1089:opencode-free-model-factory-49:123 -->',
+        body: '<!-- comic-pile-factory-implement-progress-v3:issue-1089:opencode-free-model-factory-74:123 -->',
       },
     }),
   });
   assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:49'));
+  assert.ok(calls[0].labels.includes('factory:74'));
   assert.ok(!calls[0].labels.includes('factory:unowned'));
 });
 
@@ -1056,7 +1058,7 @@ test('pull_request_target owner lookup ignores a worker App claim marker', async
     draft: false,
     body: 'Refs #3131',
     head: {
-      ref: 'factory/49-3131-opencode-free-identity',
+      ref: 'factory/74-3131-opencode-free-identity',
       sha: 'c'.repeat(40),
       repo: { full_name: 'JoshCLWren/comic-pile' },
     },
@@ -1065,7 +1067,7 @@ test('pull_request_target owner lookup ignores a worker App claim marker', async
     created_at: '2026-01-01T00:00:00Z',
     author_association: 'OWNER',
     user: { login: 'mark-cordova[bot]' },
-    body: '<!-- comic-pile-factory-implement-claim-v3:issue-3131:opencode-free-model-factory-49:1 -->',
+    body: '<!-- comic-pile-factory-implement-claim-v3:issue-3131:opencode-free-model-factory-74:1 -->',
     performed_via_github_app: { slug: 'mark-cordova' },
   };
   const workerCalls = [];
@@ -1105,7 +1107,7 @@ test('pull_request_target owner lookup ignores a worker App claim marker', async
     }),
   });
   assert.equal(actionsCalls.length, 1);
-  assert.ok(actionsCalls[0].labels.includes('factory:49'));
+  assert.ok(actionsCalls[0].labels.includes('factory:74'));
 });
 
 test('pull_request_review trust: github-actions[bot] is trusted, worker App is not', () => {

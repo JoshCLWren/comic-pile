@@ -119,19 +119,21 @@ def test_opencode_zen_promo_union_alpha_is_free(validate) -> None:
 
 
 def test_opencode_longcat_lane_pins_gateway_id_not_analytics_slug(validate) -> None:
-    """LongCat lane pins the Zen gateway id, not OpenCode's analytics slug.
+    """LongCat's callable id is the gateway ``*-free`` form, now lock-retired.
 
     OpenCode's public data surface uses ``longcat-2.5-preview`` as a usage
     slug, but the Zen gateway, models.dev, and the OpenCode Zen docs all
     publish ``longcat-2.5-preview-free`` as the callable model id. The
     analytics slug must not be whitelisted as free, otherwise a
-    non-existent id passes the fail-closed opencode-free guard and the lane
-    fails at OpenCode smoke on every run.
+    non-existent id passes the fail-closed opencode-free guard. Worker 73
+    retired when that gateway id left the free catalog; the analytics slug
+    still must not be pinned.
     """
     assert validate.opencode_model_is_free("longcat-2.5-preview-free")
     assert not validate.opencode_model_is_free("longcat-2.5-preview")
 
     manifest = Path(".github/free-model-factories.tsv")
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     pinned: list[str] = []
     for line in manifest.read_text(encoding="utf-8").splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
@@ -139,8 +141,10 @@ def test_opencode_longcat_lane_pins_gateway_id_not_analytics_slug(validate) -> N
         fields = line.split("\t")
         if fields[1] == "opencode-free":
             pinned.append(fields[2])
-    assert "longcat-2.5-preview-free" in pinned
+    assert "longcat-2.5-preview-free" not in pinned
     assert "longcat-2.5-preview" not in pinned
+    assert 73 in lock["retired_workers"]
+    assert "longcat-2.5-preview-free" in lock["retired_models"]
 
 
 def test_discovered_free_models_reuse_existing_worker_slots(validate) -> None:
@@ -221,9 +225,10 @@ def test_workers_79_to_82_pin_oct_11_smoked_free_models(validate) -> None:
 
 
 def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None:
-    """Workers 83-86 are debian OpenCode NVIDIA smokes; worker 59 is retired."""
+    """Worker 83 Cat Jam is retired; worker 86 Muse Glimmer and 59 stay as-is."""
     rows = validate.load_roster_rows(validate.MANIFEST)
     by_worker = {row["worker"]: row for row in rows}
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["48"]["source"] == "mistral"
@@ -232,9 +237,9 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
     assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
     assert "59" not in by_worker
     assert "ling-3.0-flash-fin-free" not in {row["model"] for row in rows}
-    assert by_worker["83"]["source"] == "opencode-free"
-    assert by_worker["83"]["model"] == "cat-jam-free"
-    assert by_worker["83"]["minute"] == "45"
+    assert "83" not in by_worker
+    assert 83 in lock["retired_workers"]
+    assert "cat-jam-free" in lock["retired_models"]
     assert "84" not in by_worker
     assert "85" not in by_worker
     assert by_worker["86"]["source"] == "nvidia"
@@ -263,17 +268,38 @@ def test_workers_68_and_69_openrouter_laguna_are_retired(validate) -> None:
 
 
 def test_workers_94_95_pin_minimax_m31_flash_and_nvidia_nemotron_35_super_vl(validate) -> None:
-    """Workers 94-95 are Harvy debian OpenCode smokes (fix bug + write/run test)."""
+    """Worker 94 MiniMax M3.1 Flash :free is retired; NVIDIA Super VL 95 stays."""
     rows = validate.load_roster_rows(validate.MANIFEST)
     by_worker = {row["worker"]: row for row in rows}
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["94"]["source"] == "openrouter-free"
-    assert by_worker["94"]["model"] == "minimax/minimax-m3.1-flash:free"
-    assert by_worker["94"]["minute"] == "40"
-    assert validate.openrouter_model_is_free(by_worker["94"]["model"])
+    assert "94" not in by_worker
+    assert 94 in lock["retired_workers"]
+    assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
     assert by_worker["95"]["source"] == "nvidia"
     assert by_worker["95"]["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
-    assert by_worker["95"]["minute"] == "20"
+    assert by_worker["95"]["minute"] == "35"
     # The OpenRouter :free Super VL id was not smoked (daily free cap), so it is not pinned.
     assert "nvidia/nemotron-3.5-super-vl:free" not in {row["model"] for row in rows}
+
+
+def test_ghost_workers_49_58_63_73_83_94_are_retired(validate) -> None:
+    """Six ghost free-catalog lanes retire; kilo-auto 46 and OpenCode 42 stay."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    by_worker = {row["worker"]: row for row in rows}
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
+    for worker in (49, 58, 63, 73, 83, 94):
+        assert str(worker) not in by_worker
+        assert worker in lock["retired_workers"]
+        assert worker not in lock["expected_workers"]
+    assert "space-bunny-free" in lock["retired_models"]
+    assert "muse-spark-1.3-contributor-free" in lock["retired_models"]
+    assert "nvidia/nemotron-3-super-120b-a12b:free" in lock["retired_models"]
+    assert "longcat-2.5-preview-free" in lock["retired_models"]
+    assert "cat-jam-free" in lock["retired_models"]
+    assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
+    assert by_worker["42"]["source"] == "opencode-free"
+    assert by_worker["42"]["model"] == "nemotron-3-ultra-free"
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
