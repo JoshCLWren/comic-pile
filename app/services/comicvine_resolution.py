@@ -521,6 +521,7 @@ async def get_issue_identity_state(
     confirmed: list[IssueIdentityMapping] = []
     candidates: list[IssueIdentityMapping] = []
     has_unresolved = False
+    hydration_status = "unmapped"
 
     for mapping, identity in mapping_rows:
         item = IssueIdentityMapping(
@@ -534,6 +535,12 @@ async def get_issue_identity_state(
         )
         if mapping.status == "confirmed":
             confirmed.append(item)
+            if identity.provider == "comicvine":
+                from app.services.comicvine_fallback import metadata_needs_hydration
+
+                hydration_status = (
+                    "needed" if metadata_needs_hydration(identity) else "complete"
+                )
         elif mapping.status == "candidate":
             candidates.append(item)
         elif mapping.status == "unresolved":
@@ -549,6 +556,7 @@ async def get_issue_identity_state(
         confirmed_mappings=confirmed,
         candidate_mappings=candidates,
         has_unresolved=has_unresolved,
+        metadata_hydration_status=hydration_status,
     )
 
 
@@ -712,7 +720,10 @@ async def save_confirmed_comicvine_identity(
     response = await get_issue_identity_state(db, user_id=user_id, issue_id=issue_id)
     await db.commit()
     if needs_refresh:
-        await refresh_issue_metadata(identity_id)
+        refreshed = await refresh_issue_metadata(identity_id)
+        response.metadata_hydration_status = (
+            "complete" if refreshed else "not_completed"
+        )
     return response
 
 
