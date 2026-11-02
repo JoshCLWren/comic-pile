@@ -114,6 +114,22 @@ def _assert_route_priorities(routes: list[dict[str, object]]) -> None:
         "Native routes must precede the Python API catch-all"
     )
 
+    # Vercel evaluates rewrites in order. Duplicate native method/path rewrites
+    # hide whichever entry appears second and must not silently pass this guard.
+    seen_native: set[tuple[str, str]] = set()
+    for index in native_indices:
+        route = routes[index]
+        src = route.get("src")
+        methods = route.get("methods")
+        assert isinstance(src, str) and isinstance(methods, list) and methods
+        for method in methods:
+            assert isinstance(method, str)
+            identity = (src, method)
+            assert identity not in seen_native, (
+                f"Duplicate native ingress rewrite for {method} {src}"
+            )
+            seen_native.add(identity)
+
     docs = _route_index(routes, src="/(?:openapi\\.json|docs|redoc|health)")
     landing = _route_index(routes, src="/")
     assets = _route_index(routes, src="/assets/.+")
@@ -277,6 +293,34 @@ def test_unrelated_native_route_insertion_keeps_deployment_guards_stable() -> No
     _assert_route_priorities(expanded)
     assert _route(expanded, _route_html_src_pattern()) == _route_html_rule()
     assert _route(expanded, "/")["dest"] == "/index.html"
+
+
+@pytest.mark.parametrize("methods", [("POST",), ("GET", "POST")])
+def test_duplicate_native_method_and_path_rewrite_fails(methods: tuple[str, ...]) -> None:
+    """Reject a native rewrite whose method and source overlap an existing one."""
+    routes = _routes(_load_vercel_config())
+    insertion = _route_index(routes, src="/api(?:/.*)?")
+    duplicate = {
+        "src": "/api/v2/auth/register",
+        "methods": list(methods),
+        "dest": "/api/native_roll.rs",
+    }
+    expanded = [*routes[:insertion], duplicate, *routes[insertion:]]
+    with pytest.raises(AssertionError, match="Duplicate native ingress rewrite"):
+        _assert_route_priorities(expanded)
+
+
+def test_disjoint_methods_can_use_same_native_source() -> None:
+    """Two handlers sharing a path but not its HTTP method are not duplicates."""
+    routes = _routes(_load_vercel_config())
+    insertion = _route_index(routes, src="/api(?:/.*)?")
+    distinct_method = {
+        "src": "/api/v2/auth/register",
+        "methods": ["GET"],
+        "dest": "/api/native_roll.rs",
+    }
+    expanded = [*routes[:insertion], distinct_method, *routes[insertion:]]
+    _assert_route_priorities(expanded)
 
 
 def test_python_catchall_cannot_shadow_a_native_route() -> None:
