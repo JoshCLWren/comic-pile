@@ -142,11 +142,26 @@ async def refresh_issue_metadata(identity_id: int) -> bool:
         )
         return False
     except Exception as exc:
-        logger.warning(
-            "comicvine_fallback_inline_failed identity_id=%s error=%s",
-            identity_id,
-            type(exc).__name__,
-        )
+        # Capture detailed error information for TypeErrors while keeping it safe
+        if isinstance(exc, TypeError):
+            # For TypeErrors, include more details to help with debugging
+            # but sanitize any potentially sensitive context
+            error_msg = f"TypeError: {str(exc)}"
+            # Limit the message length to avoid overly long log entries
+            if len(error_msg) > 200:
+                error_msg = error_msg[:197] + "..."
+            logger.warning(
+                "comicvine_fallback_inline_failed identity_id=%s error=%s",
+                identity_id,
+                error_msg,
+            )
+        else:
+            # For other exceptions, keep the existing behavior
+            logger.warning(
+                "comicvine_fallback_inline_failed identity_id=%s error=%s",
+                identity_id,
+                type(exc).__name__,
+            )
         return False
 
 
