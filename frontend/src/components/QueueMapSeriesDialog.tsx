@@ -83,6 +83,8 @@ interface QueueMapSeriesDialogProps {
    * one series at a time omit it.
    */
   batchProgress?: SeriesBatchProgress
+  /** A partial Queue scope is warned inside this active modal, not behind its overlay. */
+  batchIncomplete?: boolean
   /**
    * Optional bulk-run exit. Without it the results screen is only reachable
    * after every series is processed, which traps a reader in a long batch
@@ -169,6 +171,7 @@ export default function QueueMapSeriesDialog({
   onSkip,
   onFailed,
   batchProgress,
+  batchIncomplete = false,
   onFinishBatch,
 }: QueueMapSeriesDialogProps) {
   const [step, setStep] = useState<DialogStep>('search')
@@ -419,6 +422,17 @@ export default function QueueMapSeriesDialog({
   return (
     <Modal isOpen={isOpen} title={dialogTitle} onClose={onClose} size="large">
       <div data-testid="queue-map-series-dialog">
+        {batchIncomplete && (
+          <p
+            role="alert"
+            data-testid="queue-map-series-incomplete-warning"
+            className="mb-3 rounded-lg border border-[var(--theme-warning)]/40 bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-text-primary)]"
+          >
+            Part of the queue could not be loaded, so this run may not cover every series that
+            needs a ComicVine match. Reopen Map Series once the queue finishes loading to include
+            the rest.
+          </p>
+        )}
         {batchProgress && (
           <div
             className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[var(--theme-border)] pb-3"

@@ -60,6 +60,11 @@ describe('QueueBulkMapSeriesDialog', () => {
             data-thread-title={props.threadTitle}
             data-progress={props.batchProgress ? `${props.batchProgress.position}/${props.batchProgress.total}` : ''}
           >
+            {props.batchIncomplete && (
+              <p role="alert" data-testid="mock-series-incomplete-warning">
+                Part of the queue could not be loaded
+              </p>
+            )}
             <span data-testid="mock-series-progress">{props.batchProgress?.position ?? ''}</span>
             <span data-testid="mock-series-counts">
               {props.batchProgress
@@ -320,6 +325,32 @@ describe('QueueBulkMapSeriesDialog', () => {
 
     const results = await screen.findByTestId('queue-bulk-map-series-results')
     expect(results).toHaveTextContent('Part of the queue could not be loaded')
+  })
+
+  it('preserves the incomplete-batch warning through mapping and prop refresh (regression for #4125)', async () => {
+    const { view } = renderBulkDialog({
+      threadIds: [1, 2],
+      isScopeIncomplete: true,
+    })
+    // Warning must appear once the batch opens to mapping
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('mock-series-dialog')).toContainElement(screen.getByRole('alert'))
+      expect(screen.getByRole('alert')).toHaveTextContent('Part of the queue could not be loaded')
+    })
+    // A refreshed queue can clear the incomplete flag and replace the visible
+    // threads. Neither change can erase the warning or mutate the saved batch.
+    view.rerender(
+      <QueueBulkMapSeriesDialog
+        isOpen
+        threadIds={[3, 4]}
+        threadTitles={['Flash', 'Green Lantern']}
+        isScopeIncomplete={false}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('mock-series-dialog')).toHaveAttribute('data-progress', '1/2')
+    expect(screen.getByTestId('mock-series-dialog')).toContainElement(screen.getByRole('alert'))
+    expect(screen.getByRole('alert')).toHaveTextContent('Part of the queue could not be loaded')
   })
 
   it('reports a preserved batch to the host while a run is saved', async () => {
