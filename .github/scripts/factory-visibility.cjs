@@ -111,11 +111,15 @@ function derivedLabelsFor(pullRequest) {
 
 function hasManualOnlyDirective(body) {
   // Referencing this marker in inline or fenced documentation is not an opt-out.
-  // Only a standalone directive outside Markdown code spans qualifies.
+  // A standalone HTML comment or a standalone `manual-only` line qualifies.
+  // Keep lockstep with scripts/factory_eligibility.py is_manual_only().
   const prose = String(body || '')
     .replace(/`{3}[\s\S]*?`{3}/g, '')
     .replace(/`[^`\n]*`/g, '');
-  return prose.split(/\r?\n/).some(line => line.trim() === MANUAL_ONLY_MARKER);
+  return prose.split(/\r?\n/).some((line) => {
+    const trimmed = line.trim();
+    return trimmed === MANUAL_ONLY_MARKER || trimmed === 'manual-only';
+  });
 }
 
 function labelsBlockEnrollment(labels) {

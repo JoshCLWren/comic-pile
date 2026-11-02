@@ -38,6 +38,13 @@ def test_manual_only_standalone_directive_excludes() -> None:
     assert eligibility.is_manual_only("<!--factory-execution:manual-only-->")
 
 
+def test_manual_only_standalone_line_excludes() -> None:
+    """A standalone ``manual-only`` line is the short-form operator hold."""
+    assert eligibility.is_manual_only("manual-only")
+    assert eligibility.is_manual_only("Revert auth.\nmanual-only\n")
+    assert eligibility.is_manual_only("   manual-only   ")
+
+
 def test_manual_only_prose_discussion_stays_eligible() -> None:
     """Merely discussing the marker in prose must not trigger exclusion."""
     assert not eligibility.is_manual_only(
@@ -64,6 +71,8 @@ def test_manual_only_quoted_in_code_stays_eligible() -> None:
     assert not eligibility.is_manual_only(
         "```markdown\n<!-- factory-execution:manual-only -->\n```"
     )
+    assert not eligibility.is_manual_only("`manual-only`\nOrdinary work.")
+    assert not eligibility.is_manual_only("```\nmanual-only\n```\nOrdinary work.")
 
 
 def test_inline_depends_on_single_and_cluster() -> None:
@@ -265,6 +274,8 @@ def test_selectors_agree_with_shared_semantics() -> None:
         "<!-- factory-execution:manual-only -->\nGate.",
         "The `<!-- factory-execution:manual-only -->` marker is discussed.",
         "Plain prose about manual-only gates.",
+        "Revert auth.\nmanual-only\n",
+        "`manual-only`\nOrdinary work.",
         "Depends on #10 and #11.",
         "## Dependencies\n\n- #19\n",
     ]

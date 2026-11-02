@@ -38,9 +38,9 @@ AXUM_ROUTE = re.compile(
     r'\.route\(\s*"(?P<path>/[^"]+)"\s*,\s*'
     r'(?P<method>get|post|put|patch|delete)\s*\('
 )
-# Axum 0.8 spells captures ``{name}``; normalize them to stable tokens
-# for comparisons. In vercel.json, routes[].src is PCRE, not a high-level
-# rewrite pattern, and MUST NOT expand ``:name`` capture-looking strings.
+# Axum 0.8 spells captures ``{name}``; normalize these to stable tokens.
+# Vercel routes[].src is PCRE, not high-level rewrite syntax: a literal
+# ``:name`` cannot match the concrete HTTP path.
 
 
 def _normalized_path(path: str) -> str:
@@ -68,7 +68,7 @@ def _vercel_routes() -> list[dict[str, object]]:
 
 
 def _vercel_pattern(source: str) -> str:
-    """Use the literal PCRE route source as Vercel does, without translation."""
+    """Treat Vercel routes[].src as a literal PCRE pattern."""
     return source
 
 
@@ -157,7 +157,7 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
             continue
         source = route.get("src")
         assert isinstance(source, str) and re.search(r"/:[A-Za-z_]", source) is None, (
-            f"Vercel routes[].src is PCRE, not high-level rewrite syntax: {source}"
+            f"Vercel routes[].src must use regex, not :param: {source}"
         )
         methods = route.get("methods")
         assert isinstance(source, str) and (

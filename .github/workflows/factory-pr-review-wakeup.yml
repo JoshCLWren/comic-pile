@@ -3,6 +3,7 @@ name: Factory PR Review Wakeup
 # A bounded idle dispatcher stops its five-minute roster chain. This small
 # trusted event bridge wakes the canonical controller when new PR work arrives.
 # Never checkout or execute the PR head: pull_request_target has a write token.
+# The default-branch checkout is only for the trusted manual-only helper.
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, labeled, synchronize]
@@ -34,6 +35,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
+      - name: Checkout trusted manual-only helper
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
       - name: Validate current PR and wake canonical dispatcher
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,6 +58,20 @@ jobs:
             and .user.login != "renovate[bot]"
           ' <<<"$pr" >/dev/null; then
             echo "PR #${PR_NUMBER} is no longer eligible; no dispatch"
+            exit 0
+          fi
+          if printf '%s' "$pr" | python3 -c '
+          import json
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path("scripts").resolve()))
+          from factory_eligibility import is_manual_only
+
+          payload = json.load(sys.stdin)
+          raise SystemExit(0 if is_manual_only(payload.get("body")) else 1)
+          '; then
+            echo "PR #${PR_NUMBER} is manual-only; no dispatch"
             exit 0
           fi
           gh workflow run fixed-model-factory-dispatch.yml \

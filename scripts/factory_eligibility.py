@@ -14,15 +14,16 @@ reimplementing the rules.
 
 Manual-only directive contract
 ------------------------------
-Autonomous execution is excluded only by a standalone HTML-comment directive
-on its own line, outside fenced code blocks and inline code spans::
+Autonomous execution is excluded by either of these standalone lines, outside
+fenced code blocks and inline code spans::
 
     <!-- factory-execution:manual-only -->
+    manual-only
 
 Raw substring matching is explicitly NOT the contract: merely discussing the
 marker in prose or quoting it in code (for example, in backticks) must never
 exclude an issue. To mention the marker without triggering exclusion, wrap it
-in code spans or omit the ``<!-- -->`` delimiters.
+in code spans or place it inside a sentence.
 
 Dependency declaration contract
 -------------------------------
@@ -73,6 +74,7 @@ _INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 _MANUAL_ONLY_DIRECTIVE_RE = re.compile(
     r"(?m)^[ \t]*<!--[ \t]*factory-execution:manual-only[ \t]*-->[ \t]*$"
 )
+_MANUAL_ONLY_LINE_RE = re.compile(r"(?m)^[ \t]*manual-only[ \t]*$")
 
 ACCEPTANCE_PARENT_BODY_RE = re.compile(
     r"acceptance parent|parent acceptance criteria",
@@ -108,11 +110,12 @@ def strip_code_segments(text: str) -> str:
 
 
 def is_manual_only(body: str | None) -> bool:
-    """Return whether a body carries the structured manual-only directive.
+    """Return whether a body carries a structured manual-only opt-out.
 
-    Only a standalone ``<!-- factory-execution:manual-only -->`` comment on
-    its own line counts, and only outside fenced code blocks and inline code
-    spans. Prose discussion and quoted mentions never trigger exclusion.
+    Either a standalone ``<!-- factory-execution:manual-only -->`` comment or
+    a standalone ``manual-only`` line counts, and only outside fenced code
+    blocks and inline code spans. Prose discussion and quoted mentions never
+    trigger exclusion.
 
     Args:
         body: The raw issue body, or None for an empty body.
@@ -122,7 +125,10 @@ def is_manual_only(body: str | None) -> bool:
     """
     if not body:
         return False
-    return bool(_MANUAL_ONLY_DIRECTIVE_RE.search(strip_code_segments(body)))
+    prose = strip_code_segments(body)
+    return bool(
+        _MANUAL_ONLY_DIRECTIVE_RE.search(prose) or _MANUAL_ONLY_LINE_RE.search(prose)
+    )
 
 
 def is_acceptance_parent(body: str | None) -> bool:

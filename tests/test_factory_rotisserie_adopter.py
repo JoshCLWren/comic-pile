@@ -214,5 +214,7 @@ def test_human_gate_uses_the_structured_manual_only_contract() -> None:
         return {"number": 9001, "body": body, "labels": []}
 
     assert adapter._human_gate(issue("<!-- factory-execution:manual-only -->\nGate.")) is True
+    assert adapter._human_gate(issue("Gate.\nmanual-only\n")) is True
     assert adapter._human_gate(issue("Gate: <!-- factory-execution:manual-only -->")) is False
     assert adapter._human_gate(issue("The `<!-- factory-execution:manual-only -->` marker.")) is False
+    assert adapter._human_gate(issue("The `manual-only` marker.")) is False
