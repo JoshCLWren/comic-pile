@@ -586,8 +586,8 @@ async def _hydrate_after_commit(
         async with asyncio.timeout(budget):
             for identity_id in identity_ids:
                 try:
-                    await refresh_issue_metadata(identity_id)
-                    hydrated += 1
+                    if await refresh_issue_metadata(identity_id):
+                        hydrated += 1
                 except Exception as exc:
                     logger.warning(
                         "catalog_series_mapping_commit hydration_failed user_id=%s identity_id=%s error=%s",
