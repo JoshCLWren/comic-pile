@@ -456,3 +456,106 @@ async def test_corrupt_session_json_recovers_in_place_and_keeps_pending_roll():
         async with admin.begin() as c:
             await c.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         await admin.dispose()
+
+
+@pytest.mark.asyncio
+async def test_read_only_get_projects_foreign_pending_issue_without_persisting_repair():
+    """GET masks a foreign/mismatched pending issue; POST later repairs durable state."""
+    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
+    schema = f"native_read_only_{uuid4().hex}"
+    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    async with admin.begin() as connection:
+        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+    engine = create_async_engine(
+        url.replace("postgresql://", "postgresql+asyncpg://"),
+        connect_args={"server_settings": {"search_path": schema}},
+    )
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username="readonly-owner")
+            other = User(username="readonly-other")
+            db.add_all([owner, other])
+            await db.flush()
+            owned = Thread(user_id=owner.id, title="Owned", format="Comic", queue_position=1)
+            foreign = Thread(user_id=other.id, title="Foreign", format="Comic", queue_position=1)
+            db.add_all([owned, foreign])
+            await db.flush()
+            foreign_issue = Issue(thread_id=foreign.id, issue_number="1", position=1)
+            db.add(foreign_issue)
+            await db.flush()
+            session = ReadingSession(
+                user_id=owner.id,
+                started_at=NOW - timedelta(minutes=5),
+                pending_thread_id=owned.id,
+                pending_issue_id=foreign_issue.id,
+                pending_thread_updated_at=NOW,
+            )
+            db.add(session)
+            await db.flush()
+            session_id = session.id
+            thread_id = owned.id
+            foreign_issue_id = foreign_issue.id
+            await db.commit()
+
+        separator = "&" if "?" in url else "?"
+        env = {
+            **os.environ,
+            "RUST_ROLL_DATABASE_URL": (
+                f"{url}{separator}application_name={schema}&options=-csearch_path%3D{schema}"
+            ),
+            "RUST_ROLL_JWT_SECRET": SECRET,
+            "RUST_ROLL_TEST_TOKEN": jwt.encode(
+                {"sub": "readonly-owner", "jti": "fixture", "type": "access"},
+                SECRET, "HS256",
+            ),
+            "RUST_ROLL_TEST_NOW": str(NOW.timestamp()),
+        }
+
+        async def native(*, initialize=False):
+            process = await asyncio.create_subprocess_exec(
+                str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
+                env={**env, **({"RUST_ROLL_TEST_INITIALIZE": "1"} if initialize else {})},
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            output, error = await asyncio.wait_for(process.communicate(), 20)
+            return process.returncode, json.loads(output) if output else None, error
+
+        async def durable():
+            async with engine.connect() as connection:
+                state = {}
+                for table in ("sessions", "snapshots", "events"):
+                    result = await connection.scalars(
+                        text(f"SELECT row_to_json(t)::text FROM {table} t ORDER BY id")
+                    )
+                    state[table] = [json.loads(row) for row in result]
+                return state
+
+        before = await durable()
+        assert before["sessions"][0]["pending_issue_id"] == foreign_issue_id
+        code, projection, err = await native()
+        assert code == 0, err.decode()
+        assert projection["session"]["id"] == session_id
+        assert projection["session"]["pending_thread_id"] == thread_id
+        assert projection["session"]["pending_issue_id"] is None
+        assert await durable() == before
+
+        code, initialized, err = await native(initialize=True)
+        assert code == 0, err.decode()
+        assert initialized["session"]["id"] == session_id
+        assert initialized["session"]["pending_issue_id"] is None
+        after = await durable()
+        assert after["sessions"][0]["pending_issue_id"] is None
+        assert len(after["sessions"]) == 1
+        assert after["snapshots"] == before["snapshots"]
+        code, again, err = await native()
+        assert code == 0, err.decode()
+        assert again["session"]["pending_issue_id"] is None
+        assert await durable() == after
+    finally:
+        await engine.dispose()
+        async with admin.begin() as connection:
+            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        await admin.dispose()
