@@ -33,6 +33,9 @@
 # because worker runners have no PostgreSQL service (CI still runs it).
 # FACTORY_FAST_CHECKS=off disables the gate for an incident.
 
+# Enable globstar for recursive glob patterns in case statements
+shopt -s globstar
+
 FACTORY_FAST_CHECK_TIMEOUT="${FACTORY_FAST_CHECK_TIMEOUT:-600}"
 FACTORY_FAST_CHECK_DB_ERROR_RE='(ConnectionRefusedError|could not connect to server|Connect call failed|connection to server at .* failed|OSError: \[Errno 111\]|asyncpg\.exceptions\.(CannotConnectNowError|InvalidPasswordError|ConnectionDoesNotExistError))'
 

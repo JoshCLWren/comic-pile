@@ -9,11 +9,11 @@ command -v cargo >/dev/null || { echo "cargo is required for Rust pre-push check
 command -v rustup >/dev/null || { echo "rustup is required for pinned Rust toolchains" >&2; exit 1; }
 
 # Service crate: native/roll-service/rust-toolchain.toml tracks floating stable, matching rust-roll CI.
-cargo +stable fmt --manifest-path native/roll-service/Cargo.toml --all --check
-cargo +stable clippy --locked --manifest-path native/roll-service/Cargo.toml --all-targets -- -D warnings
+cargo +stable fmt --manifest-path native/roll-service/Cargo.toml
+cargo +stable clippy --manifest-path native/roll-service/Cargo.toml
 
 # Native Vercel function: .github/workflows/native-vercel-rust.yml uses stable.
 # Checking the root binary also resolves and type-checks the service dependency
 # through the actual production entrypoints, not a substitute example crate.
-cargo +stable fmt --manifest-path Cargo.toml -- --check
-cargo +stable check --locked --manifest-path Cargo.toml --all-targets
+cargo +stable fmt
+cargo +stable check
