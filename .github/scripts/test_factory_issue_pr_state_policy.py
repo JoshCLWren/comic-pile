@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from factory_issue_pr_state_policy import (
     LEASE_ACTION_HOLD_AMBIGUOUS,
@@ -22,7 +22,7 @@ from factory_work_policy import BLOCKED_LABELS
 
 def _iso_timestamp(epoch: int) -> str:
     """Return a GitHub-style UTC timestamp for an epoch."""
-    return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(epoch, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _issue_payload(labels: list[str], updated_at: str | None) -> dict[str, object]:

@@ -6,7 +6,7 @@ import importlib.util
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 
@@ -45,7 +45,7 @@ def _reconcile_issue_body(workflow: str) -> str:
 
 def _iso_timestamp(epoch: int) -> str:
     """Return a GitHub-style UTC timestamp for an epoch."""
-    return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(epoch, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _issue_payload(labels: list[str], updated_at: str | None) -> dict[str, object]:
