@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from datetime import UTC, datetime
+from typing import Literal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -521,7 +522,7 @@ async def get_issue_identity_state(
     confirmed: list[IssueIdentityMapping] = []
     candidates: list[IssueIdentityMapping] = []
     has_unresolved = False
-    hydration_status = "unmapped"
+    hydration_status: Literal["unmapped", "needed", "complete", "not_completed"] = "unmapped"
 
     for mapping, identity in mapping_rows:
         item = IssueIdentityMapping(
