@@ -6,7 +6,7 @@
 //! including single-use token consumption and Gmail SMTP delivery, is native
 //! here; see [`crate::auth::mailer`] and [`crate::auth::BackgroundTasks`].
 
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 
@@ -22,17 +22,15 @@ const ALGORITHM: Algorithm = Algorithm::HS256;
 const MAX_USERNAME_FAILURES: i64 = 5;
 const MAX_IP_FAILURES: i64 = 10;
 
-/// Synthetic bcrypt work for nonexistent users, not a credential or a login.
-/// Keep the same password-check cost for unknown and known usernames.
+/// Static synthetic bcrypt cost-12 hash for unknown accounts. There is no
+/// account using this digest. Avoid lazy generation, which would make the
+/// very first missing-user login measurably slower than every later request.
+const UNKNOWN_ACCOUNT_BCRYPT_HASH: &str =
+    "$2b$12$r0ZbLBzmr2toxR/aBGO75uh1uNrTLhTHJjce/iCVup/sztzLEyTUy";
+
+/// Known and unknown usernames each perform one password verification.
 fn verify_unknown_account_password(password: &str) -> AuthResult<()> {
-    static DUMMY_HASH: OnceLock<String> = OnceLock::new();
-    if let Some(hash) = DUMMY_HASH.get() {
-        let _ = verify_password(password, hash)?;
-    } else {
-        let candidate = hash_password("comicpile-nonexistent-account-bcrypt-work")?;
-        let hash = DUMMY_HASH.get_or_init(|| candidate);
-        let _ = verify_password(password, hash)?;
-    }
+    let _ = verify_password(password, UNKNOWN_ACCOUNT_BCRYPT_HASH)?;
     Ok(())
 }
 
