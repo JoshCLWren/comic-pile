@@ -151,6 +151,7 @@ export default function QueueBulkMapSeriesDialog({
   const [confirmedByThread, setConfirmedByThread] = useState<Record<number, number>>({})
   const [confirmedIssueIds, setConfirmedIssueIds] = useState<number[]>([])
   const [batchIncomplete, setBatchIncomplete] = useState(false)
+  const capturedScopeIncompleteRef = useRef(false)
 
   // The Queue re-creates these arrays on every render, so hold only the newest
   // values in a ref. Run initialization reads them when the dialog opens without
@@ -211,10 +212,10 @@ export default function QueueBulkMapSeriesDialog({
     setConfirmedByThread({})
     setConfirmedIssueIds([])
     setCurrentIndex(0)
-    // Preserve the existing batchIncomplete state during prop refresh
-    // (e.g., queue refresh with new array identity). Only reset when isScopeLoading
-    // changes, which indicates a genuine queue scope change that should affect incomplete status.
-    setBatchIncomplete((prev) => prev || isScopeIncomplete)
+    // Capture the incomplete state at the moment the batch is captured.
+    // This persists even if the queue query succeeds or resets during processing.
+    capturedScopeIncompleteRef.current = isScopeIncomplete
+    setBatchIncomplete(isScopeIncomplete)
     setPhase(nextBatch.length > 0 ? 'mapping' : 'results')
     // The batch is fixed from here on: a queue refresh after a saved mapping
     // drops the loaded pages, and re-draining would reopen the preparing dialog
