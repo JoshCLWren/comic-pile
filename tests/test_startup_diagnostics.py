@@ -1,8 +1,9 @@
 """Tests for process-level startup and cold-request diagnostics."""
 
-import pytest
-from types import SimpleNamespace
 from time import process_time
+from types import SimpleNamespace
+
+import pytest
 
 import app.startup_diagnostics as diagnostics
 from app.startup_diagnostics import (
