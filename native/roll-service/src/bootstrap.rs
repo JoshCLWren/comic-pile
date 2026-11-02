@@ -728,6 +728,32 @@ async fn visible_thread_tags(
     Ok(by_id)
 }
 
+/// Temporary explicit write boundary for legacy reading-session consumers.
+/// GET /api/v2/roll/bootstrap never creates or mutates a session.
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct InitializeSessionRequest {
+    pub timezone: Option<String>,
+}
+
+pub async fn initialize_session(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<InitializeSessionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let initialized = reading_session::initialize(
+        &state,
+        user,
+        request.timezone.as_deref(),
+        SessionPolicy::default(),
+    )
+    .await?;
+    Ok(Json(json!({
+        "session_id": initialized.session.id,
+        "created": initialized.created,
+    })))
+}
+
 pub async fn bootstrap_v2(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1303,6 +1329,131 @@ mod pool_parity_tests {
             );
         }
 
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod initialize_session_db_tests {
+    use super::{initialize_session, InitializeSessionRequest};
+    use crate::{auth::AuthenticatedUser, config::Config, AppState};
+    use axum::{extract::State, Json};
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn initialize_session_persists_timezone_without_duplicate_sessions() {
+        let Ok(database_url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&database_url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("session_init_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (id integer PRIMARY KEY, user_id integer NOT NULL);
+                 CREATE TABLE {schema}.issues (id integer PRIMARY KEY, thread_id integer NOT NULL);
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     session_id integer, type text, timestamp timestamptz,
+                     die_after integer, context json
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at timestamptz NOT NULL, ended_at timestamptz,
+                     start_die integer NOT NULL, manual_die integer,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz,
+                     snoozed_thread_ids integer[], skipped_thread_ids integer[],
+                     timezone text, predicted_bandwidth text, active_bandwidth text,
+                     bandwidth_confidence double precision, bandwidth_source text,
+                     bandwidth_version text, bandwidth_updated_at timestamptz,
+                     reading_bandwidth text, reading_intent text, reading_mode_source text,
+                     reading_mode_suggested boolean NOT NULL,
+                     active_intent text, predicted_intent text, intent_confidence double precision,
+                     intent_source text, intent_version text,
+                     session_mode_correction_guidance jsonb
+                 );
+                 INSERT INTO {schema}.users VALUES (1);
+                 INSERT INTO {schema}.sessions
+                     (id, user_id, started_at, start_die, reading_mode_suggested, bandwidth_source)
+                 VALUES (7, 1, NOW(), 6, false, 'manual');"
+            ))
+            .await
+            .unwrap();
+        // Set only this test pool's search path, never mutate the shared test database.
+        let mut config = Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(database_url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-jwt-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        config
+            .database
+            .options(&format!("-c search_path={schema},public"));
+        let state = Arc::new(AppState::new(config).unwrap());
+
+        let Json(first) = initialize_session(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Json(InitializeSessionRequest {
+                timezone: Some("America/Chicago".into()),
+            }),
+        )
+        .await
+        .expect("existing session initialization must succeed");
+        assert_eq!(first["session_id"], 7);
+        assert_eq!(first["created"], false);
+        let timezone = admin
+            .query_one(
+                &format!("SELECT timezone FROM {schema}.sessions WHERE id=7"),
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            timezone.get::<_, Option<String>>(0).as_deref(),
+            Some("America/Chicago")
+        );
+
+        let Json(second) = initialize_session(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Json(InitializeSessionRequest {
+                timezone: Some("America/New_York".into()),
+            }),
+        )
+        .await
+        .expect("repeated initialization must reuse the existing session");
+        assert_eq!(second["session_id"], 7);
+        assert_eq!(second["created"], false);
+        let row = admin
+            .query_one(
+                &format!("SELECT count(*), max(timezone) FROM {schema}.sessions"),
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(row.get::<_, i64>(0), 1);
+        assert_eq!(
+            row.get::<_, Option<String>>(1).as_deref(),
+            Some("America/Chicago")
+        );
+
+        state.pool.close();
+        drop(state);
         admin
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
             .await

@@ -16,6 +16,12 @@ import type {
 export function createRollBootstrapApi(client: HttpClient) {
   return {
     get: async (timezone?: string): Promise<RollBootstrapResponse> => {
+      // Explicitly initialize/resolve the retained legacy session on a write route.
+      // The following GET is a pure projection and must never create state.
+      await client.post<{ session_id: number; created: boolean }, { timezone?: string }>(
+        '/v2/reading-sessions',
+        timezone ? { timezone } : {},
+      )
       const response = timezone
         ? await client.get<RollV2BootstrapResponse>('/v2/roll/bootstrap', {
             params: { timezone },

@@ -100,5 +100,5 @@ export function auxBudget(path: string): readonly string[] {
  * @returns True when the row belongs to the authenticated Roll surface.
  */
 export function isPeerRollRow(row: string): boolean {
-  return row.startsWith('GET /api/v2/roll/')
+  return row.startsWith('GET /api/v2/roll/') || row.startsWith('POST /api/v2/reading-sessions')
 }

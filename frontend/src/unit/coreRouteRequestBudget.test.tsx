@@ -260,8 +260,9 @@ describe('core route request budgets', () => {
     })
   })
 
-  it('Roll cold-loads one bootstrap read, even under StrictMode', async () => {
+  it('Roll initializes once before one read-only bootstrap, even under StrictMode', async () => {
     const { calls, client } = createRequestRecorder((call) => {
+      if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
       if (call.url === '/v2/roll/bootstrap') return bootstrap
       return {}
     })
@@ -272,10 +273,12 @@ describe('core route request budgets', () => {
     await waitFor(() => expect(calls.some((call) => call.url === '/v2/roll/bootstrap')).toBe(true))
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    expect(calls).toHaveLength(1)
-    expect(calls[0].method).toBe('GET')
-    expect(calls[0].url).toBe('/v2/roll/bootstrap')
-    expect(calls[0].params?.timezone).toBe(
+    expect(calls).toHaveLength(2)
+    expect(calls.map(({ method, url }) => [method, url])).toEqual([
+      ['POST', '/v2/reading-sessions'],
+      ['GET', '/v2/roll/bootstrap'],
+    ])
+    expect(calls[1].params?.timezone).toBe(
       Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
     )
   })
