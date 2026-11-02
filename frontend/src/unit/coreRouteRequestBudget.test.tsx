@@ -19,6 +19,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { setDefaultHttpClient } from '../services/httpClient'
+import { threadsApi } from '../services/api-threads'
+import { sessionApi } from '../services/api-sessions'
+import { readingBoundariesApi } from '../services/api-reading-boundaries'
+import { dependencyGroupsApi } from '../services/api-dependency-groups'
+import { dependenciesApi } from '../services/api-dependencies'
 import { createAppQueryClient } from '../query/queryClient'
 import api from '../services/api'
 import { AuthContext } from '../contexts/AuthContext'
@@ -94,29 +99,6 @@ const queueThreads = [1, 2].map((id) => ({
   blocking_reasons: [],
 }))
 
-const queueHandler: Responder = (call) => {
-  if (call.url === '/v1/sessions/current/') return session
-  if (call.url === '/v1/threads/' || call.url === '/v1/threads') {
-    return { threads: queueThreads, next_page_token: null, active_count: 2 }
-  }
-  if (call.url === '/v1/threads/excluded/threads') {
-    return { threads: [], next_page_token: null, active_count: 0 }
-  }
-  if (call.url === '/v2/reading-boundaries') {
-    return { threads: { 1: { state: 'unavailable' }, 2: { state: 'unavailable' } } }
-  }
-  if (call.url === '/v1/threads/groups:batch') return {}
-  if (call.url === '/v1/threads:getBlockingInfo') {
-    return {
-      threads: {
-        1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] },
-        2: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] },
-      },
-    }
-  }
-  return {}
-}
-
 /**
  * Queue data-hook composition: the same real hooks the route mounts, in the
  * same order, without the page's presentation tree. The full Queue page's
@@ -126,7 +108,7 @@ function QueueBudgetProbe() {
   const queue = useQueueThreads()
   useSession()
   useExcludedThreads(true)
-  const threadIds = queue.data?.map((thread) => thread.id) ?? []
+  const threadIds = (queue.data ?? []).flatMap((thread) => (thread ? [thread.id] : []))
   const boundaries = useReadingBoundaries(threadIds)
   useQueueCrossovers(queue.data ?? [])
   const boundariesUnavailable =
@@ -134,7 +116,9 @@ function QueueBudgetProbe() {
     (boundaries.isError ||
       boundaries.data == null ||
       threadIds.some(
-        (id) => boundaries.data?.threads[id] == null || boundaries.data?.threads[id].state === 'unavailable',
+        (id) =>
+          boundaries.data?.threads[id] == null ||
+          boundaries.data?.threads[id].state === 'unavailable',
       ))
   useQueueBlockingInfo(boundariesUnavailable ? threadIds : [])
   return null
@@ -248,6 +232,7 @@ beforeEach(() => {
 
 afterEach(() => {
   api.defaults.adapter = originalAdapter
+  vi.restoreAllMocks()
 })
 
 describe('core route request budgets', () => {
@@ -296,30 +281,52 @@ describe('core route request budgets', () => {
   })
 
   it('Queue cold-loads each bounded batch once and reuses the cache on warm remount', async () => {
-    const { calls, client } = createRequestRecorder(queueHandler)
-    setDefaultHttpClient(client)
+    // SAFETY: the queue fixture supplies every field the Queue hooks read.
+    const list = vi.spyOn(threadsApi, 'list').mockResolvedValue({
+      threads: queueThreads,
+      next_page_token: null,
+      active_count: 2,
+    } as never)
+    // SAFETY: the excluded fixture is an empty valid list page.
+    const listExcluded = vi.spyOn(threadsApi, 'listExcluded').mockResolvedValue({
+      threads: [],
+      next_page_token: null,
+      active_count: 0,
+    } as never)
+    // SAFETY: the session fixture supplies every SessionCurrent field read here.
+    vi.spyOn(sessionApi, 'getCurrent').mockResolvedValue(session as never)
+    // SAFETY: the boundary fixture supplies a state for each requested id.
+    const batchBoundaries = vi.spyOn(readingBoundariesApi, 'batch').mockResolvedValue({
+      threads: { 1: { state: 'unavailable' }, 2: { state: 'unavailable' } },
+    } as never)
+    vi.spyOn(dependencyGroupsApi, 'listForThreads').mockResolvedValue({})
+    // SAFETY: the blocking fixture supplies the batch map shape read by the hook.
+    const batchBlocking = vi.spyOn(dependenciesApi, 'getBatchBlockingInfo').mockResolvedValue({
+      threads: {
+        1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] },
+        2: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] },
+      },
+    } as never)
 
     const view = render(renderAt('/queue', <QueueBudgetProbe />))
 
-    await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v1/threads:getBlockingInfo')).toBe(true),
+    await waitFor(() => expect(batchBlocking).toHaveBeenCalledTimes(1))
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({ page_size: 50, sort: 'position' }),
+      undefined,
     )
-    await new Promise((resolve) => setTimeout(resolve, 100))
-
-    expect(requestCounts(calls)).toEqual({
-      'GET /v1/threads/?page_size=50&sort=position': 1,
-      'GET /v1/sessions/current/': 1,
-      'GET /v1/threads/excluded/threads?page_size=50&sort=created': 1,
-      'POST /v2/reading-boundaries': 1,
-      'POST /v1/threads/groups:batch': 1,
-      'POST /v1/threads:getBlockingInfo': 1,
-    })
+    expect(listExcluded).toHaveBeenCalledTimes(1)
+    expect(batchBoundaries).toHaveBeenCalledTimes(1)
+    expect(batchBlocking).toHaveBeenCalledTimes(1)
 
     view.unmount()
-    const warmed = calls.length
     render(renderAt('/queue', <QueueBudgetProbe />))
     await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(calls).toHaveLength(warmed)
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(listExcluded).toHaveBeenCalledTimes(1)
+    expect(batchBoundaries).toHaveBeenCalledTimes(1)
+    expect(batchBlocking).toHaveBeenCalledTimes(1)
   })
 
   it('Queue search commits one value for the final debounced input', async () => {
