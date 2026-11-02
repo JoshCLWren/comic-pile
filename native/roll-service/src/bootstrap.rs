@@ -718,6 +718,32 @@ async fn visible_thread_tags(
     Ok(by_id)
 }
 
+/// Temporary explicit write boundary for legacy reading-session consumers.
+/// GET /api/v2/roll/bootstrap never creates or mutates a session.
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct InitializeSessionRequest {
+    pub timezone: Option<String>,
+}
+
+pub async fn initialize_session(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<InitializeSessionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let initialized = reading_session::initialize(
+        &state,
+        user,
+        request.timezone.as_deref(),
+        SessionPolicy::default(),
+    )
+    .await?;
+    Ok(Json(json!({
+        "session_id": initialized.session.id,
+        "created": initialized.created,
+    })))
+}
+
 pub async fn bootstrap_v2(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
