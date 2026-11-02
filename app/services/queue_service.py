@@ -7,6 +7,7 @@ HTTP status mapping lives in routers.
 """
 
 import logging
+from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -82,7 +83,7 @@ class QueueService:
         user_id: int,
         thread_id: int,
         *,
-        action: str,
+        action: Literal["position", "back"],
         new_position: int | None = None,
     ) -> ThreadResponse:
         """Run one queue-mutation flow and record a reorder event on change.
