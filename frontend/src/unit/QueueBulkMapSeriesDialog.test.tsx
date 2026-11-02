@@ -336,16 +336,18 @@ describe('QueueBulkMapSeriesDialog', () => {
       expect(screen.getByTestId('mock-series-dialog')).toContainElement(screen.getByRole('alert'))
       expect(screen.getByRole('alert')).toHaveTextContent('Part of the queue could not be loaded')
     })
-    // Change props (simulating queue refresh with new array identity) must not suppress it
+    // A refreshed queue can clear the incomplete flag and replace the visible
+    // threads. Neither change can erase the warning or mutate the saved batch.
     view.rerender(
       <QueueBulkMapSeriesDialog
         isOpen
         threadIds={[3, 4]}
         threadTitles={['Flash', 'Green Lantern']}
-        isScopeIncomplete={true}
+        isScopeIncomplete={false}
         onClose={vi.fn()}
       />,
     )
+    expect(screen.getByTestId('mock-series-dialog')).toHaveAttribute('data-progress', '1/2')
     expect(screen.getByTestId('mock-series-dialog')).toContainElement(screen.getByRole('alert'))
     expect(screen.getByRole('alert')).toHaveTextContent('Part of the queue could not be loaded')
   })
