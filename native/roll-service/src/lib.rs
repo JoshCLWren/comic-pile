@@ -185,24 +185,42 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/auth/logout", post(auth::handlers::logout))
         .route("/api/v2/auth/csrf", get(auth::handlers::csrf))
         .route("/api/v2/auth/me", get(auth::handlers::me))
-        .route("/api/v2/auth/forgot-password", post(auth::handlers::forgot_password))
-        .route("/api/v2/auth/reset-password", post(auth::handlers::reset_password))
+        .route(
+            "/api/v2/auth/forgot-password",
+            post(auth::handlers::forgot_password),
+        )
+        .route(
+            "/api/v2/auth/reset-password",
+            post(auth::handlers::reset_password),
+        )
         .route("/api/v1/auth/register", post(auth::handlers::register))
         .route("/api/v1/auth/login", post(auth::handlers::login))
         .route("/api/v1/auth/refresh", post(auth::handlers::refresh))
         .route("/api/v1/auth/logout", post(auth::handlers::logout))
         .route("/api/v1/auth/csrf", get(auth::handlers::csrf))
         .route("/api/v1/auth/me", get(auth::handlers::me))
-        .route("/api/v1/auth/forgot-password", post(auth::handlers::forgot_password))
-        .route("/api/v1/auth/reset-password", post(auth::handlers::reset_password))
+        .route(
+            "/api/v1/auth/forgot-password",
+            post(auth::handlers::forgot_password),
+        )
+        .route(
+            "/api/v1/auth/reset-password",
+            post(auth::handlers::reset_password),
+        )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))
         .route("/api/auth/refresh", post(auth::handlers::refresh))
         .route("/api/auth/logout", post(auth::handlers::logout))
         .route("/api/auth/csrf", get(auth::handlers::csrf))
         .route("/api/auth/me", get(auth::handlers::me))
-        .route("/api/auth/forgot-password", post(auth::handlers::forgot_password))
-        .route("/api/auth/reset-password", post(auth::handlers::reset_password))
+        .route(
+            "/api/auth/forgot-password",
+            post(auth::handlers::forgot_password),
+        )
+        .route(
+            "/api/auth/reset-password",
+            post(auth::handlers::reset_password),
+        )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))

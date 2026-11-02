@@ -36,7 +36,6 @@ fn verify_unknown_account_password(password: &str) -> AuthResult<()> {
     Ok(())
 }
 
-
 /// Account lifecycle service. Stateless beyond the shared application pool.
 pub struct AuthService {
     state: Arc<AppState>,

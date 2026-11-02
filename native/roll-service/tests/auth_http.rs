@@ -169,12 +169,22 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
         rejection_details.push(body);
     }
     assert_eq!(rejection_details[0], rejection_details[1]);
-    let inserted: i64 = state.pool.get().await.unwrap()
+    let inserted: i64 = state
+        .pool
+        .get()
+        .await
+        .unwrap()
         .query_one(
             "SELECT count(*) FROM failed_login_attempts WHERE username IN ($1, $2)",
             &[&"http-reader", &"reader-that-does-not-exist"],
-        ).await.unwrap().get(0);
-    assert_eq!(inserted, 2, "both rejections must write persistent lockout records");
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        inserted, 2,
+        "both rejections must write persistent lockout records"
+    );
 
     let refresh_token = logged_in["refresh_token"].as_str().unwrap().to_string();
     let access_token = logged_in["access_token"].as_str().unwrap().to_string();
