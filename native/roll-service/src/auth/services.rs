@@ -255,7 +255,7 @@ impl AuthService {
     ) -> AuthResult<()> {
         connection
             .execute(
-                "INSERT INTO failed_login_attempts (username, ip_address) VALUES ($1, $2)",
+                "INSERT INTO failed_login_attempts (username, ip_address, attempted_at) VALUES ($1, $2, NOW())",
                 &[&username, &client_ip],
             )
             .await
