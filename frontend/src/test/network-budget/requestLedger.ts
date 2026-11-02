@@ -184,6 +184,7 @@ export function installNetworkLedger(
   let action = options.initialAction ?? 'mount'
   const handlers: HandlerMap = options.handlers ?? {}
   const defaultResponse = options.defaultResponse ?? { status: 200, data: {} }
+  let inFlight = 0
 
   const resolve = (request: RecordedRequest): LedgerResponse | undefined => {
     const handler = handlers[`${request.method} ${request.path}`]
@@ -205,17 +206,22 @@ export function installNetworkLedger(
       action,
     }
     requests.push(request)
+    inFlight += 1
 
-    const response = resolve(request)
-    if (!response) {
-      const key = `${method} ${path}`
-      if (!unhandled.includes(key)) unhandled.push(key)
+    try {
+      const response = resolve(request)
+      if (!response) {
+        const key = `${method} ${path}`
+        if (!unhandled.includes(key)) unhandled.push(key)
+      }
+      const settled = response ?? defaultResponse
+      if ((settled.status ?? 200) >= 400) {
+        throw buildError(config, settled)
+      }
+      return buildResponse(config, settled)
+    } finally {
+      inFlight -= 1
     }
-    const settled = response ?? defaultResponse
-    if ((settled.status ?? 200) >= 400) {
-      throw buildError(config, settled)
-    }
-    return buildResponse(config, settled)
   }
 
   const ledger: NetworkLedger = {
@@ -229,6 +235,7 @@ export function installNetworkLedger(
       requests.length = 0
       unhandled.length = 0
       sequence = 0
+      inFlight = 0
     },
     requests: () => [...requests],
     since: marker => requests.filter(request => request.sequence > marker),
@@ -243,7 +250,7 @@ export function installNetworkLedger(
       return Object.fromEntries(Object.entries(counts).filter(([, count]) => count > 1))
     },
     unhandled: () => [...unhandled],
-    pending: () => 0,
+    pending: () => inFlight,
   }
 
   ledger.attach(client)

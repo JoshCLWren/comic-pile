@@ -33,7 +33,6 @@ describe('public route network budgets', () => {
       await app.settle()
 
       expect(app.rows()).toEqual([...publicBudget(path)])
-      expect(app.rows()).toEqual([])
       expect(app.ledger.unhandled()).toEqual([])
       expect(app.currentPath()).toBe(path)
     },
