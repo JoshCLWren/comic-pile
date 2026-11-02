@@ -5,6 +5,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.comicvine_resolution import _get_comicvine_client
@@ -718,3 +719,59 @@ async def test_confirmation_preserves_stale_metadata_age_for_fallback(
     assert response.status_code == 200
     refresh_spy.assert_awaited_once_with(identity_id)
     assert response.json()["confirmed_mappings"][0]["comicvine_id"] == "281813"
+
+@pytest.mark.asyncio
+async def test_confirm_commits_mapping_when_hydration_not_completed(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successful mapping response does not claim the metadata hydrated."""
+    from app.services import comicvine_fallback
+
+    calls: list[int] = []
+
+    async def unavailable_refresh(identity_id: int) -> bool:
+        calls.append(identity_id)
+        return False
+
+    monkeypatch.setattr(comicvine_fallback, "refresh_issue_metadata", unavailable_refresh)
+    thread = Thread(
+        user_id=default_user.id,
+        title="Hydration Failures Do Not Unmap",
+        format="issue",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=1,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+
+    response = await auth_client.post(
+        f"/api/v1/comicvine/issues/{issue.id}/identity:confirm",
+        json={"comicvine_issue_id": 37625},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["has_confirmed_identity"] is True
+    assert body["comicvine_issue_id"] == "37625"
+    assert body["metadata_hydration_status"] == "not_completed"
+    assert len(calls) == 1
+
+    mapping = await async_db.scalar(
+        select(IssueExternalIdentityMapping).where(
+            IssueExternalIdentityMapping.issue_id == issue.id,
+            IssueExternalIdentityMapping.status == "confirmed",
+        )
+    )
+    assert mapping is not None
+    assert mapping.external_identity_id == calls[0]
+
+    readback = await auth_client.get(f"/api/v1/comicvine/issues/{issue.id}/identity")
+    assert readback.status_code == 200
+    assert readback.json()["has_confirmed_identity"] is True
+    assert readback.json()["metadata_hydration_status"] == "needed"
