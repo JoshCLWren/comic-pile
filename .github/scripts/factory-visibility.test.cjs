@@ -87,7 +87,10 @@ function githubFor({
     }),
     rest: {
       issues: api,
-      pulls: { get: async ({ pull_number }) => ({ data: { number: pull_number, state: 'open', body: '', head: { sha: 'a'.repeat(40), ref: 'factory/1-1-x', repo: { full_name: 'JoshCLWren/comic-pile' } } } }) },
+      pulls: {
+        listReviews: async () => ({ data: [], headers: {}, status: 200 }),
+        get: async ({ pull_number }) => ({ data: { number: pull_number, state: 'open', body: '', head: { sha: 'a'.repeat(40), ref: 'factory/1-1-x', repo: { full_name: 'JoshCLWren/comic-pile' } } } }),
+      },
       checks: { listForRef: async () => ({ data: { check_runs: [] } }) },
     },
   };

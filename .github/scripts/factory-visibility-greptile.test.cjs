@@ -65,6 +65,7 @@ function githubFor({
   liveHead = HEAD,
   body = '',
   checkRuns = [],
+  reviews = [],
   issueComments = [],
   fullComments = {},
   setLabels,
@@ -108,6 +109,9 @@ function githubFor({
       issues: api,
       checks: { listForRef: async () => ({ data: { check_runs: checkRuns } }) },
       pulls: {
+        listReviews: async ({ page }) => ({
+          data: page === 1 ? reviews : [], headers: {}, status: 200,
+        }),
         get: async (params) => {
           if (pullCalls) pullCalls.push(params);
           return {
@@ -184,14 +188,99 @@ const run = (review, options = {}) => runWith(reviewContext(review, options), op
 const routed = calls => calls.length === 1 && calls[0].labels.includes('factory:changes-requested');
 
 test('reviewer-bot allowlist is separate from marker trust', () => {
-  assert.deepEqual([...REPAIR_ROUTING_REVIEWER_BOTS], ['greptile-apps[bot]']);
+  assert.deepEqual([...REPAIR_ROUTING_REVIEWER_BOTS], ['greptile-apps[bot]', 'coderabbitai[bot]']);
   assert.equal(isRepairRoutingReviewer(greptileReview()), true);
   // Greptile is a routing signal only; it must never become a trusted marker author.
   assert.equal(trusted(greptileReview()), false);
   assert.equal(trusted({ ...greptileReview(), body: '<!-- comic-pile-factory-ready-v1:x -->' }), false);
   assert.equal(TRUSTED_APP_SLUGS.has('greptile-apps'), false);
   assert.equal(isRepairRoutingReviewer({ user: { login: 'greptile-apps' } }), false);
-  assert.equal(isRepairRoutingReviewer({ user: { login: 'coderabbitai[bot]' } }), false);
+  assert.equal(isRepairRoutingReviewer({ user: { login: 'coderabbitai[bot]' } }), true);
+  assert.equal(trusted({ author_association: 'NONE', user: { login: 'coderabbitai[bot]' } }), false);
+});
+
+function rabbitReview({ commit = HEAD, body = '', user = { login: 'coderabbitai[bot]', type: 'Bot' } } = {}) {
+  return { id: 3, user, state: 'COMMENTED', commit_id: commit, body, submitted_at: '2026-11-02T17:12:03Z' };
+}
+
+test('CodeRabbit inline comments on a current-head review route to the existing repair lane', async () => {
+  const review = rabbitReview();
+  const { calls } = await run(review, {
+    reviews: [review],
+    threads: [thread({ login: 'coderabbitai' })],
+  });
+  assert.ok(routed(calls));
+  assert.equal(calls[0].labels.filter(l => l.startsWith('factory:')).includes('factory:changes-requested'), true);
+});
+
+test('CodeRabbit actionable top-level outside-diff findings route even with no inline threads', async () => {
+  const review = rabbitReview({ body: '> **⚠️ Outside diff range comments (1)**\n> Major: migration guard is stale.' });
+  const { calls } = await run(review, { reviews: [review] });
+  assert.ok(routed(calls));
+});
+
+test('CodeRabbit informational walkthrough, zero findings, and impersonated reviewer do not route', async () => {
+  for (const review of [
+    rabbitReview({ body: '## Walkthrough\nNo actionable comments posted.' }),
+    rabbitReview({ body: 'Outside diff range comments (0)' }),
+    rabbitReview({ body: 'Outside diff range comments (1)', user: { login: 'coderabbitai[bot]', type: 'User' } }),
+    rabbitReview({ body: 'Outside diff range comments (1)', user: { login: 'coderabbitai-impersonator[bot]', type: 'Bot' } }),
+  ]) {
+    const { calls } = await run(review, { reviews: [review] });
+    assert.equal(calls.length, 0, JSON.stringify(review));
+  }
+});
+
+test('stale-head CodeRabbit reviews never route even when a delayed webhook arrives', async () => {
+  const review = rabbitReview({ commit: OLD_HEAD, body: 'Outside diff range comments (3)' });
+  const { calls } = await run(review, {
+    headSha: OLD_HEAD, reviews: [review],
+    threads: [thread({ login: 'coderabbitai' })],
+  });
+  assert.equal(calls.length, 0);
+});
+
+test('CodeRabbit resolved, outdated, or answered threads do not trigger repair', async () => {
+  const review = rabbitReview();
+  for (const candidate of [
+    thread({ login: 'coderabbitai', isResolved: true }),
+    thread({ login: 'coderabbitai', isOutdated: true }),
+    thread({ login: 'coderabbitai', replies: [actions('Fixed at current head')] }),
+    thread({ login: 'coderabbitai', replies: [comment('JoshCLWren', 'Evidence-based rebuttal', { authorAssociation: 'OWNER' })] }),
+  ]) {
+    const { calls } = await run(review, { reviews: [review], threads: [candidate] });
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('CodeRabbit pushback following an answered thread re-routes but not on duplicate events', async () => {
+  const review = rabbitReview();
+  const pushedBack = thread({ login: 'coderabbitai', replies: [
+    actions('Fixed in this PR'),
+    comment('coderabbitai', 'This remains broken.'),
+  ] });
+  const first = await run(review, { reviews: [review], threads: [pushedBack] });
+  const already = await run(review, {
+    reviews: [review], threads: [pushedBack],
+    labels: ['factory', 'factory:changes-requested', 'factory:unowned'],
+  });
+  assert.ok(routed(first.calls));
+  assert.equal(already.calls.length, 0);
+});
+
+test('CodeRabbit review history truncation refuses to treat missing findings as clean', async () => {
+  const review = rabbitReview();
+  const { calls } = await run(review, { reviews: [review], threads: [] });
+  assert.equal(calls.length, 0);
+  // GraphQL pagination is still the same fail-closed contract as Greptile.
+  const github = githubFor({
+    reviews: [review],
+    threadPages: [{ nodes: [], pageInfo: { hasNextPage: true, endCursor: null } }],
+  });
+  await assert.rejects(
+    reconcile({ github, context: reviewContext(review) }),
+    /review-thread pagination was incomplete/,
+  );
 });
 
 test('Greptile COMMENTED review with an open finding routes to changes-requested', async () => {
