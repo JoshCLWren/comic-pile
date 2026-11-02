@@ -185,7 +185,11 @@ impl AuthService {
 
     /// Revoke the presented access token. Invalid tokens still log out cleanly.
     pub async fn logout(&self, access_token: &str) -> AuthResult<()> {
-        let Ok(claims) = decode_claims(access_token, self.state.jwt_secret.as_bytes(), None) else {
+        let Ok(claims) = decode_claims(
+            access_token,
+            self.state.jwt_secret.as_bytes(),
+            Some("access"),
+        ) else {
             return Ok(());
         };
         let connection = checkout(&self.state).await?;
@@ -295,8 +299,18 @@ impl AuthService {
 
     async fn issue_tokens(&self, username: &str, password_epoch: i64) -> AuthResult<TokenResponse> {
         let jti = generate_token(32);
-        let access = Claims::access(username, &jti, password_epoch);
-        let refresh = Claims::refresh(username, &jti, password_epoch);
+        let access = Claims::access(
+            username,
+            &jti,
+            password_epoch,
+            self.state.access_token_expire_minutes,
+        );
+        let refresh = Claims::refresh(
+            username,
+            &jti,
+            password_epoch,
+            self.state.refresh_token_expire_days,
+        );
         let access_token = encode_token(&access, self.state.jwt_secret.as_bytes())?;
         let refresh_token = encode_token(&refresh, self.state.jwt_secret.as_bytes())?;
         Ok(TokenResponse::bearer(access_token, refresh_token))

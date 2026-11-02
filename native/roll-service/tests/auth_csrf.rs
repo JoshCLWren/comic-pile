@@ -36,7 +36,10 @@ async fn status_and_body(
     let mut builder = Request::builder()
         .method("POST")
         .uri(path)
-        .header(header::CONTENT_TYPE, "application/json");
+        .header(header::CONTENT_TYPE, "application/json")
+        // CSRF is enforced for authenticated mutations, matching Python. The
+        // synthetic bearer ensures these probes exercise the protected branch.
+        .header(header::AUTHORIZATION, "Bearer synthetic-access-token");
     if let Some(cookie) = cookie {
         builder = builder.header(header::COOKIE, format!("csrf_token={cookie}"));
     }
@@ -55,29 +58,42 @@ async fn status_and_body(
 
 #[tokio::test]
 async fn protected_native_mutations_require_a_matching_double_submit_pair() {
-    let path = "/api/v1/roll/dismiss-pending";
-
-    for (cookie, header_value) in [
-        (None, None),
-        (Some("token-value"), None),
-        (None, Some("token-value")),
-        (Some("token-value"), Some("different-value")),
+    // Cover the live mutation paths the SPA actually calls, not only one alias.
+    for path in [
+        "/api/v1/roll/dismiss-pending",
+        "/api/v2/reading-sessions",
+        "/api/v2/issues/cards",
+        "/api/v2/queue-orders",
+        "/api/v1/roll/skip",
+        "/api/v1/auth/logout",
     ] {
-        let (status, body) = status_and_body(cookie, header_value, path).await;
-        assert_eq!(
-            status,
-            StatusCode::FORBIDDEN,
-            "missing or mismatched CSRF pair must be rejected"
-        );
-        assert_eq!(
-            body,
-            Some(serde_json::json!({"detail": "CSRF token missing or invalid"}))
-        );
+        for (cookie, header_value) in [
+            (None, None),
+            (Some("token-value"), None),
+            (None, Some("token-value")),
+            (Some("token-value"), Some("different-value")),
+        ] {
+            let (status, body) = status_and_body(cookie, header_value, path).await;
+            assert_eq!(
+                status,
+                StatusCode::FORBIDDEN,
+                "{path}: missing or mismatched CSRF pair must be rejected"
+            );
+            assert_eq!(
+                body,
+                Some(serde_json::json!({"detail": "CSRF token missing or invalid"}))
+            );
+        }
     }
 
     // A valid pair clears the CSRF gate and reaches bearer authentication, which
     // rejects the unauthenticated request with 401 rather than 403.
-    let (status, _) = status_and_body(Some("token-value"), Some("token-value"), path).await;
+    let (status, _) = status_and_body(
+        Some("token-value"),
+        Some("token-value"),
+        "/api/v1/roll/dismiss-pending",
+    )
+    .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 

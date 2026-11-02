@@ -78,21 +78,36 @@ pub fn token_digest(token: &str) -> String {
     format!("{:x}", hasher.finalize())
 }
 
+/// Maximum characters stored in `failed_login_attempts.ip_address`.
+/// The production column is `varchar(45)`, so an unbounded forwarded header
+/// would otherwise turn a rejected login into a 22001/500.
+const MAX_CLIENT_IP_CHARS: usize = 45;
+
+fn bounded_client_ip(candidate: &str) -> Option<String> {
+    let trimmed = candidate.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.chars().take(MAX_CLIENT_IP_CHARS).collect())
+}
+
 /// Extract the first client IP from proxy headers, mirroring Python.
+///
+/// Values are truncated to the database column bound so a hostile
+/// `X-Forwarded-For` cannot produce a persistence error on the rejected-login
+/// path.
 pub fn get_client_ip(headers: &http::HeaderMap, remote_addr: Option<&str>) -> String {
     if let Some(forwarded) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
-        let first = forwarded.split(',').next().unwrap_or("").trim();
-        if !first.is_empty() {
-            return first.to_string();
+        if let Some(first) = bounded_client_ip(forwarded.split(',').next().unwrap_or("")) {
+            return first;
         }
     }
     if let Some(real_ip) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
-        let trimmed = real_ip.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
+        if let Some(trimmed) = bounded_client_ip(real_ip) {
+            return trimmed;
         }
     }
-    remote_addr.unwrap_or("unknown").to_string()
+    bounded_client_ip(remote_addr.unwrap_or("")).unwrap_or_else(|| "unknown".to_string())
 }
 
 /// Whether the original client request used HTTPS, respecting proxy headers.

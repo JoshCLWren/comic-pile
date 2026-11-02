@@ -186,6 +186,45 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
         "both rejections must write persistent lockout records"
     );
 
+    // Regression: an attacker-controlled forwarding header longer than the
+    // varchar(45) production column must still produce the non-enumerating 401,
+    // never the P0 500 class.
+    let long_ip = format!("{}x", "198.51.100.250-".repeat(8));
+    assert!(long_ip.len() > 45);
+    let long_header_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/login")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("x-forwarded-for", &long_ip)
+        .body(Body::from(
+            serde_json::json!({
+                "username": "oversized-header-reader",
+                "password": "incorrect-password"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let (status, body, _) = send(&state, long_header_request).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    assert_eq!(body["detail"], "Incorrect username or password");
+    let stored_ip_length: i32 = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT char_length(ip_address) FROM failed_login_attempts \
+             WHERE username = $1",
+            &[&"oversized-header-reader"],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(
+        stored_ip_length <= 45,
+        "failed-attempt IP must fit the production varchar(45) column, got {stored_ip_length}"
+    );
+
     let refresh_token = logged_in["refresh_token"].as_str().unwrap().to_string();
     let access_token = logged_in["access_token"].as_str().unwrap().to_string();
     let csrf = cookies
@@ -195,14 +234,15 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
         .unwrap()
         .to_string();
 
-    let (status, rotated, _) = send(
-        &state,
-        post(
-            "/api/v1/auth/refresh",
-            serde_json::json!({"refresh_token": refresh_token}),
-        ),
-    )
-    .await;
+    // The production client refreshes with the HttpOnly cookie and no body.
+    // Exercise that exact transport, not only the body-token variant.
+    let refresh_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/refresh")
+        .header(header::COOKIE, format!("refresh_token={refresh_token}"))
+        .body(Body::empty())
+        .unwrap();
+    let (status, rotated, _) = send(&state, refresh_request).await;
     assert_eq!(status, StatusCode::OK, "{rotated}");
     assert_ne!(rotated["refresh_token"], refresh_token);
 

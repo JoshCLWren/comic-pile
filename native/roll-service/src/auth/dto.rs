@@ -6,7 +6,9 @@ use validator::Validate;
 /// Request body for account registration.
 #[derive(Debug, Deserialize, Validate)]
 pub struct RegisterRequest {
-    #[validate(length(min = 3, max = 50))]
+    // Python imposed no minimum username length; keep the DB's 50-character
+    // bound so existing short accounts remain registrable/loggable-in.
+    #[validate(length(max = 50))]
     pub username: String,
 
     #[validate(email)]
@@ -19,13 +21,14 @@ pub struct RegisterRequest {
 /// Request body for username/password login.
 ///
 /// Login deliberately does not impose the registration minimum length: accounts
-/// created before the current policy must still be able to sign in.
+/// created before the current policy must still be able to sign in. An empty
+/// password is rejected by bcrypt verification with the same non-enumerating
+/// 401 as any other incorrect credential, matching Python.
 #[derive(Debug, Deserialize, Validate)]
 pub struct LoginRequest {
     #[validate(length(max = 50))]
     pub username: String,
 
-    #[validate(length(min = 1))]
     pub password: String,
 }
 
@@ -111,14 +114,20 @@ pub struct Claims {
 }
 
 impl Claims {
-    /// Create access-token claims valid for 30 minutes.
-    pub fn access(username: &str, jti: &str, password_epoch: i64) -> Self {
-        Self::new(username, jti, password_epoch, "access", 30 * 60)
+    /// Create access-token claims using the configured lifetime.
+    pub fn access(username: &str, jti: &str, password_epoch: i64, expire_minutes: i64) -> Self {
+        Self::new(username, jti, password_epoch, "access", expire_minutes * 60)
     }
 
-    /// Create refresh-token claims valid for seven days.
-    pub fn refresh(username: &str, jti: &str, password_epoch: i64) -> Self {
-        Self::new(username, jti, password_epoch, "refresh", 7 * 24 * 60 * 60)
+    /// Create refresh-token claims using the configured lifetime.
+    pub fn refresh(username: &str, jti: &str, password_epoch: i64, expire_days: i64) -> Self {
+        Self::new(
+            username,
+            jti,
+            password_epoch,
+            "refresh",
+            expire_days * 24 * 60 * 60,
+        )
     }
 
     fn new(username: &str, jti: &str, password_epoch: i64, token_type: &str, ttl: i64) -> Self {

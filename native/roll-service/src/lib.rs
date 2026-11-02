@@ -47,6 +47,8 @@ pub struct AppState {
     pub pool: Pool,
     pub jwt_secret: JwtSecret,
     pub request_timeout: Duration,
+    pub access_token_expire_minutes: i64,
+    pub refresh_token_expire_days: i64,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -74,6 +76,8 @@ impl AppState {
             pool,
             jwt_secret: config.jwt_secret,
             request_timeout: config.request_timeout,
+            access_token_expire_minutes: config.access_token_expire_minutes,
+            refresh_token_expire_days: config.refresh_token_expire_days,
         })
     }
 }

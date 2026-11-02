@@ -29,13 +29,25 @@ fn constant_time_eq(left: &str, right: &str) -> bool {
 }
 
 pub async fn csrf_middleware(request: Request, next: Next) -> Response {
+    // Python's middleware is disabled in the explicit test environment; keep
+    // the same contract so backend/browser test harnesses are not forced to
+    // mint cookies for every mutation.
+    if std::env::var("TEST_ENVIRONMENT").is_ok_and(|value| value == "true") {
+        return next.run(request).await;
+    }
     let method = request.method().as_str();
     let path = request.uri().path().trim_end_matches('/');
     let protected =
         matches!(method, "POST" | "PUT" | "PATCH" | "DELETE") && path.starts_with("/api/");
-    // Recovery endpoints are CSRF-exempt like Python's unauthenticated auth
-    // requests: they carry no ambient credential (the reset token arrives out of
-    // band) and the browser cannot be tricked into a state change without it.
+    // Python skips CSRF when no bearer credential is present. Anonymous
+    // requests cannot act on a victim's session, and protected handlers still
+    // reject them with 401 instead of a confusing 403.
+    let authenticated = request
+        .headers()
+        .contains_key(axum::http::header::AUTHORIZATION);
+    // Recovery endpoints are intentionally CSRF-exempt: the React client's
+    // AUTH_ENDPOINT_PATHS omits the CSRF header for them, and they carry no
+    // ambient credential (the reset token arrives out of band).
     let exempt = matches!(
         path,
         "/api/v2/auth/login"
@@ -54,7 +66,7 @@ pub async fn csrf_middleware(request: Request, next: Next) -> Response {
             | "/api/auth/forgot-password"
             | "/api/auth/reset-password"
     );
-    if protected && !exempt {
+    if protected && authenticated && !exempt {
         let cookie = cookie_token(request.headers());
         let header = request
             .headers()

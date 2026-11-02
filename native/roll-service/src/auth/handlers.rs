@@ -32,11 +32,16 @@ const CSRF_COOKIE: &str = "csrf_token";
 // assets, and set/clear must use the identical path or logout cannot remove it.
 const REFRESH_COOKIE_PATH: &str = "/api";
 const CSRF_COOKIE_PATH: &str = "/";
-const REFRESH_COOKIE_MAX_AGE_SECONDS: i64 = 7 * 24 * 60 * 60;
 const CSRF_COOKIE_MAX_AGE_SECONDS: i64 = 24 * 60 * 60;
 const FORGOT_PASSWORD_MESSAGE: &str = "If an account exists, a reset link has been sent.";
 const RESET_PASSWORD_MESSAGE: &str = "Password reset successfully.";
 const RESET_PASSWORD_LIMIT_PER_MINUTE: usize = 5;
+/// Hard cap on distinct limiter keys, so rotating an attacker-controlled
+/// token/IP cannot grow this process-local map without bound.
+const MAX_RATE_LIMIT_KEYS: usize = 4096;
+/// Keys with no attempt inside this retention window are discarded during
+/// pressure eviction.
+const RATE_LIMIT_RETENTION: Duration = Duration::from_secs(60 * 60);
 
 /// In-process request limiter. Keys are endpoint-scoped client IPs (or token
 /// digests for refresh), never usernames, passwords or secrets.
@@ -49,6 +54,18 @@ impl RateLimiter {
     fn check(&self, key: &str, limit: usize, window: Duration) -> Result<(), AuthError> {
         let now = Instant::now();
         let mut attempts = self.attempts.write().unwrap_or_else(|e| e.into_inner());
+        if attempts.len() >= MAX_RATE_LIMIT_KEYS {
+            attempts.retain(|_, entries| {
+                entries.retain(|seen| now.duration_since(*seen) < RATE_LIMIT_RETENTION);
+                !entries.is_empty()
+            });
+            // A sustained flood can still fill every key with fresh timestamps.
+            // Resetting the counters is preferable to unbounded memory growth;
+            // the database-backed username/IP lockout remains authoritative.
+            if attempts.len() >= MAX_RATE_LIMIT_KEYS {
+                attempts.clear();
+            }
+        }
         let entries = attempts.entry(key.to_string()).or_default();
         entries.retain(|seen| now.duration_since(*seen) < window);
         if entries.len() >= limit {
@@ -110,7 +127,11 @@ fn cleared_refresh_cookie(secure: bool) -> HeaderValue {
 }
 
 /// Append the refresh and double-submit CSRF cookies for a successful sign-in.
-fn authentication_headers(headers: &HeaderMap, refresh_token: &str) -> HeaderMap {
+fn authentication_headers(
+    headers: &HeaderMap,
+    refresh_token: &str,
+    refresh_max_age_seconds: i64,
+) -> HeaderMap {
     let secure = is_secure_request(headers);
     let csrf_token = cookie_value(headers, CSRF_COOKIE)
         .map(str::to_owned)
@@ -122,7 +143,7 @@ fn authentication_headers(headers: &HeaderMap, refresh_token: &str) -> HeaderMap
             REFRESH_COOKIE,
             refresh_token,
             REFRESH_COOKIE_PATH,
-            REFRESH_COOKIE_MAX_AGE_SECONDS,
+            refresh_max_age_seconds,
             true,
             secure,
         ),
@@ -141,6 +162,10 @@ fn authentication_headers(headers: &HeaderMap, refresh_token: &str) -> HeaderMap
     response_headers
 }
 
+fn refresh_cookie_max_age_seconds(state: &AppState) -> i64 {
+    state.refresh_token_expire_days * 24 * 60 * 60
+}
+
 /// Register a new first-party account.
 pub async fn register(
     State(state): State<Arc<AppState>>,
@@ -150,8 +175,9 @@ pub async fn register(
     request.validate().map_err(|_| AuthError::Validation)?;
     let ip = client_ip(&headers);
     limiter().check(&format!("register:{ip}"), 5, Duration::from_secs(60))?;
+    let refresh_max_age = refresh_cookie_max_age_seconds(&state);
     let tokens = AuthService::new(state).register(&request).await?;
-    let response_headers = authentication_headers(&headers, &tokens.refresh_token);
+    let response_headers = authentication_headers(&headers, &tokens.refresh_token, refresh_max_age);
     Ok((response_headers, Json(tokens)))
 }
 
@@ -164,8 +190,9 @@ pub async fn login(
     request.validate().map_err(|_| AuthError::Validation)?;
     let ip = client_ip(&headers);
     limiter().check(&format!("login:{ip}"), 5, Duration::from_secs(60))?;
+    let refresh_max_age = refresh_cookie_max_age_seconds(&state);
     let tokens = AuthService::new(state).login(&request, &ip).await?;
-    let response_headers = authentication_headers(&headers, &tokens.refresh_token);
+    let response_headers = authentication_headers(&headers, &tokens.refresh_token, refresh_max_age);
     Ok((response_headers, Json(tokens)))
 }
 
@@ -190,8 +217,9 @@ pub async fn refresh(
         20,
         Duration::from_secs(60),
     )?;
+    let refresh_max_age = refresh_cookie_max_age_seconds(&state);
     let tokens = AuthService::new(state).refresh(&refresh_token).await?;
-    let response_headers = authentication_headers(&headers, &tokens.refresh_token);
+    let response_headers = authentication_headers(&headers, &tokens.refresh_token, refresh_max_age);
     Ok((response_headers, Json(tokens)))
 }
 
@@ -305,6 +333,22 @@ mod tests {
     use crate::auth::utils::{bcrypt_hash_calls, token_digest, verify_password};
     use crate::config::Config;
     use axum::body::Bytes;
+
+    #[test]
+    fn rate_limiter_caps_distinct_attacker_controlled_keys() {
+        let limiter = RateLimiter::default();
+        let over_cap = MAX_RATE_LIMIT_KEYS + 32;
+        for index in 0..over_cap {
+            limiter
+                .check(&format!("refresh:{index}"), 20, Duration::from_secs(60))
+                .unwrap();
+        }
+        let keys = limiter.attempts.read().unwrap().len();
+        assert!(
+            keys <= MAX_RATE_LIMIT_KEYS,
+            "limiter must evict keys instead of growing without bound: {keys}"
+        );
+    }
 
     fn state(url: &str) -> Arc<AppState> {
         Arc::new(

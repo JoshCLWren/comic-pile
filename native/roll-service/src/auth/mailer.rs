@@ -100,6 +100,13 @@ fn environment_value(name: &str) -> Option<String> {
 }
 
 fn smtp_settings() -> Option<SmtpSettings> {
+    // Python's mailer refuses live delivery under TEST_ENVIRONMENT/test so a
+    // test run can never send real mail or depend on developer credentials.
+    if std::env::var("TEST_ENVIRONMENT").is_ok_and(|value| value == "true")
+        || std::env::var("ENVIRONMENT").is_ok_and(|value| value == "test")
+    {
+        return None;
+    }
     let username = environment_value("GMAIL_SMTP_USERNAME")?;
     let app_password = environment_value("GMAIL_SMTP_APP_PASSWORD")?;
     let production = environment_value("ENVIRONMENT").as_deref() == Some("production");

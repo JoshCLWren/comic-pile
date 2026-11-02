@@ -89,9 +89,10 @@ impl AuthError {
     /// The HTTP status and stable detail for this failure.
     pub fn status_and_detail(&self) -> (StatusCode, &'static str) {
         match self {
-            AuthError::InvalidCredentials | AuthError::UserNotFound => {
+            AuthError::InvalidCredentials => {
                 (StatusCode::UNAUTHORIZED, "Incorrect username or password")
             }
+            AuthError::UserNotFound => (StatusCode::UNAUTHORIZED, "User not found"),
             AuthError::UsernameExists => (StatusCode::BAD_REQUEST, "Username already registered"),
             AuthError::EmailExists => (StatusCode::BAD_REQUEST, "Email already registered"),
             AuthError::UserExists => (

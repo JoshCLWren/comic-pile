@@ -7,7 +7,17 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.security import MAX_CLIENT_IP_CHARS, get_client_ip
 from tests.conftest import _create_async_db_override
+
+
+def test_get_client_ip_truncates_to_the_persisted_column_bound() -> None:
+    """A hostile forwarding header must not exceed varchar(45) on rejected login."""
+    hostile = "198.51.100.250-" * 8
+    resolved = get_client_ip({"x-forwarded-for": f"{hostile}, 203.0.113.9"}, None)
+    assert len(resolved) == MAX_CLIENT_IP_CHARS
+    assert len(get_client_ip({}, "203.0.113.9" * 10)) == MAX_CLIENT_IP_CHARS
+    assert get_client_ip({}, None) == "unknown"
 
 
 @pytest.mark.asyncio

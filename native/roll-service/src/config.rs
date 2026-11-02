@@ -38,6 +38,11 @@ pub struct Config {
     pub pool_size: usize,
     pub pool_timeout: Duration,
     pub request_timeout: Duration,
+    /// Access-token lifetime, matching Python's ACCESS_TOKEN_EXPIRE_MINUTES.
+    pub access_token_expire_minutes: i64,
+    /// Refresh-token and refresh-cookie lifetime, matching Python's
+    /// REFRESH_TOKEN_EXPIRE_DAYS.
+    pub refresh_token_expire_days: i64,
 }
 /// Adapt SQLAlchemy/Neon URLs for tokio-postgres. The production DATABASE_URL
 /// can contain libpq/driver options that tokio-postgres does not recognize.
@@ -160,6 +165,15 @@ impl Config {
                 10000,
                 60000,
             )?),
+            // Python defaults: 12 hours access, 7 days refresh. Read the same
+            // environment names so Rust and any still-Python path agree.
+            access_token_expire_minutes: number(
+                &get,
+                "ACCESS_TOKEN_EXPIRE_MINUTES",
+                720,
+                7 * 24 * 60,
+            )? as i64,
+            refresh_token_expire_days: number(&get, "REFRESH_TOKEN_EXPIRE_DAYS", 7, 365)? as i64,
         })
     }
 }
@@ -240,5 +254,28 @@ mod vercel_tests {
             _ => None,
         });
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn token_lifetimes_match_python_defaults_and_environment_overrides() {
+        let base = |key: &str| match key {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/app".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic".into()),
+            "ACCESS_TOKEN_EXPIRE_MINUTES" => Some("45".into()),
+            "REFRESH_TOKEN_EXPIRE_DAYS" => Some("2".into()),
+            _ => None,
+        };
+        let overridden = Config::from_lookup(base).unwrap();
+        assert_eq!(overridden.access_token_expire_minutes, 45);
+        assert_eq!(overridden.refresh_token_expire_days, 2);
+
+        let defaults = Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/app".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic".into()),
+            _ => None,
+        })
+        .unwrap();
+        assert_eq!(defaults.access_token_expire_minutes, 720);
+        assert_eq!(defaults.refresh_token_expire_days, 7);
     }
 }
