@@ -273,13 +273,21 @@ def outstanding_request(
     repo: str, candidate: ReviewChoice, getter: Any = api
 ) -> bool:
     """Avoid retrying a request already made for this commit, even after an hour."""
-    items = getter(f"repos/{repo}/issues/{candidate.number}/comments?per_page=100")
-    if not isinstance(items, list) or len(items) == 100:
-        raise ValueError("PR comment history incomplete")
-    requests = [
-        item for item in items
-        if str(item.get("body") or "").strip() == REVIEW_COMMAND
-    ]
+    requests: list[dict[str, Any]] = []
+    for page in range(1, 21):
+        items = getter(
+            f"repos/{repo}/issues/{candidate.number}/comments?per_page=100&page={page}"
+        )
+        if not isinstance(items, list):
+            raise ValueError("invalid PR comment history")
+        requests.extend(
+            item for item in items
+            if str(item.get("body") or "").strip() == REVIEW_COMMAND
+        )
+        if len(items) < 100:
+            break
+    else:
+        raise ValueError("PR comment history exceeds safe pagination bound")
     if not requests:
         return False
     head_commit = getter(f"repos/{repo}/commits/{candidate.head}")
