@@ -438,14 +438,14 @@ class ClassifierTests(unittest.TestCase):
         """An exhausted OpenCode free tier is quota, not a transient model failure."""
         lock = (
             "Factory 58 locked: source=opencode-free model=flint-40b-free "
-            "runtime=opencode/flint-40b-free minute=:40 scheduler=dispatcher configured=true\\n"
+            "runtime=opencode/flint-40b-free minute=:40 scheduler=dispatcher configured=true\n"
         )
         result = classify(
             lock
-            + "Smoke exact pinned model through OpenCode\\n"
+            + "Smoke exact pinned model through OpenCode\n"
             + "Error: Free usage limit reached. Connect a provider or subscribe "
-            + "to OpenCode Go to keep going, or switch models.\\n"
-            + "##[error]Process completed with exit code 1.\\n"
+            + "to OpenCode Go to keep going, or switch models.\n"
+            + "##[error]Process completed with exit code 1.\n"
         )
         self.assertEqual(result.outcome, "PROVIDER QUOTA")
         self.assertEqual(result.outcome_class, "provider_quota")
