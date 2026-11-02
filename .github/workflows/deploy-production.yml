@@ -412,6 +412,112 @@ jobs:
             --retry 10 --retry-delay 2 --retry-all-errors \
             https://comic-pile.vercel.app/health >/dev/null
 
+      - name: Smoke production rejected login
+        run: |
+          set -euo pipefail
+          # A distinct nonexistent username per deployed SHA avoids locking
+          # out any real account or accumulating retries under one identity.
+          username="auth_smoke_${GITHUB_SHA:0:12}"
+          payload="$(jq -nc --arg username "$username" '{username: $username, password: "synthetic-invalid-credential"}')"
+          response="$(curl --silent --show-error --max-time 25 \
+            --request POST \
+            --header 'content-type: application/json' \
+            --data "$payload" \
+            --write-out '\n%{http_code}' \
+            https://comic-pile.vercel.app/api/v1/auth/login)"
+          status="${response##*
+
+  # Keep-N=1: live production alias only. No rollback candidate.
+  # Fail-soft so prune errors do not fail a finished migrate/deploy/smoke.
+  prune:
+    name: Prune older Vercel deployments
+    needs:
+      - preflight
+      - deploy
+    if: |
+      always() &&
+      needs.preflight.result == 'success' &&
+      (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out deployment commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.deploy_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Require Vercel token
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [[ -z "$VERCEL_TOKEN" ]]; then
+            echo "Repository secret VERCEL_TOKEN is required to prune Vercel deployments." >&2
+            exit 1
+          fi
+
+      - name: Keep only the live production alias
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          python3 scripts/prune_vercel_deployments.py \
+            --project-id "$VERCEL_PROJECT_ID" \
+            --project-name comic-pile \
+            --team-id "$VERCEL_ORG_ID" \
+            --keep-n 1 \
+            --fail-soft
+\n'}"
+          body="${response%
+
+  # Keep-N=1: live production alias only. No rollback candidate.
+  # Fail-soft so prune errors do not fail a finished migrate/deploy/smoke.
+  prune:
+    name: Prune older Vercel deployments
+    needs:
+      - preflight
+      - deploy
+    if: |
+      always() &&
+      needs.preflight.result == 'success' &&
+      (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out deployment commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.deploy_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Require Vercel token
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [[ -z "$VERCEL_TOKEN" ]]; then
+            echo "Repository secret VERCEL_TOKEN is required to prune Vercel deployments." >&2
+            exit 1
+          fi
+
+      - name: Keep only the live production alias
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          python3 scripts/prune_vercel_deployments.py \
+            --project-id "$VERCEL_PROJECT_ID" \
+            --project-name comic-pile \
+            --team-id "$VERCEL_ORG_ID" \
+            --keep-n 1 \
+            --fail-soft
+\n'*}"
+          detail="$(jq -r '.detail // ""' <<< "$body")"
+          if [[ "$status" != "401" || "$detail" != "Incorrect username or password" ]]; then
+            echo "::error::Production rejected-login contract failed, HTTP $status" >&2
+            exit 1
+          fi
+          echo "Production rejected-login contract passed (HTTP 401)"
+
   # Keep-N=1: live production alias only. No rollback candidate.
   # Fail-soft so prune errors do not fail a finished migrate/deploy/smoke.
   prune:
