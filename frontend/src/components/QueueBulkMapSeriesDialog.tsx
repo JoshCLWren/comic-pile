@@ -386,17 +386,17 @@ export default function QueueBulkMapSeriesDialog({
 
       {currentItem && (
         <QueueMapSeriesDialog
-            isOpen={mappingOpen}
-            threadId={currentItem.threadId}
-            threadTitle={currentItem.threadTitle}
-            onClose={handleCancel}
-            onMapped={handleCurrentMapped}
-            onSkip={handleCurrentSkipped}
-            onFailed={handleCurrentFailed}
-            batchProgress={batchProgress}
-            batchIncomplete={batchIncomplete}
-            onFinishBatch={handleFinish}
-          />
+          isOpen={mappingOpen}
+          threadId={currentItem.threadId}
+          threadTitle={currentItem.threadTitle}
+          onClose={handleCancel}
+          onMapped={handleCurrentMapped}
+          onSkip={handleCurrentSkipped}
+          onFailed={handleCurrentFailed}
+          batchProgress={batchProgress}
+          batchIncomplete={batchIncomplete}
+          onFinishBatch={handleFinish}
+        />
       )}
 
       <Modal isOpen={resultsOpen} title="Mapping Results" onClose={handleDone} size="large">
