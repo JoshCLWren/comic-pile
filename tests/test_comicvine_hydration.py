@@ -722,6 +722,7 @@ async def test_cached_deep_response_can_still_enrich_a_sparse_row(async_db: Asyn
     ]
     assert hydration.DEEP_METADATA_REFRESHED_AT_KEY not in cached.metadata_json
 
+
 def test_timezone_free_provider_revision_is_utc_aware() -> None:
     """ComicVine's SQL-style timestamps must compare with PostgreSQL timestamptz."""
     parsed = hydration._provider_timestamp("2026-11-01 17:33:53")
