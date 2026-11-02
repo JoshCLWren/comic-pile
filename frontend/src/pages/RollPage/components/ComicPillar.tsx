@@ -310,6 +310,16 @@ export function ComicPillar({
                   {identityStatusLabel}
                 </span>
               )}
+              {isLinked &&
+                (identityState?.metadata_hydration_status === 'needed' ||
+                  identityState?.metadata_hydration_status === 'not_completed') && (
+                  <span
+                    data-testid="comic-metadata-status"
+                    className="text-[10px] font-semibold text-[var(--theme-text-muted)]"
+                  >
+                    Metadata incomplete
+                  </span>
+              )}
 
               {correctionItems.length > 0 && (
                 <OverflowMenu
