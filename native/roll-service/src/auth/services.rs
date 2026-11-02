@@ -276,7 +276,7 @@ impl AuthService {
                         "native authentication write failed (driver/transport)"
                     );
                 }
-                query_error(error).into()
+                AuthError::from(query_error(error))
             })?;
         Ok(())
     }
