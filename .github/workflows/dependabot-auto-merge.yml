@@ -51,7 +51,6 @@ jobs:
 
             pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}")"
             if ! jq -e --arg repo "${GITHUB_REPOSITORY}" --arg head "$tested_head" '
-              .state == "open" and
               .draft == false and
               .user.login == "dependabot[bot]" and
               .base.ref == "main" and
@@ -59,6 +58,18 @@ jobs:
               .head.sha == $head
             ' <<< "$pr" >/dev/null; then
               echo "PR #${number} is not an eligible Dependabot PR at tested head ${tested_head}; skipping"
+              continue
+            fi
+
+            # GitHub may already have completed native auto-merge as soon
+            # as CI Summary turned green, before this workflow_run started.
+            # Still dispatch deployment for that exact tested head.
+            if [[ "$(jq -r '.merged_at != null' <<< "$pr")" == 'true' ]]; then
+              merged_prs+=("${number}")
+              continue
+            fi
+            if [[ "$(jq -r '.state' <<< "$pr")" != 'open' ]]; then
+              echo "PR #${number} closed without merging"
               continue
             fi
 
