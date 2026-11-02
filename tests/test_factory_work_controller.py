@@ -1217,6 +1217,8 @@ def test_reconcile_contradictory_labels_skips_manual_only_pr(
     )
     hold = pr(3971, "infra/factory-local-hard-stop", *contradictory)
     hold["body"] = "<!-- factory-execution:manual-only -->\nHold this factory PR.\n"
+    line_hold = pr(4512, "cursor/revert-auth", *contradictory)
+    line_hold["body"] = "P0 auth outage rollback.\n\nmanual-only\n"
     sibling = pr(3972, "infra/factory-sibling", *contradictory)
     replaced: list[tuple[int, str, str | None]] = []
     monkeypatch.setattr(
@@ -1225,7 +1227,7 @@ def test_reconcile_contradictory_labels_skips_manual_only_pr(
         lambda number, owner, stage=None: replaced.append((number, owner, stage)),
     )
 
-    assert controller.reconcile_contradictory_labels([], [hold, sibling]) == [3972]
+    assert controller.reconcile_contradictory_labels([], [hold, line_hold, sibling]) == [3972]
     assert replaced == [(3972, "factory:13", "factory:building")]
 
 
@@ -1705,3 +1707,68 @@ def test_assign_falls_back_when_selected_head_changes_before_the_lease(
     assert selected.number == 35301
     assert written == [35301]
     assert "Jev FALLBACK worker=6" in capsys.readouterr().err
+
+
+def test_replace_factory_labels_skips_standalone_manual_only_line(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The label-write choke point must not re-apply factory* labels on a hold."""
+    writes: list[list[str]] = []
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda _number: {
+            "number": 4512,
+            "body": "P0 auth outage rollback.\n\nmanual-only\n",
+            "labels": [{"name": "bug"}],
+        },
+    )
+
+    def fake_run_gh(
+        args: list[str], *, input_json: object | None = None, check: bool = True
+    ) -> str:
+        writes.append(list(args))
+        return ""
+
+    monkeypatch.setattr(controller, "run_gh", fake_run_gh)
+
+    controller.replace_factory_labels(4512, "factory:unowned", "factory:review")
+    assert writes == []
+
+
+def test_replace_factory_labels_writes_ordinary_pr(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ordinary PRs still receive a single factory label-set replacement."""
+    written_labels: list[str] = []
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda _number: {
+            "number": 12,
+            "body": "Ordinary factory work.",
+            "labels": [{"name": "bug"}],
+        },
+    )
+
+    def fake_run_gh(
+        args: list[str], *, input_json: object | None = None, check: bool = True
+    ) -> str:
+        assert args[:2] == ["api", "--method"]
+        assert isinstance(input_json, dict)
+        labels = input_json["labels"]
+        assert isinstance(labels, list)
+        written_labels.extend(str(label) for label in labels)
+        return ""
+
+    monkeypatch.setattr(controller, "run_gh", fake_run_gh)
+
+    controller.replace_factory_labels(12, "factory:unowned", "factory:review")
+    assert written_labels == [
+        "bug",
+        "factory",
+        "factory:review",
+        "factory:unowned",
+    ]
