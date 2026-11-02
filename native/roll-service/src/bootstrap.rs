@@ -1402,7 +1402,7 @@ mod initialize_session_db_tests {
         .unwrap();
         config
             .database
-            .options(&format!("-c search_path={schema},public"));
+            .options(format!("-c search_path={schema},public"));
         let state = Arc::new(AppState::new(config).unwrap());
 
         let Json(first) = initialize_session(
