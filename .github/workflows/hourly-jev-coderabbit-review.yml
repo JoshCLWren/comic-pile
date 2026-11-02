@@ -10,6 +10,7 @@ permissions:
   contents: read
   pull-requests: read
   issues: read
+  checks: read
 
 # Scheduled and manually dispatched runs share the same review quota.
 concurrency:
