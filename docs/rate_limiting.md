@@ -46,7 +46,7 @@ limiter = Limiter(key_func=get_remote_address)
 | Endpoint | Limit | Description |
 |----------|-------|-------------|
 | `PUT /queue/threads/{thread_id}/position/` | 30/minute | Move thread to position |
-| `PUT /queue/threads/{thread_id}/front/` | 30/minute | Move thread to front |
+| `PATCH /api/v2/queue-entries/{thread_id}` | Not governed by slowapi (native Rust) | Set position (`1` for front); replaces legacy front PUT |
 | `PUT /queue/threads/{thread_id}/back/` | 30/minute | Move thread to back |
 
 ### Session API

@@ -17,7 +17,6 @@ from app.services.thread_service import thread_to_response
 from app.schemas import ThreadResponse
 from comic_pile.queue import (
     move_to_back as _move_to_back,
-    move_to_front as _move_to_front,
     move_to_position as _move_to_position,
     shuffle_queue as _shuffle_queue,
 )
@@ -28,9 +27,9 @@ logger = logging.getLogger(__name__)
 class QueueService:
     """Queue list/mutation orchestration for the queue API.
 
-    Owns the move-to-position, move-to-front, move-to-back, and shuffle flows
-    previously embedded in ``app.api.queue``, including ownership checks and
-    reorder-event persistence.
+    Owns the move-to-position, move-to-back, and shuffle flows previously
+    embedded in ``app.api.queue``, including ownership checks and reorder-event
+    persistence.
     """
 
     def __init__(self, db: AsyncSession) -> None:
@@ -63,21 +62,6 @@ class QueueService:
             new_position=new_position,
         )
 
-    async def move_to_front(self, user_id: int, thread_id: int) -> ThreadResponse:
-        """Move an owned thread to the front of the queue.
-
-        Args:
-            user_id: Owner that must own the thread.
-            thread_id: Thread to move.
-
-        Returns:
-            ThreadResponse with the updated thread information.
-
-        Raises:
-            NotFoundError: When the thread does not exist for this user.
-        """
-        return await self._move_thread(user_id, thread_id, action="front")
-
     async def move_to_back(self, user_id: int, thread_id: int) -> ThreadResponse:
         """Move an owned thread to the back of the queue.
 
@@ -106,7 +90,7 @@ class QueueService:
         Args:
             user_id: Owner that must own the thread.
             thread_id: Thread to move.
-            action: Mutation kind: ``"position"``, ``"front"``, or ``"back"``.
+            action: Mutation kind: ``"position"`` or ``"back"``.
             new_position: Target position for the ``"position"`` action.
 
         Returns:
@@ -145,8 +129,6 @@ class QueueService:
                 await _move_to_position(
                     thread_id, user_id, new_position, self._db, manual=True
                 )
-            elif action == "front":
-                await _move_to_front(thread_id, user_id, self._db, manual=True)
             else:
                 await _move_to_back(thread_id, user_id, self._db, manual=True)
         except ValueError as exc:
@@ -166,7 +148,7 @@ class QueueService:
             await self._db.commit()
             await self._db.refresh(thread)
         elif thread.queue_position_is_manual and not was_manual:
-            # Moving an already-front/back series does not reorder the queue,
+            # Moving an already-back series does not reorder the queue,
             # but the mutation still recorded the reader's explicit placement
             # claim. Commit it here; otherwise the claim is rolled back when
             # the request session closes and a later below-threshold rating
