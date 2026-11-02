@@ -81,10 +81,14 @@ fn validate_key(key: &str) -> Result<(), ApiError> {
     }
 }
 
-fn empty_pool() -> ApiError {
+fn empty_pool(has_candidates: bool) -> ApiError {
     ApiError(
         StatusCode::BAD_REQUEST,
-        "No other eligible comics remain. Reset Dice to clear temporary snoozes, or wait until tomorrow.".to_string(),
+        if has_candidates {
+            "No other eligible comics remain. Reset Dice to clear temporary snoozes, or wait until tomorrow."
+        } else {
+            "No eligible comics to roll. Add comics or resolve reading constraints."
+        }.to_string(),
     )
 }
 
@@ -403,7 +407,7 @@ pub async fn offer(
     let pool = offer_frontiers(&candidates, &excluded, die);
     if pool.is_empty() {
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(empty_pool());
+        return Err(empty_pool(!candidates.is_empty()));
     }
     let index = rand::rng().random_range(0..pool.len());
     let selected = pool[index];
@@ -473,6 +477,16 @@ mod tests {
 
     fn ids(pool: &[crate::reading_constraints::EligibleFrontier]) -> Vec<i32> {
         pool.iter().map(|candidate| candidate.thread_id).collect()
+    }
+
+    #[test]
+    fn exhaustion_is_distinct_from_having_no_eligible_comics() {
+        assert!(empty_pool(true)
+            .1
+            .starts_with("No other eligible comics remain."));
+        assert!(empty_pool(false)
+            .1
+            .starts_with("No eligible comics to roll."));
     }
 
     #[test]
