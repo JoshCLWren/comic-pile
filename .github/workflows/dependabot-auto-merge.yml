@@ -1,0 +1,123 @@
+name: Dependabot Auto Merge
+
+# Only trusted PR metadata is evaluated in this privileged workflow.
+# Never check out or execute code from a Dependabot PR under pull_request_target.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  enable-automerge:
+    name: Enable Dependabot auto-merge
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Verify PR author and enable native GitHub auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          # Re-read current GitHub state. Labels/branch names do not confer trust.
+          pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          if ! jq -e --arg repo "${GITHUB_REPOSITORY}" '
+            .state == "open" and
+            .draft == false and
+            .user.login == "dependabot[bot]" and
+            .base.ref == "main" and
+            .head.repo.full_name == $repo
+          ' <<< "$pr" >/dev/null; then
+            echo "PR #${PR_NUMBER} is not an eligible, open Dependabot PR"
+            exit 0
+          fi
+
+          if [[ "$(jq -r '.auto_merge != null' <<< "$pr")" == 'true' ]]; then
+            echo "PR #${PR_NUMBER} already has auto-merge enabled"
+            exit 0
+          fi
+
+          # The active main ruleset requires CI Summary to pass. GitHub
+          # rechecks this on the exact PR head before completing the merge.
+          gh pr merge "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --auto --merge
+
+  dispatch-deployment:
+    name: Dispatch production after Dependabot auto-merge
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check out trusted deployment dispatcher from main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Dispatch production if the successful CI merged Dependabot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          # GITHUB_TOKEN merges do not emit a push event. CI workflow_run does
+          # emit an event, so use that to dispatch the existing deploy path.
+          # CI can finish just before GitHub's auto-merge transaction completes.
+          # The PR/head are checked again on every poll to avoid stale CI.
+          merged_prs=()
+          while IFS=$'\t' read -r number expected_head; do
+            [[ "$number" =~ ^[0-9]+$ && "$expected_head" =~ ^[0-9a-f]{40}$ ]] || continue
+
+            for attempt in {1..20}; do
+              pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}")"
+              if ! jq -e --arg repo "${GITHUB_REPOSITORY}" --arg head "$expected_head" '
+                .user.login == "dependabot[bot]" and
+                .base.ref == "main" and
+                .head.repo.full_name == $repo and
+                .head.sha == $head
+              ' <<< "$pr" >/dev/null; then
+                echo "PR #${number} is not the original Dependabot head; skipping"
+                break
+              fi
+
+              if [[ "$(jq -r '.merged_at != null' <<< "$pr")" == 'true' ]]; then
+                merged_prs+=("${number}")
+                break
+              fi
+              if [[ "$(jq -r '.state' <<< "$pr")" != 'open' ]]; then
+                echo "PR #${number} closed without merging"
+                break
+              fi
+              if (( attempt < 20 )); then sleep 3; fi
+            done
+          done < <(jq -r '.workflow_run.pull_requests[]? | [.number, .head.sha] | @tsv' "$GITHUB_EVENT_PATH")
+
+          if (( ${#merged_prs[@]} > 0 )); then
+            # This helper deduplicates READY SHAs and preserves queued
+            # manual redeploys. It is also used by factory merge drains.
+            source .github/scripts/factory-dispatch-production-deploy.sh
+            factory_dispatch_production_deploy "Dependabot auto-merged PR(s): ${merged_prs[*]}"
+          else
+            echo "No Dependabot PR merged at this successful CI head"
+          fi
