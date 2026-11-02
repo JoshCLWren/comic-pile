@@ -93,8 +93,11 @@ def _destination(
 
 def _concrete_path(path: str) -> str:
     """Use a numeric owned Issue ID when checking parameterized Axum routes."""
-    concrete = AXUM_CAPTURE.sub("42", path)
-    concrete = VERCEL_CAPTURE.sub("42", concrete)
+    # First normalize Axum curly braces {thread_id} to Vercel colon syntax :thread_id
+    normalized = AXUM_CAPTURE.sub(r":\1", path)
+    # Then convert the colon syntax to numeric for concrete path matching
+    concrete = VERCEL_CAPTURE.sub("42", normalized)
+    # Verify curly braces are gone (Axum syntax converted)
     assert "{" not in concrete and "}" not in concrete, path
     return concrete
 
@@ -212,4 +215,8 @@ def test_axum_08_captures_normalize_to_vercel_parameters() -> None:
         start="pub fn router(",
         end="#[cfg(test)]",
     )
+    # This test validates that the _axum_routes function correctly normalizes
+    # Axum routes from curly brace syntax ({thread_id}) to colon syntax (:thread_id),
+    # which is the expected intermediate step in the route normalization process.
+    # The actual vercel.json routes use regex patterns like [0-9]+$ for numeric matching.
     assert routes == {("GET", "/api/v2/queue-entries/:thread_id")}
