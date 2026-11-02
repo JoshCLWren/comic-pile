@@ -66,6 +66,7 @@ def test_explicit_sender_and_origin_still_override_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A configured Gmail alias and custom public origin may override defaults."""
+    monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("GMAIL_SMTP_USERNAME", "owner@gmail.com")
     monkeypatch.setenv("GMAIL_SMTP_APP_PASSWORD", "app-password")
