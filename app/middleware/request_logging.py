@@ -27,6 +27,7 @@ from app.performance_diagnostics import (
     get_request_diagnostics,
 )
 from app.startup_diagnostics import (
+    mark_lifespan_started,
     mark_startup_complete,
     next_request_snapshot,
     startup_event_snapshot,
@@ -228,6 +229,9 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
     @app.on_event("startup")
     async def record_startup_completion() -> None:
         """Emit one process-scoped startup timing event after lifespan startup."""
+        # Main marks the real start/end of lifespan work. Standalone FastAPI
+        # consumers that only attach this middleware still get a valid span.
+        mark_lifespan_started()
         mark_startup_complete()
         snapshot = startup_event_snapshot()
         startup_duration = snapshot.startup_duration_ms or 0.0
@@ -238,6 +242,8 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
             extra={
                 "event": "application_startup",
                 "startup_duration_ms": _rounded_optional(startup_duration),
+                "process_to_startup_ms": _rounded_optional(snapshot.process_to_startup_ms),
+                "startup_cpu_ms": _rounded_optional(snapshot.startup_cpu_ms),
                 "application_import_ms": _rounded_optional(snapshot.application_import_ms),
                 "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
                 "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
@@ -319,11 +325,16 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "process_age_ms": round(startup.process_age_ms, 2),
                 "startup_complete": startup.startup_complete,
                 "startup_duration_ms": _rounded_optional(startup.startup_duration_ms),
+                "process_to_startup_ms": _rounded_optional(startup.process_to_startup_ms),
+                "startup_cpu_ms": _rounded_optional(startup.startup_cpu_ms),
                 "application_import_ms": _rounded_optional(startup.application_import_ms),
                 "application_creation_ms": _rounded_optional(startup.application_creation_ms),
                 "lifespan_ms": _rounded_optional(startup.lifespan_ms),
                 "heavy_initialized": startup.heavy_initialized,
                 "heavy_init_duration_ms": _rounded_optional(startup.heavy_init_duration_ms),
+                "heavy_init_process_age_ms": _rounded_optional(
+                    startup.heavy_init_process_age_ms
+                ),
                 "deployment_id": startup.deployment_id,
                 "process_started_at_ns": startup.process_started_at_ns,
                 "client_host": request.client.host if request.client else None,
