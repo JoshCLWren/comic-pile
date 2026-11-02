@@ -1,6 +1,8 @@
 """Tests for process-level startup and cold-request diagnostics."""
 
 import pytest
+from types import SimpleNamespace
+from time import process_time
 
 import app.startup_diagnostics as diagnostics
 from app.startup_diagnostics import (
@@ -124,7 +126,11 @@ def test_worker_idle_age_does_not_inflate_readiness_budget(
     """A 300-second pause between app creation and lifespan is not startup work."""
     monkeypatch.setattr(diagnostics, "_PROCESS_STARTED_AT", 1.0)
     times = iter((1.10, 1.16, 301.16, 301.30, 301.31, 360.0))
-    monkeypatch.setattr(diagnostics.time, "perf_counter", lambda: next(times))
+    monkeypatch.setattr(
+        diagnostics,
+        "time",
+        SimpleNamespace(perf_counter=lambda: next(times), process_time=process_time),
+    )
 
     mark_application_import_complete()
     mark_application_created()
@@ -150,7 +156,11 @@ def test_heavy_init_reports_operation_duration_not_worker_age(
     """Deferred DB work is timed from its own entry, even after a long idle."""
     monkeypatch.setattr(diagnostics, "_PROCESS_STARTED_AT", 1.0)
     times = iter((450.0, 450.4, 500.0))
-    monkeypatch.setattr(diagnostics.time, "perf_counter", lambda: next(times))
+    monkeypatch.setattr(
+        diagnostics,
+        "time",
+        SimpleNamespace(perf_counter=lambda: next(times), process_time=process_time),
+    )
 
     mark_heavy_init_started()
     duration_ms = mark_heavy_init_complete()
@@ -167,7 +177,11 @@ def test_heavy_init_retry_resets_its_start_timestamp(
     """A failed initialization attempt cannot charge idle time to a retry."""
     monkeypatch.setattr(diagnostics, "_PROCESS_STARTED_AT", 1.0)
     times = iter((100.0, 300.0, 300.2))
-    monkeypatch.setattr(diagnostics.time, "perf_counter", lambda: next(times))
+    monkeypatch.setattr(
+        diagnostics,
+        "time",
+        SimpleNamespace(perf_counter=lambda: next(times), process_time=process_time),
+    )
 
     mark_heavy_init_started()  # First attempt failed without completing.
     mark_heavy_init_started()  # Next attempt starts after idle.
