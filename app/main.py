@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import re
 import secrets
 from pathlib import Path
 from typing import cast
@@ -47,6 +48,12 @@ from app.router_mounts import (
 from app.safe_logging import safe_connection_metadata
 
 logger = logging.getLogger(__name__)
+
+# Scrub query credentials from third-party HTTP transport logs before any
+# hosting-platform handler formats a record. The raw values must not be stored.
+_SECRET_QUERY_PARAMETER_RE = re.compile(
+    r"(?i)(\b(?:api_key|access_token|refresh_token|client_secret|password)=)[^&\s\"\']+"
+)
 
 # Per-operation startup budgets (issue #3243). Every readiness-critical await on
 # the ping-ready path is bounded well below the 2500 ms total startup budget, so
@@ -243,6 +250,11 @@ class _DiagnosticFieldsFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if getattr(record, "_comic_pile_diagnostics_appended", False):
             return True
+        message = record.getMessage()
+        redacted = _SECRET_QUERY_PARAMETER_RE.sub(r"\1[REDACTED]", message)
+        if redacted != message:
+            record.msg = redacted
+            record.args = ()
         extras = [
             f"{field}={getattr(record, field)!r}"
             for field in self._DIAGNOSTIC_FIELDS
