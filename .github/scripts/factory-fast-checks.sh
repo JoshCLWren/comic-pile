@@ -76,7 +76,7 @@ factory_fast_check_plan() {
     # Check the real FastAPI-generated contract before a worker pushes.
     # Deletions are included because an imported module might be removed.
     case "$path" in
-      app/*.py|api/*.py|scripts/export_openapi_schema.py|scripts/generate_openapi_types.py|frontend/src/generated/openapi.json|frontend/src/generated/openapi.ts)
+      app/**/*.py|app/*.py|api/**/*.py|api/*.py|scripts/export_openapi_schema.py|scripts/generate_openapi_types.py|frontend/src/generated/openapi.json|frontend/src/generated/openapi.ts)
         printf 'openapi\t%s\n' "$path"
         ;;
     esac
