@@ -66,6 +66,7 @@ class Review(TypedDict):
     body: str
     commit_id: str
     submitted_at: str
+    state: NotRequired[str]
 
 
 class CheckOutput(TypedDict):
