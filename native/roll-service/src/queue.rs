@@ -1818,9 +1818,7 @@ mod tests {
         seed_option_e_thread(&state, 7, 1, 1, false, Some(10)).await;
         seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
         seed_option_e_thread(&state, 7, 3, 3, false, Some(30)).await;
-        let connection = db::checkout(&state)
-            .await
-            .expect("prerequisite connection");
+        let connection = db::checkout(&state).await.expect("prerequisite connection");
         connection
             .execute(
                 "INSERT INTO dependencies \
