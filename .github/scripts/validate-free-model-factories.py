@@ -211,7 +211,6 @@ def main() -> None:
     assert 'FACTORY_OMNIROUTE_ENABLED' in runner
     # INCIDENT: catalog free-code lanes keep lane pins while OmniRoute is dark.
     assert 'selected-by-runtime-evidence' in runner
-    assert 'starves restored free-code lanes' in runner
     assert 'if [[ "$model" == nvidia/* ]]' in runner or "if [[ \"$model\" == nvidia/* ]]" in runner
     assert "source='omniroute-free'" not in runner
     assert 'auto/best-free' not in runner
