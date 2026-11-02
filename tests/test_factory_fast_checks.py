@@ -486,8 +486,8 @@ def test_rust_compile_error_blocks_push_and_runs_focused_ingress_guards(tmp_path
     assert result.returncode == 1, result.stdout + result.stderr
     assert "error[E0308]" in result.stdout
     assert "Rust format/Clippy/native build" in result.stdout
-    assert "cargo +1.85.0 fmt" in (tmp_path / "cargo.log").read_text()
-    assert "cargo +1.85.0 clippy" in (tmp_path / "cargo.log").read_text()
+    assert "cargo +stable fmt" in (tmp_path / "cargo.log").read_text()
+    assert "cargo +stable clippy" in (tmp_path / "cargo.log").read_text()
     assert "test_native_roll_live_ingress.py" in (tmp_path / "uv.log").read_text()
     assert "test_native_roll_write_test_guard.py" in (tmp_path / "uv.log").read_text()
     assert "test_vercel_deployment.py" in (tmp_path / "uv.log").read_text()
