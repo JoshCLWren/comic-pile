@@ -1,6 +1,12 @@
 """Tests for process-level startup and cold-request diagnostics."""
 
+import pytest
+
+import app.startup_diagnostics as diagnostics
 from app.startup_diagnostics import (
+    mark_heavy_init_complete,
+    mark_heavy_init_started,
+    mark_lifespan_started,
     mark_application_created,
     mark_application_import_complete,
     mark_startup_complete,
@@ -75,6 +81,7 @@ def test_startup_snapshot_decomposes_measurable_phases() -> None:
     """
     mark_application_import_complete()
     mark_application_created()
+    mark_lifespan_started()
     total = mark_startup_complete()
     snapshot = startup_event_snapshot()
 
@@ -109,3 +116,59 @@ def test_request_before_startup_completion_reports_unknown_phases() -> None:
     assert snapshot.application_creation_ms is None
     assert snapshot.lifespan_ms is None
     assert snapshot.process_started_at_ns > 0
+
+
+def test_worker_idle_age_does_not_inflate_readiness_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 300-second pause between app creation and lifespan is not startup work."""
+    monkeypatch.setattr(diagnostics, "_PROCESS_STARTED_AT", 1.0)
+    times = iter((1.10, 1.16, 301.16, 301.30, 301.31, 360.0))
+    monkeypatch.setattr(diagnostics.time, "perf_counter", lambda: next(times))
+
+    mark_application_import_complete()
+    mark_application_created()
+    mark_lifespan_started()
+    observed_ms = mark_startup_complete()
+    snapshot = startup_event_snapshot()
+
+    # Import 100 ms + app creation 60 ms + lifespan 140 ms.
+    assert observed_ms == pytest.approx(300.0)
+    assert snapshot.startup_duration_ms == pytest.approx(300.0)
+    assert snapshot.application_import_ms == pytest.approx(100.0)
+    assert snapshot.application_creation_ms == pytest.approx(60.0)
+    assert snapshot.lifespan_ms == pytest.approx(140.0)
+    # These are process-age diagnostics, not readiness violations.
+    assert snapshot.process_to_startup_ms == pytest.approx(300_300.0)
+    assert snapshot.process_age_ms == pytest.approx(359_000.0)
+    assert snapshot.startup_cpu_ms is not None
+
+
+def test_heavy_init_reports_operation_duration_not_worker_age(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deferred DB work is timed from its own entry, even after a long idle."""
+    monkeypatch.setattr(diagnostics, "_PROCESS_STARTED_AT", 1.0)
+    times = iter((450.0, 450.4, 500.0))
+    monkeypatch.setattr(diagnostics.time, "perf_counter", lambda: next(times))
+
+    mark_heavy_init_started()
+    duration_ms = mark_heavy_init_complete()
+    snapshot = startup_event_snapshot()
+
+    assert duration_ms == pytest.approx(400.0)
+    assert snapshot.heavy_init_duration_ms == pytest.approx(400.0)
+    assert snapshot.heavy_init_process_age_ms == pytest.approx(449_400.0)
+
+
+def test_heavy_init_retry_resets_its_start_timestamp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed initialization attempt cannot charge idle time to a retry."""
+    monkeypatch.setattr(diagnostics, "_PROCESS_STARTED_AT", 1.0)
+    times = iter((100.0, 300.0, 300.2))
+    monkeypatch.setattr(diagnostics.time, "perf_counter", lambda: next(times))
+
+    mark_heavy_init_started()  # First attempt failed without completing.
+    mark_heavy_init_started()  # Next attempt starts after idle.
+    assert mark_heavy_init_complete() == pytest.approx(200.0)
