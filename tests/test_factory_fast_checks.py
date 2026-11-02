@@ -552,8 +552,8 @@ def test_valid_rust_checks_both_crates_and_deletion_still_checks(tmp_path: Path)
     result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
     assert result.returncode == 0, result.stdout + result.stderr
     cargo = (tmp_path / "cargo.log").read_text()
-    assert "cargo +1.85.0 fmt" in cargo
-    assert "cargo +1.85.0 clippy" in cargo
+    assert "cargo +stable fmt --manifest-path native/roll-service/Cargo.toml" in cargo
+    assert "cargo +stable clippy --manifest-path native/roll-service/Cargo.toml" in cargo
     assert "cargo +stable fmt" in cargo
     assert "cargo +stable check" in cargo
 
