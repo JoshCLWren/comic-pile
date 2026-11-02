@@ -460,7 +460,7 @@ describe('comparison and CBL discovery request budgets', () => {
             },
           ],
         }),
-        'GET /api/v1/threads/': () => ({
+        'GET /api/v2/threads': () => ({
           data: { threads: [], next_page_token: null, active_count: 0 },
         }),
       },
@@ -482,6 +482,6 @@ describe('comparison and CBL discovery request budgets', () => {
     fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
 
     await waitFor(() => expect(ledger.requests).toHaveLength(2))
-    expect(ledger.requests[1]?.url).toBe('GET /api/v1/threads/?page_size=100')
+    expect(ledger.requests[1]?.url).toBe('GET /api/v2/threads?page_size=100')
   })
 })
