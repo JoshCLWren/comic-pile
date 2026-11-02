@@ -63,6 +63,9 @@ async def test_rejected_and_valid_login_use_actual_app_schema() -> None:
                 "RUST_ROLL_JWT_SECRET": SECRET,
                 "RUST_ROLL_TEST_USERNAME": username,
                 "RUST_ROLL_TEST_PASSWORD": PASSWORD,
+                "RUST_ROLL_TEST_REGISTER_USERNAME": f"reg_{uuid4().hex[:16]}",
+                "RUST_ROLL_TEST_REGISTER_EMAIL": f"reg_{uuid4().hex[:16]}@example.invalid",
+                "RUST_ROLL_TEST_REGISTER_PASSWORD": "registered-parity-password",
             }
         )
         process = await asyncio.create_subprocess_exec(
@@ -74,6 +77,12 @@ async def test_rejected_and_valid_login_use_actual_app_schema() -> None:
         stdout, stderr = await asyncio.wait_for(process.communicate(), 35)
         assert process.returncode == 0, stderr.decode()
         result = json.loads(stdout)
+        # Production users.created_at is NOT NULL with no server default; a
+        # handcrafted DEFAULT NOW() table masked the register 500.
+        assert result["register"]["status"] == 200, result
+        assert result["register"]["token_issued"] is True
+        assert result["registered_valid"]["status"] == 200, result
+        assert result["registered_valid"]["token_issued"] is True
         assert result["valid"]["status"] == 200, result
         assert result["valid"]["token_issued"] is True
         for key in ("wrong_password", "unknown_user"):

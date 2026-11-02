@@ -70,7 +70,8 @@ impl AuthService {
 
         let inserted = connection
             .query_opt(
-                "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) \
+                "INSERT INTO users (username, email, password_hash, is_admin, created_at) \
+                 VALUES ($1, $2, $3, false, NOW()) \
                  ON CONFLICT DO NOTHING RETURNING id",
                 &[&request.username, &request.email, &password_hash],
             )
