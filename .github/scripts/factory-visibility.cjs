@@ -159,11 +159,6 @@ function isRepairRoutingReviewer(review) {
   return REPAIR_ROUTING_REVIEWER_BOTS.has(review?.user?.login);
 }
 
-function reviewerGraphqlLogins() {
-  // GraphQL reports App actors without the REST "[bot]" suffix.
-  return new Set([...REPAIR_ROUTING_REVIEWER_BOTS].flatMap(login => [login, login.replace(/\[bot\]$/, '')]));
-}
-
 const REVIEW_THREAD_PAGE_LIMIT = 50;
 
 // REST/GraphQL instrumentation: record every outbound request by installation,
