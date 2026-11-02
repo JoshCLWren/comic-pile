@@ -132,8 +132,7 @@ export function useQueueBulkMapping(scope: QueueBulkMappingScope): QueueBulkMapp
   const seriesNeedingMapping = useMemo(
     () =>
       (data ?? []).filter((thread) => {
-        // A malformed page must not crash the Queue; skip rows without a record.
-        const status = thread?.comicvine_mapping?.status
+        const status = thread.comicvine_mapping?.status
         return status != null && MAPPING_NEEDED_STATUSES.has(status)
       }),
     [data],

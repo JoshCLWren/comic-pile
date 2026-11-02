@@ -99,8 +99,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
   const pages = query.data?.pages ?? []
   const lastPage = pages[pages.length - 1] ?? null
 
-  // A malformed page must select no rows rather than injecting `undefined`.
-  const selectedItems = pages.flatMap((page) => spec.selectPage(page) ?? [])
+  const selectedItems = pages.flatMap(spec.selectPage)
   let items = selectedItems
   if (spec.selectId) {
     const seen = new Set<string | number>()

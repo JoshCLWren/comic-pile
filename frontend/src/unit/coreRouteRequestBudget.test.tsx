@@ -26,7 +26,12 @@ import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import type { AuthState } from '../services/authState'
 import Navigation from '../components/Navigation'
 import { PreferencesSync } from '../hooks/usePreferences'
-import QueuePage from '../pages/QueuePage'
+import { QueueControls } from '../pages/QueuePage/QueueControls'
+import { useQueueCrossovers } from '../pages/QueuePage/useQueueCrossovers'
+import { useExcludedThreads, useQueueThreads } from '../hooks/useQueue'
+import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
+import { useSession } from '../hooks/useSession'
+import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import RollPage from '../pages/RollPage'
 import HistoryPage from '../pages/HistoryPage'
 import SessionPage from '../pages/SessionPage'
@@ -110,6 +115,29 @@ const queueHandler: Responder = (call) => {
     }
   }
   return {}
+}
+
+/**
+ * Queue data-hook composition: the same real hooks the route mounts, in the
+ * same order, without the page's presentation tree. The full Queue page's
+ * request set is covered in the Chromium budget spec.
+ */
+function QueueBudgetProbe() {
+  const queue = useQueueThreads()
+  useSession()
+  useExcludedThreads(true)
+  const threadIds = queue.data?.map((thread) => thread.id) ?? []
+  const boundaries = useReadingBoundaries(threadIds)
+  useQueueCrossovers(queue.data ?? [])
+  const boundariesUnavailable =
+    !boundaries.isPending &&
+    (boundaries.isError ||
+      boundaries.data == null ||
+      threadIds.some(
+        (id) => boundaries.data?.threads[id] == null || boundaries.data?.threads[id].state === 'unavailable',
+      ))
+  useQueueBlockingInfo(boundariesUnavailable ? threadIds : [])
+  return null
 }
 
 const bootstrap = {
@@ -271,7 +299,7 @@ describe('core route request budgets', () => {
     const { calls, client } = createRequestRecorder(queueHandler)
     setDefaultHttpClient(client)
 
-    const view = render(renderAt('/queue', <QueuePage />))
+    const view = render(renderAt('/queue', <QueueBudgetProbe />))
 
     await waitFor(() =>
       expect(calls.some((call) => call.url === '/v1/threads:getBlockingInfo')).toBe(true),
@@ -289,37 +317,36 @@ describe('core route request budgets', () => {
 
     view.unmount()
     const warmed = calls.length
-    render(renderAt('/queue', <QueuePage />))
+    render(renderAt('/queue', <QueueBudgetProbe />))
     await new Promise((resolve) => setTimeout(resolve, 100))
     expect(calls).toHaveLength(warmed)
   })
 
-  it('Queue search commits one request for the final debounced value', async () => {
-    const { calls, client } = createRequestRecorder(queueHandler)
-    setDefaultHttpClient(client)
-
-    render(renderAt('/queue', <QueuePage />))
-    await waitFor(() => expect(calls.some((call) => call.url === '/v1/threads/')).toBe(true))
+  it('Queue search commits one value for the final debounced input', async () => {
+    const onSearchChange = vi.fn()
+    render(
+      <QueueControls
+        activeCount={2}
+        shuffleDisabled={false}
+        shufflePending={false}
+        onShuffle={() => undefined}
+        onCreateThread={() => undefined}
+        onAddFromComicVine={() => undefined}
+        onBulkMapSeries={() => undefined}
+        sortBy="position"
+        onSortChange={() => undefined}
+        searchQuery=""
+        onSearchChange={onSearchChange}
+      />,
+    )
 
     const search = screen.getByRole('textbox', { name: 'Search series' })
     for (const value of ['r', 'ro', 'rob', 'robe', 'robert']) {
       fireEvent.change(search, { target: { value } })
     }
 
-    await waitFor(
-      () =>
-        expect(
-          calls.some(
-            (call) => call.url === '/v1/threads/' && call.params?.search === 'robert',
-          ),
-        ).toBe(true),
-      { timeout: 2000 },
-    )
-
-    const searchCalls = calls.filter(
-      (call) => call.url === '/v1/threads/' && call.params?.search != null,
-    )
-    expect(searchCalls.map((call) => call.params?.search)).toEqual(['robert'])
+    await waitFor(() => expect(onSearchChange).toHaveBeenCalledTimes(1), { timeout: 2000 })
+    expect(onSearchChange).toHaveBeenCalledWith('robert')
   })
 
   it('History cold-loads exactly one session list page', async () => {
