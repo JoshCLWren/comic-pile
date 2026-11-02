@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +20,7 @@ review = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = review
 SPEC.loader.exec_module(review)
 
-NOW = datetime(2026, 11, 2, 18, 32, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 2, 18, 32, tzinfo=UTC)
 REPO = "JoshCLWren/comic-pile"
 
 
@@ -78,6 +78,7 @@ def fake_api(
     def get(
         path: str, *, token: str | None = None, body: str | None = None
     ) -> Any:
+        """Return fixture API responses and capture attempted review posts."""
         if body is not None:
             posts.append((path, token, body))
             return {"id": 1}
@@ -106,6 +107,7 @@ def fake_api(
 
 
 def test_jev_actively_chooses_a_nonfirst_pull_request() -> None:
+    """Verify jev actively chooses a nonfirst pull request."""
     """The model choice, not the deterministic candidate order, is requested."""
     rows = [pr(101), pr(102)]
     getter, posts = fake_api(rows)
@@ -117,6 +119,7 @@ def test_jev_actively_chooses_a_nonfirst_pull_request() -> None:
 
 
 def test_code_rabbit_review_at_exact_head_is_ineligible() -> None:
+    """Verify code rabbit review at exact head is ineligible."""
     rows = [pr(101), pr(102)]
     getter, posts = fake_api(rows, submitted={
         101: [{
@@ -131,6 +134,7 @@ def test_code_rabbit_review_at_exact_head_is_ineligible() -> None:
 
 
 def test_recent_actual_review_spends_shared_hourly_slot() -> None:
+    """Verify recent actual review spends shared hourly slot."""
     rows = [pr(101), pr(102)]
     getter, posts = fake_api(rows, submitted={
         101: [{
@@ -145,6 +149,7 @@ def test_recent_actual_review_spends_shared_hourly_slot() -> None:
 
 
 def test_recent_manual_review_command_uses_the_quota() -> None:
+    """Verify recent manual review command uses the quota."""
     rows = [pr(101), pr(102)]
     getter, posts = fake_api(rows, global_comments=[{
         "created_at": "2026-11-02T18:01:00Z",
@@ -157,6 +162,7 @@ def test_recent_manual_review_command_uses_the_quota() -> None:
 
 
 def test_bot_quoting_the_command_does_not_consume_quota() -> None:
+    """Verify bot quoting the command does not consume quota."""
     rows = [pr(101)]
     getter, posts = fake_api(rows, global_comments=[{
         "created_at": "2026-11-02T18:01:00Z",
@@ -170,6 +176,7 @@ def test_bot_quoting_the_command_does_not_consume_quota() -> None:
 
 
 def test_already_requested_same_head_is_not_retried() -> None:
+    """Verify already requested same head is not retried."""
     rows = [pr(101)]
     getter, posts = fake_api(rows, per_pr_comments={101: [{
         "body": "@coderabbitai review",
@@ -181,6 +188,7 @@ def test_already_requested_same_head_is_not_retried() -> None:
 
 
 def test_new_head_can_be_reviewed_after_older_command() -> None:
+    """Verify new head can be reviewed after older command."""
     rows = [pr(101)]
     getter, posts = fake_api(rows, per_pr_comments={101: [{
         "body": "@coderabbitai review",
@@ -200,6 +208,7 @@ def test_new_head_can_be_reviewed_after_older_command() -> None:
 def test_nonreviewable_prs_are_excluded(
     draft: bool, merge: str, state: str
 ) -> None:
+    """Reject draft, conflicted, and closed PRs before invoking the model."""
     row = pr(101, draft=draft, merge=merge, state=state)
     if state == "MERGED":
         row["closedAt"] = "2026-11-02T18:15:00Z"
@@ -210,6 +219,7 @@ def test_nonreviewable_prs_are_excluded(
 
 
 def test_head_movement_after_jev_selection_blocks_command() -> None:
+    """Verify head movement after jev selection blocks command."""
     rows = [pr(101), pr(102)]
     getter, posts = fake_api(rows, change_head=True)
     result = review.perform(REPO, rows, NOW, "jev-key", "user-pat", getter, decision)
@@ -218,6 +228,7 @@ def test_head_movement_after_jev_selection_blocks_command() -> None:
 
 
 def test_no_user_token_or_jev_key_never_posts() -> None:
+    """Verify no user token or jev key never posts."""
     rows = [pr(101), pr(102)]
     getter, posts = fake_api(rows)
     assert "not configured" in review.perform(
@@ -230,6 +241,7 @@ def test_no_user_token_or_jev_key_never_posts() -> None:
 
 
 def test_low_probability_jev_choice_does_not_spend_review() -> None:
+    """Verify low probability jev choice does not spend review."""
     rows = [pr(101), pr(102)]
     getter, posts = fake_api(rows)
 
@@ -247,6 +259,7 @@ def test_low_probability_jev_choice_does_not_spend_review() -> None:
 
 
 def test_invalid_jev_response_fails_without_fallback_comment() -> None:
+    """Verify invalid jev response fails without fallback comment."""
     rows = [pr(101), pr(102)]
     getter, posts = fake_api(rows)
     result = review.perform(
@@ -258,6 +271,7 @@ def test_invalid_jev_response_fails_without_fallback_comment() -> None:
 
 
 def test_incomplete_comment_history_fails_closed() -> None:
+    """Verify incomplete comment history fails closed."""
     rows = [pr(101)]
 
     def broken(path: str, **_kw: Any) -> Any:
@@ -270,6 +284,7 @@ def test_incomplete_comment_history_fails_closed() -> None:
 
 
 def test_shortlist_favors_priority_then_green_ci() -> None:
+    """Verify shortlist favors priority then green ci."""
     rows = [pr(101), pr(102), pr(103)]
     rows[2]["labels"] = [{"name": "priority:P0"}]
     rows[1]["statusCheckRollup"] = [{"name": "CI Summary", "conclusion": "FAILURE"}]
