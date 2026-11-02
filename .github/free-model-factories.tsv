@@ -8,27 +8,22 @@
 45	opencode-free	nemotron-3.5-lightning-free	35	dispatcher	OpenCode Nemotron 3.5 Lightning Free
 46	kilo-auto	kilo-auto/free	40	dispatcher	Kilo Auto Free · Forge
 48	mistral	codestral-latest	50	dispatcher	Mistral Codestral
-49	opencode-free	space-bunny-free	55	dispatcher	OpenCode Space Bunny Free
 51	openrouter-free	nvidia/nemotron-3-ultra-550b-a55b:free	5	dispatcher	OpenRouter Nemotron 3 Ultra Free
 52	openrouter-free	thinkingmachines/inkling:free	10	dispatcher	OpenRouter Inkling Free
 53	openrouter-free	thinkingmachines/inkling-small:free	15	dispatcher	OpenRouter Inkling Small Free
 54	z-ai	glm-4.5-flash	20	dispatcher	Z.AI GLM 4.5 Flash
 55	ollama-cloud	nemotron-3-nano:30b	25	dispatcher	Ollama Cloud Nemotron 3 Nano 30B
 56	openrouter-free	dots-studio/dots-3-note-preview:free	30	dispatcher	OpenRouter Dots 3 Note Preview Free
-58	opencode-free	muse-spark-1.3-contributor-free	40	dispatcher	OpenCode Muse Spark 1.3 Contributor Free
 60	openrouter-free	cohere/north-mini-code:free	30	dispatcher	OpenRouter Cohere North Mini Code Free
 61	openrouter-free	google/gemma-4-31b-it:free	55	dispatcher	OpenRouter Gemma 4 31B Free
 62	openrouter-free	google/gemma-4-26b-a4b-it:free	0	dispatcher	OpenRouter Gemma 4 26B Free
-63	openrouter-free	nvidia/nemotron-3-super-120b-a12b:free	35	dispatcher	OpenRouter Nemotron 3 Super Free
 64	openrouter-free	nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free	10	dispatcher	OpenRouter Nemotron 3 Omni Free
 65	openrouter-free	nvidia/nemotron-3.5-lightning:free	25	dispatcher	OpenRouter Nemotron 3.5 Lightning Free
-73	opencode-free	longcat-2.5-preview-free	5	dispatcher	OpenCode LongCat 2.5 Preview Free
 74	opencode-free	deepseek-v4.1-flash-free	20	dispatcher	OpenCode Deepseek V4.1 Flash Free
 75	opencode-free	nemotron-3.5-super-vl-free	25	dispatcher	OpenCode Nemotron 3.5 Super Vl Free
 78	nvidia	z-ai/glm-5.3	0	dispatcher	NVIDIA GLM 5.3
 80	nvidia	z-ai/glm-5.3-flash	40	dispatcher	NVIDIA GLM 5.3 Flash
 82	z-ai	glm-4.7-flash	55	dispatcher	Z.AI GLM 4.7 Flash
-83	opencode-free	cat-jam-free	45	dispatcher	OpenCode Cat Jam Free
 86	nvidia	meta/muse-glimmer-30b	0	dispatcher	NVIDIA Muse Glimmer 30B
 87	opencode-free	deepseek-v4.1-flash-free	30	dispatcher	DeepSeek V4.1 Free Anonymous A
 88	opencode-free	deepseek-v4.1-flash-free	35	dispatcher	OpenCode DeepSeek V4.1 Free Authenticated A
@@ -36,6 +31,5 @@
 90	opencode-free	deepseek-v4.1-flash-free	50	dispatcher	OpenCode DeepSeek V4.1 Free Authenticated B
 91	orcarouter	z-ai/glm-5.3-flash-free	5	dispatcher	OrcaRouter GLM 5.3 Flash Free
 92	requesty	nvidia/nemotron-3-ultra-550b-a55b	10	dispatcher	Requesty Nemotron 3 Ultra
-93	requesty	nvidia/nemotron-3-super-120b-a12b	15	dispatcher	Requesty Nemotron 3 Super
-94	openrouter-free	minimax/minimax-m3.1-flash:free	40	dispatcher	OpenRouter MiniMax M3.1 Flash Free
-95	nvidia	nvidia/nemotron-3.5-super-vl-120b-a12b	20	dispatcher	NVIDIA Nemotron 3.5 Super VL
+93	requesty	nvidia/nemotron-3-super-120b-a12b	5	dispatcher	Requesty Nemotron 3 Super
+95	nvidia	nvidia/nemotron-3.5-super-vl-120b-a12b	35	dispatcher	NVIDIA Nemotron 3.5 Super VL

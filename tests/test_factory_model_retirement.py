@@ -105,6 +105,22 @@ def test_retired_fixed_models_are_replaced_by_catalog_free_slots() -> None:
     assert rows_by_worker["11"][1] == "nvidia"
     assert rows_by_worker["11"][2] == "poolside/laguna-xs-2.1"
     assert rows_by_worker["46"][1] == "kilo-auto"
+    # Ghost lanes whose models left the free catalogs: OpenRouter Nemotron 3
+    # Super / MiniMax M3.1 Flash, plus OpenCode Space Bunny, Muse Spark 1.3,
+    # LongCat 2.5 Preview, and Cat Jam.
+    for worker in ("49", "58", "63", "73", "83", "94"):
+        assert worker in REMOVED_WORKERS
+        assert worker not in rows_by_worker
+    assert "space-bunny-free" in RETIRED_FIXED_MODELS
+    assert "muse-spark-1.3-contributor-free" in RETIRED_FIXED_MODELS
+    assert "nvidia/nemotron-3-super-120b-a12b:free" in RETIRED_FIXED_MODELS
+    assert "longcat-2.5-preview-free" in RETIRED_FIXED_MODELS
+    assert "cat-jam-free" in RETIRED_FIXED_MODELS
+    assert "minimax/minimax-m3.1-flash:free" in RETIRED_FIXED_MODELS
+    assert rows_by_worker["42"][1] == "opencode-free"
+    assert rows_by_worker["42"][2] == "nemotron-3-ultra-free"
+    assert rows_by_worker["46"][1] == "kilo-auto"
+    assert rows_by_worker["46"][2] == "kilo-auto/free"
 
 
 def test_catalog_selection_fails_closed_when_every_candidate_is_cooling() -> None:
