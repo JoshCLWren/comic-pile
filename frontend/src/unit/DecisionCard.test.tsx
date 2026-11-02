@@ -53,6 +53,7 @@ interface DecisionCardProps {
   onSubmitRating: (finishSession: boolean) => void
   onReroll?: () => Promise<void>
   onSkip?: () => void
+  onResetDice?: () => void
   onCancel: () => void
 }
 
@@ -69,6 +70,17 @@ function ratingReadout(): HTMLElement {
 }
 
 describe('DecisionCard', () => {
+  it('offers an explicit reset after the eligible library is exhausted', async () => {
+    const onResetDice = vi.fn()
+    renderDecisionCard(makeDecisionCardProps({
+      errorMessage: 'No other eligible comics remain. Reset Dice to clear temporary snoozes, or wait until tomorrow.',
+      onResetDice,
+    }))
+    expect(onResetDice).not.toHaveBeenCalled()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Reset Dice' }))
+    expect(onResetDice).toHaveBeenCalledTimes(1)
+  })
+
   it('invokes the Rust reroll action from the rating view', async () => {
     const onReroll = vi.fn().mockResolvedValue(undefined)
     renderDecisionCard(makeDecisionCardProps({ onReroll }))

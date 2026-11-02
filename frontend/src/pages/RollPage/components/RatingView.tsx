@@ -70,6 +70,7 @@ export function RatingView({ data }: RatingViewProps) {
             onUpdateRating={onUpdateRating}
             onSubmitRating={onSubmitRating}
             onReroll={onReroll}
+            onResetDice={data.onResetDice}
             rerollIsPending={rerollIsPending}
             onSkip={onSkip}
             onCancel={onCancel}

@@ -8,7 +8,7 @@ use crate::{
 };
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     Json,
 };
 use serde::Deserialize;
@@ -758,6 +758,7 @@ pub async fn bootstrap_v2(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Query(query): Query<BootstrapQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
     let active = reading_session::bootstrap(
         &state,
@@ -782,11 +783,10 @@ pub async fn bootstrap_v2(
     } else {
         json!(session.manual_die)
     };
-    // Identical ordering and top-die-before-exclusions semantics as the offer.
-    // Bootstrap has no temporary (cookie) exclusions, so these are the exact
-    // Option E faces the next offer draws from. Legacy session state is
-    // deliberately not consulted here; it is display-only below.
-    let eligible = crate::roll_pool::in_play_frontiers(&candidates, current_die);
+    // Match the offer's browser-owned exclusions before the die limit.
+    // GET remains read-only; legacy durable backoff is display-only below.
+    let excluded = crate::roll_pool::browser_snoozes(&headers);
+    let eligible = crate::roll_pool::offer_frontiers(&candidates, &excluded, current_die);
     // A single reason, derived from the same validated inputs, keeps the empty
     // pool state truthful without re-materializing whole-library diagnostics.
     let pool_reason = crate::reading_constraints::pool_reason(validated.inputs(), &candidates);
@@ -1402,7 +1402,7 @@ mod initialize_session_db_tests {
         .unwrap();
         config
             .database
-            .options(&format!("-c search_path={schema},public"));
+            .options(format!("-c search_path={schema},public"));
         let state = Arc::new(AppState::new(config).unwrap());
 
         let Json(first) = initialize_session(

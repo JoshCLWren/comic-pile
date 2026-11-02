@@ -395,6 +395,7 @@ export default function RollPage() {
     snoozeMutation,
     rerollMutation: rollMutation,
     onReroll: snooze.handleReroll,
+    onResetDice: () => state.setIsDieModalOpen(true),
     dismissPendingMutation,
     skipMutation,
     ratingViewTopRef,

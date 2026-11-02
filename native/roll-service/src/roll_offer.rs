@@ -84,7 +84,7 @@ fn validate_key(key: &str) -> Result<(), ApiError> {
 fn empty_pool() -> ApiError {
     ApiError(
         StatusCode::BAD_REQUEST,
-        "No eligible comics to roll. Add comics or reset temporary snoozes.".to_string(),
+        "No other eligible comics remain. Reset Dice to clear temporary snoozes, or wait until tomorrow.".to_string(),
     )
 }
 
@@ -476,13 +476,12 @@ mod tests {
     }
 
     #[test]
-    fn bounded_pool_never_backfills_a_snoozed_candidate() {
+    fn bounded_pool_backfills_after_snoozing() {
         let candidates: Vec<_> = (1..=4).map(frontier).collect();
         let excluded = HashSet::from([2, 3]);
         let pool = offer_frontiers(&candidates, &excluded, 2);
-        // #2 is inside the d2 scope; removing it shrinks the pool to one choice
-        // instead of pulling #3 up from outside the scope.
-        assert_eq!(ids(&pool), vec![1]);
+        // Snoozes leave the eligible queue before taking the d2 window.
+        assert_eq!(ids(&pool), vec![1, 4]);
 
         let excluded = HashSet::from([3]);
         let pool = offer_frontiers(&candidates, &excluded, 4);
