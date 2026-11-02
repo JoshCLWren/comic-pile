@@ -220,3 +220,24 @@ def test_axum_08_captures_normalize_to_vercel_parameters() -> None:
     # which is the expected intermediate step in the route normalization process.
     # The actual vercel.json routes use regex patterns like [0-9]+$ for numeric matching.
     assert routes == {("GET", "/api/v2/queue-entries/:thread_id")}
+
+
+def test_queue_entry_get_patch_use_numeric_public_route_and_native_handler() -> None:
+    """Numeric GET/PATCH queue-entry URLs route to Rust; bad inputs fall through."""
+    routes = _vercel_routes()
+    native = "/api/native_roll.rs"
+    assert _destination(routes, "GET", "/api/v2/queue-entries/42") == native
+    assert _destination(routes, "PATCH", "/api/v2/queue-entries/42") == native
+    assert _destination(routes, "GET", "/api/v2/queue-entries/101") == native
+    assert _destination(routes, "PATCH", "/api/v2/queue-entries/101") == native
+    for method, path in (
+        ("POST", "/api/v2/queue-entries/42"),
+        ("DELETE", "/api/v2/queue-entries/42"),
+        ("GET", "/api/v2/queue-entries/not-an-id"),
+        ("PATCH", "/api/v2/queue-entries/not-an-id"),
+        ("GET", "/api/v2/queue-entries/"),
+        ("PATCH", "/api/v2/queue-entries/"),
+    ):
+        assert _destination(routes, method, path) != native, (method, path)
+    # Catch-all still sends ordinary API traffic to Python.
+    assert _destination(routes, "GET", "/api/health") != native
