@@ -720,6 +720,7 @@ async def test_confirmation_preserves_stale_metadata_age_for_fallback(
     refresh_spy.assert_awaited_once_with(identity_id)
     assert response.json()["confirmed_mappings"][0]["comicvine_id"] == "281813"
 
+
 @pytest.mark.asyncio
 async def test_confirm_commits_mapping_when_hydration_not_completed(
     auth_client,
