@@ -591,6 +591,10 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
     # lazy registration without issuing HTTP requests.
     app.state.register_routers_for_path = register_routers_for_path
 
+    # Preserve the established request middleware order. Append only the
+    # startup-completion event after readiness work has been registered.
+    add_request_logging_middleware(app, app_settings.environment, defer_startup_event=True)
+
     # Global, HTTP, and validation exception handlers (environment-aware logging).
     register_exception_handlers(app, app_settings)
 
@@ -1056,10 +1060,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         except Exception:
             logger.warning("ComicVine shared HTTP client shutdown skipped", exc_info=True)
 
-    # Register request logging after the app startup handler so its process
-    # completion event observes all awaited readiness work (including Neon
-    # monitoring), not a premature lifespan milestone.
-    add_request_logging_middleware(app, app_settings.environment)
+    # The request logging middleware was registered in its original position,
+    # but this completion callback must run after the actual startup handler.
+    app.add_event_handler("startup", app.state.record_startup_completion)
 
     return app
 
