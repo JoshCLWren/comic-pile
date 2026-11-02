@@ -317,8 +317,9 @@ describe('/continuity-plans/new', () => {
 })
 
 describe('/continuity-plans/events', () => {
-  it('cold load requests crossover groups without fetching threads until expansion', async () => {
+  it('cold load requests crossover groups only until expanded', async () => {
     renderRoute('/continuity-plans/events')
+    await screen.findByRole('heading', { name: 'Crossover events' })
     await settle(1)
     expectExact([DEPENDENCY_GROUPS])
   })
