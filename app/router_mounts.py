@@ -207,10 +207,9 @@ def _register_rate(app: FastAPI) -> None:
 
 def _register_queue(app: FastAPI) -> None:
     """Register queue routers."""
-    from app.api import queue
-
-    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-    app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
+    # v2 queue endpoints are handled by the Rust implementation in native/roll-service/src/queue.rs
+    # No Python queue routers needed for v2
+    pass
 
 
 def _register_reading_orders(app: FastAPI) -> None:
