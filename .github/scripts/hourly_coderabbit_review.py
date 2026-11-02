@@ -258,7 +258,8 @@ def jev_pick(
         }},
     }
     response = client(payload, api_key)
-    answer = response.get("answers", {}).get("review_target")
+    answers = response.get("answers")
+    answer = answers.get("review_target") if isinstance(answers, dict) else None
     # Reuse the factory's existing typed Choice validator and confidence gate.
     validated = {**response, "answers": {"next_action": answer}}
     chosen, _confidence, probabilities = validated_choice(candidates, validated)
