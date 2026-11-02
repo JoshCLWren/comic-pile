@@ -77,7 +77,7 @@ def fake_api(
 
     def get(
         path: str, *, token: str | None = None, body: str | None = None
-    ) -> Any:
+    ) -> dict[str, object] | list[dict[str, object]]:
         """Return fixture API responses and capture attempted review posts."""
         if body is not None:
             posts.append((path, token, body))
@@ -274,7 +274,10 @@ def test_incomplete_comment_history_fails_closed() -> None:
     """Verify incomplete comment history fails closed."""
     rows = [pr(101)]
 
-    def broken(path: str, **_kw: Any) -> Any:
+    def broken(
+        path: str, *, token: str | None = None, body: str | None = None
+    ) -> list[dict[str, str]]:
+        """Simulate a GitHub comment history that exhausts the pagination limit."""
         if "/issues/comments?" in path:
             return [{"created_at": "2026-11-02T18:00:00Z", "body": ""}] * 100
         raise AssertionError("should not attempt the write")
