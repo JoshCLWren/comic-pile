@@ -151,7 +151,9 @@ function trusted(comment) {
 // deliberately separate from trusted(): a reviewer bot can never author
 // factory markers, ownership, or readiness. It only proves that the bot left
 // unresolved findings on the exact current head.
-const REPAIR_ROUTING_REVIEWER_BOTS = new Set(['greptile-apps[bot]']);
+const REPAIR_ROUTING_REVIEWER_BOTS = new Set(['greptile-apps[bot]', 'coderabbitai[bot]']);
+// CodeRabbit is a reviewer, never a trusted factory ownership/approval actor.
+const CODERABBIT_LOGIN = 'coderabbitai[bot]';
 
 function isRepairRoutingReviewer(review) {
   return REPAIR_ROUTING_REVIEWER_BOTS.has(review?.user?.login);
@@ -317,7 +319,60 @@ const GREPTILE_OUTCOME_MARKER = 'comic-pile-factory-greptile-outcome-v1';
 const RECENT_COMMENT_WINDOW = 20;
 
 function isGreptileLogin(login) {
-  return reviewerGraphqlLogins().has(login || '');
+  return login === 'greptile-apps' || login === 'greptile-apps[bot]';
+}
+
+function isCodeRabbitLogin(login) {
+  return login === 'coderabbitai' || login === CODERABBIT_LOGIN;
+}
+
+function isCodeRabbitReview(review) {
+  return review?.user?.login === CODERABBIT_LOGIN && review?.user?.type === 'Bot';
+}
+
+// Only explicit out-of-diff findings count as actionable top-level feedback.
+// Walkthroughs, release notes, and "no findings" cannot route work.
+function codeRabbitBodyHasFindings(body) {
+  return /Outside diff range comments\s*\([1-9][0-9]*\)/i.test(String(body || ''));
+}
+
+function codeRabbitThreadOpen(thread) {
+  if (thread.isResolved || thread.isOutdated || !isCodeRabbitLogin(thread.firstComment?.author?.login)) {
+    return false;
+  }
+  const comments = Array.isArray(thread.comments) ? thread.comments : [];
+  let lastBot = -1;
+  comments.forEach((item, index) => {
+    if (isCodeRabbitLogin(item?.author?.login)) lastBot = index;
+  });
+  // Once an authorized worker has answered, wait for CodeRabbit or a new
+  // head instead of repeatedly pushing the PR into repair.
+  return !comments.slice(lastBot + 1).some(isTrustedResponder);
+}
+
+async function currentHeadCodeRabbitReviews(github, context, number, head) {
+  const reviews = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const endpoint = `repos/${context.repo.owner}/${context.repo.repo}/pulls/${number}/reviews?per_page=100&page=${page}`;
+    const response = await withRetryLogged(github, context, {
+      endpoint, method: 'GET', event: context.eventName,
+    }, () => github.rest.pulls.listReviews({
+      owner: context.repo.owner, repo: context.repo.repo, pull_number: number,
+      per_page: 100, page,
+    }));
+    if (!Array.isArray(response?.data)) {
+      throw new Error(`PR #${number}: review history was unavailable`);
+    }
+    reviews.push(...response.data);
+    if (response.data.length < 100) {
+      return reviews.filter(item => (
+        isCodeRabbitReview(item)
+        && item.commit_id === head
+        && item.state === 'COMMENTED'
+      ));
+    }
+  }
+  throw new Error(`PR #${number}: CodeRabbit review history was incomplete`);
 }
 
 function isGreptileAck(body) {
@@ -437,9 +492,13 @@ async function greptileReviewThreads(github, context, number, { pageLimit = REVI
       // An incomplete read keeps the window, which leaves the finding open.
       const total = node.recent?.totalCount ?? thread.comments.length;
       if (!thread.isResolved && !thread.isOutdated
-          && isGreptileLogin(thread.firstComment?.author?.login)
+          && (isGreptileLogin(thread.firstComment?.author?.login)
+            || isCodeRabbitLogin(thread.firstComment?.author?.login))
           && total > thread.comments.length
-          && !thread.comments.some(comment => isGreptileLogin(comment?.author?.login))) {
+          && !thread.comments.some(comment => (
+            isGreptileLogin(comment?.author?.login)
+            || isCodeRabbitLogin(comment?.author?.login)
+          )) {
         const all = await fullThreadComments(github, context, node.id);
         if (all) thread.comments = all;
       }
@@ -558,6 +617,12 @@ async function routeGreptileFindings(github, context, number) {
   }
   const { threads, complete } = await greptileReviewThreads(github, context, number);
   const openThreads = threads.filter(thread => greptileThreadState(thread) === 'open');
+  // Re-read from live state, never trust a late review webhook's SHA. Only a
+  // CodeRabbit review submitted at this exact head can route its findings.
+  const rabbitReviews = await currentHeadCodeRabbitReviews(github, context, number, head);
+  const rabbitThreads = rabbitReviews.length
+    ? threads.filter(codeRabbitThreadOpen) : [];
+  const rabbitSummary = rabbitReviews.some(item => codeRabbitBodyHasFindings(item.body));
   const summary = greptileSummaryFindings(live.body);
   let openSummary = [];
   if (summary && summary.commit === head && summary.findings.length) {
@@ -584,7 +649,8 @@ async function routeGreptileFindings(github, context, number) {
       : [];
     openSummary = openSummaryFindings(summary, threads, head, reviewedAt, issueComments);
   }
-  if (openThreads.length === 0 && openSummary.length === 0) {
+  if (openThreads.length === 0 && openSummary.length === 0
+      && rabbitThreads.length === 0 && !rabbitSummary) {
     // Fail closed: never treat a truncated thread listing as "no findings".
     // Failing the run leaves the event visibly red for retry.
     if (!complete) {
@@ -597,7 +663,8 @@ async function routeGreptileFindings(github, context, number) {
     owner: [...current].find(isOwnerLabel) || await ownerFromLinkedIssue(github, context, { ...live, number }),
     stage: 'factory:changes-requested',
   });
-  return { routed: true, openThreads: openThreads.length, openSummary: openSummary.length };
+  return { routed: true, openThreads: openThreads.length, openSummary: openSummary.length,
+    codeRabbitThreads: rabbitThreads.length, codeRabbitSummary: rabbitSummary };
 }
 
 async function livePullRequest(github, context, number) {
@@ -1092,9 +1159,8 @@ async function reconcile({ github, context }) {
       });
       return;
     }
-    // Any other submitted review (Greptile's COMMENTED review, a thread reply,
-    // or a review that replaced a still-pending run in this PR's concurrency
-    // group) recomputes Greptile routing from live state. Native APPROVED
+    // Submitted reviews recompute Greptile and CodeRabbit findings from live
+    // state; CodeRabbit cannot mint factory attestations. Native APPROVED
     // never moves labels by itself.
     await routeGreptileFindings(github, context, pullRequest.number);
     return;
