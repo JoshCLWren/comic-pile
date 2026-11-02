@@ -110,6 +110,11 @@ class IssueIdentityResponse(BaseModel):
     confirmed_mappings: list[IssueIdentityMapping]
     candidate_mappings: list[IssueIdentityMapping]
     has_unresolved: bool
+    # Mapping is independent of provider metadata. "not_completed" indicates
+    # a post-commit refresh was attempted without a confirmed successful write.
+    metadata_hydration_status: Literal[
+        "unmapped", "needed", "complete", "not_completed"
+    ] = "unmapped"
 
 
 class ConfirmIdentityRequest(BaseModel):
