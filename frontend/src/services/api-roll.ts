@@ -18,8 +18,8 @@ type RollOfferResponse = RollResponse & { snoozed_thread_id?: number | null }
 const SNOOZE_COOKIE = 'comicpile_roll_snoozes'
 const PENDING_OFFER_KEY = 'comicpile:roll:pending-offer'
 const PENDING_RESET_KEY = 'comicpile:roll:pending-reset'
-const MAX_ROLL_SNOOZES = 50
-const SNOOZE_COOKIE_PATTERN = /^\[\d{1,10}(,\d{1,10}){0,49}\]$/
+const MAX_ROLL_SNOOZES = 200
+const SNOOZE_COOKIE_PATTERN = /^\[\d{1,10}(,\d{1,10}){0,199}\]$/
 const OFFER_KEY_PATTERN = /^roll-offer-[0-9a-f]{32}$/
 
 function newCommandKey(): string {

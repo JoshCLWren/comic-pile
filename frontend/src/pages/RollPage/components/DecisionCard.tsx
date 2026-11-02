@@ -27,6 +27,7 @@ interface DecisionCardProps {
   onSubmitRating: (finishSession: boolean) => void
   onReroll?: () => Promise<void>
   onSkip?: () => void
+  onResetDice?: () => void
   onCancel: () => void
 }
 
@@ -61,6 +62,7 @@ export function DecisionCard({
   rerollIsPending = false,
   onSkip,
   onCancel,
+  onResetDice,
 }: DecisionCardProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const isLastIssue = issuesRemaining === 1
@@ -192,6 +194,11 @@ export function DecisionCard({
       {errorMessage ? (
         <div id="error-message" className="text-center text-[10px] font-bold text-[var(--theme-danger)]" role="alert">
           {errorMessage}
+          {errorMessage.startsWith('No other eligible comics remain.') && onResetDice ? (
+            <button type="button" className={`${rollSecondaryActionClass} mt-2`} onClick={onResetDice}>
+              Reset Dice
+            </button>
+          ) : null}
         </div>
       ) : null}
 
