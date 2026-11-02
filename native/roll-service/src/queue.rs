@@ -32,6 +32,11 @@
 //! queue writer uses, so concurrent moves and shuffles serialize per reader.
 //! Reorder and shuffle events reuse the durable `events` table, so retries can
 //! recover the recorded revision instead of re-shuffling.
+//!
+//! Pool use is bounded per request. The reposition handler evaluates its
+//! Option E grouping inside the advisory-locked write transaction it already
+//! holds, so a move never needs a second pooled connection; the read path
+//! releases its row connection before it evaluates the same grouping.
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
@@ -138,29 +143,41 @@ fn option_e_enabled() -> bool {
             .unwrap_or(false)
 }
 
-/// Return the blocked grouping authority used by Queue ordering.
+/// Return the eligible-thread authority used by the read path.
 ///
 /// Production defaults to the stored `threads.is_blocked` flag, matching the
 /// legacy authority Python uses when Option E is disabled. When Option E is
 /// explicitly enabled, ordering follows the same evaluated eligibility graph
 /// instead of silently reverting to the stored flag.
-async fn blocked_thread_ids(
+///
+/// This variant checks out its own pooled connection, so the read path resolves
+/// it only after releasing its row-read connection. The reposition path
+/// evaluates inside its locked write transaction through
+/// [`crate::option_inputs::load_validated_in_transaction`] instead.
+async fn eligible_thread_ids(
     state: &AppState,
     user: AuthenticatedUser,
-    queued: &[(i32, i32, bool)],
 ) -> Result<Option<std::collections::HashSet<i32>>, ApiError> {
     if !option_e_enabled() {
         return Ok(None);
     }
     let validated = crate::option_inputs::load_option_inputs(state, user).await?;
-    let evaluated = crate::reading_eligibility::evaluate(&validated)?;
-    Ok(Some(
-        queued
-            .iter()
-            .map(|(id, _, _)| *id)
-            .filter(|id| !evaluated.get(id).is_some_and(|thread| thread.eligible))
-            .collect(),
-    ))
+    Ok(Some(evaluated_eligible_ids(&validated)?))
+}
+
+/// Reduce validated Option E inputs to the eligible thread ids.
+///
+/// Shares one authority and one error surface between the pool-based read path
+/// and the in-transaction write path.
+fn evaluated_eligible_ids(
+    validated: &crate::reading_constraints::ValidatedReadingInputs,
+) -> Result<std::collections::HashSet<i32>, ApiError> {
+    let evaluated = crate::reading_eligibility::evaluate(validated)?;
+    Ok(evaluated
+        .values()
+        .filter(|thread| thread.eligible)
+        .map(|thread| thread.thread_id)
+        .collect())
 }
 
 struct OrderedEntry {
@@ -196,24 +213,20 @@ where
 ///
 /// Readable entries sort ahead of blocked entries; queue rank then id breaks
 /// ties deterministically, exactly like Python's `build_sort_order`. Blocked
-/// grouping always uses [`blocked_thread_ids`], so GET and PATCH share one
-/// authority under every execution mode.
-async fn order_display_rows(
-    state: &AppState,
-    user: AuthenticatedUser,
+/// grouping is supplied by the caller (`eligible_thread_ids` for reads,
+/// `evaluated_eligible_ids` inside the locked write transaction), so no pool
+/// checkout happens here.
+fn order_display_rows(
     mut entries: Vec<OrderedEntry>,
-) -> Result<Vec<OrderedEntry>, ApiError> {
-    let raw: Vec<(i32, i32, bool)> = entries
-        .iter()
-        .map(|entry| (entry.thread_id, entry.queue_position, entry.is_blocked))
-        .collect();
-    if let Some(blocked) = blocked_thread_ids(state, user, &raw).await? {
+    eligible: Option<&std::collections::HashSet<i32>>,
+) -> Vec<OrderedEntry> {
+    if let Some(eligible) = eligible {
         for entry in &mut entries {
-            entry.is_blocked = blocked.contains(&entry.thread_id);
+            entry.is_blocked = !eligible.contains(&entry.thread_id);
         }
     }
     entries.sort_by_key(|entry| (entry.is_blocked, entry.queue_position, entry.thread_id));
-    Ok(entries)
+    entries
 }
 
 fn ordinal_of(entries: &[OrderedEntry], thread_id: i32) -> Option<usize> {
@@ -264,7 +277,8 @@ pub async fn get_queue_entry(
         load_queue_rows(&***client, user.id()).await?
     };
     pending.release();
-    let entries = order_display_rows(&state, user, rows).await?;
+    let eligible = eligible_thread_ids(&state, user).await?;
+    let entries = order_display_rows(rows, eligible.as_ref());
     let position = ordinal_of(&entries, thread_id).ok_or_else(|| not_found(thread_id))?;
     Ok(Json(QueueEntryResponse {
         thread_id,
@@ -304,7 +318,17 @@ pub async fn update_queue_entry(
         .map_err(db::query_error)?;
 
     let rows = load_queue_rows(&*transaction, user_id).await?;
-    let entries = order_display_rows(&state, user, rows).await?;
+    // Evaluate Option E grouping on the already-locked write transaction. This
+    // keeps the grouping consistent with the serialized move and avoids a second
+    // pool checkout while this request holds its write connection.
+    let eligible = if option_e_enabled() {
+        let validated =
+            crate::option_inputs::load_validated_in_transaction(&transaction, user).await?;
+        Some(evaluated_eligible_ids(&validated)?)
+    } else {
+        None
+    };
+    let entries = order_display_rows(rows, eligible.as_ref());
     let current = ordinal_of(&entries, thread_id).ok_or_else(|| not_found(thread_id))?;
     let total = entries.len();
     // A rank beyond the end expresses "back" without a custom action method.
@@ -656,11 +680,19 @@ mod tests {
     static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     async fn state() -> Arc<AppState> {
+        state_with_pool_size(2).await
+    }
+
+    /// Build a test state with an explicit pool size.
+    ///
+    /// A single-slot pool makes an accidental second concurrent connection
+    /// checkout fail deterministically instead of merely slowing down.
+    async fn state_with_pool_size(pool_size: usize) -> Arc<AppState> {
         let url = test_database_url();
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
-            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
             _ => None,
         })
         .expect("queue test config");
@@ -1761,5 +1793,126 @@ mod tests {
         )
         .await;
         assert_eq!(invalid.expect_err("empty key").0, StatusCode::BAD_REQUEST);
+    }
+
+    /// #4535: a reposition must not need a second pooled connection.
+    ///
+    /// Production runs Option E with a bounded pool. The reposition handler used
+    /// to keep its write transaction's connection checked out and then ask for a
+    /// second one to evaluate Option E, so a concurrent Queue read burst could
+    /// starve the write path into the pool wait timeout (HTTP 503) and the move
+    /// never committed. A single-slot pool makes that regression deterministic:
+    /// the old code waits for the pool timeout and fails, while evaluating the
+    /// grouping on the already-locked transaction completes on one connection.
+    ///
+    /// The fixture also keeps one thread behind an unsatisfied prerequisite so
+    /// the in-transaction evaluation covers blocked grouping, readable moves and
+    /// a blocked clamp, not just the all-readable case.
+    #[tokio::test]
+    async fn option_e_reposition_needs_only_one_pooled_connection_at_a_time() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state_with_pool_size(1).await;
+        reset(&state).await;
+        let _option_e = OptionEEnv::enable();
+        let user = AuthenticatedUser::for_test(7);
+        seed_option_e_thread(&state, 7, 1, 1, false, Some(10)).await;
+        seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
+        seed_option_e_thread(&state, 7, 3, 3, false, Some(30)).await;
+        let connection = db::checkout(&state)
+            .await
+            .expect("prerequisite connection");
+        connection
+            .execute(
+                "INSERT INTO dependencies \
+                     (id, source_issue_id, target_issue_id, origin, classification, provenance) \
+                 VALUES (1, 10, 30, 'reader', 'A', 'option-e-lock-test')",
+                &[],
+            )
+            .await
+            .expect("seed prerequisite");
+        drop(Object::take(connection));
+
+        // Read path: readable 1 and 2 ahead of prerequisite-blocked 3.
+        let before = get_queue_entry(State(state.clone()), user, Path(3))
+            .await
+            .expect("Option E entry read")
+            .0;
+        assert_eq!(before.position, 3);
+
+        // Write path: a readable move with the grouping evaluated on the locked
+        // transaction while holding the pool's only connection.
+        let moved = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(1),
+            Json(QueueEntryPatch { position: 2 }),
+        )
+        .await
+        .expect("Option E reposition must complete with one pooled connection")
+        .0;
+        assert_eq!(moved.position, 2);
+        assert_ne!(moved.ordering_version, before.ordering_version);
+        assert_eq!(positions(&state, 7).await, vec![(2, 1), (1, 2), (3, 3)]);
+        assert_eq!(event_count(&state, "reorder").await, 1);
+
+        // The same connection also serves the blocked clamp: a readable ordinal
+        // request clamps to the first blocked ordinal, which is this row's own
+        // ordinal, so it is a no-op.
+        let clamped = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(3),
+            Json(QueueEntryPatch { position: 1 }),
+        )
+        .await
+        .expect("Option E blocked clamp")
+        .0;
+        assert_eq!(clamped.position, 3);
+        assert_eq!(clamped.ordering_version, moved.ordering_version);
+        assert_eq!(positions(&state, 7).await, vec![(2, 1), (1, 2), (3, 3)]);
+        assert_eq!(event_count(&state, "reorder").await, 1);
+    }
+
+    /// Two concurrent Option E repositions each need only their own connection.
+    ///
+    /// Both requests take the queue advisory lock, so they serialize, and each
+    /// evaluates Option E on its own locked transaction. With a two-slot pool a
+    /// nested second checkout would need four slots and time out; this asserts
+    /// the dense rewrite and both reorder revisions instead.
+    #[tokio::test]
+    async fn concurrent_option_e_repositions_serialize_without_extra_pool_slots() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state_with_pool_size(2).await;
+        reset(&state).await;
+        let _option_e = OptionEEnv::enable();
+        let user = AuthenticatedUser::for_test(7);
+        seed_option_e_thread(&state, 7, 1, 1, false, Some(10)).await;
+        seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
+        seed_option_e_thread(&state, 7, 3, 3, false, Some(30)).await;
+
+        let first = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(1),
+            Json(QueueEntryPatch { position: 2 }),
+        );
+        let second = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(3),
+            Json(QueueEntryPatch { position: 2 }),
+        );
+        let (first, second) = tokio::join!(first, second);
+        assert!(first.is_ok(), "first concurrent Option E move failed");
+        assert!(second.is_ok(), "second concurrent Option E move failed");
+
+        let mut ranks: Vec<i32> = positions(&state, 7)
+            .await
+            .iter()
+            .map(|(_, position)| *position)
+            .collect();
+        ranks.sort_unstable();
+        assert_eq!(ranks, vec![1, 2, 3], "queue stays dense after both moves");
+        assert_eq!(event_count(&state, "reorder").await, 2);
     }
 }
