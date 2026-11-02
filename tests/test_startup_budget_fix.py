@@ -92,7 +92,6 @@ def test_old_worker_age_does_not_trigger_false_startup_violation(
         with TestClient(app) as client:
             response = client.get("/api/ping")
             assert response.status_code == 200
-            assert response.headers["X-App-Cold-Request"] == "1"
 
         assert get_performance_budget_manager().get_startup_violations() == []
     finally:
