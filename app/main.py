@@ -247,6 +247,7 @@ class _DiagnosticFieldsFilter(logging.Filter):
         "startup_duration_ms",
         "process_to_startup_ms",
         "startup_cpu_ms",
+        "process_started_at_ns",
         "application_import_ms",
         "application_creation_ms",
         "lifespan_ms",
@@ -863,7 +864,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                 # This is the database initialization span, not elapsed worker
                 # age since module import. It is synchronous and not awaitable.
                 heavy_ms = mark_heavy_init_complete()
+                from app.startup_diagnostics import startup_event_snapshot
 
+                heavy_snapshot = startup_event_snapshot()
                 logger.warning(
                     "Heavy application initialization completed in %.2f ms",
                     heavy_ms,
@@ -871,6 +874,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                         "event": "heavy_application_startup",
                         "heavy_initialized": True,
                         "heavy_init_duration_ms": round(heavy_ms, 2),
+                        "heavy_init_process_age_ms": heavy_snapshot.heavy_init_process_age_ms,
+                        "process_started_at_ns": heavy_snapshot.process_started_at_ns,
+                        "deployment_id": heavy_snapshot.deployment_id,
                     },
                 )
                 _heavy_state["initialized"] = True
