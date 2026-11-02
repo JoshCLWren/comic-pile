@@ -6,6 +6,17 @@ supports issue #638 (Developer experience and frontend simplification) and the
 `tests/test_api_v1_canonical_contract.py` enforces every statement below against the
 generated OpenAPI schema, so this list cannot silently drift.
 
+## Native v2 replacements (retired v1 routes)
+
+These resources no longer have a `/api/v1` implementation. Their canonical route is the bounded
+native Rust v2 resource. Their routing and real caller are enforced by
+`tests/test_rust_cutover_route_identity.py`; native behavior is covered by the parity suite under
+`native/roll-service/parity/`.
+
+| Family | Canonical route |
+|--------|-----------------|
+| Analytics metrics | `GET /api/v2/analytics/metrics` (legacy `/api/v1/analytics/metrics` and `/api/analytics/metrics` retired) |
+
 ## Canonical families (must use `/api/v1`)
 
 These retained first-party client families are exposed under `/api/v1/<family>` and are
@@ -13,7 +24,6 @@ the supported, documented surface. New client code must call these paths:
 
 | Family | Canonical prefix |
 |--------|------------------|
-| Analytics | `/api/v1/analytics` |
 | Auth | `/api/v1/auth` |
 | Continuity | `/api/v1/continuity` |
 | Continuity plans | `/api/v1/continuity-plans` |

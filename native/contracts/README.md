@@ -85,6 +85,17 @@ Recovery uses `frontend/src/services/protectedRollMutationApi.ts`. Both keep
 their existing v1 URL. The legacy `/api/roll/bootstrap` alias shares the Python
 handler and must also move before Python deletion. V2 is a separate contract.
 
+`GET /api/v2/analytics/metrics` (#4348) is documented by
+`comicpile_roll_service::analytics::AnalyticsApi`. Emit its operation with:
+
+```sh
+cd native/roll-service
+cargo run --example analytics_openapi
+```
+
+The unified Rust-derived contract and generated TS client remain owned by
+#4457; this repository does not hand-author a second analytics schema.
+
 To compare an independently generated Rust OpenAPI operation:
 
 ```sh

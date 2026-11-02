@@ -9,7 +9,7 @@ import type { AnalyticsMetrics } from '../types'
  */
 export function createTasksApi(client: HttpClient) {
   return {
-    getMetrics: () => client.get<AnalyticsMetrics>('/v1/analytics/metrics'),
+    getMetrics: () => client.get<AnalyticsMetrics>('/v2/analytics/metrics'),
   }
 }
 

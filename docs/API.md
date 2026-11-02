@@ -247,6 +247,49 @@ Reactivate a completed thread by adding more issues. Moves thread to position 1.
 
 ---
 
+## Analytics
+
+The authenticated reader's bounded reading metrics. This is a native Rust v2
+resource; the legacy Python `GET /api/v1/analytics/metrics` and
+`GET /api/analytics/metrics` handlers are retired.
+
+### GET /api/v2/analytics/metrics
+
+Return owner-scoped thread counts, completion rate, average ended-session
+duration, the five newest sessions from the last seven days, event-type counts,
+and the five highest-rated threads at or above 4.0. Authentication, ownership,
+token revocation and the credential epoch are validated in the same single
+database statement as the metrics.
+
+**Response**: `200 OK`
+
+```json
+{
+  "total_threads": 5,
+  "active_threads": 4,
+  "completed_threads": 1,
+  "completion_rate": 20.0,
+  "average_session_hours": 2.0,
+  "recent_sessions": [
+    {
+      "id": 12,
+      "started_at": "2025-12-30T10:30:00+00:00",
+      "ended_at": null,
+      "start_die": 6
+    }
+  ],
+  "event_stats": {"rate": 1, "roll": 4},
+  "top_rated_threads": [
+    {"id": 3, "title": "Saga", "rating": 4.5, "format": "Comic"}
+  ]
+}
+```
+
+`401 Unauthorized` is returned for a missing/invalid token, a revoked token, or
+a password change that predates the token's credential epoch.
+
+---
+
 ## Queue
 
 Queue management for thread positioning.

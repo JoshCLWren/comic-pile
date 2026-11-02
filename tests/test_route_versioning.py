@@ -199,9 +199,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/admin/export/json/",
             "/api/admin/export/summary/",
             "/api/admin/import/csv/",
-            "/api/analytics/metrics",
-            "/api/analytics/summary",
-            "/api/analytics/reading-history",
             "/api/auth/csrf",
             "/api/auth/login",
             "/api/auth/logout",
@@ -297,3 +294,12 @@ def test_retired_move_to_front_routes_are_absent() -> None:
     methods_by_path = _collect_routes(create_app(serve_frontend=False))
     for prefix in ("/api/queue", "/api/v1/queue"):
         assert f"{prefix}/threads/{{thread_id}}/front/" not in methods_by_path
+
+
+def test_analytics_metrics_is_only_the_native_v2_resource() -> None:
+    """Retiring the Python handler must not leave a dormant v1/bare endpoint."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+
+    assert "/api/v1/analytics/metrics" not in methods_by_path
+    assert "/api/analytics/metrics" not in methods_by_path
