@@ -169,6 +169,81 @@ def test_python_checks_run_ci_parity_lint_types_and_targeted_tests(tmp_path: Pat
     assert "pytest -q -p no:cacheprovider --no-cov -x tests/test_service.py" in calls
 
 
+def test_openapi_paths_select_schema_freshness_check(tmp_path: Path) -> None:
+    """Backend edits and generated artifacts must select the contract gate."""
+    repo = repo_with(
+        tmp_path,
+        {
+            "app/routers/comicvine.py": "x = 1\n",
+            "api/index.py": "x = 1\n",
+            "frontend/src/generated/openapi.json": "{}\n",
+            "frontend/src/generated/openapi.ts": "export {};\n",
+        },
+    )
+    result = subprocess.run(
+        ["bash", "-c", f"source {HELPER!s}; factory_fast_check_paths HEAD | factory_fast_check_plan"],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    plan = set(result.stdout.splitlines())
+    for path in (
+        "app/routers/comicvine.py",
+        "api/index.py",
+        "frontend/src/generated/openapi.json",
+        "frontend/src/generated/openapi.ts",
+    ):
+        assert f"openapi\t{path}" in plan
+
+
+def test_stale_openapi_blocks_factory_push(tmp_path: Path) -> None:
+    """A stale generated schema fails closed while the change is still local."""
+    repo = repo_with(tmp_path, {"app/routers/comicvine.py": "x = 1\n"})
+    bin_dir = tmp_path / "bin"
+    stub(
+        bin_dir,
+        "uv",
+        'echo "uv $*" >> ../uv.log\n'
+        'case "$*" in\n'
+        '  *export_openapi_schema.py*--check*) echo "Generated OpenAPI schema is stale"; exit 1 ;;\n'
+        'esac\nexit 0',
+    )
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "FAST CHECKS FAILED: OpenAPI schema freshness" in result.stdout
+    assert "Generated OpenAPI schema is stale" in result.stdout
+    calls = (tmp_path / "uv.log").read_text()
+    assert "sync --frozen --all-extras" in calls
+    assert "run --frozen python scripts/export_openapi_schema.py --check" in calls
+
+
+def test_generated_schema_only_change_still_checks_openapi(tmp_path: Path) -> None:
+    """JSON-only changes cannot skip the Python-based generated schema gate."""
+    repo = repo_with(tmp_path, {"frontend/src/generated/openapi.json": "{}\n"})
+    bin_dir = tmp_path / "bin"
+    stub(
+        bin_dir,
+        "uv",
+        'echo "uv $*" >> ../uv.log\n'
+        'case "$*" in\n'
+        '  *export_openapi_schema.py*--check*) exit 1 ;;\n'
+        'esac\nexit 0',
+    )
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 1
+    assert "OpenAPI schema freshness" in result.stdout
+    assert "sync --frozen --all-extras" in (tmp_path / "uv.log").read_text()
+
+
+def test_missing_openapi_toolchain_blocks_generated_schema_change(tmp_path: Path) -> None:
+    """Missing tooling fails closed rather than silently pushing stale schema."""
+    repo = repo_with(tmp_path, {"frontend/src/generated/openapi.json": "{}\n"})
+    result = run_checks(repo, prelude="_factory_fast_check_ensure_uv() { return 1; }")
+    assert result.returncode == 1
+    assert "OpenAPI check toolchain (uv)" in result.stdout
+
+
 def test_ruff_failure_blocks_push(tmp_path: Path) -> None:
     repo = repo_with(tmp_path, {"app/service.py": "helper()\n"})
     bin_dir = tmp_path / "bin"
