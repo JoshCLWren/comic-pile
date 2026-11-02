@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import cast
 
 import pytest
@@ -720,3 +721,60 @@ async def test_cached_deep_response_can_still_enrich_a_sparse_row(async_db: Asyn
         {"id": 1, "name": "Writer", "role": "writer"}
     ]
     assert hydration.DEEP_METADATA_REFRESHED_AT_KEY not in cached.metadata_json
+
+def test_timezone_free_provider_revision_is_utc_aware() -> None:
+    """ComicVine's SQL-style timestamps must compare with PostgreSQL timestamptz."""
+    parsed = hydration._provider_timestamp("2026-11-01 17:33:53")
+    assert parsed == datetime(2026, 11, 1, 17, 33, 53, tzinfo=UTC)
+    assert parsed is not None and parsed.tzinfo is UTC
+
+
+@pytest.mark.asyncio
+async def test_deep_hydration_updates_existing_identity_with_naive_provider_date(
+    async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stored UTC-aware provider revision cannot break a repeat deep fetch."""
+    existing = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="37625",
+        metadata_json={"issue_number": "5"},
+        provider_updated_at=datetime(2025, 1, 1, tzinfo=UTC),
+    )
+    async_db.add(existing)
+    await async_db.flush()
+    original_id = existing.id
+
+    client = FakeClient()
+
+    async def fetch_issue(_issue_id: int, *, refresh: bool = False) -> ComicVineResponse:
+        assert refresh is True
+        return ComicVineResponse(
+            {
+                "status_code": 1,
+                "results": _deep_issue_result(
+                    date_last_updated="2026-11-01 17:33:53",
+                ),
+            },
+            False,
+            "issue",
+        )
+
+    monkeypatch.setattr(client, "fetch_issue", fetch_issue)
+    hydrated = await hydration.hydrate_issue(
+        async_db, cast(object, client), 37625, refresh=True
+    )
+    assert hydrated.id == original_id
+    assert hydrated.metadata_json["primary_image"] == "https://img/medium"
+    assert hydrated.metadata_json["creator_credits"] == [
+        {"id": 1, "name": "Writer", "role": "writer"}
+    ]
+    assert hydrated.metadata_json["story_arcs"] == [{"id": 4, "name": "Arc"}]
+    assert hydrated.metadata_json[hydration.DEEP_METADATA_REFRESHED_AT_KEY]
+    assert hydrated.provider_updated_at == datetime(
+        2026, 11, 1, 17, 33, 53, tzinfo=UTC
+    )
+    await async_db.commit()
+    await async_db.refresh(existing)
+    assert existing.metadata_json["creator_credits"]
+    assert await async_db.scalar(select(func.count()).select_from(ExternalIdentity)) == 1
