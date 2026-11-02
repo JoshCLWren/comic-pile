@@ -7,7 +7,10 @@ pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
+pub mod issue_handler;
+pub mod issue_service;
 pub mod option_inputs;
+pub mod queue;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
 pub mod reading_constraints;
@@ -19,13 +22,14 @@ pub mod roll_pool;
 pub mod roll_reset;
 mod session_bandwidth;
 pub mod skip;
+pub mod threads;
 
 use axum::{
     extract::{Request, State},
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use config::{Config, ConfigError, JwtSecret};
@@ -43,6 +47,8 @@ pub struct AppState {
     pub pool: Pool,
     pub jwt_secret: JwtSecret,
     pub request_timeout: Duration,
+    pub access_token_expire_minutes: i64,
+    pub refresh_token_expire_days: i64,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -70,6 +76,8 @@ impl AppState {
             pool,
             jwt_secret: config.jwt_secret,
             request_timeout: config.request_timeout,
+            access_token_expire_minutes: config.access_token_expire_minutes,
+            refresh_token_expire_days: config.refresh_token_expire_days,
         })
     }
 }
@@ -169,12 +177,59 @@ async fn bound_request(
 
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
+    use auth::middleware::csrf_middleware;
     Router::new()
         .route(
             "/health",
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
         )
+        .route("/api/v2/auth/register", post(auth::handlers::register))
+        .route("/api/v2/auth/login", post(auth::handlers::login))
+        .route("/api/v2/auth/refresh", post(auth::handlers::refresh))
+        .route("/api/v2/auth/logout", post(auth::handlers::logout))
+        .route("/api/v2/auth/csrf", get(auth::handlers::csrf))
+        .route("/api/v2/auth/me", get(auth::handlers::me))
+        .route(
+            "/api/v2/auth/forgot-password",
+            post(auth::handlers::forgot_password),
+        )
+        .route(
+            "/api/v2/auth/reset-password",
+            post(auth::handlers::reset_password),
+        )
+        .route("/api/v1/auth/register", post(auth::handlers::register))
+        .route("/api/v1/auth/login", post(auth::handlers::login))
+        .route("/api/v1/auth/refresh", post(auth::handlers::refresh))
+        .route("/api/v1/auth/logout", post(auth::handlers::logout))
+        .route("/api/v1/auth/csrf", get(auth::handlers::csrf))
+        .route("/api/v1/auth/me", get(auth::handlers::me))
+        .route(
+            "/api/v1/auth/forgot-password",
+            post(auth::handlers::forgot_password),
+        )
+        .route(
+            "/api/v1/auth/reset-password",
+            post(auth::handlers::reset_password),
+        )
+        .route("/api/auth/register", post(auth::handlers::register))
+        .route("/api/auth/login", post(auth::handlers::login))
+        .route("/api/auth/refresh", post(auth::handlers::refresh))
+        .route("/api/auth/logout", post(auth::handlers::logout))
+        .route("/api/auth/csrf", get(auth::handlers::csrf))
+        .route("/api/auth/me", get(auth::handlers::me))
+        .route(
+            "/api/auth/forgot-password",
+            post(auth::handlers::forgot_password),
+        )
+        .route(
+            "/api/auth/reset-password",
+            post(auth::handlers::reset_password),
+        )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
+        .route(
+            "/api/v2/reading-sessions",
+            post(bootstrap::initialize_session),
+        )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
         .route("/api/v2/roll/reset", post(roll_reset::reset))
@@ -186,6 +241,16 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-boundaries/{thread_id}",
             get(reading_boundary::reading_boundary_single_v2),
         )
+        .route(
+            "/api/v2/queue-entries/{thread_id}",
+            get(queue::get_queue_entry),
+        )
+        .route(
+            "/api/v2/queue-entries/{thread_id}",
+            patch(queue::update_queue_entry),
+        )
+        .route("/api/v2/queue-orders", post(queue::create_queue_order))
+        .route("/api/v2/threads", get(threads::list_threads))
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
         .route(
@@ -196,6 +261,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
+        .route(
+            "/api/v2/issues/{issue_id}",
+            patch(issue_handler::read_rate_issue),
+        )
+        .route("/api/v2/issues/cards", post(issue_handler::issue_cards))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(
@@ -204,6 +274,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             )
         })
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
+        .layer(axum::middleware::from_fn(csrf_middleware))
         .with_state(state)
 }
 

@@ -40,6 +40,13 @@ export default defineConfig(() => ({
   server: {
     host: '0.0.0.0',
     proxy: {
+      // Production routes every native v2 resource before the Python
+      // catch-all; mirror that split in local development.
+      '/api/v2': {
+        target: process.env.VITE_NATIVE_API_URL || 'http://localhost:8010',
+        changeOrigin: true,
+        secure: false,
+      },
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,

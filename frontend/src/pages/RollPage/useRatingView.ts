@@ -30,6 +30,7 @@ interface UseRatingViewParams {
     enterRatingView: (threadId: number | null, result?: number | null, threadMetadata?: ThreadMetadata | null) => Promise<void>
   }
   snooze: { handleSnooze: () => Promise<void> }
+  onResetDice?: () => void
   onReroll?: () => Promise<void>
   onSkip: () => Promise<void>
   rateMutation: { isPending: boolean }
@@ -56,6 +57,7 @@ export interface RatingViewData {
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze?: () => void
+  onResetDice?: () => void
   onReroll?: () => Promise<void>
   onSkip?: () => void
   onCancel: () => void
@@ -113,6 +115,7 @@ export function useRatingView({
   rating,
   snooze,
   onReroll,
+  onResetDice,
   onSkip,
   rateMutation,
   snoozeMutation,
@@ -159,6 +162,7 @@ export function useRatingView({
     onSubmitRating: rating.handleSubmitRating,
     onSnooze: snooze.handleSnooze,
     onReroll,
+    onResetDice,
     rerollIsPending: rerollMutation?.isPending ?? false,
     onSkip,
     onCancel: rating.handleCancelRating,

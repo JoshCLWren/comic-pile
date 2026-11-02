@@ -15,7 +15,7 @@ beforeEach(() => {
   globalThis.sessionStorage?.removeItem('comicpile:roll:pending-manual-die')
   globalThis.sessionStorage?.removeItem('comicpile:roll:pending-offer')
   globalThis.document.cookie = 'comicpile_roll_snoozes=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-  client.get.mockReset().mockResolvedValue({ rollable: [], total_threads: 0, available_threads: 0, excluded_count: 0, excluded_threads: [], inactive_count: 0, inactive_threads: [] })
+  client.get.mockReset().mockResolvedValue({ rollable: [], pool_reason: 'no_series' })
   client.post.mockReset().mockResolvedValue({})
 })
 
@@ -171,4 +171,14 @@ it('does not replay an unanswered offer after Reset Dice', async () => {
   // SAFETY: same payload shape, posted by the post-reset roll().
   const second = offers[1][1] as { idempotency_key: string }
   expect(second.idempotency_key).not.toBe(first.idempotency_key)
+})
+
+it('retains more than fifty daily snoozes instead of silently restoring the oldest comic', async () => {
+  const snoozes = Array.from({ length: 75 }, (_, index) => index + 1)
+  globalThis.document.cookie = `comicpile_roll_snoozes=${encodeURIComponent(JSON.stringify(snoozes))}`
+  client.post.mockResolvedValueOnce({ snoozed_thread_id: 76 })
+  const isolated = createRollApi(client)
+  await isolated.reroll()
+  await isolated.reroll()
+  expect(client.post).toHaveBeenLastCalledWith('/v2/roll/offer', expect.objectContaining({ snoozed_thread_ids: [...snoozes, 76] }))
 })

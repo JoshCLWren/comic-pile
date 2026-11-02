@@ -39,6 +39,7 @@ from app.models import (
     User,
 )
 from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
+from app.services.thread_service import list_queue_threads
 
 PASSWORD_HASH = hash_password("password")
 
@@ -340,11 +341,12 @@ async def _excluded_thread_ids(auth_client: AsyncClient) -> list[int]:
     return [row["id"] for row in response.json()["threads"]]
 
 
-async def _queue_thread_ids(auth_client: AsyncClient) -> list[int]:
-    """Read the active queue and return its thread ids."""
-    response = await auth_client.get("/api/v1/threads/")
-    assert response.status_code == 200
-    return [row["id"] for row in response.json()["threads"]]
+async def _queue_thread_ids(async_db: AsyncSession, user_id: int) -> list[int]:
+    """Read the active queue projection and return its thread ids."""
+    page = await list_queue_threads(
+        async_db, user_id, search=None, sort="position", page_size=200, page_token=None
+    )
+    return [row.id for row in page.threads]
 
 
 async def _completed_thread_ids(auth_client: AsyncClient) -> list[int]:
@@ -366,6 +368,7 @@ async def test_remove_from_queue_preserves_records_and_restore_reuses_the_same_r
     dependency must come back with identical identifiers and curated state
     rather than being recreated.
     """
+    owner_id = default_user.id
     ids = await _seed_series(async_db, default_user)
     before = await _curated_state(async_db, ids)
 
@@ -383,7 +386,7 @@ async def test_remove_from_queue_preserves_records_and_restore_reuses_the_same_r
 
     # It leaves the active queue entirely and becomes discoverable in the
     # excluded library view instead.
-    assert ids.thread_id not in await _queue_thread_ids(auth_client)
+    assert ids.thread_id not in await _queue_thread_ids(async_db, owner_id)
     assert await _excluded_thread_ids(auth_client) == [ids.thread_id]
 
     excluded_page = await auth_client.get("/api/v1/threads/excluded/threads")
@@ -403,7 +406,7 @@ async def test_remove_from_queue_preserves_records_and_restore_reuses_the_same_r
     assert restored.queue_position >= 1
     assert restored.next_unread_issue_id == ids.unread_issue_ids[0]
 
-    assert ids.thread_id in await _queue_thread_ids(auth_client)
+    assert ids.thread_id in await _queue_thread_ids(async_db, owner_id)
     assert await _excluded_thread_ids(auth_client) == []
 
 
@@ -460,6 +463,7 @@ async def test_restore_returns_a_fully_read_series_to_the_finished_shelf(
     invariant that Roll and the queue eligibility predicates rely on, so a fully
     read series returns to the finished shelf with all of its history intact.
     """
+    owner_id = default_user.id
     ids = await _seed_series(async_db, default_user)
     before = await _curated_state(async_db, ids)
 
@@ -485,7 +489,7 @@ async def test_restore_returns_a_fully_read_series_to_the_finished_shelf(
     # shelf — not the active queue — owns the series again.
     await _assert_thread_preserved(async_db, ids, before)
     assert ids.thread_id in await _completed_thread_ids(auth_client)
-    assert ids.thread_id not in await _queue_thread_ids(auth_client)
+    assert ids.thread_id not in await _queue_thread_ids(async_db, owner_id)
     assert await _excluded_thread_ids(auth_client) == []
 
 
@@ -530,6 +534,7 @@ async def test_appending_issues_does_not_reactivate_an_excluded_series(
     too, otherwise an out-of-band sync silently puts a deliberately removed
     series back into the active queue.
     """
+    owner_id = default_user.id
     ids = await _seed_series(async_db, default_user)
     before = await _curated_state(async_db, ids)
 
@@ -541,7 +546,7 @@ async def test_appending_issues_does_not_reactivate_an_excluded_series(
     await issue_service.create_issues(
         async_db,
         thread_id=ids.thread_id,
-        current_user_id=default_user.id,
+        current_user_id=owner_id,
         issue_range="4",
         insert_after_issue_id=None,
     )
@@ -558,7 +563,7 @@ async def test_appending_issues_does_not_reactivate_an_excluded_series(
     assert [issue.issue_number for issue in issues] == ["1", "2", "3", "4"]
     await _assert_thread_preserved(async_db, ids, before)
     assert await _excluded_thread_ids(auth_client) == [ids.thread_id]
-    assert ids.thread_id not in await _queue_thread_ids(auth_client)
+    assert ids.thread_id not in await _queue_thread_ids(async_db, owner_id)
 
 
 @pytest.mark.asyncio

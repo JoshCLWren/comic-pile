@@ -242,6 +242,8 @@ def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick() -> Non
     assert "!github.event.pull_request.draft" in wake
     assert "gh workflow run fixed-model-factory-dispatch.yml" in wake
     assert "--ref main -f mode=roster" in wake
+    assert "from factory_eligibility import is_manual_only" in wake
+    assert "is manual-only; no dispatch" in wake
 
 
 def test_event_wakeup_never_checks_out_untrusted_pr_code_or_assigns_workers() -> None:
@@ -256,8 +258,11 @@ def test_event_wakeup_never_checks_out_untrusted_pr_code_or_assigns_workers() ->
     assert "actions: write" in wake
     assert "pull-requests: read" in wake
     assert "cancel-in-progress: false" in wake
-    assert "actions/checkout" not in wake
+    assert "ref: ${{ github.event.repository.default_branch }}" in wake
+    assert "persist-credentials: false" in wake
+    assert "github.event.pull_request.head.sha" not in wake
     assert "factory-work-controller.py" not in wake
+    assert "from factory_eligibility import is_manual_only" in wake
     assert 'gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"' in wake
     assert '.state == "open"' in wake
     assert '.base.repo.full_name == $repo' in wake

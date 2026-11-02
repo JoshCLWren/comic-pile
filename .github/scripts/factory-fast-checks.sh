@@ -22,6 +22,10 @@
 #                                 for each touched module
 #   frontend/**/*.ts|tsx|mjs      pnpm --filter frontend run typecheck, then
 #                                 eslint on the touched frontend files
+#   *.rs / Cargo manifests        pinned Rust format, Clippy and root Vercel
+#                                 compile checks (both actual CI crates)
+#   Rust or vercel.json           native ingress, mutation-coverage and Vercel
+#                                 deployment contract tests
 # The worker runner (ubuntu-latest) has no uv/pnpm or dependencies, so the
 # needed toolchain is installed on demand. Toolchain setup failure fails
 # closed: an unverifiable diff is not pushed. A targeted pytest failure whose
@@ -42,7 +46,7 @@ factory_fast_check_paths() {
 }
 
 # Classify touched paths (stdin) into "<kind>\t<path>" lines. Kinds: node,
-# python, pytest, frontend. A path may produce several kinds.
+# python, pytest, frontend, rust, ingress. A path may produce several kinds.
 factory_fast_check_plan() {
   local path stem candidate
   while IFS= read -r path; do
@@ -52,6 +56,16 @@ factory_fast_check_plan() {
     esac
     case "$path" in
       frontend/*.ts|frontend/*.tsx|frontend/*.mjs) printf 'frontend\t%s\n' "$path" ;;
+    esac
+    case "$path" in
+      *.rs|Cargo.toml|*/Cargo.toml|Cargo.lock|*/Cargo.lock|rust-toolchain.toml|*/rust-toolchain.toml|.cargo/config.toml|*/.cargo/config.toml)
+        printf 'rust\t%s\n' "$path"
+        ;;
+    esac
+    case "$path" in
+      vercel.json|api/*.rs|native/roll-service/src/*.rs)
+        printf 'ingress\t%s\n' "$path"
+        ;;
     esac
     case "$path" in
       *.py)
@@ -129,7 +143,7 @@ factory_run_fast_checks() {
     0|off|false|no) printf 'fast checks disabled by FACTORY_FAST_CHECKS\n' >> "$log"; return 0 ;;
   esac
   plan="$(factory_fast_check_paths "$base_ref" | factory_fast_check_plan)"
-  local fe_project=0
+  local fe_project=0 rust_project=0 rust_ingress=0
   while IFS=$'\t' read -r kind file; do
     [[ -n "$file" ]] || continue
     case "$kind" in
@@ -140,6 +154,8 @@ factory_run_fast_checks() {
         fe_project=1
         [[ -f "$file" ]] && fe_files+=("${file#frontend/}")
         ;;
+      rust) rust_project=1 ;;
+      ingress) rust_ingress=1 ;;
     esac
   done <<< "$plan"
   printf 'fast-check plan:\n%s\n' "${plan:-(no checked file types touched)}" >> "$log"
@@ -190,6 +206,36 @@ factory_run_fast_checks() {
         _factory_fast_check_run "$log" 'frontend eslint (touched files)' pnpm --dir frontend exec eslint -- "${fe_files[@]}" \
           || failures+=("frontend eslint (${fe_files[*]})")
       fi
+    fi
+  fi
+
+
+  # Rust-only changes previously bypassed this trusted gate entirely.
+  # Keep the two cargo entrypoints aligned with their separate CI workflows.
+  # The script fails closed on missing toolchains and failed compilation.
+  if (( rust_project )); then
+    if ! command -v cargo >/dev/null 2>&1 || ! command -v rustup >/dev/null 2>&1; then
+      failures+=('Rust toolchain (cargo/rustup missing)')
+    elif ! _factory_fast_check_run "$log" 'Rust format, service Clippy, root Vercel compilation' \
+      bash scripts/check-rust-factory-prepush.sh; then
+      failures+=('Rust format/Clippy/native build')
+    fi
+  fi
+
+  # When native routing or Rust handlers change, verify the real Vercel
+  # rewrite, HTTP-method registration and POST/PATCH write-path guards.
+  if (( rust_project || rust_ingress )); then
+    if ! _factory_fast_check_ensure_uv; then
+      failures+=('Rust ingress test toolchain (uv)')
+    elif ! _factory_fast_check_run "$log" 'Rust ingress test dependency sync' \
+      uv sync --frozen --all-extras --quiet; then
+      failures+=('Rust ingress test dependencies')
+    elif ! _factory_fast_check_run "$log" 'Native ingress and deployment contract tests' \
+      uv run --frozen pytest -q -x --no-cov \
+        tests/test_native_roll_live_ingress.py \
+        tests/test_native_roll_write_test_guard.py \
+        tests/test_vercel_deployment.py; then
+      failures+=('native ingress/deployment/write guard tests')
     fi
   fi
 

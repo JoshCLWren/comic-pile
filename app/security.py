@@ -16,6 +16,10 @@ IP_LOCKOUT_MINUTES = 30
 
 LOCKOUT_ERROR_MESSAGE = "Incorrect username or password"
 
+# Production column is varchar(45); an unbounded forwarding header would
+# otherwise turn a rejected login into a 500 (SQLSTATE 22001).
+MAX_CLIENT_IP_CHARS = 45
+
 
 def get_client_ip(request_headers: dict, client_host: str | None) -> str:
     """Extract client IP from request, respecting X-Forwarded-For.
@@ -25,12 +29,12 @@ def get_client_ip(request_headers: dict, client_host: str | None) -> str:
         client_host: The direct client host from ``request.client.host``.
 
     Returns:
-        Client IP address string.
+        Client IP address string, truncated to the persisted column bound.
     """
     forwarded = request_headers.get("x-forwarded-for", "").split(",")[0].strip()
     if forwarded:
-        return forwarded
-    return client_host or "unknown"
+        return forwarded[:MAX_CLIENT_IP_CHARS]
+    return (client_host or "unknown")[:MAX_CLIENT_IP_CHARS]
 
 
 async def check_login_lockout(db: AsyncSession, username: str, ip_address: str) -> None:

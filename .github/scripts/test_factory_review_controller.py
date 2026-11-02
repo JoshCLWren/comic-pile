@@ -919,3 +919,64 @@ def test_review_thread_query_uses_named_graphql_field(
     result = controller.current_head_review_gate(123, HEAD)
     assert result["decision"] == decision
     assert len(calls) == 3
+
+
+def test_replace_factory_labels_skips_standalone_manual_only_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review/repair label writes must leave a manual-only PR untouched."""
+    controller = load_controller()
+    writes: list[list[str]] = []
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda _number: {
+            "body": "Hold this PR.\nmanual-only\n",
+            "labels": [{"name": "factory"}, {"name": "factory:review"}],
+        },
+    )
+
+    def fake_run_gh(
+        args: list[str], *, input_json: object | None = None, check: bool = True
+    ) -> str:
+        writes.append(list(args))
+        return ""
+
+    monkeypatch.setattr(controller, "run_gh", fake_run_gh)
+
+    controller.replace_factory_labels(4512, "factory:unowned", "factory:changes-requested")
+    assert writes == []
+
+
+def test_replace_factory_labels_writes_ordinary_pr(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ordinary review handoffs still replace factory owner/stage labels."""
+    controller = load_controller()
+    written_labels: list[str] = []
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda _number: {
+            "body": "Ordinary factory work.",
+            "labels": [{"name": "bug"}, {"name": "factory:ci"}],
+        },
+    )
+
+    def fake_run_gh(
+        args: list[str], *, input_json: object | None = None, check: bool = True
+    ) -> str:
+        assert any("issues/12/labels" in part for part in args)
+        assert isinstance(input_json, dict)
+        labels = input_json["labels"]
+        assert isinstance(labels, list)
+        written_labels.extend(str(label) for label in labels)
+        return ""
+
+    monkeypatch.setattr(controller, "run_gh", fake_run_gh)
+
+    controller.replace_factory_labels(12, "factory:unowned", "factory:review")
+    assert set(written_labels) == {
+        "bug",
+        "factory",
+        "factory:review",
+        "factory:unowned",
+    }

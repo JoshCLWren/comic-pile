@@ -1,5 +1,4 @@
 import type {
-  BlockingDependency,
   ReadingBandwidth,
   ReadingIntent,
   RollLastReadPayload,
@@ -9,6 +8,17 @@ import type {
 import type { Tag } from '../services/api-tags'
 
 export type { ReadingBandwidth, ReadingIntent, SessionMode, SessionModeCorrectionGuidance } from './index'
+
+/**
+ * Why the Roll pool has no in-play faces. One minimal reason derived from the
+ * already-loaded Option E inputs; never a list, count or whole-library report.
+ */
+export type RollPoolReason =
+  | 'ready'
+  | 'no_series'
+  | 'all_blocked'
+  | 'all_completed'
+  | 'all_out_of_pool'
 
 /** Lightweight thread summary returned by the Roll bootstrap endpoint. */
 export interface RollBootstrapThread {
@@ -22,50 +32,6 @@ export interface RollBootstrapThread {
   last_activity_at?: string | null
   /** Visible direct tags, so a die face shows tag context before rolling (#3425). */
   tags?: Tag[]
-}
-
-/** One series excluded from the roll pool, with the reason the user can understand. */
-export interface ThreadExclusionReason {
-  /**
-   * Stable Thread id for the row.
-   *
-   * The server always sends it, but the UI treats it as optional so a
-   * contract-violating row renders honest plain text instead of linking to a
-   * speculative `/thread/undefined` route.
-   */
-  thread_id?: number
-  title: string
-  format: string
-  /** Truthful identity context for disambiguating same-named out-of-pool series. */
-  year?: number | string | null
-  volume?: string | null
-  publisher?: string | null
-  reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue"
-  detail?: string | null
-  /** Live eligibility labels for a blocked series, when the server has them. */
-  blocking_reasons?: string[]
-  /** Navigable dependency details for a blocked series, when the server has them. */
-  blocking_dependencies?: BlockingDependency[]
-  last_activity_at?: string | null
-}
-
-/** Categories the Roll exclusion drill-down can page through (issue #3330). */
-export type RollExclusionCategory = 'blocked' | 'inactive'
-
-/**
- * One deterministic page of a Roll exclusion category.
- *
- * `total` is the authoritative category size, computed by the backend from the
- * same predicate as the bootstrap category count, so a heading can never show
- * the loaded preview size as if it were the total.
- */
-export interface RollExclusionPageResponse {
-  category: RollExclusionCategory
-  items: ThreadExclusionReason[]
-  total: number
-  limit: number
-  offset: number
-  next_cursor: string | null
 }
 
 /** One direct continuity blocker for a pending roll. */
@@ -179,10 +145,8 @@ export interface RollBootstrapResponse {
   snoozed_count: number
   skipped_thread_ids: number[]
   skipped_threads: RollBootstrapThread[]
-  blocked_count: number
-  blocked_threads: RollBootstrapThread[]
-  stale_thread_count: number
-  stale_thread: RollBootstrapThread | null
+  /** Minimal empty-pool explanation; absent only for legacy fixtures. */
+  pool_reason?: RollPoolReason
   timezone?: string | null
   /**
    * Session last-read projection (#2720). The retained v1 bootstrap does not
@@ -190,13 +154,4 @@ export interface RollBootstrapResponse {
    * seeded by a rate response is the authoritative client-side fallback.
    */
   last_read?: RollLastReadPayload | null
-
-  // Issue #3125: exclusion transparency — every series not in the pool is
-  // explained so the user can see why options vanish.
-  total_threads?: number
-  available_threads?: number
-  excluded_count?: number
-  excluded_threads?: ThreadExclusionReason[]
-  inactive_count?: number
-  inactive_threads?: ThreadExclusionReason[]
 }

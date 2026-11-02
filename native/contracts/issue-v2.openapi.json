@@ -1,0 +1,327 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "comicpile-roll-service",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v2/issues/cards": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation used to emit the generated batch card contract.",
+        "operationId": "issue_cards_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueCardsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Owner-scoped cards in request order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueCardsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid or unbounded issue id list"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/issues/{issue_id}": {
+      "patch": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation used to emit the generated PATCH contract.",
+        "operationId": "issue_read_rate_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Exact owned issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueReadRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Reconciled issue and thread state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueReadRateResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issue not found for this reader"
+          },
+          "409": {
+            "description": "Idempotency key reused for a different action"
+          },
+          "422": {
+            "description": "Invalid status, rating or idempotency key"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "IssueCard": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "has_confirmed_identity",
+          "mapping_state"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Confirmed provider issue identifier, never a provisional candidate."
+          },
+          "cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact provider-supplied CDN URL. Null when unmapped; never image bytes."
+          },
+          "has_confirmed_identity": {
+            "type": "boolean",
+            "description": "Whether a confirmed ComicVine issue mapping exists."
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Owned issue identifier."
+          },
+          "issue_number": {
+            "type": "string",
+            "description": "Exact issue number within the run."
+          },
+          "mapping_state": {
+            "type": "string",
+            "description": "Stored mapping state (``confirmed``, ``candidate``, ...)."
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Effective per-issue saved rating."
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "UTC read timestamp, when read."
+          },
+          "status": {
+            "type": "string",
+            "description": "Stored read state (``read`` or ``unread``)."
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Owning thread identifier."
+          },
+          "thread_title": {
+            "type": "string",
+            "description": "Display series/run title."
+          }
+        }
+      },
+      "IssueCardsRequest": {
+        "type": "object",
+        "required": [
+          "issue_ids"
+        ],
+        "properties": {
+          "issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Visible issue identifiers requested for one bounded batch."
+          }
+        },
+        "additionalProperties": false
+      },
+      "IssueCardsResponse": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueCard"
+            },
+            "description": "Owned cards in first-request order; foreign or missing IDs are omitted."
+          }
+        }
+      },
+      "IssueReadRateRequest": {
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "description": "Client-generated retry key. Same key/payload replays the same receipt."
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Effective issue rating in 0.5-point steps. Omit to keep the stored rating."
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Explicit new status. Omit to leave read state unchanged."
+          }
+        },
+        "additionalProperties": false
+      },
+      "IssueReadRateResponse": {
+        "type": "object",
+        "required": [
+          "issue",
+          "thread",
+          "read_event_created",
+          "rating_event_created",
+          "replayed"
+        ],
+        "properties": {
+          "final_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/IssueCard"
+          },
+          "rating_event_created": {
+            "type": "boolean"
+          },
+          "read_event_created": {
+            "type": "boolean"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "thread": {
+            "$ref": "#/components/schemas/ThreadProgress"
+          }
+        }
+      },
+      "ThreadProgress": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "status",
+          "issues_remaining"
+        ],
+        "properties": {
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "next_unread_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

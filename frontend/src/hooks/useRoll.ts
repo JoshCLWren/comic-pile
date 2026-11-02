@@ -106,6 +106,9 @@ export function useReroll(api?: RollApi) {
   const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
     mutationFn: () => rollApiInstance.reroll(),
+    onSuccess: async () => {
+      await invalidateAfterRollDieModeUpdate(queryClient)
+    },
   })
 
   return {

@@ -30,7 +30,7 @@ async fn main() {
     )
     .unwrap();
     // Parity cancellation mode: the process and its single-connection pool
-    // outlive the abandoned bootstrap future. A byte on stdin cancels Rust work
+    // outlive the abandoned initialization future. A byte on stdin cancels Rust work
     // while the database is still blocked on the fixture's advisory lock.
     if std::env::var_os("RUST_ROLL_TEST_CANCEL_ON_STDIN").is_some() {
         let cancellation = tokio::task::spawn_blocking(|| {
@@ -39,7 +39,7 @@ async fn main() {
             std::io::stdin().read_exact(&mut command)
         });
         let completed = tokio::select! {
-            result = reading_session::bootstrap_at(
+            result = reading_session::initialize_at(
                 &state, user, timezone.as_deref(), policy, now
             ) => Some(result),
             input = cancellation => {
@@ -82,6 +82,10 @@ async fn main() {
         let s = reading_session::resolve_current_session(&tx, user, now, policy).await;
         tx.rollback().await.unwrap();
         s.map(|s| serde_json::to_value(s).unwrap())
+    } else if std::env::var_os("RUST_ROLL_TEST_INITIALIZE").is_some() {
+        reading_session::initialize_at(&state, user, timezone.as_deref(), policy, now)
+            .await
+            .map(|s| serde_json::to_value(s).unwrap())
     } else {
         reading_session::bootstrap_at(&state, user, timezone.as_deref(), policy, now)
             .await

@@ -310,8 +310,13 @@ def get_password_reset_mailer() -> PasswordResetMailer:
     defaults to that same Gmail identity, while PASSWORD_RESET_SENDER remains an
     optional override for an alias already configured on the Gmail account.
     """
+    # Test runs must never use live SMTP credentials inherited from .env or
+    # the invoking factory's shell. Explicit test doubles remain supported.
     if _mailer_override is not None:
         return _mailer_override
+    is_test_run = os.environ.get("TEST_ENVIRONMENT", "").lower() in {"true", "1", "yes"}
+    if is_test_run or os.environ.get("ENVIRONMENT", "").lower() == "test":
+        return get_fake_mailer()
 
     settings = get_email_settings()
     gmail_username = settings.usable_gmail_smtp_username

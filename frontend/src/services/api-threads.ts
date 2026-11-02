@@ -25,7 +25,7 @@ export function createThreadsApi(client: HttpClient) {
       if (pageToken) {
         queryParams.page_token = pageToken;
       }
-      const response = await client.get<ThreadListResponse>('/v1/threads/', {
+      const response = await client.get<ThreadListResponse>('/v2/threads', {
         params: Object.keys(queryParams).length ? queryParams : undefined,
       })
       return response

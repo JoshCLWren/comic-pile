@@ -117,10 +117,6 @@ beforeEach(() => {
       { id: 6, title: 'Monstress', format: 'Comics' },
       { id: 7, title: 'Paper Girls', format: 'Comics' },
     ],
-    blocked_count: 0,
-    blocked_threads: [],
-    stale_thread_count: 0,
-    stale_thread: null,
   }
   mockedUseRollBootstrap.mockReturnValue({
     data: mockBootstrapData,
@@ -243,10 +239,6 @@ it('does not render snoozed indicators when no snoozed threads', async () => {
         { id: 6, title: 'Monstress', format: 'Comics' },
         { id: 7, title: 'Paper Girls', format: 'Comics' },
       ],
-      blocked_count: 0,
-      blocked_threads: [],
-      stale_thread_count: 0,
-      stale_thread: null,
     },
     refetch: vi.fn(),
     isPending: false,

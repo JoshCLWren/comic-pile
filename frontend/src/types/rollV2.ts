@@ -1,5 +1,5 @@
 import type { SessionMode, SessionThread } from './index'
-import type { RollRecoveryInfo, ThreadExclusionReason } from './rollBootstrap'
+import type { RollPoolReason, RollRecoveryInfo } from './rollBootstrap'
 import type { Tag } from '../services/api-tags'
 
 export type { RollBootstrapResponse, RollBootstrapThread } from './rollBootstrap'
@@ -75,6 +75,8 @@ export interface RollV2Item {
 
 /** Nullable session-scoped last-read object shared with rate responses. */
 export interface RollV2LastRead {
+  /** Stored provider-hosted cover URL, available even after a cold navigation. */
+  cover_url?: string | null
   issue_id?: number | null
   issue_number?: string | null
   thread_id?: number | null
@@ -107,22 +109,14 @@ export interface RollV2BootstrapResponse {
   roll_recovery?: RollRecoveryInfo | null
   bandwidth: RollV2BandwidthState
   rollable: RollV2Item[]
+  /** Minimal empty-pool explanation derived from the same Option E inputs. */
+  pool_reason: RollPoolReason
   last_read: RollV2LastRead | null
   snoozed_threads: RollV2Thread[]
   snoozed_count: number
   skipped_thread_ids: number[]
   skipped_threads: RollV2Thread[]
-  blocked_count: number
-  blocked_threads: RollV2Thread[]
-  stale_thread_count: number
-  stale_thread: RollV2Thread | null
   timezone?: string | null
-  total_threads: number
-  available_threads: number
-  excluded_count: number
-  excluded_threads: ThreadExclusionReason[]
-  inactive_count: number
-  inactive_threads: ThreadExclusionReason[]
 }
 
 /** Additive rate response: ThreadResponse fields plus roll reconciliation. */

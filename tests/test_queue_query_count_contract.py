@@ -1,15 +1,12 @@
 """Query-count evidence for the bounded Queue response contract."""
 
 from datetime import UTC, datetime
-from inspect import unwrap
-from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from starlette.requests import Request
 
-from app.api.thread import list_threads
+from app.services.thread_service import list_queue_threads
 from app.models import Issue, Thread
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from tests.conftest import get_or_create_user_async
@@ -89,15 +86,6 @@ async def test_queue_query_count_is_constant_for_page_size(
     )
     await async_db.commit()
 
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/api/v1/threads/",
-            "headers": [],
-            "query_string": b"",
-        }
-    )
     select_statements: list[str] = []
 
     def _capture_statement(
@@ -112,13 +100,11 @@ async def test_queue_query_count_is_constant_for_page_size(
         if normalized_statement.startswith("SELECT"):
             select_statements.append(statement)
 
-    route = unwrap(list_threads)
     event.listen(db_engine.sync_engine, "before_cursor_execute", _capture_statement)
     try:
-        response = await route(
-            request=request,
-            current_user=SimpleNamespace(id=user.id),
-            db=async_db,
+        response = await list_queue_threads(
+            async_db,
+            user.id,
             search=None,
             sort="position",
             page_size=thread_count,

@@ -62,16 +62,12 @@ function bootstrapState(
     roll_pool: [],
     snoozed_threads: [],
     snoozed_count: 0,
-    blocked_count: 0,
-    blocked_threads: [],
     skipped_thread_ids: skippedThreadIds,
     skipped_threads: skippedThreadIds.map((id) => ({
       id,
       title: `Series ${id}`,
       format: 'Comic',
     })),
-    stale_thread_count: 0,
-    stale_thread: null,
   }
 }
 

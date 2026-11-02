@@ -201,6 +201,14 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
     ):
         raise RuntimeError('dispatcher authorization failed: mutation blocked for non-dispatcher workflow')
     target = target_json(number)
+    # Shared write choke point: never add, repair, or re-apply factory labels
+    # on a manual-only hold. Leftover factory* labels stay for humans.
+    if is_manual_only(target.get("body")):
+        print(
+            f"[factory-controller] skip factory label write on #{number}: manual-only",
+            file=sys.stderr,
+        )
+        return
     current = [label['name'] for label in target.get('labels', [])]
     
     # Normalize state based on global policy

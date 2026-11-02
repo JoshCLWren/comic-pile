@@ -23,15 +23,11 @@ from app.models.thread import normalize_format_value
 from app.models.recommendation_context import RecommendationContext as RecContextModel
 from app.repositories.roll_repository import (
     clear_session_pending,
-    count_blocked_exclusion_rows,
-    count_inactive_exclusion_rows,
-    fetch_blocked_exclusion_page,
     fetch_bootstrap_blocked_rows,
     fetch_bootstrap_excluded_thread_rows,
     fetch_bootstrap_library_rows,
     fetch_bootstrap_pool_rows,
     fetch_bootstrap_stale_rows,
-    fetch_inactive_exclusion_page,
     fetch_issue_by_id,
     fetch_latest_session_event,
     fetch_pending_thread_id,
@@ -42,7 +38,6 @@ from app.repositories.roll_repository import (
     update_session_pending_thread,
     update_session_skipped,
 )
-from app.services.dependency_service import get_blocking_details
 from app.services.queue_display import display_position
 from app.services.roll_phase_trace import RollPhaseTrace
 from app.services.reading_effort import (
@@ -84,7 +79,6 @@ from comic_pile.recommendation_version import (
 from comic_pile.reading_session import (
     get_current_die_for_session,
     get_or_create,
-    resolve_current_session,
 )
 
 from app.config import get_recommendation_settings
@@ -133,21 +127,6 @@ class BootstrapLibrarySummary:
     excluded: dict[int, ThreadExclusionReason]
     inactive: list[ThreadExclusionReason]
     blocked_ids: list[int]
-
-
-@dataclass(frozen=True)
-class ExclusionPage:
-    """One deterministic page of a Roll exclusion category (issue #3330).
-
-    The Roll bootstrap carries bounded previews, so the page heading needs the
-    category total while the expanded section loads rows on demand. ``total``
-    and ``items`` are produced from the same predicate, so a drill-down page can
-    never contradict the bootstrap count it belongs to.
-    """
-
-    category: Literal["blocked", "inactive"]
-    items: list[ThreadExclusionReason]
-    total: int
 
 
 @dataclass(frozen=True)
@@ -465,121 +444,6 @@ class RollService:
             stale_thread_count=stale_thread_count,
             library=library,
         )
-
-    async def load_exclusion_page(
-        self,
-        *,
-        user_id: int,
-        category: Literal["blocked", "inactive"],
-        limit: int,
-        offset: int,
-    ) -> ExclusionPage:
-        """Load one deterministic page of a Roll exclusion category.
-
-        Issue #3330: the Roll bootstrap intentionally carries bounded previews,
-        but the collapsed headings must report the real category totals and the
-        expanded section must reach every counted series. This method answers
-        both with the same predicate set used by the bootstrap classification,
-        so the count beside a section always equals the number of rows the
-        drill-down exposes.
-
-        Args:
-            user_id: Authenticated owner of the library.
-            category: ``blocked`` (waiting on an earlier issue) or ``inactive``
-                (completed or otherwise out of the active queue).
-            limit: Maximum rows in this page.
-            offset: Rows to skip in the deterministic category order.
-
-        Returns:
-            ExclusionPage with the page rows and the authoritative category total.
-        """
-        eligibility = await get_execution_eligibility(self._db, user_id)
-        eligibility_args = {"eligibility": eligibility} if eligibility is not None else {}
-
-        if category == "blocked":
-            total = await count_blocked_exclusion_rows(
-                self._db, user_id, **eligibility_args
-            )
-            rows = await fetch_blocked_exclusion_page(
-                self._db, user_id, limit=limit, offset=offset, **eligibility_args
-            )
-            blocking_map = await get_blocking_details(
-                [row.id for row in rows], user_id, self._db
-            )
-            items: list[ThreadExclusionReason] = []
-            for row in rows:
-                explanation = blocking_map.get(row.id)
-                reasons = explanation.blocking_reasons if explanation is not None else []
-                dependencies = (
-                    explanation.blocking_dependencies if explanation is not None else []
-                )
-                items.append(
-                    ThreadExclusionReason(
-                        thread_id=row.id,
-                        title=row.title,
-                        format=normalize_format_value(row.format),
-                        reason="blocked",
-                        detail=reasons[0] if reasons else None,
-                        blocking_reasons=reasons,
-                        blocking_dependencies=dependencies,
-                        last_activity_at=(
-                            row.last_activity_at.isoformat()
-                            if row.last_activity_at is not None
-                            else None
-                        ),
-                    )
-                )
-            return ExclusionPage(category=category, items=items, total=total)
-
-        # The drill-down must classify rows exactly like the bootstrap did, so it
-        # resolves the same current reading session the bootstrap resolves
-        # (`get_or_create` prefers a recent session that still has pending
-        # reading work over the newest unended one). Reading the newest
-        # unended session instead could disagree with the bootstrap about
-        # which series are skipped or snoozed, and a series the bootstrap
-        # classified as skipped would then appear here as inactive (#3330).
-        session = await resolve_current_session(self._db, user_id)
-        snoozed_ids = set(session.snoozed_thread_ids or []) if session is not None else set()
-        skipped_ids = set(session.skipped_thread_ids or []) if session is not None else set()
-        # The bootstrap derives cross-session backoff exclusions whether or not a
-        # session row exists, so the drill-down derives them the same way.
-        derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(self._db, user_id)
-        session_excluded_ids = sorted(snoozed_ids | derived_snoozed_ids | skipped_ids)
-
-        total = await count_inactive_exclusion_rows(
-            self._db,
-            user_id,
-            session_excluded_ids=session_excluded_ids,
-            **eligibility_args,
-        )
-        rows = await fetch_inactive_exclusion_page(
-            self._db,
-            user_id,
-            limit=limit,
-            offset=offset,
-            session_excluded_ids=session_excluded_ids,
-            **eligibility_args,
-        )
-        inactive_items = [
-            ThreadExclusionReason(
-                thread_id=row.id,
-                title=row.title,
-                format=normalize_format_value(row.format),
-                reason="completed" if row.status == "completed" else "not_in_queue",
-                detail=(
-                    "Read the full series"
-                    if row.status == "completed"
-                    else "Not in the active queue"
-                ),
-                last_activity_at=(
-                    row.last_activity_at.isoformat()
-                    if row.last_activity_at is not None
-                    else None
-                ),
-            )
-            for row in rows
-        ]
-        return ExclusionPage(category=category, items=inactive_items, total=total)
 
     async def select_pending_thread(
         self,

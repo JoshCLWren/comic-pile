@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from httpx import AsyncClient
 from app.auth import hash_password
 from app.models import Thread, User
+from app.services.thread_service import list_queue_threads
 
 PASSWORD_HASH = hash_password("password")
 
@@ -70,40 +71,26 @@ async def user_b_thread(async_db: AsyncSession, user_b: User) -> Thread:
 
 @pytest.mark.asyncio
 async def test_thread_scoped_by_user_on_list(
-    client: AsyncClient, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread
+    async_db: AsyncSession,
+    user_a: User,
+    user_b: User,
+    user_a_thread: Thread,
+    user_b_thread: Thread,
 ) -> None:
-    """Test list threads only returns threads for authenticated user."""
-    _ = user_a
-    _ = user_b
+    """The Queue collection only returns the requesting reader's threads."""
     _ = user_a_thread
     _ = user_b_thread
-    login_a = await client.post(
-        "/api/v1/auth/login", json={"username": "test_user_a", "password": "password"}
+    page_a = await list_queue_threads(
+        async_db, user_a.id, search=None, sort="position", page_size=50, page_token=None
     )
-    assert login_a.status_code == 200
-    token_a = login_a.json()["access_token"]
+    assert len(page_a.threads) == 1
+    assert page_a.threads[0].title == "User A Thread"
 
-    response = await client.get("/api/v1/threads/", headers={"Authorization": f"Bearer {token_a}"})
-    assert response.status_code == 200
-    data = response.json()
-    assert "threads" in data
-    threads = data["threads"]
-    assert len(threads) == 1
-    assert threads[0]["title"] == "User A Thread"
-
-    login_b = await client.post(
-        "/api/v1/auth/login", json={"username": "test_user_b", "password": "password"}
+    page_b = await list_queue_threads(
+        async_db, user_b.id, search=None, sort="position", page_size=50, page_token=None
     )
-    assert login_b.status_code == 200
-    token_b = login_b.json()["access_token"]
-
-    response = await client.get("/api/v1/threads/", headers={"Authorization": f"Bearer {token_b}"})
-    assert response.status_code == 200
-    data = response.json()
-    assert "threads" in data
-    threads = data["threads"]
-    assert len(threads) == 1
-    assert threads[0]["title"] == "User B Thread"
+    assert len(page_b.threads) == 1
+    assert page_b.threads[0].title == "User B Thread"
 
 
 @pytest.mark.asyncio

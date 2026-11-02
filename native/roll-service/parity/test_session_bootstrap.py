@@ -163,6 +163,17 @@ async def test_session_bootstrap_parity(scenario):
                 return normalize(result)
 
         initial = await durable()
+        # The public GET is read-only even with no active session, stale pointers,
+        # and a fresh/expired session. Mutating legacy Python parity is checked
+        # separately against the explicit Rust initialize command below.
+        code, pure, err = await native()
+        if scenario in {"first", "expired", "inferred-history", "era-history"}:
+            assert code != 0 and b"No active session" in err
+        else:
+            assert code == 0, err.decode()
+            assert pure["session"]["user_id"] == reader_id
+            assert pure["created"] is False
+        assert await durable() == initial
         code, _, err = await native(RUST_ROLL_TEST_RESOLVE_ONLY="1")
         assert code == 0, err.decode()
         assert await durable() == initial  # read-only resolution never creates state
@@ -191,7 +202,7 @@ async def test_session_bootstrap_parity(scenario):
         # Sequence values are not transactional. Reset to the fixture's last identity.
         async with engine.begin() as c:
             await c.execute(text("SELECT setval(pg_get_serial_sequence('sessions','id'), (SELECT max(id) FROM sessions))"))
-        code, actual, err = await native()
+        code, actual, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
         assert code == 0, err.decode()
         assert normalize(actual["session"]) == normalize(expected)
         assert actual["current_die"] == current_die
@@ -202,9 +213,15 @@ async def test_session_bootstrap_parity(scenario):
                                           "snapshot_kind": x.snapshot_kind, "schema_version": x.schema_version}) for x in checkpoints]
         assert actual_snapshots == expected_snapshots
         after = await durable()
+        # A completed initialization makes the GET usable without any further writes.
+        code, projection, err = await native()
+        assert code == 0, err.decode()
+        assert projection["session"]["id"] == actual["session"]["id"]
+        assert projection["created"] is False
+        assert await durable() == after
         for table in ("threads", "issues", "events"):
             assert after[table] == initial[table]
-        code, again, err = await native()
+        code, again, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
         assert code == 0, err.decode()
         assert not again["created"]
         assert again["session"] == actual["session"]
@@ -216,14 +233,14 @@ async def test_session_bootstrap_parity(scenario):
             assert b"404 Not Found Session not found" in err
         assert await durable() == after
         # Concurrent GETs serialize and return the same authoritative session.
-        results = await asyncio.gather(*(native() for _ in range(5)))
+        results = await asyncio.gather(*(native(RUST_ROLL_TEST_INITIALIZE="1") for _ in range(5)))
         assert all(code == 0 and result["session"] == actual["session"] for code, result, _ in results)
         assert await durable() == after
         if scenario == "first":
             # Fresh first-session concurrency, rather than only concurrent reuse.
             async with engine.begin() as c:
                 await c.execute(text("DELETE FROM sessions WHERE user_id=:reader"), {"reader": reader_id})
-            results = await asyncio.gather(*(native() for _ in range(5)))
+            results = await asyncio.gather(*(native(RUST_ROLL_TEST_INITIALIZE="1") for _ in range(5)))
             assert all(code == 0 for code, _, _ in results)
             assert len({result["session"]["id"] for _, result, _ in results}) == 1
             assert sum(result["created"] for _, result, _ in results) == 1
@@ -234,7 +251,7 @@ async def test_session_bootstrap_parity(scenario):
                     BEGIN RAISE EXCEPTION 'synthetic checkpoint failure'; END $$"""))
                 await c.execute(text("CREATE TRIGGER fail_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION fail_checkpoint()"))
             before_failure = await durable()
-            code, _, err = await native()
+            code, _, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
             assert code != 0 and b"500 Internal Server Error" in err
             assert await durable() == before_failure
             async with engine.begin() as c:
@@ -294,7 +311,7 @@ async def test_session_bootstrap_parity(scenario):
                       RETURN NEW;
                     END $$"""))
                 await c.execute(text("CREATE TRIGGER retry_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION retry_checkpoint()"))
-            code, recovered, err = await native()
+            code, recovered, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
             assert code == 0 and recovered["created"], err.decode()
             async with engine.connect() as c:
                 assert await c.scalar(text("SELECT last_value FROM checkpoint_attempt")) == 2
@@ -438,4 +455,107 @@ async def test_corrupt_session_json_recovers_in_place_and_keeps_pending_roll():
         await engine.dispose()
         async with admin.begin() as c:
             await c.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        await admin.dispose()
+
+
+@pytest.mark.asyncio
+async def test_read_only_get_projects_foreign_pending_issue_without_persisting_repair():
+    """GET masks a foreign/mismatched pending issue; POST later repairs durable state."""
+    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
+    schema = f"native_read_only_{uuid4().hex}"
+    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    async with admin.begin() as connection:
+        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+    engine = create_async_engine(
+        url.replace("postgresql://", "postgresql+asyncpg://"),
+        connect_args={"server_settings": {"search_path": schema}},
+    )
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username="readonly-owner")
+            other = User(username="readonly-other")
+            db.add_all([owner, other])
+            await db.flush()
+            owned = Thread(user_id=owner.id, title="Owned", format="Comic", queue_position=1)
+            foreign = Thread(user_id=other.id, title="Foreign", format="Comic", queue_position=1)
+            db.add_all([owned, foreign])
+            await db.flush()
+            foreign_issue = Issue(thread_id=foreign.id, issue_number="1", position=1)
+            db.add(foreign_issue)
+            await db.flush()
+            session = ReadingSession(
+                user_id=owner.id,
+                started_at=NOW - timedelta(minutes=5),
+                pending_thread_id=owned.id,
+                pending_issue_id=foreign_issue.id,
+                pending_thread_updated_at=NOW,
+            )
+            db.add(session)
+            await db.flush()
+            session_id = session.id
+            thread_id = owned.id
+            foreign_issue_id = foreign_issue.id
+            await db.commit()
+
+        separator = "&" if "?" in url else "?"
+        env = {
+            **os.environ,
+            "RUST_ROLL_DATABASE_URL": (
+                f"{url}{separator}application_name={schema}&options=-csearch_path%3D{schema}"
+            ),
+            "RUST_ROLL_JWT_SECRET": SECRET,
+            "RUST_ROLL_TEST_TOKEN": jwt.encode(
+                {"sub": "readonly-owner", "jti": "fixture", "type": "access"},
+                SECRET, "HS256",
+            ),
+            "RUST_ROLL_TEST_NOW": str(NOW.timestamp()),
+        }
+
+        async def native(*, initialize=False):
+            process = await asyncio.create_subprocess_exec(
+                str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
+                env={**env, **({"RUST_ROLL_TEST_INITIALIZE": "1"} if initialize else {})},
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            output, error = await asyncio.wait_for(process.communicate(), 20)
+            return process.returncode, json.loads(output) if output else None, error
+
+        async def durable():
+            async with engine.connect() as connection:
+                state = {}
+                for table in ("sessions", "snapshots", "events"):
+                    result = await connection.scalars(
+                        text(f"SELECT row_to_json(t)::text FROM {table} t ORDER BY id")
+                    )
+                    state[table] = [json.loads(row) for row in result]
+                return state
+
+        before = await durable()
+        assert before["sessions"][0]["pending_issue_id"] == foreign_issue_id
+        code, projection, err = await native()
+        assert code == 0, err.decode()
+        assert projection["session"]["id"] == session_id
+        assert projection["session"]["pending_thread_id"] == thread_id
+        assert projection["session"]["pending_issue_id"] is None
+        assert await durable() == before
+
+        code, initialized, err = await native(initialize=True)
+        assert code == 0, err.decode()
+        assert initialized["session"]["id"] == session_id
+        assert initialized["session"]["pending_issue_id"] is None
+        after = await durable()
+        assert after["sessions"][0]["pending_issue_id"] is None
+        assert len(after["sessions"]) == 1
+        assert after["snapshots"] == before["snapshots"]
+        code, again, err = await native()
+        assert code == 0, err.decode()
+        assert again["session"]["pending_issue_id"] is None
+        assert await durable() == after
+    finally:
+        await engine.dispose()
+        async with admin.begin() as connection:
+            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         await admin.dispose()

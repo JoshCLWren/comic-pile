@@ -81,10 +81,14 @@ fn validate_key(key: &str) -> Result<(), ApiError> {
     }
 }
 
-fn empty_pool() -> ApiError {
+fn empty_pool(has_candidates: bool) -> ApiError {
     ApiError(
         StatusCode::BAD_REQUEST,
-        "No eligible comics to roll. Add comics or reset temporary snoozes.".to_string(),
+        if has_candidates {
+            "No other eligible comics remain. Reset Dice to clear temporary snoozes, or wait until tomorrow."
+        } else {
+            "No eligible comics to roll. Add comics or resolve reading constraints."
+        }.to_string(),
     )
 }
 
@@ -403,7 +407,7 @@ pub async fn offer(
     let pool = offer_frontiers(&candidates, &excluded, die);
     if pool.is_empty() {
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(empty_pool());
+        return Err(empty_pool(!candidates.is_empty()));
     }
     let index = rand::rng().random_range(0..pool.len());
     let selected = pool[index];
@@ -476,13 +480,22 @@ mod tests {
     }
 
     #[test]
-    fn bounded_pool_never_backfills_a_snoozed_candidate() {
+    fn exhaustion_is_distinct_from_having_no_eligible_comics() {
+        assert!(empty_pool(true)
+            .1
+            .starts_with("No other eligible comics remain."));
+        assert!(empty_pool(false)
+            .1
+            .starts_with("No eligible comics to roll."));
+    }
+
+    #[test]
+    fn bounded_pool_backfills_after_snoozing() {
         let candidates: Vec<_> = (1..=4).map(frontier).collect();
         let excluded = HashSet::from([2, 3]);
         let pool = offer_frontiers(&candidates, &excluded, 2);
-        // #2 is inside the d2 scope; removing it shrinks the pool to one choice
-        // instead of pulling #3 up from outside the scope.
-        assert_eq!(ids(&pool), vec![1]);
+        // Snoozes leave the eligible queue before taking the d2 window.
+        assert_eq!(ids(&pool), vec![1, 4]);
 
         let excluded = HashSet::from([3]);
         let pool = offer_frontiers(&candidates, &excluded, 4);
@@ -539,6 +552,8 @@ mod tests {
                     .method("POST")
                     .uri("/api/v2/roll/offer")
                     .header("content-type", "application/json")
+                    .header("cookie", "csrf_token=synthetic-test-csrf")
+                    .header("x-csrf-token", "synthetic-test-csrf")
                     .body(Body::from(r#"{"idempotency_key":"roll-offer-0123456789"}"#))
                     .unwrap(),
             )

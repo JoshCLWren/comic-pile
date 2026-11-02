@@ -99,3 +99,11 @@
 **Expected:** One canonical prerequisite is described once; distinct prerequisites remain separately visible. Story-arc copy has proper spacing and singular/plural grammar. Back to Roll, View Queue and Cancel Roll each describe and perform their actual action without silently discarding a pending choice.
 
 **Tracking:** Owner-approved Roll behavior [#3559](https://github.com/JoshCLWren/comic-pile/issues/3559); QA regressions [#3761](https://github.com/JoshCLWren/comic-pile/issues/3761) and [#3893](https://github.com/JoshCLWren/comic-pile/issues/3893). Historical closed QA issues are evidence, not proof of a passing current implementation.
+
+## MQA-ROLL-010: Daily reroll snoozes backfill the die
+
+**Setup:** More than twenty eligible QA series; use d20.
+
+**Test:** Choose Roll again repeatedly, inspect the pool, then reload. Continue until no alternative remains. Choose Reset Dice from the exhaustion message and confirm the reset.
+
+**Expected:** Snoozed series leave the current pool before the die limit is applied; later eligible series fill the open faces. The same browser keeps temporary snoozes through reload until local midnight. Exhaustion shows a message and an explicit reset action; it never automatically restores snoozed comics. An exhausted reroll preserves the final pending offer for rating or cancellation rather than committing half a reroll. Explicit Reset Dice clears browser snoozes and restores eligible faces. Browser hints never override owner-scoped reading constraints. The existing transport accepts at most 200 temporary snoozes.

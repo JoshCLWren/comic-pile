@@ -13,6 +13,9 @@ import {
 import { rollApi } from '../services/api-roll'
 import type { OverrideRollPayload } from '../types'
 import { cast } from '../utils/cast'
+import { invalidateAfterRollDieModeUpdate } from '../query/cacheEffects'
+
+vi.mock('../query/cacheEffects', () => ({ invalidateAfterRollDieModeUpdate: vi.fn().mockResolvedValue(undefined) }))
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -92,7 +95,9 @@ it('calls clear manual die mutation', async () => {
   expect(mockedRollApi.clearManualDie).toHaveBeenCalled()
 })
 
-it('calls reroll mutation', async () => {
+it('refreshes the die and eligible pool after reroll has updated browser snoozes', async () => {
+  vi.mocked(invalidateAfterRollDieModeUpdate).mockClear()
   await setupMutation(useReroll, undefined)
   expect(mockedRollApi.reroll).toHaveBeenCalled()
+  expect(invalidateAfterRollDieModeUpdate).toHaveBeenCalledTimes(1)
 })

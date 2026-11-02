@@ -57,11 +57,15 @@ hand-authored release comment is ever required.
 
 ## Manual-only directive contract
 
-Autonomous execution is excluded **only** by a standalone HTML-comment
-directive on its own line, outside fenced code blocks and inline code spans:
+Autonomous execution is excluded by either of these standalone lines, outside
+fenced code blocks and inline code spans:
 
 ```html
 <!-- factory-execution:manual-only -->
+```
+
+```text
+manual-only
 ```
 
 Raw substring matching is not the contract. Merely discussing the marker in
@@ -69,7 +73,7 @@ prose, or quoting it in code (backticks, fenced blocks), never excludes an
 issue — that brittleness caused the Factory-41 misread on #3039, where
 release-note prose mentioning the marker was mistaken for the directive. To
 mention the marker without triggering exclusion, wrap it in code spans or
-omit the `<!-- -->` delimiters.
+place it inside a sentence.
 
 One deliberate exception: `factory_post_merge_closure.py` keeps the broader
 substring guard. That path decides whether merge automation may *close* an

@@ -95,6 +95,8 @@ class FactoryIssuePrStatePolicyTests(unittest.TestCase):
                 "To opt out, use `<!-- factory-execution:manual-only -->`."
             )
         )
+        self.assertTrue(body_blocks_reconciliation("Hold this factory PR.\nmanual-only\n"))
+        self.assertFalse(body_blocks_reconciliation("Discussing a manual-only hold in prose.\n"))
 
 
 if __name__ == "__main__":

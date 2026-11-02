@@ -188,6 +188,35 @@ class TestAuth:
         assert new_tokens["refresh_token"] != tokens["refresh_token"]
 
     @pytest.mark.asyncio
+    async def test_refresh_token_rotation_rejects_replay(
+        self, client: AsyncClient, async_db: AsyncSession
+    ) -> None:
+        """A rotated refresh token cannot be replayed to mint another session."""
+        user_data = {
+            "username": "refreshreplay",
+            "email": "refreshreplay@example.com",
+            "password": "password123",
+        }
+        assert (await client.post("/api/v1/auth/register", json=user_data)).status_code == 200
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"username": "refreshreplay", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+        refresh_token = login_response.json()["refresh_token"]
+
+        first = await client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
+        )
+        assert first.status_code == 200
+
+        replay = await client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
+        )
+        assert replay.status_code == 401
+        assert replay.json()["detail"] == "Refresh token has been revoked"
+
+    @pytest.mark.asyncio
     async def test_login_sets_refresh_cookie(
         self, client: AsyncClient, async_db: AsyncSession
     ) -> None:
@@ -207,6 +236,7 @@ class TestAuth:
         set_cookie = login_response.headers.get("set-cookie", "")
         assert "refresh_token=" in set_cookie
         assert "HttpOnly" in set_cookie
+        assert "Path=/api" in set_cookie
 
     @pytest.mark.asyncio
     async def test_refresh_token_success_with_cookie(
