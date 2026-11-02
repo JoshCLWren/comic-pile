@@ -347,6 +347,11 @@ Rules:
   existing owner/stage, defaults missing ownership to `factory:unowned`, and uses
   exact-head trusted review markers when recovering a missing stage; otherwise
   it requests `factory:review`. Green CI alone never establishes readiness.
+  A stage rewrite derived from trusted PR history never replaces an active owner
+  lease: the sweep preserves `factory:local` while its shared local-lease TTL is
+  fresh or its activity is unknown, and it treats numbered owners as
+  controller-owned because only the controller resolves active fixed-worker/run
+  evidence. A release is always followed by the same atomic full-set replacement.
 - A contributor PR, Josh-authored manual PR, or local factory PR follows the same review,
   repair handoff, exact-head CI, and merge-drain stages. Branches named
   `local/*`, `agent/*`, and `chatgpt/*` are eligible when enrolled with

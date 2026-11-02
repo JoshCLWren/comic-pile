@@ -175,7 +175,7 @@ jobs:
           }
 
           reconcile_issue() {
-            local issue="$1" pulls records stage labels blocked body_file
+            local issue="$1" pulls records stage labels blocked body_file lease_file lease_action
             # Claim policy already treats BLOCKED_LABELS (including
             # ralph-status:blocked) as non-executable. Skip before any
             # trusted-history walk so replace_issue_state never rewrites
@@ -230,6 +230,21 @@ jobs:
 
             stage="$(python3 .github/scripts/factory_issue_pr_state_policy.py \
               --records-json "$records")"
+            # A historical PR sweep is not a lease reaper. Re-read the live issue
+            # and preserve an active factory:local or numbered owner: replacing
+            # the label set here would strip factory:building and
+            # ralph-status:in-progress from an actively worked issue. Only a
+            # provably stale local lease falls through; numbered leases belong
+            # to the controller, which alone has active-run evidence.
+            lease_file="$(mktemp)"
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${issue}" >"$lease_file"
+            lease_action="$(python3 .github/scripts/factory_issue_pr_state_policy.py \
+              --lease-action-issue-file "$lease_file")"
+            rm -f "$lease_file"
+            if [[ "$lease_action" != "reconcile" ]]; then
+              echo "Issue #${issue}: skipped (${lease_action})"
+              return 0
+            fi
             replace_issue_state "$issue" "$stage"
           }
 
