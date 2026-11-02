@@ -219,7 +219,7 @@ export default function QueueBulkMapSeriesDialog({
     // drops the loaded pages, and re-draining would reopen the preparing dialog
     // beneath the mapping or results dialog after every saved series.
     onBatchCaptured?.()
-}, [isOpen, isScopeLoading, phase, resumeAtFirstPending, onBatchCaptured])
+  }, [isOpen, isScopeLoading, phase, resumeAtFirstPending, onBatchCaptured])
 
   const currentItem = batch[currentIndex]
 
