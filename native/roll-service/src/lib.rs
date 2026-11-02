@@ -222,6 +222,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(auth::handlers::reset_password),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
+        .route(
+            "/api/v2/reading-sessions",
+            post(bootstrap::initialize_session),
+        )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
         .route("/api/v2/roll/reset", post(roll_reset::reset))

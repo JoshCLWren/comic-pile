@@ -134,6 +134,7 @@ fn app() -> Router {
     Router::new()
         .route("/api/_native_roll/health", get(native_health))
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
+        .route("/api/v2/reading-sessions", post(native_dispatch))
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))

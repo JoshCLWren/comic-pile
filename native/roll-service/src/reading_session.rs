@@ -316,6 +316,135 @@ fn session_error(error: tokio_postgres::Error) -> ApiError {
 async fn bootstrap_once(
     state: &AppState,
     user: AuthenticatedUser,
+    _timezone: Option<&str>,
+    policy: SessionPolicy,
+    now: f64,
+) -> Result<SessionBootstrap, ApiError> {
+    SessionPolicy::new(policy.gap_hours, policy.start_die).map_err(|_| corrupt())?;
+    if !now.is_finite() {
+        return Err(corrupt());
+    }
+    let mut pending = Pending(Some(db::checkout(state).await?));
+    let result = tokio::time::timeout(state.request_timeout, async {
+        let tx = pending
+            .0
+            .as_mut()
+            .unwrap()
+            .build_transaction()
+            .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+            .read_only(true)
+            .start()
+            .await
+            .map_err(session_error)?;
+        tx.batch_execute("SET LOCAL TIME ZONE 'UTC'")
+            .await
+            .map_err(session_error)?;
+        if tx
+            .query_opt("SELECT id FROM users WHERE id = $1", &[&user.id()])
+            .await
+            .map_err(session_error)?
+            .is_none()
+        {
+            return Err(ApiError(
+                StatusCode::UNAUTHORIZED,
+                "Could not validate credentials".to_string(),
+            ));
+        }
+        let existing = resolve_current_session(&tx, user, now, policy).await?;
+        let mut session = match existing {
+            Some(s) => s,
+            None => {
+                return Err(ApiError(
+                    StatusCode::NOT_FOUND,
+                    "No active session".to_string(),
+                ))
+            }
+        };
+        // Pending selection is disposable UI state. Return a nulled projection for
+        // stale pointers without persisting any repair; write paths repair on offer/reset/dismiss.
+        let (thread_valid, issue_valid) = pending_validity(
+            &tx,
+            user,
+            session.pending_thread_id,
+            session.pending_issue_id,
+        )
+        .await?;
+        if !thread_valid {
+            session.pending_thread_id = None;
+            session.pending_issue_id = None;
+            session.pending_thread_updated_at = None;
+        } else if !issue_valid {
+            session.pending_issue_id = None;
+        }
+        // Read-only bootstrap: do not infer bandwidth, checkpoint, or persist timezone.
+        // Timezone is returned as stored; client preference is not persisted on GET.
+        let (current_die, automatic_die) = dice(&tx, &session).await?;
+        // Rollback to guarantee zero writes for the GET path.
+        tx.rollback().await.map_err(session_error)?;
+        Ok(SessionBootstrap {
+            session,
+            current_die,
+            automatic_die,
+            created: false,
+        })
+    })
+    .await;
+    match result {
+        Err(_) => Err(ApiError(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Database temporarily unavailable".to_string(),
+        )),
+        Ok(result) => {
+            if result.is_ok() {
+                drop(pending.0.take());
+            }
+            result
+        }
+    }
+}
+
+/// Bootstrap with a real clock. Caller must pass the same policy as the Python backend.
+pub async fn initialize(
+    state: &AppState,
+    user: AuthenticatedUser,
+    timezone: Option<&str>,
+    policy: SessionPolicy,
+) -> Result<SessionBootstrap, ApiError> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| corrupt())?
+        .as_secs_f64();
+    initialize_at(state, user, timezone, policy, now).await
+}
+
+/// Bounded, cancellation-safe transactional entry point with deterministic clock for parity.
+/// This explicit write command initializes sessions; GET remains pure read-only.
+pub async fn initialize_at(
+    state: &AppState,
+    user: AuthenticatedUser,
+    timezone: Option<&str>,
+    policy: SessionPolicy,
+    now: f64,
+) -> Result<SessionBootstrap, ApiError> {
+    tokio::time::timeout(state.request_timeout, async {
+        for attempt in 0..3 {
+            let result = initialize_once(state, user, timezone, policy, now).await;
+            if !matches!(&result, Err(e) if e.1 == "Reading session deadlock") || attempt == 2 {
+                return result;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100 << attempt)).await;
+        }
+        unreachable!()
+    })
+    .await
+    .unwrap_or(Err(ApiError(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Database temporarily unavailable".to_string(),
+    )))
+}
+async fn initialize_once(
+    state: &AppState,
+    user: AuthenticatedUser,
     timezone: Option<&str>,
     policy: SessionPolicy,
     now: f64,
@@ -521,6 +650,8 @@ async fn pending_validity(
 }
 
 // PostgreSQL JSON timestamps omit trailing zeroes; checkpoints use Python isoformat.
+
+// PostgreSQL JSON timestamps omit trailing zeroes; checkpoints use Python isoformat.
 fn python_timestamp(value: &mut Value) {
     if let Some(s) = value.as_str() {
         if let Some((head, offset)) = s.rsplit_once('+') {
@@ -639,6 +770,7 @@ async fn checkpoint(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     #[test]
     fn timezone_validation_and_manual_ladder() {
         assert_eq!(

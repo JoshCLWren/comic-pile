@@ -75,6 +75,8 @@ export interface RollV2Item {
 
 /** Nullable session-scoped last-read object shared with rate responses. */
 export interface RollV2LastRead {
+  /** Stored provider-hosted cover URL, available even after a cold navigation. */
+  cover_url?: string | null
   issue_id?: number | null
   issue_number?: string | null
   thread_id?: number | null

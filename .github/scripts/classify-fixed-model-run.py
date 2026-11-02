@@ -38,7 +38,8 @@ TARGET_RE = re.compile(r"checked out (?P<kind>issue|pr) #(?P<number>\d+) on ")
 # not clear within minutes, so it gets its own class (and a quota pause).
 QUOTA_RE = re.compile(
     r"budget[ _]exhausted|payment required|(?:http(?: status)?|status(?: code)?)[ :]+402\b|"
-    r"(?:monthly|daily|weekly) usage limit|reached your [a-z ]*usage limit|"
+    r"(?:monthly|daily|weekly|free) usage limit(?: reached)?|"
+    r"reached your [a-z ]*usage limit|"
     r"insufficient[ _](?:credits|balance|quota)|exceeded your current quota|"
     r"quota[ _](?:exceeded|exhausted)",
     re.I,
@@ -432,6 +433,25 @@ class ClassifierTests(unittest.TestCase):
             + "usage limit, upgrade for higher limits (HTTP 429)\n"
         )
         self.assertEqual(result.outcome_class, "provider_quota")
+
+    def test_opencode_free_usage_limit_is_provider_quota(self) -> None:
+        """An exhausted OpenCode free tier is quota, not a transient model failure."""
+        lock = (
+            "Factory 58 locked: source=opencode-free model=flint-40b-free "
+            "runtime=opencode/flint-40b-free minute=:40 scheduler=dispatcher configured=true\n"
+        )
+        result = classify(
+            lock
+            + "Smoke exact pinned model through OpenCode\n"
+            + "Error: Free usage limit reached. Connect a provider or subscribe "
+            + "to OpenCode Go to keep going, or switch models.\n"
+            + "##[error]Process completed with exit code 1.\n"
+        )
+        self.assertEqual(result.outcome, "PROVIDER QUOTA")
+        self.assertEqual(result.outcome_class, "provider_quota")
+        self.assertFalse(result.exact_model_proven)
+        self.assertFalse(result.persisted_work)
+        self.assert_canonical(result)
 
     def test_tpm_413_is_provider_throttle(self) -> None:
         """HTTP 413 TPM / request-too-large maps to provider_throttle."""

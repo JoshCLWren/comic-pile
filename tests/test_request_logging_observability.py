@@ -102,6 +102,39 @@ def _build_diagnostic_record() -> logging.LogRecord:
     return record
 
 
+@pytest.mark.parametrize(
+    "parameter",
+    ("api_key", "access_token", "refresh_token", "client_secret", "password"),
+)
+def test_provider_httpx_log_redacts_query_credentials(parameter: str) -> None:
+    """Transport logs must not print provider credentials on platform handlers."""
+    credential = "fake-example-secret-123"
+    record = logging.LogRecord(
+        name="httpx",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg=(
+            'HTTP Request: GET "https://comicvine.gamespot.com/api/search/'
+            f'?{parameter}={credential}&format=json" "HTTP/1.1 200 OK"'
+        ),
+        args=(),
+        exc_info=None,
+    )
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
+    handler.addFilter(_DiagnosticFieldsFilter())
+    assert handler.filter(record)
+    rendered = handler.format(record)
+    assert credential not in rendered
+    assert f"{parameter}=[REDACTED]" in rendered
+    assert "format=json" in rendered
+    assert "HTTP Request: GET" in rendered
+    # Repeated handlers must not restore raw values or duplicate diagnostics.
+    assert handler.filter(record)
+    assert credential not in handler.format(record)
+
+
 def test_configure_logging_prints_diagnostic_fields(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

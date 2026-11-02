@@ -633,6 +633,37 @@ def test_transport_timeout_scales_connect_budget_with_configured_timeout(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("endpoint", "expected_path"),
+    (
+        ("search", "/api/search/"),
+        ("issues", "/api/issues/"),
+        ("issue/4000-7", "/api/issue/4000-7"),
+    ),
+)
+async def test_async_provider_uses_canonical_endpoint_without_redirect(
+    tmp_path: Path, endpoint: str, expected_path: str
+) -> None:
+    """Every collection request starts at the provider canonical URL."""
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(200, json={"status_code": 1, "results": {}})
+
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("fake-key", tmp_path, http_client=http_client)
+    try:
+        await client._request_async(endpoint, {})
+    finally:
+        await http_client.aclose()
+
+    assert len(captured) == 1
+    assert captured[0].url.path == expected_path
+    assert captured[0].url.params["api_key"] == "fake-key"
+
+
+@pytest.mark.asyncio
 async def test_request_async_uses_injected_client_and_decodes_payload(tmp_path: Path) -> None:
     """The injected transport sends the provider contract and decodes the payload."""
     sent: list[httpx.Request] = []

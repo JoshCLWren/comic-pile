@@ -501,6 +501,13 @@ class ComicVineClient:
         """
         return httpx.Timeout(self.timeout_seconds, connect=self.timeout_seconds * 0.3)
 
+    def _provider_url(self, endpoint: str) -> str:
+        """Use canonical collection URLs to avoid credential-bearing 301 redirects."""
+        path = endpoint.lstrip("/")
+        if path in {"issues", "search"}:
+            path += "/"
+        return f"{self.base_url}/{path}"
+
     async def _request_async(
         self, endpoint: str, params: Mapping[str, ComicVineQueryValue]
     ) -> dict[str, object]:
@@ -529,7 +536,7 @@ class ComicVineClient:
             "api_key": self.api_key,
             "format": "json",
         }
-        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        url = self._provider_url(endpoint)
 
         try:
             response = await self._http_client.get(
@@ -572,7 +579,7 @@ class ComicVineClient:
             "api_key": self.api_key,
             "format": "json",
         }
-        url = f"{self.base_url}/{endpoint.lstrip('/')}?{urllib.parse.urlencode(query)}"
+        url = f"{self._provider_url(endpoint)}?{urllib.parse.urlencode(query)}"
         request = urllib.request.Request(url, headers={"User-Agent": "ComicPile/1.0"})
         try:
             with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:

@@ -148,6 +148,8 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         assert body["active_thread"]["id"] == t.id
         assert body["active_thread"]["tags"][0]["name"] == "Favorites"
         assert body["last_rolled_result"] == 3
+        # Last Read must carry persisted cover metadata on a cold bootstrap.
+        assert body["last_read"]["cover_url"] == "https://example.com/cover.jpg"
         assert body["timezone"] == "America/Chicago"
         # The in-play pool is the Option E top-die set. Legacy session snoozes
         # and skips stay in their own display categories and cannot hide a
