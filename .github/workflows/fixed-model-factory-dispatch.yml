@@ -447,7 +447,7 @@ jobs:
       - name: Preserve Jev selection decision for later evaluation
         if: always() && hashFiles('.github/scripts/factory_jev_shadow.py') != ''
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jev-shadow-${{ github.run_id }}
           path: ${{ runner.temp }}/jev-shadow.json
