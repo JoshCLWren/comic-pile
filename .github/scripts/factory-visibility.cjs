@@ -493,7 +493,7 @@ async function greptileReviewThreads(github, context, number, { pageLimit = REVI
           && !thread.comments.some(comment => (
             isGreptileLogin(comment?.author?.login)
             || isCodeRabbitLogin(comment?.author?.login)
-          )) {
+          ))) {
         const all = await fullThreadComments(github, context, node.id);
         if (all) thread.comments = all;
       }
