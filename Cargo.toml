@@ -6,6 +6,7 @@ rust-version = "1.88"
 publish = false
 
 [dependencies]
+http-body = "1"
 axum = "0.8"
 comicpile-roll-service = { path = "native/roll-service" }
 serde_json = "1"

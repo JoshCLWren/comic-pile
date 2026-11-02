@@ -25,8 +25,8 @@ LIB_SOURCE = SERVICE_SOURCE / "lib.rs"
 BASELINE = REPOSITORY_ROOT / "tests" / "native_roll_write_test_baseline.json"
 
 WRITE_ROUTE_RE = re.compile(
-    r'\.route\(\s*"[^"]+"\s*,\s*(?:post|patch|put|delete)\(\s*(?P<module>[a-z_0-9]+)::'
-    r'(?P<handler>[a-z_0-9]+)\s*\)\s*,?\s*\)',
+    r'\.route\(\s*"[^"]+"\s*,\s*(?:post|patch|put|delete)\(\s*'
+    r'(?P<path>(?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)\s*,?\s*\)',
     re.DOTALL,
 )
 DB_TEST_MARKER = "RUST_ROLL_TEST_DATABASE_URL"
@@ -64,10 +64,11 @@ def _route_matches() -> list[tuple[str, str]]:
     Returns:
         Module/handler pairs in router order, including aliases.
     """
-    return [
-        (match.group("module"), match.group("handler"))
-        for match in WRITE_ROUTE_RE.finditer(_lib_source())
-    ]
+    matches: list[tuple[str, str]] = []
+    for match in WRITE_ROUTE_RE.finditer(_lib_source()):
+        module, _, handler = match.group("path").rpartition("::")
+        matches.append((module, handler))
+    return matches
 
 
 def _mounted_post_routes() -> set[tuple[str, str]]:
@@ -88,7 +89,7 @@ def _test_module(module: str) -> str:
     Returns:
         Test-module source, or an empty string when the module has no tests.
     """
-    source = (SERVICE_SOURCE / f"{module}.rs").read_text(encoding="utf-8")
+    source = (SERVICE_SOURCE / f"{module.replace('::', '/')}.rs").read_text(encoding="utf-8")
     marker = "#[cfg(test)]"
     if marker not in source:
         return ""
@@ -113,7 +114,7 @@ def _tests_write_path(module: str, handler: str) -> bool:
     delegate = DELEGATED_WRITE_TESTS.get((module, handler))
     if delegate is not None:
         writer_module, writer = delegate
-        production = (SERVICE_SOURCE / f"{module}.rs").read_text(encoding="utf-8")
+        production = (SERVICE_SOURCE / f"{module.replace('::', '/')}.rs").read_text(encoding="utf-8")
         if f"{writer_module}::{writer}(" not in production.split("#[cfg(test)]", 1)[0]:
             return False
         tests = _test_module(writer_module)
@@ -215,7 +216,7 @@ def test_read_only_post_handlers_are_proven_by_real_schema_http_tests() -> None:
             f"{module}::{handler} is no longer mounted; remove its read-only "
             "exemption"
         )
-        source = (SERVICE_SOURCE / f"{module}.rs").read_text(encoding="utf-8")
+        source = (SERVICE_SOURCE / f"{module.replace('::', '/')}.rs").read_text(encoding="utf-8")
         production = source.split("#[cfg(test)]", 1)[0]
         assert WRITE_SQL_RE.search(production) is None, (
             f"{module} contains write SQL; a read-only POST handler must not "
