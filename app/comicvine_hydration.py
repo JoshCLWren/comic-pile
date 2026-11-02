@@ -64,9 +64,16 @@ def _provider_timestamp(value: object) -> datetime | None:
         return None
     normalized = value.replace("Z", "+00:00")
     try:
-        return datetime.fromisoformat(normalized)
+        parsed = datetime.fromisoformat(normalized)
     except ValueError:
         return None
+    # ComicVine also emits timezone-free SQL-style timestamps. PostgreSQL
+    # returns the stored provider revision as UTC-aware (DateTime(timezone=True));
+    # comparing that to a naive parsed revision raises TypeError on re-hydration.
+    # Interpret ComicVine's timezone-free timestamps as UTC at ingestion.
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _compact_reference(value: object) -> dict[str, object] | None:
