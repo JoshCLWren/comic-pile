@@ -9,15 +9,22 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tower::ServiceExt;
 
-async fn login(app: &Router, username: &str, password: &str) -> Result<Value, Box<dyn std::error::Error>> {
-    let response = app.clone()
+async fn login(
+    app: &Router,
+    username: &str,
+    password: &str,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    let response = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
                 .uri("/api/v1/auth/login")
                 .header("content-type", "application/json")
                 .header("x-forwarded-for", "198.51.100.51")
-                .body(Body::from(json!({"username": username, "password": password}).to_string()))?,
+                .body(Body::from(
+                    json!({"username": username, "password": password}).to_string(),
+                ))?,
         )
         .await?;
     let status = response.status().as_u16();
@@ -38,11 +45,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Exercise successful auth and BOTH rejected paths in one process.
     let valid = login(&app, &username, &password).await?;
     let wrong_password = login(&app, &username, "wrong-password-for-test").await?;
-    let unknown_user = login(&app, "does-not-exist-auth-parity", "wrong-password-for-test").await?;
-    println!("{}", json!({
-        "valid": valid,
-        "wrong_password": wrong_password,
-        "unknown_user": unknown_user,
-    }));
+    let unknown_user = login(
+        &app,
+        "does-not-exist-auth-parity",
+        "wrong-password-for-test",
+    )
+    .await?;
+    println!(
+        "{}",
+        json!({
+            "valid": valid,
+            "wrong_password": wrong_password,
+            "unknown_user": unknown_user,
+        })
+    );
     Ok(())
 }
