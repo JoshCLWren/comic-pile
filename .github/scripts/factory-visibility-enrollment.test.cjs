@@ -4,7 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const visibility = require('./factory-visibility.cjs');
 const { reconcileMissingPrLabels } = visibility;
-const { BLOCKED_LABELS } = visibility._test;
+const { BLOCKED_LABELS, hasManualOnlyDirective } = visibility._test;
 
 const sha = 'a'.repeat(40);
 const MANUAL_ONLY = '<!-- factory-execution:manual-only -->';
@@ -109,6 +109,28 @@ test('a standalone manual-only directive opts out even with factory labels', asy
   assert.deepEqual(writes, []);
 });
 
+test('a standalone manual-only line opts out of first-time enrollment', async () => {
+  const hold = { ...pr(4512), body: 'P0 auth outage rollback.\n\nmanual-only\n' };
+  const { writes } = await run({
+    prs: [hold],
+    labels: [],
+    event: 'pull_request_target',
+    action: 'opened',
+  });
+  assert.deepEqual(writes, []);
+});
+
+test('a standalone manual-only line is not re-enrolled after humans strip labels', async () => {
+  const hold = { ...pr(4512), body: 'Hold this PR.\nmanual-only\n' };
+  const { writes } = await run({
+    prs: [hold],
+    labels: [],
+    event: 'pull_request_target',
+    action: 'unlabeled',
+  });
+  assert.deepEqual(writes, []);
+});
+
 test('manual-only PR with empty factory labels is not enrolled as factory:unowned', async () => {
   const hold = {
     ...pr(3971),
@@ -195,6 +217,32 @@ test('enrollment BLOCKED_LABELS matches factory_work_policy.py', () => {
   assert.ok(match, 'factory_work_policy.BLOCKED_LABELS must remain parseable');
   const fromPolicy = [...match[1].matchAll(/'([^']+)'/g)].map(item => item[1]).sort();
   assert.deepEqual([...BLOCKED_LABELS].sort(), fromPolicy);
+});
+
+test('hasManualOnlyDirective stays in lockstep with Python is_manual_only', () => {
+  const { spawnSync } = require('node:child_process');
+  const repoRoot = path.join(__dirname, '..', '..');
+  const cases = [
+    'manual-only',
+    'P0 rollback.\n\nmanual-only\n',
+    '<!-- factory-execution:manual-only -->',
+    'The manual-only marker is reserved for human gates.',
+    '`manual-only`',
+    '```\nmanual-only\n```\nOrdinary work.',
+    'To opt out, use `<!-- factory-execution:manual-only -->`.',
+  ];
+  for (const body of cases) {
+    const py = spawnSync('python3', [
+      '-c',
+      'import sys; sys.path.insert(0, "scripts"); from factory_eligibility import is_manual_only; print("1" if is_manual_only(sys.stdin.read()) else "0")',
+    ], { input: body, encoding: 'utf8', cwd: repoRoot });
+    assert.equal(py.status, 0, py.stderr);
+    assert.equal(
+      hasManualOnlyDirective(body),
+      py.stdout.trim() === '1',
+      body,
+    );
+  }
 });
 
 test('scheduled sweep paginates all open PRs', async () => {
