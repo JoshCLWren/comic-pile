@@ -163,6 +163,17 @@ async def test_session_bootstrap_parity(scenario):
                 return normalize(result)
 
         initial = await durable()
+        # The public GET is read-only even with no active session, stale pointers,
+        # and a fresh/expired session. Mutating legacy Python parity is checked
+        # separately against the explicit Rust initialize command below.
+        code, pure, err = await native()
+        if scenario in {"first", "expired", "inferred-history", "era-history"}:
+            assert code != 0 and b"No active session" in err
+        else:
+            assert code == 0, err.decode()
+            assert pure["session"]["user_id"] == reader_id
+            assert pure["created"] is False
+        assert await durable() == initial
         code, _, err = await native(RUST_ROLL_TEST_RESOLVE_ONLY="1")
         assert code == 0, err.decode()
         assert await durable() == initial  # read-only resolution never creates state
@@ -191,7 +202,7 @@ async def test_session_bootstrap_parity(scenario):
         # Sequence values are not transactional. Reset to the fixture's last identity.
         async with engine.begin() as c:
             await c.execute(text("SELECT setval(pg_get_serial_sequence('sessions','id'), (SELECT max(id) FROM sessions))"))
-        code, actual, err = await native()
+        code, actual, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
         assert code == 0, err.decode()
         assert normalize(actual["session"]) == normalize(expected)
         assert actual["current_die"] == current_die
@@ -202,9 +213,15 @@ async def test_session_bootstrap_parity(scenario):
                                           "snapshot_kind": x.snapshot_kind, "schema_version": x.schema_version}) for x in checkpoints]
         assert actual_snapshots == expected_snapshots
         after = await durable()
+        # A completed initialization makes the GET usable without any further writes.
+        code, projection, err = await native()
+        assert code == 0, err.decode()
+        assert projection["session"]["id"] == actual["session"]["id"]
+        assert projection["created"] is False
+        assert await durable() == after
         for table in ("threads", "issues", "events"):
             assert after[table] == initial[table]
-        code, again, err = await native()
+        code, again, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
         assert code == 0, err.decode()
         assert not again["created"]
         assert again["session"] == actual["session"]
@@ -216,14 +233,14 @@ async def test_session_bootstrap_parity(scenario):
             assert b"404 Not Found Session not found" in err
         assert await durable() == after
         # Concurrent GETs serialize and return the same authoritative session.
-        results = await asyncio.gather(*(native() for _ in range(5)))
+        results = await asyncio.gather(*(native(RUST_ROLL_TEST_INITIALIZE="1") for _ in range(5)))
         assert all(code == 0 and result["session"] == actual["session"] for code, result, _ in results)
         assert await durable() == after
         if scenario == "first":
             # Fresh first-session concurrency, rather than only concurrent reuse.
             async with engine.begin() as c:
                 await c.execute(text("DELETE FROM sessions WHERE user_id=:reader"), {"reader": reader_id})
-            results = await asyncio.gather(*(native() for _ in range(5)))
+            results = await asyncio.gather(*(native(RUST_ROLL_TEST_INITIALIZE="1") for _ in range(5)))
             assert all(code == 0 for code, _, _ in results)
             assert len({result["session"]["id"] for _, result, _ in results}) == 1
             assert sum(result["created"] for _, result, _ in results) == 1
@@ -234,7 +251,7 @@ async def test_session_bootstrap_parity(scenario):
                     BEGIN RAISE EXCEPTION 'synthetic checkpoint failure'; END $$"""))
                 await c.execute(text("CREATE TRIGGER fail_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION fail_checkpoint()"))
             before_failure = await durable()
-            code, _, err = await native()
+            code, _, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
             assert code != 0 and b"500 Internal Server Error" in err
             assert await durable() == before_failure
             async with engine.begin() as c:
@@ -294,7 +311,7 @@ async def test_session_bootstrap_parity(scenario):
                       RETURN NEW;
                     END $$"""))
                 await c.execute(text("CREATE TRIGGER retry_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION retry_checkpoint()"))
-            code, recovered, err = await native()
+            code, recovered, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
             assert code == 0 and recovered["created"], err.decode()
             async with engine.connect() as c:
                 assert await c.scalar(text("SELECT last_value FROM checkpoint_attempt")) == 2
