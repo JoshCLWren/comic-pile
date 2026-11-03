@@ -46,13 +46,10 @@ jobs:
           PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
         run: |
           set -Eeuo pipefail
-          # Include recently closed PRs for repository-wide review cooldown.
-          gh pr list --repo "$GITHUB_REPOSITORY" --state all --limit 120 \
-            --json number,title,state,headRefOid,isDraft,createdAt,closedAt,updatedAt,labels,mergeStateStatus,statusCheckRollup \
-            > "$RUNNER_TEMP/coderabbit-review-prs.json"
+          # REST-only listing avoids GraphQL 504s from "gh pr list".
+          # The script also inspects recently closed PRs for the 60-minute quota.
           python3 .github/scripts/hourly_coderabbit_review.py \
-            --repo "$GITHUB_REPOSITORY" \
-            --prs "$RUNNER_TEMP/coderabbit-review-prs.json"
+            --repo "$GITHUB_REPOSITORY"
 
       - name: Install factory syntax parsers
         uses: ./.github/actions/factory-syntax
