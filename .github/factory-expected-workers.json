@@ -14,7 +14,6 @@
     53,
     54,
     55,
-    56,
     60,
     61,
     62,
@@ -22,7 +21,6 @@
     65,
     74,
     75,
-    78,
     80,
     82,
     86,
@@ -32,8 +30,7 @@
     90,
     91,
     92,
-    93,
-    95
+    93
   ],
   "retired_workers": [
     9,
@@ -52,6 +49,7 @@
     47,
     49,
     50,
+    56,
     57,
     58,
     59,
@@ -66,18 +64,21 @@
     73,
     76,
     77,
+    78,
     79,
     81,
     83,
     84,
     85,
-    94
+    94,
+    95
   ],
   "retired_models": [
     "apodex/apodex-1.1-mini:free",
     "cat-jam-free",
     "deepseek-ai/deepseek-v4.1-flash",
     "deepseek-v4-flash-free",
+    "dots-studio/dots-3-note-preview:free",
     "exo-free",
     "fledge-alpha-free",
     "hy3-free",
@@ -102,6 +103,7 @@
     "nvidia/nemotron-3-super-120b-a12b:free",
     "nvidia/nemotron-3-ultra-550b-a55b",
     "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "nvidia/nemotron-3.5-super-vl-120b-a12b",
     "nvidia/nvidia-nemotron-nano-9b-v2",
     "openrouter/free",
     "poolside/laguna-s-2.1:free",
@@ -113,6 +115,7 @@
     "step-5-preview-free",
     "stepfun-ai/step-3.7-flash",
     "thinkingmachines/inkling",
-    "union-alpha"
+    "union-alpha",
+    "z-ai/glm-5.3"
   ]
 }
