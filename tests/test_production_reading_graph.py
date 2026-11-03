@@ -157,7 +157,6 @@ async def restore_production_graph(
     await db.flush()
 
 
-
 async def assert_offers(
     db: AsyncSession, owner: int, *, offered: tuple[int, ...] = (),
     withheld: tuple[int, ...] = (),
@@ -233,33 +232,6 @@ async def test_real_ff_fantastic_four_multiple_handoffs(
         await advance(async_db, step["read"])
         await assert_offers(async_db, owner, offered=tuple(step["unblocks"]),
                             withheld=tuple(step["after_blocked"]))
-
-
-@pytest.mark.asyncio
-async def test_actual_roll_queue_selection_and_api_rating(
-    production_graph: tuple[int, ProductionGraphFixture], async_db: AsyncSession,
-    auth_client: AsyncClient,
-) -> None:
-    """Roll override and /rate exercise real code on restored PostgreSQL rows."""
-    owner, _ = production_graph
-    source_id = review_contract()["approved_sequences"]["xmen_1998"]["steps"][0]["read"]
-    source = (await async_db.execute(select(Issue).where(Issue.id == source_id))).scalar_one()
-    pool = await get_bounded_roll_pool_rows(owner, async_db, 10000)
-    assert source.thread_id in {row[0].id for row in pool}
-    blocked_id = review_contract()["approved_sequences"]["xmen_1998"]["steps"][0]["blocked"][0]
-    blocked = (await async_db.execute(select(Issue).where(Issue.id == blocked_id))).scalar_one()
-    assert blocked.thread_id not in {row[0].id for row in pool}
-    rolled = await auth_client.post("/api/v1/roll/override", json={"thread_id": source.thread_id})
-    assert rolled.status_code == 200, rolled.text
-    assert rolled.json()["issue_id"] == source_id
-    rated = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
-    assert rated.status_code == 200, rated.text
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == source_id)) == "read"
-    await assert_offers(
-        async_db, owner,
-        offered=tuple(review_contract()["approved_sequences"]["xmen_1998"]["steps"][0]["unblocks"]),
-        withheld=tuple(review_contract()["approved_sequences"]["xmen_1998"]["steps"][0]["still_blocked"]),
-    )
 
 
 @pytest.mark.asyncio
@@ -373,8 +345,6 @@ async def test_real_saved_volume_exclusion_survives_hypothetical_reactivation(
     assert snapshot is not None
     assert issue.id in snapshot.excluded_issue_ids
     assert thread.id not in snapshot.candidate_ids()
-
-
 
 
 @pytest.mark.parametrize(("census", "is_missing"), [

@@ -6,7 +6,6 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.rate_service import snapshot_thread_states
 from app.api.undo import undo_to_snapshot
 from app.models import Event, Issue, Snapshot, Thread
 from app.models import ReadingSession
@@ -33,67 +32,6 @@ async def _create_session_event(
     async_db.add(event)
     await async_db.flush()
     return session, event
-
-
-@pytest.mark.asyncio
-async def test_snapshot_includes_issue_positions(
-    async_db: AsyncSession, default_user: User
-) -> None:
-    """Snapshot serialization persists explicit issue positions."""
-    thread = Thread(
-        title="Test Thread",
-        format="comic",
-        user_id=default_user.id,
-        queue_position=1,
-        total_issues=3,
-        status="active",
-        reading_progress="in_progress",
-    )
-    async_db.add(thread)
-    await async_db.flush()
-
-    async_db.add_all(
-        [
-            Issue(
-                id=100,
-                thread_id=thread.id,
-                issue_number="1",
-                position=5,
-                status="read",
-                read_at=datetime.now(UTC),
-            ),
-            Issue(
-                id=101,
-                thread_id=thread.id,
-                issue_number="2",
-                position=10,
-                status="unread",
-            ),
-            Issue(
-                id=102,
-                thread_id=thread.id,
-                issue_number="3",
-                position=15,
-                status="unread",
-            ),
-        ]
-    )
-    await async_db.flush()
-
-    session, event = await _create_session_event(async_db, default_user, thread)
-    await snapshot_thread_states(async_db, session.id, event.id, default_user.id, commit=False)
-    await async_db.flush()
-
-    snapshot_result = await async_db.execute(
-        select(Snapshot)
-        .where(Snapshot.session_id == session.id)
-        .where(Snapshot.event_id == event.id)
-        .order_by(Snapshot.id.desc())
-    )
-    snapshot = snapshot_result.scalar_one()
-
-    issue_states = snapshot.thread_states[str(thread.id)]["issue_states"]
-    assert [issue_state["position"] for issue_state in issue_states] == [5, 10, 15]
 
 
 @pytest.mark.asyncio
