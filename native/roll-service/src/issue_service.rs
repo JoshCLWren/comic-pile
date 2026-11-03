@@ -1,15 +1,39 @@
-//! Authenticated direct issue completion. Option E selects offers, not permissions.
+//! Authenticated issue read/rate completion. Option E selects offers, not
+//! permissions: this writer applies the exact issue action a reader asked for,
+//! and only a Roll-offer rating carries the Roll completion effects.
 //! Uses the canonical issues/events schema and the shared PostgreSQL pool.
-use crate::{auth::AuthenticatedUser, db, dice_state, ApiError};
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    dice_mutation::{self, DiceCommand},
+    option_inputs, queue, skip, ApiError,
+};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio_postgres::Transaction;
 
 /// Upper bound for one visible issue-card group. Keeps the set request bounded
 /// instead of degenerating into a per-card or whole-library lookup.
 pub(crate) const MAX_CARD_ISSUES: usize = 200;
+
+/// Source of one issue action: a manual read from a Thread row (#3581).
+const DIRECT_SOURCE: &str = "direct";
+
+/// Source of one issue action: finishing the issue Roll offered.
+const ROLL_OFFER_SOURCE: &str = "roll_offer";
+
+/// Rating at or above this steps the die down and moves the series forward.
+///
+/// Mirrors the legacy `rating_threshold` default, the frontend
+/// `RATING_THRESHOLD` and `dice_state::DiceAction::RollRating`, which all use
+/// the same boundary, so the ladder and the queue agree on one threshold.
+const ROLL_RATING_THRESHOLD: f64 = 4.0;
+
+/// Rating applied to a new read that arrives without one. Mirrors the legacy
+/// Roll default and the direct-read default this writer already used.
+const DEFAULT_NEW_READ_RATING: f64 = 3.5;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -20,8 +44,11 @@ pub struct IssueReadRateRequest {
     pub rating: Option<f64>,
     /// Client-generated retry key. Same key/payload replays the same receipt.
     pub idempotency_key: String,
-    /// Source of the rating action. "direct" for manual issue reads, "roll_offer" for Roll completion.
-    /// When "roll_offer", applies die stepping, queue effects, and links to the originating offer event.
+    /// Source of the issue action. Omitted or "direct" is a manual read from a
+    /// Thread row: it never steps the die and never repositions the queue.
+    /// "roll_offer" is a Roll completion: it applies the Roll rating semantics
+    /// (die stepping, queue placement, and a link back to the originating offer
+    /// event) in the same transaction as the read.
     #[serde(default)]
     pub source: Option<String>,
 }
@@ -91,6 +118,18 @@ fn invalid(message: &'static str) -> ApiError {
     ApiError(StatusCode::UNPROCESSABLE_ENTITY, message.into())
 }
 
+/// Resolve the requested action source to its canonical value.
+///
+/// An omitted source is a direct action, which is what every pre-source client
+/// sent. `validate` already rejected any other value, so this only normalizes.
+fn rating_source(request: &IssueReadRateRequest) -> Result<&'static str, ApiError> {
+    match request.source.as_deref() {
+        None | Some(DIRECT_SOURCE) => Ok(DIRECT_SOURCE),
+        Some(ROLL_OFFER_SOURCE) => Ok(ROLL_OFFER_SOURCE),
+        Some(_) => Err(invalid("Invalid issue action source")),
+    }
+}
+
 pub(crate) fn validate(request: &IssueReadRateRequest) -> Result<(), ApiError> {
     if !(8..=128).contains(&request.idempotency_key.len())
         || !request
@@ -110,6 +149,15 @@ pub(crate) fn validate(request: &IssueReadRateRequest) -> Result<(), ApiError> {
         if !rating.is_finite() || !(0.5..=5.0).contains(&rating) || (rating * 2.0).fract() != 0.0 {
             return Err(invalid("Rating must be 0.5 to 5.0 in half steps"));
         }
+    }
+    if !matches!(
+        request.source.as_deref(),
+        None | Some(DIRECT_SOURCE) | Some(ROLL_OFFER_SOURCE)
+    ) {
+        return Err(invalid("Invalid issue action source"));
+    }
+    if request.source.as_deref() == Some(ROLL_OFFER_SOURCE) && request.rating.is_none() {
+        return Err(invalid("A Roll offer rating requires a rating"));
     }
     if request.status.is_none() && request.rating.is_none() {
         return Err(invalid("Provide status or rating"));
@@ -334,8 +382,164 @@ async fn progress(tx: &Transaction<'_>, thread_id: i32) -> Result<ThreadProgress
     })
 }
 
+/// One Roll-offer rating intent, resolved before the shared transaction began.
+struct RollOfferEffects<'a> {
+    thread_id: i32,
+    issue_id: i32,
+    rating: f64,
+    remaining: i32,
+    idempotency_key: &'a str,
+}
+
+/// Apply the Roll completion effects for one offer rating inside the caller's
+/// transaction.
+///
+/// This is the same writer composition the Roll offer command uses: the die
+/// steps through the durable dice writer, so the ladder, the queue placement
+/// and the rating event all commit or all roll back together. Eligibility is
+/// only consulted to decide where a below-threshold rating seats the series; it
+/// never gates the rating itself (#4453).
+///
+/// Returns the die after the step and the id of the roll event that offered
+/// this exact issue, when one is recorded.
+async fn apply_roll_offer_effects(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+    effects: &RollOfferEffects<'_>,
+    placement_is_manual: bool,
+) -> Result<(i32, Option<i32>), ApiError> {
+    // Step the die first: this is the durable dice command, and its returned
+    // `die_after` is the die the queue placement below must bound against.
+    let dice_key = format!("roll-rating-{}-{}", effects.thread_id, effects.idempotency_key);
+    let stepped = dice_mutation::persist_in_transaction(
+        tx,
+        user,
+        &dice_key,
+        &DiceCommand::RollRating {
+            thread_id: effects.thread_id,
+            issue_id: effects.issue_id,
+            rating: effects.rating,
+        },
+    )
+    .await?
+    .die_after;
+
+    // Link the rating back to the roll that offered this exact issue, so the
+    // completion can be traced to its offer instead of to any roll of the
+    // same series.
+    let offered_by: Option<i32> = tx
+        .query_opt(
+            "SELECT id FROM events
+             WHERE user_id=$1 AND type='roll' AND issue_id=$2
+             ORDER BY timestamp DESC, id DESC LIMIT 1",
+            &[&user.id(), &effects.issue_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .map(|row| row.get(0));
+
+    // Every queue writer for this reader takes the queue advisory lock before
+    // it reads or rewrites positions, so a concurrent move or shuffle cannot
+    // interleave with this placement.
+    queue::lock_queue(tx, user.id()).await?;
+    if effects.remaining == 0 {
+        // A finished series leaves the pool behind the rest of the queue.
+        queue::move_to_back(tx, user.id(), effects.thread_id).await?;
+    } else if effects.rating >= ROLL_RATING_THRESHOLD {
+        // A good rating moves the series to the front.
+        queue::move_to_rank(tx, user.id(), effects.thread_id, 1).await?;
+    } else if !placement_is_manual {
+        // A below-threshold rating seats the series just beyond the die-sized
+        // roll pool, so the next roll does not immediately repeat it. A reader
+        // who placed this series by hand keeps that placement (#3638).
+        let excluded = effective_roll_exclusions(tx, user).await?;
+        let eligible = eligible_thread_ids(tx, user).await?;
+        if let Some(rank) = queue::safe_position_rank(
+            tx,
+            user.id(),
+            effects.thread_id,
+            stepped,
+            &excluded,
+            &eligible,
+        )
+        .await?
+        {
+            queue::move_to_rank(tx, user.id(), effects.thread_id, rank).await?;
+        }
+    }
+
+    Ok((stepped, offered_by))
+}
+
+/// The complete thread exclusion set the next roll would apply (issue #3696):
+/// this session's snoozes and skips, durable cross-session snooze backoff, and
+/// durable "Remove from Queue" exclusions.
+///
+/// This is the same union `comic_pile.queue.derive_effective_roll_excluded_thread_ids`
+/// builds for the legacy rating path and the native Skip writer builds for its
+/// pool, so a below-threshold rating counts exactly the series the next roll
+/// cannot select.
+async fn effective_roll_exclusions(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+) -> Result<Vec<i32>, ApiError> {
+    let session = tx
+        .query_opt(
+            "SELECT snoozed_thread_ids, skipped_thread_ids FROM sessions
+             WHERE user_id=$1 AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut excluded: Vec<i32> = Vec::new();
+    let mut seen: HashSet<i32> = HashSet::new();
+    if let Some(session) = session {
+        let snoozed: Option<Vec<i32>> = session.get(0);
+        let skipped: Option<Vec<i32>> = session.get(1);
+        for thread_id in snoozed
+            .unwrap_or_default()
+            .into_iter()
+            .chain(skipped.unwrap_or_default())
+        {
+            if seen.insert(thread_id) {
+                excluded.push(thread_id);
+            }
+        }
+    }
+    for thread_id in skip::durable_snoozed(tx, user.id()).await? {
+        if seen.insert(thread_id) {
+            excluded.push(thread_id);
+        }
+    }
+    for thread_id in skip::excluded_status_ids(tx, user.id()).await? {
+        if seen.insert(thread_id) {
+            excluded.push(thread_id);
+        }
+    }
+    Ok(excluded)
+}
+
+/// The Option E eligible thread ids for one reader, resolved inside the caller's
+/// transaction so placement uses the same authority the next Roll offer draws
+/// from. Sorted so the SQL parameter array is deterministic.
+async fn eligible_thread_ids(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+) -> Result<Vec<i32>, ApiError> {
+    let validated = option_inputs::load_validated_in_transaction(tx, user).await?;
+    let mut ids: Vec<i32> = queue::evaluated_eligible_ids(&validated)?.into_iter().collect();
+    ids.sort_unstable();
+    Ok(ids)
+}
+
 /// Apply the exact issue action inside an existing owner-serialized transaction.
-/// No Option E, queue-position, die, snooze, prerequisite or session writes.
+///
+/// A `direct` action only advances the issue and its thread progress. A
+/// `roll_offer` action additionally applies the Roll completion effects the
+/// legacy `/v1/rate/` route carried: the die steps through the durable dice
+/// writer, the series is repositioned in the queue, and the rating event links
+/// back to the originating offer event. Eligibility never re-tests the action
+/// itself (#4453); it only decides where a low rating seats the series.
 pub(crate) async fn persist(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
@@ -343,6 +547,7 @@ pub(crate) async fn persist(
     request: &IssueReadRateRequest,
 ) -> Result<IssueReadRateResponse, ApiError> {
     validate(request)?;
+    let source = rating_source(request)?;
     // This must be the first DB statement, consistent with the Rust dice writer.
     tx.query_one(
         "SELECT pg_advisory_xact_lock($1::bigint)",
@@ -355,13 +560,16 @@ pub(crate) async fn persist(
         "issue_id": issue_id,
         "status": request.status,
         "rating": request.rating,
-        "source": request.source.as_deref().unwrap_or("direct"),
+        "source": source,
     });
     // Lock the owner thread before the issue; owner transfers and concurrent
-    // progress writers must not escape the ownership check.
+    // progress writers must not escape the ownership check. The manual-placement
+    // flag rides along on the already-locked row: a below-threshold Roll rating
+    // must not demote a placement the reader chose by hand (#3638).
     let owner = tx
         .query_opt(
-            "SELECT t.id FROM threads t JOIN issues i ON i.thread_id=t.id
+            "SELECT t.id, t.queue_position_is_manual FROM threads t
+         JOIN issues i ON i.thread_id=t.id
          WHERE i.id=$1 AND t.user_id=$2 FOR UPDATE OF t,i",
             &[&issue_id, &user.id()],
         )
@@ -369,6 +577,7 @@ pub(crate) async fn persist(
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Issue not found".into()))?;
     let thread_id: i32 = owner.get(0);
+    let placement_is_manual: bool = owner.get(1);
 
     // Replays, including a lost response to a no-op, return their original receipt.
     // Same user/key with a different issue or payload is a conflict.
@@ -437,16 +646,17 @@ pub(crate) async fn persist(
     let newly_read = request.status.as_deref() == Some("read") && old_status != "read";
     let newly_unread = request.status.as_deref() == Some("unread") && old_status == "read";
     let status_changed = newly_read || newly_unread;
-    let requested_rating = request.rating.or(if newly_read { Some(3.5) } else { None });
+    let requested_rating = request.rating.or(if newly_read {
+        Some(DEFAULT_NEW_READ_RATING)
+    } else {
+        None
+    });
     let rating_changed = requested_rating.is_some_and(|rating| Some(rating) != old_rating);
     let final_rating = requested_rating.or(old_rating);
 
-    // One Roll rating creates one event with its die outcome and offer link.
-    // An additional dice-command event would double-count the rating.
-    let mut die_before: Option<i32> = None;
+    // Track die_after and source_roll_event_id for roll_offer source
     let mut die_after: Option<i32> = None;
     let mut source_roll_event_id: Option<i32> = None;
-    let mut source_session_id: Option<i32> = None;
 
     if newly_read {
         tx.execute(
@@ -483,98 +693,37 @@ pub(crate) async fn persist(
             None
         };
 
-        // Direct reads never change the Roll die or automatic queue ordering.
-        if request.source.as_deref() == Some("roll_offer") {
-            let current_die = dice_state::current_die(tx, user).await?;
-            let rating_value = final_rating.unwrap_or(3.5);
-            let next_die = dice_state::apply_action(
-                current_die,
-                dice_state::DiceAction::RollRating(rating_value),
-            )
-            .map_err(|_| invalid("Invalid Roll rating"))?;
-            die_before = Some(current_die);
-            die_after = Some(next_die);
-
-            // Link only to a live offer for the exact issue, never to a
-            // historical roll of another issue from the same thread.
-            let source_row = tx
-                .query_opt(
-                    "SELECT e.id, e.session_id FROM events e
-                     JOIN sessions s ON s.id=e.session_id
-                     WHERE s.user_id=$1 AND s.ended_at IS NULL
-                       AND s.pending_issue_id=$2 AND e.type='roll'
-                       AND e.selected_thread_id=$3
-                       AND (e.issue_id=$2 OR e.issue_id IS NULL)
-                     ORDER BY e.timestamp DESC,e.id DESC LIMIT 1",
-                    &[&user.id(), &issue_id, &thread_id],
-                )
-                .await
-                .map_err(db::query_error)?;
-            if let Some(row) = source_row {
-                source_roll_event_id = Some(row.get(0));
-                source_session_id = row.get(1);
-            }
-
-            if remaining == 0 {
-                tx.execute(
-                    "UPDATE threads SET queue_position=0 WHERE id=$1",
-                    &[&thread_id],
-                )
-                .await
-                .map_err(db::query_error)?;
-            } else if rating_value >= 4.0 {
-                // A rating is automatic placement, not a manual queue pin.
-                tx.execute(
-                    "UPDATE threads SET queue_position=queue_position+1
-                     WHERE user_id=$1 AND status='active' AND id<>$2
-                       AND queue_position>=1 AND queue_position < (
-                           SELECT queue_position FROM threads WHERE id=$2
-                       )",
-                    &[&user.id(), &thread_id],
-                )
-                .await
-                .map_err(db::query_error)?;
-                tx.execute(
-                    "UPDATE threads SET queue_position=1,
-                         queue_position_is_manual=FALSE WHERE id=$1",
-                    &[&thread_id],
-                )
-                .await
-                .map_err(db::query_error)?;
-            } else {
-                // Low ratings leave the expanded Roll pool, without
-                // overwriting an explicit manual placement.
-                tx.execute(
-                    "UPDATE threads SET queue_position=(
-                         SELECT COALESCE(MAX(other.queue_position),0)+1
-                         FROM threads other
-                         WHERE other.user_id=$1 AND other.status='active'
-                           AND other.queue_position>=1 AND other.id<>$2
-                     )
-                     WHERE id=$2 AND queue_position_is_manual=FALSE",
-                    &[&user.id(), &thread_id],
-                )
-                .await
-                .map_err(db::query_error)?;
-            }
-        } else {
+        if source == ROLL_OFFER_SOURCE {
+            // `validate` rejects a Roll offer action without a rating, so the
+            // effective rating is always resolved here.
+            let rating_value = requested_rating.unwrap_or(DEFAULT_NEW_READ_RATING);
+            let effects = RollOfferEffects {
+                thread_id,
+                issue_id,
+                rating: rating_value,
+                remaining,
+                idempotency_key: &request.idempotency_key,
+            };
+            let (stepped, offered_by) =
+                apply_roll_offer_effects(tx, user, &effects, placement_is_manual).await?;
+            die_after = Some(stepped);
+            source_roll_event_id = offered_by;
+        } else if status_changed && remaining > 0 {
             // Direct source: existing logic for reactivating completed series
-            if status_changed && remaining > 0 {
-                tx.execute(
-                    "UPDATE threads SET queue_position = (
-                         SELECT COALESCE(MAX(other.queue_position), 0) + 1
-                         FROM threads other
-                         WHERE other.user_id = $1
-                           AND other.status = 'active'
-                           AND other.queue_position >= 1
-                           AND other.id <> $2
-                     )
-                     WHERE id = $2 AND status = 'completed' AND queue_position < 1",
-                    &[&user.id(), &thread_id],
-                )
-                .await
-                .map_err(db::query_error)?;
-            }
+            tx.execute(
+                "UPDATE threads SET queue_position = (
+                     SELECT COALESCE(MAX(other.queue_position), 0) + 1
+                     FROM threads other
+                     WHERE other.user_id = $1
+                       AND other.status = 'active'
+                       AND other.queue_position >= 1
+                       AND other.id <> $2
+                 )
+                 WHERE id = $2 AND status = 'completed' AND queue_position < 1",
+                &[&user.id(), &thread_id],
+            )
+            .await
+            .map_err(db::query_error)?;
         }
 
         tx.execute(
@@ -618,7 +767,7 @@ pub(crate) async fn persist(
         None
     };
     let context = json!({
-        "source": request.source.as_deref().unwrap_or("direct"),
+        "source": source,
         "issue_command_key": request.idempotency_key,
         "issue_command_payload": payload,
         "source_roll_event_id": source_roll_event_id,
@@ -627,8 +776,8 @@ pub(crate) async fn persist(
         .query_one(
             "INSERT INTO events
             (user_id,type,timestamp,thread_id,issue_id,issue_number,
-             rating,issues_read,die,die_after,session_id,source_roll_event_id,context)
-         VALUES ($1,$2,NOW(),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::text::json) RETURNING id",
+             rating,issues_read,context)
+         VALUES ($1,$2,NOW(),$3,$4,$5,$6,$7,$8::text::json) RETURNING id",
             &[
                 &user.id(),
                 &event_type,
@@ -637,10 +786,6 @@ pub(crate) async fn persist(
                 &issue_number,
                 &recorded_rating,
                 &issues_read,
-                &die_before,
-                &die_after,
-                &source_session_id,
-                &source_roll_event_id,
                 &context.to_string(),
             ],
         )
@@ -846,9 +991,8 @@ mod tests {
                      id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
                      user_id integer, type text, timestamp timestamptz DEFAULT NOW(),
                      thread_id integer, issue_id integer, issue_number text,
-                     rating double precision, issues_read integer, die integer,
-                     die_after integer, session_id integer, selected_thread_id integer,
-                     source_roll_event_id integer, context json
+                     rating double precision, issues_read integer, die_after integer,
+                     context json
                  );
                  CREATE TABLE {schema}.external_identities (
                      id integer PRIMARY KEY, provider text, entity_type text,
@@ -1158,112 +1302,6 @@ mod tests {
         );
         assert_eq!(bounded.items[1].mapping_state, "unmapped");
         assert_eq!(bounded.items[1].cover_image_url, None);
-
-        // The native writer must record one atomic, linked Roll rating and
-        // replay its original die/queue receipt without a second event.
-        first
-            .batch_execute(
-                "INSERT INTO threads VALUES
-                    (60,1,'Roll offered run','active',2,601,'in_progress',NULL,4,false,NULL,false),
-                    (70,1,'Low rated run','active',1,701,'in_progress',NULL,5,false,NULL,false);
-                 INSERT INTO issues VALUES
-                    (601,60,'1','unread',1,NULL),
-                    (602,60,'2','unread',2,NULL),
-                    (701,70,'1','unread',1,NULL);
-                 INSERT INTO sessions VALUES
-                    (2,1,60,601,NULL,6,NULL),
-                    (3,1,70,701,NULL,6,NULL);
-                 INSERT INTO events (user_id,type,session_id,selected_thread_id,issue_id)
-                 VALUES (1,'roll',2,60,601), (1,'roll',3,70,701);",
-            )
-            .await
-            .unwrap();
-        let offer: i32 = first
-            .query_one(
-                "SELECT id FROM events WHERE session_id=2 AND type='roll'",
-                &[],
-            )
-            .await
-            .unwrap()
-            .get(0);
-        let high = IssueReadRateRequest {
-            status: Some("read".into()),
-            rating: Some(4.5),
-            idempotency_key: "roll-issue-high-00001".into(),
-            source: Some("roll_offer".into()),
-        };
-        let tx = first.transaction().await.unwrap();
-        let completed = persist(&tx, user, 601, &high).await.unwrap();
-        tx.commit().await.unwrap();
-        assert_eq!(completed.die_after, Some(4));
-        assert_eq!(completed.thread.issues_remaining, 1);
-        assert!(completed.read_event_created);
-        let linked = first
-            .query_one(
-                "SELECT die,die_after,source_roll_event_id,session_id
-                 FROM events WHERE type='rate' AND issue_id=601",
-                &[],
-            )
-            .await
-            .unwrap();
-        assert_eq!(linked.get::<_, i32>(0), 6);
-        assert_eq!(linked.get::<_, i32>(1), 4);
-        assert_eq!(linked.get::<_, i32>(2), offer);
-        assert_eq!(linked.get::<_, i32>(3), 2);
-        let position = first
-            .query_one(
-                "SELECT queue_position,queue_position_is_manual FROM threads WHERE id=60",
-                &[],
-            )
-            .await
-            .unwrap();
-        assert_eq!(position.get::<_, i32>(0), 1);
-        assert!(!position.get::<_, bool>(1));
-        let displaced: i32 = first
-            .query_one("SELECT queue_position FROM threads WHERE id=30", &[])
-            .await
-            .unwrap()
-            .get(0);
-        assert_eq!(displaced, 3);
-        let pending: Option<i32> = first
-            .query_one("SELECT pending_issue_id FROM sessions WHERE id=2", &[])
-            .await
-            .unwrap()
-            .get(0);
-        assert_eq!(pending, None);
-        let tx = first.transaction().await.unwrap();
-        let replay = persist(&tx, user, 601, &high).await.unwrap();
-        tx.commit().await.unwrap();
-        assert!(replay.replayed);
-        assert_eq!(replay.die_after, Some(4));
-        let count: i64 = first
-            .query_one(
-                "SELECT COUNT(*) FROM events WHERE type='rate' AND issue_id=601",
-                &[],
-            )
-            .await
-            .unwrap()
-            .get(0);
-        assert_eq!(count, 1, "a retry must not create a second rate event");
-
-        let low = IssueReadRateRequest {
-            status: Some("read".into()),
-            rating: Some(3.0),
-            idempotency_key: "roll-issue-low-000001".into(),
-            source: Some("roll_offer".into()),
-        };
-        let tx = first.transaction().await.unwrap();
-        let low_result = persist(&tx, user, 701, &low).await.unwrap();
-        tx.commit().await.unwrap();
-        assert_eq!(low_result.die_after, Some(6));
-        let low_position: i32 = first
-            .query_one("SELECT queue_position FROM threads WHERE id=70", &[])
-            .await
-            .unwrap()
-            .get(0);
-        assert_eq!(low_position, 0);
-        assert_eq!(low_result.thread.status, "completed");
-        assert_eq!(low_result.thread.issues_remaining, 0);
 
         admin
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
