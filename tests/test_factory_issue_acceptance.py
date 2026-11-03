@@ -163,7 +163,7 @@ def test_opencode_jsonl_assistant_text_acceptance_report_is_parsed():
     event = json.dumps({
         "type": "text",
         "timestamp": 1793748011648,
-        "part": {"type": "text", "text": line + "\\nFACTORY_GATE_READY"},
+        "part": {"type": "text", "text": line + "\nFACTORY_GATE_READY"},
     })
     assert acceptance.report_from_text(event) == report
     assert acceptance.validate(
@@ -184,10 +184,10 @@ def test_tool_output_and_event_metadata_cannot_mint_acceptance():
         {"type": "text", "part": {"type": "tool", "text": line}},
         {"type": "text", "part": {"type": "text", "text": line}},
     ]
-    log = "\\n".join(json.dumps(event) for event in events)
+    log = "\n".join(json.dumps(event) for event in events)
     assert acceptance.report_from_text(log) == complete_report()
     assert acceptance.report_from_text(
-        "\\n".join(json.dumps(event) for event in events[:-1])
+        "\n".join(json.dumps(event) for event in events[:-1])
     ) is None
 
 
@@ -197,8 +197,8 @@ def test_multiple_jsonl_assistant_reports_fail_closed():
 
     line = acceptance.PREFIX + json.dumps(complete_report())
     event = json.dumps({"type": "text", "part": {"type": "text", "text": line}})
-    assert acceptance.report_from_text(event + "\\n" + event) is None
-    assert acceptance.report_from_text(line + "\\n" + event) is None
+    assert acceptance.report_from_text(event + "\n" + event) is None
+    assert acceptance.report_from_text(line + "\n" + event) is None
 
 
 def test_changed_path_citations_allow_numeric_line_ranges_only():
