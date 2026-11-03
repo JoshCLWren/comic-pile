@@ -58,7 +58,8 @@ async function mockRustRollReadApi(page: Page): Promise<void> {
   await page.route('**/api/**', async (route) => {
     const request = route.request()
     const path = new URL(request.url()).pathname
-    if (path.endsWith('/auth/me')) {
+    const endpoint = path.split('/').at(-1)
+    if (endpoint === 'me') {
       return route.fulfill({ json: {
         id: 1,
         username: 'reader',
@@ -66,10 +67,10 @@ async function mockRustRollReadApi(page: Page): Promise<void> {
         preferences: { theme: 'classic' },
       } })
     }
-    if (path.endsWith('/auth/refresh')) {
+    if (endpoint === 'refresh') {
       return route.fulfill({ json: { access_token: 'test-access-token' } })
     }
-    if (path.endsWith('/auth/csrf')) {
+    if (endpoint === 'csrf') {
       return route.fulfill({ json: { csrf_token: 'test-csrf' } })
     }
     if (path === '/api/v2/reading-sessions') {
