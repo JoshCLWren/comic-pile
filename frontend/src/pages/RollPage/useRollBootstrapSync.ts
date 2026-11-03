@@ -27,6 +27,10 @@ export function useRollBootstrapSync({
 }: UseRollBootstrapSyncParams): void {
   const { setCurrentDie, setRolledResult, setDiceState } = state
 
+  const manualDie = bootstrap?.manual_die ?? null
+  const currentDie = bootstrap?.current_die
+  const lastRolledResult = bootstrap?.last_rolled_result
+
   useEffect(() => {
     if (isBootstrapError && bootstrapError) {
       const status = getApiErrorStatus(bootstrapError)
@@ -35,10 +39,11 @@ export function useRollBootstrapSync({
   }, [isBootstrapError, bootstrapError, navigate])
 
   useEffect(() => {
-    if (bootstrap?.current_die) setCurrentDie(bootstrap.current_die)
-    if (bootstrap?.last_rolled_result !== undefined && bootstrap?.last_rolled_result !== null) {
-      setRolledResult(bootstrap.last_rolled_result)
+    const effectiveDie = manualDie ?? currentDie
+    if (effectiveDie) setCurrentDie(effectiveDie)
+    if (lastRolledResult !== undefined && lastRolledResult !== null) {
+      setRolledResult(lastRolledResult)
       setDiceState('rolled')
     }
-  }, [bootstrap?.current_die, bootstrap?.last_rolled_result, setCurrentDie, setRolledResult, setDiceState])
+  }, [manualDie, currentDie, lastRolledResult, setCurrentDie, setRolledResult, setDiceState])
 }
