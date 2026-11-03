@@ -202,6 +202,8 @@ BRANCH_RE = re.compile(r"^factory/\d+-(\d+)-")
 PART_OF_RE = re.compile(
     r"(?i)^Part of #(\d+)(?:\s+and governed by #\d+)?\.?$"
 )
+FENCED_BLOCK_START_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+FENCED_BLOCK_END_RE = re.compile(r"^ {0,3}(`+|~+)[ \t]*$")
 
 
 def linked_issue(branch: str, body: str) -> int | None:
@@ -235,7 +237,25 @@ def nonclosing_part_of(body: str) -> int | None:
     Returns:
         Explicit linked issue number, or None when no canonical line exists.
     """
+    fence: tuple[str, int] | None = None
     for line in body.splitlines():
+        if fence is not None:
+            closing_match = FENCED_BLOCK_END_RE.fullmatch(line)
+            if closing_match is not None:
+                closing = closing_match.group(1)
+                if closing[0] == fence[0] and len(closing) >= fence[1]:
+                    fence = None
+            continue
+
+        fence_match = FENCED_BLOCK_START_RE.fullmatch(line)
+        if fence_match is not None:
+            delimiter, info = fence_match.groups()
+            if delimiter[0] != "`" or "`" not in info:
+                fence = (delimiter[0], len(delimiter))
+                continue
+
+        if line.startswith("\t") or len(line) - len(line.lstrip(" ")) >= 4:
+            continue
         match = PART_OF_RE.fullmatch(line.strip())
         if match:
             return int(match.group(1))

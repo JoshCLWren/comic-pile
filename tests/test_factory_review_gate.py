@@ -2532,6 +2532,20 @@ def test_nonclosing_part_of_link_is_reviewable_but_does_not_close_issue(
     assert module.linked_issue_for_pr(1390, "local/acp-4348") is None
 
 
+def test_code_block_part_of_example_is_not_a_review_issue_link(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Markdown code examples do not become trusted review issue references."""
+    module = load_review_controller()
+    monkeypatch.setattr(
+        module,
+        "pr_json",
+        lambda _pr: {"body": "```text\nPart of #4348\n```"},
+    )
+
+    assert module.linked_issue_for_pr(1390, "local/feature") is None
+
+
 @pytest.mark.parametrize(
     "worker_script",
     [

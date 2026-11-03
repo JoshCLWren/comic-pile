@@ -157,6 +157,20 @@ def test_casual_issue_mentions_do_not_link_local_prs():
         assert acceptance.linked_issue("local/feature", body) is None
 
 
+def test_part_of_examples_in_markdown_code_blocks_do_not_link_local_prs():
+    bodies = (
+        "```text\nPart of #4010\n```",
+        "~~~\nPart of #4010\n~~~",
+        "    Part of #4010",
+        "\tPart of #4010",
+    )
+
+    for body in bodies:
+        assert acceptance.linked_issue("local/feature", body) is None
+
+    assert acceptance.linked_issue("local/feature", "Part of #4010") == 4010
+
+
 def test_large_report_parses_without_truncating_criterion_evidence():
     import json
     report = complete_report()
