@@ -32,10 +32,12 @@ async def test_core_scalar_parity() -> None:
         await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
     engine = create_async_engine(
         url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": schema}},
+        connect_args={"server_settings": {"search_path": f"{schema},public"}},
     )
     try:
         async with engine.begin() as connection:
+            # Isolated schema first; keep public on the path for pg_trgm's
+            # gin_trgm_ops operator class (Alembic c40080000001).
             await connection.run_sync(Base.metadata.create_all)
         async with AsyncSession(engine, expire_on_commit=False) as db:
             reader, foreign = User(username="core-reader"), User(username="foreign-reader")

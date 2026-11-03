@@ -60,10 +60,12 @@ async def test_session_bootstrap_parity(scenario):
         await c.execute(text(f'CREATE SCHEMA "{schema}"'))
     engine = create_async_engine(
         url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": schema}},
+        connect_args={"server_settings": {"search_path": f"{schema},public"}},
     )
     try:
         async with engine.begin() as c:
+            # Isolated schema first; keep public on the path for pg_trgm's
+            # gin_trgm_ops operator class (Alembic c40080000001).
             await c.run_sync(Base.metadata.create_all)
         async with AsyncSession(engine, expire_on_commit=False) as db:
             reader, foreign = User(username="session-reader"), User(username="foreign")
@@ -334,10 +336,12 @@ async def test_corrupt_session_json_recovers_in_place_and_keeps_pending_roll():
         await c.execute(text(f'CREATE SCHEMA "{schema}"'))
     engine = create_async_engine(
         url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": schema}},
+        connect_args={"server_settings": {"search_path": f"{schema},public"}},
     )
     try:
         async with engine.begin() as c:
+            # Isolated schema first; keep public on the path for pg_trgm's
+            # gin_trgm_ops operator class (Alembic c40080000001).
             await c.run_sync(Base.metadata.create_all)
         async with AsyncSession(engine, expire_on_commit=False) as db:
             reader = User(username="corrupt-reader")
@@ -468,10 +472,12 @@ async def test_read_only_get_projects_foreign_pending_issue_without_persisting_r
         await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
     engine = create_async_engine(
         url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": schema}},
+        connect_args={"server_settings": {"search_path": f"{schema},public"}},
     )
     try:
         async with engine.begin() as connection:
+            # Isolated schema first; keep public on the path for pg_trgm's
+            # gin_trgm_ops operator class (Alembic c40080000001).
             await connection.run_sync(Base.metadata.create_all)
         async with AsyncSession(engine, expire_on_commit=False) as db:
             owner = User(username="readonly-owner")

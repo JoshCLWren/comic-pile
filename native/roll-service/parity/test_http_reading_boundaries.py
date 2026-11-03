@@ -84,10 +84,12 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
         await connection.execute(text(f'CREATE SCHEMA "{name}"'))
     engine = create_async_engine(
         url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": name}},
+        connect_args={"server_settings": {"search_path": f"{name},public"}},
     )
     try:
         async with engine.begin() as connection:
+            # Isolated schema first; keep public on the path for pg_trgm's
+            # gin_trgm_ops operator class (Alembic c40080000001).
             await connection.run_sync(Base.metadata.create_all)
 
         now = datetime.now(UTC)

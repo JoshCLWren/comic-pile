@@ -12,6 +12,7 @@ on:
       - '.python-version'
       - 'tests/test_native_roll_workflow.py'
       - '.github/workflows/rust-roll.yml'
+      - 'scripts/export_roll_test_schema.py'
       - 'tests/fixtures/roll-v2/auth-matrix.json'
   push:
     branches: [main]
@@ -25,6 +26,7 @@ on:
       - '.python-version'
       - 'tests/test_native_roll_workflow.py'
       - '.github/workflows/rust-roll.yml'
+      - 'scripts/export_roll_test_schema.py'
       - 'tests/fixtures/roll-v2/auth-matrix.json'
   workflow_dispatch:
 

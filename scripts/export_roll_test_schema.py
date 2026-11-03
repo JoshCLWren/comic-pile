@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,27 @@ DROPPED_SETTINGS = ("SET transaction_timeout = 0;",)
 # The fixture is a whole-database dump so extension creation (pg_trgm, created
 # by migration c40080000001) travels with the tables that index with it.
 DROPPED_STATEMENTS = ("CREATE SCHEMA public;",)
+# pg_dump always emits `SET search_path = ''`. Some client versions then leave
+# the pg_trgm GIN operator class unqualified. Qualify it so the fixture replays
+# against an empty search_path the same way production objects live in public.
+_UNQUALIFIED_GIN_TRGM_OPS = re.compile(r"(?<![\w.])gin_trgm_ops\b")
+
+
+def _qualify_extension_operator_classes(sql: str) -> str:
+    """Qualify ``pg_trgm`` operator classes so empty ``search_path`` can replay.
+
+    Production creates ``pg_trgm`` in ``public`` (Alembic ``c40080000001``).
+    The dump must name ``public.gin_trgm_ops`` explicitly because pg_dump
+    clears ``search_path`` before emitting index DDL. Already-qualified names
+    are left unchanged so regeneration stays idempotent across pg_dump versions.
+
+    Args:
+        sql: Schema-only SQL, possibly with unqualified ``gin_trgm_ops``.
+
+    Returns:
+        The same SQL with every bare ``gin_trgm_ops`` token schema-qualified.
+    """
+    return _UNQUALIFIED_GIN_TRGM_OPS.sub("public.gin_trgm_ops", sql)
 
 
 def _normalize(raw: str) -> str:
@@ -58,7 +80,7 @@ def _normalize(raw: str) -> str:
         if stripped in DROPPED_STATEMENTS:
             continue
         kept.append(line)
-    return "\n".join(kept).rstrip("\n") + "\n"
+    return _qualify_extension_operator_classes("\n".join(kept).rstrip("\n") + "\n")
 
 
 def _assert_at_head(database_url: str) -> None:
