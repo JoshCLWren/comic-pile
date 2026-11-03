@@ -832,11 +832,6 @@ fn continuity_plan_reader_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        config::Config,
-        reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
-    };
-    use std::collections::BTreeMap;
 
     #[test]
     fn ordering_mode_mapping() {

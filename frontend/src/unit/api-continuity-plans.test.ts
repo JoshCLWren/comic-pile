@@ -73,7 +73,7 @@ describe('continuityPlansApi', () => {
     client.get.mockResolvedValueOnce(reader)
 
     await expect(continuityPlansApi.getReader(12)).resolves.toEqual(reader)
-    expect(client.get).toHaveBeenCalledWith('/v1/continuity-plans/12/reader')
+    expect(client.get).toHaveBeenCalledWith('/v2/continuity-plans/12/reader')
   })
 
   it('replaces a plan with a full ordered payload', async () => {
