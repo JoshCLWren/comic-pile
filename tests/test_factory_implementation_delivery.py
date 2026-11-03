@@ -292,6 +292,8 @@ def test_omitted_large_patch_reads_the_whole_base_file_instead_of_failing() -> N
             return json.dumps({
                 "head": {"sha": HEAD}, "base": {"sha": "base"},
             })
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
         if endpoint.endswith("/files"):
             # No `patch` field at all: this is how GitHub reports a change too
             # large to inline.
@@ -300,7 +302,7 @@ def test_omitted_large_patch_reads_the_whole_base_file_instead_of_failing() -> N
             }]])
         if f"ref={HEAD}" in endpoint:
             return new
-        if "ref=base" in endpoint:
+        if "ref=ancestor" in endpoint:
             return old
         raise AssertionError(f"unexpected read {endpoint}")
 
@@ -351,11 +353,13 @@ def test_omitted_patch_for_a_removed_file_reads_the_base_content() -> None:
             return json.dumps({
                 "head": {"sha": HEAD}, "base": {"sha": "base"},
             })
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
         if endpoint.endswith("/files"):
             return json.dumps([[{
                 "filename": removed, "status": "removed", "changes": 1,
             }]])
-        if "ref=base" in endpoint:
+        if "ref=ancestor" in endpoint:
             return "VALUE = 1\n"
         raise AssertionError(f"unexpected read {endpoint}")
 
@@ -377,6 +381,8 @@ def test_unavailable_base_source_still_fails_closed() -> None:
             return json.dumps({
                 "head": {"sha": HEAD}, "base": {"sha": "base"},
             })
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
         if endpoint.endswith("/files"):
             return json.dumps([[{
                 "filename": artifact, "status": "modified", "changes": 2,
@@ -439,13 +445,15 @@ def test_omitted_patch_fallback_matches_the_patch_reversal_evidence() -> None:
             return json.dumps({
                 "head": {"sha": HEAD}, "base": {"sha": "base"},
             })
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
         if endpoint.endswith("/files"):
             return json.dumps([[{
                 "filename": artifact, "status": "modified", "changes": 2,
             }]])
         if f"ref={HEAD}" in endpoint:
             return new
-        if "ref=base" in endpoint:
+        if "ref=ancestor" in endpoint:
             return old
         raise AssertionError(f"unexpected read {endpoint}")
 
@@ -453,6 +461,95 @@ def test_omitted_patch_fallback_matches_the_patch_reversal_evidence() -> None:
     _, omitted_diff = delivery.complete_pr_diff(44, HEAD, "owner/repo", omitted_read)
 
     assert patched_diff == omitted_diff
+
+
+
+def test_omitted_patch_uses_merge_base_not_advanced_main_tip() -> None:
+    """Base branch updates must never look like authored PR changes."""
+    import json
+
+    artifact = "frontend/src/generated/openapi.json"
+    calls: list[str] = []
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        calls.append(endpoint)
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "advanced-main"},
+            })
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+            }]])
+        if "/compare/advanced-main..." in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
+        if f"ref={HEAD}" in endpoint:
+            return "VALUE = 2\n"
+        if "ref=ancestor" in endpoint:
+            return "VALUE = 1\n"
+        if "ref=advanced-main" in endpoint:
+            raise AssertionError("moving main tip used instead of merge base")
+        raise AssertionError(f"unexpected read {endpoint}")
+
+    _, diff = delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+
+    assert "-VALUE = 1" in diff
+    assert "+VALUE = 2" in diff
+    assert any("/compare/advanced-main..." in call for call in calls)
+    assert not any("ref=advanced-main" in call for call in calls)
+
+
+def test_omitted_patch_without_verified_merge_base_fails_closed() -> None:
+    """A missing merge-base identity cannot authorize source evidence."""
+    import json
+
+    artifact = "frontend/src/generated/openapi.json"
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "advanced-main"},
+            })
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+            }]])
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {}})
+        if f"ref={HEAD}" in endpoint:
+            return "new\n"
+        raise AssertionError(f"unexpected base-file read {endpoint}")
+
+    with pytest.raises(RuntimeError, match="source patch unavailable"):
+        delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+
+
+def test_omitted_patch_on_merged_head_fails_closed() -> None:
+    """An already-merged head cannot stand in for its original pre-change source."""
+    import json
+
+    artifact = "frontend/src/generated/openapi.json"
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "main-now"},
+            })
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+            }]])
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": HEAD}})
+        if f"ref={HEAD}" in endpoint:
+            return "new\n"
+        raise AssertionError(f"unexpected base-file read {endpoint}")
+
+    with pytest.raises(RuntimeError, match="source patch unavailable"):
+        delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
 
 
 def test_head_change_still_fails_closed_before_any_source_read() -> None:
