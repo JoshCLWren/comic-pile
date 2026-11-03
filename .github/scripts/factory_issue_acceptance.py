@@ -194,7 +194,7 @@ def validate(report: Mapping[str, Any] | None, issue: int, head: str, body: str,
         # e.g. path.py:33-69 or path.rs:191-342,245-336. Only the pathname
         # participates in diff membership; arbitrary suffixes still fail.
         if isinstance(cited_file, str):
-            cited_file = re.sub(r":\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*$", "", cited_file)
+            cited_file = re.sub(r":\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$", "", cited_file)
         if not isinstance(cited_file, str) or cited_file not in changed:
             errors.append(f"{name}: cite a file changed by this PR")
         evidence = item.get("evidence")
