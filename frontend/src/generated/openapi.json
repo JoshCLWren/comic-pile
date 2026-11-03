@@ -17991,6 +17991,14 @@
       "RollOfferRequest": {
         "additionalProperties": false,
         "properties": {
+          "expected_pending_thread_id": {
+            "description": "A Queue action may only reroll the exact pending thread shown to the user.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "idempotency_key": {
             "description": "Stable client key; retries return the original offer without re-rolling.",
             "type": "string"

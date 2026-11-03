@@ -15104,6 +15104,11 @@ export interface components {
             thread_title?: string | null;
         };
         RollOfferRequest: {
+            /**
+             * Format: int32
+             * @description A Queue action may only reroll the exact pending thread shown to the user.
+             */
+            expected_pending_thread_id?: number | null;
             /** @description Stable client key; retries return the original offer without re-rolling. */
             idempotency_key: string;
             /** @description Threads this browser has temporarily snoozed (cookie authority only). */

@@ -2324,6 +2324,14 @@
           "idempotency_key"
         ],
         "properties": {
+          "expected_pending_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "A Queue action may only reroll the exact pending thread shown to the user."
+          },
           "idempotency_key": {
             "type": "string",
             "description": "Stable client key; retries return the original offer without re-rolling."
