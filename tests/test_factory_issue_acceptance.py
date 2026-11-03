@@ -152,3 +152,61 @@ def test_large_report_parses_without_truncating_criterion_evidence():
     line = acceptance.PREFIX + json.dumps(report)
     assert len(line) > 7000
     assert acceptance.report_from_text("Review complete\n" + line) == report
+
+
+def test_opencode_jsonl_assistant_text_acceptance_report_is_parsed():
+    """A real OpenCode assistant text event can carry the structured report."""
+    import json
+
+    report = complete_report()
+    line = acceptance.PREFIX + json.dumps(report)
+    event = json.dumps({
+        "type": "text",
+        "timestamp": 1793748011648,
+        "part": {"type": "text", "text": line + "\\nFACTORY_GATE_READY"},
+    })
+    assert acceptance.report_from_text(event) == report
+    assert acceptance.validate(
+        acceptance.report_from_text(event), 4010, HEAD, ISSUE, (FILE,)
+    ) == []
+
+
+def test_tool_output_and_event_metadata_cannot_mint_acceptance():
+    """Untrusted tool results and non-assistant events are never evidence."""
+    import json
+
+    line = acceptance.PREFIX + json.dumps(complete_report())
+    events = [
+        {"type": "tool_use", "part": {"type": "tool", "text": line},
+         "metadata": {"output": line}},
+        {"type": "step_finish", "part": {"type": "step-finish"},
+         "metadata": {"output": line}},
+        {"type": "text", "part": {"type": "tool", "text": line}},
+        {"type": "text", "part": {"type": "text", "text": line}},
+    ]
+    log = "\\n".join(json.dumps(event) for event in events)
+    assert acceptance.report_from_text(log) == complete_report()
+    assert acceptance.report_from_text(
+        "\\n".join(json.dumps(event) for event in events[:-1])
+    ) is None
+
+
+def test_multiple_jsonl_assistant_reports_fail_closed():
+    """Two reports are ambiguous even if the two copies are identical."""
+    import json
+
+    line = acceptance.PREFIX + json.dumps(complete_report())
+    event = json.dumps({"type": "text", "part": {"type": "text", "text": line}})
+    assert acceptance.report_from_text(event + "\\n" + event) is None
+    assert acceptance.report_from_text(line + "\\n" + event) is None
+
+
+def test_changed_path_citations_allow_numeric_line_ranges_only():
+    """Line spans are review evidence, not changes to the actual path."""
+    report = complete_report()
+    for span in (":21", ":21-45", ":21-45,62-68"):
+        report["items"][0]["file"] = FILE + span
+        assert errors(report) == []
+    for invalid in (FILE + " tests", FILE + ":21-45 notes", "other.py:21-45", []):
+        report["items"][0]["file"] = invalid
+        assert "cite a file changed" in " ".join(errors(report))
