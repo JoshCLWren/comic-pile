@@ -782,6 +782,9 @@ mod tests {
         connection
             .batch_execute(
                 "CREATE SCHEMA IF NOT EXISTS queue_unit_test; \
+                 CREATE TABLE IF NOT EXISTS queue_unit_test.users ( \
+                     id integer PRIMARY KEY \
+                 ); \
                  CREATE TABLE IF NOT EXISTS queue_unit_test.threads ( \
                      id integer PRIMARY KEY, \
                      user_id integer NOT NULL, \
@@ -870,7 +873,7 @@ mod tests {
                      external_identity_id bigint, \
                      status text \
                  ); \
-                 TRUNCATE queue_unit_test.threads, queue_unit_test.events, \
+                 TRUNCATE queue_unit_test.users, queue_unit_test.threads, queue_unit_test.events, \
                      queue_unit_test.issues, queue_unit_test.dependencies, \
                      queue_unit_test.custom_cbl_lists, \
                      queue_unit_test.custom_cbl_entries, \
@@ -880,7 +883,8 @@ mod tests {
                      queue_unit_test.catalog_series, \
                      queue_unit_test.catalog_issues, \
                      queue_unit_test.thread_external_series_mappings \
-                     RESTART IDENTITY;",
+                     RESTART IDENTITY; \
+                 INSERT INTO queue_unit_test.users (id) VALUES (7), (9);",
             )
             .await
             .expect("queue test schema");

@@ -60,12 +60,17 @@ jobs:
         run: cargo fmt --all --check
       - name: Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
-      - name: Unit and integration tests
-        run: cargo test --locked --all-targets
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       - name: Install Python oracle dependencies
         working-directory: .
         run: uv sync --frozen --all-extras
+      - name: Prepare the migrated PostgreSQL schema for Rust integration tests
+        working-directory: .
+        env:
+          DATABASE_URL: postgresql://postgres:native-local-test@127.0.0.1:5432/native_auth_test
+        run: uv run alembic upgrade head
+      - name: Unit and integration tests
+        run: cargo test --locked --all-targets
       - name: Build scalar parity runner
         run: cargo build --locked --examples
       - name: Python versus Rust scalar parity

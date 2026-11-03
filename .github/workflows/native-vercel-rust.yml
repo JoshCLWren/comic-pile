@@ -13,7 +13,7 @@ jobs:
   native-vercel-rust:
     name: Rust function build and tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:16
@@ -41,6 +41,13 @@ jobs:
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - name: Install migration dependencies
+        run: uv sync --frozen --all-extras
+      - name: Prepare the migrated PostgreSQL schema for Rust integration tests
+        env:
+          DATABASE_URL: postgresql://postgres:native-local-test@127.0.0.1:5432/native_auth_test
+        run: uv run alembic upgrade head
       - name: Check Vercel Rust function formatting
         run: cargo fmt --manifest-path Cargo.toml -- --check
       - name: Compile the native Vercel Rust function

@@ -945,7 +945,7 @@ mod tests {
                 INSERT INTO continuity_plans
                     (id, user_id, name, ordering_mode, nodes_json, lanes_json,
                      created_at, updated_at)
-                VALUES (20, 7, 'Fixture Plan', 'strict', '[]'::json, '[]'::json, now(), now());
+                VALUES (20, 7, 'Fixture Plan', 'strict_sequential', '[]'::json, '[]'::json, now(), now());
                 INSERT INTO custom_cbl_lists
                     (id, user_id, name, mode, created_at, updated_at)
                 VALUES (30, 7, 'Fixture List', 'strict', now(), now());
@@ -1050,8 +1050,8 @@ mod tests {
                     (id, user_id, name, ordering_mode, nodes_json, lanes_json,
                      created_at, updated_at)
                 VALUES
-                    (21, 8, 'Foreign Plan', 'strict', '[]'::json, '[]'::json, now(), now()),
-                    (22, 7, 'Unlinked Plan', 'strict', '[]'::json, '[]'::json, now(), now());
+                    (21, 8, 'Foreign Plan', 'strict_sequential', '[]'::json, '[]'::json, now(), now()),
+                    (22, 7, 'Unlinked Plan', 'strict_sequential', '[]'::json, '[]'::json, now(), now());
                 "#,
             )
             .await
