@@ -1068,7 +1068,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
     # The request logging middleware was registered in its original position,
     # but this completion callback must run after the actual startup handler.
-    app.add_event_handler("startup", app.state.record_startup_completion)
+    app.router.add_event_handler("startup", app.state.record_startup_completion)
 
     return app
 
