@@ -1164,7 +1164,10 @@ mod tests {
         drop(connection);
         let snapshot = load_reader_snapshot(&state, &claims, 20).await.unwrap();
         assert_eq!(snapshot.release_candidates.len(), 1);
-        assert_eq!(snapshot.release_candidates[0].external_identity_id, Some(62));
+        assert_eq!(
+            snapshot.release_candidates[0].external_identity_id,
+            Some(62)
+        );
         assert!(snapshot.release_candidates[0].enableable);
         // The source metadata may use "name" rather than "title".
         let followed_source = snapshot
