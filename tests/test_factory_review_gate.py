@@ -3345,3 +3345,93 @@ def test_declared_dependency_gate_records_one_durable_block_reason(
         in posted[0]
     )
     assert "#4008" in posted[0]
+
+def test_controller_projects_accepted_head_approval_without_event(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Controller bot comments do not trigger issue_comment GitHub Actions."""
+    module = load_review_controller()
+    writes: list[tuple[list[str], object]] = []
+    monkeypatch.setattr(
+        module, "pr_json",
+        lambda _pr: {"state": "OPEN", "headRefOid": REVIEWED_HEAD},
+    )
+    monkeypatch.setattr(
+        module, "target_json",
+        lambda _pr: {"body": "", "labels": [
+            "factory", "factory:review", "factory:unowned", "priority:high"
+        ]},
+    )
+    monkeypatch.setattr(
+        module, "run_gh",
+        lambda args, *, input_json=None: writes.append((args, input_json)),
+    )
+    marker = (
+        "<!-- comic-pile-factory-acceptance-v1:issue-4612:"
+        f"head-{REVIEWED_HEAD}:digest-{'b' * 64} -->"
+    )
+    module.post_review_comment(
+        pr_number=4613, marker=None, reviewer="64", verdict="approve",
+        excerpt="", note="Exact-head acceptance passed", acceptance_marker=marker,
+    )
+    assert len(writes) == 3  # review comment, acceptance marker, label PUT
+    assert writes[2][0][:3] == ["api", "--method", "PUT"]
+    labels = set(writes[2][1]["labels"])
+    assert labels == {
+        "factory", "factory:review", "factory:unowned", "priority:high",
+        "factory:approved",
+    }
+
+
+def test_controller_approval_visibility_rejects_stale_head_or_repair_stage(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Only live accepted review heads can receive an informational label."""
+    module = load_review_controller()
+    writes: list[object] = []
+    monkeypatch.setattr(
+        module, "run_gh",
+        lambda args, *, input_json=None: writes.append((args, input_json)),
+    )
+    monkeypatch.setattr(
+        module, "pr_json",
+        lambda _pr: {"state": "OPEN", "headRefOid": MOVED_HEAD},
+    )
+    module.set_review_approval_visibility(4613, REVIEWED_HEAD)
+    assert writes == []
+    monkeypatch.setattr(
+        module, "pr_json",
+        lambda _pr: {"state": "OPEN", "headRefOid": REVIEWED_HEAD},
+    )
+    for stage in ("factory:building", "factory:changes-requested"):
+        monkeypatch.setattr(
+            module, "target_json",
+            lambda _pr, stage=stage: {"body": "", "labels": [stage]},
+        )
+        module.set_review_approval_visibility(4613, REVIEWED_HEAD)
+    assert writes == []
+
+
+def test_controller_repair_transition_clears_stale_approved_label(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A later actionable repair never retains an earlier approval label."""
+    module = load_review_controller()
+    writes: list[object] = []
+    monkeypatch.setattr(
+        module, "target_json",
+        lambda _pr: {"body": "", "labels": [
+            "factory", "factory:review", "factory:unowned",
+            "factory:approved", "bug",
+        ]},
+    )
+    monkeypatch.setattr(
+        module, "run_gh",
+        lambda args, *, input_json=None: writes.append(input_json),
+    )
+    module.replace_factory_labels(
+        4613, "factory:unowned", "factory:changes-requested"
+    )
+    assert writes
+    assert "factory:approved" not in writes[0]["labels"]
+    assert "bug" in writes[0]["labels"]
