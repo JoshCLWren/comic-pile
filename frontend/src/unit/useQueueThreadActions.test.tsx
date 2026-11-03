@@ -279,7 +279,7 @@ describe('useQueueThreadActions', () => {
     )
 
     await result.current.handleSnoozeToggle(makeThread({ id: 4, title: 'Pending Comic' }), false)
-    expect(reroll).toHaveBeenCalledTimes(1)
+    expect(reroll).toHaveBeenCalledExactlyOnceWith(4)
     expect(unsnooze.mutate).not.toHaveBeenCalled()
     expect(toastSpy).toHaveBeenCalledWith(
       'Snoozed "Pending Comic" and rolled "Next Comic". Open Roll to read it.',
@@ -309,7 +309,7 @@ describe('useQueueThreadActions', () => {
 
     await result.current.handleSnoozeToggle(makeThread({ id: 4 }), false)
 
-    expect(reroll).toHaveBeenCalledTimes(1)
+    expect(reroll).toHaveBeenCalledExactlyOnceWith(4)
     expect(sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated).toBe(true)
   })
 
