@@ -224,6 +224,8 @@ def add_request_logging_middleware(
     Args:
         app: FastAPI application instance to wire the middleware onto.
         environment: Current application environment.
+        defer_startup_event: Register the startup callback after the caller finishes
+            configuring application startup handlers when true.
     """
     # Initialize performance budget manager
     budget_manager = get_performance_budget_manager()
@@ -260,7 +262,7 @@ def add_request_logging_middleware(
         # application append startup logging after its awaited initialization.
         app.state.record_startup_completion = record_startup_completion
     else:
-        app.add_event_handler("startup", record_startup_completion)
+        app.router.add_event_handler("startup", record_startup_completion)
 
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):
