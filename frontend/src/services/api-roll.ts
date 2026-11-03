@@ -16,6 +16,8 @@ type RollOfferPayload = {
 
 type RollOfferResponse = RollResponse & { snoozed_thread_id?: number | null }
 
+type PendingOffer = { key: string; expectedPendingThreadId?: number }
+
 const SNOOZE_COOKIE = 'comicpile_roll_snoozes'
 const PENDING_OFFER_KEY = 'comicpile:roll:pending-offer'
 const PENDING_RESET_KEY = 'comicpile:roll:pending-reset'
@@ -111,18 +113,30 @@ function clearPendingResetKey(key: string): void {
   }
 }
 
-function readPendingOfferKey(): string | null {
+function readPendingOfferKey(): PendingOffer | null {
   try {
     const raw = globalThis.sessionStorage?.getItem(PENDING_OFFER_KEY)
-    return raw && OFFER_KEY_PATTERN.test(raw) ? raw : null
+    if (!raw) return null
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed.key === 'string' && OFFER_KEY_PATTERN.test(parsed.key)) {
+        return { key: parsed.key, expectedPendingThreadId: parsed.expectedPendingThreadId }
+      }
+    } catch {
+      // ignore parse errors
+    }
+    if (OFFER_KEY_PATTERN.test(raw)) {
+      return { key: raw }
+    }
+    return null
   } catch {
     return null
   }
 }
 
-function writePendingOfferKey(key: string): void {
+function writePendingOfferKey(pending: PendingOffer): void {
   try {
-    globalThis.sessionStorage?.setItem(PENDING_OFFER_KEY, key)
+    globalThis.sessionStorage?.setItem(PENDING_OFFER_KEY, JSON.stringify(pending))
   } catch {
     // In-memory retry safety remains for this page instance.
   }
@@ -130,7 +144,8 @@ function writePendingOfferKey(key: string): void {
 
 function clearPendingOfferKey(key: string): void {
   try {
-    if (readPendingOfferKey() === key) {
+    const pending = readPendingOfferKey()
+    if (pending?.key === key) {
       globalThis.sessionStorage?.removeItem(PENDING_OFFER_KEY)
     }
   } catch {
@@ -183,13 +198,19 @@ function clearPendingManualDie(key: string): void {
  */
 export function createRollApi(client: HttpClient) {
   let unresolvedManual: PendingManualDie | null = readPendingManualDie()
-  let unresolvedOfferKey: string | null = readPendingOfferKey()
+  let unresolvedOffer: PendingOffer | null = readPendingOfferKey()
   let unresolvedResetKey: string | null = readPendingResetKey()
 
   const offer = async (expectedPendingThreadId?: number): Promise<RollOfferResponse> => {
-    const key = unresolvedOfferKey ?? newOfferKey()
-    unresolvedOfferKey = key
-    writePendingOfferKey(key)
+    const existing = unresolvedOffer
+    let key: string
+    if (existing?.key && existing.expectedPendingThreadId === expectedPendingThreadId) {
+      key = existing.key
+    } else {
+      key = newOfferKey()
+    }
+    unresolvedOffer = { key, expectedPendingThreadId }
+    writePendingOfferKey(unresolvedOffer)
     const payload: RollOfferPayload = {
       timezone: browserTimeZone(),
       snoozed_thread_ids: readRollSnoozes(),
@@ -202,7 +223,7 @@ export function createRollApi(client: HttpClient) {
       '/v2/roll/offer',
       payload,
     )
-    if (unresolvedOfferKey === key) unresolvedOfferKey = null
+    if (unresolvedOffer?.key === key) unresolvedOffer = null
     clearPendingOfferKey(key)
     if (response.snoozed_thread_id) {
       writeRollSnoozes([...readRollSnoozes(), response.snoozed_thread_id])
@@ -242,7 +263,7 @@ export function createRollApi(client: HttpClient) {
       writeRollSnoozes([])
       // A reset discards the pre-reset intent: never replay an unanswered
       // offer or manual-die key against the fresh state.
-      unresolvedOfferKey = null
+      unresolvedOffer = null
       unresolvedManual = null
       try {
         globalThis.sessionStorage?.removeItem(PENDING_OFFER_KEY)
