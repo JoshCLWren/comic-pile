@@ -2,6 +2,7 @@
 pub mod auth;
 pub mod bootstrap;
 pub mod config;
+pub mod continuity_plan_reader;
 pub mod db;
 pub mod dice_api;
 pub mod dice_mutation;
@@ -248,6 +249,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
         .route("/api/v2/threads", get(threads::list_threads))
+        .route(
+            "/api/v2/continuity-plans/{plan_id}/reader",
+            get(continuity_plan_reader::continuity_plan_reader_v2),
+        )
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
         .route(
