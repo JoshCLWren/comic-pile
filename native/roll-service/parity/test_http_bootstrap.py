@@ -34,7 +34,12 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         async with engine.begin() as connection:
             # Isolated schema first; keep public on the path for pg_trgm's
             # gin_trgm_ops operator class (Alembic c40080000001).
-            await connection.run_sync(Base.metadata.create_all)
+            # Skip catalog checks so public tables are not mistaken for isolated tables.
+            await connection.run_sync(
+                lambda sync_connection: Base.metadata.create_all(
+                    sync_connection, checkfirst=False
+                )
+            )
         now = datetime.now(UTC)
         username = f"nr_{uuid4().hex[:16]}"
         async with AsyncSession(engine, expire_on_commit=False) as db:
