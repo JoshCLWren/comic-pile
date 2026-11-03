@@ -497,9 +497,7 @@ mod tests {
         assert!(require_expected_pending(None, Some(7)).is_ok());
         assert!(require_expected_pending(Some(7), Some(7)).is_ok());
         assert_eq!(
-            require_expected_pending(Some(7), Some(8))
-                .unwrap_err()
-                .0,
+            require_expected_pending(Some(7), Some(8)).unwrap_err().0,
             StatusCode::CONFLICT
         );
         assert_eq!(
