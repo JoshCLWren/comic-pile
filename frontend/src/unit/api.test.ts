@@ -18,7 +18,6 @@ const {
   migrationApi,
   preferencesApi,
   queueApi,
-  rateApi,
   rollApi,
   sessionApi,
   snoozeApi,
@@ -160,7 +159,6 @@ it('calls every remaining API resource endpoint', async () => {
   await rollApi.reroll()
   await rollApi.setDie(6)
   await rollApi.clearManualDie()
-  await rateApi.rate({ thread_id: 1, rating: 4 })
   await sessionApi.list({ status: 'complete' }, 'page')
   await sessionApi.get(1)
   await sessionApi.getCurrent()

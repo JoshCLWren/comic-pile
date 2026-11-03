@@ -385,7 +385,7 @@ export async function submitRatingAndWaitForRateResponse(
   submitAction: () => Promise<void>,
 ): Promise<void> {
   const rateResponse = page.waitForResponse(
-    (response) => response.url().includes('/api/v1/rate/') && response.request().method() === 'POST',
+    (response) => response.url().includes('/api/v2/issues/') && response.request().method() === 'PATCH',
   )
 
   await submitAction()

@@ -108,7 +108,7 @@ const SCENARIOS: Scenario[] = [
     prepare: enterDeterministicRatingState,
     afterCapture: async (page) => {
       const rateResponse = page.waitForResponse(
-        (response) => response.url().includes('/api/v1/rate/') && response.request().method() === 'POST',
+        (response) => response.url().includes('/api/v2/issues/') && response.request().method() === 'PATCH',
       )
       await page.getByTestId('save-and-continue').click()
       expect((await rateResponse).ok()).toBe(true)

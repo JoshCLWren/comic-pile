@@ -1975,7 +1975,7 @@
               "string",
               "null"
             ],
-            "description": "Source of the rating action. \"direct\" for manual issue reads, \"roll_offer\" for Roll completion.\nWhen \"roll_offer\", applies die stepping, queue effects, and links to the originating offer event."
+            "description": "Source of the issue action. Omitted or \"direct\" is a manual read from a\nThread row: it never steps the die and never repositions the queue.\n\"roll_offer\" is a Roll completion: it applies the Roll rating semantics\n(die stepping, queue placement, and a link back to the originating offer\nevent) in the same transaction as the read."
           },
           "status": {
             "type": [

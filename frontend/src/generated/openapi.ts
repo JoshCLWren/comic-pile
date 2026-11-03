@@ -3667,26 +3667,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/rate/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Rate
-         * @description Delegate rating orchestration to the rate service.
-         */
-        post: operations["post_rate_api_v1_rate__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/reading-boundaries": {
         parameters: {
             query?: never;
@@ -12752,8 +12732,11 @@ export interface components {
              */
             rating?: number | null;
             /**
-             * @description Source of the rating action. "direct" for manual issue reads, "roll_offer" for Roll completion.
-             *     When "roll_offer", applies die stepping, queue effects, and links to the originating offer event.
+             * @description Source of the issue action. Omitted or "direct" is a manual read from a
+             *     Thread row: it never steps the die and never repositions the queue.
+             *     "roll_offer" is a Roll completion: it applies the Roll rating semantics
+             *     (die stepping, queue placement, and a link back to the originating offer
+             *     event) in the same transaction as the read.
              */
             source?: string | null;
             /** @description Explicit new status. Omit to leave read state unchanged. */
@@ -13655,95 +13638,6 @@ export interface components {
             next_page_token?: string | null;
             /** Threads */
             threads: components["schemas"]["QueueThreadListItem"][];
-        };
-        /**
-         * RateRequest
-         * @description Schema for rating request.
-         */
-        RateRequest: {
-            /**
-             * Direct
-             * @description Set by a Thread issue row rating (issue #3581). Roll requests keep the session-driven path even though they also send ``thread_id``.
-             * @default false
-             */
-            direct: boolean;
-            /**
-             * Finish Session
-             * @default false
-             */
-            finish_session: boolean;
-            /**
-             * Issue Number
-             * @description Issue number just read, e.g. '5' or 'Annual 1' (triggers migration if provided)
-             */
-            issue_number?: string | null;
-            /** Rating */
-            rating: number;
-            /**
-             * Thread Id
-             * @description Explicit thread being rated (issue #3581). Required when ``direct`` is true; the rating is then applied to that owned thread instead of the pending Roll target.
-             */
-            thread_id?: number | null;
-        };
-        /**
-         * RateResponse
-         * @description Rate response extending ThreadResponse with roll reconciliation.
-         *
-         *     Subclasses ThreadResponse so every current top-level field is preserved
-         *     exactly, and adds ``roll_reconciliation.last_read`` for the v2 contract.
-         *     Declared as the FastAPI ``response_model`` so the extra field is not
-         *     filtered out.
-         */
-        RateResponse: {
-            /**
-             * Blocking Reasons
-             * @default []
-             */
-            blocking_reasons: string[];
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Format */
-            format: string;
-            /** Id */
-            id: number;
-            /**
-             * Is Blocked
-             * @default false
-             */
-            is_blocked: boolean;
-            /** Is Test */
-            is_test: boolean;
-            /** Issues Remaining */
-            issues_remaining: number;
-            /** Last Activity At */
-            last_activity_at: string | null;
-            /** Last Rating */
-            last_rating: number | null;
-            /** Manual Creator Credits */
-            manual_creator_credits?: {
-                name: string;
-                roles: string[];
-            }[];
-            /** Next Unread Issue Id */
-            next_unread_issue_id?: number | null;
-            /** Next Unread Issue Number */
-            next_unread_issue_number?: string | null;
-            /** Notes */
-            notes: string | null;
-            /** Queue Position */
-            queue_position: number;
-            /** Reading Progress */
-            reading_progress?: string | null;
-            roll_reconciliation?: components["schemas"]["RollReconciliation"] | null;
-            /** Status */
-            status: string;
-            /** Title */
-            title: string;
-            /** Total Issues */
-            total_issues?: number | null;
         };
         /**
          * ReactivateRequest
@@ -15150,22 +15044,6 @@ export interface components {
             /** Token */
             token: string;
         };
-        /**
-         * RollLastRead
-         * @description Session-scoped last read information.
-         */
-        RollLastRead: {
-            /** Issue Id */
-            issue_id?: number | null;
-            /** Issue Number */
-            issue_number?: string | null;
-            /** Read At */
-            read_at?: string | null;
-            /** Thread Id */
-            thread_id?: number | null;
-            /** Thread Title */
-            thread_title?: string | null;
-        };
         RollOfferRequest: {
             /** @description Stable client key; retries return the original offer without re-rolling. */
             idempotency_key: string;
@@ -15239,13 +15117,6 @@ export interface components {
             target_thread_id: number;
             /** Target Thread Title */
             target_thread_title: string;
-        };
-        /**
-         * RollReconciliation
-         * @description Roll reconciliation information for rate response.
-         */
-        RollReconciliation: {
-            last_read: components["schemas"]["RollLastRead"];
         };
         /**
          * RollRequest
@@ -21785,39 +21656,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_rate_api_v1_rate__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RateResponse"];
                 };
             };
             /** @description Validation Error */

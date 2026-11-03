@@ -410,7 +410,10 @@ async fn apply_roll_offer_effects(
 ) -> Result<(i32, Option<i32>), ApiError> {
     // Step the die first: this is the durable dice command, and its returned
     // `die_after` is the die the queue placement below must bound against.
-    let dice_key = format!("roll-rating-{}-{}", effects.thread_id, effects.idempotency_key);
+    let dice_key = format!(
+        "roll-rating-{}-{}",
+        effects.thread_id, effects.idempotency_key
+    );
     let stepped = dice_mutation::persist_in_transaction(
         tx,
         user,
@@ -527,7 +530,9 @@ async fn eligible_thread_ids(
     user: AuthenticatedUser,
 ) -> Result<Vec<i32>, ApiError> {
     let validated = option_inputs::load_validated_in_transaction(tx, user).await?;
-    let mut ids: Vec<i32> = queue::evaluated_eligible_ids(&validated)?.into_iter().collect();
+    let mut ids: Vec<i32> = queue::evaluated_eligible_ids(&validated)?
+        .into_iter()
+        .collect();
     ids.sort_unstable();
     Ok(ids)
 }

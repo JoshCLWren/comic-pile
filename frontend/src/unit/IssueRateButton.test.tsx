@@ -6,11 +6,13 @@ import { IssueRateButton } from '../pages/thread-detail/IssueRateButton'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
-import { rateApi } from '../services/api-rate'
+import { createNativeRollMutationApi } from '../services/nativeRollMutationApi'
 import type { Issue, Thread } from '../types'
 
-vi.mock('../services/api-rate', () => ({
-  rateApi: { rate: vi.fn() },
+vi.mock('../services/nativeRollMutationApi', () => ({
+  createNativeRollMutationApi: vi.fn(() => ({
+    rateDirect: vi.fn(),
+  })),
 }))
 
 vi.mock('../query/cacheEffects', () => ({
@@ -55,9 +57,13 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe('IssueRateButton', () => {
+  let mockRateDirect: ReturnType<typeof vi.fn>
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(applyRatedThreadCache).mockResolvedValue()
+    mockRateDirect = vi.fn()
+    vi.mocked(createNativeRollMutationApi).mockReturnValue({ rateDirect: mockRateDirect } as any)
   })
 
   it('rates the row directly and reconciles the issue and thread cache', async () => {
@@ -68,7 +74,7 @@ describe('IssueRateButton', () => {
       next_unread_issue_number: '3',
       last_rating: 4,
     }
-    vi.mocked(rateApi.rate).mockResolvedValue(ratedThread)
+    mockRateDirect.mockResolvedValue(ratedThread)
     const onSnapshotChange = vi.fn()
 
     render(
@@ -84,12 +90,14 @@ describe('IssueRateButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rate issue #2 4 out of 5' }))
 
     await waitFor(() => expect(onSnapshotChange).toHaveBeenCalledTimes(1))
-    expect(rateApi.rate).toHaveBeenCalledWith({
+    expect(mockRateDirect).toHaveBeenCalledWith(expect.objectContaining({
       thread_id: 7,
       rating: 4,
       direct: true,
       issue_number: '2',
-    })
+      issue_id: 11,
+      source: 'direct',
+    }))
     expect(applyRatedThreadCache).toHaveBeenCalledWith(queryClient, ratedThread)
     expect(onSnapshotChange).toHaveBeenCalledWith({
       issues: [{ ...issue, status: 'read', read_at: '2026-08-03T18:30:00Z' }],
@@ -104,7 +112,7 @@ describe('IssueRateButton', () => {
   })
 
   it('shows an error and keeps the issue unread when the server rejects the rating', async () => {
-    vi.mocked(rateApi.rate).mockRejectedValue(new Error('nope'))
+    mockRateDirect.mockRejectedValue(new Error('nope'))
     const onSnapshotChange = vi.fn()
 
     render(

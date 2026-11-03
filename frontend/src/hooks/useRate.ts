@@ -69,7 +69,7 @@ export function useRate(deps: RateDeps = {}) {
           }
           result = await nativeRollMutationApi.rateRollOffer(data as RatePayload & { issue_id: number; idempotency_key: string })
         } else {
-          // Use legacy POST /v1/rate/ for direct reads
+          // Use native PATCH /api/v2/issues/{issue_id} for direct reads (source="direct")
           result = await protectedRollApi.rate(data)
         }
         await applyCache(client, result)
