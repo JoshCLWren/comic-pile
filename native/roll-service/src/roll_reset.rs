@@ -50,6 +50,8 @@ pub(crate) async fn persist_reset(
             .execute(
                 "UPDATE sessions
                  SET pending_thread_id=NULL,pending_issue_id=NULL,
+                 -- Clear the legacy pin with the pending selection so it cannot
+                 -- override Reset Dice's event-derived d6 on the next bootstrap.
                      pending_thread_updated_at=NULL,manual_die=NULL
                  WHERE id=$1 AND user_id=$2",
                 &[&session_id, &user.id()],
