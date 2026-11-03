@@ -878,73 +878,101 @@ mod tests {
         let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("pending_validity_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL
-                 );
-                 CREATE TABLE {schema}.issues (
-                     id integer PRIMARY KEY, thread_id integer NOT NULL
-                 );
-                 INSERT INTO {schema}.users VALUES (1), (2);
-                 INSERT INTO {schema}.threads VALUES (10, 1), (20, 2);
-                 INSERT INTO {schema}.issues VALUES (100, 10), (200, 20);"
-            ))
-            .await
-            .unwrap();
+        // The real Alembic schema enforces the ownership and FK relationships
+        // that the old three-table test approximation omitted.
+        let config = crate::config::Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-pending-validity-test".into()),
+            _ => None,
+        })
+        .expect("reading-session test config");
+        let state = crate::AppState::new(config).expect("reading-session test state");
+        crate::test_support::ensure_schema(&state).await;
+
         let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
             .await
             .expect("disposable Postgres");
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        client
-            .batch_execute(&format!("SET search_path TO {schema}, public"))
+        // All seed rows stay inside this test's transaction. Other native
+        // tests may use the same database concurrently; no global TRUNCATE,
+        // schema DDL, committed rows or manually assigned IDs are needed.
+        let tx = client.transaction().await.expect("test transaction");
+        let owner_id: i32 = tx
+            .query_one(
+                "INSERT INTO users (username) VALUES ('pending-owner-' || nextval('users_id_seq')) RETURNING id",
+                &[],
+            )
             .await
-            .unwrap();
-        let tx = client.transaction().await.unwrap();
-        let user = AuthenticatedUser::for_test(1);
-
+            .expect("insert owner")
+            .get(0);
+        let foreign_id: i32 = tx
+            .query_one(
+                "INSERT INTO users (username) VALUES ('pending-foreign-' || nextval('users_id_seq')) RETURNING id",
+                &[],
+            )
+            .await
+            .expect("insert foreign reader")
+            .get(0);
+        let owner_thread: i32 = tx
+            .query_one(
+                "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status) VALUES ($1, 'Owned pending', 'Comic', 1, 1, 'active') RETURNING id",
+                &[&owner_id],
+            )
+            .await
+            .expect("insert owned thread")
+            .get(0);
+        let foreign_thread: i32 = tx
+            .query_one(
+                "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status) VALUES ($1, 'Foreign pending', 'Comic', 1, 1, 'active') RETURNING id",
+                &[&foreign_id],
+            )
+            .await
+            .expect("insert foreign thread")
+            .get(0);
+        let owner_issue: i32 = tx
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, status, created_at, position) VALUES ($1, '1', 'unread', now(), 1) RETURNING id",
+                &[&owner_thread],
+            )
+            .await
+            .expect("insert owned issue")
+            .get(0);
+        let foreign_issue: i32 = tx
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, status, created_at, position) VALUES ($1, '1', 'unread', now(), 1) RETURNING id",
+                &[&foreign_thread],
+            )
+            .await
+            .expect("insert foreign issue")
+            .get(0);
+        let user = AuthenticatedUser::for_test(owner_id);
         assert_eq!(
-            pending_validity(&tx, user, Some(10), Some(100))
+            pending_validity(&tx, user, Some(owner_thread), Some(owner_issue))
                 .await
                 .unwrap(),
             (true, true)
         );
         // Legacy Python Roll can leave an issue from another thread in place.
         assert_eq!(
-            pending_validity(&tx, user, Some(10), Some(200))
+            pending_validity(&tx, user, Some(owner_thread), Some(foreign_issue))
                 .await
                 .unwrap(),
             (true, false)
         );
-        // A dangling or foreign thread invalidates the whole pending pointer.
+        // A foreign thread invalidates the pending pointer.
         assert_eq!(
-            pending_validity(&tx, user, Some(20), None).await.unwrap(),
+            pending_validity(&tx, user, Some(foreign_thread), None)
+                .await
+                .unwrap(),
             (false, true)
         );
         assert_eq!(
             pending_validity(&tx, user, None, None).await.unwrap(),
             (true, true)
         );
-
-        tx.rollback().await.unwrap();
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
+        tx.rollback().await.expect("discard pending-test fixtures");
     }
+
 }
