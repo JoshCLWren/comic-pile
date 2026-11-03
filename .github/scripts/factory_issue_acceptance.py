@@ -199,10 +199,13 @@ CLOSING_RE = re.compile(
     r"(?i)\b(?:closes?|closed|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)"
 )
 BRANCH_RE = re.compile(r"^factory/\d+-(\d+)-")
+PART_OF_RE = re.compile(
+    r"(?i)^Part of #(\d+)(?:\s+and governed by #\d+)?\.?$"
+)
 
 
 def linked_issue(branch: str, body: str) -> int | None:
-    """Resolve a linked issue using the same semantics as the controller.
+    """Resolve a linked issue from a factory branch or explicit PR-body link.
 
     Args:
         branch: PR branch name.
@@ -210,12 +213,21 @@ def linked_issue(branch: str, body: str) -> int | None:
 
     Returns:
         Canonical linked issue number, if a supported link was found.
+
+    A standalone ``Part of #N`` line is non-closing and therefore safe for
+    transition PRs whose linked issue must remain open after merge.
     """
     match = BRANCH_RE.match(branch)
     if match:
         return int(match.group(1))
     match = CLOSING_RE.search(body)
-    return int(match.group(1)) if match else None
+    if match:
+        return int(match.group(1))
+    for line in body.splitlines():
+        match = PART_OF_RE.fullmatch(line.strip())
+        if match:
+            return int(match.group(1))
+    return None
 
 
 def mission(issue: int, head: str, body: str) -> str:

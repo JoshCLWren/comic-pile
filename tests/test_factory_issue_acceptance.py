@@ -145,6 +145,18 @@ def test_supported_link_spellings_have_same_issue_identity():
     assert acceptance.linked_issue("factory/54-4010-cbl", "Closes #999") == 4010
 
 
+def test_standalone_part_of_reference_links_without_closing():
+    assert acceptance.linked_issue(
+        "local/acp-4010", "Part of #4010 and governed by #4335."
+    ) == 4010
+    assert acceptance.linked_issue("local/acp-4010", "Part of #4010") == 4010
+
+
+def test_casual_issue_mentions_do_not_link_local_prs():
+    for body in ("Advances #4010", "See #4010", "Parent: #4010", "- Part of #4010"):
+        assert acceptance.linked_issue("local/feature", body) is None
+
+
 def test_large_report_parses_without_truncating_criterion_evidence():
     import json
     report = complete_report()

@@ -281,21 +281,18 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
 
 
 def linked_issue_for_pr(pr_number: int, branch: str | None) -> int | None:
-    """Resolve manual/local PR issue handoffs from explicit closing references.
+    """Resolve manual/local PR issue handoffs from explicit issue references.
 
     A casual #number mention is not an issue-ownership claim. Preserve the
-    canonical factory branch identity when available; otherwise use a GitHub
-    PR body with GitHub's explicit closes/fixes/resolves syntax.
+    canonical factory branch identity when available; otherwise use an explicit
+    closing reference or standalone non-closing ``Part of #N`` line. The latter
+    supports transition PRs whose issue must remain open after merge.
     """
     linked = linked_issue_from_branch(branch)
     if linked is not None:
         return linked
     body = str(pr_json(pr_number).get("body") or "")
-    match = re.search(
-        r"(?i)\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)",
-        body,
-    )
-    return int(match.group(1)) if match else None
+    return issue_acceptance.linked_issue("", body)
 
 
 def flatten_pages(value: object | None) -> list[dict[str, Any]]:

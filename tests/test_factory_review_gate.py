@@ -2514,6 +2514,22 @@ def test_interactive_handoff_uses_explicit_body_issue_without_factory_branch(
     assert module.linked_issue_for_pr(1390, "local/feature") is None
 
 
+def test_nonclosing_part_of_link_is_reviewable_but_does_not_close_issue(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Review resolves explicit Part-of links without making them merge closures."""
+    module = load_review_controller()
+    monkeypatch.setattr(
+        module,
+        "pr_json",
+        lambda _pr: {"body": "Part of #4348 and governed by #4335."},
+    )
+    assert module.linked_issue_for_pr(1390, "local/acp-4348") == 4348
+    assert module._post_merge_closure.linked_issue(
+        "local/acp-4348", "Part of #4348 and governed by #4335."
+    ) is None
+
+
 @pytest.mark.parametrize(
     "worker_script",
     [
