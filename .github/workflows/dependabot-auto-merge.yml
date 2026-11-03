@@ -1,0 +1,115 @@
+name: Dependabot CI Auto Merge
+
+# A successful CI workflow_run runs from main with a write-capable token,
+# unlike a Dependabot pull_request event. Never execute PR-head code here.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  auto-merge:
+    name: Merge Dependabot after exact-head CI
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - name: Check out trusted deployment helper from main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Merge only verified Dependabot heads and dispatch production
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          # GitHub can return a PR's *current* head in the workflow_run
+          # pull_requests array, even when the run tested an older head.
+          # workflow_run.head_sha is the authoritative tested commit.
+          tested_head="$(jq -r '.workflow_run.head_sha // empty' "$GITHUB_EVENT_PATH")"
+          [[ "$tested_head" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::CI run has no valid tested commit SHA"
+            exit 1
+          }
+
+          merged_prs=()
+          # Dispatch even when a later PR/API operation fails after a merge.
+          # The trusted helper is idempotent and avoids queued manual deploys.
+          dispatch_deploy_after_merges() {
+            if (( ${#merged_prs[@]} > 0 )); then
+              source .github/scripts/factory-dispatch-production-deploy.sh
+              factory_dispatch_production_deploy "Dependabot CI auto-merged PR(s): ${merged_prs[*]}"
+            else
+              echo "No matching Dependabot head auto-merged by this CI completion"
+            fi
+          }
+          trap dispatch_deploy_after_merges EXIT
+          while IFS= read -r number; do
+            [[ "$number" =~ ^[0-9]+$ ]] || continue
+
+            pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}")"
+            if ! jq -e --arg repo "${GITHUB_REPOSITORY}" --arg head "$tested_head" '
+              .draft == false and
+              .user.login == "dependabot[bot]" and
+              .base.ref == "main" and
+              .head.repo.full_name == $repo and
+              .head.sha == $head
+            ' <<< "$pr" >/dev/null; then
+              echo "PR #${number} is not an eligible Dependabot PR at tested head ${tested_head}; skipping"
+              continue
+            fi
+
+            # GitHub may already have completed native auto-merge as soon
+            # as CI Summary turned green, before this workflow_run started.
+            # Still dispatch deployment for that exact tested head.
+            if [[ "$(jq -r '.merged_at != null' <<< "$pr")" == 'true' ]]; then
+              merged_prs+=("${number}")
+              continue
+            fi
+            if [[ "$(jq -r '.state' <<< "$pr")" != 'open' ]]; then
+              echo "PR #${number} closed without merging"
+              continue
+            fi
+
+            # The active main ruleset requires CI Summary. GitHub auto-merge
+            # enforces it and any future required checks; never bypass them.
+            if [[ "$(jq -r '.auto_merge != null' <<< "$pr")" != 'true' ]]; then
+              gh pr merge "${number}" --repo "${GITHUB_REPOSITORY}" --auto --merge
+            else
+              echo "PR #${number} already has native auto-merge enabled"
+            fi
+
+            # Native auto-merge may complete just after the CI result is set.
+            # Reject any new head to prevent old green CI authorizing a merge.
+            for attempt in {1..20}; do
+              current="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}")"
+              if [[ "$(jq -r '.head.sha' <<< "$current")" != "$tested_head" ]]; then
+                echo "PR #${number} head moved after CI; will wait for its new run"
+                break
+              fi
+              if [[ "$(jq -r '.merged_at != null' <<< "$current")" == 'true' ]]; then
+                merged_prs+=("${number}")
+                break
+              fi
+              if [[ "$(jq -r '.state' <<< "$current")" != 'open' ]]; then
+                echo "PR #${number} was closed without merge"
+                break
+              fi
+              if (( attempt < 20 )); then sleep 3; fi
+            done
+          done < <(jq -r '.workflow_run.pull_requests[]?.number // empty' "$GITHUB_EVENT_PATH" | sort -un)
+
+
