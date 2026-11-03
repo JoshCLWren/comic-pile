@@ -3634,38 +3634,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/queue/threads/{thread_id}/front/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Move Thread Front
-         * @description Move thread to the front.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         thread_id: The ID of the thread to move.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         ThreadResponse with the updated thread information.
-         *
-         *     Raises:
-         *         HTTPException: If thread not found.
-         */
-        put: operations["move_thread_front_api_v1_queue_threads__thread_id__front__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/queue/threads/{thread_id}/position/": {
         parameters: {
             query?: never;
@@ -20813,37 +20781,6 @@ export interface operations {
         };
     };
     move_thread_back_api_v1_queue_threads__thread_id__back__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    move_thread_front_api_v1_queue_threads__thread_id__front__put: {
         parameters: {
             query?: never;
             header?: never;

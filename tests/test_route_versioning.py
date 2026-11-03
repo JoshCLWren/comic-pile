@@ -59,9 +59,7 @@ def _collect_routes(app) -> dict[str, frozenset[str]]:
     methods_by_path: dict[str, frozenset[str]] = {}
 
     def record_methods(path: str, methods: set[str] | None) -> None:
-        methods_by_path[path] = methods_by_path.get(path, frozenset()) | frozenset(
-            methods or ()
-        )
+        methods_by_path[path] = methods_by_path.get(path, frozenset()) | frozenset(methods or ())
 
     def collect_from_routes(routes):
         for route in routes:
@@ -118,7 +116,6 @@ def test_v1_queue_aliases_match_legacy_route_methods() -> None:
     alias_pairs = (
         ("/api/queue/shuffle/", "/api/v1/queue/shuffle/"),
         ("/api/queue/threads/{thread_id}/back/", "/api/v1/queue/threads/{thread_id}/back/"),
-        ("/api/queue/threads/{thread_id}/front/", "/api/v1/queue/threads/{thread_id}/front/"),
         ("/api/queue/threads/{thread_id}/position/", "/api/v1/queue/threads/{thread_id}/position/"),
     )
     for legacy_path, canonical_path in alias_pairs:
@@ -222,7 +219,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/ping",
             "/api/queue/shuffle/",
             "/api/queue/threads/{thread_id}/back/",
-            "/api/queue/threads/{thread_id}/front/",
             "/api/queue/threads/{thread_id}/position/",
             "/api/rate/",
             "/api/roll/",
@@ -294,3 +290,10 @@ def test_threads_collection_is_only_the_native_v2_resource() -> None:
     assert "POST" in methods_by_path["/api/v1/threads/"]
     assert "POST" in methods_by_path["/api/threads/"]
     assert "/api/v1/threads/stale" in methods_by_path
+
+
+def test_retired_move_to_front_routes_are_absent() -> None:
+    """Native queue-entry PATCH replaces both legacy move-to-front aliases."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    for prefix in ("/api/queue", "/api/v1/queue"):
+        assert f"{prefix}/threads/{{thread_id}}/front/" not in methods_by_path

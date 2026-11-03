@@ -243,25 +243,12 @@ Move thread to a specific position.
 }
 ```
 
-### PUT /queue/threads/{thread_id}/front/
+### PATCH /api/v2/queue-entries/{thread_id}
 
-Move thread to the front of the queue (position 1).
-
-**Response**: `200 OK`
-
-```json
-{
-  "id": 5,
-  "title": "Saga Volume 1",
-  "format": "Graphic Novel",
-  "issues_remaining": 6,
-  "position": 1,
-  "status": "active",
-  "last_rating": 4.0,
-  "last_activity_at": "2025-12-29T15:00:00",
-  "created_at": "2025-12-28T10:00:00"
-}
-```
+Move an owned thread to the front with `{"position": 1}`. This resource is
+implemented in native Rust and replaces both legacy move-to-front PUT aliases.
+The response contains `thread_id`, `position`, and `ordering_version`, rather
+than a full thread projection. Queue/Thread clients already use this resource.
 
 ### PUT /queue/threads/{thread_id}/back/
 

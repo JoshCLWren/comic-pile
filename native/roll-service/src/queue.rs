@@ -1193,6 +1193,32 @@ mod tests {
         assert_eq!(front.0.position, 1);
         assert_eq!(positions(&state, 7).await, vec![(3, 1), (1, 2), (2, 3)]);
         assert_eq!(event_count(&state, "reorder").await, 1);
+        // Migrated from the retired Python move-to-front HTTP regression:
+        // history must identify the reader and the moved thread, not merely
+        // increase the event count.
+        let connection = db::checkout(&state).await.expect("front event connection");
+        let event = connection
+            .query_one(
+                "SELECT user_id, thread_id FROM events WHERE type = 'reorder'",
+                &[],
+            )
+            .await
+            .expect("front reorder event");
+        assert_eq!(event.get::<_, i32>(0), 7);
+        assert_eq!(event.get::<_, i32>(1), 3);
+        let manual: bool = connection
+            .query_one(
+                "SELECT queue_position_is_manual FROM threads WHERE id = 3",
+                &[],
+            )
+            .await
+            .expect("manual front placement")
+            .get(0);
+        assert!(
+            manual,
+            "a native front move preserves the reader's manual claim"
+        );
+        drop(Object::take(connection));
         assert_ne!(
             front.0.ordering_version, initial,
             "a reordered queue must publish a new ordering revision"
