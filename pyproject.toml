@@ -60,7 +60,12 @@ dev = [
     "ruff>=0.1.0",
     "pyright>=1.1.0",
     "ty>=0.0.12",
-    "faker>=20.0.0",
+    # Pinned exactly: worker GitHub App display names are derived from a seeded
+    # Faker instance, and Faker's seeded name sequence changes between
+    # releases. Worker 48's App name ("Mark Cordova") is already provisioned
+    # and persisted in .github/factory-worker-github-apps.json, so a newer
+    # Faker would re-roll it and break the existing App identity.
+    "faker==40.40.0",
     "playwright>=1.50.0",
     "pytest-playwright==0.10.0",
     "uvicorn>=0.30.0",
