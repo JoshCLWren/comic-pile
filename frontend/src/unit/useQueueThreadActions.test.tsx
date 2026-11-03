@@ -88,6 +88,7 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   vi.clearAllMocks()
   sharedQueryClient.clear()
+  globalThis.document.cookie = 'comicpile_roll_snoozes=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
 })
 
 describe('useQueueThreadActions', () => {
@@ -266,8 +267,11 @@ describe('useQueueThreadActions', () => {
     )
   })
 
-  it('routes Queue snooze to the native Rust reroll and keeps legacy unsnooze separate (#4589)', async () => {
-    const reroll = vi.fn().mockResolvedValue({ thread_id: 5, title: 'Next Comic' })
+  it('routes Queue snooze and unsnooze through native temporary roll state (#4589)', async () => {
+    const reroll = vi.fn().mockImplementation(async () => {
+      globalThis.document.cookie = 'comicpile_roll_snoozes=%5B4%5D; path=/; SameSite=Lax'
+      return { thread_id: 5, title: 'Next Comic' }
+    })
     const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
     const { result } = renderHook(
       () =>
@@ -287,8 +291,25 @@ describe('useQueueThreadActions', () => {
     )
 
     await result.current.handleSnoozeToggle(makeThread({ id: 4 }), true)
-    expect(unsnooze.mutate).toHaveBeenCalledWith(4)
+    expect(unsnooze.mutate).not.toHaveBeenCalled()
+    expect(globalThis.document.cookie).not.toContain('%5B4%5D')
     expect(reroll).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps legacy unsnooze for session snoozes outside the native cookie', async () => {
+    const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions(
+          { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
+          buildDeps({ unsnoozeHook: () => unsnooze }),
+        ),
+      { wrapper },
+    )
+
+    await result.current.handleSnoozeToggle(makeThread({ id: 4 }), true)
+
+    expect(unsnooze.mutate).toHaveBeenCalledExactlyOnceWith(4)
   })
 
   it('refreshes current session once after native Queue reroll (#4589)', async () => {
@@ -311,6 +332,43 @@ describe('useQueueThreadActions', () => {
 
     expect(reroll).toHaveBeenCalledExactlyOnceWith(4)
     expect(sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated).toBe(true)
+  })
+
+  it('reconciles Queue and session state after a stale-pending reroll conflict (#4589)', async () => {
+    sharedQueryClient.setQueryData(queryKeys.session.current(), {
+      id: 1,
+      pending_thread_id: 4,
+    })
+    sharedQueryClient.setQueryData(queryKeys.roll.bootstrap(), {
+      session_id: 1,
+      pending_thread_id: 4,
+      roll_pool: [],
+    })
+    const reroll = vi.fn().mockRejectedValue({
+      response: {
+        status: 409,
+        data: { detail: 'Pending roll changed; refresh Queue before snoozing' },
+      },
+    })
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions(
+          { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
+          buildDeps({ reroll }),
+        ),
+      { wrapper },
+    )
+
+    await act(async () => {
+      await result.current.handleSnoozeToggle(makeThread({ id: 4 }), false)
+    })
+
+    expect(sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated).toBe(true)
+    expect(sharedQueryClient.getQueryState(queryKeys.roll.bootstrap())?.isInvalidated).toBe(true)
+    expect(toastSpy).toHaveBeenCalledWith(
+      'Failed to snooze thread: Pending roll changed; refresh Queue before snoozing',
+      'error',
+    )
   })
 
   it('does not repeat the owning legacy unsnooze session refresh (#4276)', async () => {

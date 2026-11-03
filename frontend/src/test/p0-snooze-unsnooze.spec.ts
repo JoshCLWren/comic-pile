@@ -18,12 +18,14 @@ import { test } from './fixtures'
 import {
   createThread,
   dismissRollNudgeIfPresent,
+  getAuthToken,
   gotoRollPage,
   gotoQueue,
   openThreadActions,
   startRequestLedger,
   waitForRollPageReady,
 } from './helpers'
+import { hasProperty, isNumber, isObject } from '../utils/runtimeChecks'
 
 test.describe('SNOOZE-001: Snooze and unsnooze', () => {
   test('snooze from rating view moves thread to snoozed section', async ({
@@ -113,8 +115,14 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
   }) => {
     const page = authenticatedPage
     const ledger = startRequestLedger(page)
-    await createThread(page, {
+    const primary = await createThread(page, {
       title: 'Single Owner Snooze Thread',
+      format: 'Comic',
+      issues_remaining: 3,
+      total_issues: 3,
+    })
+    const replacement = await createThread(page, {
+      title: 'Replacement Offer Thread',
       format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
@@ -126,6 +134,30 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     await page.locator('#main-die-3d').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 20000 })
 
+    // Queue row snooze commits the pending comic and immediately offers a
+    // replacement, so the fixture must have another eligible comic. Read the
+    // server's authoritative pending ID to target whichever one the die chose.
+    const token = await getAuthToken(page)
+    if (!token) throw new Error('Authenticated fixture token was unavailable')
+    const currentSessionResponse = await page.request.get('/api/v1/sessions/current/', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(currentSessionResponse.ok()).toBe(true)
+    const sessionData: unknown = await currentSessionResponse.json()
+    if (
+      !isObject(sessionData) ||
+      !hasProperty(sessionData, 'pending_thread_id') ||
+      !isNumber(sessionData.pending_thread_id)
+    ) {
+      throw new Error('Current session response did not include a pending thread ID')
+    }
+    const threadNameById = new Map([
+      [primary.id, 'Single Owner Snooze Thread'],
+      [replacement.id, 'Replacement Offer Thread'],
+    ])
+    const pendingThreadName = threadNameById.get(sessionData.pending_thread_id)
+    if (!pendingThreadName) throw new Error('Roll offered a thread outside the test fixture')
+
     // Baseline everything AFTER the pend: the die roll and its refresh are
     // setup traffic, outside the measured snooze/unsnooze window.
     await gotoQueue(page)
@@ -134,7 +166,7 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     await dismissRollNudgeIfPresent(page)
     const threadItem = page
       .getByTestId('queue-thread-item')
-      .filter({ hasText: 'Single Owner Snooze Thread' })
+      .filter({ hasText: pendingThreadName })
     await expect(threadItem).toBeVisible()
     const before = {
       sessions: ledger.count('GET', '/api/v1/sessions/current/'),
