@@ -8,7 +8,7 @@ const spies = vi.hoisted(() => ({
   navigate: vi.fn(),
   refetch: vi.fn().mockResolvedValue({}),
   invalidateRollBootstrapOnNavigation: vi.fn().mockResolvedValue({}),
-  setDie: vi.fn().mockResolvedValue({}), clearDie: vi.fn().mockResolvedValue({}),
+  setDie: vi.fn().mockResolvedValue({}),
   roll: vi.fn().mockResolvedValue({}), dismissPending: vi.fn().mockResolvedValue({}),
   override: vi.fn().mockResolvedValue({}), snooze: vi.fn().mockResolvedValue({}),
   unsnooze: vi.fn().mockResolvedValue({}), moveFront: vi.fn().mockResolvedValue({}),
@@ -70,7 +70,7 @@ vi.mock('../hooks/useSession', () => ({ useSession: () => sessionHook.value ?? (
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: () => bootstrapHook.value ?? ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }) }))
 vi.mock('../hooks/useThread', () => ({ useStaleThreads: () => ({ data: staleData, refetch: spies.refetch }) }))
 vi.mock('../hooks/useRoll', () => ({
-  useSetDie: () => ({ mutate: spies.setDie, isPending: false }), useClearManualDie: () => ({ mutate: spies.clearDie, isPending: false }),
+  useSetDie: () => ({ mutate: spies.setDie, isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: spies.roll, isPending: false }), useDismissPending: () => ({ mutate: spies.dismissPending, isPending: false }),
   useOverrideRoll: () => ({ mutate: spies.override, isPending: false }),
@@ -174,7 +174,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.snoozed_threads = sessionData.snoozed_threads
     bootstrapData.snoozed_count = 0
     bootstrapData.pool_reason = 'ready'
-    for (const mutation of [spies.setDie, spies.clearDie, spies.roll, spies.dismissPending, spies.override, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
+    for (const mutation of [spies.setDie, spies.roll, spies.dismissPending, spies.override, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
     // Rate publishes its authoritative bootstrap snapshot to the page; the mock
     // mirrors that contract so no page-level bootstrap refetch is expected.
     spies.rate.mockImplementation(async () => ({
@@ -258,7 +258,7 @@ describe('RollPage parent handlers', () => {
 
     await user.click(screen.getAllByRole('button', { name: 'd6' })[0]!)
     await user.click(screen.getAllByRole('button', { name: 'd4' })[0]!)
-    await user.click(screen.getByRole('button', { name: 'Auto' }))
+    expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument()
     expect(spies.setDie).toHaveBeenCalled()
   })
 
@@ -510,7 +510,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.snoozed_count = 6
     render(<RollPage />)
     expect(screen.getByText('offset active')).toBeInTheDocument()
-    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /^current die d6$/i }))
     expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'close modal' }))
     expect(screen.getByRole('button', { name: 'toggle snoozed' })).toBeInTheDocument()
@@ -683,14 +683,13 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
   })
 
-  it('handles set-die and clear-die failures from the controls', async () => {
+  it('handles set-die failures from the controls', async () => {
     spies.setDie.mockRejectedValue(new Error('die failed'))
-    spies.clearDie.mockRejectedValue(new Error('die failed'))
     render(<RollPage />)
     await userEvent.setup().click(screen.getAllByRole('button', { name: 'd6' })[0]!)
-    await userEvent.setup().click(screen.getByRole('button', { name: 'd4' }))
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Auto' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Auto' })).toBeInTheDocument())
+    await userEvent.setup().click(screen.getAllByRole('button', { name: 'd4' })[0]!)
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'd4' })[0]).toBeInTheDocument())
+    spies.setDie.mockResolvedValue({})
   })
 
   it('keeps a completed rating when the authoritative snapshot is unavailable', async () => {
@@ -1147,14 +1146,14 @@ describe('RollPage parent handlers', () => {
     threadData.splice(1)
   })
 
-  it('selects a die and clears manual die from the mobile die modal', async () => {
+  it('selects a die from the mobile die modal without an Auto option', async () => {
     render(<RollPage />)
-    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /^current die d6$/i }))
     const autoModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
-    await userEvent.setup().click(within(autoModal).getByRole('button', { name: 'Auto' }))
-    expect(spies.clearDie).toHaveBeenCalled()
+    expect(within(autoModal).queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'close modal' }))
 
-    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /^current die d6$/i }))
     const dieModal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
     await userEvent.setup().click(within(dieModal).getByRole('button', { name: 'd4' }))
     expect(spies.setDie).toHaveBeenCalledWith(4)
@@ -1178,12 +1177,12 @@ describe('RollPage parent handlers', () => {
     vi.useRealTimers()
   })
 
-  it('renders manual-die mode and a failed die change in the modal', async () => {
+  it('renders a manual die choice and a failed die change in the modal', async () => {
     bootstrapData.manual_die = 4
     render(<RollPage />)
-    expect(screen.getByRole('button', { name: 'Auto' })).toHaveAttribute('title', 'Exit manual mode (currently d4)')
+    expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument()
 
-    await userEvent.setup().click(screen.getByRole('button', { name: /current die d6, (?:automatic|manual) mode/i }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /^current die d6$/i }))
     const modal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
     spies.setDie.mockRejectedValueOnce(new Error('die failed'))
     await userEvent.setup().click(within(modal).getByRole('button', { name: 'd4' }))

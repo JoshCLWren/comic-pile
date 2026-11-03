@@ -240,9 +240,9 @@ export type IntentSource = 'manual' | 'inferred' | 'snooze' | 'quiz' | null
 export type SessionModeCorrectionGuidance = Record<string, string>
 
 /**
- * Canonical session reading-mode snapshot shared by the Roll bootstrap and the
- * roll session-mode API. All fields are null when the session is in the legacy
- * default state. Roll and API-client consumers must stay on this single shape.
+ * Canonical session reading-mode snapshot carried by the Roll bootstrap. All
+ * fields are null when the session is in the legacy default state. Roll and
+ * API-client consumers must stay on this single shape.
  */
 export interface SessionMode {
   active_bandwidth: ReadingBandwidth | string | null
@@ -256,29 +256,6 @@ export interface SessionMode {
   intent_source: IntentSource
   intent_version: string | null
   session_mode_correction_guidance: SessionModeCorrectionGuidance | null
-}
-
-/** API-client alias for the canonical session mode snapshot. */
-export type SessionModeResponse = SessionMode
-
-export interface SessionModeUpdateRequest {
-  bandwidth?: ReadingBandwidth | null
-  intent?: ReadingIntent | null
-}
-
-export type CorrectionChoiceId =
-  | 'even_easier'
-  | 'keep_level_different'
-  | 'something_familiar'
-  | 'something_different'
-  | 'pure_random'
-
-export interface CorrectionSheetExamplesResponse {
-  even_easier: string | null
-  keep_level_different: string | null
-  something_familiar: string | null
-  something_different: string | null
-  pure_random: string | null
 }
 
 export interface ReadingModeState {

@@ -190,5 +190,28 @@
         "frontend/src/services/api-roll.ts"
       ]
     }
+  ],
+  "retired_legacy_operations": [
+    {
+      "method": "POST",
+      "path": "/api/v1/roll/set-die",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4352,
+      "replacement": "POST /api/v2/roll/dice-command"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/roll/clear-manual-die",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4353,
+      "replacement": "POST /api/v2/roll/reset"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/roll/session-mode",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4354,
+      "replacement": null
+    }
   ]
 }

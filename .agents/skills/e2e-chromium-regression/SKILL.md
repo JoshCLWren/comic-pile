@@ -93,7 +93,7 @@ selector or inventory instead of bypassing it.
 | `nav` locator mismatches | `page.getByLabel('Desktop navigation')`, not `page.locator('nav')` |
 | Auth error-copy selectors fail | `getByText(/incorrect username or password/i)` etc., not stale class selectors |
 | Scroll-position `toBe` equality fails | Virtualization geometry; bound the assertion; `scrollAppUntil`/`scrollAppTo` in helpers |
-| `set-die` 405 | Verify exact method/path against `app/api/roll.py` before blaming the backend |
+| `dice-command` 405 | Verify exact method/path against `native/roll-service/src/lib.rs` before blaming the backend |
 
 Shared helpers live in `frontend/src/test/helpers.ts` (`waitForQueueReady`,
 `dismissRollNudgeIfPresent`, `scrollAppUntil`); persistent vs `replyOnce` HTTP mocking layers

@@ -36,7 +36,6 @@ vi.mock('../hooks/useRollBootstrap', () => ({
 }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: spies.setDie, isPending: state.setDiePending }),
-  useClearManualDie: () => ({ mutate: spies.clearDie, isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: vi.fn(), isPending: false }),
   useDismissPending: () => ({ mutate: vi.fn(), isPending: false }),
@@ -159,7 +158,7 @@ describe('RollPage bootstrap modal coverage', () => {
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     expect(screen.queryByRole('heading', { name: 'Pick manually' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /current die d6, manual mode/i }))
+    await user.click(screen.getByRole('button', { name: /^current die d6$/i }))
     expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
     const d8Buttons = screen.getAllByRole('button', { name: 'd8' })
     await user.click(d8Buttons[d8Buttons.length - 1]!)

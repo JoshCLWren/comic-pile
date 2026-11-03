@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useClearManualDie, useSetDie } from '../hooks/useRoll'
+import { useSetDie } from '../hooks/useRoll'
 import { useRatingView } from '../pages/RollPage/useRatingView'
 import { readerContextApi } from '../services/api-reader-context'
 import type { RollApi } from '../services/apiTypes'
@@ -19,7 +19,6 @@ vi.mock('../services/api-reader-context', () => ({
 const getReaderContext = vi.mocked(readerContextApi.get)
 
 const setDie = vi.fn<(die: number) => Promise<void>>().mockResolvedValue(undefined)
-const clearManualDie = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
 
 const rollApi: RollApi = {
   roll: vi.fn(),
@@ -28,7 +27,6 @@ const rollApi: RollApi = {
   skip: vi.fn(),
   reroll: vi.fn(),
   setDie,
-  clearManualDie,
   reset: vi.fn().mockResolvedValue({ die: 6, replayed: false }),
 }
 
@@ -185,7 +183,6 @@ function renderUseRatingView(
 beforeEach(() => {
   getReaderContext.mockClear()
   setDie.mockClear()
-  clearManualDie.mockClear()
 })
 
 describe('rating view manual-die projection', () => {
@@ -229,31 +226,6 @@ describe('die-mode mutations refresh the manual_die projection', () => {
     })
 
     expect(setDie).toHaveBeenCalledWith(20)
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.bootstrap(),
-      exact: true,
-    })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    })
-
-    invalidateQueries.mockRestore()
-  })
-
-  it('leaving manual mode invalidates the same resources', async () => {
-    const invalidateQueries = vi
-      .spyOn(queryClient, 'invalidateQueries')
-      .mockResolvedValue(undefined)
-    const { result } = renderHook(() => useClearManualDie(rollApi), {
-      wrapper: wrapper(testClient()),
-    })
-
-    await act(async () => {
-      await result.current.mutate()
-    })
-
-    expect(clearManualDie).toHaveBeenCalled()
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,

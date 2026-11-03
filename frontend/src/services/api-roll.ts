@@ -247,8 +247,6 @@ export function createRollApi(client: HttpClient) {
       }
       return response
     },
-    // Legacy auto toggle remains until the sessionless Roll UI is cut over.
-    clearManualDie: () => client.post<void>('/v1/roll/clear-manual-die'),
   }
 }
 
