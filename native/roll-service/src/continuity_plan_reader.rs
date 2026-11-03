@@ -6,8 +6,12 @@
 //! or ambiguous associations, matching Python's behavior.
 
 use crate::{
-    auth::VerifiedAccessClaims, db, option_inputs, reading_constraints::ValidatedReadingInputs,
-    reading_eligibility::evaluate, ApiError, AppState,
+    auth::VerifiedAccessClaims,
+    db, option_inputs,
+    reading_blocker_projection::describe_blocker_gates,
+    reading_constraints::{Blocker, ValidatedReadingInputs},
+    reading_eligibility::evaluate,
+    ApiError, AppState,
 };
 use axum::{
     extract::{Path, State},
@@ -472,6 +476,32 @@ fn release_source_metadata(
     )
 }
 
+fn project_reader_blockers(
+    blockers: &[Blocker],
+    issue_thread_id: &HashMap<i32, i32>,
+    issue_number: &HashMap<i32, String>,
+    thread_title: &HashMap<i32, String>,
+) -> Vec<ContinuityPlanBlocker> {
+    describe_blocker_gates(blockers.to_vec())
+        .into_iter()
+        .flat_map(|gate| gate.described_issue_ids)
+        .filter_map(|source_issue_id| {
+            let target_thread_id = *issue_thread_id.get(&source_issue_id)?;
+            Some(ContinuityPlanBlocker {
+                issue_id: source_issue_id,
+                thread_id: target_thread_id,
+                thread_title: thread_title.get(&target_thread_id)?.clone(),
+                issue_number: issue_number.get(&source_issue_id)?.clone(),
+                explanation: format!(
+                    "Read {} #{} first",
+                    thread_title.get(&target_thread_id)?,
+                    issue_number.get(&source_issue_id)?
+                ),
+            })
+        })
+        .collect()
+}
+
 /// Build the reader response from the evaluated eligibility and list entries.
 #[allow(clippy::too_many_arguments)]
 fn build_response(
@@ -541,28 +571,15 @@ fn build_response(
 
         let blockers = if availability == ReaderAvailability::Blocked {
             state
-                .map(|s| &s.blockers)
-                .unwrap_or(&vec![])
-                .iter()
-                .filter_map(|b| {
-                    if b.waiting_on_issue_ids.is_empty() {
-                        return None;
-                    }
-                    let source_issue_id = b.waiting_on_issue_ids[0];
-                    let target_thread_id = *issue_thread_id.get(&source_issue_id)?;
-                    Some(ContinuityPlanBlocker {
-                        issue_id: source_issue_id,
-                        thread_id: target_thread_id,
-                        thread_title: thread_title.get(&target_thread_id)?.clone(),
-                        issue_number: issue_number.get(&source_issue_id)?.clone(),
-                        explanation: format!(
-                            "Read {} #{} first",
-                            thread_title.get(&target_thread_id)?,
-                            issue_number.get(&source_issue_id)?
-                        ),
-                    })
+                .map(|s| {
+                    project_reader_blockers(
+                        &s.blockers,
+                        &issue_thread_id,
+                        &issue_number,
+                        &thread_title,
+                    )
                 })
-                .collect()
+                .unwrap_or_default()
         } else {
             vec![]
         };
@@ -819,6 +836,55 @@ mod tests {
             serde_json::to_string(&ReleaseMappingState::Confirmed).unwrap(),
             "\"confirmed\""
         );
+    }
+
+    #[test]
+    fn reader_blockers_include_each_distinct_issue_across_gates() {
+        let blockers = vec![
+            Blocker {
+                kind: "prerequisite".into(),
+                list_id: None,
+                waiting_on_issue_ids: vec![1, 2],
+                gate_issue_id: None,
+                prerequisite_id: Some(1),
+                origin: Some("reader".into()),
+                provenance: vec![],
+            },
+            Blocker {
+                kind: "hold".into(),
+                list_id: Some(10),
+                waiting_on_issue_ids: vec![2, 3],
+                gate_issue_id: None,
+                prerequisite_id: None,
+                origin: None,
+                provenance: vec![],
+            },
+        ];
+        let issue_thread_id = HashMap::from([(1, 10), (2, 20), (3, 30)]);
+        let issue_number = HashMap::from([
+            (1, "1".to_string()),
+            (2, "2".to_string()),
+            (3, "3".to_string()),
+        ]);
+        let thread_title = HashMap::from([
+            (10, "First Series".to_string()),
+            (20, "Second Series".to_string()),
+            (30, "Third Series".to_string()),
+        ]);
+
+        let projected =
+            project_reader_blockers(&blockers, &issue_thread_id, &issue_number, &thread_title);
+
+        assert_eq!(
+            projected
+                .iter()
+                .map(|blocker| blocker.issue_id)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(projected[1].thread_id, 20);
+        assert_eq!(projected[1].thread_title, "Second Series");
+        assert_eq!(projected[1].explanation, "Read Second Series #2 first");
     }
 
     #[test]
