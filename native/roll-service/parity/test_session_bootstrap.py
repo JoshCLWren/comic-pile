@@ -66,7 +66,12 @@ async def test_session_bootstrap_parity(scenario):
         async with engine.begin() as c:
             # Isolated schema first; keep public on the path for pg_trgm's
             # gin_trgm_ops operator class (Alembic c40080000001).
-            await c.run_sync(Base.metadata.create_all)
+            # Skip catalog checks so public tables are not mistaken for isolated tables.
+            await c.run_sync(
+                lambda sync_connection: Base.metadata.create_all(
+                    sync_connection, checkfirst=False
+                )
+            )
         async with AsyncSession(engine, expire_on_commit=False) as db:
             reader, foreign = User(username="session-reader"), User(username="foreign")
             db.add_all([reader, foreign])
@@ -342,7 +347,12 @@ async def test_corrupt_session_json_recovers_in_place_and_keeps_pending_roll():
         async with engine.begin() as c:
             # Isolated schema first; keep public on the path for pg_trgm's
             # gin_trgm_ops operator class (Alembic c40080000001).
-            await c.run_sync(Base.metadata.create_all)
+            # Skip catalog checks so public tables are not mistaken for isolated tables.
+            await c.run_sync(
+                lambda sync_connection: Base.metadata.create_all(
+                    sync_connection, checkfirst=False
+                )
+            )
         async with AsyncSession(engine, expire_on_commit=False) as db:
             reader = User(username="corrupt-reader")
             db.add(reader)
@@ -478,7 +488,12 @@ async def test_read_only_get_projects_foreign_pending_issue_without_persisting_r
         async with engine.begin() as connection:
             # Isolated schema first; keep public on the path for pg_trgm's
             # gin_trgm_ops operator class (Alembic c40080000001).
-            await connection.run_sync(Base.metadata.create_all)
+            # Skip catalog checks so public tables are not mistaken for isolated tables.
+            await connection.run_sync(
+                lambda sync_connection: Base.metadata.create_all(
+                    sync_connection, checkfirst=False
+                )
+            )
         async with AsyncSession(engine, expire_on_commit=False) as db:
             owner = User(username="readonly-owner")
             other = User(username="readonly-other")
