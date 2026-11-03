@@ -805,4 +805,131 @@ mod tests {
         assert_eq!(stored.result, 2);
         assert_eq!(stored.snoozed_thread_id, Some(9));
     }
+
+    #[tokio::test]
+    async fn stale_authenticated_queue_offer_returns_conflict_without_mutation() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("stale_offer_{}_{}", std::process::id(), nanos);
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (
+                     id integer PRIMARY KEY, username text NOT NULL,
+                     password_changed_at timestamptz
+                 );
+                 CREATE TABLE {schema}.revoked_tokens (jti text NOT NULL);
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     started_at timestamptz NOT NULL, ended_at timestamptz,
+                     start_die integer NOT NULL, manual_die integer,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz,
+                     reading_mode_suggested boolean NOT NULL DEFAULT false
+                 );
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     user_id integer NOT NULL, session_id integer NOT NULL,
+                     type text NOT NULL, timestamp timestamptz NOT NULL DEFAULT now(),
+                     die_after integer, context json
+                 );
+                 INSERT INTO {schema}.users (id, username) VALUES (1, 'route-reader');
+                 INSERT INTO {schema}.sessions (
+                     id, user_id, started_at, start_die, pending_thread_id,
+                     pending_issue_id, pending_thread_updated_at
+                 ) VALUES (1, 1, now(), 6, 8, 80, now());
+                 INSERT INTO {schema}.threads VALUES (8, 1);
+                 INSERT INTO {schema}.issues VALUES (80, 8);
+                 INSERT INTO {schema}.events (user_id, session_id, type, die_after, context)
+                 VALUES (1, 1, 'snooze', 8, '{{}}'::json);"
+            ))
+            .await
+            .unwrap();
+        admin
+            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .await
+            .unwrap();
+
+        let database_url = format!("{url}?options=-csearch_path%3D{schema}");
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some(database_url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-stale-offer-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let app = router(Arc::new(AppState::new(config).unwrap()));
+        let token = jsonwebtoken::encode(
+            &jsonwebtoken::Header::default(),
+            &serde_json::json!({
+                "sub": "route-reader",
+                "type": "access",
+                "jti": "stale-offer-route-token",
+            }),
+            &jsonwebtoken::EncodingKey::from_secret(b"synthetic-stale-offer-secret"),
+        )
+        .unwrap();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v2/roll/offer")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {token}"))
+                    .header("cookie", "csrf_token=synthetic-test-csrf")
+                    .header("x-csrf-token", "synthetic-test-csrf")
+                    .body(Body::from(
+                        r#"{"idempotency_key":"roll-offer-stale-012345","expected_pending_thread_id":7}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let session = admin
+            .query_one("SELECT pending_thread_id FROM sessions WHERE id = 1", &[])
+            .await
+            .unwrap();
+        let snooze_count: i64 = admin
+            .query_one(
+                "SELECT count(*) FROM events WHERE user_id = 1 AND type = 'snooze'",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let die: i32 = admin
+            .query_one(
+                "SELECT die_after FROM events WHERE user_id = 1 ORDER BY timestamp DESC, id DESC LIMIT 1",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(session.get::<_, i32>(0), 8);
+        assert_eq!(snooze_count, 1);
+        assert_eq!(die, 8);
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
 }
