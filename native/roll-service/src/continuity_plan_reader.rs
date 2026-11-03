@@ -27,14 +27,46 @@ pub struct ContinuityPlanReaderPath {
     pub plan_id: i32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReaderExecutionMode {
+    OptionE,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReaderOrderingMode {
+    StrictSequential,
+    Informational,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReaderAvailability {
+    Read,
+    Available,
+    Blocked,
+    Later,
+    Excluded,
+    Inactive,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReleaseMappingState {
+    Confirmed,
+    Ambiguous,
+    Unmapped,
+}
+
 /// Canonical v2 response for the Continuity Plan Reader.
 /// Matches Python's ReadingPlanReaderResponse shape for Option E execution mode.
 #[derive(Serialize, ToSchema)]
 pub struct ContinuityPlanReaderResponse {
-    pub execution_mode: String, // Always "option_e"
+    pub execution_mode: ReaderExecutionMode,
     pub plan_id: i32,
     pub name: String,
-    pub ordering_mode: String, // "strict_sequential" or "informational"
+    pub ordering_mode: ReaderOrderingMode,
     pub progress: ReadingPlanProgress,
     pub available_now: Vec<ContinuityPlanReaderIssue>,
     pub blocked_next: Vec<ContinuityPlanReaderIssue>,
@@ -64,7 +96,7 @@ pub struct ContinuityPlanReaderIssue {
     pub thread_id: i32,
     pub thread_title: String,
     pub status: String,
-    pub availability: String,
+    pub availability: ReaderAvailability,
     pub blockers: Vec<ContinuityPlanBlocker>,
     pub source_paths: Vec<String>,
 }
@@ -117,7 +149,7 @@ pub struct ReadingPlanReleaseSourceStatus {
 pub struct ReadingPlanReleaseCandidate {
     pub thread_id: i32,
     pub thread_title: String,
-    pub mapping_state: String,
+    pub mapping_state: ReleaseMappingState,
     pub external_identity_id: Option<i32>,
     pub provider_volume_id: Option<String>,
     pub provider_title: Option<String>,
@@ -193,7 +225,7 @@ struct ReleaseSourceRow {
 struct ReleaseCandidateRow {
     thread_id: i32,
     thread_title: String,
-    mapping_state: String,
+    mapping_state: ReleaseMappingState,
     external_identity_id: Option<i32>,
     provider_volume_id: Option<String>,
     provider_title: Option<String>,
@@ -448,7 +480,7 @@ async fn load_release_candidates(
                 .map(|i| i as i32);
 
             (
-                "confirmed",
+                ReleaseMappingState::Confirmed,
                 Some(mapping.get(0)),
                 Some(mapping.get(1)),
                 title,
@@ -473,7 +505,7 @@ async fn load_release_candidates(
 
             if ambiguous_count > 0 {
                 (
-                    "ambiguous",
+                    ReleaseMappingState::Ambiguous,
                     None,
                     None,
                     None,
@@ -486,7 +518,7 @@ async fn load_release_candidates(
                 )
             } else {
                 (
-                    "unmapped",
+                    ReleaseMappingState::Unmapped,
                     None,
                     None,
                     None,
@@ -503,7 +535,7 @@ async fn load_release_candidates(
         candidates.push(ReleaseCandidateRow {
             thread_id,
             thread_title,
-            mapping_state: mapping_state.to_string(),
+            mapping_state,
             external_identity_id,
             provider_volume_id,
             provider_title,
@@ -576,24 +608,24 @@ fn build_response(
         let state = evaluated.get(&thread_id);
 
         let availability = if entry.status == "read" {
-            "read"
+            ReaderAvailability::Read
         } else if state.is_none() {
-            "inactive"
+            ReaderAvailability::Inactive
         } else if validated
             .inputs()
             .excluded_issue_ids
             .contains(&entry.issue_id)
         {
-            "excluded"
+            ReaderAvailability::Excluded
         } else if state.as_ref().and_then(|s| s.next_issue_id) != Some(entry.issue_id) {
-            "later"
+            ReaderAvailability::Later
         } else if state.as_ref().map(|s| s.eligible).unwrap_or(false) {
-            "available"
+            ReaderAvailability::Available
         } else {
-            "blocked"
+            ReaderAvailability::Blocked
         };
 
-        let blockers = if matches!(availability, "blocked") {
+        let blockers = if availability == ReaderAvailability::Blocked {
             state
                 .map(|s| &s.blockers)
                 .unwrap_or(&vec![])
@@ -634,7 +666,7 @@ fn build_response(
             thread_id: entry.thread_id,
             thread_title: entry.thread_title.clone(),
             status: entry.status.clone(),
-            availability: availability.to_string(),
+            availability,
             blockers,
             source_paths: source_paths.get(&entry.id).cloned().unwrap_or_default(),
         });
@@ -643,13 +675,13 @@ fn build_response(
     // Build available_now and blocked_next
     let available_now: Vec<ContinuityPlanReaderIssue> = reader_issues
         .iter()
-        .filter(|i| i.availability == "available")
+        .filter(|i| i.availability == ReaderAvailability::Available)
         .cloned()
         .collect();
 
     let blocked_next: Vec<ContinuityPlanReaderIssue> = reader_issues
         .iter()
-        .filter(|i| i.availability == "blocked")
+        .filter(|i| i.availability == ReaderAvailability::Blocked)
         .cloned()
         .collect();
 
@@ -704,7 +736,7 @@ fn build_response(
         .map(|rc| ReadingPlanReleaseCandidate {
             thread_id: rc.thread_id,
             thread_title: rc.thread_title.clone(),
-            mapping_state: rc.mapping_state.clone(),
+            mapping_state: rc.mapping_state,
             external_identity_id: rc.external_identity_id,
             provider_volume_id: rc.provider_volume_id.clone(),
             provider_title: rc.provider_title.clone(),
@@ -718,13 +750,13 @@ fn build_response(
         .collect();
 
     Ok(ContinuityPlanReaderResponse {
-        execution_mode: "option_e".to_string(),
+        execution_mode: ReaderExecutionMode::OptionE,
         plan_id: plan.id,
         name: plan.name.clone(),
         ordering_mode: if list_mode == "strict" {
-            "strict_sequential".to_string()
+            ReaderOrderingMode::StrictSequential
         } else {
-            "informational".to_string()
+            ReaderOrderingMode::Informational
         },
         progress: ReadingPlanProgress {
             total_issues,
@@ -837,10 +869,10 @@ mod tests {
     fn ordering_mode_mapping() {
         assert_eq!(
             ContinuityPlanReaderResponse {
-                execution_mode: "option_e".into(),
+                execution_mode: ReaderExecutionMode::OptionE,
                 plan_id: 1,
                 name: "Test".into(),
-                ordering_mode: "strict_sequential".into(),
+                ordering_mode: ReaderOrderingMode::StrictSequential,
                 progress: ReadingPlanProgress {
                     total_issues: 0,
                     read_issues: 0
@@ -853,7 +885,27 @@ mod tests {
                 release_candidates: vec![],
             }
             .ordering_mode,
-            "strict_sequential"
+            ReaderOrderingMode::StrictSequential
+        );
+    }
+
+    #[test]
+    fn reader_state_enums_preserve_wire_values() {
+        assert_eq!(
+            serde_json::to_string(&ReaderExecutionMode::OptionE).unwrap(),
+            "\"option_e\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ReaderOrderingMode::StrictSequential).unwrap(),
+            "\"strict_sequential\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ReaderAvailability::Available).unwrap(),
+            "\"available\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ReleaseMappingState::Confirmed).unwrap(),
+            "\"confirmed\""
         );
     }
 }

@@ -1794,7 +1794,7 @@
         ],
         "properties": {
           "availability": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReaderAvailability"
           },
           "blockers": {
             "type": "array",
@@ -1927,7 +1927,7 @@
             }
           },
           "execution_mode": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReaderExecutionMode"
           },
           "lanes": {
             "type": "array",
@@ -1939,7 +1939,7 @@
             "type": "string"
           },
           "ordering_mode": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReaderOrderingMode"
           },
           "plan_id": {
             "type": "integer",
@@ -2369,6 +2369,30 @@
           }
         }
       },
+      "ReaderAvailability": {
+        "type": "string",
+        "enum": [
+          "read",
+          "available",
+          "blocked",
+          "later",
+          "excluded",
+          "inactive"
+        ]
+      },
+      "ReaderExecutionMode": {
+        "type": "string",
+        "enum": [
+          "option_e"
+        ]
+      },
+      "ReaderOrderingMode": {
+        "type": "string",
+        "enum": [
+          "strict_sequential",
+          "informational"
+        ]
+      },
       "ReadingBoundaryBatchRequest": {
         "type": "object",
         "required": [
@@ -2537,7 +2561,7 @@
             "type": "boolean"
           },
           "mapping_state": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReleaseMappingState"
           },
           "mapping_status": {
             "type": [
@@ -2752,6 +2776,14 @@
             "type": "string"
           }
         }
+      },
+      "ReleaseMappingState": {
+        "type": "string",
+        "enum": [
+          "confirmed",
+          "ambiguous",
+          "unmapped"
+        ]
       },
       "ResetDiceRequest": {
         "type": "object",

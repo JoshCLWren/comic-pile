@@ -5024,7 +5024,7 @@
       "ContinuityPlanReaderIssue": {
         "properties": {
           "availability": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReaderAvailability"
           },
           "blockers": {
             "items": {
@@ -5158,7 +5158,7 @@
             "type": "array"
           },
           "execution_mode": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReaderExecutionMode"
           },
           "lanes": {
             "items": {
@@ -5170,7 +5170,7 @@
             "type": "string"
           },
           "ordering_mode": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReaderOrderingMode"
           },
           "plan_id": {
             "format": "int32",
@@ -13395,7 +13395,7 @@
             "type": "boolean"
           },
           "mapping_state": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReleaseMappingState"
           },
           "mapping_status": {
             "type": [
@@ -14937,6 +14937,17 @@
         "title": "ReactivateRequest",
         "type": "object"
       },
+      "ReaderAvailability": {
+        "enum": [
+          "read",
+          "available",
+          "blocked",
+          "later",
+          "excluded",
+          "inactive"
+        ],
+        "type": "string"
+      },
       "ReaderContextCrossover": {
         "description": "One owned crossover relevant to the requested issue's thread.",
         "properties": {
@@ -15460,6 +15471,19 @@
         ],
         "title": "ReaderContextSeries",
         "type": "object"
+      },
+      "ReaderExecutionMode": {
+        "enum": [
+          "option_e"
+        ],
+        "type": "string"
+      },
+      "ReaderOrderingMode": {
+        "enum": [
+          "strict_sequential",
+          "informational"
+        ],
+        "type": "string"
       },
       "ReadingBoundaryBatchRequest": {
         "description": "Owned series IDs to explain in one request.",
@@ -17986,6 +18010,14 @@
         ],
         "title": "ReleaseListResponse",
         "type": "object"
+      },
+      "ReleaseMappingState": {
+        "enum": [
+          "confirmed",
+          "ambiguous",
+          "unmapped"
+        ],
+        "type": "string"
       },
       "ReleaseResponse": {
         "description": "One complete release ledger record returned to trusted automation.",

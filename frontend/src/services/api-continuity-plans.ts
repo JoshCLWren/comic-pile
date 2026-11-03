@@ -126,11 +126,11 @@ export interface ReadingPlanSourceSnapshot {
   id: number
   raw_source_path: string
   display_name?: string | null
-  repository: string | null
-  source_path: string | null
-  revision_sha: string | null
-  content_hash: string | null
-  adopted_at: string | null
+  repository?: string | null
+  source_path?: string | null
+  revision_sha?: string | null
+  content_hash?: string | null
+  adopted_at?: string | null
   recorded_at: string
 }
 
@@ -139,12 +139,12 @@ export interface ReadingPlanReleaseSourceStatus {
   thread_id: number
   external_identity_id: number
   provider_volume_id: string
-  provider_title: string | null
-  provider_publisher: string | null
-  provider_start_year: number | null
-  provider_issue_count: number | null
+  provider_title?: string | null
+  provider_publisher?: string | null
+  provider_start_year?: number | null
+  provider_issue_count?: number | null
   enabled: boolean
-  last_synced_at: string | null
+  last_synced_at?: string | null
 }
 
 /** How a plan thread's ComicVine series mapping currently stands. */
@@ -161,13 +161,13 @@ export interface ReadingPlanReleaseCandidate {
   thread_id: number
   thread_title: string
   mapping_state: ReadingPlanReleaseMappingState
-  external_identity_id: number | null
-  provider_volume_id: string | null
-  provider_title: string | null
-  provider_publisher: string | null
-  provider_start_year: number | null
-  provider_issue_count: number | null
-  mapping_status: string | null
+  external_identity_id?: number | null
+  provider_volume_id?: string | null
+  provider_title?: string | null
+  provider_publisher?: string | null
+  provider_start_year?: number | null
+  provider_issue_count?: number | null
+  mapping_status?: string | null
   enableable: boolean
   followed: boolean
 }
@@ -283,8 +283,8 @@ export function createContinuityPlansApi(client: HttpClient) {
       client.post<ContinuityPlan, ContinuityPlanWrite>('/v1/continuity-plans/', payload),
     get: (planId: number) =>
       client.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
-    getReader: (planId: number) =>
-      nativeV2.continuityPlanReader({ path: { plan_id: planId } }) as Promise<ReadingPlanReaderView>,
+    getReader: (planId: number): Promise<ReadingPlanReaderView> =>
+      nativeV2.continuityPlanReader({ path: { plan_id: planId } }),
     listReleaseSources: (planId: number) =>
       client.get<ReadingPlanReleaseSourceStatus[]>(
         `/v1/continuity-plans/${planId}/release-sources/reader`,

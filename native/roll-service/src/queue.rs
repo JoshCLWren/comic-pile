@@ -2139,9 +2139,9 @@ mod tests {
         let connection = db::checkout(state).await.expect("test connection");
         connection
             .batch_execute(&format!(
-                "CREATE SCHEMA IF NOT EXISTS {schema}; \
-                 CREATE TABLE IF NOT EXISTS {schema}.users (id integer PRIMARY KEY); \
-                 CREATE TABLE IF NOT EXISTS {schema}.threads ( \
+                "CREATE SCHEMA IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}; \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.users (id integer PRIMARY KEY); \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.threads ( \
                      id integer PRIMARY KEY, \
                      title varchar NOT NULL, \
                      format varchar NOT NULL, \
@@ -2164,25 +2164,25 @@ mod tests {
                      catalog_series_id bigint, \
                      queue_order_key bigint, \
                      queue_position_is_manual boolean NOT NULL DEFAULT false, \
-                     FOREIGN KEY (user_id) REFERENCES {schema}.users(id) \
+                     FOREIGN KEY (user_id) REFERENCES {PRODUCTION_SHAPE_SCHEMA}.users(id) \
                  ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.issues ( \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.issues ( \
                      id integer PRIMARY KEY, \
-                     thread_id integer NOT NULL REFERENCES {schema}.threads(id), \
+                     thread_id integer NOT NULL REFERENCES {PRODUCTION_SHAPE_SCHEMA}.threads(id), \
                      position integer NOT NULL, \
                      status varchar NOT NULL, \
                      issue_number varchar NOT NULL, \
                      catalog_issue_id bigint, \
                      UNIQUE (thread_id, id) \
                  ); \
-                 ALTER TABLE {schema}.threads \
+                 ALTER TABLE {PRODUCTION_SHAPE_SCHEMA}.threads \
                      DROP CONSTRAINT IF EXISTS fk_threads_frontier_same_thread; \
-                 ALTER TABLE {schema}.threads \
+                 ALTER TABLE {PRODUCTION_SHAPE_SCHEMA}.threads \
                      ADD CONSTRAINT fk_threads_frontier_same_thread \
                      FOREIGN KEY (id, next_unread_issue_id) \
-                     REFERENCES {schema}.issues(thread_id, id) \
+                     REFERENCES {PRODUCTION_SHAPE_SCHEMA}.issues(thread_id, id) \
                      DEFERRABLE INITIALLY DEFERRED; \
-                 CREATE TABLE IF NOT EXISTS {schema}.events ( \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.events ( \
                      id serial PRIMARY KEY, \
                      type varchar NOT NULL, \
                      timestamp timestamptz NOT NULL, \
@@ -2190,14 +2190,14 @@ mod tests {
                      thread_id integer, \
                      context json \
                  ); \
-                 CREATE OR REPLACE FUNCTION {schema}.assign_event_owner() \
+                 CREATE OR REPLACE FUNCTION {PRODUCTION_SHAPE_SCHEMA}.assign_event_owner() \
                  RETURNS trigger LANGUAGE plpgsql AS $$ \
                  DECLARE inferred_owner integer; \
                  BEGIN \
                      IF TG_OP = 'INSERT' THEN \
                          IF NEW.thread_id IS NOT NULL THEN \
                              SELECT user_id INTO inferred_owner \
-                             FROM {schema}.threads WHERE id = NEW.thread_id; \
+                             FROM {PRODUCTION_SHAPE_SCHEMA}.threads WHERE id = NEW.thread_id; \
                          END IF; \
                          IF inferred_owner IS NOT NULL AND NEW.user_id IS NOT NULL \
                             AND NEW.user_id <> inferred_owner THEN \
@@ -2212,11 +2212,11 @@ mod tests {
                      END IF; \
                      RETURN NEW; \
                  END; $$; \
-                 DROP TRIGGER IF EXISTS trg_assign_event_owner ON {schema}.events; \
+                 DROP TRIGGER IF EXISTS trg_assign_event_owner ON {PRODUCTION_SHAPE_SCHEMA}.events; \
                  CREATE TRIGGER trg_assign_event_owner \
-                     BEFORE INSERT ON {schema}.events \
-                     FOR EACH ROW EXECUTE FUNCTION {schema}.assign_event_owner(); \
-                 CREATE TABLE IF NOT EXISTS {schema}.dependencies ( \
+                     BEFORE INSERT ON {PRODUCTION_SHAPE_SCHEMA}.events \
+                     FOR EACH ROW EXECUTE FUNCTION {PRODUCTION_SHAPE_SCHEMA}.assign_event_owner(); \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.dependencies ( \
                      id integer PRIMARY KEY, \
                      source_issue_id integer NOT NULL, \
                      target_issue_id integer NOT NULL, \
@@ -2224,47 +2224,46 @@ mod tests {
                      classification text, \
                      provenance text \
                  ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.custom_cbl_lists ( \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.custom_cbl_lists ( \
                      id integer PRIMARY KEY, user_id integer NOT NULL, mode text NOT NULL \
                  ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.custom_cbl_entries ( \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.custom_cbl_entries ( \
                      id integer PRIMARY KEY, list_id integer NOT NULL, \
                      issue_id integer NOT NULL, gate text NOT NULL, \
                      skipped boolean NOT NULL DEFAULT false, \
                      position integer NOT NULL DEFAULT 1 \
                  ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.custom_cbl_overlap_decisions ( \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.custom_cbl_overlap_decisions ( \
                      id integer PRIMARY KEY, list_id integer, user_id integer, \
                      continuing_external_identity_id bigint, \
                      waiting_external_identity_id bigint \
                  ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.collection_exclusions ( \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.collection_exclusions ( \
                      id integer PRIMARY KEY, user_id integer, issue_id integer, \
                      thread_id integer, provider text, external_volume_id text \
                  ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.external_identities ( \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.external_identities ( \
                      id bigint PRIMARY KEY, provider text NOT NULL, \
                      external_id text NOT NULL, entity_type text NOT NULL \
                  ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.catalog_series ( \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.catalog_series ( \
                      id bigint PRIMARY KEY, canonical_external_identity_id bigint \
                  ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.catalog_issues ( \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.catalog_issues ( \
                      id bigint PRIMARY KEY, catalog_series_id bigint, \
                      canonical_external_identity_id bigint \
                  ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.thread_external_series_mappings ( \
+                 CREATE TABLE IF NOT EXISTS {PRODUCTION_SHAPE_SCHEMA}.thread_external_series_mappings ( \
                      thread_id integer, external_identity_id bigint, status text \
                  ); \
-                 TRUNCATE {schema}.threads, {schema}.events, {schema}.issues, \
-                     {schema}.users, {schema}.dependencies, \
-                     {schema}.custom_cbl_lists, {schema}.custom_cbl_entries, \
-                     {schema}.custom_cbl_overlap_decisions, \
-                     {schema}.collection_exclusions, \
-                     {schema}.external_identities, {schema}.catalog_series, \
-                     {schema}.catalog_issues, \
-                     {schema}.thread_external_series_mappings RESTART IDENTITY CASCADE;",
-                schema = PRODUCTION_SHAPE_SCHEMA
+                 TRUNCATE {PRODUCTION_SHAPE_SCHEMA}.threads, {PRODUCTION_SHAPE_SCHEMA}.events, {PRODUCTION_SHAPE_SCHEMA}.issues, \
+                     {PRODUCTION_SHAPE_SCHEMA}.users, {PRODUCTION_SHAPE_SCHEMA}.dependencies, \
+                     {PRODUCTION_SHAPE_SCHEMA}.custom_cbl_lists, {PRODUCTION_SHAPE_SCHEMA}.custom_cbl_entries, \
+                     {PRODUCTION_SHAPE_SCHEMA}.custom_cbl_overlap_decisions, \
+                     {PRODUCTION_SHAPE_SCHEMA}.collection_exclusions, \
+                     {PRODUCTION_SHAPE_SCHEMA}.external_identities, {PRODUCTION_SHAPE_SCHEMA}.catalog_series, \
+                     {PRODUCTION_SHAPE_SCHEMA}.catalog_issues, \
+                     {PRODUCTION_SHAPE_SCHEMA}.thread_external_series_mappings RESTART IDENTITY CASCADE;",
             ))
             .await
             .expect("production-shape schema");

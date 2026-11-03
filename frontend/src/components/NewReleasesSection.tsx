@@ -33,7 +33,7 @@ function isFollowable(candidate: ReadingPlanReleaseCandidate): candidate is Foll
   return candidate.enableable && candidate.external_identity_id != null
 }
 
-function formatLastSync(lastSyncedAt: string | null): string {
+function formatLastSync(lastSyncedAt: string | null | undefined): string {
   if (!lastSyncedAt) return 'Never synced'
   const date = new Date(lastSyncedAt)
   if (Number.isNaN(date.getTime())) return 'Never synced'
@@ -251,7 +251,7 @@ export function NewReleasesSection({
                     {needsReview
                       ? 'This volume mapping is not confirmed yet, so it cannot be followed.'
                       : 'No ComicVine volume is mapped to this thread yet, so it cannot be followed.'}
-                    {candidate.external_identity_id === null ? (
+                    {candidate.external_identity_id == null ? (
                       <>
                         {' '}
                         Track issues in this thread first, then map its series to follow new

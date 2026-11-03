@@ -8986,7 +8986,7 @@ export interface components {
             source_target_story_arc_id?: string | null;
         };
         ContinuityPlanReaderIssue: {
-            availability: string;
+            availability: components["schemas"]["ReaderAvailability"];
             blockers: components["schemas"]["ContinuityPlanBlocker"][];
             /** Format: int32 */
             display_position: number;
@@ -9023,10 +9023,10 @@ export interface components {
         ContinuityPlanReaderResponse: {
             available_now: components["schemas"]["ContinuityPlanReaderIssue"][];
             blocked_next: components["schemas"]["ContinuityPlanReaderIssue"][];
-            execution_mode: string;
+            execution_mode: components["schemas"]["ReaderExecutionMode"];
             lanes: components["schemas"]["ContinuityPlanReaderLane"][];
             name: string;
-            ordering_mode: string;
+            ordering_mode: components["schemas"]["ReaderOrderingMode"];
             /** Format: int32 */
             plan_id: number;
             progress: components["schemas"]["NativeReadingPlanProgress"];
@@ -13104,7 +13104,7 @@ export interface components {
             /** Format: int32 */
             external_identity_id?: number | null;
             followed: boolean;
-            mapping_state: string;
+            mapping_state: components["schemas"]["ReleaseMappingState"];
             mapping_status?: string | null;
             /** Format: int32 */
             provider_issue_count?: number | null;
@@ -13820,6 +13820,8 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
+        /** @enum {string} */
+        ReaderAvailability: "read" | "available" | "blocked" | "later" | "excluded" | "inactive";
         /**
          * ReaderContextCrossover
          * @description One owned crossover relevant to the requested issue's thread.
@@ -14009,6 +14011,10 @@ export interface components {
             /** Series Name */
             series_name?: string | null;
         };
+        /** @enum {string} */
+        ReaderExecutionMode: "option_e";
+        /** @enum {string} */
+        ReaderOrderingMode: "strict_sequential" | "informational";
         /**
          * ReadingBoundaryBatchRequest
          * @description Owned series IDs to explain in one request.
@@ -15058,6 +15064,8 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** @enum {string} */
+        ReleaseMappingState: "confirmed" | "ambiguous" | "unmapped";
         /**
          * ReleaseResponse
          * @description One complete release ledger record returned to trusted automation.
