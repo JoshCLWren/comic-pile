@@ -293,7 +293,9 @@ dependencies = [
  "http-body",
  "serde_json",
  "tokio",
+ "tokio-postgres",
  "tower",
+ "tracing-subscriber",
  "vercel_runtime",
 ]
 
