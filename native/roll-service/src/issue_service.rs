@@ -1159,7 +1159,6 @@ mod tests {
         assert_eq!(bounded.items[1].mapping_state, "unmapped");
         assert_eq!(bounded.items[1].cover_image_url, None);
 
-
         // The native writer must record one atomic, linked Roll rating and
         // replay its original die/queue receipt without a second event.
         first
@@ -1180,7 +1179,10 @@ mod tests {
             .await
             .unwrap();
         let offer: i32 = first
-            .query_one("SELECT id FROM events WHERE session_id=2 AND type='roll'", &[])
+            .query_one(
+                "SELECT id FROM events WHERE session_id=2 AND type='roll'",
+                &[],
+            )
             .await
             .unwrap()
             .get(0);
