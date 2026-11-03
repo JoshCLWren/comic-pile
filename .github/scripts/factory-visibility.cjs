@@ -29,6 +29,7 @@ const DEFINITIONS = {
   'factory:unowned': ['BFDADC', 'Factory work has no current next-action owner'],
   'factory:building': ['FBCA04', 'A factory is actively implementing or repairing this work'],
   'factory:review': ['D4C5F9', 'The exact current head needs review or re-review'],
+  'factory:approved': ['8A63D2', 'Code review passed for this PR head; merge gates still apply'],
   'factory:changes-requested': ['D73A4A', 'Actionable review findings currently block progress'],
   'factory:ci': ['1D76DB', 'Review passed and required exact-head checks are being verified'],
   'factory:ready': ['0E8A16', 'All exact-head factory merge gates are satisfied'],
@@ -63,6 +64,8 @@ const STAGE_LABELS = [
   'factory:blocked',
 ];
 const ADVANCED_PR_STAGES = new Set(['factory:review', 'factory:ci', 'factory:ready']);
+// Review outcome is an informational second axis, never a stage or merge gate.
+const APPROVAL_LABEL = 'factory:approved';
 const MANUAL_ONLY_MARKER = '<!-- factory-execution:manual-only -->';
 // Lockstep with factory_work_policy.BLOCKED_LABELS / issue_labels_block_reconciliation.
 const BLOCKED_LABELS = new Set([
@@ -817,14 +820,22 @@ async function currentLabels(github, context, number) {
   return new Set(response.data.map(label => label.name));
 }
 
-async function reconcileLabels(github, context, number, { owner, stage, derivedLabels }) {
+async function reconcileLabels(github, context, number, { owner, stage, derivedLabels, approved }) {
   const current = await currentLabels(github, context, number);
   const next = [...current].filter(
-    label => !isOwnerLabel(label) && !STAGE_LABELS.includes(label) && !DERIVED_LABELS.has(label),
+    label => !isOwnerLabel(label) && !STAGE_LABELS.includes(label)
+      && !DERIVED_LABELS.has(label) && label !== APPROVAL_LABEL,
   );
   if (!next.includes('factory')) next.push('factory');
   if (owner) next.push(owner);
   if (stage) next.push(stage);
+  // A trusted exact-head PASS is code-review visibility, NOT merge authority.
+  // Preserve it across CI/ready transitions. New pushes and actionable review
+  // findings clear it, even if an older PASS comment remains in history.
+  const reviewApproved = approved === true || (approved == null && current.has(APPROVAL_LABEL));
+  if (reviewApproved && stage !== 'factory:changes-requested' && stage !== 'factory:building') {
+    next.push(APPROVAL_LABEL);
+  }
   // `undefined`/`null` preserves the current derived labels. Callers that do not
   // read live mergeability (review routing, comment markers) must not claim or
   // erase an observability fact they did not verify.
@@ -1019,6 +1030,7 @@ async function reconcileMissingPrLabels({ github, context }) {
     // Repair missing metadata without taking an existing lease or downgrading
     // review/CI state. Never manufacture readiness from green checks alone.
     let stage = !pushed && stages.length === 1 ? stages[0] : 'factory:review';
+    let approved = pushed ? false : undefined;
     if (!pushed && stages.length === 0) {
       const commentsEndpoint = `repos/${context.repo.owner}/${context.repo.repo}/issues/${pr.number}/comments`;
       const commentsResponse = await manualPaginationWithLogging(github, context, {
@@ -1043,6 +1055,7 @@ async function reconcileMissingPrLabels({ github, context }) {
         );
         if (match?.[1] !== pr.head.sha) continue;
         stage = match[2] === 'pass' ? 'factory:ci' : 'factory:changes-requested';
+        approved = match[2] === 'pass';
         break;
       }
     }
@@ -1054,6 +1067,7 @@ async function reconcileMissingPrLabels({ github, context }) {
         : owners.length === 1 ? owners[0] : 'factory:unowned',
       stage,
       derivedLabels: derived,
+      approved,
     });
   }
 }
@@ -1077,6 +1091,14 @@ async function reconcile({ github, context }) {
     const currentOwner = [...current].find(isOwnerLabel) || null;
     const currentStage = STAGE_LABELS.find(label => current.has(label));
     const requestedStage = stageFrom(body);
+    // The marker is trusted as *review visibility* only when it names the live
+    // PR head. It is not an authorization to merge or a controller attestation.
+    const verdict = body.match(/<!-- comic-pile-factory-review-v\d+:([a-f0-9]{40}):(pass|changes-required) -->/);
+    if (verdict) {
+      if (!context.payload.issue.pull_request) return;
+      const live = await livePullRequest(github, context, number);
+      if (!live || verdict[1] !== live.head?.sha) return;
+    }
     const preserveAdvancedPrStage = Boolean(context.payload.issue.pull_request)
       && requestedStage === 'factory:building'
       && ADVANCED_PR_STAGES.has(currentStage);
@@ -1084,6 +1106,7 @@ async function reconcile({ github, context }) {
     await reconcileLabels(github, context, number, {
       owner: released ? 'factory:unowned' : worker ? ownerFor(worker) : currentOwner,
       stage: preserveAdvancedPrStage ? currentStage : requestedStage || currentStage,
+      approved: verdict ? verdict[2] === 'pass' : undefined,
     });
     return;
   }
@@ -1125,6 +1148,7 @@ async function reconcile({ github, context }) {
       // when the linked issue has since been released for other work.
       owner: prLocalOwner || await ownerFromLinkedIssue(github, context, pullRequest),
       stage: 'factory:review',
+      approved: false,
     });
     return;
   }
@@ -1142,6 +1166,7 @@ async function reconcile({ github, context }) {
       await reconcileLabels(github, context, pullRequest.number, {
         owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),
         stage: 'factory:review',
+        approved: false,
       });
       return;
     }
@@ -1151,6 +1176,7 @@ async function reconcile({ github, context }) {
       await reconcileLabels(github, context, pullRequest.number, {
         owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),
         stage: 'factory:changes-requested',
+        approved: false,
       });
       return;
     }
@@ -1173,6 +1199,7 @@ module.exports._test = {
   STAGE_LABELS,
   DERIVED_LABELS,
   MERGE_CONFLICT_LABEL,
+  APPROVAL_LABEL,
   mergeConflictState,
   derivedLabelsFor,
   labelsBlockEnrollment,
