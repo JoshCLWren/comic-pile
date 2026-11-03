@@ -14,7 +14,7 @@ export interface RollApi {
   skip: () => Promise<RollResponse>
   reroll: () => Promise<RollResponse>
   setDie: (die: number) => Promise<void>
-  clearManualDie: () => Promise<void>
+  clearManualDie: () => Promise<number | null>
   reset: () => Promise<{ die: number; replayed: boolean }>
 }
 
