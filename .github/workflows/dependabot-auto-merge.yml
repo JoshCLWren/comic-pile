@@ -46,6 +46,17 @@ jobs:
           }
 
           merged_prs=()
+          # Dispatch even when a later PR/API operation fails after a merge.
+          # The trusted helper is idempotent and avoids queued manual deploys.
+          dispatch_deploy_after_merges() {
+            if (( ${#merged_prs[@]} > 0 )); then
+              source .github/scripts/factory-dispatch-production-deploy.sh
+              factory_dispatch_production_deploy "Dependabot CI auto-merged PR(s): ${merged_prs[*]}"
+            else
+              echo "No matching Dependabot head auto-merged by this CI completion"
+            fi
+          }
+          trap dispatch_deploy_after_merges EXIT
           while IFS= read -r number; do
             [[ "$number" =~ ^[0-9]+$ ]] || continue
 
@@ -101,12 +112,4 @@ jobs:
             done
           done < <(jq -r '.workflow_run.pull_requests[]?.number // empty' "$GITHUB_EVENT_PATH" | sort -un)
 
-          if (( ${#merged_prs[@]} > 0 )); then
-            # GitHub's built-in token merges don't trigger push workflows.
-            # This existing helper deduplicates READY deployments and does
-            # not displace a queued manual redeploy.
-            source .github/scripts/factory-dispatch-production-deploy.sh
-            factory_dispatch_production_deploy "Dependabot CI auto-merged PR(s): ${merged_prs[*]}"
-          else
-            echo "No matching Dependabot head auto-merged by this CI completion"
-          fi
+
