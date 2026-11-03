@@ -11,6 +11,7 @@ type RollOfferPayload = {
   timezone?: string
   snoozed_thread_ids: number[]
   idempotency_key: string
+  expected_pending_thread_id?: number
 }
 
 type RollOfferResponse = RollResponse & { snoozed_thread_id?: number | null }
@@ -185,17 +186,21 @@ export function createRollApi(client: HttpClient) {
   let unresolvedOfferKey: string | null = readPendingOfferKey()
   let unresolvedResetKey: string | null = readPendingResetKey()
 
-  const offer = async (): Promise<RollOfferResponse> => {
+  const offer = async (expectedPendingThreadId?: number): Promise<RollOfferResponse> => {
     const key = unresolvedOfferKey ?? newOfferKey()
     unresolvedOfferKey = key
     writePendingOfferKey(key)
+    const payload: RollOfferPayload = {
+      timezone: browserTimeZone(),
+      snoozed_thread_ids: readRollSnoozes(),
+      idempotency_key: key,
+    }
+    if (expectedPendingThreadId !== undefined) {
+      payload.expected_pending_thread_id = expectedPendingThreadId
+    }
     const response = await client.post<RollOfferResponse, RollOfferPayload>(
       '/v2/roll/offer',
-      {
-        timezone: browserTimeZone(),
-        snoozed_thread_ids: readRollSnoozes(),
-        idempotency_key: key,
-      },
+      payload,
     )
     if (unresolvedOfferKey === key) unresolvedOfferKey = null
     clearPendingOfferKey(key)
