@@ -93,7 +93,11 @@ vi.mock('../services/api-issues', () => ({
 }))
 
 vi.mock('../services/api-roll', () => ({
-  rollApi: { reroll: vi.fn() },
+  rollApi: {
+    reroll: vi.fn(),
+    isTemporarilySnoozed: vi.fn().mockReturnValue(false),
+    unsnoozeTemporary: vi.fn(),
+  },
 }))
 
 vi.mock('../contexts/useBugReportRestore', () => ({
