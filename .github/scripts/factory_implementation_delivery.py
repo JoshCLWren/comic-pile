@@ -446,7 +446,7 @@ def _unified_file_diff(path: str, old: str, new: str) -> str:
             [line + "\n" for line in old.splitlines()],
             [line + "\n" for line in new.splitlines()],
             fromfile=f"a/{path}", tofile=f"b/{path}",
-            n=max(len(old.splitlines()), len(new.splitlines())) + 1,
+            n=3,
         ))
     )
 
