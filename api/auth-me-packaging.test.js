@@ -94,7 +94,7 @@ test('unbundled Node ESM can load the Vercel auth/me function', async (t) => {
   try {
     ({ default: handler } = await import(pathToFileURL(entry).href));
   } catch (error) {
-    const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+    const code = error instanceof Error && 'code' in error ? error.code : undefined;
     assert.notEqual(
       code,
       'ERR_MODULE_NOT_FOUND',
@@ -166,8 +166,8 @@ test('unbundled Node ESM can load the Vercel auth/me function', async (t) => {
     `);
 
     const inserted = await setupPool.query(
-      `INSERT INTO users (username, email, is_admin, password_hash)
-       VALUES ($1, $2, false, $3)
+      `INSERT INTO users (username, email, is_admin, password_hash, created_at)
+       VALUES ($1, $2, false, $3, now())
        ON CONFLICT (username) DO UPDATE
          SET email = EXCLUDED.email
        RETURNING id, username, email, is_admin`,

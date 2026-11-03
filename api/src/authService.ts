@@ -1,6 +1,6 @@
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { findAuthUser, isTokenRevoked } from './authRepository.js';
-import type { UserResponse } from './authTypes.js';
+import type { UserResponse, VerifiedAccessTokenClaims } from './authTypes.js';
 
 const SECRET_KEY = process.env.SECRET_KEY || '';
 if (!SECRET_KEY) throw new Error('SECRET_KEY environment variable must be set');
@@ -10,13 +10,7 @@ function isJwtPayload(value: string | JwtPayload): value is JwtPayload {
   return Object.prototype.toString.call(value) === '[object Object]';
 }
 
-function verifyToken(token: string): {
-  sub: string;
-  jti: string;
-  type: string;
-  exp: number;
-  pc?: number;
-} {
+function verifyToken(token: string): VerifiedAccessTokenClaims {
   try {
     const payload = jwt.verify(token, SECRET_KEY, { algorithms: ['HS256'] });
     if (!isJwtPayload(payload) || !payload.sub || Object.prototype.toString.call(payload.sub) !== '[object String]') {
@@ -34,9 +28,13 @@ function verifyToken(token: string): {
       jti: payload.jti,
       type: 'access',
       exp: payload.exp !== undefined && Number.isFinite(payload.exp) ? payload.exp : 0,
-    };
-    if (Number.isFinite(payload.pc)) {
-      return { ...claims, pc: payload.pc };
+    } satisfies Omit<VerifiedAccessTokenClaims, 'pc'>;
+    const passwordEpochClaim: unknown = payload.pc;
+    if (
+      Object.prototype.toString.call(passwordEpochClaim) === '[object Number]' &&
+      Number.isFinite(Number(passwordEpochClaim))
+    ) {
+      return { ...claims, pc: Number(passwordEpochClaim) };
     }
     return claims;
   } catch (error) {

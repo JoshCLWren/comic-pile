@@ -1,140 +1,191 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import jwt from 'jsonwebtoken';
+import { after, test } from 'node:test';
+import type { AddressInfo } from 'node:net';
+import express from 'express';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 
 process.env.SECRET_KEY = 'test-secret-key';
 process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/comic_pile_test';
 
+interface MockUser {
+  id: number;
+  username: string;
+  email: string;
+  is_admin: boolean;
+  password_changed_at: Date | null;
+}
+
+interface MockQueryResult {
+  rows: Array<{ id: number } | MockUser>;
+}
+
 const mockPool = {
-  query: async (query: string, params: any[]) => {
+  query: async (query: string, params: string[]): Promise<MockQueryResult> => {
     if (query.includes('SELECT 1 FROM revoked_tokens')) {
-      if (params[1] === 'revoked-jti') return { rows: [{ id: 1 }] };
-      return { rows: [] };
+      return { rows: params[1] === 'revoked-jti' ? [{ id: 1 }] : [] };
     }
     if (query.includes('FROM users')) {
-      if (params[0] === 'database-outage') throw new Error('database unavailable');
-      if (params[0] === 'testuser') {
-        return { rows: [{ id: 1, username: 'testuser', email: 'test@example.com', is_admin: false, password_changed_at: null }] };
+      const username = params[0];
+      if (username === 'database-outage') throw new Error('database unavailable');
+      if (username === 'testuser') {
+        return {
+          rows: [{
+            id: 1,
+            username,
+            email: 'test@example.com',
+            is_admin: false,
+            password_changed_at: null,
+          }],
+        };
       }
-      if (params[0] === 'nonexistentuser') return { rows: [] };
-      if (params[0] === 'passwordchangeduser') {
-        return { rows: [{ id: 2, username: 'passwordchangeduser', email: 'test2@example.com', is_admin: false, password_changed_at: new Date() }] };
+      if (username === 'passwordchangeduser') {
+        return {
+          rows: [{
+            id: 2,
+            username,
+            email: 'test2@example.com',
+            is_admin: false,
+            password_changed_at: new Date(),
+          }],
+        };
       }
-      return { rows: [] };
     }
     return { rows: [] };
   },
-  connect: async () => ({ query: mockPool.query, release: () => {} }),
 };
 
-(globalThis as any).pool = mockPool;
+Object.assign(globalThis, { pool: mockPool });
 
-const SECRET_KEY = process.env.SECRET_KEY as string;
-
-function createMockRequest(authHeader?: string) {
-  return { headers: { authorization: authHeader } };
-}
-
-function createMockResponse() {
-  const calls: any = { status: [], json: [] };
-  const res: any = {
-    setHeader: () => {},
-    status: (code: number) => { calls.status.push(code); res._status = code; return res; },
-    json: (body: any) => { calls.json.push(body); res._json = body; return res; },
-    end: () => {},
-  };
-  res._status = 200; // default like browser
-  res._calls = calls;
-  return res;
-}
+const secretKey = process.env.SECRET_KEY;
+if (!secretKey) throw new Error('SECRET_KEY environment variable must be set');
 
 const { default: authMeHandler } = await import('./auth.js');
+const app = express();
+app.get('/api/v1/auth/me', authMeHandler);
+const server = app.listen(0, '127.0.0.1');
+await new Promise<void>((resolve, reject) => {
+  server.once('listening', resolve);
+  server.once('error', reject);
+});
 
-test('Auth/me API Handler Tests', async (t) => {
-  await t.test('should return user information for valid access token', async () => {
-    const jti = 'valid-jti-123';
-    const token = jwt.sign({ sub: 'testuser', jti, type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
-    const req = createMockRequest(`Bearer ${token}`);
-    const res = createMockResponse();
-    await authMeHandler(req as any, res as any);
-    assert.equal(res._status, 200);
-    assert.deepEqual(res._json, { id: 1, username: 'testuser', email: 'test@example.com', is_admin: false });
-  });
+const address = server.address();
+assert.ok(address !== null && Object.prototype.toString.call(address) === '[object Object]');
+// SAFETY: This server was bound to the TCP host 127.0.0.1 and is listening, so Node returns AddressInfo.
+const port = (address as AddressInfo).port;
+const endpoint = `http://127.0.0.1:${port}/api/v1/auth/me`;
 
-  await t.test('should return 401 for missing authorization header', async () => {
-    const req = createMockRequest();
-    const res = createMockResponse();
-    await authMeHandler(req as any, res as any);
-    assert.equal(res._status, 401);
-    assert.deepEqual(res._json, { error: 'Missing or invalid authorization header' });
+after(async () => {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
   });
+});
 
-  await t.test('should return 401 for expired token', async () => {
-    const token = jwt.sign({ sub: 'testuser', jti: 'valid-jti-123', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '-1s' });
-    const req = createMockRequest(`Bearer ${token}`);
-    const res = createMockResponse();
-    await authMeHandler(req as any, res as any);
-    assert.equal(res._status, 401);
-    assert.deepEqual(res._json, { error: 'Invalid or expired token' });
+async function requestAuthMe(token?: string): Promise<{ status: number; body: unknown }> {
+  const response = await fetch(endpoint, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
   });
+  return { status: response.status, body: await response.json() };
+}
 
-  await t.test('should return 401 for malformed token', async () => {
-    const req = createMockRequest('Bearer not-a-jwt');
-    const res = createMockResponse();
-    await authMeHandler(req as any, res as any);
-    assert.equal(res._status, 401);
-    assert.deepEqual(res._json, { error: 'Invalid or expired token' });
-  });
+function createToken(
+  claims: Record<string, string | number>,
+  expiresIn: SignOptions['expiresIn'] = '1h',
+): string {
+  return jwt.sign(claims, secretKey, { expiresIn });
+}
 
-  await t.test('should return 401 for revoked token', async () => {
-    const token = jwt.sign({ sub: 'testuser', jti: 'revoked-jti', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
-    const req = createMockRequest(`Bearer ${token}`);
-    const res = createMockResponse();
-    await authMeHandler(req as any, res as any);
-    assert.equal(res._status, 401);
-    assert.deepEqual(res._json, { error: 'Token has been revoked' });
+test('returns user information for a valid access token', async () => {
+  const result = await requestAuthMe(createToken({
+    sub: 'testuser',
+    jti: 'valid-jti-123',
+    type: 'access',
+    pc: 0,
+  }));
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, {
+    id: 1,
+    username: 'testuser',
+    email: 'test@example.com',
+    is_admin: false,
   });
+});
 
-  await t.test('should return 401 for missing claims', async () => {
-    const token = jwt.sign({ sub: 'testuser', type: 'access' }, SECRET_KEY, { expiresIn: '1h' });
-    const req = createMockRequest(`Bearer ${token}`);
-    const res = createMockResponse();
-    await authMeHandler(req as any, res as any);
-    assert.equal(res._status, 401);
-    assert.deepEqual(res._json, { error: 'Invalid authentication credentials' });
-  });
+test('returns 401 for a missing authorization header', async () => {
+  const result = await requestAuthMe();
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { error: 'Missing or invalid authorization header' });
+});
 
-  await t.test('should return 401 for deleted user', async () => {
-    const token = jwt.sign({ sub: 'nonexistentuser', jti: 'valid-jti-123', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
-    const req = createMockRequest(`Bearer ${token}`);
-    const res = createMockResponse();
-    await authMeHandler(req as any, res as any);
-    assert.equal(res._status, 401);
-    assert.deepEqual(res._json, { error: 'User not found' });
-  });
+test('returns 401 for an expired token', async () => {
+  const token = createToken({ sub: 'testuser', jti: 'valid-jti-123', type: 'access', pc: 0 }, '-1s');
+  const result = await requestAuthMe(token);
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { error: 'Invalid or expired token' });
+});
 
-  await t.test('should return 401 for password change', async () => {
-    const token = jwt.sign({ sub: 'passwordchangeduser', jti: 'valid-jti-123', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
-    const req = createMockRequest(`Bearer ${token}`);
-    const res = createMockResponse();
-    await authMeHandler(req as any, res as any);
-    assert.equal(res._status, 401);
-    assert.deepEqual(res._json, { error: 'Password changed; please sign in again.' });
-  });
-  await t.test('should reject refresh credentials', async () => {
-    const token = jwt.sign({ sub: 'testuser', jti: 'refresh-jti', type: 'refresh', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
-    const res = createMockResponse();
-    await authMeHandler(createMockRequest(`Bearer ${token}`) as any, res as any);
-    assert.equal(res._status, 401);
-    assert.deepEqual(res._json, { error: 'Invalid authentication credentials' });
-  });
+test('returns 401 for a malformed token', async () => {
+  const result = await requestAuthMe('not-a-jwt');
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { error: 'Invalid or expired token' });
+});
 
-  await t.test('should map a database failure to 500', async () => {
-    const token = jwt.sign({ sub: 'database-outage', jti: 'valid-jti', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
-    const res = createMockResponse();
-    await authMeHandler(createMockRequest(`Bearer ${token}`) as any, res as any);
-    assert.equal(res._status, 500);
-    assert.deepEqual(res._json, { error: 'Internal server error' });
-  });
+test('returns 401 for a revoked token', async () => {
+  const result = await requestAuthMe(createToken({
+    sub: 'testuser',
+    jti: 'revoked-jti',
+    type: 'access',
+    pc: 0,
+  }));
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { error: 'Token has been revoked' });
+});
 
+test('returns 401 for missing claims', async () => {
+  const result = await requestAuthMe(createToken({ sub: 'testuser', type: 'access' }));
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { error: 'Invalid authentication credentials' });
+});
+
+test('returns 401 for a deleted user', async () => {
+  const result = await requestAuthMe(createToken({
+    sub: 'nonexistentuser',
+    jti: 'valid-jti-123',
+    type: 'access',
+    pc: 0,
+  }));
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { error: 'User not found' });
+});
+
+test('returns 401 when the user password changed after token issuance', async () => {
+  const result = await requestAuthMe(createToken({
+    sub: 'passwordchangeduser',
+    jti: 'valid-jti-123',
+    type: 'access',
+    pc: 0,
+  }));
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { error: 'Password changed; please sign in again.' });
+});
+
+test('rejects refresh credentials', async () => {
+  const result = await requestAuthMe(createToken({
+    sub: 'testuser',
+    jti: 'refresh-jti',
+    type: 'refresh',
+    pc: 0,
+  }));
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { error: 'Invalid authentication credentials' });
+});
+
+test('maps a database failure to 500', async () => {
+  const result = await requestAuthMe(createToken({
+    sub: 'database-outage',
+    jti: 'valid-jti',
+    type: 'access',
+    pc: 0,
+  }));
+  assert.equal(result.status, 500);
+  assert.deepEqual(result.body, { error: 'Internal server error' });
 });
