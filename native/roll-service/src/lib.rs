@@ -9,6 +9,7 @@ pub mod dice_state;
 pub mod dismiss_pending;
 pub mod issue_handler;
 pub mod issue_service;
+pub mod openapi;
 pub mod option_inputs;
 pub mod queue;
 pub mod reading_blocker_projection;
