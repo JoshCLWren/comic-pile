@@ -221,6 +221,10 @@ mod tests {
                      issue_number text,
                      rating double precision,
                      issues_read integer,
+                     die integer,
+                     die_after integer,
+                     session_id integer,
+                     source_roll_event_id integer,
                      context json
                  );
                  CREATE TABLE {schema}.dependencies (
