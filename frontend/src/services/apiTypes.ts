@@ -12,7 +12,7 @@ export interface RollApi {
   override: (data: OverrideRollPayload) => Promise<RollResponse>
   dismissPending: () => Promise<void>
   skip: () => Promise<RollResponse>
-  reroll: () => Promise<RollResponse>
+  reroll: (expectedPendingThreadId?: number) => Promise<RollResponse>
   setDie: (die: number) => Promise<void>
   clearManualDie: () => Promise<void>
   reset: () => Promise<{ die: number; replayed: boolean }>
