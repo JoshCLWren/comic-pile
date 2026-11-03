@@ -336,6 +336,86 @@ test('trusted exact-head factory PASS is labeled approved but never merge-ready'
   assert.ok(!calls[0].labels.includes('factory:ready'));
 });
 
+test('current semantic controller approval adds visibility without changing review stage', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:ready', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  const head = 'a'.repeat(40);
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+      comment: {
+        author_association: 'NONE',
+        user: { login: 'github-actions[bot]' },
+        body: '<!-- comic-pile-factory-semantic-review-v1:pr-44:head-'
+          + head + ':reviewer-64:producer-unknown:verdict-approve -->\n\n'
+          + '### Factory semantic review, Factory 64, APPROVE',
+      },
+    }),
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:approved'));
+  assert.ok(calls[0].labels.includes('factory:ready'));
+  assert.ok(!calls[0].labels.includes('factory:ci'), 'late comment must not downgrade ready');
+});
+
+test('semantic approval cannot be spoofed by wrong head, PR, actor, or prose echo', async () => {
+  const head = 'a'.repeat(40);
+  const marker = ({ pr = 44, sha = head, verdict = 'approve' } = {}) =>
+    '<!-- comic-pile-factory-semantic-review-v1:pr-' + pr
+    + ':head-' + sha + ':reviewer-82:producer-11:verdict-' + verdict + ' -->';
+  for (const { body, association, actor } of [
+    { body: marker({ sha: 'b'.repeat(40) }), association: 'OWNER' },
+    { body: marker({ pr: 45 }), association: 'OWNER' },
+    { body: marker(), association: 'NONE', actor: 'anonymous' },
+    { body: 'Review notes\n' + marker(), association: 'OWNER' },
+    { body: marker({ verdict: 'repair' }), association: 'OWNER' },
+    { body: marker({ verdict: 'reject' }), association: 'OWNER' },
+  ]) {
+    const calls = [];
+    const github = githubFor({
+      labels: ['factory', 'factory:review', 'factory:unowned'],
+      setLabels: input => calls.push(input),
+    });
+    await reconcile({
+      github,
+      context: contextFor('issue_comment', {
+        issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+        comment: {
+          author_association: association,
+          user: { login: actor || 'JoshCLWren' },
+          body,
+        },
+      }),
+    });
+    assert.ok(calls.every(call => !call.labels.includes('factory:approved')), body);
+  }
+});
+
+test('semantic review verdict is not an approval on issue-only conversations', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:building', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 44 },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+        body: '<!-- comic-pile-factory-semantic-review-v1:pr-44:head-'
+          + 'a'.repeat(40) + ':reviewer-82:producer-11:verdict-approve -->',
+      },
+    }),
+  });
+  assert.deepEqual(calls, []);
+});
+
 test('issue comments cannot stamp a review approval onto a non-PR issue', async () => {
   const calls = [];
   const github = githubFor({
