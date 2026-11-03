@@ -26,6 +26,9 @@ mod session_bandwidth;
 pub mod skip;
 pub mod threads;
 
+#[cfg(test)]
+mod test_support;
+
 use axum::{
     extract::{Request, State},
     http::StatusCode,
