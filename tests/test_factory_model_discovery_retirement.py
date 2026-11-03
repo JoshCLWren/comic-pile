@@ -1441,14 +1441,12 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "77" not in by_worker
     assert 77 in lock["retired_workers"]
     assert "moonshotai/kimi-k3" in lock["retired_models"]
-    assert by_worker["78"] == {
-        "worker": "78",
-        "source": "nvidia",
-        "model": "z-ai/glm-5.3",
-        "minute": "0",
-        "scheduler": "dispatcher",
-        "display_name": "NVIDIA GLM 5.3",
-    }
+    # The NVIDIA GLM 5.3 410 marker retires worker 78, even though
+    # the separate NVIDIA GLM 5.3 Flash worker 80 remains.
+    assert "78" not in by_worker
+    assert 78 not in lock["expected_workers"]
+    assert 78 in lock["retired_workers"]
+    assert "z-ai/glm-5.3" in lock["retired_models"]
     assert "79" not in by_worker
     assert 79 not in lock["expected_workers"]
     assert 79 in lock["retired_workers"]
@@ -1621,31 +1619,25 @@ def test_committed_tsv_converts_surplus_pickle_to_z_ai_and_ollama_cloud() -> Non
     assert ROSTER.schedule_is_balanced(rows)
 
 
-def test_committed_tsv_converts_surplus_pickle_to_openrouter_dots_note() -> None:
-    """Worker 56 stays expected and pins Harvy-smoked OpenRouter Dots 3 Note Preview Free."""
+def test_committed_tsv_retires_openrouter_dots_preview_worker_56() -> None:
+    """Worker 56 stays retired after its OpenRouter preview leaves the catalog."""
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
 
-    assert 56 in lock["expected_workers"]
-    assert 56 not in lock["retired_workers"]
+    assert 56 not in lock["expected_workers"]
+    assert 56 in lock["retired_workers"]
+    assert "56" not in by_worker
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["54"]["source"] == "z-ai"
     assert by_worker["54"]["model"] == "glm-4.5-flash"
     assert by_worker["55"]["source"] == "ollama-cloud"
     assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
-    assert by_worker["56"] == {
-        "worker": "56",
-        "source": "openrouter-free",
-        "model": "dots-studio/dots-3-note-preview:free",
-        "minute": "30",
-        "scheduler": "dispatcher",
-        "display_name": "OpenRouter Dots 3 Note Preview Free",
+    assert "dots-studio/dots-3-note-preview:free" in lock["retired_models"]
+    assert "dots-studio/dots-3-note-preview:free" not in {
+        row["model"] for row in rows
     }
-    assert by_worker["56"]["model"] not in lock["retired_models"]
-    assert "dots-studio/dots-3-note-preview:free" not in lock["retired_models"]
-    assert ROSTER.openrouter_model_is_free(by_worker["56"]["model"])
     assert ROSTER.schedule_is_balanced(rows)
 
 
@@ -1754,9 +1746,9 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     ``space-bunny-free`` (w49), ``muse-spark-1.3-contributor-free`` (w58),
     ``longcat-2.5-preview-free`` (w73), and ``cat-jam-free`` (w83) are no
     longer served free. OpenCode Nemotron 3 Ultra (worker 42) and kilo-auto
-    worker 46 stay. Dispatcher minutes for remaining pins 93 and 95 fill
-    the vacated :5/:35 buckets so the ±1 schedule invariant holds without
-    adding, swapping, or re-pinning any other worker.
+    worker 46 stay. Requesty worker 93 remains active; NVIDIA worker 95
+    later retired when its Super VL model disappeared from the catalog.
+    The remaining roster still satisfies the balanced-schedule invariant.
     """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
@@ -1788,9 +1780,10 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     assert by_worker["93"]["source"] == "requesty"
     assert by_worker["93"]["model"] == "nvidia/nemotron-3-super-120b-a12b"
     assert by_worker["93"]["minute"] == "5"
-    assert by_worker["95"]["source"] == "nvidia"
-    assert by_worker["95"]["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
-    assert by_worker["95"]["minute"] == "35"
+    assert "95" not in by_worker
+    assert 95 not in lock["expected_workers"]
+    assert 95 in lock["retired_workers"]
+    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" in lock["retired_models"]
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 
@@ -1811,8 +1804,10 @@ def test_committed_tsv_upgrades_worker_41_to_opencode_mimo_v26_flash() -> None:
     assert by_worker["54"]["model"] == "glm-4.5-flash"
     assert by_worker["55"]["source"] == "ollama-cloud"
     assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
-    assert by_worker["56"]["source"] == "openrouter-free"
-    assert by_worker["56"]["model"] == "dots-studio/dots-3-note-preview:free"
+    assert "56" not in by_worker
+    assert 56 not in lock["expected_workers"]
+    assert 56 in lock["retired_workers"]
+    assert "dots-studio/dots-3-note-preview:free" in lock["retired_models"]
     assert by_worker["41"] == {
         "worker": "41",
         "source": "opencode-free",
