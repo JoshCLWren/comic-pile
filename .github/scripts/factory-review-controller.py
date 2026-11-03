@@ -292,7 +292,13 @@ def linked_issue_for_pr(pr_number: int, branch: str | None) -> int | None:
     if linked is not None:
         return linked
     body = str(pr_json(pr_number).get("body") or "")
-    return issue_acceptance.linked_issue("", body)
+    match = re.search(
+        r"(?i)\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)",
+        body,
+    )
+    if match:
+        return int(match.group(1))
+    return issue_acceptance.nonclosing_part_of(body)
 
 
 def flatten_pages(value: object | None) -> list[dict[str, Any]]:

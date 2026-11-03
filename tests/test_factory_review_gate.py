@@ -2528,6 +2528,8 @@ def test_nonclosing_part_of_link_is_reviewable_but_does_not_close_issue(
     assert module._post_merge_closure.linked_issue(
         "local/acp-4348", "Part of #4348 and governed by #4335."
     ) is None
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": "closed #4348"})
+    assert module.linked_issue_for_pr(1390, "local/acp-4348") is None
 
 
 @pytest.mark.parametrize(

@@ -223,6 +223,18 @@ def linked_issue(branch: str, body: str) -> int | None:
     match = CLOSING_RE.search(body)
     if match:
         return int(match.group(1))
+    return nonclosing_part_of(body)
+
+
+def nonclosing_part_of(body: str) -> int | None:
+    """Resolve only a standalone non-closing ``Part of #N`` reference.
+
+    Args:
+        body: Pull request description.
+
+    Returns:
+        Explicit linked issue number, or None when no canonical line exists.
+    """
     for line in body.splitlines():
         match = PART_OF_RE.fullmatch(line.strip())
         if match:
