@@ -48,7 +48,8 @@ vi.mock('../services/api', () => ({
   },
 }))
 
-vi.mock('../services/api-roll', () => ({
+vi.mock('../services/api-roll', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/api-roll')>()),
   rollApi: { reroll: vi.fn() },
 }))
 

@@ -487,8 +487,12 @@ describe('QueuePage callback coverage', () => {
     renderPage()
     await user.click(screen.getByText('read callback'))
     expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
+    // Queue unsnooze is client-only since the v1 unsnooze route was retired:
+    // it drops the id from the browser snooze cookie without a server write.
+    document.cookie = `comicpile_roll_snoozes=${encodeURIComponent('[1]')}; path=/`
     await user.click(screen.getByText('snooze callback'))
-    expect(mocks.mutate).toHaveBeenCalled()
+    await waitFor(() => expect(document.cookie).not.toContain(encodeURIComponent('[1]')))
+    expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('Failed'), 'error')
   })
 
   it('renders pending mutation labels for create, edit, and reactivation', async () => {

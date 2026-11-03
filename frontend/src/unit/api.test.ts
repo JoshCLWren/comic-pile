@@ -187,7 +187,7 @@ it('calls every remaining API resource endpoint', async () => {
 })
 
 
-it('uses canonical v1 paths for session, snooze, and undo resources', async () => {
+it('uses canonical v1 paths for session and undo resources', async () => {
   await sessionApi.list()
   await sessionApi.get(7)
   await sessionApi.getCurrent()
@@ -205,8 +205,6 @@ it('uses canonical v1 paths for session, snooze, and undo resources', async () =
   expect(get).toHaveBeenCalledWith('/v1/sessions/7/snapshots')
   expect(post).toHaveBeenCalledWith('/v1/sessions/7/restore-session-start')
   expect(patch).toHaveBeenCalledWith('/v1/roll/session-mode', { bandwidth: 'light' })
-  expect(post).toHaveBeenCalledWith('/v1/snooze/')
-  expect(post).toHaveBeenCalledWith('/v1/snooze/9/unsnooze')
   expect(post).toHaveBeenCalledWith('/v1/undo/7/undo/3')
   expect(get).toHaveBeenCalledWith('/v1/undo/7/snapshots')
 })
