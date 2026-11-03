@@ -19,7 +19,7 @@ vi.mock('../services/api-reader-context', () => ({
 const getReaderContext = vi.mocked(readerContextApi.get)
 
 const setDie = vi.fn<(die: number) => Promise<void>>().mockResolvedValue(undefined)
-const clearManualDie = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
+const clearManualDie = vi.fn<() => Promise<number | null>>().mockResolvedValue(null)
 
 const rollApi: RollApi = {
   roll: vi.fn(),

@@ -18,7 +18,7 @@ import type { RatingThread, ThreadMetadata } from './types'
 
 interface RollMutations {
   setDieMutation: { mutate: (die: number) => Promise<void>; isPending: boolean }
-  clearManualDieMutation: { mutate: () => Promise<void>; isPending: boolean }
+  clearManualDieMutation: { mutate: () => Promise<number | null | void>; isPending: boolean }
   rollMutation: { mutate: () => Promise<RollResponse>; isPending: boolean }
   snoozeMutation: {
     mutate: (expectedPendingThreadId?: number) => Promise<SnoozeMutationOutcome>
