@@ -155,8 +155,22 @@ jobs:
           }
 
           replace_issue_state() {
-            local issue="$1" stage="$2" labels target
-            labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${issue}/labels?per_page=100" --jq '[.[].name]')"
+            local issue="$1" stage="$2" issue_file labels target lease_action
+            # Read the live issue once at the real write boundary. The same
+            # payload supplies both the ownership/freshness decision and the
+            # labels this write would replace, so a claim visible to the policy
+            # can never be silently discarded by a later separate label read.
+            issue_file="$(mktemp)"
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${issue}" >"$issue_file"
+            lease_action="$(python3 .github/scripts/factory_issue_pr_state_policy.py \
+              --lease-action-issue-file "$issue_file")"
+            if [[ "$lease_action" != "reconcile" ]]; then
+              rm -f "$issue_file"
+              echo "Issue #${issue}: skipped (${lease_action})"
+              return 0
+            fi
+            labels="$(jq -c '[.labels[] | if type == "object" then .name else . end]' "$issue_file")"
+            rm -f "$issue_file"
             target="$(jq -c --arg stage "$stage" '
               map(select((test("^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$")|not)
                          and (test("^factory:(?:building|review|changes-requested|ci|ready|blocked)$")|not)
@@ -169,6 +183,10 @@ jobs:
               echo "Issue #${issue}: labels unchanged"
               return 0
             fi
+            # GitHub's label PUT has no compare-and-swap. A claim applied after
+            # the boundary read above and before this PUT can still be
+            # overwritten; that is the irreducible residual race, not a claim of
+            # atomic ownership preservation.
             gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${issue}/labels" \
               --input - <<< "{\"labels\":${target}}" >/dev/null
             echo "Issue #${issue} -> factory:unowned${stage:+ + ${stage}}"
@@ -230,6 +248,9 @@ jobs:
 
             stage="$(python3 .github/scripts/factory_issue_pr_state_policy.py \
               --records-json "$records")"
+            # replace_issue_state is the only writer. It applies the shared
+            # lease policy to its own boundary read, so this history walk never
+            # needs a separate ownership read that could become stale.
             replace_issue_state "$issue" "$stage"
           }
 

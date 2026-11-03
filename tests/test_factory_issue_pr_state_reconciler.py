@@ -6,6 +6,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 
@@ -40,6 +41,26 @@ def _reconcile_issue_body(workflow: str) -> str:
     start = workflow.index("reconcile_issue() {")
     end = workflow.index("if [[ \"$EVENT_NAME\" == 'pull_request_target' ]]", start)
     return workflow[start:end]
+
+
+def _replace_issue_state_body(workflow: str) -> str:
+    """Return the bash replace_issue_state writer from the workflow file."""
+    start = workflow.index("replace_issue_state() {")
+    end = workflow.index("reconcile_issue() {", start)
+    return workflow[start:end]
+
+
+def _iso_timestamp(epoch: int) -> str:
+    """Return a GitHub-style UTC timestamp for an epoch."""
+    return datetime.fromtimestamp(epoch, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _issue_payload(labels: list[str], updated_at: str | None) -> dict[str, object]:
+    """Build the decoded issue shape consumed by the lease policy."""
+    return {
+        "labels": [{"name": label} for label in labels],
+        "updated_at": updated_at,
+    }
 
 
 def test_factory_issue_state_reconciler_has_periodic_sweep() -> None:
@@ -112,7 +133,9 @@ def test_reconcile_issue_skips_blocked_labels_before_replace() -> None:
     assert "return 0" in body[skip_at:replace_at]
     assert '[[ "$blocked" == "blocked" ]]' in body
     policy_source = POLICY_SCRIPT.read_text(encoding="utf-8")
-    assert "from factory_work_policy import BLOCKED_LABELS, is_manual_only" in policy_source
+    assert "from factory_work_policy import (" in policy_source
+    assert "BLOCKED_LABELS" in policy_source
+    assert "lease_is_stale" in policy_source
     assert "set(labels) & BLOCKED_LABELS" in policy_source
 
 
@@ -182,3 +205,215 @@ def test_reconcile_issue_skips_manual_only_before_replace() -> None:
     assert "skipped (manual-only)" in body
     assert "return 0" in body[skip_at:replace_at]
     assert '[[ "$blocked" == "blocked" ]]' in body[skip_at:replace_at]
+
+
+def test_fresh_local_lease_is_preserved_over_historical_pr_history() -> None:
+    """A live local claim must survive a sweep that sees only closed PRs.
+
+    #4457/#4345: applying factory:local + factory:building + ralph-status,
+    then a historical-PR sweep replaces it with factory:unowned. The issue is
+    still being edited, so its updated_at proves the lease is fresh.
+    """
+    policy = _policy()
+    now = 1_800_000_000
+
+    assert policy.lease_action_for_issue(
+        _issue_payload(
+            ["factory", "factory:local", "factory:building", "ralph-status:in-progress"],
+            _iso_timestamp(now - 5),
+        ),
+        now_epoch=now,
+    ) == policy.LEASE_ACTION_HOLD_LOCAL
+
+
+def test_local_lease_with_unknown_activity_is_preserved() -> None:
+    """Missing freshness evidence is unknown, not stale, so the lease holds."""
+    policy = _policy()
+    now = 1_800_000_000
+
+    assert policy.lease_action_for_issue(
+        _issue_payload(["factory", "factory:local"], None),
+        now_epoch=now,
+    ) == policy.LEASE_ACTION_HOLD_LOCAL
+
+
+def test_provably_stale_local_lease_falls_through_to_history() -> None:
+    """The shared local lease TTL still permits an authoritative release."""
+    policy = _policy()
+    now = 1_800_000_000
+    labels = ["factory", "factory:local", "factory:building"]
+
+    assert policy.lease_action_for_issue(
+        _issue_payload(labels, _iso_timestamp(now - 3601)),
+        now_epoch=now,
+    ) == policy.LEASE_ACTION_RECONCILE
+    # Exactly at the TTL is not yet stale.
+    assert policy.lease_action_for_issue(
+        _issue_payload(labels, _iso_timestamp(now - 3600)),
+        now_epoch=now,
+    ) == policy.LEASE_ACTION_HOLD_LOCAL
+
+
+def test_local_lease_with_redundant_unowned_still_holds() -> None:
+    """A contradictory unowned marker must not turn an active local lease off.
+
+    A no-persisted-change handoff can leave factory:local and factory:unowned
+    together. Visibility enrollment already treats the local lease as active;
+    the history sweep must do the same instead of reading unowned as released.
+    """
+    policy = _policy()
+    now = 1_800_000_000
+
+    assert policy.lease_action_for_issue(
+        _issue_payload(
+            ["factory", "factory:local", "factory:unowned", "factory:building"],
+            _iso_timestamp(now - 5),
+        ),
+        now_epoch=now,
+    ) == policy.LEASE_ACTION_HOLD_LOCAL
+
+
+def test_numbered_lease_is_never_stolen_without_active_run_evidence() -> None:
+    """The issue sweep has no fixed-worker evidence, so numbered owners hold."""
+    policy = _policy()
+    now = 1_800_000_000
+
+    assert policy.lease_action_for_issue(
+        _issue_payload(["factory", "factory:7", "factory:building"], _iso_timestamp(now - 10_000)),
+        now_epoch=now,
+    ) == policy.LEASE_ACTION_HOLD_NUMBERED
+
+
+def test_numbered_lease_release_requires_authoritative_worker_evidence() -> None:
+    """The helper applies the shared fixed-lease TTL only with real evidence."""
+    policy = _policy()
+    now = 1_800_000_000
+    labels = ["factory", "factory:7", "factory:building"]
+
+    assert policy.lease_reconciliation_action(
+        labels,
+        latest_activity_epoch=now - 901,
+        now_epoch=now,
+        active_fixed_workers=set(),
+        has_unresolved_active_runs=False,
+    ) == policy.LEASE_ACTION_RECONCILE
+    assert policy.lease_reconciliation_action(
+        labels,
+        latest_activity_epoch=now - 10_000,
+        now_epoch=now,
+        active_fixed_workers={7},
+        has_unresolved_active_runs=False,
+    ) == policy.LEASE_ACTION_HOLD_NUMBERED
+
+
+def test_conflicting_owners_are_preserved_for_operator_review() -> None:
+    """Never guess which of two active owners survives a sweep."""
+    policy = _policy()
+
+    assert policy.lease_action_for_issue(
+        _issue_payload(["factory", "factory:local", "factory:7"], _iso_timestamp(1_799_999_000)),
+        now_epoch=1_800_000_000,
+    ) == policy.LEASE_ACTION_HOLD_AMBIGUOUS
+
+
+def test_released_owner_does_not_block_history_reconciliation() -> None:
+    """factory:unowned is a released owner, not a live lease."""
+    policy = _policy()
+
+    assert policy.lease_action_for_issue(
+        _issue_payload(["factory", "factory:unowned", "factory:review"], None),
+        now_epoch=1_800_000_000,
+    ) == policy.LEASE_ACTION_RECONCILE
+
+
+def test_lease_action_cli_reports_hold_for_active_local_lease(tmp_path: Path) -> None:
+    """The workflow's real CLI call returns a machine-readable hold."""
+    policy = _policy()
+    now = 1_800_000_000
+    issue_file = tmp_path / "issue.json"
+    issue_file.write_text(
+        json.dumps(
+            _issue_payload(
+                ["factory", "factory:local", "factory:building"],
+                _iso_timestamp(now - 5),
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(POLICY_SCRIPT),
+            "--lease-action-issue-file",
+            str(issue_file),
+            "--now-epoch",
+            str(now),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == policy.LEASE_ACTION_HOLD_LOCAL
+
+
+def test_claim_after_history_walk_is_caught_at_writer_boundary(tmp_path: Path) -> None:
+    """A claim landing after the history walk must stop the writer.
+
+    The pre-repair guard read the issue at T1 and the writer re-read labels at
+    T2, so a claim in that window was visible to the write yet discarded. The
+    writer now reads once at the boundary, applies the shared lease policy to
+    that payload, and builds the replacement labels from the same payload.
+    """
+    policy = _policy()
+    now = 1_800_000_000
+    issue_file = tmp_path / "boundary-issue.json"
+    issue_file.write_text(
+        json.dumps(
+            _issue_payload(
+                ["factory", "factory:local", "factory:building", "ralph-status:in-progress"],
+                _iso_timestamp(now - 1),
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    decision = subprocess.run(
+        [
+            sys.executable,
+            str(POLICY_SCRIPT),
+            "--lease-action-issue-file",
+            str(issue_file),
+            "--now-epoch",
+            str(now),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert decision.stdout.strip() == policy.LEASE_ACTION_HOLD_LOCAL
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    body = _replace_issue_state_body(workflow)
+    read_at = body.index('gh api "repos/${GITHUB_REPOSITORY}/issues/${issue}"')
+    policy_at = body.index("--lease-action-issue-file")
+    labels_at = body.index('labels="$(jq')
+    put_at = body.index('--method PUT')
+    assert read_at < policy_at < labels_at < put_at
+    assert "return 0" in body[policy_at:put_at]
+    # Both the policy decision and the target labels consume the boundary read.
+    assert '"$issue_file"' in body[read_at:labels_at]
+    assert '"$issue_file"' in body[labels_at:put_at]
+    # No second labels fetch can discard an owner the policy just accepted.
+    assert "/labels?per_page=100" not in body
+
+
+def test_reconcile_issue_has_no_separate_pre_write_lease_read() -> None:
+    """The history walk must not duplicate the writer's boundary ownership read."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    body = _reconcile_issue_body(workflow)
+
+    assert "--lease-action-issue-file" not in body
+    assert "lease_file" not in body
+    assert body.count('replace_issue_state "$issue" "$stage"') == 1
+    assert workflow.count("--lease-action-issue-file") == 1
