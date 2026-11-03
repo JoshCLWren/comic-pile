@@ -39,6 +39,8 @@ import { useExcludedThreads, useMoveToFront, useQueueThreads } from '../hooks/us
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSession } from '../hooks/useSession'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
+import type { SnoozeMutationOutcome } from '../hooks/useSnooze'
+import type { SkipMutationOutcome } from '../hooks/useSkip'
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
@@ -47,7 +49,7 @@ import RollPage from '../pages/RollPage'
 import HistoryPage from '../pages/HistoryPage'
 import SessionPage from '../pages/SessionPage'
 import type { RollBootstrapThread } from '../types/rollBootstrap'
-import type { ThreadListItem } from '../types'
+import type { ThreadListItem, RollResponse } from '../types'
 import {
   createRequestRecorder,
   requestCounts,
@@ -108,6 +110,44 @@ const queueThreads = [1, 2].map((id) => ({
   created_at: '2026-01-01T00:00:00Z',
   last_activity_at: null,
 }))
+
+/**
+ * Typed stand-ins for the sibling Roll mutations this probe does not exercise.
+ *
+ * The budget assertions cover the move-to-front request path, so the roll,
+ * snooze and skip mutations must resolve with the exact shapes their hooks
+ * declare. Returning `undefined` where a response object is required would not
+ * type-check, and the anti-slop rules forbid casting around that.
+ */
+const stubRollResponse: RollResponse = {
+  thread_id: 1,
+  title: 'Series 1',
+  format: 'Comic',
+  issues_remaining: 3,
+  queue_position: 1,
+  die_size: 20,
+  result: 6,
+  offset: 0,
+  snoozed_count: 0,
+  issue_id: null,
+  issue_number: null,
+  next_issue_id: null,
+  next_issue_number: null,
+  total_issues: 3,
+  reading_progress: null,
+}
+
+const stubSnoozeOutcome: SnoozeMutationOutcome = {
+  response: undefined,
+  refreshed: false,
+  refreshError: undefined,
+}
+
+const stubSkipOutcome: SkipMutationOutcome = {
+  response: undefined,
+  refreshed: false,
+  refreshError: undefined,
+}
 
 /**
  * Queue data-hook composition: the same real hooks the route mounts, in the
@@ -178,16 +218,16 @@ function RollMoveBudgetProbe() {
     mutations: {
       setDieMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       clearManualDieMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
-      rollMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
-      snoozeMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
-      unsnoozeMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
-      skipMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
-      unskipMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
+      rollMutation: { mutate: () => Promise.resolve(stubRollResponse), isPending: false },
+      snoozeMutation: { mutate: () => Promise.resolve(stubSnoozeOutcome), isPending: false },
+      unsnoozeMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
+      skipMutation: { mutate: () => Promise.resolve(stubSkipOutcome), isPending: false },
+      unskipMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       moveToFrontMutation: {
         mutate: moveToFrontMutation.mutate,
         isPending: moveToFrontMutation.isPending,
       },
-      moveToBackMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
+      moveToBackMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       shuffleQueueMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
     },
     refetchBootstrap,
