@@ -245,6 +245,7 @@ def main() -> None:
         '--no-add-unused-free',
         '--dynamic-opencode-free',
         '.github/free-model-factories.tsv',
+        '.github/factory-roster-snapshot.json',
     ):
         assert required in model_discovery, f'model discovery invariant missing: {required}'
     assert 'omniroute/auto' not in model_discovery
