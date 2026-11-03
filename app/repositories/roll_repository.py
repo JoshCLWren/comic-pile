@@ -256,47 +256,6 @@ async def clear_session_pending(db: AsyncSession, session_id: int, now: datetime
     )
 
 
-async def update_session_skipped(
-    db: AsyncSession,
-    session_id: int,
-    skipped_ids: list[int],
-) -> None:
-    """Update the skipped thread list on a session.
-
-    Args:
-        db: Database session.
-        session_id: Session to update.
-        skipped_ids: New list of skipped thread IDs.
-    """
-    await db.execute(
-        update(ReadingSession)
-        .where(ReadingSession.id == session_id)
-        .values(skipped_thread_ids=skipped_ids)
-    )
-
-
-async def fetch_session_for_unskip(
-    db: AsyncSession, user_id: int,
-) -> ReadingSession | None:
-    """Return the active session for unskip operations.
-
-    Args:
-        db: Database session.
-        user_id: Owner of the session.
-
-    Returns:
-        The active session, or None when none exists.
-    """
-    result = await db.execute(
-        select(ReadingSession)
-        .where(ReadingSession.user_id == user_id)
-        .where(ReadingSession.ended_at.is_(None))
-        .order_by(ReadingSession.started_at.desc())
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
 async def fetch_bootstrap_pool_rows(
     db: AsyncSession,
     user_id: int,

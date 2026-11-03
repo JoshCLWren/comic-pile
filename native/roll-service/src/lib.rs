@@ -22,7 +22,6 @@ pub mod roll_offer;
 pub mod roll_pool;
 pub mod roll_reset;
 mod session_bandwidth;
-pub mod skip;
 pub mod threads;
 
 use axum::{
@@ -248,8 +247,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
         .route("/api/v2/threads", get(threads::list_threads))
-        .route("/api/v1/roll/skip", post(skip::skip_roll))
-        .route("/api/roll/skip", post(skip::skip_roll))
         .route(
             "/api/v1/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),

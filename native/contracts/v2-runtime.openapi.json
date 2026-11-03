@@ -1523,7 +1523,7 @@
       },
       "BootstrapThreadSummary": {
         "type": "object",
-        "description": "Owner-scoped thread summary shown by Roll snooze/skip chips and rollable rows.",
+        "description": "Owner-scoped thread summary shown by Roll snooze chips and rollable rows.",
         "required": [
           "id",
           "title",
