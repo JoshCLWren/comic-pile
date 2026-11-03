@@ -13,13 +13,13 @@ use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ManualDieRequest {
     ManualSelect { die: i32, idempotency_key: String },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct DiceCommandReceipt {
     event_id: i32,
     die_before: i32,
@@ -80,6 +80,23 @@ pub async fn manual_die(
         replayed: receipt.replayed,
     }))
 }
+
+/// Documentation-only operation for the mounted v2 manual-die command.
+#[utoipa::path(
+    post,
+    path = "/api/v2/roll/dice-command",
+    tag = "roll",
+    request_body = ManualDieRequest,
+    responses(
+        (status = 200, description = "Manual die command receipt", body = DiceCommandReceipt),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Invalid die or idempotency key"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn manual_die_documentation() {}
 
 #[cfg(test)]
 mod tests {
