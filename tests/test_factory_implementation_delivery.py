@@ -1402,3 +1402,149 @@ def test_assignment_sign_spacing_is_not_delivery(old: str, new: str) -> None:
     assert not delivery.pr_delivers_implementation(
         "Implement configuration", [path], patch(path, [old], [new])
     )[0]
+
+
+def test_mid_file_change_in_40_line_file_counts_as_delivery() -> None:
+    """A change at line 25 of a 40-line file must count as implementation delivery.
+
+    Regression test for n=3 context regression: with n=3 the diff hunk starts at
+    line 22 (@@ -22,7 +22,7 @@) which fails _has_code_delta's complete-file
+    context requirement (must start at line 0 or 1). Full context produces
+    @@ -1,40 +1,40 @@ which passes.
+    """
+    path = "app/services/mid_file_change.py"
+    # Valid Python: a class with 20 methods (each method = 2 lines), change method 13
+    # Total lines: 1 (class) + 20*2 = 41 lines
+    old = ["class Service:"]
+    for i in range(1, 21):
+        old.append(f"    def method_{i}(self) -> int:")
+        old.append(f"        return {i}")
+    new = old.copy()
+    # Change method_13's return value (line 25 in 1-indexed: class=1, methods 1-12 = 24 lines, method_13 def=25, return=26)
+    new[26] = "        return 999"  # 0-indexed: return statement of method_13
+    assert delivery.pr_delivers_implementation(
+        "Fix mid-file behavior", [path], patch(path, old, new)
+    )[0]
+
+
+def test_multi_hunk_change_first_and_last_lines_counts_as_delivery() -> None:
+    """Edits near first and last lines of a long file must count as delivery.
+
+    With n=3 this produces two hunks (@@ -2,7 +2,7 @@ and @@ -45,6 +45,6 @@)
+    which fails _has_code_delta's single-hunk requirement. Full context produces
+    a single @@ -1,50 +1,50 @@ hunk which passes.
+    """
+    path = "app/services/multi_hunk_change.py"
+    # Valid Python: a class with 25 methods (each method = 2 lines), change method 2 and method 24
+    # Total lines: 1 (class) + 25*2 = 51 lines
+    old = ["class Service:"]
+    for i in range(1, 26):
+        old.append(f"    def method_{i}(self) -> int:")
+        old.append(f"        return {i}")
+    new = old.copy()
+    new[3] = "        return 999"    # method_2 return (0-indexed: class=0, method_1 def=1, method_1 return=2, method_2 def=3, method_2 return=4)
+    new[48] = "        return 888"   # method_24 return (near end)
+    assert delivery.pr_delivers_implementation(
+        "Fix multi-location behavior", [path], patch(path, old, new)
+    )[0]
+
+
+def test_renamed_file_through_merge_base_fallback_counts_as_delivery() -> None:
+    """A renamed file using previous_filename through the merge-base path counts as delivery.
+
+    This tests the omitted-patch fallback path for renamed files (status=renamed
+    with previous_filename) which uses _unified_file_diff with base content from
+    the merge-base commit.
+    """
+    import json
+
+    renamed_from = "app/services/old_reader.py"
+    renamed_to = "app/services/new_reader.py"
+    old_content = "OLD_VALUE = 1\n"
+    new_content = "NEW_VALUE = 2\n"
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": "a" * 40}, "base": {"sha": "base"},
+            })
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": renamed_to,
+                "status": "renamed",
+                "previous_filename": renamed_from,
+                "changes": 2,
+            }]])
+        if f"ref={'a' * 40}" in endpoint:
+            return new_content
+        if "ref=ancestor" in endpoint:
+            return old_content
+        raise AssertionError(f"unexpected read {endpoint}")
+
+    paths, diff = delivery.complete_pr_diff(44, "a" * 40, "owner/repo", read)
+
+    # Verify the diff contains the rename header and complete-file context
+    assert renamed_to in paths
+    assert f"diff --git a/{renamed_to} b/{renamed_to}" in diff
+    # Full context: single hunk starting at line 1
+    assert "@@ -1,1 +1,1 @@" in diff or "@@ -1 +1 @@" in diff
+    assert "-OLD_VALUE = 1" in diff
+    assert "+NEW_VALUE = 2" in diff
+    assert delivery.pr_delivers_implementation("Rename and fix reader", paths, diff)[0]
+
+
+def test_complete_file_context_single_hunk_starting_at_line_one() -> None:
+    """_unified_file_diff must produce a single hunk starting at line 1/0.
+
+    This assertion locks the complete-file context behavior that _has_code_delta
+    requires. Any change to _unified_file_diff that produces multiple hunks or
+    a hunk not starting at line 1 (old) / 1 (new) or 0 (old) / 1 (new) will
+    fail this test.
+    """
+    import re
+
+    # Test various file sizes and change positions
+    test_cases = [
+        # (old_lines, new_lines, description)
+        (["line 1"], ["changed line 1"], "single line change"),
+        (["line 1", "line 2"], ["line 1", "changed line 2"], "two lines, change second"),
+        ([f"line {i}" for i in range(1, 41)], [f"line {i}" if i != 25 else "changed line 25" for i in range(1, 41)], "40 lines, change at line 25"),
+        ([f"line {i}" for i in range(1, 101)], [f"line {i}" if i not in (5, 95) else f"changed line {i}" for i in range(1, 101)], "100 lines, changes at lines 5 and 95"),
+        ([], ["added line"], "empty to one line"),
+        (["removed line"], [], "one line to empty"),
+        (["line 1", "line 2"], ["line 1", "line 2", "added line 3"], "add line at end"),
+        (["line 1", "line 2", "line 3"], ["line 1", "line 2"], "remove line at end"),
+    ]
+
+    hunk_header_pattern = re.compile(r"^@@ -([01])(?:,(\d+))? \+([01])(?:,(\d+))? @@")
+
+    for old_lines, new_lines, desc in test_cases:
+        old = "\n".join(old_lines)
+        new = "\n".join(new_lines)
+        diff = delivery._unified_file_diff("test/path.py", old, new)
+
+        # Parse hunks
+        hunks = []
+        for line in diff.splitlines():
+            match = hunk_header_pattern.match(line)
+            if match:
+                old_start = int(match.group(1))
+                new_start = int(match.group(3))
+                hunks.append((old_start, new_start))
+
+        # Must have exactly one hunk
+        assert len(hunks) == 1, f"{desc}: expected 1 hunk, got {len(hunks)}: {hunks}"
+
+        # Hunk must start at line 0 or 1 for both old and new
+        old_start, new_start = hunks[0]
+        assert old_start in (0, 1), f"{desc}: old hunk starts at line {old_start}, expected 0 or 1"
+        assert new_start in (0, 1), f"{desc}: new hunk starts at line {new_start}, expected 0 or 1"
+
+        # For non-empty files, should start at line 1
+        if old_lines:
+            assert old_start == 1, f"{desc}: non-empty old file should start at line 1, got {old_start}"
+        if new_lines:
+            assert new_start == 1, f"{desc}: non-empty new file should start at line 1, got {new_start}"

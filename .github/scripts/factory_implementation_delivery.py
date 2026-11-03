@@ -441,12 +441,15 @@ def _unified_file_diff(path: str, old: str, new: str) -> str:
     Returns:
         A unified diff prefixed with the git header the patch parser expects.
     """
+    old_lines = old.splitlines()
+    new_lines = new.splitlines()
+    context_lines = max(len(old_lines), len(new_lines)) + 1
     return (
         f"diff --git a/{path} b/{path}\n" + "".join(difflib.unified_diff(
-            [line + "\n" for line in old.splitlines()],
-            [line + "\n" for line in new.splitlines()],
+            [line + "\n" for line in old_lines],
+            [line + "\n" for line in new_lines],
             fromfile=f"a/{path}", tofile=f"b/{path}",
-            n=3,
+            n=context_lines,
         ))
     )
 
