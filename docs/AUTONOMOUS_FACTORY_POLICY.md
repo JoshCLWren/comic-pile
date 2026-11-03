@@ -394,9 +394,13 @@ Rules:
   steals an actively edited local checkout. Review findings hand off as
   `factory:changes-requested`, and independent workers can pick up the PR
   once the lease is released.
-- The manual/local review controller follows only explicit `Closes #N`,
-  `Fixes #N`, or `Resolves #N` references when reconciling a linked issue;
-  casual issue mentions do not create ownership or issue mutations.
+- The manual/local review controller follows a canonical factory branch, an
+  explicit `Closes #N` / `Fixes #N` / `Resolves #N` reference, or a standalone
+  `Part of #N` line when resolving the issue contract for review. Casual issue
+  mentions do not create ownership or issue mutations. `Part of #N` is
+  non-closing: merge-time issue closure still requires a closing reference (or
+  the canonical factory branch rule), so transition issues that need deployed
+  production proof remain open.
 - `factory:building`, `factory:review`, `factory:changes-requested`, `factory:ci`, `factory:ready`, and `factory:blocked` are mutually exclusive workflow states.
 - `factory:unowned`, `factory:local`, and every `factory:<number>` owner label are mutually exclusive next-action owners.
 - Never leave a factory-produced or factory-managed open PR without `factory`, one truthful workflow-state label, and one truthful owner label.
