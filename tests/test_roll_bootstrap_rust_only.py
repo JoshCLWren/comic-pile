@@ -63,7 +63,7 @@ def test_frontend_bootstrap_and_recovery_call_only_v2_rust_route() -> None:
         assert "'/v1/roll/bootstrap'" not in source, path
         assert "'/roll/bootstrap'" not in source, path
     acceptance = (root / "frontend/src/test/reading-mode-acceptance.spec.ts").read_text()
-    assert "page.request.get('/api/v2/roll/bootstrap'" in acceptance
+    assert "fetch('/api/v2/roll/bootstrap'" in acceptance
     assert "page.request.get('/api/roll/bootstrap'" not in acceptance
     assert "page.request.get('/api/v1/roll/bootstrap'" not in acceptance
     native = (root / "native/roll-service/src/lib.rs").read_text()
