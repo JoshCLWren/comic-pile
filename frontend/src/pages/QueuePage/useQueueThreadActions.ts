@@ -334,8 +334,14 @@ export function useQueueThreadActions(
   const handleSnoozeToggle = useCallback(
     async (thread: ThreadListItem, isSnoozed: boolean) => {
       try {
+        const isTemporarySnooze =
+          isSnoozed && rollApi.isTemporarilySnoozed(thread.id)
         if (isSnoozed) {
-          await unsnoozeMutation.mutate(thread.id)
+          if (isTemporarySnooze) {
+            rollApi.unsnoozeTemporary(thread.id)
+          } else {
+            await unsnoozeMutation.mutate(thread.id)
+          }
         } else {
           // The canonical Rust offer atomically records the pending reroll
           // snooze, advances the die, and selects the replacement. The legacy
@@ -347,7 +353,9 @@ export function useQueueThreadActions(
         // Native reroll does not own a session query refresh, so Queue must
         // invalidate it here. Legacy unsnooze still refreshes that key in its
         // own hook, and must not issue a duplicate GET (#4276).
-        await invalidateAfterQueueMovement(queryClient, { skipSessionCurrent: isSnoozed })
+        await invalidateAfterQueueMovement(queryClient, {
+          skipSessionCurrent: isSnoozed && !isTemporarySnooze,
+        })
         // Snooze resets the paginated queue cache, so the row remounts; the
         // id-based restore lands on the refetched trigger (#3147).
         restoreSeriesActionsFocus(thread.id)

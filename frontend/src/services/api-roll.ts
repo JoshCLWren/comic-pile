@@ -1,5 +1,6 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { RollResponse } from '../types'
+import { hasProperty, isNumber, isObject, isString } from '../utils/runtimeChecks'
 
 type ManualDieCommand = {
   kind: 'manual_select'
@@ -117,16 +118,27 @@ function readPendingOfferKey(): PendingOffer | null {
   try {
     const raw = globalThis.sessionStorage?.getItem(PENDING_OFFER_KEY)
     if (!raw) return null
+    if (OFFER_KEY_PATTERN.test(raw)) return { key: raw }
+
     try {
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed.key === 'string' && OFFER_KEY_PATTERN.test(parsed.key)) {
-        return { key: parsed.key, expectedPendingThreadId: parsed.expectedPendingThreadId }
+      const parsed: unknown = JSON.parse(raw)
+      if (!isObject(parsed) || !hasProperty(parsed, 'key')) return null
+
+      const key = parsed.key
+      if (!isString(key) || !OFFER_KEY_PATTERN.test(key)) return null
+      if (!hasProperty(parsed, 'expectedPendingThreadId')) return { key }
+
+      const expectedPendingThreadId = parsed.expectedPendingThreadId
+      if (
+        !isNumber(expectedPendingThreadId) ||
+        !Number.isSafeInteger(expectedPendingThreadId) ||
+        expectedPendingThreadId <= 0
+      ) {
+        return null
       }
+      return { key, expectedPendingThreadId }
     } catch {
       // ignore parse errors
-    }
-    if (OFFER_KEY_PATTERN.test(raw)) {
-      return { key: raw }
     }
     return null
   } catch {
@@ -232,6 +244,11 @@ export function createRollApi(client: HttpClient) {
   }
 
   return {
+    isTemporarilySnoozed: (threadId: number): boolean =>
+      readRollSnoozes().includes(threadId),
+    unsnoozeTemporary: (threadId: number): void => {
+      writeRollSnoozes(readRollSnoozes().filter((id) => id !== threadId))
+    },
     roll: offer,
     override: (data: { thread_id: number }) => client.post<RollResponse, { thread_id: number }>('/v1/roll/override', data),
     dismissPending: () => client.post<void>('/v1/roll/dismiss-pending'),
