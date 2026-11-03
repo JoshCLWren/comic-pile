@@ -21,6 +21,16 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/reader",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4346,
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/queue-entries/{thread_id}",
       "runtime": "native-rust",
       "status": "target",

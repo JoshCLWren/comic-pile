@@ -1,4 +1,6 @@
+import { createNativeV2Client } from '../generated/nativeV2Client'
 import { defaultHttpClient, type HttpClient } from './httpClient'
+import type { components } from '../generated/openapi'
 
 export type ContinuityPlanNodeType = 'issue' | 'crossover' | 'thread'
 
@@ -193,19 +195,8 @@ export interface ReleaseSourceCreateRequest {
   external_identity_id: number
 }
 
-export interface ReadingPlanReaderView {
-  execution_mode?: 'legacy' | 'option_e'
-  plan_id: number
-  name: string
-  ordering_mode: ContinuityPlanOrderingMode
-  progress: { total_issues: number; read_issues: number }
-  available_now: ReadingPlanReaderIssue[]
-  blocked_next: ReadingPlanReaderIssue[]
-  lanes: ReadingPlanReaderLane[]
-  sources: ReadingPlanSourceSnapshot[]
-  release_sources: ReadingPlanReleaseSourceStatus[]
-  release_candidates: ReadingPlanReleaseCandidate[]
-}
+/** Native v2 reader response type from the generated contract. */
+export type ReadingPlanReaderView = components['schemas']['ContinuityPlanReaderResponse']
 
 
 export interface SyncRequest {
@@ -273,6 +264,8 @@ export interface ReleaseSourceUpdateRequest {
  * @returns The continuity plans API bound to `client`.
  */
 export function createContinuityPlansApi(client: HttpClient) {
+  const nativeV2 = createNativeV2Client(client)
+
   return {
     list: (): Promise<ContinuityPlanListItem[]> =>
       client.get<ContinuityPlanListItem[]>('/v1/continuity-plans/'),
@@ -281,7 +274,7 @@ export function createContinuityPlansApi(client: HttpClient) {
     get: (planId: number) =>
       client.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
     getReader: (planId: number) =>
-      client.get<ReadingPlanReaderView>(`/v2/continuity-plans/${planId}/reader`),
+      nativeV2.continuityPlanReader({ path: { plan_id: planId } }),
     listReleaseSources: (planId: number) =>
       client.get<ReadingPlanReleaseSourceStatus[]>(
         `/v1/continuity-plans/${planId}/release-sources/reader`,

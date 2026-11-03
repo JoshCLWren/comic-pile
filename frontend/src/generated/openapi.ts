@@ -6476,6 +6476,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/continuity-plans/{plan_id}/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the mounted v2 continuity plan reader. */
+        get: operations["continuity_plan_reader_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/issues/cards": {
         parameters: {
             query?: never;
@@ -8864,6 +8881,15 @@ export interface components {
             /** Keep Issue Id */
             keep_issue_id?: number | null;
         };
+        ContinuityPlanBlocker: {
+            explanation: string;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
         /**
          * ContinuityPlanLane
          * @description One visual lane in a continuity plan.
@@ -8958,6 +8984,55 @@ export interface components {
             source_story_arc_ids?: string[] | null;
             /** Source Target Story Arc Id */
             source_target_story_arc_id?: string | null;
+        };
+        ContinuityPlanReaderIssue: {
+            availability: string;
+            blockers: components["schemas"]["ContinuityPlanBlocker"][];
+            /** Format: int32 */
+            display_position: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            label?: string | null;
+            lane_id: string;
+            occurrence_id: string;
+            reader_optional?: boolean | null;
+            reader_role?: string | null;
+            source_paths: string[];
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        ContinuityPlanReaderLane: {
+            id: string;
+            issues: components["schemas"]["ContinuityPlanReaderIssue"][];
+            name: string;
+            /** Format: int32 */
+            order: number;
+        };
+        ContinuityPlanReaderPath: {
+            /** Format: int32 */
+            plan_id: number;
+        };
+        /**
+         * @description Canonical v2 response for the Continuity Plan Reader.
+         *     Matches Python's ReadingPlanReaderResponse shape for Option E execution mode.
+         */
+        ContinuityPlanReaderResponse: {
+            available_now: components["schemas"]["ContinuityPlanReaderIssue"][];
+            blocked_next: components["schemas"]["ContinuityPlanReaderIssue"][];
+            execution_mode: string;
+            lanes: components["schemas"]["ContinuityPlanReaderLane"][];
+            name: string;
+            ordering_mode: string;
+            /** Format: int32 */
+            plan_id: number;
+            progress: components["schemas"]["NativeReadingPlanProgress"];
+            release_candidates: components["schemas"]["NativeReadingPlanReleaseCandidate"][];
+            release_sources: components["schemas"]["NativeReadingPlanReleaseSourceStatus"][];
+            sources: components["schemas"]["NativeReadingPlanSourceSnapshot"][];
         };
         /**
          * ContinuityPlanResponse
@@ -13017,6 +13092,59 @@ export interface components {
         NativeReadingBoundaryNext: {
             editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
             issue: components["schemas"]["NativeBoundaryIssue"];
+        };
+        NativeReadingPlanProgress: {
+            /** Format: int32 */
+            read_issues: number;
+            /** Format: int32 */
+            total_issues: number;
+        };
+        NativeReadingPlanReleaseCandidate: {
+            enableable: boolean;
+            /** Format: int32 */
+            external_identity_id?: number | null;
+            followed: boolean;
+            mapping_state: string;
+            mapping_status?: string | null;
+            /** Format: int32 */
+            provider_issue_count?: number | null;
+            provider_publisher?: string | null;
+            /** Format: int32 */
+            provider_start_year?: number | null;
+            provider_title?: string | null;
+            provider_volume_id?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeReadingPlanReleaseSourceStatus: {
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            last_synced_at?: string | null;
+            /** Format: int32 */
+            provider_issue_count?: number | null;
+            provider_publisher?: string | null;
+            /** Format: int32 */
+            provider_start_year?: number | null;
+            provider_title?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            source_id: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        NativeReadingPlanSourceSnapshot: {
+            adopted_at?: string | null;
+            content_hash?: string | null;
+            display_name?: string | null;
+            /** Format: int32 */
+            id: number;
+            raw_source_path: string;
+            recorded_at: string;
+            repository?: string | null;
+            revision_sha?: string | null;
+            source_path?: string | null;
         };
         /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
         NativeRefreshTokenRequest: {
@@ -25241,6 +25369,57 @@ export interface operations {
             };
             /** @description Password-recovery rate limit exceeded */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plan_reader_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned continuity plan identifier */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Option E Reading List projection for the continuity plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanReaderResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Continuity plan not found for this reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading Plan has no linked authoritative Reading List or ambiguous associations */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

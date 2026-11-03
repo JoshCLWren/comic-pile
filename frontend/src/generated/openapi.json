@@ -4663,6 +4663,35 @@
         "title": "ConsolidationRequest",
         "type": "object"
       },
+      "ContinuityPlanBlocker": {
+        "properties": {
+          "explanation": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "explanation"
+        ],
+        "type": "object"
+      },
       "ContinuityPlanLane": {
         "description": "One visual lane in a continuity plan.",
         "properties": {
@@ -4990,6 +5019,198 @@
           "position"
         ],
         "title": "ContinuityPlanNode",
+        "type": "object"
+      },
+      "ContinuityPlanReaderIssue": {
+        "properties": {
+          "availability": {
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanBlocker"
+            },
+            "type": "array"
+          },
+          "display_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_id": {
+            "type": "string"
+          },
+          "occurrence_id": {
+            "type": "string"
+          },
+          "reader_optional": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "reader_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "occurrence_id",
+          "issue_id",
+          "lane_id",
+          "display_position",
+          "is_checkpoint",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "status",
+          "availability",
+          "blockers",
+          "source_paths"
+        ],
+        "type": "object"
+      },
+      "ContinuityPlanReaderLane": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanReaderIssue"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "order",
+          "issues"
+        ],
+        "type": "object"
+      },
+      "ContinuityPlanReaderPath": {
+        "properties": {
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id"
+        ],
+        "type": "object"
+      },
+      "ContinuityPlanReaderResponse": {
+        "description": "Canonical v2 response for the Continuity Plan Reader.\nMatches Python's ReadingPlanReaderResponse shape for Option E execution mode.",
+        "properties": {
+          "available_now": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanReaderIssue"
+            },
+            "type": "array"
+          },
+          "blocked_next": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanReaderIssue"
+            },
+            "type": "array"
+          },
+          "execution_mode": {
+            "type": "string"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanReaderLane"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/NativeReadingPlanProgress"
+          },
+          "release_candidates": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingPlanReleaseCandidate"
+            },
+            "type": "array"
+          },
+          "release_sources": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingPlanReleaseSourceStatus"
+            },
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingPlanSourceSnapshot"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "execution_mode",
+          "plan_id",
+          "name",
+          "ordering_mode",
+          "progress",
+          "available_now",
+          "blocked_next",
+          "lanes",
+          "sources",
+          "release_sources",
+          "release_candidates"
+        ],
         "type": "object"
       },
       "ContinuityPlanResponse": {
@@ -13138,6 +13359,214 @@
         },
         "required": [
           "issue"
+        ],
+        "type": "object"
+      },
+      "NativeReadingPlanProgress": {
+        "properties": {
+          "read_issues": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_issues",
+          "read_issues"
+        ],
+        "type": "object"
+      },
+      "NativeReadingPlanReleaseCandidate": {
+        "properties": {
+          "enableable": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "followed": {
+            "type": "boolean"
+          },
+          "mapping_state": {
+            "type": "string"
+          },
+          "mapping_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_issue_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "provider_publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_start_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "provider_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "mapping_state",
+          "enableable",
+          "followed"
+        ],
+        "type": "object"
+      },
+      "NativeReadingPlanReleaseSourceStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_issue_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "provider_publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_start_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "provider_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "NativeReadingPlanSourceSnapshot": {
+        "properties": {
+          "adopted_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "raw_source_path": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string"
+          },
+          "repository": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "raw_source_path",
+          "recorded_at"
         ],
         "type": "object"
       },
@@ -36008,6 +36437,56 @@
         "summary": "Documentation-only operation for the mounted v2 reset-password handler.",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v2/continuity-plans/{plan_id}/reader": {
+      "get": {
+        "operationId": "continuity_plan_reader_documentation",
+        "parameters": [
+          {
+            "description": "Owned continuity plan identifier",
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanReaderResponse"
+                }
+              }
+            },
+            "description": "Option E Reading List projection for the continuity plan"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Continuity plan not found for this reader"
+          },
+          "409": {
+            "description": "Reading Plan has no linked authoritative Reading List or ambiguous associations"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 continuity plan reader.",
+        "tags": [
+          "continuity-plans"
         ]
       }
     },

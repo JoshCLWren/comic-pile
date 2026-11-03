@@ -31,6 +31,14 @@ export interface BootstrapRequest {
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
 
+export interface ContinuityPlanReaderRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ContinuityPlanReaderResponse = components['schemas']['ContinuityPlanReaderResponse']
+
 export interface CreateQueueOrderRequest {
   body: components['schemas']['QueueOrderRequest']
 }
@@ -148,6 +156,7 @@ export type UpdateQueueEntryResponse = components['schemas']['QueueEntryResponse
 
 export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  continuityPlanReader(args: ContinuityPlanReaderRequest): Promise<ContinuityPlanReaderResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   csrf(): Promise<CsrfResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
@@ -175,6 +184,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<BootstrapResponse>(
         "/v2/roll/bootstrap",
         { params: compactQuery(args.query) },
+      )
+    },
+    continuityPlanReader(args: ContinuityPlanReaderRequest) {
+      return client.get<ContinuityPlanReaderResponse>(
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reader`,
       )
     },
     createQueueOrder(args: CreateQueueOrderRequest) {

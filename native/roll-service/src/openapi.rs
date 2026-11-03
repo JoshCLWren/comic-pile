@@ -5,8 +5,8 @@
 //! documentation-only operation is generated from the same Rust request and
 //! response types the mounted handlers use, and the aggregate merges the
 //! existing per-domain [`utoipa::OpenApi`] documents (`QueueApi`, `ThreadsApi`,
-//! `IssueApi`) with the v2 auth, bootstrap, dice, offer, reset and
-//! reading-boundary declarations.
+//! `IssueApi`) with the v2 auth, bootstrap, dice, offer, reset, reading-boundary
+//! and continuity plan reader declarations.
 //!
 //! The checked-in artifact is `native/contracts/v2-runtime.openapi.json`; see
 //! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.py`
@@ -40,7 +40,8 @@ use utoipa::OpenApi;
         crate::dice_api::manual_die_documentation,
         crate::roll_offer::offer_documentation,
         crate::roll_reset::reset_documentation,
-        crate::reading_boundary::reading_boundary_batch_documentation
+        crate::reading_boundary::reading_boundary_batch_documentation,
+        crate::continuity_plan_reader::continuity_plan_reader_documentation
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -60,7 +61,16 @@ use utoipa::OpenApi;
         crate::roll_reset::ResetDiceRequest,
         crate::roll_reset::ResetDiceResponse,
         crate::reading_boundary::ReadingBoundaryBatchRequest,
-        crate::reading_boundary::ReadingBoundaryBatchResponseV2
+        crate::reading_boundary::ReadingBoundaryBatchResponseV2,
+        crate::continuity_plan_reader::ContinuityPlanReaderPath,
+        crate::continuity_plan_reader::ContinuityPlanReaderResponse,
+        crate::continuity_plan_reader::ReadingPlanProgress,
+        crate::continuity_plan_reader::ContinuityPlanReaderIssue,
+        crate::continuity_plan_reader::ContinuityPlanBlocker,
+        crate::continuity_plan_reader::ContinuityPlanReaderLane,
+        crate::continuity_plan_reader::ReadingPlanSourceSnapshot,
+        crate::continuity_plan_reader::ReadingPlanReleaseSourceStatus,
+        crate::continuity_plan_reader::ReadingPlanReleaseCandidate
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -88,9 +98,10 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 20] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 21] = [
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
+    ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
     ("get", "/api/v2/roll/bootstrap"),
     ("get", "/api/v2/threads"),

@@ -20,15 +20,16 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use utoipa::ToSchema;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ContinuityPlanReaderPath {
     pub plan_id: i32,
 }
 
 /// Canonical v2 response for the Continuity Plan Reader.
 /// Matches Python's ReadingPlanReaderResponse shape for Option E execution mode.
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ContinuityPlanReaderResponse {
     pub execution_mode: String, // Always "option_e"
     pub plan_id: i32,
@@ -43,13 +44,13 @@ pub struct ContinuityPlanReaderResponse {
     pub release_candidates: Vec<ReadingPlanReleaseCandidate>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ReadingPlanProgress {
     pub total_issues: i32,
     pub read_issues: i32,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, ToSchema)]
 pub struct ContinuityPlanReaderIssue {
     pub occurrence_id: String,
     pub issue_id: i32,
@@ -68,7 +69,7 @@ pub struct ContinuityPlanReaderIssue {
     pub source_paths: Vec<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, ToSchema)]
 pub struct ContinuityPlanBlocker {
     pub issue_id: i32,
     pub thread_id: i32,
@@ -77,7 +78,7 @@ pub struct ContinuityPlanBlocker {
     pub explanation: String,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, ToSchema)]
 pub struct ContinuityPlanReaderLane {
     pub id: String,
     pub name: String,
@@ -85,7 +86,7 @@ pub struct ContinuityPlanReaderLane {
     pub issues: Vec<ContinuityPlanReaderIssue>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ReadingPlanSourceSnapshot {
     pub id: i32,
     pub display_name: Option<String>,
@@ -98,7 +99,7 @@ pub struct ReadingPlanSourceSnapshot {
     pub recorded_at: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ReadingPlanReleaseSourceStatus {
     pub source_id: i32,
     pub thread_id: i32,
@@ -112,7 +113,7 @@ pub struct ReadingPlanReleaseSourceStatus {
     pub last_synced_at: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ReadingPlanReleaseCandidate {
     pub thread_id: i32,
     pub thread_title: String,
@@ -809,6 +810,24 @@ pub async fn continuity_plan_reader_v2(
 
     Ok(Json(response))
 }
+
+/// Documentation-only operation for the mounted v2 continuity plan reader.
+#[utoipa::path(
+    get,
+    path = "/api/v2/continuity-plans/{plan_id}/reader",
+    tag = "continuity-plans",
+    params(("plan_id" = i32, Path, description = "Owned continuity plan identifier")),
+    responses(
+        (status = 200, description = "Option E Reading List projection for the continuity plan", body = ContinuityPlanReaderResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Continuity plan not found for this reader"),
+        (status = 409, description = "Reading Plan has no linked authoritative Reading List or ambiguous associations"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+fn continuity_plan_reader_documentation() {}
 
 #[cfg(test)]
 mod tests {
