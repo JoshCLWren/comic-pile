@@ -25,7 +25,7 @@
     "lint:html": "pnpm exec htmlhint app/templates/*.html",
     "lint": "pnpm run lint:js && pnpm run lint:html",
     "lint:fix": "sh -c 'if ls static/react/assets/*.js >/dev/null 2>&1 || ls static/assets/*.js >/dev/null 2>&1; then pnpm exec eslint static/react/assets/*.js static/assets/*.js --fix; else echo \"No JavaScript files to fix\"; fi'",
-    "lint:anti-slop": "oxlint -c .oxlintrc.json frontend",
+    "lint:anti-slop": "oxlint --config .oxlintrc.json --ignore-pattern '.github/**'",
     "dice:playground": "pnpm --filter frontend run dice:playground",
     "test:dice-playground": "pnpm --filter frontend run test:dice-playground",
     "test:dice-playground:update": "pnpm --filter frontend run test:dice-playground:update",

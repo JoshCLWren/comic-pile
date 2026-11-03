@@ -13,6 +13,7 @@ export interface AuthUserRecord {
 const DATABASE_URL = process.env.DATABASE_URL || '';
 if (!DATABASE_URL) throw new Error('DATABASE_URL environment variable must be set');
 
+// SAFETY: The optional injected pool is provided only by the Node auth test harness.
 const pool =
   (globalThis as typeof globalThis & { pool?: Pick<Pool, 'query'> }).pool ||
   new Pool(buildAuthPoolConfig(DATABASE_URL));

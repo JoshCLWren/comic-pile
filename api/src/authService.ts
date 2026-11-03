@@ -1,9 +1,14 @@
-import jwt from 'jsonwebtoken';
+import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { findAuthUser, isTokenRevoked } from './authRepository.js';
 import type { UserResponse } from './authTypes.js';
 
 const SECRET_KEY = process.env.SECRET_KEY || '';
 if (!SECRET_KEY) throw new Error('SECRET_KEY environment variable must be set');
+
+/** The JWT library returns an object for signed JSON claims, or a string. */
+function isJwtPayload(value: string | JwtPayload): value is JwtPayload {
+  return Object.prototype.toString.call(value) === '[object Object]';
+}
 
 function verifyToken(token: string): {
   sub: string;
@@ -13,41 +18,25 @@ function verifyToken(token: string): {
   pc?: number;
 } {
   try {
-    const payload = jwt.verify(token, SECRET_KEY, { algorithms: ['HS256'] }) as {
-      sub?: unknown;
-      jti?: unknown;
-      type?: unknown;
-      exp?: number;
-      pc?: number;
-    };
-    
-    // Validate required claims
-    if (!payload.sub || typeof payload.sub !== 'string') {
+    const payload = jwt.verify(token, SECRET_KEY, { algorithms: ['HS256'] });
+    if (!isJwtPayload(payload) || !payload.sub || Object.prototype.toString.call(payload.sub) !== '[object String]') {
       throw new Error('Invalid subject claim');
     }
-    
-    if (!payload.jti || typeof payload.jti !== 'string') {
+    if (!payload.jti || Object.prototype.toString.call(payload.jti) !== '[object String]') {
       throw new Error('Invalid JTI claim');
     }
-    
     if (payload.type !== 'access') {
       throw new Error('Invalid token type');
     }
-    
-    const claims: {
-      sub: string;
-      jti: string;
-      type: string;
-      exp: number;
-      pc?: number;
-    } = {
+
+    const claims = {
       sub: payload.sub,
       jti: payload.jti,
       type: 'access',
-      exp: typeof payload.exp === 'number' ? payload.exp : 0,
+      exp: Number.isFinite(payload.exp) ? payload.exp : 0,
     };
-    if (typeof payload.pc === 'number') {
-      claims.pc = payload.pc;
+    if (Number.isFinite(payload.pc)) {
+      return { ...claims, pc: payload.pc };
     }
     return claims;
   } catch (error) {
