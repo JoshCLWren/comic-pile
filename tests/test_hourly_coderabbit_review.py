@@ -342,7 +342,7 @@ def test_rest_snapshot_reads_open_and_recent_closed_with_check_runs() -> None:
         "closed_at": "2026-11-02T14:00:00Z",
     }
 
-    def rest(path: str, *, token: str | None = None, body: str | None = None) -> Any:
+    def rest(path: str, *, token: str | None = None, body: str | None = None) -> object:
         """Emulate GitHub's REST PR listing and check-run response."""
         calls.append(path)
         if "pulls?state=open" in path:
@@ -376,7 +376,7 @@ def test_rest_snapshot_rejects_incomplete_checks() -> None:
         "labels": [], "closed_at": None,
     }
 
-    def rest(path: str, *, token: str | None = None, body: str | None = None) -> Any:
+    def rest(path: str, *, token: str | None = None, body: str | None = None) -> object:
         """Return a truncated REST check response."""
         if "pulls?state=open" in path:
             return [row]
@@ -400,7 +400,7 @@ def test_rest_snapshot_paginates_open_prs() -> None:
             "labels": [], "closed_at": None,
         }
 
-    def rest(path: str, *, token: str | None = None, body: str | None = None) -> Any:
+    def rest(path: str, *, token: str | None = None, body: str | None = None) -> object:
         """Return 100 open PRs and one additional older open PR."""
         if "pulls?state=open" in path and "page=1" in path:
             return [make_row(i) for i in range(1, 101)]
