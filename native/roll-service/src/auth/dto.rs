@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 /// Request body for account registration.
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
 pub struct RegisterRequest {
     // Python imposed no minimum username length; keep the DB's 50-character
     // bound so existing short accounts remain registrable/loggable-in.
@@ -24,7 +24,7 @@ pub struct RegisterRequest {
 /// created before the current policy must still be able to sign in. An empty
 /// password is rejected by bcrypt verification with the same non-enumerating
 /// 401 as any other incorrect credential, matching Python.
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
 pub struct LoginRequest {
     #[validate(length(max = 50))]
     pub username: String,
@@ -33,13 +33,13 @@ pub struct LoginRequest {
 }
 
 /// Optional request body for token refresh; the refresh cookie is also accepted.
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
 pub struct RefreshTokenRequest {
     pub refresh_token: String,
 }
 
 /// Response body for token endpoints, matching the Python wire contract.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct TokenResponse {
     pub access_token: String,
     pub refresh_token: String,
@@ -58,7 +58,7 @@ impl TokenResponse {
 }
 
 /// Response body for the current-user endpoint.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct UserResponse {
     pub id: i32,
     pub username: String,
@@ -67,14 +67,14 @@ pub struct UserResponse {
 }
 
 /// Request body for an enumeration-safe password-recovery email.
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
 pub struct ForgotPasswordRequest {
     #[validate(email)]
     pub email: String,
 }
 
 /// Request body for completing a password reset with a single-use token.
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
 pub struct ResetPasswordRequest {
     #[validate(length(min = 1))]
     pub token: String,
@@ -84,13 +84,14 @@ pub struct ResetPasswordRequest {
 }
 
 /// Safe acknowledgement returned whether or not an account exists.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct PasswordResetResponse {
+    #[schema(value_type = String)]
     pub message: &'static str,
 }
 
 /// Response body carrying a double-submit CSRF token.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct CsrfResponse {
     pub csrf_token: String,
 }
@@ -154,3 +155,134 @@ pub struct UserData {
     pub is_admin: bool,
     pub password_epoch: i64,
 }
+
+// Documentation-only operations below emit the published v2 auth contract.
+// They intentionally have no bodies: the mounted handlers in `handlers.rs` are
+// the runtime authority, and these declarations exist only so the canonical
+// `NativeV2Api` aggregate can publish each deployed method/path.
+
+/// Documentation-only operation for the mounted v2 registration handler.
+#[utoipa::path(
+    post,
+    path = "/api/v2/auth/register",
+    tag = "auth",
+    request_body = RegisterRequest,
+    responses(
+        (status = 200, description = "Account created and bearer tokens issued", body = TokenResponse),
+        (status = 400, description = "Username or email is already registered"),
+        (status = 422, description = "Request payload failed validation"),
+        (status = 429, description = "Registration rate limit exceeded"),
+        (status = 503, description = "Database temporarily unavailable")
+    )
+)]
+#[allow(dead_code)]
+pub fn register_documentation() {}
+
+/// Documentation-only operation for the mounted v2 login handler.
+#[utoipa::path(
+    post,
+    path = "/api/v2/auth/login",
+    tag = "auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Credentials accepted and bearer tokens issued", body = TokenResponse),
+        (status = 400, description = "Username field contained an email address"),
+        (status = 401, description = "Incorrect username or password"),
+        (status = 422, description = "Request payload failed validation"),
+        (status = 429, description = "Login rate limit exceeded"),
+        (status = 503, description = "Database temporarily unavailable")
+    )
+)]
+#[allow(dead_code)]
+pub fn login_documentation() {}
+
+/// Documentation-only operation for the mounted v2 refresh handler.
+///
+/// The refresh cookie is an alternative to the optional JSON body token.
+#[utoipa::path(
+    post,
+    path = "/api/v2/auth/refresh",
+    tag = "auth",
+    request_body = Option<RefreshTokenRequest>,
+    responses(
+        (status = 200, description = "Refreshed bearer tokens issued", body = TokenResponse),
+        (status = 401, description = "Missing, invalid, revoked or stale refresh token"),
+        (status = 429, description = "Refresh rate limit exceeded"),
+        (status = 503, description = "Database temporarily unavailable")
+    )
+)]
+#[allow(dead_code)]
+pub fn refresh_documentation() {}
+
+/// Documentation-only operation for the mounted v2 logout handler.
+#[utoipa::path(
+    post,
+    path = "/api/v2/auth/logout",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Bearer token revoked and refresh cookie cleared", body = serde_json::Value),
+        (status = 503, description = "Database temporarily unavailable")
+    )
+)]
+#[allow(dead_code)]
+pub fn logout_documentation() {}
+
+/// Documentation-only operation for the mounted v2 CSRF handler.
+#[utoipa::path(
+    get,
+    path = "/api/v2/auth/csrf",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Double-submit CSRF token", body = CsrfResponse)
+    )
+)]
+#[allow(dead_code)]
+pub fn csrf_documentation() {}
+
+/// Documentation-only operation for the mounted v2 current-user handler.
+#[utoipa::path(
+    get,
+    path = "/api/v2/auth/me",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Authenticated account profile", body = UserResponse),
+        (status = 401, description = "Not authenticated or token invalid"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn me_documentation() {}
+
+/// Documentation-only operation for the mounted v2 forgot-password handler.
+#[utoipa::path(
+    post,
+    path = "/api/v2/auth/forgot-password",
+    tag = "auth",
+    request_body = ForgotPasswordRequest,
+    responses(
+        (status = 200, description = "Enumeration-safe acknowledgement", body = PasswordResetResponse),
+        (status = 422, description = "Request payload failed validation"),
+        (status = 429, description = "Password-recovery rate limit exceeded"),
+        (status = 503, description = "Database temporarily unavailable")
+    )
+)]
+#[allow(dead_code)]
+pub fn forgot_password_documentation() {}
+
+/// Documentation-only operation for the mounted v2 reset-password handler.
+#[utoipa::path(
+    post,
+    path = "/api/v2/auth/reset-password",
+    tag = "auth",
+    request_body = ResetPasswordRequest,
+    responses(
+        (status = 200, description = "Password reset completed", body = PasswordResetResponse),
+        (status = 400, description = "Invalid or expired reset request"),
+        (status = 422, description = "Request payload failed validation"),
+        (status = 429, description = "Password-recovery rate limit exceeded"),
+        (status = 503, description = "Database temporarily unavailable")
+    )
+)]
+#[allow(dead_code)]
+pub fn reset_password_documentation() {}
