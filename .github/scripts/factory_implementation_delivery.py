@@ -401,6 +401,56 @@ def _previous_source(current: str, patch: str) -> str:
     return "\n".join(previous)
 
 
+def _base_source(
+    repo: str, path: str, base_sha: str,
+    run: Callable[[list[str]], str],
+) -> str:
+    """Fetch a file's complete content at the PR's base commit.
+
+    GitHub omits the `patch` field for changes too large to inline (a generated
+    OpenAPI artifact is the common case). The base commit still holds the whole
+    pre-change file, so the same complete source evidence the patch-reversal
+    path reconstructs can be read directly instead of being inferred.
+
+    Args:
+        repo: Repository owner/name.
+        path: Repository-relative file path.
+        base_sha: Commit the pull request is based on.
+        run: GitHub CLI reader that raises RuntimeError on failure.
+
+    Returns:
+        The complete file content at the base commit.
+
+    Raises:
+        RuntimeError: If the base content cannot be read.
+    """
+    return run([
+        "api", "-H", "Accept: application/vnd.github.raw+json",
+        f"repos/{repo}/contents/{quote(path, safe='/')}?ref={base_sha}",
+    ])
+
+
+def _unified_file_diff(path: str, old: str, new: str) -> str:
+    """Render one complete unified diff between two whole file versions.
+
+    Args:
+        path: Repository-relative file path.
+        old: Complete pre-change file content.
+        new: Complete post-change file content.
+
+    Returns:
+        A unified diff prefixed with the git header the patch parser expects.
+    """
+    return (
+        f"diff --git a/{path} b/{path}\n" + "".join(difflib.unified_diff(
+            [line + "\n" for line in old.splitlines()],
+            [line + "\n" for line in new.splitlines()],
+            fromfile=f"a/{path}", tofile=f"b/{path}",
+            n=max(len(old.splitlines()), len(new.splitlines())) + 1,
+        ))
+    )
+
+
 def complete_pr_diff(
     pr_number: int, expected_head: str, repo: str,
     run: Callable[[list[str]], str],
@@ -422,6 +472,7 @@ def complete_pr_diff(
     info = json.loads(run(["api", f"repos/{repo}/pulls/{pr_number}"]))
     if info["head"]["sha"] != expected_head:
         raise RuntimeError("PR head changed during implementation inspection")
+    base_sha = info.get("base", {}).get("sha")
     files = json.loads(run([
         "api", "--paginate", "--slurp", f"repos/{repo}/pulls/{pr_number}/files",
     ]))
@@ -433,22 +484,29 @@ def complete_pr_diff(
         path = record["filename"]
         if path not in candidates or record["status"] == "renamed" and not record.get("changes"):
             continue
-        patch = record.get("patch")
-        if not isinstance(patch, str) or not patch:
-            raise RuntimeError(f"source patch unavailable for {path}")
-        new = "" if record["status"] == "removed" else run([
+        status = record["status"]
+        new = "" if status == "removed" else run([
             "api", "-H", "Accept: application/vnd.github.raw+json",
             f"repos/{repo}/contents/{quote(path, safe='/')}?ref={expected_head}",
         ])
-        # Reverse the original PR patch rather than comparing against current
-        # main, which can already contain the merged head during closure.
-        old = _previous_source(new, patch)
-        patches.append(
-            f"diff --git a/{path} b/{path}\n" + "".join(difflib.unified_diff(
-                [line + "\n" for line in old.splitlines()],
-                [line + "\n" for line in new.splitlines()],
-                fromfile=f"a/{path}", tofile=f"b/{path}",
-                n=max(len(old.splitlines()), len(new.splitlines())) + 1,
-            ))
-        )
+        patch = record.get("patch")
+        if isinstance(patch, str) and patch:
+            # Reverse the original PR patch rather than comparing against current
+            # main, which can already contain the merged head during closure.
+            old = _previous_source(new, patch)
+        else:
+            # GitHub omits the patch for changes too large to inline. Read the
+            # whole pre-change file at the pull request's base commit instead of
+            # failing closed on an artifact the review still has to see.
+            if not isinstance(base_sha, str) or not base_sha:
+                raise RuntimeError(f"source patch unavailable for {path}")
+            base_path = record.get("previous_filename") or path
+            if status == "added":
+                old = ""
+            else:
+                try:
+                    old = _base_source(repo, base_path, base_sha, run)
+                except RuntimeError as exc:
+                    raise RuntimeError(f"source patch unavailable for {path}") from exc
+        patches.append(_unified_file_diff(path, old, new))
     return paths, "\n".join(patches)
