@@ -10,10 +10,8 @@ import {
   useShuffleQueue,
 } from '../../hooks/useQueue'
 import { useDeleteThread, useExcludeThread } from '../../hooks/useThread'
-import {
-  useSnooze,
-  useUnsnooze,
-} from '../../hooks/useSnooze'
+import { useUnsnooze } from '../../hooks/useSnooze'
+import { rollApi } from '../../services/api-roll'
 import { useToast } from '../../contexts/useToast'
 import {
   invalidateAfterQueueMovement,
@@ -59,7 +57,7 @@ export interface UseQueueThreadActionsDeps {
   moveToBackHook?: typeof useMoveToBack
   moveToPositionHook?: typeof useMoveToPosition
   shuffleHook?: typeof useShuffleQueue
-  snoozeHook?: typeof useSnooze
+  reroll?: typeof rollApi.reroll
   unsnoozeHook?: typeof useUnsnooze
   toastHook?: typeof useToast
   setPending?: typeof threadsApi.setPending
@@ -119,7 +117,7 @@ export function useQueueThreadActions(
     moveToBackHook = useMoveToBack,
     moveToPositionHook = useMoveToPosition,
     shuffleHook = useShuffleQueue,
-    snoozeHook = useSnooze,
+    reroll = rollApi.reroll,
     unsnoozeHook = useUnsnooze,
     toastHook = useToast,
     setPending = threadsApi.setPending,
@@ -132,7 +130,6 @@ export function useQueueThreadActions(
   const moveToBackMutation = moveToBackHook()
   const moveToPositionMutation = moveToPositionHook()
   const shuffleQueueMutation = shuffleHook()
-  const snoozeMutation = snoozeHook()
   const unsnoozeMutation = unsnoozeHook()
 
   const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
@@ -340,19 +337,17 @@ export function useQueueThreadActions(
         if (isSnoozed) {
           await unsnoozeMutation.mutate(thread.id)
         } else {
-          // `expectedPendingThreadId` is what lets the snooze hook recover an
-          // auth-failure snooze and reconcile an ambiguous network failure.
-          // Dropping it would silently disable both recovery paths, so the row
-          // that owns the pending thread must pass its own id (#3260).
-          await snoozeMutation.mutate(thread.id)
+          // The canonical Rust offer atomically records the pending reroll
+          // snooze, advances the die, and selects the replacement. The legacy
+          // v1 snooze clears session.pending_thread_id without selecting a new
+          // offer, which loses a native pending roll (#4589).
+          const offer = await reroll()
+          showToast(`Snoozed "${thread.title}" and rolled "${offer.title}". Open Roll to read it.`, 'success')
         }
-        // Both mutation hooks already refresh `session.current` inside their
-        // own success path (`invalidateCurrentSessionAfterSnooze`), so the
-        // row-action pass refreshes only the queue-side read models and skips
-        // the session key — invalidating it a second time re-ran the session
-        // fetch the mutation just settled, sending the endpoint two identical
-        // extra GETs per toggle.
-        await invalidateAfterQueueMovement(queryClient, { skipSessionCurrent: true })
+        // Native reroll does not own a session query refresh, so Queue must
+        // invalidate it here. Legacy unsnooze still refreshes that key in its
+        // own hook, and must not issue a duplicate GET (#4276).
+        await invalidateAfterQueueMovement(queryClient, { skipSessionCurrent: isSnoozed })
         // Snooze resets the paginated queue cache, so the row remounts; the
         // id-based restore lands on the refetched trigger (#3147).
         restoreSeriesActionsFocus(thread.id)
@@ -364,7 +359,7 @@ export function useQueueThreadActions(
         )
       }
     },
-    [snoozeMutation, unsnoozeMutation, restoreSeriesActionsFocus, showToast],
+    [reroll, unsnoozeMutation, restoreSeriesActionsFocus, showToast],
   )
 
   return {
