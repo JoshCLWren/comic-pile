@@ -341,7 +341,7 @@ export function useQueueThreadActions(
           // snooze, advances the die, and selects the replacement. The legacy
           // v1 snooze clears session.pending_thread_id without selecting a new
           // offer, which loses a native pending roll (#4589).
-          const offer = await reroll()
+          const offer = await reroll(thread.id)
           showToast(`Snoozed "${thread.title}" and rolled "${offer.title}". Open Roll to read it.`, 'success')
         }
         // Native reroll does not own a session query refresh, so Queue must
