@@ -169,11 +169,6 @@ function renderActionSheet(bootstrap: RollBootstrapResponse): Harness {
           isPending: false,
         },
         unsnoozeMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
-        skipMutation: {
-          mutate: vi.fn(() => Promise.resolve({ response: undefined, refreshed: true, refreshError: null })),
-          isPending: false,
-        },
-        unskipMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         moveToFrontMutation: { mutate: moveToFront.mutate, isPending: moveToFront.isPending },
         moveToBackMutation: { mutate: moveToBack.mutate, isPending: moveToBack.isPending },
         shuffleQueueMutation: { mutate: shuffleQueue.mutate, isPending: shuffleQueue.isPending },

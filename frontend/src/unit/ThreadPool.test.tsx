@@ -1,5 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
 import type { RollBootstrapThread } from '../types/rollBootstrap'
@@ -30,16 +29,11 @@ const baseProps: ThreadPoolProps = {
   selectedThreadId: null,
   snoozedThreads: [],
   snoozedExpanded: false,
-  skippedThreads: [],
-  skippedExpanded: false,
   onThreadClick: () => {},
   onUnsnooze: () => {},
-  onUnskip: () => {},
   onToggleSnoozed: () => {},
-  onToggleSkipped: () => {},
   onShuffle: () => {},
   unsnoozeIsPending: false,
-  unskipIsPending: false,
   shuffleIsPending: false,
 }
 
@@ -111,36 +105,6 @@ describe('ThreadPool Component', () => {
     renderPool({ pool: [] })
 
     expect(screen.getByText(/Nothing to roll yet/i)).toBeInTheDocument()
-  })
-
-  it('shows skipped threads when expanded and calls onUnskip', () => {
-    const onUnskip = vi.fn()
-
-    renderPool({
-      pool: [],
-      skippedThreads: [{ id: 10, title: 'Skipped Saga', format: 'Comic' }],
-      skippedExpanded: true,
-      onUnskip,
-    })
-
-    expect(screen.getByText('Skipped Saga')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /unskip this comic/i }))
-    expect(onUnskip).toHaveBeenCalledWith(10)
-  })
-
-  it('hides skipped threads when collapsed and toggles expansion', () => {
-    const onToggleSkipped = vi.fn()
-
-    renderPool({
-      pool: [],
-      skippedThreads: [{ id: 10, title: 'Skipped Saga', format: 'Comic' }],
-      skippedExpanded: false,
-      onToggleSkipped,
-    })
-
-    expect(screen.queryByText('Skipped Saga')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByText(/Skipped \(1\)/i))
-    expect(onToggleSkipped).toHaveBeenCalledTimes(1)
   })
 
   it('renders each die face with its visible thread tags (#3425)', () => {

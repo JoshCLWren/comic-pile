@@ -45,8 +45,6 @@ const spies = vi.hoisted(() => ({
   moveBack: vi.fn().mockResolvedValue({}),
   shuffle: vi.fn().mockResolvedValue({}),
   rate: vi.fn(),
-  skip: vi.fn(),
-  unskip: vi.fn().mockResolvedValue({}),
   setPending: vi.fn(),
 }))
 
@@ -159,10 +157,6 @@ vi.mock('../hooks/useQueue', () => ({
 }))
 vi.mock('../hooks', () => ({
   useRate: () => ({ mutate: spies.rate, isPending: false }),
-}))
-vi.mock('../hooks/useSkip', () => ({
-  useSkip: () => ({ mutate: spies.skip, isPending: false, isError: false }),
-  useUnskip: () => ({ mutate: spies.unskip, isPending: false, isError: false }),
 }))
 vi.mock('../services/api-taste', () => ({
   tasteApi: {

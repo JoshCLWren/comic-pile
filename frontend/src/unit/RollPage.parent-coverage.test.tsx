@@ -94,7 +94,6 @@ vi.mock('../hooks/useReaderContext', async (importOriginal) => {
 })
 vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) } }))
 vi.mock('../services/api-sessions', () => ({ sessionApi: { updateMode: vi.fn().mockResolvedValue({}) } }))
-vi.mock('../services/api-skip', () => ({ skipApi: { skip: vi.fn().mockResolvedValue(undefined), unskip: vi.fn().mockResolvedValue(undefined) } }))
 vi.mock('../services/api', () => ({ default: {} }))
 vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
 vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
@@ -122,9 +121,8 @@ interface ThreadPoolMockProps {
   onShuffle: () => void
   onUnsnooze: () => void
   onToggleSnoozed: () => void
-  onToggleSkipped: () => void
 }
-vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: ThreadPoolMockProps) => <div><button onClick={() => props.onThreadClick({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle}>shuffle pool</button><button onClick={props.onUnsnooze}>unsnooze</button><button onClick={props.onToggleSnoozed}>toggle snoozed</button><button onClick={props.onToggleSkipped}>toggle skipped</button></div> }))
+vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: ThreadPoolMockProps) => <div><button onClick={() => props.onThreadClick({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle}>shuffle pool</button><button onClick={props.onUnsnooze}>unsnooze</button><button onClick={props.onToggleSnoozed}>toggle snoozed</button></div> }))
 interface RatingViewMockData {
   activeRatingThread: { title?: string; issue_number?: string | null } | null
   errorMessage: string

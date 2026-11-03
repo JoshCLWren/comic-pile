@@ -33,10 +33,6 @@ vi.mock('../hooks/useQueue', () => ({
   useActiveSeriesCount: () => null,
 }))
 vi.mock('../hooks', () => ({ useRate: () => ({ mutate: vi.fn(), isPending: false }) }))
-vi.mock('../hooks/useSkip', () => ({
-  useSkip: () => ({ mutate: vi.fn(), isPending: false }),
-  useUnskip: () => ({ mutate: vi.fn(), isPending: false }),
-}))
 vi.mock('../services/api-taste', () => ({
   tasteApi: {
     getDiscoveries: vi.fn().mockResolvedValue({ discoveries: [], generated_at: new Date().toISOString() }),
@@ -53,10 +49,6 @@ vi.mock('../services/api', () => ({
   dependenciesApi: {
     getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
-  },
-  skipApi: {
-    skip: vi.fn().mockResolvedValue(undefined),
-    unskip: vi.fn().mockResolvedValue(undefined),
   },
   sessionApi: {
     updateMode: vi.fn().mockResolvedValue({}),
