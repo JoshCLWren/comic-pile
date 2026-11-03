@@ -49,41 +49,6 @@ function nextMidnight(): Date {
   return midnight
 }
 
-/**
- * Temporary snoozes live only in this browser and expire at midnight.
- * The server treats them as exclusion hints, never as eligibility or auth.
- */
-function readRollSnoozes(): number[] {
-  try {
-    const raw = globalThis.document?.cookie
-      ?.split('; ')
-      .find((entry) => entry.startsWith(`${SNOOZE_COOKIE}=`))
-      ?.slice(SNOOZE_COOKIE.length + 1)
-    if (!raw) return []
-    const decoded = decodeURIComponent(raw)
-    if (!SNOOZE_COOKIE_PATTERN.test(decoded)) return []
-    return decoded
-      .slice(1, -1)
-      .split(',')
-      .map((value) => Number(value))
-  } catch {
-    return []
-  }
-}
-
-function writeRollSnoozes(ids: number[]): void {
-  try {
-    const bounded = Array.from(
-      new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0)),
-    ).slice(-MAX_ROLL_SNOOZES)
-    globalThis.document.cookie = `${SNOOZE_COOKIE}=${encodeURIComponent(
-      JSON.stringify(bounded),
-    )}; expires=${nextMidnight().toUTCString()}; path=/; SameSite=Lax`
-  } catch {
-    // A blocked cookie must not disable Roll; the server still snoozes pending.
-  }
-}
-
 function readPendingResetKey(): string | null {
   try {
     const raw = globalThis.sessionStorage?.getItem(PENDING_RESET_KEY)
@@ -258,3 +223,49 @@ export function createRollApi(client: HttpClient) {
 }
 
 export const rollApi = createRollApi(defaultHttpClient())
+
+/**
+ * Read the current browser snooze cookie.
+ */
+export function readRollSnoozes(): number[] {
+  try {
+    const raw = globalThis.document?.cookie
+      ?.split('; ')
+      .find((entry) => entry.startsWith(`${SNOOZE_COOKIE}=`))
+      ?.slice(SNOOZE_COOKIE.length + 1)
+    if (!raw) return []
+    const decoded = decodeURIComponent(raw)
+    if (!SNOOZE_COOKIE_PATTERN.test(decoded)) return []
+    return decoded
+      .slice(1, -1)
+      .split(',')
+      .map((value) => Number(value))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Write the browser snooze cookie.
+ */
+export function writeRollSnoozes(ids: number[]): void {
+  try {
+    const bounded = Array.from(
+      new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0)),
+    ).slice(-MAX_ROLL_SNOOZES)
+    globalThis.document.cookie = `${SNOOZE_COOKIE}=${encodeURIComponent(
+      JSON.stringify(bounded),
+    )}; expires=${nextMidnight().toUTCString()}; path=/; SameSite=Lax`
+  } catch {
+    // A blocked cookie must not disable Roll; the server still snoozes pending.
+  }
+}
+
+/**
+ * Remove a thread ID from the browser snooze cookie.
+ */
+export function removeRollSnooze(threadId: number): void {
+  const current = readRollSnoozes()
+  const filtered = current.filter((id) => id !== threadId)
+  writeRollSnoozes(filtered)
+}

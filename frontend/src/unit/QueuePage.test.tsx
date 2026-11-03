@@ -20,7 +20,7 @@ import {
 import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze } from '../hooks/useSnooze'
 import { useToast } from '../contexts/useToast'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
@@ -54,7 +54,6 @@ vi.mock('../hooks/useSession', () => ({
 
 vi.mock('../hooks/useSnooze', () => ({
   useSnooze: vi.fn(),
-  useUnsnooze: vi.fn(),
 }))
 
 vi.mock('../hooks/useQueueBlockingInfo', () => ({
@@ -132,8 +131,6 @@ const mockedUseReadingBoundaries = vi.mocked(useReadingBoundaries) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedThreadsApi = vi.mocked(threadsApi) as any
@@ -163,7 +160,6 @@ beforeEach(() => {
     data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
     refetch: vi.fn(),
   })
-  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseReadingBoundaries.mockReturnValue({
     data: { threads: {} },
@@ -278,12 +274,10 @@ beforeEach(() => {
 
 describe('Visible action Snooze/Unsnooze', () => {
   const mockSnoozeMutation = { mutate: vi.fn(), isPending: false }
-  const mockUnsnoozeMutation = { mutate: vi.fn(), isPending: false }
   const mockReroll = vi.mocked(rollApi.reroll)
 
   beforeEach(() => {
     mockSnoozeMutation.mutate.mockReset()
-    mockUnsnoozeMutation.mutate.mockReset()
     mockReroll.mockReset().mockResolvedValue({
       thread_id: 2,
       title: 'Next comic',
@@ -302,7 +296,6 @@ describe('Visible action Snooze/Unsnooze', () => {
       reading_progress: null,
     })
     mockedUseSnooze.mockReturnValue(mockSnoozeMutation)
-    mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
   it('shows visible actions for thread cards', async () => {
@@ -346,7 +339,6 @@ describe('Visible action Snooze/Unsnooze', () => {
 
     expect(mockReroll).toHaveBeenCalledWith(1)
     expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
-    expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
   it('explains why Snooze is unavailable for a series the reader did not roll (#3260)', async () => {
@@ -379,7 +371,7 @@ describe('Visible action Snooze/Unsnooze', () => {
     expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
-  it('calls unsnooze mutation when the Unsnooze action is clicked', async () => {
+  it('removes thread from snooze cookie when Unsnooze action is clicked', async () => {
     mockedUseSession.mockReturnValue({
       data: {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
@@ -402,7 +394,8 @@ describe('Visible action Snooze/Unsnooze', () => {
     await user.click(unsnoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
-    expect(mockUnsnoozeMutation.mutate).toHaveBeenCalledWith(1)
+    // Unsnooze is now client-side only - it removes the thread from the browser cookie
+    // No server mutation is called
     expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
@@ -474,11 +467,8 @@ describe('Visible action Snooze/Unsnooze', () => {
     await user.click(unsnoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
-    await waitFor(() => {
-      expect(mockUnsnoozeMutation.mutate).toHaveBeenCalledWith(1)
-    })
-    // The unsnooze mutation owns the `session.current` refresh itself, so the
-    // row-action pass must not issue a second session fetch (#4276).
+    // Unsnooze is now client-side only - it removes the thread from the browser cookie
+    // No server mutation is called, so no session fetch should be triggered
     expect(mockRefetchSession).not.toHaveBeenCalled()
     expect(mockRefetch).not.toHaveBeenCalled()
   })

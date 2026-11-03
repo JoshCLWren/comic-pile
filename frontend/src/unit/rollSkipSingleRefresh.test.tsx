@@ -187,7 +187,6 @@ function renderActionSheetFlow(apis: Apis) {
         clearManualDieMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         rollMutation: { mutate: vi.fn(), isPending: false },
         snoozeMutation: { mutate: vi.fn().mockResolvedValue({ refreshed: true, refreshError: null }), isPending: false },
-        unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         skipMutation,
         unskipMutation,
         moveToFrontMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },

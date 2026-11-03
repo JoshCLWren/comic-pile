@@ -56,7 +56,6 @@ function buildDeps(overrides: Partial<UseQueueThreadActionsDeps> = {}): UseQueue
     moveToPositionHook: () => mutationStubs(),
     shuffleHook: () => mutationStubs(),
     reroll: vi.fn().mockResolvedValue({ thread_id: 5, title: 'Next Comic' }),
-    unsnoozeHook: () => mutationStubs(),
     toastHook: () => ({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] }),
     setPending,
     ...overrides,
@@ -266,28 +265,26 @@ describe('useQueueThreadActions', () => {
     )
   })
 
-  it('routes Queue snooze to the native Rust reroll and keeps legacy unsnooze separate (#4589)', async () => {
+  it('routes Queue snooze to the native Rust reroll and unsnooze is client-side only (#4589)', async () => {
     const reroll = vi.fn().mockResolvedValue({ thread_id: 5, title: 'Next Comic' })
-    const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
           { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
-          buildDeps({ reroll, unsnoozeHook: () => unsnooze }),
+          buildDeps({ reroll }),
         ),
       { wrapper },
     )
 
     await result.current.handleSnoozeToggle(makeThread({ id: 4, title: 'Pending Comic' }), false)
     expect(reroll).toHaveBeenCalledExactlyOnceWith(4)
-    expect(unsnooze.mutate).not.toHaveBeenCalled()
     expect(toastSpy).toHaveBeenCalledWith(
       'Snoozed "Pending Comic" and rolled "Next Comic". Open Roll to read it.',
       'success',
     )
 
+    // Unsnooze is now client-only (removes from browser cookie), no server call
     await result.current.handleSnoozeToggle(makeThread({ id: 4 }), true)
-    expect(unsnooze.mutate).toHaveBeenCalledWith(4)
     expect(reroll).toHaveBeenCalledTimes(1)
   })
 

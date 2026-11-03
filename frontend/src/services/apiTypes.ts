@@ -47,17 +47,11 @@ export interface SkipApi {
   unskip: (threadId: number) => Promise<void>
 }
 
-export interface SnoozeApi {
-  snooze: () => Promise<SnoozeSessionResponse>
-  unsnooze: (threadId: number) => Promise<void>
-}
-
 /** Injectable dependencies for the Roll mutation hooks (snooze/skip/rate). */
 export interface RollMutationDeps {
   protectedApi?: ProtectedRollMutationApi
   bootstrapApi?: RollBootstrapApi
   cacheEffects?: CacheEffectsApi
-  snoozeApi?: SnoozeApi
   skipApi?: SkipApi
 }
 

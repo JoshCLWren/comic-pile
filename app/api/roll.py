@@ -28,7 +28,7 @@ from app.services.session_response import (
     build_ladder_path,
     build_session_response,
 )
-from app.services.snooze_service import (
+from app.services.roll_exclusion import (
     derive_effective_roll_excluded_thread_ids,
 )
 from app.schemas import (

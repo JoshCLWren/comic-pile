@@ -270,14 +270,6 @@ def _register_reading_mode(app: FastAPI) -> None:
     app.include_router(reading_mode.router, tags=["reading-mode"])
 
 
-def _register_snooze(app: FastAPI) -> None:
-    """Register snooze routers."""
-    from app.api import snooze
-
-    app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
-    app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
-
-
 def _register_undo(app: FastAPI) -> None:
     """Register undo routers."""
     from app.api import undo
@@ -430,7 +422,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("recommendations", frozenset({"recommendations"}), _register_recommendations),
     RouterMount("sessions", frozenset({"sessions"}), _register_sessions),
     RouterMount("reading-mode", frozenset({"reading-mode"}), _register_reading_mode),
-    RouterMount("snooze", frozenset({"snooze"}), _register_snooze),
     RouterMount("undo", frozenset({"undo"}), _register_undo),
     RouterMount("preferences", frozenset({"users"}), _register_preferences),
     RouterMount("taste-signals", frozenset({"users"}), _register_taste_signals),

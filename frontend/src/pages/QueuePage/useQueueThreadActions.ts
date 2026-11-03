@@ -10,8 +10,8 @@ import {
   useShuffleQueue,
 } from '../../hooks/useQueue'
 import { useDeleteThread, useExcludeThread } from '../../hooks/useThread'
-import { useUnsnooze } from '../../hooks/useSnooze'
 import { rollApi } from '../../services/api-roll'
+import { removeRollSnooze } from '../../services/api-roll'
 import { useToast } from '../../contexts/useToast'
 import {
   invalidateAfterQueueMovement,
@@ -58,7 +58,6 @@ export interface UseQueueThreadActionsDeps {
   moveToPositionHook?: typeof useMoveToPosition
   shuffleHook?: typeof useShuffleQueue
   reroll?: typeof rollApi.reroll
-  unsnoozeHook?: typeof useUnsnooze
   toastHook?: typeof useToast
   setPending?: typeof threadsApi.setPending
 }
@@ -118,7 +117,6 @@ export function useQueueThreadActions(
     moveToPositionHook = useMoveToPosition,
     shuffleHook = useShuffleQueue,
     reroll = rollApi.reroll,
-    unsnoozeHook = useUnsnooze,
     toastHook = useToast,
     setPending = threadsApi.setPending,
   } = deps
@@ -130,7 +128,6 @@ export function useQueueThreadActions(
   const moveToBackMutation = moveToBackHook()
   const moveToPositionMutation = moveToPositionHook()
   const shuffleQueueMutation = shuffleHook()
-  const unsnoozeMutation = unsnoozeHook()
 
   const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
   const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
@@ -335,7 +332,8 @@ export function useQueueThreadActions(
     async (thread: ThreadListItem, isSnoozed: boolean) => {
       try {
         if (isSnoozed) {
-          await unsnoozeMutation.mutate(thread.id)
+          // Queue unsnooze is client-only: remove the thread from the browser snooze cookie
+          removeRollSnooze(thread.id)
         } else {
           // The canonical Rust offer atomically records the pending reroll
           // snooze, advances the die, and selects the replacement. The legacy
@@ -359,7 +357,7 @@ export function useQueueThreadActions(
         )
       }
     },
-    [reroll, unsnoozeMutation, restoreSeriesActionsFocus, showToast],
+    [reroll, restoreSeriesActionsFocus, showToast],
   )
 
   return {

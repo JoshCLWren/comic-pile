@@ -2,7 +2,7 @@ import { type ReactNode } from 'react'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze } from '../hooks/useSnooze'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
@@ -13,7 +13,7 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 function makeSnoozeApi() {
-  return { snooze: vi.fn(), unsnooze: vi.fn() }
+  return { snooze: vi.fn() }
 }
 
 function makeProtectedApi() {
@@ -37,10 +37,6 @@ const deps = { snoozeApi, protectedApi: protectedRollMutationApi, bootstrapApi: 
 
 function renderSnooze() {
   return renderHook(() => useSnooze(deps), { wrapper })
-}
-
-function renderUnsnooze() {
-  return renderHook(() => useUnsnooze(deps), { wrapper })
 }
 
 const bootstrapState = (
@@ -83,11 +79,10 @@ describe('snooze hooks', () => {
     vi.clearAllMocks()
     invalidateCurrentSessionAfterSnooze.mockReset()
     protectedRollMutationApi.snooze.mockResolvedValue(undefined)
-    snoozeApi.unsnooze.mockResolvedValue(undefined)
     rollBootstrapApi.get.mockResolvedValue(bootstrapState(null))
   })
 
-  it('snoozes, publishes authoritative Roll state, and unsnoozes successfully', async () => {
+  it('snoozes and publishes authoritative Roll state', async () => {
     const reconciled = vi.fn()
     window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
 
@@ -100,12 +95,6 @@ describe('snooze hooks', () => {
       expect(reconciled).toHaveBeenCalledTimes(1)
       expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(client)
       expect(snooze.result.current.isError).toBe(false)
-
-      const unsnooze = renderUnsnooze()
-      await act(async () => await unsnooze.result.current.mutate(7))
-      expect(snoozeApi.unsnooze).toHaveBeenCalledWith(7)
-      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledTimes(2)
-      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenLastCalledWith(client)
     } finally {
       window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
     }
@@ -286,11 +275,6 @@ describe('snooze hooks', () => {
     const snooze = renderSnooze()
     await act(async () => await expect(snooze.result.current.mutate(7)).rejects.toThrow('snooze failed'))
     await waitFor(() => expect(snooze.result.current.isError).toBe(true))
-
-    snoozeApi.unsnooze.mockRejectedValueOnce(new Error('unsnooze failed'))
-    const unsnooze = renderUnsnooze()
-    await act(async () => await expect(unsnooze.result.current.mutate(7)).rejects.toThrow('unsnooze failed'))
-    await waitFor(() => expect(unsnooze.result.current.isError).toBe(true))
 
     expect(invalidateCurrentSessionAfterSnooze).not.toHaveBeenCalled()
   })

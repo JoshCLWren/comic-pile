@@ -25,7 +25,6 @@ interface RollMutations {
     isPending: boolean
     retryRefresh?: () => Promise<boolean>
   }
-  unsnoozeMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
   skipMutation: {
     mutate: (expectedPendingThreadId?: number) => Promise<SkipMutationOutcome>
     isPending: boolean
@@ -119,7 +118,6 @@ export function useRollActions({
     clearManualDieMutation,
     rollMutation,
     snoozeMutation,
-    unsnoozeMutation,
     skipMutation,
     unskipMutation,
     moveToFrontMutation,
@@ -200,7 +198,9 @@ export function useRollActions({
           break
         case 'snooze': {
           if (isSnoozed) {
-            await unsnoozeMutation.mutate(selectedThread!.id)
+            // Roll unsnooze is client-only: remove the thread from the browser snooze cookie
+            const { removeRollSnooze } = await import('../../services/api-roll')
+            removeRollSnooze(selectedThread!.id)
             await refetchBootstrap()
             break
           }

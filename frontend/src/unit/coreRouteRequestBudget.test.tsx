@@ -220,7 +220,6 @@ function RollMoveBudgetProbe() {
       clearManualDieMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       rollMutation: { mutate: () => Promise.resolve(stubRollResponse), isPending: false },
       snoozeMutation: { mutate: () => Promise.resolve(stubSnoozeOutcome), isPending: false },
-      unsnoozeMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       skipMutation: { mutate: () => Promise.resolve(stubSkipOutcome), isPending: false },
       unskipMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       moveToFrontMutation: {

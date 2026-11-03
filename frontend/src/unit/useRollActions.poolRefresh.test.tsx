@@ -168,7 +168,6 @@ function renderActionSheet(bootstrap: RollBootstrapResponse): Harness {
           mutate: vi.fn(() => Promise.resolve({ response: undefined, refreshed: true, refreshError: null })),
           isPending: false,
         },
-        unsnoozeMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         skipMutation: {
           mutate: vi.fn(() => Promise.resolve({ response: undefined, refreshed: true, refreshError: null })),
           isPending: false,

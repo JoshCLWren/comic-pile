@@ -1350,7 +1350,7 @@ async def test_low_rating_safe_position_excludes_cross_session_snooze_backoff_is
     )
     await async_db.commit()
 
-    from app.services.snooze_service import derive_cross_session_excluded_thread_ids
+    from app.services.roll_exclusion import derive_cross_session_excluded_thread_ids
 
     derived = await derive_cross_session_excluded_thread_ids(async_db, user.id)
     assert cross_snoozed.id in derived
@@ -1402,7 +1402,7 @@ async def test_low_rating_uses_shared_effective_roll_exclusion_set_issue_3696(
     backoff derivation itself is exercised.
     """
     from app.services import rate_service
-    from app.services.snooze_service import (
+    from app.services.roll_exclusion import (
         derive_cross_session_excluded_thread_ids,
         derive_effective_roll_excluded_thread_ids,
     )

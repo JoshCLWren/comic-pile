@@ -117,7 +117,6 @@ function renderSnoozeFlow(apis: Apis) {
     const snooze = useRollSnooze({
       state,
       snoozeMutation,
-      unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined) },
       refetchBootstrap: bootstrap.refetch,
       onRefreshFailed,
     })
@@ -133,7 +132,6 @@ function renderSnoozeFlow(apis: Apis) {
         clearManualDieMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         rollMutation: { mutate: vi.fn(), isPending: false },
         snoozeMutation,
-        unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         skipMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         unskipMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         moveToFrontMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },

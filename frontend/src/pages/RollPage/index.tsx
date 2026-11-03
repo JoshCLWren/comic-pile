@@ -12,7 +12,7 @@ import {
   useRoll,
   useSetDie,
 } from '../../hooks/useRoll'
-import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
+import { useSnooze } from '../../hooks/useSnooze'
 import { useSkip, useUnskip } from '../../hooks/useSkip'
 import { useMoveToBack, useMoveToFront, useShuffleQueue, useActiveSeriesCount } from '../../hooks/useQueue'
 import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
@@ -152,7 +152,6 @@ export default function RollPage() {
   const skipMutation = useSkip()
   const unskipMutation = useUnskip()
   const snoozeMutation = useSnooze()
-  const unsnoozeMutation = useUnsnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
   const shuffleQueueMutation = useShuffleQueue()
@@ -267,7 +266,6 @@ export default function RollPage() {
     snoozeMutation,
     rerollMutation: rollMutation,
     enterRatingView: rating.enterRatingView,
-    unsnoozeMutation,
     refetchBootstrap,
     onClarificationSuggested: handleCorrectionSuggested,
     onRefreshFailed: reportSnoozeRefreshFailed,
@@ -293,7 +291,6 @@ export default function RollPage() {
       clearManualDieMutation,
       rollMutation,
       snoozeMutation,
-      unsnoozeMutation,
       skipMutation,
       unskipMutation,
       moveToFrontMutation,
@@ -594,7 +591,7 @@ export default function RollPage() {
               onToggleSkipped={() => state.setSkippedExpanded(!state.skippedExpanded)}
 
               onShuffle={actions.handleShufflePool}
-              unsnoozeIsPending={unsnoozeMutation.isPending}
+              unsnoozeIsPending={false}
               unskipIsPending={unskipMutation.isPending}
               shuffleIsPending={shuffleQueueMutation.isPending}
             />

@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, ReadingSession, Thread, User
-from app.services.snooze_service import derive_cross_session_excluded_thread_ids
+from app.services.roll_exclusion import derive_cross_session_excluded_thread_ids
 
 
 @pytest.mark.asyncio

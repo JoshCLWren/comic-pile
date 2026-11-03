@@ -89,14 +89,12 @@ def test_collect_routes_unions_methods_on_the_same_path() -> None:
     assert _collect_routes(app)["/api/v1/threads/"] == frozenset({"GET", "POST"})
 
 
-def test_v1_snooze_and_undo_aliases_match_legacy_route_methods() -> None:
-    """Canonical aliases reuse the same snooze and undo handler contracts."""
+def test_v1_undo_aliases_match_legacy_route_methods() -> None:
+    """Canonical aliases reuse the same undo handler contracts (v1 snooze retired, #4338)."""
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
 
     alias_pairs = (
-        ("/api/snooze/", "/api/v1/snooze/"),
-        ("/api/snooze/{thread_id}/unsnooze", "/api/v1/snooze/{thread_id}/unsnooze"),
         (
             "/api/undo/{session_id}/undo/{snapshot_id}",
             "/api/v1/undo/{session_id}/undo/{snapshot_id}",
@@ -237,8 +235,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/sessions/{session_id}/details",
             "/api/sessions/{session_id}/restore-session-start",
             "/api/sessions/{session_id}/snapshots",
-            "/api/snooze/",
-            "/api/snooze/{thread_id}/unsnooze",
             "/api/threads/",
             "/api/threads/active",
             "/api/threads/completed",

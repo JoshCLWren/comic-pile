@@ -21,7 +21,6 @@ const {
   rateApi,
   rollApi,
   sessionApi,
-  snoozeApi,
   tasksApi,
   threadsApi,
   undoApi,
@@ -174,8 +173,6 @@ it('calls every remaining API resource endpoint', async () => {
   await dependenciesApi.getConnectedThreads(1)
   await dependenciesApi.updateDependency(3, null)
   await tasksApi.getMetrics()
-  await snoozeApi.snooze()
-  await snoozeApi.unsnooze(2)
   await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
   await bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
   await preferencesApi.get()
@@ -198,8 +195,6 @@ it('uses canonical v1 paths for session, snooze, and undo resources', async () =
   await sessionApi.getSnapshots(7)
   await sessionApi.restoreSessionStart(7)
   await sessionApi.updateMode({ bandwidth: 'light' })
-  await snoozeApi.snooze()
-  await snoozeApi.unsnooze(9)
   await undoApi.undo(7, 3)
   await undoApi.listSnapshots(7)
 

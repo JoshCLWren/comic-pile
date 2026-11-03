@@ -46,7 +46,7 @@ from app.services.snapshot_contract import (
     USES_ISSUE_TRACKING_KEY,
     classify_snapshot,
 )
-from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
+from app.services.roll_exclusion import derive_effective_roll_excluded_thread_ids
 from comic_pile.bandwidth import capture_ephemeral_bandwidth
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up

@@ -4773,72 +4773,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/snooze/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Snooze Thread
-         * @description Snooze the pending thread and step the die up.
-         *
-         *     This endpoint:
-         *     1. Gets the current session (must exist with a pending_thread_id)
-         *     2. Adds the pending_thread_id to snoozed_thread_ids
-         *     3. Steps the die UP (wider pool) using dice ladder logic
-         *     4. Computes a structured bandwidth correction from the snooze evidence
-         *     5. Applies the correction to ephemeral session bandwidth state
-         *     6. Records a "snooze" event
-         *     7. Clears pending_thread_id
-         *     8. Returns the updated session with correction guidance
-         *
-         *     The snoozed thread's durable queue position is NOT changed (issue #1721).
-         *     Rating remains the authority for long-term promotion/demotion behavior.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionResponse containing the updated session with snoozed_thread_ids,
-         *         cleared pending_thread_id, current die state, bandwidth state, and
-         *         structured correction guidance.
-         *
-         *     Raises:
-         *         HTTPException: If no active session exists or no pending thread to snooze.
-         */
-        post: operations["snooze_thread_api_v1_snooze__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/snooze/{thread_id}/unsnooze": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Unsnooze Thread
-         * @description Remove thread from snoozed list.
-         */
-        post: operations["unsnooze_thread_api_v1_snooze__thread_id__unsnooze_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/tags/": {
         parameters: {
             query?: never;
@@ -23082,57 +23016,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SnapshotsListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    snooze_thread_api_v1_snooze__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-        };
-    };
-    unsnooze_thread_api_v1_snooze__thread_id__unsnooze_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
                 };
             };
             /** @description Validation Error */
