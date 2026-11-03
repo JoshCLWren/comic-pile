@@ -216,7 +216,7 @@ export function createRollApi(client: HttpClient) {
   const offer = async (expectedPendingThreadId?: number): Promise<RollOfferResponse> => {
     const existing = unresolvedOffer
     let key: string
-    if (existing?.key && existing.expectedPendingThreadId === expectedPendingThreadId) {
+    if (existing && existing.key && existing.expectedPendingThreadId === expectedPendingThreadId) {
       key = existing.key
     } else {
       key = newOfferKey()
