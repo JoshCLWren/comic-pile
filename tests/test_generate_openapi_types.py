@@ -114,8 +114,101 @@ def test_main_generates_default_schema_and_types(
             ),
             True,
         ),
+        (
+            generate_openapi_types.native_client_command(
+                generate_openapi_types.SCHEMA_OUTPUT,
+                generate_openapi_types.NATIVE_CONTRACT,
+                generate_openapi_types.NATIVE_CLIENT_OUTPUT,
+            ),
+            True,
+        ),
     ]
     assert "openapi-typescript@7.10.1" in capsys.readouterr().out
+
+
+def test_main_custom_schema_does_not_generate_native_client(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Never write the repository native client from a custom-schema run."""
+    client_calls: list[tuple[Path, Path, Path]] = []
+    generated: list[Path] = []
+
+    def fake_generate_types(_schema: Path, output: Path) -> None:
+        generated.append(output)
+
+    def fake_generate_client(schema: Path, native: Path, output: Path) -> None:
+        client_calls.append((schema, native, output))
+
+    monkeypatch.setattr(generate_openapi_types, "generate_types", fake_generate_types)
+    monkeypatch.setattr(
+        generate_openapi_types, "generate_native_client", fake_generate_client
+    )
+    monkeypatch.setattr(
+        generate_openapi_types,
+        "_parse_args",
+        lambda: type(
+            "Args",
+            (),
+            {
+                "schema": tmp_path / "openapi.json",
+                "output": generate_openapi_types.TYPES_OUTPUT,
+                "check": False,
+            },
+        )(),
+    )
+
+    assert generate_openapi_types.main() == 0
+    assert generated == [generate_openapi_types.TYPES_OUTPUT]
+    assert client_calls == []
+
+
+def test_main_check_rejects_stale_native_client_without_rewriting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Compare the native client in a temp path and leave the repository copy alone."""
+    schema = tmp_path / "openapi.json"
+    types = tmp_path / "openapi.ts"
+    client = tmp_path / "nativeV2Client.ts"
+    schema.write_text("{}\n", encoding="utf-8")
+    types.write_text("current\n", encoding="utf-8")
+    client.write_text("stale\n", encoding="utf-8")
+
+    monkeypatch.setattr(generate_openapi_types, "SCHEMA_OUTPUT", schema)
+    monkeypatch.setattr(generate_openapi_types, "TYPES_OUTPUT", types)
+    monkeypatch.setattr(generate_openapi_types, "NATIVE_CONTRACT", tmp_path / "native.json")
+    monkeypatch.setattr(generate_openapi_types, "NATIVE_CLIENT_OUTPUT", client)
+    monkeypatch.setattr(
+        generate_openapi_types,
+        "_export_schema",
+        lambda **_: None,
+    )
+
+    def fake_generate_types(_schema: Path, output: Path) -> None:
+        output.write_text("current\n", encoding="utf-8")
+
+    def fake_generate_client(_schema: Path, _native: Path, output: Path) -> None:
+        output.write_text("fresh\n", encoding="utf-8")
+
+    monkeypatch.setattr(generate_openapi_types, "generate_types", fake_generate_types)
+    monkeypatch.setattr(
+        generate_openapi_types, "generate_native_client", fake_generate_client
+    )
+    monkeypatch.setattr(
+        generate_openapi_types,
+        "_parse_args",
+        lambda: type(
+            "Args",
+            (),
+            {"schema": schema, "output": types, "check": True},
+        )(),
+    )
+
+    assert generate_openapi_types.main() == 1
+    assert client.read_text(encoding="utf-8") == "stale\n"
+    assert "are stale" in capsys.readouterr().out
 
 
 def test_main_check_rejects_stale_types_without_rewriting(

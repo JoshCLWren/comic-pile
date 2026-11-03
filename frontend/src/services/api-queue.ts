@@ -1,3 +1,4 @@
+import { createNativeV2Client } from '../generated/nativeV2Client'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
 /**
@@ -25,21 +26,31 @@ function newQueueOrderKey(): string {
 /**
  * Build the queue service bound to an HTTP client.
  *
+ * The generated native v2 client owns the URL, method and body contract; this
+ * adapter keeps the reader-facing queue actions and their `void` results.
+ *
  * @param client - HTTP transport used for every queue request.
  * @returns The queue API bound to `client`.
  */
 export function createQueueApi(client: HttpClient) {
-  const setPosition = (id: number, position: number) =>
-    client.patch<void, { position: number }>(`/v2/queue-entries/${id}`, { position })
+  const nativeV2 = createNativeV2Client(client)
+
+  const setPosition = async (id: number, position: number): Promise<void> => {
+    await nativeV2.updateQueueEntry({
+      path: { thread_id: id },
+      body: { position },
+    })
+  }
 
   return {
     moveToPosition: (id: number, position: number) => setPosition(id, position),
     moveToFront: (id: number) => setPosition(id, 1),
     moveToBack: (id: number) => setPosition(id, LAST_QUEUE_POSITION),
-    shuffle: (idempotencyKey: string = newQueueOrderKey()) =>
-      client.post<void, { idempotency_key: string }>('/v2/queue-orders', {
-        idempotency_key: idempotencyKey,
-      }),
+    shuffle: async (idempotencyKey: string = newQueueOrderKey()): Promise<void> => {
+      await nativeV2.createQueueOrder({
+        body: { idempotency_key: idempotencyKey },
+      })
+    },
   }
 }
 

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from scripts.export_openapi_schema import (
     is_client_schema_path,
+    merge_native_runtime_contract,
     prune_legacy_bare_paths,
     render_openapi_schema,
     write_schema,
@@ -111,3 +112,120 @@ def test_prune_legacy_bare_paths_tolerates_missing_paths_mapping() -> None:
     schema = {"info": {"title": "ComicPile"}}
 
     assert prune_legacy_bare_paths(schema) is schema
+
+
+def test_merge_native_runtime_contract_overrides_same_method_and_path() -> None:
+    """Prefer the native operation when ingress routes that method/path to Rust."""
+    schema = {
+        "openapi": "3.1.0",
+        "paths": {"/api/v2/reading-boundaries": {"post": {"summary": "python"}}},
+        "components": {"schemas": {}},
+    }
+    native = {
+        "paths": {"/api/v2/reading-boundaries": {"post": {"summary": "native"}}},
+        "components": {"schemas": {}},
+    }
+
+    merged = merge_native_runtime_contract(schema, native)
+
+    assert merged["paths"]["/api/v2/reading-boundaries"]["post"]["summary"] == "native"
+    assert schema["paths"]["/api/v2/reading-boundaries"]["post"]["summary"] == "python"
+
+
+def test_merge_native_runtime_contract_renames_conflicting_schema_and_refs() -> None:
+    """Rename a differing native component and rewrite every native reference."""
+    schema = {
+        "paths": {},
+        "components": {
+            "schemas": {
+                "Thing": {"type": "object", "properties": {"kind": {"type": "string"}}}
+            }
+        },
+    }
+    native = {
+        "paths": {
+            "/api/v2/things": {
+                "get": {
+                    "responses": {
+                        "200": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/Thing"}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "components": {
+            "schemas": {
+                "Thing": {"type": "object", "properties": {"kind": {"type": "integer"}}},
+                "Wrapper": {
+                    "type": "object",
+                    "properties": {"thing": {"$ref": "#/components/schemas/Thing"}},
+                },
+            }
+        },
+    }
+
+    merged = merge_native_runtime_contract(schema, native)
+
+    assert merged["components"]["schemas"]["Thing"]["properties"]["kind"] == {"type": "string"}
+    assert merged["components"]["schemas"]["NativeThing"]["properties"]["kind"] == {
+        "type": "integer"
+    }
+    assert merged["components"]["schemas"]["Wrapper"]["properties"]["thing"] == {
+        "$ref": "#/components/schemas/NativeThing"
+    }
+    assert merged["paths"]["/api/v2/things"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/NativeThing"}
+
+
+def test_merge_native_runtime_contract_reuses_identical_component() -> None:
+    """Keep one shared schema when the native declaration is byte-identical."""
+    same = {"type": "string"}
+    schema = {"paths": {}, "components": {"schemas": {"Shared": dict(same)}}}
+    native = {"paths": {}, "components": {"schemas": {"Shared": dict(same)}}}
+
+    merged = merge_native_runtime_contract(schema, native)
+
+    assert merged["components"]["schemas"]["Shared"] == same
+    assert "NativeShared" not in merged["components"]["schemas"]
+
+
+def test_merge_native_runtime_contract_renames_transitive_references() -> None:
+    """Rename a schema whose only difference is a reference to a renamed schema."""
+    schema = {
+        "paths": {},
+        "components": {
+            "schemas": {
+                "Holder": {
+                    "type": "object",
+                    "properties": {"child": {"$ref": "#/components/schemas/Child"}},
+                },
+                "Child": {"type": "string"},
+            }
+        },
+    }
+    native = {
+        "paths": {},
+        "components": {
+            "schemas": {
+                "Holder": {
+                    "type": "object",
+                    "properties": {"child": {"$ref": "#/components/schemas/Child"}},
+                },
+                "Child": {"type": "integer"},
+            }
+        },
+    }
+
+    merged = merge_native_runtime_contract(schema, native)
+
+    assert merged["components"]["schemas"]["Child"] == {"type": "string"}
+    assert merged["components"]["schemas"]["NativeChild"] == {"type": "integer"}
+    assert merged["components"]["schemas"]["NativeHolder"]["properties"]["child"] == {
+        "$ref": "#/components/schemas/NativeChild"
+    }

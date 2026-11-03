@@ -6337,7 +6337,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/reading-boundaries": {
+    "/api/v2/auth/csrf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the mounted v2 CSRF handler. */
+        get: operations["csrf_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/auth/forgot-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 forgot-password handler. */
+        post: operations["forgot_password_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 login handler. */
+        post: operations["login_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 logout handler. */
+        post: operations["logout_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the mounted v2 current-user handler. */
+        get: operations["me_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/auth/refresh": {
         parameters: {
             query?: never;
             header?: never;
@@ -6347,10 +6432,130 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Get Reading Boundary Batch V2
-         * @description Return canonical blockers for owned series, without legacy auditing.
+         * Documentation-only operation for the mounted v2 refresh handler.
+         * @description The refresh cookie is an alternative to the optional JSON body token.
          */
-        post: operations["get_reading_boundary_batch_v2_api_v2_reading_boundaries_post"];
+        post: operations["refresh_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 registration handler. */
+        post: operations["register_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/auth/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 reset-password handler. */
+        post: operations["reset_password_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issues/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation used to emit the generated batch card contract. */
+        post: operations["issue_cards_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issues/{issue_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Documentation-only operation used to emit the generated PATCH contract. */
+        patch: operations["issue_read_rate_documentation"];
+        trace?: never;
+    };
+    "/api/v2/queue-entries/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation used to emit the generated OpenAPI contract. */
+        get: operations["get_queue_entry_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Documentation-only operation used to emit the generated OpenAPI contract. */
+        patch: operations["update_queue_entry_documentation"];
+        trace?: never;
+    };
+    "/api/v2/queue-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation used to emit the generated OpenAPI contract. */
+        post: operations["create_queue_order_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-boundaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 reading-boundaries batch. */
+        post: operations["reading_boundary_batch_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6369,6 +6574,114 @@ export interface paths {
          * @description Explain live canonical constraints without querying historical rows.
          */
         get: operations["get_reading_boundary_v2_api_v2_reading_boundaries__thread_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 reading-session initializer. */
+        post: operations["initialize_session_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/roll/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted v2 Roll bootstrap read.
+         * @description The published response is the actual handler DTO, so known session, die,
+         *     pending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and
+         *     timezone fields stay in the live contract. Stored tag records, recovery
+         *     nodes and mode-guidance JSON remain explicitly extensible.
+         */
+        get: operations["bootstrap_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/roll/dice-command": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 manual-die command. */
+        post: operations["manual_die_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/roll/offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 Roll offer command. */
+        post: operations["offer_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/roll/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 Roll reset command. */
+        post: operations["reset_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation used to emit the generated OpenAPI contract. */
+        get: operations["list_threads_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6704,6 +7017,34 @@ export interface components {
             /** Expected Issue Id */
             expected_issue_id?: number | null;
         };
+        /** @description Currently pending thread shown by the Roll surface. */
+        BootstrapActiveThread: {
+            format: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_read: number;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: double */
+            last_rating?: number | null;
+            /** Format: int32 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** @description Stored tag records; unknown stored columns are preserved via flatten. */
+            tags: components["schemas"]["BootstrapTag"][];
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
         /**
          * BootstrapAliasCounterSchema
          * @description One aggregated bootstrap alias tally.
@@ -6740,6 +7081,166 @@ export interface components {
              * @description Aggregated counts per (alias, web_origin, status class).
              */
             counters?: components["schemas"]["BootstrapAliasCounterSchema"][];
+        };
+        /** @description Compact bandwidth block retained for existing Roll consumers. */
+        BootstrapBandwidth: {
+            active_bandwidth?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            mode_version?: string | null;
+            predicted_bandwidth?: string | null;
+            source?: string | null;
+        };
+        /** @description Mapping state for a rollable candidate. */
+        BootstrapIdentitySummary: {
+            canonical_series_id?: string | null;
+            series_mapping_state: string;
+            source: string;
+            state: string;
+        };
+        /** @description Candidate issue identity displayed on a Roll face. */
+        BootstrapIssueSummary: {
+            canonical_series_title?: string | null;
+            cover_url?: string | null;
+            /** Format: int32 */
+            id: number;
+            number: string;
+        };
+        /** @description Most recent rated issue for the active session. */
+        BootstrapLastRead: {
+            cover_url?: string | null;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            read_at?: string | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+            thread_title?: string | null;
+        };
+        /** @description Reader statistics for one rollable face or canonical series run. */
+        BootstrapReaderStats: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int64 */
+            issue_count?: number | null;
+            /** Format: double */
+            latest_rating?: number | null;
+            progress_scope: string;
+            /** Format: int64 */
+            rating_count: number;
+            /** Format: int64 */
+            read_count: number;
+        };
+        /**
+         * @description Full live `GET /api/v2/roll/bootstrap` payload.
+         *
+         *     This is the actual handler response type, so the generated contract and the
+         *     runtime share one authority. It is retained only until the bootstrap
+         *     retirement work removes the route; it is not a new feature surface.
+         */
+        BootstrapResponseV2: {
+            active_thread?: null | components["schemas"]["BootstrapActiveThread"];
+            bandwidth: components["schemas"]["BootstrapBandwidth"];
+            /** Format: int32 */
+            current_die: number;
+            last_read?: null | components["schemas"]["BootstrapLastRead"];
+            /** Format: int64 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            manual_die?: number | null;
+            /** Format: int32 */
+            pending_thread_id?: number | null;
+            pool_reason: components["schemas"]["PoolReason"];
+            roll_recovery?: null | components["schemas"]["BootstrapRollRecovery"];
+            rollable: components["schemas"]["BootstrapRollableItem"][];
+            /** Format: int32 */
+            session_id: number;
+            session_mode: components["schemas"]["BootstrapSessionMode"];
+            skipped_thread_ids: number[];
+            skipped_threads: components["schemas"]["BootstrapThreadSummary"][];
+            /** Format: int64 */
+            snoozed_count: number;
+            snoozed_threads: components["schemas"]["BootstrapThreadSummary"][];
+            timezone?: string | null;
+            /** Format: int32 */
+            user_id: number;
+        };
+        /**
+         * @description Bounded recovery diagnostic shown when the pending issue is blocked.
+         *
+         *     The stable envelope is typed; each nested blocker/chain/diagnostic entry is
+         *     the existing bounded JSON node shape and remains extensible so no current
+         *     recovery detail is dropped from the live contract.
+         */
+        BootstrapRollRecovery: {
+            chains: unknown[][];
+            diagnostics: unknown[];
+            direct_blockers: unknown[];
+            /** Format: int32 */
+            original_thread_id: number;
+            original_thread_title: string;
+            readable_prerequisites: unknown[];
+        };
+        /** @description One eligible Roll face. */
+        BootstrapRollableItem: {
+            identity: components["schemas"]["BootstrapIdentitySummary"];
+            issue: components["schemas"]["BootstrapIssueSummary"];
+            /** Format: int64 */
+            overflow_routes_count: number;
+            reader: components["schemas"]["BootstrapReaderStats"];
+            routes: components["schemas"]["BootstrapRoute"][];
+            thread: components["schemas"]["BootstrapThreadSummary"];
+        };
+        /** @description One Roll route label attached to a rollable face. */
+        BootstrapRoute: {
+            kind: string;
+            name: string;
+        };
+        /** @description Legacy session-mode bridge retained on the live bootstrap contract. */
+        BootstrapSessionMode: {
+            active_bandwidth?: string | null;
+            active_intent?: string | null;
+            /** Format: double */
+            bandwidth_confidence?: number | null;
+            bandwidth_source?: string | null;
+            bandwidth_version?: string | null;
+            /** Format: double */
+            intent_confidence?: number | null;
+            intent_source?: string | null;
+            intent_version?: string | null;
+            predicted_bandwidth?: string | null;
+            predicted_intent?: string | null;
+            /** @description Extension boundary: stored guidance JSON is passed through verbatim. */
+            session_mode_correction_guidance?: unknown;
+        };
+        /**
+         * @description One tag visible to the reader on a Roll thread row.
+         *
+         *     The stable stored tag columns are typed; `extra` preserves any additional
+         *     stored columns so future tag metadata is never silently dropped.
+         */
+        BootstrapTag: {
+            color: string;
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            normalized_name: string;
+            /** Format: int32 */
+            owner_user_id?: number | null;
+            scope: string;
+            updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Owner-scoped thread summary shown by Roll snooze/skip chips and rollable rows. */
+        BootstrapThreadSummary: {
+            format: string;
+            /** Format: int32 */
+            id: number;
+            last_activity_at?: string | null;
+            tags: components["schemas"]["BootstrapTag"][];
+            title: string;
         };
         /**
          * BoundaryEditorTarget
@@ -10582,6 +11083,10 @@ export interface components {
             /** Source Path */
             source_path: string;
         };
+        /** @description Response body carrying a double-submit CSRF token. */
+        CsrfResponse: {
+            csrf_token: string;
+        };
         /**
          * CustomCBLApplyRequest
          * @description Options for explicitly applying a custom CBL to an existing Reading Plan.
@@ -11209,6 +11714,15 @@ export interface components {
             height: number;
             /** Width */
             width: number;
+        };
+        DiceCommandReceipt: {
+            /** Format: int32 */
+            die_after: number;
+            /** Format: int32 */
+            die_before: number;
+            /** Format: int32 */
+            event_id: number;
+            replayed: boolean;
         };
         /**
          * DuplicateAnomalyResponse
@@ -11838,6 +12352,13 @@ export interface components {
             target_type: string;
         };
         /**
+         * @description Temporary explicit write boundary for legacy reading-session consumers.
+         *     GET /api/v2/roll/bootstrap never creates or mutates a session.
+         */
+        InitializeSessionRequest: {
+            timezone?: string | null;
+        };
+        /**
          * InsertReadingOrderItemRequest
          * @description Request schema for inserting an item into a reading order.
          */
@@ -11992,6 +12513,47 @@ export interface components {
              * @description Broadcast list of issue IDs to mark unread.
              */
             issue_ids: number[];
+        };
+        IssueCard: {
+            /** @description Confirmed provider issue identifier, never a provisional candidate. */
+            comicvine_issue_id?: string | null;
+            /** @description Exact provider-supplied CDN URL. Null when unmapped; never image bytes. */
+            cover_image_url?: string | null;
+            /** @description Whether a confirmed ComicVine issue mapping exists. */
+            has_confirmed_identity: boolean;
+            /**
+             * Format: int32
+             * @description Owned issue identifier.
+             */
+            issue_id: number;
+            /** @description Exact issue number within the run. */
+            issue_number: string;
+            /** @description Stored mapping state (``confirmed``, ``candidate``, ...). */
+            mapping_state: string;
+            /**
+             * Format: double
+             * @description Effective per-issue saved rating.
+             */
+            rating?: number | null;
+            /** @description UTC read timestamp, when read. */
+            read_at?: string | null;
+            /** @description Stored read state (``read`` or ``unread``). */
+            status: string;
+            /**
+             * Format: int32
+             * @description Owning thread identifier.
+             */
+            thread_id: number;
+            /** @description Display series/run title. */
+            thread_title: string;
+        };
+        IssueCardsRequest: {
+            /** @description Visible issue identifiers requested for one bounded batch. */
+            issue_ids: number[];
+        };
+        IssueCardsResponse: {
+            /** @description Owned cards in first-request order; foreign or missing IDs are omitted. */
+            items: components["schemas"]["IssueCard"][];
         };
         /**
          * IssueCreateRange
@@ -12164,6 +12726,26 @@ export interface components {
             /** Warnings */
             warnings: string[];
         };
+        IssueReadRateRequest: {
+            /** @description Client-generated retry key. Same key/payload replays the same receipt. */
+            idempotency_key: string;
+            /**
+             * Format: double
+             * @description Effective issue rating in 0.5-point steps. Omit to keep the stored rating.
+             */
+            rating?: number | null;
+            /** @description Explicit new status. Omit to leave read state unchanged. */
+            status?: string | null;
+        };
+        IssueReadRateResponse: {
+            /** Format: double */
+            final_rating?: number | null;
+            issue: components["schemas"]["IssueCard"];
+            rating_event_created: boolean;
+            read_event_created: boolean;
+            replayed: boolean;
+            thread: components["schemas"]["ThreadProgress"];
+        };
         /**
          * IssueReorderRequest
          * @description Schema for bulk reordering issues within a thread.
@@ -12197,6 +12779,25 @@ export interface components {
             status: string;
             /** Thread Id */
             thread_id: number;
+        };
+        /**
+         * @description Request body for username/password login.
+         *
+         *     Login deliberately does not impose the registration minimum length: accounts
+         *     created before the current policy must still be able to sign in. An empty
+         *     password is rejected by bcrypt verification with the same non-enumerating
+         *     401 as any other incorrect credential, matching Python.
+         */
+        LoginRequest: {
+            password: string;
+            username: string;
+        };
+        ManualDieRequest: {
+            /** Format: int32 */
+            die: number;
+            idempotency_key: string;
+            /** @enum {string} */
+            kind: "manual_select";
         };
         /**
          * MetadataCorrectionRequest
@@ -12331,6 +12932,114 @@ export interface components {
              * @enum {string}
              */
             visibility: "public" | "internal";
+        };
+        NativeBoundaryEditorTarget: {
+            /** Format: int32 */
+            issue_id?: number | null;
+            kind: string;
+            label: string;
+            /** Format: int32 */
+            list_id?: number | null;
+            /** Format: int32 */
+            prerequisite_id?: number | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+        };
+        NativeBoundaryIssue: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            label: string;
+            reading_lists: components["schemas"]["NativeBoundaryReadingList"][];
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+            volume_label?: string | null;
+        };
+        NativeBoundaryReadingList: {
+            /** Format: int32 */
+            list_id: number;
+            mode: string;
+            name: string;
+        };
+        /** @description Compact confirmed ComicVine mapping health for one queue row. */
+        NativeComicVineMappingHealth: {
+            /** Format: int32 */
+            confirmed_issue_count: number;
+            /** Format: int32 */
+            metadata_missing_count: number;
+            /** Format: int32 */
+            needs_mapping_count: number;
+            /** Format: int32 */
+            needs_review_count: number;
+            status: string;
+            /** Format: int32 */
+            tracked_issue_count: number;
+        };
+        /** @description Request body for an enumeration-safe password-recovery email. */
+        NativeForgotPasswordRequest: {
+            email: string;
+        };
+        /** @description Safe acknowledgement returned whether or not an account exists. */
+        NativePasswordResetResponse: {
+            message: string;
+        };
+        /** @description Confirmed provider series metadata for one queue row. */
+        NativeQueueSeriesMetadata: {
+            publisher?: string | null;
+            volume?: string | null;
+            /** Format: int32 */
+            year?: number | null;
+        };
+        NativeReadingBoundaryBatchRequest: {
+            thread_ids: number[];
+        };
+        NativeReadingBoundaryBatchResponseV2: {
+            threads: {
+                [key: string]: components["schemas"]["NativeReadingBoundaryExplanationV2"];
+            };
+        };
+        NativeReadingBoundaryBlocker: {
+            editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
+            kind: string;
+            origin: string;
+            reason: string;
+            waiting_on: components["schemas"]["NativeBoundaryIssue"][];
+        };
+        NativeReadingBoundaryExplanationV2: {
+            blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
+            next?: null | components["schemas"]["NativeReadingBoundaryNext"];
+            state: string;
+            summary: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        NativeReadingBoundaryNext: {
+            editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
+            issue: components["schemas"]["NativeBoundaryIssue"];
+        };
+        /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
+        NativeRefreshTokenRequest: {
+            refresh_token: string;
+        };
+        /** @description Request body for completing a password reset with a single-use token. */
+        NativeResetPasswordRequest: {
+            new_password: string;
+            token: string;
+        };
+        /** @description Response body for token endpoints, matching the Python wire contract. */
+        NativeTokenResponse: {
+            access_token: string;
+            refresh_token: string;
+            token_type: string;
+        };
+        /** @description Response body for the current-user endpoint. */
+        NativeUserResponse: {
+            email?: string | null;
+            /** Format: int32 */
+            id: number;
+            is_admin: boolean;
+            username: string;
         };
         /**
          * NearMatchResponse
@@ -12579,6 +13288,16 @@ export interface components {
             count: number;
         };
         /**
+         * @description Why the Roll pool has no in-play faces.
+         *
+         *     Derived from the already-loaded Option E inputs and the eligible frontier
+         *     set. This is a single reason, never a list or a whole-library report, and it
+         *     adds no database work: it exists so a genuinely non-empty library does not
+         *     render the false "reading queue is empty" state (#4441).
+         * @enum {string}
+         */
+        PoolReason: "ready" | "no_series" | "all_blocked" | "all_completed" | "all_out_of_pool";
+        /**
          * PositionRequest
          * @description Schema for position update request.
          */
@@ -12721,6 +13440,57 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** @description Resource patch for one queue entry. */
+        QueueEntryPatch: {
+            /**
+             * Format: int32
+             * @description Target reader-visible ordinal. Ranks beyond the end place the entry last.
+             */
+            position: number;
+        };
+        /** @description Queue entry resource returned by GET and PATCH. */
+        QueueEntryResponse: {
+            /**
+             * Format: int64
+             * @description Content revision of the reader's current queue order.
+             *
+             *     Derived from the durable ordering state on every read, so it changes
+             *     whenever any writer changes the order and stays equal while the order is
+             *     unchanged. It is a change-detection token, not a persisted per-entry
+             *     counter and not the #3227 sparse order key.
+             */
+            ordering_version: number;
+            /**
+             * Format: int32
+             * @description One-based dense reader-visible Queue ordinal.
+             */
+            position: number;
+            /**
+             * Format: int32
+             * @description Canonical queue-entry identity: the owned Thread id.
+             */
+            thread_id: number;
+        };
+        /** @description Queue-order (shuffle) creation request. */
+        QueueOrderRequest: {
+            /** @description Client retry key. Replaying a committed key returns the same revision. */
+            idempotency_key?: string | null;
+        };
+        /** @description Durable queue-order revision. */
+        QueueOrderResponse: {
+            /**
+             * Format: int32
+             * @description Persisted `events.id` of this queue-order revision.
+             */
+            event_id: number;
+            /** @description True when an identical `idempotency_key` was already committed. */
+            replayed: boolean;
+            /**
+             * Format: int32
+             * @description Number of entries whose position this revision wrote.
+             */
+            shuffled: number;
         };
         /**
          * QueueSeriesMetadata
@@ -14007,6 +14777,12 @@ export interface components {
             /** Source Path */
             source_path?: string | null;
         };
+        /** @description Result of the explicit v2 reading-session initialization write. */
+        ReadingSessionCreatedResponse: {
+            created: boolean;
+            /** Format: int32 */
+            session_id: number;
+        };
         /**
          * RecentSession
          * @description Summary of one recent reading session.
@@ -14133,6 +14909,12 @@ export interface components {
         RefreshTokenRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /** @description Request body for account registration. */
+        RegisterRequest: {
+            email: string;
+            password: string;
+            username: string;
         };
         /**
          * ReleaseListResponse
@@ -14287,6 +15069,14 @@ export interface components {
              */
             reason?: string | null;
         };
+        ResetDiceRequest: {
+            idempotency_key: string;
+        };
+        ResetDiceResponse: {
+            /** Format: int32 */
+            die: number;
+            replayed: boolean;
+        };
         /**
          * ResetPasswordRequest
          * @description Request schema for password reset completion.
@@ -14312,6 +15102,49 @@ export interface components {
             thread_id?: number | null;
             /** Thread Title */
             thread_title?: string | null;
+        };
+        RollOfferRequest: {
+            /** @description Stable client key; retries return the original offer without re-rolling. */
+            idempotency_key: string;
+            /** @description Threads this browser has temporarily snoozed (cookie authority only). */
+            snoozed_thread_ids?: number[];
+            /** @description Browser timezone used only by the retained session bridge. */
+            timezone?: string | null;
+        };
+        RollOfferResponse: {
+            /** Format: int32 */
+            die_size: number;
+            explanation?: string | null;
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            offset: number;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** Format: int32 */
+            result: number;
+            /** Format: int32 */
+            snoozed_count: number;
+            /**
+             * Format: int32
+             * @description Thread snoozed by this request so the browser can extend its cookie.
+             */
+            snoozed_thread_id?: number | null;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
         };
         /**
          * RollPrerequisiteSwitchRequest
@@ -15839,6 +16672,49 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
+        /** @description One reader threads collection item. */
+        ThreadListItem: {
+            blocking_reasons: string[];
+            comicvine_mapping?: null | components["schemas"]["NativeComicVineMappingHealth"];
+            created_at: string;
+            format: string;
+            /** Format: int32 */
+            id: number;
+            is_blocked: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            last_activity_at?: string | null;
+            manual_creator_credits: unknown;
+            next_unread_issue_number?: string | null;
+            notes?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            series_metadata?: null | components["schemas"]["NativeQueueSeriesMetadata"];
+            status: string;
+            tags: components["schemas"]["ThreadTag"][];
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /** @description Paginated reader threads collection. */
+        ThreadListResponse: {
+            /** Format: int32 */
+            active_count: number;
+            next_page_token?: string | null;
+            threads: components["schemas"]["ThreadListItem"][];
+        };
+        ThreadProgress: {
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: double */
+            last_rating?: number | null;
+            /** Format: int32 */
+            next_unread_issue_id?: number | null;
+            reading_progress?: string | null;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
         /**
          * ThreadReadingOrdersResponse
          * @description Response schema for reading orders containing a specific thread.
@@ -15967,6 +16843,19 @@ export interface components {
              * @description Last update timestamp (Unix epoch)
              */
             updated_at: number;
+        };
+        /** @description One tag visible to the reader. */
+        ThreadTag: {
+            color: string;
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            normalized_name: string;
+            /** Format: int32 */
+            owner_user_id?: number | null;
+            scope: string;
+            updated_at: string;
         };
         /**
          * ThreadUpdate
@@ -24032,7 +24921,27 @@ export interface operations {
             };
         };
     };
-    get_reading_boundary_batch_v2_api_v2_reading_boundaries_post: {
+    csrf_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Double-submit CSRF token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsrfResponse"];
+                };
+            };
+        };
+    };
+    forgot_password_documentation: {
         parameters: {
             query?: never;
             header?: never;
@@ -24041,27 +24950,571 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
+                "application/json": components["schemas"]["NativeForgotPasswordRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Enumeration-safe acknowledgement */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingBoundaryBatchResponseV2"];
+                    "application/json": components["schemas"]["NativePasswordResetResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Request payload failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Password-recovery rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    login_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Credentials accepted and bearer tokens issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeTokenResponse"];
+                };
+            };
+            /** @description Username field contained an email address */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Incorrect username or password */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Login rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    logout_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bearer token revoked and refresh cookie cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    me_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated account profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeUserResponse"];
+                };
+            };
+            /** @description Not authenticated or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refresh_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["NativeRefreshTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Refreshed bearer tokens issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeTokenResponse"];
+                };
+            };
+            /** @description Missing, invalid, revoked or stale refresh token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refresh rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    register_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created and bearer tokens issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeTokenResponse"];
+                };
+            };
+            /** @description Username or email is already registered */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Registration rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_password_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password reset completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativePasswordResetResponse"];
+                };
+            };
+            /** @description Invalid or expired reset request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Password-recovery rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_cards_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCardsRequest"];
+            };
+        };
+        responses: {
+            /** @description Owner-scoped cards in request order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueCardsResponse"];
+                };
+            };
+            /** @description Invalid or unbounded issue id list */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_rate_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Exact owned issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueReadRateRequest"];
+            };
+        };
+        responses: {
+            /** @description Reconciled issue and thread state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueReadRateResponse"];
+                };
+            };
+            /** @description Issue not found for this reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Idempotency key reused for a different action */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid status, rating or idempotency key */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_queue_entry_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queue entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueEntryResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Queue entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_queue_entry_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueEntryPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated queue entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueEntryResponse"];
+                };
+            };
+            /** @description Invalid target position */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Queue entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_queue_order_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay of the recorded revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueOrderResponse"];
+                };
+            };
+            /** @description Queue-order revision created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueOrderResponse"];
+                };
+            };
+            /** @description Invalid idempotency key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_boundary_batch_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeReadingBoundaryBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Explanation projection for the requested owned threads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeReadingBoundaryBatchResponseV2"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A requested thread is not owned by the reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Batch must contain between 1 and 200 thread ids */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -24093,6 +25546,301 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    initialize_session_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitializeSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created or resumed reading-session identity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingSessionCreatedResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bootstrap_documentation: {
+        parameters: {
+            query?: {
+                /** @description IANA timezone override for the active session */
+                timezone?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Projected Roll bootstrap payload */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapResponseV2"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native Roll projection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    manual_die_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualDieRequest"];
+            };
+        };
+        responses: {
+            /** @description Manual die command receipt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiceCommandReceipt"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid die or idempotency key */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offer_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollOfferRequest"];
+            };
+        };
+        responses: {
+            /** @description Recorded Roll offer for the active session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollOfferResponse"];
+                };
+            };
+            /** @description No eligible thread remains for this roll */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading session changed during the offer */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid idempotency key or too many temporary snoozes */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Roll offer projection unavailable */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetDiceRequest"];
+            };
+        };
+        responses: {
+            /** @description Reset die command receipt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResetDiceResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading session changed during the reset */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid idempotency key */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_threads_documentation: {
+        parameters: {
+            query?: {
+                /** @description Case-insensitive title search */
+                search?: string;
+                /** @description position, title, or created */
+                sort?: string;
+                /** @description 1-200 rows per page (default 50) */
+                page_size?: number;
+                /** @description Opaque continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped active threads page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadListResponse"];
+                };
+            };
+            /** @description Invalid sort or page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid bounds or retired collection_id */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
