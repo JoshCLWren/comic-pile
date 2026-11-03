@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "description": "Method/path/runtime/caller inventory for every live /api/v2 operation. Runtime is the implementation observed behind the deployed ingress, not the API version. Update this file in the cutover PR that changes a runtime, and regenerate the native contract first.",
-  "updated_by_issue": 4457,
+  "updated_by_issue": 4337,
   "operations": [
     {
       "method": "GET",
@@ -72,7 +72,10 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4443,
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/nativeRollMutationApi.ts",
+        "frontend/src/services/protectedRollMutationApi.ts"
+      ]
     },
     {
       "method": "PATCH",
