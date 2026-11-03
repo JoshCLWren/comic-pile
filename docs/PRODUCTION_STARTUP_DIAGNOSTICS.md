@@ -1,6 +1,6 @@
 # Production startup diagnostics
 
-ComicPile emits structured process and request timing so a slow first request can be separated into application startup, dependency work, and route execution. The Vercel entry point imports the startup clock before the application factory, which also lets us distinguish time spent before ComicPile user code starts from time spent inside the app.
+ComicPile emits structured process and request timing so a slow first request can be separated into application startup, dependency work, and route execution. The Vercel entry point imports the startup clock before the application factory. It cannot measure Vercel provisioning before Python begins executing. Timing measurements inside the application must not be confused with worker lifetime.
 
 ## Cold versus warm
 
@@ -12,7 +12,10 @@ The process snapshot records:
 - cold/warm classification;
 - process age when the request began;
 - whether application startup completed;
-- total measured startup duration;
+- `startup_duration_ms`, the sum of measured import, app-creation and lifespan-startup work;
+- `process_to_startup_ms`, elapsed worker lifetime until lifespan completed, including any gaps between phases;
+- `process_age_ms`, lifetime at the sampled event, and `startup_cpu_ms`, process CPU consumed between diagnostics import and startup completion;
+- `heavy_init_duration_ms`, the deferred database-initialization operation only, versus `heavy_init_process_age_ms`, worker age at heavy-init completion;
 - Vercel deployment or commit identifier when available.
 
 Request diagnostics add total route duration, database query count and time, HTTP status, and request ID. Production sanitization removes request bodies, query strings, user/session identifiers, cookies, and authorization headers.
@@ -21,12 +24,13 @@ Request diagnostics add total route duration, database query count and time, HTT
 
 1. Filter deployment logs to `event=application_startup` for the process startup record.
 2. Find the first request with `cold_request=true` and correlate it by deployment ID plus `process_started_at_ns`.
-3. Compare `startup_duration_ms` with the external time-to-first-byte captured by the timing script.
-4. Compare `process_time_ms` and database time inside that first request. `process_time_ms` is elapsed wall time despite its historical name; `cpu_time_ms` is the separate process CPU sample described below.
-5. Review the `httpstat` phase breakdown for DNS, TCP, TLS, and other externally visible transport time before attributing latency to application startup. Only the remainder not explained by those phases, measured startup, or measured request work can be treated as pre-application/platform time.
-6. Repeat the same path immediately and verify the response marker before treating it as warm (`X-App-Cold-Request: 0`).
+3. Compare `startup_duration_ms` (summed application phase spans), `process_to_startup_ms` (worker lifetime) and `startup_cpu_ms`. A large gap between process lifetime and active phase durations is **not** automatically CPU-bound startup. Use phase boundaries and Vercel's invocation metrics to investigate suspension or platform waiting. These clocks cannot prove how long Vercel took before importing the diagnostics module.
+4. Heavy initialization is intentionally deferred until a non-probe request. Compare `heavy_init_duration_ms` with request duration, not `heavy_init_process_age_ms`. A process can serve a ping, sit idle, and initialize its database much later. The 2,500 ms readiness budget applies only to the work measured on the ping-ready path.
+5. Compare `process_time_ms` and database time inside that first request. `process_time_ms` is elapsed wall time despite its historical name; `cpu_time_ms` is the separate process CPU sample described below.
+6. Review the `httpstat` phase breakdown for DNS, TCP, TLS, and other externally visible transport time before attributing latency to application startup. Only the remainder not explained by those phases, measured startup, or measured request work can be treated as pre-application/platform time.
+7. Repeat the same path immediately and verify the response marker before treating it as warm (`X-App-Cold-Request: 0`).
 
-A cold request is suspicious when measured application startup exceeds 1,000 ms or total request duration exceeds the configured slow-request threshold. A warm request is suspicious when database duration dominates the request, or when unexplained application time remains after subtracting dependency time.
+A cold request is suspicious when measured application startup work exceeds 1,000 ms or total request duration exceeds the configured slow-request threshold. The startup budget does not fire on worker lifetime or heavy-init age alone. A warm request is suspicious when database duration dominates the request, or when unexplained application time remains after subtracting dependency time.
 
 ## Timing fields and CPU attribution
 
