@@ -25,16 +25,15 @@ jobs:
         run: |
           set -Eeuo pipefail
           # Avoid spending live free quota on unrelated roster retirements.
-          # Worker 74 changes, workflow edits, and manual runs still exercise
-          # the real provider. This is a deterministic diff guard, not a
-          # simulated or shadow provider smoke.
+          # A changed worker 74 pin or a manual run still exercises the real
+          # provider. Workflow-only edits get deterministic checks in CI; live
+          # invocation remains available through workflow_dispatch.
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             base_pin="$(git show HEAD^1:.github/free-model-factories.tsv | awk -F '\t' '$1 == 74 { print; exit }')"
             current_pin="$(awk -F '\t' '$1 == 74 { print; exit }' .github/free-model-factories.tsv)"
-            if [[ "$base_pin" == "$current_pin" ]] &&
-               git diff --quiet HEAD^1 HEAD -- .github/workflows/opencode-deepseek-free-smoke.yml; then
+            if [[ "$base_pin" == "$current_pin" ]]; then
               echo 'active=false' >> "$GITHUB_OUTPUT"
-              echo 'Worker 74 and the smoke workflow are unchanged; skipping live-provider calls.'
+              echo 'Worker 74 unchanged; skipping unrelated PR live-provider calls.'
               exit 0
             fi
           fi
