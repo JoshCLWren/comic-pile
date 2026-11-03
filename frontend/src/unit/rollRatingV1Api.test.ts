@@ -51,6 +51,20 @@ it('calls Rust v2 offer for Roll/Reroll while composite mutations remain on v1',
   expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
 })
 
+it('scopes a Queue reroll to the exact pending comic (#4589)', async () => {
+  const isolated = createRollApi(client)
+  await isolated.reroll(42)
+
+  expect(client.post).toHaveBeenCalledWith(
+    '/v2/roll/offer',
+    expect.objectContaining({
+      expected_pending_thread_id: 42,
+      idempotency_key: expect.stringMatching(/^roll-offer-[0-9a-f]{32}$/),
+    }),
+  )
+  expect(client.post).not.toHaveBeenCalledWith('/v1/snooze/', expect.anything())
+})
+
 it('reads native v2 during auth recovery while keeping mutations on v1', async () => {
   await protectedRollMutationApi.rate({ thread_id: 9, rating: 3 })
   await protectedRollMutationApi.bootstrap()
