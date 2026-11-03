@@ -1,7 +1,9 @@
 //! Owner-scoped, bounded analytics metrics resource.
 //!
-//! `GET /api/v2/analytics/metrics` replaces the retired Python
-//! `GET /api/v1/analytics/metrics` and its bare `/api/analytics/metrics` alias.
+//! `GET /api/v2/analytics/metrics` is the native replacement for Python's
+//! `GET /api/v1/analytics/metrics` and bare `/api/analytics/metrics` alias.
+//! The legacy routes remain mounted until this resource is deployed and
+//! authenticated production verification permits their cleanup.
 //! The response preserves the real metrics surface: thread counts, completion
 //! rate, average ended-session duration, the five newest sessions inside a
 //! seven-day window, event-type counts and the five highest-rated threads at or
