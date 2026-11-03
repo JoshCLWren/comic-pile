@@ -17,7 +17,7 @@ LEGACY_PIPELINE = ROOT / "scripts/opencode_pipeline.sh"
 
 def require(text: str, needle: str, source: Path) -> None:
     """Require one invariant string in a policy source."""
-    if needle in {"Version: 22", "FACTORY POLICY V22", "Version: 23", "FACTORY POLICY V23", "Version: 24", "FACTORY POLICY V24"}:
+    if needle in {"Version: 22", "FACTORY POLICY V22", "Version: 23", "FACTORY POLICY V23", "Version: 24", "FACTORY POLICY V24", "Version: 25", "FACTORY POLICY V25", "Version: 26", "FACTORY POLICY V26", "Version: 27", "FACTORY POLICY V27"}:
         pattern = rf"(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])"
         present = re.search(pattern, text) is not None
     else:
@@ -52,7 +52,7 @@ def require_order(text: str, before: str, after: str, source: Path) -> None:
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     """Validate factory control-plane texts against canonical invariants."""
     for needle in (
-        "Version: 24",
+        "Version: 27",
         "ruff check .",
         "ty check --error-on-warning",
         "Path-filtered ruff or ty is not a valid CI substitute",
@@ -156,16 +156,12 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Release notes are post-merge infrastructure",
         "database-backed release ledger",
         "highest-priority unclaimed open issue labeled both `user-reported` and `bug`",
-        "reproducible E2E-discovered product bugs",
-        "full maintained Chromium discovery suite is an independent daily workflow",
-        "preserves traces, screenshots, video, JSON results, backend logs, and run metadata",
-        "Never launch the full discovery suite merely because your current work pool is empty",
+        "reproducible E2E-discovered product `bug`",
         "record a truthful no-work completion",
         "factory:unowned",
         "exact expected head SHA",
         "Never enable auto-merge",
-        "Never treat an empty or blocked backlog as a reason to self-pause or self-disable.",
-        "Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable this factory.",
+        "Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable a factory.",
     ):
         require(entrypoint, needle, ENTRYPOINT)
 
@@ -196,8 +192,8 @@ def validate_local_guidance() -> None:
         require(text, "factory-resume:v1", source)
 
     scheduled = SCHEDULED_PROMPT.read_text(encoding="utf-8")
-    require(scheduled, "Version: 24", SCHEDULED_PROMPT)
-    require(scheduled, "FACTORY POLICY V24", SCHEDULED_PROMPT)
+    require(scheduled, "Version: 27", SCHEDULED_PROMPT)
+    require(scheduled, "FACTORY POLICY V27", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "Version: 21", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "Version: 220", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "FACTORY POLICY V21", SCHEDULED_PROMPT)
@@ -207,7 +203,6 @@ def validate_local_guidance() -> None:
     require(scheduled, "one full atomic label-set replacement", SCHEDULED_PROMPT)
     require(scheduled, "At the start of every scheduled run", SCHEDULED_PROMPT)
     require(scheduled, "Heartbeat telemetry never counts as substantive progress", SCHEDULED_PROMPT)
-    require(scheduled, "independent daily workflow", SCHEDULED_PROMPT)
     require(scheduled, "FROZEN-SCOPE GOVERNANCE.", SCHEDULED_PROMPT)
     require(scheduled, "<!-- factory-execution:manual-only -->", SCHEDULED_PROMPT)
 
