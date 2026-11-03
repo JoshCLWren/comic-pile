@@ -13,7 +13,7 @@ import {
 import { rollApi } from '../services/api-roll'
 import type { OverrideRollPayload } from '../types'
 import { cast } from '../utils/cast'
-import { invalidateAfterRollDieModeUpdate, applyClearedManualDie } from '../query/cacheEffects'
+import { invalidateAfterRollDieModeUpdate } from '../query/cacheEffects'
 
 vi.mock('../query/cacheEffects', () => ({ invalidateAfterRollDieModeUpdate: vi.fn().mockResolvedValue(undefined), applyClearedManualDie: vi.fn() }))
 
