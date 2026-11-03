@@ -12734,10 +12734,20 @@ export interface components {
              * @description Effective issue rating in 0.5-point steps. Omit to keep the stored rating.
              */
             rating?: number | null;
+            /**
+             * @description Source of the rating action. "direct" for manual issue reads, "roll_offer" for Roll completion.
+             *     When "roll_offer", applies die stepping, queue effects, and links to the originating offer event.
+             */
+            source?: string | null;
             /** @description Explicit new status. Omit to leave read state unchanged. */
             status?: string | null;
         };
         IssueReadRateResponse: {
+            /**
+             * Format: int32
+             * @description Die after this rating, when source is "roll_offer". Null for "direct" source.
+             */
+            die_after?: number | null;
             /** Format: double */
             final_rating?: number | null;
             issue: components["schemas"]["IssueCard"];

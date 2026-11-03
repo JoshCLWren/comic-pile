@@ -17,6 +17,8 @@ import { useSkip, useUnskip } from '../../hooks/useSkip'
 import { useMoveToBack, useMoveToFront, useShuffleQueue, useActiveSeriesCount } from '../../hooks/useQueue'
 import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
+import { createNativeRollMutationApi } from '../../services/nativeRollMutationApi'
+import { defaultHttpClient } from '../../services/httpClient'
 import { useSessionMode } from '../../hooks/useSessionMode'
 import { useCorrectionSheetExamples } from '../../hooks/useCorrectionSheetExamples'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
@@ -156,7 +158,11 @@ export default function RollPage() {
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
   const shuffleQueueMutation = useShuffleQueue()
-  const rateMutation = useRate()
+  const nativeRollMutationApi = useMemo(
+    () => createNativeRollMutationApi(defaultHttpClient()),
+    [],
+  )
+  const rateMutation = useRate({ nativeRollApi: nativeRollMutationApi })
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const tasteDiscoveries = useTasteDiscoveries()
   const { showToast } = useToast()

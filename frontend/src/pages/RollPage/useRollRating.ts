@@ -168,12 +168,21 @@ export function useRollRating({
       // state, so this handler consumes that snapshot instead of issuing a
       // second bootstrap request.
       setShowSimpleMigration(false)
+      const issueId = activeRatingThread!.issue_id ?? activeRatingThread!.next_issue_id
+      if (issueId == null) {
+        setErrorMessage('Unable to determine issue ID for rating')
+        return
+      }
+      const idempotencyKey = `roll-rating-${activeRatingThread!.id}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
       rateMutation
         .mutate({
           thread_id: activeRatingThread!.id,
           rating,
           finish_session: false,
           issue_number: issueNumber,
+          issue_id: issueId,
+          idempotency_key: idempotencyKey,
+          source: 'roll_offer',
         })
         .then((outcome) => {
           const rateResponse = outcome.rate
@@ -247,11 +256,20 @@ export function useRollRating({
     // bootstrap refetch.
 
     try {
+      const issueId = activeRatingThread.issue_id ?? activeRatingThread.next_issue_id
+      if (issueId == null) {
+        setErrorMessage('Unable to determine issue ID for rating')
+        return
+      }
+      const idempotencyKey = `roll-rating-${activeRatingThread.id}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
       const outcome = await rateMutation.mutate({
         thread_id: activeRatingThread.id,
         rating,
         finish_session: finishSession,
         issue_number: activeRatingThread.issue_number || undefined,
+        issue_id: issueId,
+        idempotency_key: idempotencyKey,
+        source: 'roll_offer',
       })
       const rateResponse = outcome.rate
 

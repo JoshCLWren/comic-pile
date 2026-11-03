@@ -259,7 +259,6 @@ if TYPE_CHECKING:
         UserPreferencesPatchRequest,
         UserPreferencesResponse,
     )
-    from app.schemas.rate import RateRequest
     from app.schemas.recommendation_context import (
         RecommendationContextCreate,
         RecommendationContextResponse,
