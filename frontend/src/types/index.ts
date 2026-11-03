@@ -153,6 +153,12 @@ export interface RatePayload {
   finish_session?: boolean;
   issue_number?: string;
   direct?: boolean;
+  /** Source of the rating action. "direct" for manual issue reads, "roll_offer" for Roll completion. */
+  source?: 'direct' | 'roll_offer';
+  /** The issue ID being rated (required for roll_offer source). */
+  issue_id?: number;
+  /** Client-generated idempotency key for retry safety. */
+  idempotency_key?: string;
 }
 
 export interface OverrideRollPayload {

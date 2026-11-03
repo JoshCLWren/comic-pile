@@ -1,6 +1,12 @@
 //! Authenticated direct issue completion. Option E selects offers, not permissions.
 //! Uses the canonical issues/events schema and the shared PostgreSQL pool.
-use crate::{auth::AuthenticatedUser, db, ApiError};
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    dice_mutation::{DiceCommand, persist_in_transaction as persist_dice_in_transaction},
+    dice_state,
+    ApiError,
+};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -20,6 +26,10 @@ pub struct IssueReadRateRequest {
     pub rating: Option<f64>,
     /// Client-generated retry key. Same key/payload replays the same receipt.
     pub idempotency_key: String,
+    /// Source of the rating action. "direct" for manual issue reads, "roll_offer" for Roll completion.
+    /// When "roll_offer", applies die stepping, queue effects, and links to the originating offer event.
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
@@ -79,6 +89,8 @@ pub struct IssueReadRateResponse {
     pub rating_event_created: bool,
     pub replayed: bool,
     pub final_rating: Option<f64>,
+    /// Die after this rating, when source is "roll_offer". Null for "direct" source.
+    pub die_after: Option<i32>,
 }
 
 fn invalid(message: &'static str) -> ApiError {
@@ -349,6 +361,7 @@ pub(crate) async fn persist(
         "issue_id": issue_id,
         "status": request.status,
         "rating": request.rating,
+        "source": request.source.as_deref().unwrap_or("direct"),
     });
     // Lock the owner thread before the issue; owner transfers and concurrent
     // progress writers must not escape the ownership check.
@@ -434,6 +447,10 @@ pub(crate) async fn persist(
     let rating_changed = requested_rating.is_some_and(|rating| Some(rating) != old_rating);
     let final_rating = requested_rating.or(old_rating);
 
+    // Track die_after and source_roll_event_id for roll_offer source
+    let mut die_after: Option<i32> = None;
+    let mut source_roll_event_id: Option<i32> = None;
+
     if newly_read {
         tx.execute(
             "UPDATE issues SET status='read', read_at=NOW() WHERE id=$1 AND thread_id=$2",
@@ -468,31 +485,104 @@ pub(crate) async fn persist(
         } else {
             None
         };
-        // A direct unread can reactivate a completed series. The application
-        // invariant is `active => queue_position >= 1` (count_active_threads,
-        // dense_positions, reading eligibility and native Skip all require a
-        // real position), and Python's `mark_issue_unread`
-        // (app/services/issue.py) assigns `max_queue_position + 1` before the
-        // status flip. `restore_thread` deliberately leaves a fully-read
-        // restored series `completed` at position 0, so that state is reachable.
-        // This only appends behind the existing queue; it never renumbers or
-        // reorders another thread.
-        if status_changed && remaining > 0 {
-            tx.execute(
-                "UPDATE threads SET queue_position = (
-                     SELECT COALESCE(MAX(other.queue_position), 0) + 1
-                     FROM threads other
-                     WHERE other.user_id = $1
-                       AND other.status = 'active'
-                       AND other.queue_position >= 1
-                       AND other.id <> $2
-                 )
-                 WHERE id = $2 AND status = 'completed' AND queue_position < 1",
-                &[&user.id(), &thread_id],
-            )
-            .await
-            .map_err(db::query_error)?;
+
+        // Handle queue position and die stepping for roll_offer source
+        let is_roll_offer = matches!(request.source.as_deref(), Some("roll_offer"));
+        if is_roll_offer {
+            // Get current die and apply RollRating action
+            let current_die = dice_state::current_die(tx, user).await?;
+            let rating_value = request.rating.unwrap_or(3.5);
+            let new_die = dice_state::apply_action(current_die, dice_state::DiceAction::RollRating(rating_value))
+                .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid dice action".into()))?;
+            die_after = Some(new_die);
+
+            // Persist dice mutation in the same transaction
+            let dice_key = format!("roll-rating-{}-{}", thread_id, request.idempotency_key);
+            let dice_cmd = DiceCommand::RollRating {
+                thread_id,
+                issue_id,
+                rating: rating_value,
+            };
+            let _ = persist_dice_in_transaction(tx, user, &dice_key, &dice_cmd).await?;
+
+            // Find source roll event (the roll that offered this issue)
+            let source_row = tx
+                .query_opt(
+                    "SELECT e.id FROM events e
+                     JOIN sessions s ON s.id = e.session_id
+                     WHERE s.user_id = $1 AND s.ended_at IS NULL
+                       AND e.type = 'roll' AND e.selected_thread_id = $2
+                     ORDER BY e.timestamp DESC, e.id DESC LIMIT 1",
+                    &[&user.id(), &thread_id],
+                )
+                .await
+                .map_err(db::query_error)?;
+            source_roll_event_id = source_row.map(|row| row.get(0));
+
+            // Queue position updates for roll_offer
+            // If thread completes, move to back
+            if remaining == 0 {
+                tx.execute(
+                    "UPDATE threads SET queue_position = (
+                         SELECT COALESCE(MAX(other.queue_position), 0) + 1
+                         FROM threads other
+                         WHERE other.user_id = $1
+                           AND other.status = 'active'
+                           AND other.queue_position >= 1
+                           AND other.id <> $2
+                     )
+                     WHERE id = $2 AND status NOT IN ('excluded','inactive')",
+                    &[&user.id(), &thread_id],
+                )
+                .await
+                .map_err(db::query_error)?;
+            } else if rating_value >= 4.0 {
+                // Move to front for high ratings
+                tx.execute(
+                    "UPDATE threads SET queue_position = 1,
+                         queue_position_is_manual = TRUE
+                     WHERE id = $1",
+                    &[&thread_id],
+                )
+                .await
+                .map_err(db::query_error)?;
+            } else {
+                // Move to safe position (back of queue) for low ratings
+                tx.execute(
+                    "UPDATE threads SET queue_position = (
+                         SELECT COALESCE(MAX(other.queue_position), 0) + 1
+                         FROM threads other
+                         WHERE other.user_id = $1
+                           AND other.status = 'active'
+                           AND other.queue_position >= 1
+                           AND other.id <> $2
+                     )
+                     WHERE id = $2 AND queue_position_is_manual = FALSE",
+                    &[&user.id(), &thread_id],
+                )
+                .await
+                .map_err(db::query_error)?;
+            }
+        } else {
+            // Direct source: existing logic for reactivating completed series
+            if status_changed && remaining > 0 {
+                tx.execute(
+                    "UPDATE threads SET queue_position = (
+                         SELECT COALESCE(MAX(other.queue_position), 0) + 1
+                         FROM threads other
+                         WHERE other.user_id = $1
+                           AND other.status = 'active'
+                           AND other.queue_position >= 1
+                           AND other.id <> $2
+                     )
+                     WHERE id = $2 AND status = 'completed' AND queue_position < 1",
+                    &[&user.id(), &thread_id],
+                )
+                .await
+                .map_err(db::query_error)?;
+            }
         }
+
         tx.execute(
             "UPDATE threads SET
                  issues_remaining = CASE WHEN $2 THEN $3 ELSE issues_remaining END,
@@ -534,9 +624,10 @@ pub(crate) async fn persist(
         None
     };
     let context = json!({
-        "source": "direct",
+        "source": request.source.as_deref().unwrap_or("direct"),
         "issue_command_key": request.idempotency_key,
         "issue_command_payload": payload,
+        "source_roll_event_id": source_roll_event_id,
     });
     let event_id: i32 = tx
         .query_one(
@@ -566,6 +657,7 @@ pub(crate) async fn persist(
         rating_event_created: rating_changed,
         replayed: false,
         final_rating,
+        die_after,
     };
     let mut saved = context;
     saved["issue_command_receipt"] = serde_json::to_value(&result).map_err(|_| {
@@ -668,6 +760,7 @@ mod tests {
             status: status.map(str::to_owned),
             rating,
             idempotency_key: "direct-issue-012345".into(),
+            source: None,
         }
     }
 
@@ -871,6 +964,7 @@ mod tests {
             status: None,
             rating: Some(3.5),
             idempotency_key: "direct-issue-correction-01".into(),
+            source: None,
         };
         let tx = first.transaction().await.unwrap();
         let corrected = persist(&tx, user, 110, &correction).await.unwrap();
@@ -900,6 +994,7 @@ mod tests {
                 status: Some("read".into()),
                 rating: None,
                 idempotency_key: "direct-issue-unblock-01".into(),
+                source: None,
             },
         )
         .await
@@ -923,6 +1018,7 @@ mod tests {
                 status: Some("unread".into()),
                 rating: None,
                 idempotency_key: "direct-issue-reblock-01".into(),
+                source: None,
             },
         )
         .await
@@ -959,6 +1055,7 @@ mod tests {
                 status: Some("unread".into()),
                 rating: None,
                 idempotency_key: "direct-issue-reactivate-01".into(),
+                source: None,
             },
         )
         .await
@@ -1016,6 +1113,7 @@ mod tests {
                 status: Some("read".into()),
                 rating: None,
                 idempotency_key: "direct-issue-default-01".into(),
+                source: None,
             },
         )
         .await

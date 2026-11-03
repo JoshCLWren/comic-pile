@@ -12401,6 +12401,13 @@
               "null"
             ]
           },
+          "source": {
+            "description": "Source of the rating action. \"direct\" for manual issue reads, \"roll_offer\" for Roll completion.\nWhen \"roll_offer\", applies die stepping, queue effects, and links to the originating offer event.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
             "description": "Explicit new status. Omit to leave read state unchanged.",
             "type": [
@@ -12416,6 +12423,14 @@
       },
       "IssueReadRateResponse": {
         "properties": {
+          "die_after": {
+            "description": "Die after this rating, when source is \"roll_offer\". Null for \"direct\" source.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "final_rating": {
             "format": "double",
             "type": [

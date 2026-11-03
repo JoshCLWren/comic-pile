@@ -1970,6 +1970,13 @@
             "format": "double",
             "description": "Effective issue rating in 0.5-point steps. Omit to keep the stored rating."
           },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Source of the rating action. \"direct\" for manual issue reads, \"roll_offer\" for Roll completion.\nWhen \"roll_offer\", applies die stepping, queue effects, and links to the originating offer event."
+          },
           "status": {
             "type": [
               "string",
@@ -1990,6 +1997,14 @@
           "replayed"
         ],
         "properties": {
+          "die_after": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Die after this rating, when source is \"roll_offer\". Null for \"direct\" source."
+          },
           "final_rating": {
             "type": [
               "number",
