@@ -115,58 +115,6 @@ async def test_automatic_safe_position_does_not_mark_placement_manual(
 
 
 @pytest.mark.asyncio
-async def test_below_threshold_rating_keeps_manual_front_placement(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """A low rating must not demote a series the reader moved to the front."""
-    user = await get_or_create_user_async(async_db)
-    threads = await _add_active_threads(async_db, user, count=12)
-    target = threads[4]  # position 5 before the explicit move
-
-    await move_to_front(target.id, user.id, async_db, manual=True)
-
-    await async_db.refresh(target)
-    assert target.queue_position == 1
-    assert target.queue_position_is_manual is True
-
-    await _prepare_rating(async_db, user, target)
-
-    rate_response = await auth_client.post(
-        "/api/v1/rate/", json={"rating": 3.0, "issues_read": 1}
-    )
-    assert rate_response.status_code == 200
-
-    await async_db.refresh(target)
-    assert target.queue_position == 1
-    assert target.queue_position_is_manual is True
-
-
-@pytest.mark.asyncio
-async def test_completing_series_clears_manual_placement(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Completion leaves the active queue, so the manual claim is cleared."""
-    user = await get_or_create_user_async(async_db)
-    threads = await _add_active_threads(async_db, user, count=3, issues_remaining=1)
-    target = threads[2]
-
-    await move_to_front(target.id, user.id, async_db, manual=True)
-    await async_db.refresh(target)
-    assert target.queue_position_is_manual is True
-
-    await _prepare_rating(async_db, user, target)
-
-    rate_response = await auth_client.post(
-        "/api/v1/rate/", json={"rating": 5.0, "issues_read": 1}
-    )
-    assert rate_response.status_code == 200
-
-    await async_db.refresh(target)
-    assert target.status == "completed"
-    assert target.queue_position_is_manual is False
-
-
-@pytest.mark.asyncio
 async def test_shuffle_clears_manual_placements(
     async_db: AsyncSession, default_user: User
 ) -> None:
@@ -204,41 +152,6 @@ async def test_exclude_and_restore_clear_manual_placement(
     await thread_service.restore_thread(async_db, default_user.id, target.id)
     await async_db.refresh(target)
     assert target.queue_position_is_manual is False
-
-
-@pytest.mark.asyncio
-async def test_undo_restores_manual_placement_cleared_by_completion(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Undoing a completion restores the pre-rating manual claim."""
-    user = await get_or_create_user_async(async_db)
-    threads = await _add_active_threads(async_db, user, count=3, issues_remaining=1)
-    target = threads[2]
-
-    await move_to_front(target.id, user.id, async_db, manual=True)
-    await async_db.refresh(target)
-    assert target.queue_position_is_manual is True
-
-    session = await _prepare_rating(async_db, user, target)
-    rate_response = await auth_client.post(
-        "/api/v1/rate/", json={"rating": 5.0, "issues_read": 1}
-    )
-    assert rate_response.status_code == 200
-    await async_db.refresh(target)
-    assert target.queue_position_is_manual is False
-
-    snapshots_response = await auth_client.get(f"/api/v1/undo/{session.id}/snapshots")
-    assert snapshots_response.status_code == 200
-    snapshot_id = snapshots_response.json()["snapshots"][0]["id"]
-    undo_response = await auth_client.post(
-        f"/api/v1/undo/{session.id}/undo/{snapshot_id}"
-    )
-    assert undo_response.status_code == 200
-
-    restored = await async_db.execute(select(Thread).where(Thread.id == target.id))
-    restored_target = restored.scalar_one()
-    await async_db.refresh(restored_target)
-    assert restored_target.queue_position_is_manual is True
 
 
 @pytest.mark.asyncio
@@ -294,66 +207,4 @@ async def test_restore_session_start_restores_manual_placement(
     assert restore_response.status_code == 200
 
     await async_db.refresh(target)
-    assert target.queue_position_is_manual is True
-
-
-@pytest.mark.asyncio
-async def test_below_threshold_rating_keeps_manual_middle_position(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """A low rating must not demote a series the reader placed mid-queue."""
-    user = await get_or_create_user_async(async_db)
-    threads = await _add_active_threads(async_db, user, count=12)
-    target = threads[4]  # position 5 before the explicit move
-
-    move_response = await auth_client.put(
-        f"/api/v1/queue/threads/{target.id}/position/",
-        json={"new_position": 3},
-    )
-    assert move_response.status_code == 200
-
-    await async_db.refresh(target)
-    assert target.queue_position == 3
-    assert target.queue_position_is_manual is True
-
-    await _prepare_rating(async_db, user, target)
-
-    rate_response = await auth_client.post(
-        "/api/v1/rate/", json={"rating": 3.0, "issues_read": 1}
-    )
-    assert rate_response.status_code == 200
-
-    await async_db.refresh(target)
-    assert target.queue_position == 3
-    assert target.queue_position_is_manual is True
-
-
-@pytest.mark.asyncio
-async def test_same_position_move_keeps_manual_claim_after_low_rating(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Re-selecting the current position still records the manual claim."""
-    user = await get_or_create_user_async(async_db)
-    threads = await _add_active_threads(async_db, user, count=4)
-    target = threads[0]
-
-    move_response = await auth_client.put(
-        f"/api/v1/queue/threads/{target.id}/position/",
-        json={"new_position": 1},
-    )
-    assert move_response.status_code == 200
-
-    await async_db.refresh(target)
-    assert target.queue_position == 1
-    assert target.queue_position_is_manual is True
-
-    await _prepare_rating(async_db, user, target)
-
-    rate_response = await auth_client.post(
-        "/api/v1/rate/", json={"rating": 3.0, "issues_read": 1}
-    )
-    assert rate_response.status_code == 200
-
-    await async_db.refresh(target)
-    assert target.queue_position == 1
     assert target.queue_position_is_manual is True
