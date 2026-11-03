@@ -37,6 +37,9 @@ pub struct RollOfferRequest {
     pub snoozed_thread_ids: Vec<i32>,
     /// Stable client key; retries return the original offer without re-rolling.
     pub idempotency_key: String,
+    /// A Queue action may only reroll the exact pending thread shown to the user.
+    #[serde(default)]
+    pub expected_pending_thread_id: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -295,6 +298,17 @@ pub(crate) async fn persist_offer(
     Ok(row.get(0))
 }
 
+/// Reject a stale Queue action before recording any snooze/die/offer event.
+fn require_expected_pending(expected: Option<i32>, actual: Option<i32>) -> Result<(), ApiError> {
+    if expected.is_some() && expected != actual {
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Pending roll changed; refresh Queue before snoozing".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 pub async fn offer(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -370,6 +384,7 @@ pub async fn offer(
             "Reading session changed; try again".to_string(),
         ))?;
     let previous_offer: Option<i32> = locked.try_get(0).map_err(db::query_error)?;
+    require_expected_pending(request.expected_pending_thread_id, previous_offer)?;
 
     // Temporary snoozes are cookie-owned. Legacy session skip/snooze arrays and
     // the durable Fibonacci backoff must not remove candidates from the new
@@ -457,6 +472,23 @@ mod tests {
         http::{Request, StatusCode},
     };
     use tower::ServiceExt;
+
+    #[test]
+    fn stale_queue_snooze_cannot_target_a_different_pending_offer() {
+        assert!(require_expected_pending(None, None).is_ok());
+        assert!(require_expected_pending(None, Some(7)).is_ok());
+        assert!(require_expected_pending(Some(7), Some(7)).is_ok());
+        assert_eq!(
+            require_expected_pending(Some(7), Some(8))
+                .unwrap_err()
+                .0,
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            require_expected_pending(Some(7), None).unwrap_err().0,
+            StatusCode::CONFLICT
+        );
+    }
 
     #[test]
     fn rejects_unbounded_or_malformed_idempotency_keys() {
